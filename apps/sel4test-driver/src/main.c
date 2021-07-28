@@ -399,6 +399,12 @@ void sel4test_run_tests(struct driver_env *e)
     sel4test_stop_tests(SUCCESS, tests_done, tests_failed, num_tests + 1, skipped_tests);
 }
 
+void *main_continued2(void *arg UNUSED)
+{
+    printf("seL4 Test\n");
+    fflush(stdout);
+    return NULL;
+}
 void *main_continued(void *arg UNUSED)
 {
 
@@ -596,7 +602,7 @@ static void sel4test_exit(int code)
 int main(void)
 {
     /* Set exit handler */
-    sel4runtime_set_exit(sel4test_exit);
+    //sel4runtime_set_exit(sel4test_exit);
 
     int error;
     seL4_BootInfo *info = platsupport_get_bootinfo();
@@ -649,12 +655,12 @@ int main(void)
 
     /* switch to a bigger, safer stack with a guard page
      * before starting the tests */
-    printf("Switching to a safer, bigger stack... ");
+    printf("Switching to a safer, bigger stack... \n");
     fflush(stdout);
     void *res;
 
     /* Run sel4test-test related tests */
-    error = sel4utils_run_on_stack(&env.vspace, main_continued, NULL, &res);
+    error = sel4utils_run_on_stack(&env.vspace, main_continued2, NULL, &res);
     test_assert_fatal(error == 0);
     test_assert_fatal(res == 0);
 
