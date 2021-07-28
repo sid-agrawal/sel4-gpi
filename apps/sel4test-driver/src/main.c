@@ -191,12 +191,12 @@ static void init_timer(void)
     }
 }
 
-void sel4test_start_suite(const char *name)
+void sel4test_start_suite(const char *name, int num_types, int num_tests)
 {
     if (config_set(CONFIG_PRINT_XML)) {
         printf("<testsuite>\n");
     } else {
-        printf("Starting test suite %s\n", name);
+        printf("Starting test suite %s TT: %d Count: %d\n", name, num_types, num_tests);
     }
 }
 
@@ -349,7 +349,7 @@ void sel4test_run_tests(struct driver_env *e)
     int tests_done = 0;
     int tests_failed = 0;
 
-    sel4test_start_suite("sel4test");
+    sel4test_start_suite("sel4test", num_test_types, num_tests);
     /* First: test that there are tests to run */
     sel4test_start_test("Test that there are tests", tests_done);
     test_gt(num_tests, 0);
