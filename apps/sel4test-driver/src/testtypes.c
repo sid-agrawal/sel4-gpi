@@ -119,6 +119,7 @@ static int sel4test_driver_wait(driver_env_t env, struct testcase *test)
     seL4_Word badge = 0;
     sel4rpc_server_env_t rpc_server;
 
+    // siagraw: we start and rpc server to listen for requests form the test binary.
     sel4rpc_server_init(&rpc_server, &env->vka, sel4rpc_default_handler, env,
                         &env->reply, &env->simple);
 

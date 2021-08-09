@@ -10,14 +10,7 @@
 
 #define MIN_EXPECTED_ALLOCATIONS 100
 
-int test_trivial(env_t env)
-{
-    test_geq(2, 1);
-    return sel4test_get_result();
-}
-DEFINE_TEST(TRIVIAL0000, "Ensure the test framework functions", test_trivial, true)
-
-int test_allocator(env_t env)
+int test_vspace_walker(env_t env)
 {
     /* Perform a bunch of allocations and frees */
     vka_object_t endpoint;
@@ -32,5 +25,4 @@ int test_allocator(env_t env)
 
     return sel4test_get_result();
 }
-DEFINE_TEST(TRIVIAL0001, "Ensure the allocator works", test_allocator, true)
-DEFINE_TEST(TRIVIAL0002, "Ensure the allocator works more than once", test_allocator, true)
+DEFINE_TEST(WALKER001, "Ensure the walker works", test_vspace_walker, true)

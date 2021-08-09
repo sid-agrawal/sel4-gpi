@@ -361,14 +361,11 @@ void sel4test_run_tests(struct driver_env *e)
     /* Iterate through test types so that we run them in order of test type, then name.
        * Test types are ordered by ID in test.h. */
       // siagraw: skip bootstram test. by setting tt=1
-    for (int tt = 1; tt < num_test_types; tt++) {
+    for (int tt = 0; tt < num_test_types; tt++) {
         /* set up */
         if (test_types[tt]->set_up_test_type != NULL) {
             test_types[tt]->set_up_test_type((uintptr_t)e);
         }
-
-        // run only the first test which is AAAATRIVIAL0001
-        num_tests = 1;
 
         for (int i = 0; i < num_tests; i++) {
             if (tests[i]->test_type == test_types[tt]->id) {
@@ -608,7 +605,7 @@ static void sel4test_exit(int code)
 int main(void)
 {
     /* Set exit handler */
-    //sel4runtime_set_exit(sel4test_exit);
+    sel4runtime_set_exit(sel4test_exit);
 
     int error;
     seL4_BootInfo *info = platsupport_get_bootinfo();

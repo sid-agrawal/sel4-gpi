@@ -80,6 +80,9 @@ static testcase_t *find_test(const char *name)
     return test;
 }
 
+// siagraw:This new process also needs to have its own allocator for getting kernel
+// objects like caps etc.....
+// I have no delved deep into this for now.
 static void init_allocator(env_t env, test_init_data_t *init_data)
 {
     UNUSED int error;
