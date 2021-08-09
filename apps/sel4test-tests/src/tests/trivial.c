@@ -32,5 +32,5 @@ int test_allocator(env_t env)
 
     return sel4test_get_result();
 }
-DEFINE_TEST(TRIVIAL0001, "Ensure the allocator works", test_allocator, true)
+DEFINE_TEST(AAAATRIVIAL0001, "Ensure the allocator works", test_allocator, true)
 DEFINE_TEST(TRIVIAL0002, "Ensure the allocator works more than once", test_allocator, true)

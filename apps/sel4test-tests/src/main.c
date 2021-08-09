@@ -171,7 +171,9 @@ void init_simple(env_t env, test_init_data_t *init_data)
 
     arch_init_simple(env, &env->simple);
 }
-
+// each invocation of this binary has 2 args:
+// endpoint to communicate back to driver
+// init data which has the name of the test run.
 int main(int argc, char **argv)
 {
     sel4muslcsys_register_stdio_write_fn(write_buf);

@@ -210,7 +210,7 @@ void sel4test_start_test(const char *name, int n)
     sel4test_reset();
     sel4test_start_printf_buffer();
 }
-
+    
 void sel4test_end_test(test_result_t result)
 {
     sel4test_end_printf_buffer();
@@ -310,6 +310,8 @@ void sel4test_run_tests(struct driver_env *e)
     qsort(test_types, num_test_types, sizeof(struct test_type *), test_type_comparator);
 
     /* Count how many tests actually exist and allocate space for them */
+    // siagraw: This done just to make sure we know how many tests are 
+    // there. To run the test we still call the binary directly. 
     int driver_tests = (int)(__stop__test_case - __start__test_case);
     uint64_t tc_size = 0;
     testcase_t *sel4test_tests = (testcase_t *) sel4utils_elf_get_section(&tests_elf, "_test_case", &tc_size);
@@ -358,15 +360,19 @@ void sel4test_run_tests(struct driver_env *e)
 
     /* Iterate through test types so that we run them in order of test type, then name.
        * Test types are ordered by ID in test.h. */
-    for (int tt = 0; tt < num_test_types; tt++) {
+      // siagraw: skip bootstram test. by setting tt=1
+    for (int tt = 1; tt < num_test_types; tt++) {
         /* set up */
         if (test_types[tt]->set_up_test_type != NULL) {
             test_types[tt]->set_up_test_type((uintptr_t)e);
         }
 
+        // run only the first test which is AAAATRIVIAL0001
+        num_tests = 1;
+
         for (int i = 0; i < num_tests; i++) {
             if (tests[i]->test_type == test_types[tt]->id) {
-                sel4test_start_test(tests[i]->name, tests_done);
+                    sel4test_start_test(tests[i]->name, tests_done);
                 if (test_types[tt]->set_up != NULL) {
                     test_types[tt]->set_up((uintptr_t)e);
                 }
@@ -660,7 +666,7 @@ int main(void)
     void *res;
 
     /* Run sel4test-test related tests */
-    error = sel4utils_run_on_stack(&env.vspace, main_continued2, NULL, &res);
+    error = sel4utils_run_on_stack(&env.vspace, main_continued, NULL, &res);
     test_assert_fatal(error == 0);
     test_assert_fatal(res == 0);
 
