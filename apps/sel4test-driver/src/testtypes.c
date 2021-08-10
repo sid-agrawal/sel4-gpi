@@ -242,6 +242,8 @@ void basic_set_up(uintptr_t e)
     /* map the cap into remote vspace */
     env->remote_vaddr = vspace_share_mem(&env->vspace, &(env->test_process).vspace, env->init, 1, PAGE_BITS_4K,
                                          seL4_AllRights, 1);
+
+    printf("Driver page is mapped at in test VSpace at %p\n", env->remote_vaddr);
     assert(env->remote_vaddr != 0);
 
     /* WARNING: DO NOT COPY MORE CAPS TO THE PROCESS BEYOND THIS POINT,
