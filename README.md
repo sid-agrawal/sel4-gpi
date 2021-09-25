@@ -1,1 +1,1 @@
-# sel4-gpi
+# General Purpose Isolation(GPI)
