@@ -288,6 +288,9 @@ test_result_t basic_run_test(struct testcase *test, uintptr_t e)
         ZF_LOGF_IF(error != 0, "Failed to alloc time id %d", TIMER_ID);
     }
 
+    int num_res = sel4utils_walk_vspace(&env->test_process.vspace, &env->vka);
+    printf("\twalker found %d reservations stack addr is %p\n", num_res, &num_res);
+    
     /* wait on it to finish or fault, report result */
     int result = sel4test_driver_wait(env, test);
 
