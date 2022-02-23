@@ -465,6 +465,7 @@ void *main_continued(void *arg UNUSED)
     memcpy(env.init->untyped_size_bits_list, untyped_size_bits_list, sizeof(uint8_t) * env.num_untypeds);
 
     /* parse elf region data about the test image to pass to the tests app */
+    // siagraw: Hence vspace it NULL.
     num_elf_regions = sel4utils_elf_num_regions(&tests_elf);
     assert(num_elf_regions <= MAX_REGIONS);
     sel4utils_elf_reserve(NULL, &tests_elf, elf_regions);

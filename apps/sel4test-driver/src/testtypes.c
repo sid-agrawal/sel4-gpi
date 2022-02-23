@@ -278,6 +278,14 @@ test_result_t basic_run_test(struct testcase *test, uintptr_t e)
     char *argv[argc];
     sel4utils_create_word_args(string_args, argv, argc, env->endpoint, env->remote_vaddr);
 
+    int num_res = sel4utils_walk_vspace(&env->test_process.vspace, &env->vka);
+    vspace_t new_vspace;
+    error = sel4utils_copy_vspace(&env->vspace,
+                                  &env->test_process.vspace,
+                                  &new_vspace, &env->vka);
+    ZF_LOGF_IF(error != 0, "Failed to copy vspace");
+    printf("Copied vspace \n");
+    num_res = sel4utils_walk_vspace(&new_vspace, &env->vka);
     /* spawn the process */
     error = sel4utils_spawn_process_v(&(env->test_process), &env->vka, &env->vspace,
                                       argc, argv, 1);
@@ -288,9 +296,6 @@ test_result_t basic_run_test(struct testcase *test, uintptr_t e)
         ZF_LOGF_IF(error != 0, "Failed to alloc time id %d", TIMER_ID);
     }
 
-    int num_res = sel4utils_walk_vspace(&env->test_process.vspace, &env->vka);
-    printf("\twalker found %d reservations stack addr is %p\n", num_res, &num_res);
-    
     /* wait on it to finish or fault, report result */
     int result = sel4test_driver_wait(env, test);
 
