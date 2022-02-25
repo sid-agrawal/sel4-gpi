@@ -30,6 +30,8 @@
 #include "test.h"
 #include "init.h"
 
+int *shared_addr_between_threads;
+
 /* dummy global for libsel4muslcsys */
 char _cpio_archive[1];
 char _cpio_archive_end[1];
@@ -46,6 +48,20 @@ static sel4utils_alloc_data_t alloc_data;
 /* allocator static pool */
 #define ALLOCATOR_STATIC_POOL_SIZE ((1 << seL4_PageBits) * 20)
 static char allocator_mem_pool[ALLOCATOR_STATIC_POOL_SIZE];
+
+
+void thread_testing(void) {
+    printf("Thread testing entering\n");
+
+    int i = 0;
+    while (i < 10){
+        printf("Sleepign for a second\n");
+        //sleep(1);
+        i++;
+    }
+   // *shared_addr_between_threads = 77;
+    printf("Thread testing leaving\n");
+}
 
 /* override abort, called by exit (and assert fail) */
 void abort(void)
@@ -181,6 +197,10 @@ int main(int argc, char **argv)
 {
     sel4muslcsys_register_stdio_write_fn(write_buf);
 
+   //int x = 0x55;
+   // shared_addr_between_threads = &x;
+   // printf("address of x is %p\n", shared_addr_between_threads);
+
     test_init_data_t *init_data;
     struct env env;
 
@@ -239,6 +259,7 @@ int main(int argc, char **argv)
         ZF_LOGF("Cannot find test %s\n", init_data->name);
     }
 
+    printf("========= add of thread_testing is %p\n", thread_testing);
     printf("Test %s %s\n", init_data->name, result == SUCCESS ? "passed" : "failed");
     /* send our result back */
     seL4_MessageInfo_t info = seL4_MessageInfo_new(seL4_Fault_NullFault, 0, 0, 1);
@@ -249,5 +270,7 @@ int main(int argc, char **argv)
      * scheduled to run again after signalling them with the above send.
      */
     assert(!"unreachable");
+
+
     return 0;
 }
