@@ -29,8 +29,9 @@
 #include "helpers.h"
 #include "test.h"
 #include "init.h"
+#include <rpc.pb.h>
 
-int *shared_addr_between_threads;
+//int *shared_addr_between_threads;
 
 /* dummy global for libsel4muslcsys */
 char _cpio_archive[1];
@@ -61,7 +62,9 @@ void thread_testing(void) {
     }
    // *shared_addr_between_threads = 77;
     printf("Thread testing leaving\n");
+    while (1);
 }
+
 
 /* override abort, called by exit (and assert fail) */
 void abort(void)
@@ -257,6 +260,24 @@ int main(int argc, char **argv)
     } else {
         result = FAILURE;
         ZF_LOGF("Cannot find test %s\n", init_data->name);
+    }
+
+    RpcMessage rpcMsg = {
+        .which_msg = RpcMessage_threadStack_tag,
+        .msg.threadStack = {
+            .entryPoint = (uintptr_t) thread_testing,
+            .isolateStack = true,
+      },
+    };
+
+    cspacepath_t dest;
+    int err = vka_cspace_alloc_path(&env.vka, &dest);
+    if (err) {
+        ZF_LOGF("Failed to allocate cspace path");
+    }
+    err = sel4rpc_call(&env.rpc_client, &rpcMsg, dest.root, dest.capPtr, dest.capDepth);
+    if (err) {
+        ZF_LOGF("Failed to call rpc");
     }
 
     printf("========= add of thread_testing is %p\n", thread_testing);
