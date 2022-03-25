@@ -45,6 +45,7 @@ sel4_libs_import_libraries()
 set(LibNanopb ON CACHE BOOL "" FORCE)
 sel4_projects_libs_import_libraries()
 add_subdirectory(../../libsel4testsupport libsel4testsupport)
+add_subdirectory(../../libsel4gpi libsel4gpi)
 
 file(
     GLOB
@@ -77,6 +78,7 @@ target_link_libraries(
         sel4rpc
         sel4test
         sel4platsupport
+        sel4gpi
         sel4muslcsys
         sel4testsupport
     PRIVATE sel4test-driver_Config

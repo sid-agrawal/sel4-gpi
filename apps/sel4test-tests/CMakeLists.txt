@@ -48,6 +48,7 @@ target_link_libraries(
         sel4sync
         sel4muslcsys
         sel4testsupport
+        sel4gpi
         sel4serialserver_tests
     PRIVATE sel4test-driver_Config
 )
