@@ -196,9 +196,12 @@ void init_simple(env_t env, test_init_data_t *init_data)
 // each invocation of this binary has 2 args:
 // endpoint to communicate back to driver
 // init data which has the name of the test run.
+
+_Thread_local int counter = 0;
 int main(int argc, char **argv)
 {
     sel4muslcsys_register_stdio_write_fn(write_buf);
+
 
    //int x = 0x55;
    // shared_addr_between_threads = &x;
@@ -280,6 +283,12 @@ int main(int argc, char **argv)
         ZF_LOGF("Failed to call rpc");
     }
 
+
+
+    printf("========= add of thread_testing is %p\n", thread_testing);
+    printf("========= Walk from inside the child START\n");
+    sel4utils_walk_vspace(&env.vspace, &env.vka);
+    printf("========= Walk from inside the child end\n");
     printf("========= add of thread_testing is %p\n", thread_testing);
     printf("Test %s %s\n", init_data->name, result == SUCCESS ? "passed" : "failed");
     /* send our result back */
