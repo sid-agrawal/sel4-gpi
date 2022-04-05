@@ -12,10 +12,14 @@
 
 #define MIN_EXPECTED_ALLOCATIONS 100
 
-int test_vspace_walker(env_t env)
+int test_counter_capability(env_t env)
 {
-    // siagraw: This is not the right vspace to look at.
-    // int num_res = sel4utils_walk_vspace(&env->vspace, &env->vka);
+
+    // Using a known EP, get a new counter CAP.
+
+    // Increment the counter cap.
+
+    // Delete the counter cap.
     return sel4test_get_result();
 }
-DEFINE_TEST(WALKER001, "Ensure the walker works", test_vspace_walker, true)
+DEFINE_TEST(WALKER001, "Ensure the counter cap works works", test_counter_capability, true)

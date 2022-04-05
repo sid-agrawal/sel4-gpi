@@ -284,7 +284,7 @@ test_result_t basic_run_test(struct testcase *test, uintptr_t e)
     int num_res;
     num_res = sel4utils_walk_vspace(&env->test_process.vspace, &env->vka);
     vspace_t new_vspace;
-    //error = sel4utils_copy_vspace(&env->vspace, &env->test_process.vspace, &new_vspace, &env->vka);
+    error = sel4utils_copy_vspace(&env->vspace, &env->test_process.vspace, &new_vspace, &env->vka);
     ZF_LOGF_IF(error != 0, "Failed to copy vspace");
     printf("Copied vspace \n");
    // num_res = sel4utils_walk_vspace(&new_vspace, &env->vka);
