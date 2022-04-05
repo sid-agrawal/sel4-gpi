@@ -10,7 +10,8 @@
 #include <vka/object.h>
 #include <vspace/vspace.h>
 
-#include "counter.h"
+#include <sel4gpi/counter_obj.h>
+
 /** @file APIs for managing and interacting with the serial server thread.
  *
  * Defines the constants for the protocol, messages, and server-side state, as
@@ -26,6 +27,8 @@
 #define COUNTERSERVP     "CounterServ Parent: "
 
 #define COUNTER_SERVER_BADGE_VALUE_EMPTY (0)
+#define COUNTER_SERVER_BADGE_DEFAULT_VALUE (0xDEADBEEF)
+
 
 /* IPC values returned in the "label" message header. */
 enum counter_server_errors {
@@ -39,6 +42,9 @@ enum counter_server_errors {
 enum counter_server_funcs {
     FUNC_CONNECT_REQ = 0,
     FUNC_CONNECT_ACK,
+
+    FUNC_SERVER_SPAWN_SYNC_REQ,
+    FUNC_SERVER_SPAWN_SYNC_ACK,
 
     FUNC_INCREMENT_REQ,
     FUNC_INCREMENT_ACK,
@@ -59,9 +65,12 @@ enum counter_server_msgregs {
     CSMSGREG_LABEL0,
 
     CSMSGREG_CONNECT_REQ_END = CSMSGREG_LABEL0,
-    
+
     // Todo(siagraw): The return will have a new cap.
     CSMSGREG_CONNECT_ACK_END = CSMSGREG_LABEL0,
+
+    CSMSGREG_SPAWN_SYNC_REQ_END = CSMSGREG_LABEL0,
+    CSMSGREG_SPAWN_SYNC_ACK_END = CSMSGREG_LABEL0,
 
     CSMSGREG_INCREMENT_REQ_END = CSMSGREG_LABEL0,
     CSMSGREG_INCREMENT_ACK_END = CSMSGREG_LABEL0,
@@ -87,10 +96,16 @@ typedef struct _counter_server_context {
     simple_t *server_simple;
     vka_t *server_vka;
     seL4_CPtr server_cspace;
-    cspacepath_t *frame_cap_recv_cspaths;
     vspace_t *server_vspace;
     sel4utils_thread_t server_thread;
+
+    // The server listens on this endpoint. 
     vka_object_t server_ep_obj;
+
+    // Parent's badge value.
+    // There is only 1 parent and hence only 1 badge value.
+    seL4_Word parent_badge_value;
+    cspacepath_t _badged_server_ep_cspath;
 
     int registry_n_entries;
     counter_server_registry_entry_t *registry;
@@ -104,3 +119,4 @@ counter_server_context_t *get_serial_server(void);
 void counter_server_main(void);
 
 counter_server_registry_entry_t *serial_server_registry_get_entry_by_badge(seL4_Word badge_value);
+counter_server_context_t *get_counter_server(void);

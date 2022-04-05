@@ -265,31 +265,7 @@ int main(int argc, char **argv)
         ZF_LOGF("Cannot find test %s\n", init_data->name);
     }
 
-    RpcMessage rpcMsg = {
-        .which_msg = RpcMessage_threadStack_tag,
-        .msg.threadStack = {
-            .entryPoint = (uintptr_t) thread_testing,
-            .isolateStack = true,
-      },
-    };
 
-    cspacepath_t dest;
-    int err = vka_cspace_alloc_path(&env.vka, &dest);
-    if (err) {
-        ZF_LOGF("Failed to allocate cspace path");
-    }
-    err = sel4rpc_call(&env.rpc_client, &rpcMsg, dest.root, dest.capPtr, dest.capDepth);
-    if (err) {
-        ZF_LOGF("Failed to call rpc");
-    }
-
-
-
-    printf("========= add of thread_testing is %p\n", thread_testing);
-    printf("========= Walk from inside the child START\n");
-    sel4utils_walk_vspace(&env.vspace, &env.vka);
-    printf("========= Walk from inside the child end\n");
-    printf("========= add of thread_testing is %p\n", thread_testing);
     printf("Test %s %s\n", init_data->name, result == SUCCESS ? "passed" : "failed");
     /* send our result back */
     seL4_MessageInfo_t info = seL4_MessageInfo_new(seL4_Fault_NullFault, 0, 0, 1);

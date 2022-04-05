@@ -19,6 +19,8 @@
 #include <vspace/vspace.h>
 #include <sel4utils/process.h>
 
+#define COUNTER_SERVER_DEFAULT_PRIORITY    (seL4_MaxPrio - 1)
+
 /** @file API for allowing a thread to act as the parent to a serial server
  * thread.
  *

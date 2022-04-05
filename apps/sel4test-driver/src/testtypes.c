@@ -259,9 +259,6 @@ void basic_set_up(uintptr_t e)
     assert(env->init->free_slots.start < env->init->free_slots.end);
 }
 
-void start_thread_stack( vka_t * vka, vspace_t *current, vspace_t *target,  vspace_t *sbiling,
-seL4_CNode cspace, bool isolated_stack) ;
-
 test_result_t basic_run_test(struct testcase *test, uintptr_t e)
 {
     int error;
@@ -282,12 +279,6 @@ test_result_t basic_run_test(struct testcase *test, uintptr_t e)
     sel4utils_create_word_args(string_args, argv, argc, env->endpoint, env->remote_vaddr);
 
     int num_res;
-    num_res = sel4utils_walk_vspace(&env->test_process.vspace, &env->vka);
-    vspace_t new_vspace;
-    error = sel4utils_copy_vspace(&env->vspace, &env->test_process.vspace, &new_vspace, &env->vka);
-    ZF_LOGF_IF(error != 0, "Failed to copy vspace");
-    printf("Copied vspace \n");
-   // num_res = sel4utils_walk_vspace(&new_vspace, &env->vka);
     /* spawn the process */
     error = sel4utils_spawn_process_v(&(env->test_process), &env->vka, &env->vspace,
                                       argc, argv, 1);
@@ -298,17 +289,6 @@ test_result_t basic_run_test(struct testcase *test, uintptr_t e)
         ZF_LOGF_IF(error != 0, "Failed to alloc time id %d", TIMER_ID);
     }
 
-    printf("========= Walk of the driver vspace start=========\n");
-    sel4utils_walk_vspace(&env->vspace, &env->vka);
-    printf("========= Walk of the driver vspace end=========\n");
-    //Start a new thread in this process.
-    bool isolated_stack    = false;
-    // start_thread_stack(&env->vka,
-    //                    &env->vspace,
-    //                    &new_vspace,
-    //                    &env->test_process.vspace,
-    //                    (seL4_CNode)env->test_process.cspace.cptr,
-    //                    isolated_stack);
 
     /* wait on it to finish or fault, report result */
     int result = sel4test_driver_wait(env, test);
@@ -316,46 +296,6 @@ test_result_t basic_run_test(struct testcase *test, uintptr_t e)
     test_assert(result == SUCCESS);
 
     return result;
-}
-
-void start_thread_stack(vka_t *vka, vspace_t *current, vspace_t *target, vspace_t *sibling,
-                        seL4_CNode cspace, bool isolated_stack)
-{
-
-    sel4utils_thread_entry_fn ep = (sel4utils_thread_entry_fn)0x405efc;
-    sel4utils_thread_t thread_data;
-
-    // if (isolated_stack)
-    // {
-    //     target = target;
-    // }
-    // else
-    // {
-    //     target = sibling;
-    // }
-
-    int err = sel4utils_configure_thread(vka,
-                                         current,
-                                         sibling,
-                                         0,
-                                         cspace,
-                                         0,
-                                         &thread_data);
-    if (err)
-    {
-        ZF_LOGF("Failed to configure thread");
-    }
-
-    // sel4utils_walk_vspace(target, vka);
-
-    err = sel4utils_start_thread(&thread_data,
-                                 ep,
-                                 NULL, NULL,
-                                 true);
-    if (err)
-    {
-        ZF_LOGF("Failed to start thread");
-    }
 }
 
 void basic_tear_down(uintptr_t e)

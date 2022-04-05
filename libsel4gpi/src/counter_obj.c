@@ -1,7 +1,7 @@
 /**
  * @file counter_obj.c
  * @author Sid Agrawal(sid@sid-agrawal.ca)
- * @brief 
+ * @brief Implements the methods to manipulate the coutner object
  * @version 0.1
  * @date 2022-04-05
  * 
@@ -9,7 +9,7 @@
  * 
  */
 
-#include <libsel4gpi/counter_obj.h>
+#include <sel4gpi/counter_obj.h>
 
 int counter_increment(counter_t *counter) {
     counter->value++;

@@ -47,6 +47,7 @@
 #include "timer.h"
 
 #include <sel4platsupport/io.h>
+#include <sel4gpi/counter_parentapi.h>
 
 /* ammount of untyped memory to reserve for the driver (32mb) */
 #define DRIVER_UNTYPED_MEMORY (1 << 25)
@@ -424,7 +425,7 @@ void *main_continued(void *arg UNUSED)
 
     /* Print welcome banner. */
     printf("\n");
-    printf("seL4 Test\n");
+    printf("seL4 Test!!\n");
     printf("=========\n");
     printf("\n");
 
@@ -485,6 +486,16 @@ void *main_continued(void *arg UNUSED)
         error = vka_alloc_reply(&env.vka, &env.reply);
         ZF_LOGF_IF(error, "Failed to allocate reply");
     }
+
+    ZF_LOGD("Starting counter server...");
+    /* Start core services */
+    error = counter_server_parent_spawn_thread(&env.simple,
+                                        &env.vka,
+                                        &env.vspace,
+                                        COUNTER_SERVER_DEFAULT_PRIORITY);
+    printf("Failed to start counter server: %d\n", error);
+    
+
 
     /* now run the tests */
     sel4test_run_tests(&env);
