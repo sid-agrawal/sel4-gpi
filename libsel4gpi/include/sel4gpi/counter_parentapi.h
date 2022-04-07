@@ -19,6 +19,8 @@
 #include <vspace/vspace.h>
 #include <sel4utils/process.h>
 
+#include <sel4gpi/counter_server.h>
+
 #define COUNTER_SERVER_DEFAULT_PRIORITY    (seL4_MaxPrio - 1)
 
 /** @file API for allowing a thread to act as the parent to a serial server
@@ -41,9 +43,11 @@
  * @param parent_vspace Initialized vspace_t for the parent process that is
  *                      spawning the server thread.
  * @param priority Server thread's priority.
+ * @param server_ep_obj_cap Server thread's endpoint cap.
  * @return seL4_Error value.
  */
 seL4_Error counter_server_parent_spawn_thread(simple_t *parent_simple,
                                              vka_t *parent_vka,
                                              vspace_t *parent_vspace,
-                                             uint8_t priority);
+                                             uint8_t priority,
+                                             seL4_CPtr *server_ep_cap_for_client);

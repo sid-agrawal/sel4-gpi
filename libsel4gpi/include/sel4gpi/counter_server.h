@@ -27,7 +27,7 @@
 #define COUNTERSERVP     "CounterServ Parent: "
 
 #define COUNTER_SERVER_BADGE_VALUE_EMPTY (0)
-#define COUNTER_SERVER_BADGE_DEFAULT_VALUE (0xDEADBEEF)
+#define COUNTER_SERVER_BADGE_PARENT_VALUE (0xDEADBEEF)
 
 
 /* IPC values returned in the "label" message header. */
@@ -88,6 +88,7 @@ typedef struct _counter_server_registry_entry {
 
     // This is the actual counter value.
     counter_t counter;
+    struct _counter_server_registry_entry *next;
     
 } counter_server_registry_entry_t;
 
@@ -108,7 +109,7 @@ typedef struct _counter_server_context {
     cspacepath_t _badged_server_ep_cspath;
 
     int registry_n_entries;
-    counter_server_registry_entry_t *registry;
+    counter_server_registry_entry_t *client_registry;
 } counter_server_context_t;
 
 /* Global server instance accessor functions. */

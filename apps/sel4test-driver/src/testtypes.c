@@ -234,6 +234,9 @@ void basic_set_up(uintptr_t e)
      * or a fault to see when the test finishes */
     env->endpoint = sel4utils_copy_cap_to_process(&(env->test_process), &env->vka, env->test_process.fault_endpoint.cptr);
 
+    // For the counter-server
+    env->counter_endpoint = sel4utils_copy_cap_to_process(&(env->test_process), &env->vka, env->counter_endpoint);
+
     /* copy the device frame, if any */
     if (env->init->device_frame_cap) {
         env->init->device_frame_cap = sel4utils_copy_cap_to_process(&(env->test_process), &env->vka, env->device_obj.cptr);
@@ -253,7 +256,7 @@ void basic_set_up(uintptr_t e)
     if (env->init->device_frame_cap) {
         env->init->free_slots.start = env->init->device_frame_cap + 1;
     } else {
-        env->init->free_slots.start = env->endpoint + 1;
+        env->init->free_slots.start = env->counter_endpoint + 1;
     }
     env->init->free_slots.end = (1u << TEST_PROCESS_CSPACE_SIZE_BITS);
     assert(env->init->free_slots.start < env->init->free_slots.end);
@@ -273,10 +276,10 @@ test_result_t basic_run_test(struct testcase *test, uintptr_t e)
 #endif
 
     /* set up args for the test process */
-    seL4_Word argc = 2;
+    seL4_Word argc = 3;
     char string_args[argc][WORD_STRING_SIZE];
     char *argv[argc];
-    sel4utils_create_word_args(string_args, argv, argc, env->endpoint, env->remote_vaddr);
+    sel4utils_create_word_args(string_args, argv, argc, env->endpoint, env->remote_vaddr, env->counter_endpoint);
 
     int num_res;
     /* spawn the process */

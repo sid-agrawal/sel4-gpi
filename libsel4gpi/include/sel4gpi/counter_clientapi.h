@@ -11,9 +11,11 @@
 #include <vka/object.h>
 #include <vspace/vspace.h>
 
+#include <sel4gpi/counter_server.h>
+
 typedef struct _counter_client_context {
    cspacepath_t badged_server_ep_cspath;
-   cspacepath_t public_server_ep_cspath;
+   //cspacepath_t public_server_ep_cspath;
 } counter_client_context_t;
 
 /**

@@ -78,6 +78,8 @@ struct driver_env {
     sel4utils_process_t test_process;
     seL4_CPtr endpoint;
 
+    seL4_CPtr counter_endpoint;
+
     int num_untypeds;
     vka_object_t *untypeds;
 

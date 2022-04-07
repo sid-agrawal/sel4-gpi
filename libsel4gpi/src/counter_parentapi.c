@@ -26,8 +26,9 @@
 seL4_Error
 counter_server_parent_spawn_thread(simple_t *parent_simple, vka_t *parent_vka,
                                   vspace_t *parent_vspace,
-                                  uint8_t priority)
-                                  {
+                                  uint8_t priority,
+                                  seL4_CPtr *server_ep_cap)
+{
     seL4_Error error;
     cspacepath_t parent_cspace_cspath;
     seL4_MessageInfo_t tag;
@@ -54,6 +55,8 @@ counter_server_parent_spawn_thread(simple_t *parent_simple, vka_t *parent_vka,
         return error;
     }
 
+    *server_ep_cap = get_counter_server()->server_ep_obj.cptr; 
+
     /* And also allocate a badged copy of the Server's endpoint that the Parent
      * can use to send to the Server. This is used to allow the Server to report
      * back to the Parent on whether or not the Server successfully bound to a
@@ -64,7 +67,7 @@ counter_server_parent_spawn_thread(simple_t *parent_simple, vka_t *parent_vka,
      * Server later on.
      */
 
-    get_counter_server()->parent_badge_value = COUNTER_SERVER_BADGE_DEFAULT_VALUE;
+    get_counter_server()->parent_badge_value = COUNTER_SERVER_BADGE_PARENT_VALUE;
 
     error = vka_mint_object(parent_vka, &get_counter_server()->server_ep_obj,
                             &get_counter_server()->_badged_server_ep_cspath,
@@ -125,9 +128,12 @@ counter_server_parent_spawn_thread(simple_t *parent_simple, vka_t *parent_vka,
         goto out;
     }
 
+    printf(COUNTERSERVP"spawn_thread: Server thread binded well. at public EP %d\n",
+           get_counter_server()->server_ep_obj.cptr);
     return 0;
 
 out:
+    printf("spawn_thread: Server ran into an error.\n");
     if (get_counter_server()->_badged_server_ep_cspath.capPtr != 0) {
         vka_cspace_free_path(parent_vka, get_counter_server()->_badged_server_ep_cspath);
     }
