@@ -22,20 +22,20 @@
  * server thread.
  */
 
-#define COUNTERSERVS     "CounterServ Server: "
-#define COUNTERSERVC     "CounterServ Client: "
-#define COUNTERSERVP     "CounterServ Parent: "
+#define ADSSERVS     "CounterServ Server: "
+#define ADSSERVC     "CounterServ Client: "
+#define ADSSERVP     "CounterServ Parent: "
 
-#define COUNTER_SERVER_BADGE_VALUE_EMPTY (0)
-#define COUNTER_SERVER_BADGE_PARENT_VALUE (0xDEADBEEF)
+#define ADS_SERVER_BADGE_VALUE_EMPTY (0)
+#define ADS_SERVER_BADGE_PARENT_VALUE (0xDEADBEEF)
 
 
 /* IPC values returned in the "label" message header. */
 enum counter_server_errors {
-    COUNTER_SERVER_NOERROR = 0,
+    ADS_SERVER_NOERROR = 0,
     /* No future collisions with seL4_Error.*/
-    COUNTER_SERVER_ERROR_BIND_FAILED = seL4_NumErrors,
-    COUNTER_SERVER_ERROR_UNKNOWN
+    ADS_SERVER_ERROR_BIND_FAILED = seL4_NumErrors,
+    ADS_SERVER_ERROR_UNKNOWN
 };
 
 /* IPC Message register values for SSMSGREG_FUNC */
@@ -65,6 +65,8 @@ enum counter_server_msgregs {
     CSMSGREG_LABEL0,
 
     CSMSGREG_CONNECT_REQ_END = CSMSGREG_LABEL0,
+
+    // Todo(siagraw): The return will have a new cap.
     CSMSGREG_CONNECT_ACK_END = CSMSGREG_LABEL0,
 
     CSMSGREG_SPAWN_SYNC_REQ_END = CSMSGREG_LABEL0,
@@ -117,4 +119,5 @@ counter_server_context_t *get_serial_server(void);
  */
 void counter_server_main(void);
 
+counter_server_registry_entry_t *serial_server_registry_get_entry_by_badge(seL4_Word badge_value);
 counter_server_context_t *get_counter_server(void);

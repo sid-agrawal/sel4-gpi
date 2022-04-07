@@ -54,6 +54,11 @@ static inline void reply(seL4_MessageInfo_t tag)
 }
 
 
+/**
+ * @brief Insert a new client into the client registry Linked List.
+ * 
+ * @param new_node 
+ */
 static void counter_server_registry_insert(counter_server_registry_entry_t *new_node) {
 
     counter_server_registry_entry_t *head = get_counter_server()->client_registry;
@@ -82,7 +87,7 @@ static counter_server_registry_entry_t *counter_server_registry_get_entry_by_bad
     counter_server_registry_entry_t *current_ctx = get_counter_server()->client_registry;
 
     while (current_ctx != NULL) {
-        if (current_ctx == badge) {
+        if ((seL4_Word)current_ctx == badge) {
             break;
         }
         current_ctx = current_ctx->next;

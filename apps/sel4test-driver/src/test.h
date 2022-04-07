@@ -78,6 +78,10 @@ struct driver_env {
     sel4utils_process_t test_process;
     seL4_CPtr endpoint;
 
+
+    /* Add for libsel4gpi */
+    seL4_CPtr ads_endpoint;
+    seL4_CPtr cpu_endpoint;
     seL4_CPtr counter_endpoint;
 
     int num_untypeds;
