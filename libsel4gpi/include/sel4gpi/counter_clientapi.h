@@ -22,7 +22,8 @@ typedef struct _counter_client_context {
  * @brief   Initialize the counter client.
  * 
  * @param server_ep_cap Well known server endpoint cap.
- * @param client_vka client's cka for allocating memory.
+ * @param client_vka client's cka for allocating cspace slot of the returning cap.
+ *                   This should also be done by the server.
  * @param ret_conn client's connection object
  * @return int 0 on success, -1 on failure.
  */

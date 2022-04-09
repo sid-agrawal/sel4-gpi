@@ -130,7 +130,7 @@ void counter_server_main()
     printf(COUNTERSERVS"counter_server_main: Got a call from the parent.\n");
     if (error != 0)
     {
-        seL4_TCB_Suspend(get_serial_server()->server_thread.tcb.cptr);
+        seL4_TCB_Suspend(get_counter_server()->server_thread.tcb.cptr);
     }
 
 
@@ -213,8 +213,8 @@ void counter_server_main()
         }
     }
 
-    //serial_server_func_kill();
+    //counter_server_func_kill();
     /* After we break out of the loop, seL4_TCB_Suspend ourselves */
     ZF_LOGI(COUNTERSERVS"main: Suspending.");
-    seL4_TCB_Suspend(get_serial_server()->server_thread.tcb.cptr);
+    seL4_TCB_Suspend(get_counter_server()->server_thread.tcb.cptr);
 }

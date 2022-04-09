@@ -39,6 +39,7 @@ char _cpio_archive_end[1];
 
 /* endpoint to call back to the test driver on */
 static seL4_CPtr endpoint;
+static seL4_CPtr ads_endpoint;
 static seL4_CPtr counter_endpoint;
 
 /* global static memory for init */
@@ -212,19 +213,20 @@ int main(int argc, char **argv)
     struct env env;
 
     /* parse args */
-    assert(argc == 3);
+    assert(argc == 4);
     endpoint = (seL4_CPtr) atoi(argv[0]);
 
     /* read in init data */
     init_data = (void *) atol(argv[1]);
 
-    counter_endpoint = (seL4_CPtr) atoi(argv[2]);
-    printf("counter_endpoint is %d\n", counter_endpoint);
-    debug_cap_identify(counter_endpoint);
+    ads_endpoint = (seL4_CPtr) atoi(argv[2]);
+    counter_endpoint = (seL4_CPtr) atoi(argv[3]);
+
     /* configure env */
     env.cspace_root = init_data->root_cnode;
     env.page_directory = init_data->page_directory;
     env.endpoint = endpoint;
+    env.ads_endpoint = ads_endpoint;
     env.counter_endpoint = counter_endpoint;
     env.priority = init_data->priority;
     env.cspace_size_bits = init_data->cspace_size_bits;
@@ -252,9 +254,10 @@ int main(int argc, char **argv)
 
     printf("%s %d counter_endpoint is %d: ", __FUNCTION__, __LINE__, counter_endpoint);
     debug_cap_identify(counter_endpoint);
+    printf("%s %d ads_endpoint is %d: ", __FUNCTION__, __LINE__, ads_endpoint);
+    debug_cap_identify(ads_endpoint);
     /* initialise simple */
     init_simple(&env, init_data);
-    printf("%s %d counter_endpoint is %d: ", __FUNCTION__, __LINE__, counter_endpoint);
 
     /* initialise rpc client */
     sel4rpc_client_init(&env.rpc_client, env.endpoint, SEL4TEST_PROTOBUF_RPC);

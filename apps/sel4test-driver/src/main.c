@@ -48,6 +48,7 @@
 
 #include <sel4platsupport/io.h>
 #include <sel4gpi/counter_parentapi.h>
+#include <sel4gpi/ads_parentapi.h>
 
 /* ammount of untyped memory to reserve for the driver (32mb) */
 #define DRIVER_UNTYPED_MEMORY (1 << 25)
@@ -487,19 +488,31 @@ void *main_continued(void *arg UNUSED)
         ZF_LOGF_IF(error, "Failed to allocate reply");
     }
 
-    ZF_LOGD("Starting counter server...");
     /* Start core services */
+    ZF_LOGD("Starting ads server...");
+    seL4_CPtr ads_server_ep_for_clients;
+    error = ads_server_parent_spawn_thread(&env.simple,
+                                        &env.vka,
+                                        &env.vspace,
+                                        ADS_SERVER_DEFAULT_PRIORITY,
+                                        &ads_server_ep_for_clients);
+    env.ads_endpoint_in_parent = ads_server_ep_for_clients;
+    printf(ADSSERVP"Public EP is: %d\n", ads_server_ep_for_clients);
+    printf(ADSSERVP"Public EP is: %d\n", env.ads_endpoint_in_parent);
+    debug_cap_identify(ads_server_ep_for_clients);
+    
+
+    ZF_LOGD("Starting counter server...");
     seL4_CPtr counter_server_ep_for_clients;
     error = counter_server_parent_spawn_thread(&env.simple,
                                         &env.vka,
                                         &env.vspace,
                                         COUNTER_SERVER_DEFAULT_PRIORITY,
                                         &counter_server_ep_for_clients);
-    env.counter_endpoint = counter_server_ep_for_clients;
+    env.counter_endpoint_in_parent = counter_server_ep_for_clients;
     printf(COUNTERSERVP"Public EP is: %d\n", counter_server_ep_for_clients);
-    printf(COUNTERSERVP"Public EP is: %d\n", env.counter_endpoint);
+    printf(COUNTERSERVP"Public EP is: %d\n", env.counter_endpoint_in_parent);
     debug_cap_identify(counter_server_ep_for_clients);
-    
     /* now run the tests */
     sel4test_run_tests(&env);
 

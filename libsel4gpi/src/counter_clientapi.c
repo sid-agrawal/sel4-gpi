@@ -19,16 +19,26 @@ int counter_server_client_connect(seL4_CPtr server_ep_cap,
 
     // Alloc a slot for the incoming cap.
     seL4_CPtr dest_cptr;
-    vka_cspace_alloc(client_vka, &dest_cptr);
+    int error;
+    error = vka_cspace_alloc(client_vka, &dest_cptr);
+    if (error) {
+        printf(COUNTERSERVC"Failed to allocate slot for the counter cap");
+        return error;
+    }
+    printf(COUNTERSERVC"%s:%d allocated slot=%d for the counter cap\n", __FILE__, __LINE__);
     cspacepath_t path;
     vka_cspace_make_path(client_vka, dest_cptr, &path);
+    if (error) {
+        printf(COUNTERSERVC"Failed to allocate slot for the counter cap");
+        return error;
+    }
     seL4_SetCapReceivePath(
         /* _service */      path.root,
         /* index */         path.capPtr,
         /* depth */         path.capDepth
     );
     
-    printf("%s %d counter_endpoint is %d: ", __FUNCTION__, __LINE__, server_ep_cap);
+    printf(COUNTERSERVC"%s:%d counter_endpoint is %d: ", __FUNCTION__, __LINE__, server_ep_cap);
     debug_cap_identify(server_ep_cap);
 
     printf(COUNTERSERVC"Client: Set a receive path for the badged ep: %d\n", path.capPtr);

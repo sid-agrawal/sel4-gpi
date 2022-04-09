@@ -80,9 +80,14 @@ struct driver_env {
 
 
     /* Add for libsel4gpi */
-    seL4_CPtr ads_endpoint;
-    seL4_CPtr cpu_endpoint;
-    seL4_CPtr counter_endpoint;
+    seL4_CPtr ads_endpoint_in_parent;
+    seL4_CPtr cpu_endpoint_in_parent;
+    seL4_CPtr counter_endpoint_in_parent;
+    
+    seL4_CPtr ads_endpoint_in_child;
+    seL4_CPtr cpu_endpoint_in_child;
+    seL4_CPtr counter_endpoint_in_child;
+
 
     int num_untypeds;
     vka_object_t *untypeds;

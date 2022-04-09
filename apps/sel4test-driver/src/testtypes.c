@@ -234,8 +234,10 @@ void basic_set_up(uintptr_t e)
      * or a fault to see when the test finishes */
     env->endpoint = sel4utils_copy_cap_to_process(&(env->test_process), &env->vka, env->test_process.fault_endpoint.cptr);
 
+    // For the ads-server
+    env->ads_endpoint_in_child = sel4utils_copy_cap_to_process(&(env->test_process), &env->vka, env->ads_endpoint_in_parent);
     // For the counter-server
-    env->counter_endpoint = sel4utils_copy_cap_to_process(&(env->test_process), &env->vka, env->counter_endpoint);
+    env->counter_endpoint_in_child = sel4utils_copy_cap_to_process(&(env->test_process), &env->vka, env->counter_endpoint_in_parent);
 
     /* copy the device frame, if any */
     if (env->init->device_frame_cap) {
@@ -246,7 +248,6 @@ void basic_set_up(uintptr_t e)
     env->remote_vaddr = vspace_share_mem(&env->vspace, &(env->test_process).vspace, env->init, 1, PAGE_BITS_4K,
                                          seL4_AllRights, 1);
 
-    printf("Driver page is mapped at in test VSpace at %p\n", env->remote_vaddr);
     assert(env->remote_vaddr != 0);
 
     /* WARNING: DO NOT COPY MORE CAPS TO THE PROCESS BEYOND THIS POINT,
@@ -256,7 +257,8 @@ void basic_set_up(uintptr_t e)
     if (env->init->device_frame_cap) {
         env->init->free_slots.start = env->init->device_frame_cap + 1;
     } else {
-        env->init->free_slots.start = env->counter_endpoint + 1;
+        env->init->free_slots.start = env->counter_endpoint_in_child + 1;
+        printf("%s:%d: free_slot.start %d\n", __FUNCTION__, __LINE__, env->init->free_slots.start);
     }
     env->init->free_slots.end = (1u << TEST_PROCESS_CSPACE_SIZE_BITS);
     assert(env->init->free_slots.start < env->init->free_slots.end);
@@ -276,10 +278,14 @@ test_result_t basic_run_test(struct testcase *test, uintptr_t e)
 #endif
 
     /* set up args for the test process */
-    seL4_Word argc = 3;
+    seL4_Word argc = 4;
     char string_args[argc][WORD_STRING_SIZE];
     char *argv[argc];
-    sel4utils_create_word_args(string_args, argv, argc, env->endpoint, env->remote_vaddr, env->counter_endpoint);
+    sel4utils_create_word_args(string_args, argv, argc,
+                               env->endpoint,
+                               env->remote_vaddr,
+                               env->ads_endpoint_in_child,
+                               env->counter_endpoint_in_child);
 
     int num_res;
     /* spawn the process */

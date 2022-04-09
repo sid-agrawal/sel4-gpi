@@ -24,14 +24,13 @@
 
 #define ADSSERVS     "ADSServ Server: "
 #define ADSSERVC     "ADSServ Client: "
-#define ADSSERVP     "ADSServ Parent: "
 
 #define ADS_SERVER_BADGE_VALUE_EMPTY (0)
 #define ADS_SERVER_BADGE_PARENT_VALUE (0xDEADBEEF)
 
 
 /* IPC values returned in the "label" message header. */
-enum counter_server_errors {
+enum ads_server_errors {
     ADS_SERVER_NOERROR = 0,
     /* No future collisions with seL4_Error.*/
     ADS_SERVER_ERROR_BIND_FAILED = seL4_NumErrors,
@@ -39,7 +38,7 @@ enum counter_server_errors {
 };
 
 /* IPC Message register values for SSMSGREG_FUNC */
-enum counter_server_funcs {
+enum ads_server_funcs {
     FUNC_CONNECT_REQ = 0,
     FUNC_CONNECT_ACK,
 
@@ -60,58 +59,57 @@ enum counter_server_funcs {
 };
 
 /* Designated purposes of each message register in the mini-protocol. */
-enum counter_server_msgregs {
+enum ads_server_msgregs {
     /* These four are fixed headers in every serserv message. */
-    CSMSGREG_FUNC = 0,
+    ADSMSGREG_FUNC = 0,
     /* This is a convenience label for IPC MessageInfo length. */
-    CSMSGREG_LABEL0,
+    ADSMSGREG_LABEL0,
 
     /* Connect / New */
-    CSMSGREG_CONNECT_REQ_END = CSMSGREG_LABEL0,
+    ADSMSGREG_CONNECT_REQ_END = ADSMSGREG_LABEL0,
 
-    CSMSGREG_CONNECT_ACK_END = CSMSGREG_LABEL0,
+    ADSMSGREG_CONNECT_ACK_END = ADSMSGREG_LABEL0,
 
 
     /* Server Spawn */
-    CSMSGREG_SPAWN_SYNC_REQ_END = CSMSGREG_LABEL0,
+    ADSMSGREG_SPAWN_SYNC_REQ_END = ADSMSGREG_LABEL0,
 
-    CSMSGREG_SPAWN_SYNC_ACK_END = CSMSGREG_LABEL0,
+    ADSMSGREG_SPAWN_SYNC_ACK_END = ADSMSGREG_LABEL0,
 
 
 
     /* Attach */
-    CSMSGREG_ATTACH_REQ_CA = CSMSGREG_LABEL0,
-    CSMSGREG_ATTACH_REQ_END,
+    ADSMSGREG_ATTACH_REQ_VA = ADSMSGREG_LABEL0,
+    ADSMSGREG_ATTACH_REQ_END,
 
-    CSMSGREG_ATTACH_ACK_END = CSMSGREG_LABEL0,
+    ADSMSGREG_ATTACH_ACK_END = ADSMSGREG_LABEL0,
     
 
 
     /* Remove */
-    CSMSGREG_RM_REQ_VA = CSMSGREG_LABEL0,
-    CSMSGREG_RM_REQ_END,
+    ADSMSGREG_RM_REQ_VA = ADSMSGREG_LABEL0,
+    ADSMSGREG_RM_REQ_END,
 
-    CSMSGREG_RM_ACK_END = CSMSGREG_LABEL0,
+    ADSMSGREG_RM_ACK_END = ADSMSGREG_LABEL0,
 
 
 
     /* Bind to CPU */
-    CSMSGREG_BIND_CPU_REQ_END = CSMSGREG_LABEL0,
+    ADSMSGREG_BIND_CPU_REQ_END = ADSMSGREG_LABEL0,
 
-    CSMSGREG_BIND_CPU_ACK_END = CSMSGREG_LABEL0,
+    ADSMSGREG_BIND_CPU_ACK_END = ADSMSGREG_LABEL0,
 
 
 
     /* Disconnect / Delete*/
-    CSMSGREG_DISCONNECT_REQ_END = CSMSGREG_LABEL0,
+    ADSMSGREG_DISCONNECT_REQ_END = ADSMSGREG_LABEL0,
 
-    CSMSGREG_DISCONNECT_ACK_END = CSMSGREG_LABEL0,
+    ADSMSGREG_DISCONNECT_ACK_END = ADSMSGREG_LABEL0,
 };
 
 /* Per-client context maintained by the server. */
 typedef struct _ads_server_registry_entry {
-    // This is the actual address space
-    vspace_t *vspace;
+    ads_t ads;
     struct _ads_server_registry_entry *next;
     
 } ads_server_registry_entry_t;

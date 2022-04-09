@@ -24,7 +24,6 @@
 
 #define COUNTERSERVS     "CounterServ Server: "
 #define COUNTERSERVC     "CounterServ Client: "
-#define COUNTERSERVP     "CounterServ Parent: "
 
 #define COUNTER_SERVER_BADGE_VALUE_EMPTY (0)
 #define COUNTER_SERVER_BADGE_PARENT_VALUE (0xDEADBEEF)
@@ -111,10 +110,8 @@ typedef struct _counter_server_context {
 } counter_server_context_t;
 
 /* Global server instance accessor functions. */
-counter_server_context_t *get_serial_server(void);
+counter_server_context_t *get_counter_server(void);
 
 /** Internal library function: acts as the main() for the server thread.
  */
 void counter_server_main(void);
-
-counter_server_context_t *get_counter_server(void);
