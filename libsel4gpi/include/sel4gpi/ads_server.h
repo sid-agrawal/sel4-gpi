@@ -141,3 +141,13 @@ void ads_server_main(void);
 
 /* Global server instance accessor functions. */
 ads_server_context_t *get_ads_server(void);
+
+/**
+ * @brief Given a vspace_t insert it into the ADS server's metadata and return a cap to it.
+ * 
+ * @param vspace The vspace to insert.
+ * @param vka The vka instance to use for allocating the cap.
+ * @param cap_ret The cap to the vspace.
+ * @return int 
+ */
+int forge_ads_cap_from_vspace(vspace_t *vspace, vka_t *vka, seL4_CPtr *cap_ret);

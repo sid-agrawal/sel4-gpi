@@ -14,6 +14,7 @@
 #include "test.h"
 #include "timer.h"
 #include <sel4rpc/server.h>
+#include <sel4gpi/ads_server.h>
 #include <sel4testsupport/testreporter.h>
 
 /* Bootstrap test type. */
@@ -234,6 +235,15 @@ void basic_set_up(uintptr_t e)
      * or a fault to see when the test finishes */
     env->endpoint = sel4utils_copy_cap_to_process(&(env->test_process), &env->vka, env->test_process.fault_endpoint.cptr);
 
+    // For the child's as cap in the child
+    // First forge a cap to the child's vspace
+    seL4_CPtr child_as_cap_in_parent;
+    error = forge_ads_cap_from_vspace(&env->test_process.vspace, &env->vka, &child_as_cap_in_parent);
+    if (error){
+        ZF_LOGF("Failed to forge child's as cap");
+    }
+
+    env->child_as_cptr_in_child = sel4utils_copy_cap_to_process(&(env->test_process), &env->vka, child_as_cap_in_parent);
     // For the ads-server
     env->ads_endpoint_in_child = sel4utils_copy_cap_to_process(&(env->test_process), &env->vka, env->ads_endpoint_in_parent);
     // For the counter-server
@@ -278,14 +288,15 @@ test_result_t basic_run_test(struct testcase *test, uintptr_t e)
 #endif
 
     /* set up args for the test process */
-    seL4_Word argc = 4;
+    seL4_Word argc = 5;
     char string_args[argc][WORD_STRING_SIZE];
     char *argv[argc];
     sel4utils_create_word_args(string_args, argv, argc,
                                env->endpoint,
                                env->remote_vaddr,
                                env->ads_endpoint_in_child,
-                               env->counter_endpoint_in_child);
+                               env->counter_endpoint_in_child,
+                               env->child_as_cptr_in_child);
 
     int num_res;
     /* spawn the process */

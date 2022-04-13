@@ -60,6 +60,8 @@ static inline void reply(seL4_MessageInfo_t tag)
  * @param new_node 
  */
 static void ads_server_registry_insert(ads_server_registry_entry_t *new_node) {
+        // TODO:Use a mutex
+
 
     ads_server_registry_entry_t *head = get_ads_server()->client_registry;
 
@@ -185,7 +187,7 @@ void ads_server_main()
             break;
 
         case FUNC_ATTACH_REQ:
-            printf(ADSSERVS"main: Got increment request from client badge %x.\n",
+            printf(ADSSERVS"main: Got attach request from client badge %x.\n",
                     sender_badge);
 
             /* Find the client */
@@ -223,4 +225,39 @@ void ads_server_main()
     /* After we break out of the loop, seL4_TCB_Suspend ourselves */
     ZF_LOGI(ADSSERVS"main: Suspending.");
     seL4_TCB_Suspend(get_ads_server()->server_thread.tcb.cptr);
+}
+
+int forge_ads_cap_from_vspace(vspace_t *vspace, vka_t *vka, seL4_CPtr *cap_ret){
+
+    /* Allocate a new registry entry for the client. */
+    seL4_Word client_reg_ptr = (seL4_Word)malloc(sizeof(ads_server_registry_entry_t));
+    if (client_reg_ptr == 0)
+    {
+        printf(ADSSERVS "main: Failed to allocate new badge for client.\n");
+        return 1;
+    }
+    memset((void *)client_reg_ptr, 0, sizeof(ads_server_registry_entry_t));
+    ads_server_registry_insert((ads_server_registry_entry_t *)client_reg_ptr);
+
+    /* Create a badged endpoint for the client to send messages to.
+     * Use the address of the client_registry_entry as the badge.
+     */
+    cspacepath_t src, dest;
+    vka_cspace_make_path(get_ads_server()->server_vka,
+                         get_ads_server()->server_ep_obj.cptr, &src);
+    seL4_CPtr dest_cptr;
+    vka_cspace_alloc(get_ads_server()->server_vka, &dest_cptr);
+    vka_cspace_make_path(get_ads_server()->server_vka, dest_cptr, &dest);
+
+    int error = vka_cnode_mint(&dest, &src, seL4_AllRights, client_reg_ptr);
+    if (error)
+    {
+        printf(ADSSERVS "main: Failed to mint client badge %x.\n",
+               client_reg_ptr);
+        return 1;
+    }
+    printf(ADSSERVS "main: Forged a new ADS cap with badge value: %x\n", client_reg_ptr);
+
+    *cap_ret = dest_cptr;
+    return 0;
 }

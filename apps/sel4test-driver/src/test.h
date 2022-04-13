@@ -84,6 +84,7 @@ struct driver_env {
     seL4_CPtr cpu_endpoint_in_parent;
     seL4_CPtr counter_endpoint_in_parent;
     
+    seL4_CPtr child_as_cptr_in_child;
     seL4_CPtr ads_endpoint_in_child;
     seL4_CPtr cpu_endpoint_in_child;
     seL4_CPtr counter_endpoint_in_child;
