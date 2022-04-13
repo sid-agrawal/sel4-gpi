@@ -220,6 +220,10 @@ void ads_server_main()
             handle_connect_req();
             break;
 
+        case FUNC_CLONE_REQ:
+            handle_clone_req(sender_badge);
+            break;
+
         case FUNC_ATTACH_REQ:
             handle_attach_req(sender_badge);
             break;

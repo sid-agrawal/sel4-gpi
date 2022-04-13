@@ -48,6 +48,9 @@ enum ads_server_funcs {
     FUNC_ATTACH_REQ,
     FUNC_ATTACH_ACK,
 
+    FUNC_CLONE_REQ,
+    FUNC_CLONE_ACK,
+
     FUNC_RM_REQ,
     FUNC_RM_ACK,
 
@@ -84,6 +87,11 @@ enum ads_server_msgregs {
 
     ADSMSGREG_ATTACH_ACK_END = ADSMSGREG_LABEL0,
     
+    /* Clone */
+    ADSMSGREG_CLONE_REQ_VA = ADSMSGREG_LABEL0,
+    ADSMSGREG_CLONE_REQ_END,
+
+    ADSMSGREG_CLONE_ACK_END = ADSMSGREG_LABEL0,
 
 
     /* Remove */
