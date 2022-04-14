@@ -62,7 +62,8 @@ enum ads_server_funcs {
 };
 
 /* Designated purposes of each message register in the mini-protocol. */
-enum ads_server_msgregs {
+enum ads_server_msgregs
+{
     /* These four are fixed headers in every serserv message. */
     ADSMSGREG_FUNC = 0,
     /* This is a convenience label for IPC MessageInfo length. */
@@ -73,26 +74,23 @@ enum ads_server_msgregs {
 
     ADSMSGREG_CONNECT_ACK_END = ADSMSGREG_LABEL0,
 
-
     /* Server Spawn */
     ADSMSGREG_SPAWN_SYNC_REQ_END = ADSMSGREG_LABEL0,
 
     ADSMSGREG_SPAWN_SYNC_ACK_END = ADSMSGREG_LABEL0,
 
-
-
     /* Attach */
     ADSMSGREG_ATTACH_REQ_VA = ADSMSGREG_LABEL0,
+    ADSMSGREG_ATTACH_REQ_SZ,
     ADSMSGREG_ATTACH_REQ_END,
 
     ADSMSGREG_ATTACH_ACK_END = ADSMSGREG_LABEL0,
-    
+
     /* Clone */
     ADSMSGREG_CLONE_REQ_OMIT_VA = ADSMSGREG_LABEL0,
     ADSMSGREG_CLONE_REQ_END,
 
     ADSMSGREG_CLONE_ACK_END = ADSMSGREG_LABEL0,
-
 
     /* Remove */
     ADSMSGREG_RM_REQ_VA = ADSMSGREG_LABEL0,
@@ -100,14 +98,10 @@ enum ads_server_msgregs {
 
     ADSMSGREG_RM_ACK_END = ADSMSGREG_LABEL0,
 
-
-
     /* Bind to CPU */
     ADSMSGREG_BIND_CPU_REQ_END = ADSMSGREG_LABEL0,
 
     ADSMSGREG_BIND_CPU_ACK_END = ADSMSGREG_LABEL0,
-
-
 
     /* Disconnect / Delete*/
     ADSMSGREG_DISCONNECT_REQ_END = ADSMSGREG_LABEL0,

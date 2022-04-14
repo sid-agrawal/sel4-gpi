@@ -135,11 +135,13 @@ static void handle_connect_req()
     return reply(tag);
 }
 
-static void handle_attach_req(seL4_Word sender_badge)
+static void handle_attach_req(seL4_Word sender_badge, seL4_MessageInfo_t old_tag, seL4_CPtr frame_cap)
 {
     printf(ADSSERVS "main: Got attach request from client badge %x.\n",
            sender_badge);
 
+    assert(seL4_MessageInfo_get_extraCaps(old_tag) == 1);
+    int error;
     /* Find the client */
     ads_server_registry_entry_t *client_data = ads_server_registry_get_entry_by_badge(sender_badge);
     if (client_data == NULL)
@@ -149,17 +151,20 @@ static void handle_attach_req(seL4_Word sender_badge)
         return;
     }
     printf(ADSSERVS "main: found client_data %x.\n", client_data);
-    printf(ADSSERVS "main: Doing nothing in attach for now.\n");
 
-    // void *vaddr = 0; // Get from the MSG
-    // size_t size = 0; // Get fromthe MSG
-    // error = ads_attach(&client_data->ads, get_ads_server()->server_vka, vaddr, size);
-    // if (error) {
-    //     printf(ADSSERVS "main: Failed to attach at vaddr:%lx sz: %lx to client badge %x.\n",
-    //             vaddr, size, sender_badge);
-    //     continue;
-    // }
+    void *vaddr = (void *) seL4_GetMR(ADSMSGREG_ATTACH_REQ_VA);
+    size_t size = (size_t) seL4_GetMR(ADSMSGREG_ATTACH_REQ_SZ);
+    printf(ADSSERVS"main: vaddr %x, size %x\n", vaddr, size);
 
+    error = ads_attach(&client_data->ads, get_ads_server()->server_vka, vaddr, size, frame_cap, client_data->ads.vspace);
+    if (error) {
+        printf(ADSSERVS "main: Failed to attach at vaddr:%lx sz: %lx to client badge %x.\n",
+                vaddr, size, sender_badge);
+        return;
+    }
+
+
+    sel4utils_walk_vspace(client_data->ads.vspace, NULL);
     seL4_SetMR(ADSMSGREG_FUNC, FUNC_ATTACH_ACK);
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0, ADSMSGREG_ATTACH_ACK_END);
     return reply(tag);
@@ -197,7 +202,7 @@ static void handle_clone_req(seL4_Word sender_badge)
 
 
     // Do the actual clone
-    void *omit_vaddr = seL4_GetMR(ADSMSGREG_CLONE_REQ_OMIT_VA);
+    void *omit_vaddr = (void *) seL4_GetMR(ADSMSGREG_CLONE_REQ_OMIT_VA);
     ads_t src_ads = client_data->ads;
     ads_t dst_ads = ((ads_server_registry_entry_t *)client_reg_ptr)->ads;
     int error = ads_clone(get_ads_server()->server_vspace,
@@ -277,6 +282,16 @@ void ads_server_main()
 
     printf(ADSSERVS"main: Entering main loop and accepting requests.\n");
     while (1) {
+        /* Pre */
+        seL4_CPtr received_cap;
+        cspacepath_t received_cap_path;
+            /* Get the frame cap from the message */
+            vka_cspace_alloc(get_ads_server()->server_vka, &received_cap);
+            vka_cspace_make_path(get_ads_server()->server_vka, received_cap, &received_cap_path);
+            seL4_SetCapReceivePath(
+                /* _service */ received_cap_path.root,
+                /* index */ received_cap_path.capPtr,
+                /* depth */ received_cap_path.capDepth);
         tag = recv(&sender_badge);
         printf(ADSSERVS "main: Got message from %x\n", sender_badge);
 
@@ -288,6 +303,7 @@ void ads_server_main()
             continue;
         }
 
+        /* Post */
         switch (func) {
         case FUNC_CONNECT_REQ:
             handle_connect_req();
@@ -298,7 +314,7 @@ void ads_server_main()
             break;
 
         case FUNC_ATTACH_REQ:
-            handle_attach_req(sender_badge);
+            handle_attach_req(sender_badge, tag, received_cap);
             break;
 
 

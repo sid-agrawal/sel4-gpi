@@ -11,6 +11,7 @@
 #include <vka/object.h>
 #include <vspace/vspace.h>
 #include <sel4utils/vspace_internal.h>
+#include <sel4utils/process.h>
 
 typedef struct _ads {
     vspace_t *vspace;
@@ -23,9 +24,10 @@ typedef struct _ads {
  * @param vka vka object to allocate cspace slots and PT from
  * @param vaddr virtual address to attach the frame to
  * @param size size of the frame
+ * @param frame_cap cap to the frame to attach
  * @return int 0 on success, -1 on failure.
  */
-int ads_attach(ads_t *ads, vka_t *vka, void* vaddr, size_t size);
+int ads_attach(ads_t *ads, vka_t *vka, void* vaddr, size_t size, seL4_CPtr frame_cap, sel4utils_process_t *process_cookie);
 
 
 /**

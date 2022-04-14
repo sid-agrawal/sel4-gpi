@@ -14,6 +14,7 @@
 
 int test_ads_clone(env_t env)
 {
+    int error;
     cspacepath_t path;
     vka_cspace_make_path(&env->vka, env->self_as_cptr, &path);
     ads_client_context_t conn;
@@ -21,11 +22,24 @@ int test_ads_clone(env_t env)
 
     // Using a known EP, get a new ads CAP.
     ads_client_context_t conn_clone;
-    int error = ads_client_clone(&conn, &env->vka,  0x10001000, &conn_clone);
+    error = ads_client_clone(&conn, &env->vka,  (void *) 0x10001000, &conn_clone);
     test_error_eq(error, 0);
 
-    // Decrement the cap. TODO(siagraw)
+    // Allocate a frame
+    vka_object_t frame_obj;
+    size_t frame_size_bits = seL4_PageBits;
+    error = vka_alloc_frame(&env->vka, frame_size_bits, &frame_obj);
+    if (error) {
+        printf("Failed to allocate frame\n");
+        return 1;
+    }
+
+    // Attach it to the new ads cap.
+    error = ads_client_attach(&conn,  (void *)(0x10012000 + PAGE_SIZE_4K), PAGE_SIZE_4K, frame_obj.cptr);
+    test_error_eq(error, 0);
     // Delete the ads cap. TODO(siagraw)
+
+    error = ads_client_bind_cpu(&conn, 0);
     return sel4test_get_result();
 }
 DEFINE_TEST(GPIADS001, "Ensure the ads clone works", test_ads_clone, true)

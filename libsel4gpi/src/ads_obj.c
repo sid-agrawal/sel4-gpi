@@ -10,8 +10,37 @@
  */
 
 #include <sel4gpi/ads_obj.h>
+#include <sel4utils/process.h>
 
-int ads_attach(ads_t *ads, vka_t *vka, void* vaddr, size_t size){
+int ads_attach(ads_t *ads, vka_t *vka, void* vaddr, size_t size, seL4_CPtr frame_cap, 
+               sel4utils_process_t *process_cookie)
+{
+    vspace_t *target = ads->vspace;
+
+
+    /* Reserver the range in the vspace */
+    seL4_CapRights_t rights;
+    reservation_t res = sel4utils_reserve_range_at(target, vaddr, size, rights, 1);
+    if (res.res == NULL)
+    {
+        ZF_LOGE("Failed to reserve range\n");
+        return 1;
+    }
+
+    /* Map the frame cap into the vspace */
+
+    seL4_CPtr caps[] = {frame_cap};
+    size_t num_pages = size / PAGE_SIZE_4K;
+    size_t size_bits = seL4_PageBits;
+    int error = sel4utils_map_pages_at_vaddr(target, caps, process_cookie, vaddr, num_pages, size_bits, res);
+    if (error)
+    {
+        ZF_LOGE("Failed to map pages\n");
+        return 1;
+    }
+ 
+    printf("After attach\n");
+    sel4utils_walk_vspace(target, NULL);
     return 0;
 }
 

@@ -50,7 +50,11 @@ int ads_server_client_connect(seL4_CPtr server_ep_cap,
 int ads_client_attach(ads_client_context_t *conn, void* vaddr, size_t size, seL4_CPtr frame_cap)
 { 
     seL4_SetMR(ADSMSGREG_FUNC, FUNC_ATTACH_REQ);
-    seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0,
+    seL4_SetMR(ADSMSGREG_ATTACH_REQ_VA, (seL4_Word) vaddr);
+    seL4_SetMR(ADSMSGREG_ATTACH_REQ_SZ, (seL4_Word) size);
+    seL4_SetCap(0, frame_cap);
+
+    seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 1,
                                                   ADSMSGREG_ATTACH_REQ_END);
 
     tag = seL4_Call(conn->badged_server_ep_cspath.capPtr, tag);
