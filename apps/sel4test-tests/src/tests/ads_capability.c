@@ -21,7 +21,7 @@ int test_ads_clone(env_t env)
 
     // Using a known EP, get a new ads CAP.
     ads_client_context_t conn_clone;
-    int error = ads_client_clone(&conn, &env->vka, 0x00, &conn_clone);
+    int error = ads_client_clone(&conn, &env->vka,  0x10001000, &conn_clone);
     test_error_eq(error, 0);
 
     // Decrement the cap. TODO(siagraw)

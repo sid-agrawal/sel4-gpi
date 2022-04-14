@@ -28,9 +28,11 @@ int ads_clone(vspace_t *loader, ads_t *ads, vka_t *vka, void* omit_vaddr, ads_t 
     vspace_t *from = ads->vspace;
     vspace_t *to = ret_ads->vspace;
 
+    printf("Cloning vspace\n");
+    printf("Old vspace details:\n");
+    sel4utils_walk_vspace(from, NULL);
 
 
-    printf("%s %d\n", __FUNCTION__, __LINE__);
     // Give vspace root
     // assign asid pool
     static vka_object_t vspace_root_object;
@@ -43,7 +45,6 @@ int ads_clone(vspace_t *loader, ads_t *ads, vka_t *vka, void* omit_vaddr, ads_t 
         goto error_exit;
     }
 
-    printf("%s %d\n", __FUNCTION__, __LINE__);
     /* assign an asid pool */
     if (!config_set(CONFIG_X86_64) &&
         assign_asid_pool(seL4_CapInitThreadASIDPool, vspace_root_object.cptr) != seL4_NoError)
@@ -52,7 +53,6 @@ int ads_clone(vspace_t *loader, ads_t *ads, vka_t *vka, void* omit_vaddr, ads_t 
     }
     // Create empty vspace
 
-    printf("%s %d\n", __FUNCTION__, __LINE__);
 
     // It is stuck here...
     error = sel4utils_get_vspace(
@@ -71,20 +71,17 @@ int ads_clone(vspace_t *loader, ads_t *ads, vka_t *vka, void* omit_vaddr, ads_t 
     }
 
 
-    printf("%s %d\n", __FUNCTION__, __LINE__);
 
     sel4utils_alloc_data_t *from_data = get_alloc_data(from);
     sel4utils_res_t *from_sel4_res = from_data->reservation_head;
 
     printf("===========Start of interesting output================\n");
-    printf("VSPACE_NUM_LEVELS %d\n", VSPACE_NUM_LEVELS);
 
     /* walk all the reservations */
-    printf("\nReservations from  sel4utils_alloc_data->reservation_head:\n");
     int num_pages;
     while (from_sel4_res != NULL)
     {
-        printf("%s %d\n", __FUNCTION__, __LINE__);
+        printf("Reservation: %p\n", from_sel4_res->start);
         // Reserver
         reservation_t new_res = sel4utils_reserve_range_at(to,
                                                            (void *)from_sel4_res->start,
@@ -113,10 +110,11 @@ int ads_clone(vspace_t *loader, ads_t *ads, vka_t *vka, void* omit_vaddr, ads_t 
         // Move to next node.
         from_sel4_res = from_sel4_res->next;
     }
+    printf("New vspace details:\n");
+    sel4utils_walk_vspace(to, NULL);
     // For each reservation: call share_mem_at_vaddr
     return 0;
 
 error_exit:
-    printf("%s %d\n", __FUNCTION__, __LINE__);
     return -1;
 }

@@ -197,7 +197,7 @@ static void handle_clone_req(seL4_Word sender_badge)
 
 
     // Do the actual clone
-    void *omit_vaddr = 0; // Get from the MSG
+    void *omit_vaddr = seL4_GetMR(ADSMSGREG_CLONE_REQ_OMIT_VA);
     ads_t src_ads = client_data->ads;
     ads_t dst_ads = ((ads_server_registry_entry_t *)client_reg_ptr)->ads;
     int error = ads_clone(get_ads_server()->server_vspace,
