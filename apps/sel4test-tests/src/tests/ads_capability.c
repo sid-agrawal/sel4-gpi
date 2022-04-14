@@ -12,26 +12,23 @@
 
 #include<sel4gpi/ads_clientapi.h>
 
-int test_ads_self_check(env_t env)
+int test_ads_clone(env_t env)
 {
     cspacepath_t path;
     vka_cspace_make_path(&env->vka, env->self_as_cptr, &path);
     ads_client_context_t conn;
     conn.badged_server_ep_cspath = path;
-    
-    // Using a known EP, get a new ads CAP.
-    int error = ads_client_attach(&conn, 0,0,0);
-    test_error_eq(error, 0);
 
-    // Increment the ads cap.
-    error = 0 ;// Call clone
+    // Using a known EP, get a new ads CAP.
+    ads_client_context_t conn_clone;
+    int error = ads_client_clone(&conn, &env->vka, 0x00, &conn_clone);
     test_error_eq(error, 0);
 
     // Decrement the cap. TODO(siagraw)
     // Delete the ads cap. TODO(siagraw)
     return sel4test_get_result();
 }
-DEFINE_TEST(GPIADS001, "Ensure the ads self works", test_ads_self_check, true)
+DEFINE_TEST(GPIADS001, "Ensure the ads clone works", test_ads_clone, true)
 
 #ifdef WQEAREREADY
 int test_ads_attach(env_t env)

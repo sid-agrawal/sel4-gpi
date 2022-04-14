@@ -68,3 +68,14 @@ int ads_client_rm(ads_client_context_t *conn, void* vaddr, size_t size);
  * @return int 0 on success, -1 on failure.
  */
 int ads_client_bind_cpu(ads_client_context_t *conn, seL4_CPtr cpu_cap);
+
+
+/**
+ * @brief Clone the ads cap, that is make a new ADS cap that is a copy of the original.
+ * @param conn original ads connection object
+ * @param omit_vaddr Do not clone the segment with this starting VA
+ * @param ads_cap_ret return cap
+ * @return int 
+ */
+int ads_client_clone(ads_client_context_t *conn, vka_t *vka, void* omit_vaddr,    
+                     ads_client_context_t *conn_ret);

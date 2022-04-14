@@ -164,6 +164,79 @@ static void handle_attach_req(seL4_Word sender_badge)
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0, ADSMSGREG_ATTACH_ACK_END);
     return reply(tag);
 }
+
+static void handle_clone_req(seL4_Word sender_badge)
+{
+    // Find the client - like attach
+    printf(ADSSERVS "main: Got clone  request from client badge %x.\n",
+           sender_badge);
+
+    /* Find the client */
+    ads_server_registry_entry_t *client_data = ads_server_registry_get_entry_by_badge(sender_badge);
+    if (client_data == NULL)
+    {
+        printf(ADSSERVS "main: Failed to find client badge %x.\n",
+               sender_badge);
+        return;
+    }
+    printf(ADSSERVS "main: found client_data %x.\n", client_data);
+
+
+
+    // Make a new endpoint for the client to send messages to. like connect.
+    printf(ADSSERVS "main: Making a new cap for the clone.\n");
+    /* Allocate a new registry entry for the client. */
+    seL4_Word client_reg_ptr = (seL4_Word)malloc(sizeof(ads_server_registry_entry_t));
+    if (client_reg_ptr == 0)
+    {
+        printf(ADSSERVS "main: Failed to allocate new badge for client.\n");
+        return;
+   }
+    memset((void *)client_reg_ptr, 0, sizeof(ads_server_registry_entry_t));
+    ads_server_registry_insert((ads_server_registry_entry_t *)client_reg_ptr);
+
+
+    // Do the actual clone
+    void *omit_vaddr = 0; // Get from the MSG
+    ads_t src_ads = client_data->ads;
+    ads_t dst_ads = ((ads_server_registry_entry_t *)client_reg_ptr)->ads;
+    int error = ads_clone(get_ads_server()->server_vspace,
+                          &src_ads,
+                          get_ads_server()->server_vka,
+                          omit_vaddr,
+                          &dst_ads);
+    if (error) {
+        printf(ADSSERVS "main: Failed to clone from client badge %x.\n",
+               sender_badge);
+        return;
+    }
+    printf(ADSSERVS "main: Clone done.\n");
+
+    /* Create a badged endpoint for the client to send messages to.
+     * Use the address of the client_registry_entry as the badge.
+     */
+    cspacepath_t src_path, dest_path;
+    vka_cspace_make_path(get_ads_server()->server_vka,
+                         get_ads_server()->server_ep_obj.cptr, &src_path);
+    seL4_CPtr dest_cptr;
+    vka_cspace_alloc(get_ads_server()->server_vka, &dest_cptr);
+    vka_cspace_make_path(get_ads_server()->server_vka, dest_cptr, &dest_path);
+
+    error = vka_cnode_mint(&dest_path, &src_path, seL4_AllRights, client_reg_ptr);
+    if (error)
+    {
+        printf(ADSSERVS "main: Failed to mint client badge %x.\n",
+               client_reg_ptr);
+        return;
+    }
+    /* Return this badged end point in the return message. */
+    seL4_SetCap(0, dest_path.capPtr);
+    seL4_SetMR(ADSMSGREG_FUNC, FUNC_CLONE_ACK);
+    seL4_MessageInfo_t tag = seL4_MessageInfo_new(error, 0, 1, ADSMSGREG_CLONE_ACK_END);
+    return reply(tag);
+
+}
+
 /**
  * @brief The starting point for the ads server's thread.
  *
@@ -253,6 +326,7 @@ int forge_ads_cap_from_vspace(vspace_t *vspace, vka_t *vka, seL4_CPtr *cap_ret){
     memset((void *)client_reg_ptr, 0, sizeof(ads_server_registry_entry_t));
     ads_server_registry_insert((ads_server_registry_entry_t *)client_reg_ptr);
 
+    ((ads_server_registry_entry_t *)client_reg_ptr)->ads.vspace = vspace;
     /* Create a badged endpoint for the client to send messages to.
      * Use the address of the client_registry_entry as the badge.
      */
