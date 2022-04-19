@@ -49,6 +49,7 @@
 #include <sel4platsupport/io.h>
 #include <sel4gpi/counter_parentapi.h>
 #include <sel4gpi/ads_parentapi.h>
+#include <sel4gpi/cpu_parentapi.h>
 
 /* ammount of untyped memory to reserve for the driver (32mb) */
 #define DRIVER_UNTYPED_MEMORY (1 << 25)
@@ -500,6 +501,18 @@ void *main_continued(void *arg UNUSED)
     printf(ADSSERVP"Public EP is: %d\n", ads_server_ep_for_clients);
     printf(ADSSERVP"Public EP is: %d\n", env.ads_endpoint_in_parent);
     debug_cap_identify(ads_server_ep_for_clients);
+    
+    ZF_LOGD("Starting cpu server...");
+    seL4_CPtr cpu_server_ep_for_clients;
+    error = cpu_server_parent_spawn_thread(&env.simple,
+                                        &env.vka,
+                                        &env.vspace,
+                                        CPU_SERVER_DEFAULT_PRIORITY,
+                                        &cpu_server_ep_for_clients);
+    env.cpu_endpoint_in_parent = cpu_server_ep_for_clients;
+    printf(CPUSERVP"Public EP is: %d\n", cpu_server_ep_for_clients);
+    printf(CPUSERVP"Public EP is: %d\n", env.cpu_endpoint_in_parent);
+    debug_cap_identify(cpu_server_ep_for_clients);
     
 
     ZF_LOGD("Starting counter server...");

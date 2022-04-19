@@ -243,11 +243,17 @@ void basic_set_up(uintptr_t e)
         ZF_LOGF("Failed to forge child's as cap");
     }
 
-    env->child_as_cptr_in_child = sel4utils_copy_cap_to_process(&(env->test_process), &env->vka, child_as_cap_in_parent);
+    env->child_as_cptr_in_child = sel4utils_copy_cap_to_process(&(env->test_process),
+                                                                &env->vka, child_as_cap_in_parent);
     // For the ads-server
-    env->ads_endpoint_in_child = sel4utils_copy_cap_to_process(&(env->test_process), &env->vka, env->ads_endpoint_in_parent);
+    env->ads_endpoint_in_child = sel4utils_copy_cap_to_process(&(env->test_process),
+                                                               &env->vka, env->ads_endpoint_in_parent);
+    // For the cpu-server
+    env->cpu_endpoint_in_child = sel4utils_copy_cap_to_process(&(env->test_process),
+                                                               &env->vka, env->cpu_endpoint_in_parent);
     // For the counter-server
-    env->counter_endpoint_in_child = sel4utils_copy_cap_to_process(&(env->test_process), &env->vka, env->counter_endpoint_in_parent);
+    env->counter_endpoint_in_child = sel4utils_copy_cap_to_process(&(env->test_process),
+                                                                   &env->vka, env->counter_endpoint_in_parent);
 
     /* copy the device frame, if any */
     if (env->init->device_frame_cap) {
@@ -288,13 +294,14 @@ test_result_t basic_run_test(struct testcase *test, uintptr_t e)
 #endif
 
     /* set up args for the test process */
-    seL4_Word argc = 5;
+    seL4_Word argc = 6;
     char string_args[argc][WORD_STRING_SIZE];
     char *argv[argc];
     sel4utils_create_word_args(string_args, argv, argc,
                                env->endpoint,
                                env->remote_vaddr,
                                env->ads_endpoint_in_child,
+                               env->cpu_endpoint_in_child,
                                env->counter_endpoint_in_child,
                                env->child_as_cptr_in_child);
 
@@ -337,3 +344,34 @@ void basic_tear_down(uintptr_t e)
 
 DEFINE_TEST_TYPE(BASIC, BASIC, NULL, NULL, basic_set_up, basic_tear_down, basic_run_test);
 
+#if 0
+void start_thread_stack(vka_t *vka, vspace_t *current, vspace_t *target, vspace_t *sibling,
+                        seL4_CNode cspace)
+{
+
+    sel4utils_thread_entry_fn ep = (sel4utils_thread_entry_fn)0x405d88;
+    sel4utils_thread_t thread_data;
+    int err = sel4utils_configure_thread(vka,
+                                         current,
+                                         sibling, // target,
+                                         0,
+                                         cspace,
+                                         0,
+                                         &thread_data);
+    if (err)
+    {
+        ZF_LOGF("Failed to configure thread");
+    }
+
+    // sel4utils_walk_vspace(target, vka);
+
+    err = sel4utils_start_thread(&thread_data,
+                                 ep,
+                                 NULL, NULL,
+                                 true);
+    if (err)
+    {
+        ZF_LOGF("Failed to start thread");
+    }
+}
+#endif

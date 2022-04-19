@@ -11,6 +11,7 @@
 #include <stdio.h>
 
 #include<sel4gpi/ads_clientapi.h>
+#include<sel4gpi/cpu_clientapi.h>
 
 int test_ads_clone(env_t env)
 {
@@ -21,8 +22,8 @@ int test_ads_clone(env_t env)
     conn.badged_server_ep_cspath = path;
 
     // Using a known EP, get a new ads CAP.
-    ads_client_context_t conn_clone;
-    error = ads_client_clone(&conn, &env->vka,  (void *) 0x10001000, &conn_clone);
+    ads_client_context_t ads_conn_clone;
+    error = ads_client_clone(&conn, &env->vka,  (void *) 0x10001000, &ads_conn_clone);
     test_error_eq(error, 0);
 
     // Allocate a frame
@@ -37,9 +38,22 @@ int test_ads_clone(env_t env)
     // Attach it to the new ads cap.
     error = ads_client_attach(&conn,  (void *)(0x10012000 + PAGE_SIZE_4K), PAGE_SIZE_4K, frame_obj.cptr);
     test_error_eq(error, 0);
-    // Delete the ads cap. TODO(siagraw)
 
-    error = ads_client_bind_cpu(&conn, 0);
+    // Allocate new CPU cap.
+    cpu_client_context_t cpu_conn;
+    error = cpu_server_client_connect(&env->cpu_endpoint, &env->vka, &cpu_conn);
+    test_error_eq(error, 0);
+    
+
+    // Config the CPU cap.
+    error = cpu_client_config(&cpu_conn, &ads_conn_clone);
+    test_error_eq(error, 0);
+
+
+    // Start CPU
+    error = cpu_client_start(&cpu_conn);
+    test_error_eq(error, 0);
+
     return sel4test_get_result();
 }
 DEFINE_TEST(GPIADS001, "Ensure the ads clone works", test_ads_clone, true)
