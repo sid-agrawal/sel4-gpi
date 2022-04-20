@@ -11,13 +11,14 @@
 
 #include <sel4gpi/cpu_obj.h>
 #include <sel4utils/process.h>
+#include <sel4utils/vspace.h>
 
 int cpu_start(cpu_t *cpu){
 
     return 0;
 }
 
-int cpu_config(cpu_t *cpu){
+int cpu_config_vspace(cpu_t *cpu, vspace_t vspace){
 
     return 0;
 }

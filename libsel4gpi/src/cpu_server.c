@@ -84,9 +84,9 @@ static void cpu_server_registry_insert(cpu_server_registry_entry_t *new_node) {
  * @param badge 
  * @return cpu_server_registry_entry_t* 
  */
-static cpu_server_registry_entry_t *ads_server_registry_get_entry_by_badge(seL4_Word badge){
+static cpu_server_registry_entry_t *cpu_server_registry_get_entry_by_badge(seL4_Word badge){
 
-    ads_server_registry_entry_t *current_ctx = get_ads_server()->client_registry;
+    cpu_server_registry_entry_t *current_ctx = get_cpu_server()->client_registry;
 
     while (current_ctx != NULL) {
         if ((seL4_Word)current_ctx == badge) {
@@ -102,24 +102,24 @@ static void handle_connect_req()
     printf(CPUSERVS "main: Got connect request from");
 
     /* Allocate a new registry entry for the client. */
-    seL4_Word client_reg_ptr = (seL4_Word)malloc(sizeof(ads_server_registry_entry_t));
+    seL4_Word client_reg_ptr = (seL4_Word)malloc(sizeof(cpu_server_registry_entry_t));
     if (client_reg_ptr == 0)
     {
         printf(CPUSERVS "main: Failed to allocate new badge for client.\n");
         return;
    }
-    memset((void *)client_reg_ptr, 0, sizeof(ads_server_registry_entry_t));
-    ads_server_registry_insert((ads_server_registry_entry_t *)client_reg_ptr);
+    memset((void *)client_reg_ptr, 0, sizeof(cpu_server_registry_entry_t));
+    cpu_server_registry_insert((cpu_server_registry_entry_t *)client_reg_ptr);
 
     /* Create a badged endpoint for the client to send messages to.
      * Use the address of the client_registry_entry as the badge.
      */
     cspacepath_t src, dest;
-    vka_cspace_make_path(get_ads_server()->server_vka,
-                         get_ads_server()->server_ep_obj.cptr, &src);
+    vka_cspace_make_path(get_cpu_server()->server_vka,
+                         get_cpu_server()->server_ep_obj.cptr, &src);
     seL4_CPtr dest_cptr;
-    vka_cspace_alloc(get_ads_server()->server_vka, &dest_cptr);
-    vka_cspace_make_path(get_ads_server()->server_vka, dest_cptr, &dest);
+    vka_cspace_alloc(get_cpu_server()->server_vka, &dest_cptr);
+    vka_cspace_make_path(get_cpu_server()->server_vka, dest_cptr, &dest);
 
     int error = vka_cnode_mint(&dest, &src, seL4_AllRights, client_reg_ptr);
     if (error)
@@ -140,10 +140,9 @@ static void handle_start_req(seL4_Word sender_badge, seL4_MessageInfo_t old_tag,
     printf(CPUSERVS "main: Got start request from client badge %x.\n",
            sender_badge);
 
-    assert(seL4_MessageInfo_get_extraCaps(old_tag) == 1);
     int error;
     /* Find the client */
-    ads_server_registry_entry_t *client_data = ads_server_registry_get_entry_by_badge(sender_badge);
+    cpu_server_registry_entry_t *client_data = cpu_server_registry_get_entry_by_badge(sender_badge);
     if (client_data == NULL)
     {
         printf(CPUSERVS "main: Failed to find client badge %x.\n",
@@ -152,29 +151,24 @@ static void handle_start_req(seL4_Word sender_badge, seL4_MessageInfo_t old_tag,
     }
     printf(CPUSERVS "main: found client_data %x.\n", client_data);
 
-    void *vaddr = (void *) seL4_GetMR(CPUMSGREG_START_REQ_VA);
-    size_t size = (size_t) seL4_GetMR(CPUMSGREG_START_REQ_SZ);
-    printf(CPUSERVS"main: vaddr %x, size %x\n", vaddr, size);
-
-    error = ads_start(&client_data->ads, get_ads_server()->server_vka, vaddr, size, frame_cap, client_data->ads.vspace);
+    error = cpu_start(&client_data->cpu);
     if (error) {
-        printf(CPUSERVS "main: Failed to start at vaddr:%lx sz: %lx to client badge %x.\n",
-                vaddr, size, sender_badge);
+        printf(CPUSERVS "main: Failed to start CPU.\n");
         return;
     }
 
 
-    sel4utils_walk_vspace(client_data->ads.vspace, NULL);
     seL4_SetMR(CPUMSGREG_FUNC, FUNC_START_ACK);
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0, CPUMSGREG_START_ACK_END);
     return reply(tag);
 }
 
-static void handle_config_req(seL4_Word sender_badge)
+static void handle_config_req(seL4_Word sender_badge, seL4_MessageInfo_t old_tag, seL4_CPtr ads_cap)
 {
     // Find the client - like start
     printf(CPUSERVS "main: Got config  request from client badge %x.\n",
            sender_badge);
+    assert(seL4_MessageInfo_get_extraCaps(old_tag) == 1);
 
     /* Find the client */
     cpu_server_registry_entry_t *client_data = cpu_server_registry_get_entry_by_badge(sender_badge);
@@ -188,28 +182,9 @@ static void handle_config_req(seL4_Word sender_badge)
 
 
 
-    // Make a new endpoint for the client to send messages to. like connect.
-    printf(CPUSERVS "main: Making a new cap for the config.\n");
-    /* Allocate a new registry entry for the client. */
-    seL4_Word client_reg_ptr = (seL4_Word)malloc(sizeof(cpu_server_registry_entry_t));
-    if (client_reg_ptr == 0)
-    {
-        printf(CPUSERVS "main: Failed to allocate new badge for client.\n");
-        return;
-   }
-    memset((void *)client_reg_ptr, 0, sizeof(cpu_server_registry_entry_t));
-    cpu_server_registry_insert((cpu_server_registry_entry_t *)client_reg_ptr);
-
-
-    // Do the actual config
-    void *omit_vaddr = (void *) seL4_GetMR(CPUMSGREG_CONFIG_REQ_OMIT_VA) remove
-    cpu_t src_cpu = client_data->cpu;
-    cpu_t dst_cpu = ((cpu_server_registry_entry_t *)client_reg_ptr)->cpu;
-    int error = cpu_config(get_cpu_server()->server_vspace,
-                          &src_cpu,
-                          get_cpu_server()->server_vka,
-                          omit_vaddr,
-                          &dst_cpu);
+    /* How do I get the vspace_t from the ads_cap */
+    
+    error = cpu_config(&client_data->cpu, ads_cap);
     if (error) {
         printf(CPUSERVS "main: Failed to config from client badge %x.\n",
                sender_badge);
@@ -217,39 +192,20 @@ static void handle_config_req(seL4_Word sender_badge)
     }
     printf(CPUSERVS "main: config done.\n");
 
-    /* Create a badged endpoint for the client to send messages to.
-     * Use the address of the client_registry_entry as the badge.
-     */
-    cspacepath_t src_path, dest_path;
-    vka_cspace_make_path(get_cpu_server()->server_vka,
-                         get_cpu_server()->server_ep_obj.cptr, &src_path);
-    seL4_CPtr dest_cptr;
-    vka_cspace_alloc(get_cpu_server()->server_vka, &dest_cptr);
-    vka_cspace_make_path(get_cpu_server()->server_vka, dest_cptr, &dest_path);
-
-    error = vka_cnode_mint(&dest_path, &src_path, seL4_AllRights, client_reg_ptr);
-    if (error)
-    {
-        printf(CPUSERVS "main: Failed to mint client badge %x.\n",
-               client_reg_ptr);
-        return;
-    }
-    /* Return this badged end point in the return message. */
-    seL4_SetCap(0, dest_path.capPtr);
     seL4_SetMR(CPUMSGREG_FUNC, FUNC_CONFIG_ACK);
-    seL4_MessageInfo_t tag = seL4_MessageInfo_new(error, 0, 1, CPUMSGREG_CONFIG_ACK_END);
+    seL4_MessageInfo_t tag = seL4_MessageInfo_new(error, 0, 0, CPUMSGREG_CONFIG_ACK_END);
     return reply(tag);
 
 }
 
 /**
- * @brief The starting point for the ads server's thread.
+ * @brief The starting point for the cpu server's thread.
  *
  */
-void ads_server_main()
+void cpu_server_main()
 {
     seL4_MessageInfo_t tag;
-    enum ads_server_funcs func;
+    enum cpu_server_funcs func;
     seL4_Error error = 0;
     size_t buff_len, bytes_written;
 
@@ -273,10 +229,10 @@ void ads_server_main()
      * that is possible).
      */
 
-    printf(CPUSERVS"ads_server_main: Got a call from the parent.\n");
+    printf(CPUSERVS"cpu_server_main: Got a call from the parent.\n");
     if (error != 0)
     {
-        seL4_TCB_Suspend(get_ads_server()->server_thread.tcb.cptr);
+        seL4_TCB_Suspend(get_cpu_server()->server_thread.tcb.cptr);
     }
 
 
@@ -286,8 +242,8 @@ void ads_server_main()
         seL4_CPtr received_cap;
         cspacepath_t received_cap_path;
             /* Get the frame cap from the message */
-            vka_cspace_alloc(get_ads_server()->server_vka, &received_cap);
-            vka_cspace_make_path(get_ads_server()->server_vka, received_cap, &received_cap_path);
+            vka_cspace_alloc(get_cpu_server()->server_vka, &received_cap);
+            vka_cspace_make_path(get_cpu_server()->server_vka, received_cap, &received_cap_path);
             seL4_SetCapReceivePath(
                 /* _service */ received_cap_path.root,
                 /* index */ received_cap_path.capPtr,
@@ -326,5 +282,5 @@ void ads_server_main()
     //serial_server_func_kill();
     /* After we break out of the loop, seL4_TCB_Suspend ourselves */
     ZF_LOGI(CPUSERVS"main: Suspending.");
-    seL4_TCB_Suspend(get_ads_server()->server_thread.tcb.cptr);
+    seL4_TCB_Suspend(get_cpu_server()->server_thread.tcb.cptr);
 }

@@ -62,6 +62,18 @@ int ads_client_attach(ads_client_context_t *conn, void* vaddr, size_t size, seL4
     return 0;
 }
 
+int ads_client_getID(ads_client_context_t *conn, seL4_Word *ret_id)
+{
+    seL4_SetMR(ADSMSGREG_FUNC, FUNC_GETID_REQ);
+    seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0,
+                                                  ADSMSGREG_GETID_REQ_END);
+
+    tag = seL4_Call(conn->badged_server_ep_cspath.capPtr, tag);
+
+    *ret_id = seL4_GetMR(ADSMSGREG_GETID_ACK_ID);
+    return 0;
+}
+
 int ads_client_clone(ads_client_context_t *conn, vka_t* vka, void* omit_vaddr, ads_client_context_t *ret_conn)
 { 
     // Alloc a slot for the incoming cap.

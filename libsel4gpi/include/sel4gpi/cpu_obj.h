@@ -30,6 +30,7 @@ int cpu_start(cpu_t *cpu);
  * @brief Config the cpu object
  * 
  * @param cpu cpu object
+ * @param vspace vspace i.e. root PT cap
  * @return int 0 on success, -1 on failure.
  */
-int cpu_config(cpu_t *cpu);
+int cpu_config_vspace(cpu_t *cpu, vspace_t vspace);

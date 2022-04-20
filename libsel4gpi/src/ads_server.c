@@ -135,6 +135,32 @@ static void handle_connect_req()
     return reply(tag);
 }
 
+static void handle_getid_req(seL4_Word sender_badge)
+{
+    printf(ADSSERVS "main: Got getID request from client badge %x.\n",
+           sender_badge);
+
+    int error;
+    /* Find the client */
+    ads_server_registry_entry_t *client_data = ads_server_registry_get_entry_by_badge(sender_badge);
+    if (client_data == NULL)
+    {
+        printf(ADSSERVS "main: Failed to find client badge %x.\n",
+               sender_badge);
+        return;
+    }
+    printf(ADSSERVS "main: found client_data %x.\n", client_data);
+
+    assert(sender_badge == (seL4_Word)client_data);
+    
+    /* Get the ID */
+    seL4_Word id = sender_badge;
+    seL4_SetMR(ADSMSGREG_FUNC, FUNC_GETID_ACK);
+    seL4_SetMR(ADSMSGREG_GETID_ACK_ID, id);
+    seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0, ADSMSGREG_GETID_ACK_END);
+    return reply(tag);
+}
+
 static void handle_attach_req(seL4_Word sender_badge, seL4_MessageInfo_t old_tag, seL4_CPtr frame_cap)
 {
     printf(ADSSERVS "main: Got attach request from client badge %x.\n",
@@ -169,6 +195,7 @@ static void handle_attach_req(seL4_Word sender_badge, seL4_MessageInfo_t old_tag
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0, ADSMSGREG_ATTACH_ACK_END);
     return reply(tag);
 }
+
 
 static void handle_clone_req(seL4_Word sender_badge)
 {
@@ -307,6 +334,10 @@ void ads_server_main()
         switch (func) {
         case FUNC_CONNECT_REQ:
             handle_connect_req();
+            break;
+
+        case FUNC_GETID_REQ:
+            handle_getid_req(sender_badge);
             break;
 
         case FUNC_CLONE_REQ:

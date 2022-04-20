@@ -10,6 +10,7 @@
  */
 
 #include<sel4gpi/cpu_clientapi.h>
+#include<sel4gpi/ads_clientapi.h>
 
 int cpu_server_client_connect(seL4_CPtr server_ep_cap,
                               vka_t *client_vka,
@@ -47,48 +48,25 @@ int cpu_server_client_connect(seL4_CPtr server_ep_cap,
 }
 
 
-int cpu_client_start(cpu_client_context_t *conn, void* vaddr, size_t size, seL4_CPtr frame_cap)
+int cpu_client_start(cpu_client_context_t *conn) 
 { 
     seL4_SetMR(CPUMSGREG_FUNC, FUNC_START_REQ);
-    seL4_SetMR(CPUMSGREG_START_REQ_VA, (seL4_Word) vaddr);
-    seL4_SetMR(CPUMSGREG_START_REQ_SZ, (seL4_Word) size);
-    seL4_SetCap(0, frame_cap);
-
-    seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 1,
+    seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0,
                                                   CPUMSGREG_START_REQ_END);
-
     tag = seL4_Call(conn->badged_server_ep_cspath.capPtr, tag);
-
     return 0;
 }
 
-int cpu_client_config(cpu_client_context_t *conn, vka_t* vka, void* omit_vaddr, cpu_client_context_t *ret_conn)
+int cpu_client_config(cpu_client_context_t *conn, ads_client_context_t *ads_conn){
 { 
-    // Alloc a slot for the incoming cap.
-    seL4_CPtr dest_cptr;
-    vka_cspace_alloc(vka, &dest_cptr);
-    cspacepath_t path;
-    vka_cspace_make_path(vka, dest_cptr, &ret_conn->badged_server_ep_cspath);
-    seL4_SetCapReceivePath(
-        /* _service */      ret_conn->badged_server_ep_cspath.root,
-        /* index */         ret_conn->badged_server_ep_cspath.capPtr,
-        /* depth */         ret_conn->badged_server_ep_cspath.capDepth
-    );
-
     seL4_SetMR(CPUMSGREG_FUNC, FUNC_CONFIG_REQ);
-    seL4_SetMR(CPUMSGREG_CONFIG_REQ_OMIT_VA, (uintptr_t)omit_vaddr);
-    seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0,
+
+    /* Send the badged endpoint cap of the ads client as a cap */
+    seL4_SetCap(0, ads_conn->badged_server_ep_cspath.capPtr);
+
+    seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 1,
                                                   CPUMSGREG_CONFIG_REQ_END);
 
     tag = seL4_Call(conn->badged_server_ep_cspath.capPtr, tag);
-    assert(seL4_MessageInfo_get_extraCaps(tag) == 1);
-    return 0;
-}
-
-int cpu_client_rm(cpu_client_context_t *conn, void* vaddr, size_t size){
-    return 0;
-}
-
-int cpu_client_bind_cpu(cpu_client_context_t *conn, seL4_CPtr cpu_cap) {
     return 0;
 }
