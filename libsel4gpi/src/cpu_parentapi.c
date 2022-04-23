@@ -110,12 +110,12 @@ cpu_server_parent_spawn_thread(simple_t *parent_simple, vka_t *parent_vka,
      * successfully bound itself to the platform serial device. Block here
      * and wait for that reply.
      */
-    seL4_SetMR(CPUMSGREG_FUNC, FUNC_SERVER_SPAWN_SYNC_REQ);
+    seL4_SetMR(CPUMSGREG_FUNC, CPU_FUNC_SERVER_SPAWN_SYNC_REQ);
     tag = seL4_MessageInfo_new(0, 0, 0, CPUMSGREG_SPAWN_SYNC_REQ_END);
     tag = seL4_Call(get_cpu_server()->_badged_server_ep_cspath.capPtr, tag);
 
     /* Did all go well with the server? */
-    if (seL4_GetMR(CPUMSGREG_FUNC) != FUNC_SERVER_SPAWN_SYNC_ACK) {
+    if (seL4_GetMR(CPUMSGREG_FUNC) != CPU_FUNC_SERVER_SPAWN_SYNC_ACK) {
         ZF_LOGE(CPUSERVP"spawn_thread: Server thread sync message after spawn "
                 "was not a SYNC_ACK as expected.");
         error = seL4_InvalidArgument;

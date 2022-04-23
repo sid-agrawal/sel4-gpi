@@ -46,7 +46,7 @@ int test_ads_clone(env_t env)
 
     // Allocate new CPU cap.
     cpu_client_context_t cpu_conn;
-    error = cpu_server_client_connect(&env->cpu_endpoint, &env->vka, &cpu_conn);
+    error = cpu_server_client_connect(env->cpu_endpoint, &env->vka, &cpu_conn);
     test_error_eq(error, 0);
     
 
@@ -58,7 +58,6 @@ int test_ads_clone(env_t env)
     // Start CPU
     error = cpu_client_start(&cpu_conn);
     test_error_eq(error, 0);
-*/
     return sel4test_get_result();
 }
 DEFINE_TEST(GPIADS001, "Ensure the ads clone works", test_ads_clone, true)

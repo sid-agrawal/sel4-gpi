@@ -47,7 +47,6 @@
 #include "timer.h"
 
 #include <sel4platsupport/io.h>
-#include <sel4gpi/counter_parentapi.h>
 #include <sel4gpi/ads_parentapi.h>
 #include <sel4gpi/cpu_parentapi.h>
 
@@ -515,17 +514,6 @@ void *main_continued(void *arg UNUSED)
     debug_cap_identify(cpu_server_ep_for_clients);
     
 
-    ZF_LOGD("Starting counter server...");
-    seL4_CPtr counter_server_ep_for_clients;
-    error = counter_server_parent_spawn_thread(&env.simple,
-                                        &env.vka,
-                                        &env.vspace,
-                                        COUNTER_SERVER_DEFAULT_PRIORITY,
-                                        &counter_server_ep_for_clients);
-    env.counter_endpoint_in_parent = counter_server_ep_for_clients;
-    printf(COUNTERSERVP"Public EP is: %d\n", counter_server_ep_for_clients);
-    printf(COUNTERSERVP"Public EP is: %d\n", env.counter_endpoint_in_parent);
-    debug_cap_identify(counter_server_ep_for_clients);
     /* now run the tests */
     sel4test_run_tests(&env);
 

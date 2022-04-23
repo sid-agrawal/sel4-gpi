@@ -39,29 +39,29 @@ enum ads_server_errors {
 
 /* IPC Message register values for SSMSGREG_FUNC */
 enum ads_server_funcs {
-    FUNC_CONNECT_REQ = 0,
-    FUNC_CONNECT_ACK,
+    ADS_FUNC_CONNECT_REQ = 0,
+    ADS_FUNC_CONNECT_ACK,
 
-    FUNC_GETID_REQ,
-    FUNC_GETID_ACK,
+    ADS_FUNC_GETID_REQ,
+    ADS_FUNC_GETID_ACK,
 
-    FUNC_SERVER_SPAWN_SYNC_REQ,
-    FUNC_SERVER_SPAWN_SYNC_ACK,
+    ADS_FUNC_SERVER_SPAWN_SYNC_REQ,
+    ADS_FUNC_SERVER_SPAWN_SYNC_ACK,
 
-    FUNC_ATTACH_REQ,
-    FUNC_ATTACH_ACK,
+    ADS_FUNC_ATTACH_REQ,
+    ADS_FUNC_ATTACH_ACK,
 
-    FUNC_CLONE_REQ,
-    FUNC_CLONE_ACK,
+    ADS_FUNC_CLONE_REQ,
+    ADS_FUNC_CLONE_ACK,
 
-    FUNC_RM_REQ,
-    FUNC_RM_ACK,
+    ADS_FUNC_RM_REQ,
+    ADS_FUNC_RM_ACK,
 
-    FUNC_ATTACH_CPU_REQ,
-    FUNC_ATTACH_CPU_ACK,
+    ADS_FUNC_ATTACH_CPU_REQ,
+    ADS_FUNC_ATTACH_CPU_ACK,
 
-    FUNC_DISCONNECT_REQ,
-    FUNC_DISCONNECT_ACK,
+    ADS_FUNC_DISCONNECT_REQ,
+    ADS_FUNC_DISCONNECT_ACK,
 };
 
 /* Designated purposes of each message register in the mini-protocol. */
@@ -162,3 +162,5 @@ ads_server_context_t *get_ads_server(void);
  * @return int 
  */
 int forge_ads_cap_from_vspace(vspace_t *vspace, vka_t *vka, seL4_CPtr *cap_ret);
+
+ads_server_registry_entry_t *ads_server_registry_get_entry_by_badge(seL4_Word badge);

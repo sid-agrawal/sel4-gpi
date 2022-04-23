@@ -28,6 +28,7 @@
 #include <sel4gpi/cpu_parentapi.h>
 #include <sel4gpi/cpu_server.h>
 
+#include <sel4gpi/ads_clientapi.h>
 
 static cpu_server_context_t cpu_server;
 
@@ -130,7 +131,7 @@ static void handle_connect_req()
     }
     /* Return this badged end point in the return message. */
     seL4_SetCap(0, dest.capPtr);
-    seL4_SetMR(CPUMSGREG_FUNC, FUNC_CONNECT_ACK);
+    seL4_SetMR(CPUMSGREG_FUNC, CPU_FUNC_CONNECT_ACK);
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(error, 0, 1, CPUMSGREG_CONNECT_ACK_END);
     return reply(tag);
 }
@@ -158,17 +159,20 @@ static void handle_start_req(seL4_Word sender_badge, seL4_MessageInfo_t old_tag,
     }
 
 
-    seL4_SetMR(CPUMSGREG_FUNC, FUNC_START_ACK);
+    seL4_SetMR(CPUMSGREG_FUNC, CPU_FUNC_START_ACK);
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0, CPUMSGREG_START_ACK_END);
     return reply(tag);
 }
 
-static void handle_config_req(seL4_Word sender_badge, seL4_MessageInfo_t old_tag, seL4_CPtr ads_cap)
+static void handle_config_req(seL4_Word sender_badge,
+                              seL4_MessageInfo_t old_tag,
+                              cspacepath_t ads_cap_path)
 {
     // Find the client - like start
     printf(CPUSERVS "main: Got config  request from client badge %x.\n",
            sender_badge);
     assert(seL4_MessageInfo_get_extraCaps(old_tag) == 1);
+    int error = 0;
 
     /* Find the client */
     cpu_server_registry_entry_t *client_data = cpu_server_registry_get_entry_by_badge(sender_badge);
@@ -182,9 +186,28 @@ static void handle_config_req(seL4_Word sender_badge, seL4_MessageInfo_t old_tag
 
 
 
-    /* How do I get the vspace_t from the ads_cap */
+    /* Get the vspace for the ads */
+    ads_client_context_t ads_client_ctx;
+    ads_client_ctx.badged_server_ep_cspath = ads_cap_path;
+    seL4_Word ads_id;
+    error = ads_client_getID(&ads_client_ctx, &ads_id);
+    if (error) {
+        printf(CPUSERVS "main: Failed to get ads ID.\n");
+        return;
+    }
+    ads_server_registry_entry_t *asre = ads_server_registry_get_entry_by_badge(ads_id);
+    if (asre == NULL) {
+        printf(CPUSERVS "main: Failed to find ads badge %x.\n",
+               ads_id);
+        return;
+    }
+
+
+
+
+
     
-    error = cpu_config(&client_data->cpu, ads_cap);
+    error = 0; //cpu_config(&client_data->cpu, ads_cap);
     if (error) {
         printf(CPUSERVS "main: Failed to config from client badge %x.\n",
                sender_badge);
@@ -192,7 +215,7 @@ static void handle_config_req(seL4_Word sender_badge, seL4_MessageInfo_t old_tag
     }
     printf(CPUSERVS "main: config done.\n");
 
-    seL4_SetMR(CPUMSGREG_FUNC, FUNC_CONFIG_ACK);
+    seL4_SetMR(CPUMSGREG_FUNC, CPU_FUNC_CONFIG_ACK);
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(error, 0, 0, CPUMSGREG_CONFIG_ACK_END);
     return reply(tag);
 
@@ -220,7 +243,7 @@ void cpu_server_main()
     recv(&sender_badge);
     assert(sender_badge == CPU_SERVER_BADGE_PARENT_VALUE);
 
-    seL4_SetMR(CPUMSGREG_FUNC, FUNC_SERVER_SPAWN_SYNC_ACK);
+    seL4_SetMR(CPUMSGREG_FUNC, CPU_FUNC_SERVER_SPAWN_SYNC_ACK);
     tag = seL4_MessageInfo_new(error, 0, 0, CPUMSGREG_SPAWN_SYNC_ACK_END);
     reply(tag);
 
@@ -254,23 +277,23 @@ void cpu_server_main()
         func = seL4_GetMR(CPUMSGREG_FUNC);
 
         // if the badge is not set, then it has to be a new connection request.
-        if (sender_badge == CPU_SERVER_BADGE_VALUE_EMPTY && func != FUNC_CONNECT_REQ){
+        if (sender_badge == CPU_SERVER_BADGE_VALUE_EMPTY && func != CPU_FUNC_CONNECT_REQ){
             printf(CPUSERVS "main: Badge not set, but not a connect request.\n");
             continue;
         }
 
         /* Post */
         switch (func) {
-        case FUNC_CONNECT_REQ:
+        case CPU_FUNC_CONNECT_REQ:
             handle_connect_req();
             break;
 
-        case FUNC_START_REQ:
+        case CPU_FUNC_START_REQ:
             handle_start_req(sender_badge, tag, received_cap);
             break;
 
-        case FUNC_CONFIG_REQ:
-            handle_config_req(sender_badge);
+        case CPU_FUNC_CONFIG_REQ:
+            handle_config_req(sender_badge, tag, received_cap_path);
             break;
 
         default:

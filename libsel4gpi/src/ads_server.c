@@ -84,7 +84,7 @@ static void ads_server_registry_insert(ads_server_registry_entry_t *new_node) {
  * @param badge 
  * @return ads_server_registry_entry_t* 
  */
-static ads_server_registry_entry_t *ads_server_registry_get_entry_by_badge(seL4_Word badge){
+ads_server_registry_entry_t *ads_server_registry_get_entry_by_badge(seL4_Word badge){
 
     ads_server_registry_entry_t *current_ctx = get_ads_server()->client_registry;
 
@@ -130,7 +130,7 @@ static void handle_connect_req()
     }
     /* Return this badged end point in the return message. */
     seL4_SetCap(0, dest.capPtr);
-    seL4_SetMR(ADSMSGREG_FUNC, FUNC_CONNECT_ACK);
+    seL4_SetMR(ADSMSGREG_FUNC, ADS_FUNC_CONNECT_ACK);
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(error, 0, 1, ADSMSGREG_CONNECT_ACK_END);
     return reply(tag);
 }
@@ -155,7 +155,7 @@ static void handle_getid_req(seL4_Word sender_badge)
     
     /* Get the ID */
     seL4_Word id = sender_badge;
-    seL4_SetMR(ADSMSGREG_FUNC, FUNC_GETID_ACK);
+    seL4_SetMR(ADSMSGREG_FUNC, ADS_FUNC_GETID_ACK);
     seL4_SetMR(ADSMSGREG_GETID_ACK_ID, id);
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0, ADSMSGREG_GETID_ACK_END);
     return reply(tag);
@@ -191,7 +191,7 @@ static void handle_attach_req(seL4_Word sender_badge, seL4_MessageInfo_t old_tag
 
 
     sel4utils_walk_vspace(client_data->ads.vspace, NULL);
-    seL4_SetMR(ADSMSGREG_FUNC, FUNC_ATTACH_ACK);
+    seL4_SetMR(ADSMSGREG_FUNC, ADS_FUNC_ATTACH_ACK);
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0, ADSMSGREG_ATTACH_ACK_END);
     return reply(tag);
 }
@@ -263,7 +263,7 @@ static void handle_clone_req(seL4_Word sender_badge)
     }
     /* Return this badged end point in the return message. */
     seL4_SetCap(0, dest_path.capPtr);
-    seL4_SetMR(ADSMSGREG_FUNC, FUNC_CLONE_ACK);
+    seL4_SetMR(ADSMSGREG_FUNC, ADS_FUNC_CLONE_ACK);
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(error, 0, 1, ADSMSGREG_CLONE_ACK_END);
     return reply(tag);
 
@@ -291,7 +291,7 @@ void ads_server_main()
     recv(&sender_badge);
     assert(sender_badge == ADS_SERVER_BADGE_PARENT_VALUE);
 
-    seL4_SetMR(ADSMSGREG_FUNC, FUNC_SERVER_SPAWN_SYNC_ACK);
+    seL4_SetMR(ADSMSGREG_FUNC, ADS_FUNC_SERVER_SPAWN_SYNC_ACK);
     tag = seL4_MessageInfo_new(error, 0, 0, ADSMSGREG_SPAWN_SYNC_ACK_END);
     reply(tag);
 
@@ -325,26 +325,26 @@ void ads_server_main()
         func = seL4_GetMR(ADSMSGREG_FUNC);
 
         // if the badge is not set, then it has to be a new connection request.
-        if (sender_badge == ADS_SERVER_BADGE_VALUE_EMPTY && func != FUNC_CONNECT_REQ){
+        if (sender_badge == ADS_SERVER_BADGE_VALUE_EMPTY && func != ADS_FUNC_CONNECT_REQ){
             printf(ADSSERVS "main: Badge not set, but not a connect request.\n");
             continue;
         }
 
         /* Post */
         switch (func) {
-        case FUNC_CONNECT_REQ:
+        case ADS_FUNC_CONNECT_REQ:
             handle_connect_req();
             break;
 
-        case FUNC_GETID_REQ:
+        case ADS_FUNC_GETID_REQ:
             handle_getid_req(sender_badge);
             break;
 
-        case FUNC_CLONE_REQ:
+        case ADS_FUNC_CLONE_REQ:
             handle_clone_req(sender_badge);
             break;
 
-        case FUNC_ATTACH_REQ:
+        case ADS_FUNC_ATTACH_REQ:
             handle_attach_req(sender_badge, tag, received_cap);
             break;
 

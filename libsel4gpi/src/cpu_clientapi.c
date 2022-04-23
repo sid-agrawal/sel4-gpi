@@ -33,7 +33,7 @@ int cpu_server_client_connect(seL4_CPtr server_ep_cap,
     debug_cap_identify(server_ep_cap);
 
     printf(CPUSERVC"Client: Set a receive path for the badged ep: %d\n", path.capPtr);
-    seL4_SetMR(CPUMSGREG_FUNC, FUNC_CONNECT_REQ);
+    seL4_SetMR(CPUMSGREG_FUNC, CPU_FUNC_CONNECT_REQ);
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0,
                                CPUMSGREG_CONNECT_REQ_END);
 
@@ -50,16 +50,16 @@ int cpu_server_client_connect(seL4_CPtr server_ep_cap,
 
 int cpu_client_start(cpu_client_context_t *conn) 
 { 
-    seL4_SetMR(CPUMSGREG_FUNC, FUNC_START_REQ);
+    seL4_SetMR(CPUMSGREG_FUNC, CPU_FUNC_START_REQ);
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0,
                                                   CPUMSGREG_START_REQ_END);
     tag = seL4_Call(conn->badged_server_ep_cspath.capPtr, tag);
     return 0;
 }
 
-int cpu_client_config(cpu_client_context_t *conn, ads_client_context_t *ads_conn){
+int cpu_client_config(cpu_client_context_t *conn, ads_client_context_t *ads_conn)
 { 
-    seL4_SetMR(CPUMSGREG_FUNC, FUNC_CONFIG_REQ);
+    seL4_SetMR(CPUMSGREG_FUNC, CPU_FUNC_CONFIG_REQ);
 
     /* Send the badged endpoint cap of the ads client as a cap */
     seL4_SetCap(0, ads_conn->badged_server_ep_cspath.capPtr);

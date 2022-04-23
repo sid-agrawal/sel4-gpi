@@ -32,7 +32,7 @@ int ads_server_client_connect(seL4_CPtr server_ep_cap,
     debug_cap_identify(server_ep_cap);
 
     printf(ADSSERVC"Client: Set a receive path for the badged ep: %d\n", path.capPtr);
-    seL4_SetMR(ADSMSGREG_FUNC, FUNC_CONNECT_REQ);
+    seL4_SetMR(ADSMSGREG_FUNC, ADS_FUNC_CONNECT_REQ);
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0,
                                ADSMSGREG_CONNECT_REQ_END);
 
@@ -49,7 +49,7 @@ int ads_server_client_connect(seL4_CPtr server_ep_cap,
 
 int ads_client_attach(ads_client_context_t *conn, void* vaddr, size_t size, seL4_CPtr frame_cap)
 { 
-    seL4_SetMR(ADSMSGREG_FUNC, FUNC_ATTACH_REQ);
+    seL4_SetMR(ADSMSGREG_FUNC, ADS_FUNC_ATTACH_REQ);
     seL4_SetMR(ADSMSGREG_ATTACH_REQ_VA, (seL4_Word) vaddr);
     seL4_SetMR(ADSMSGREG_ATTACH_REQ_SZ, (seL4_Word) size);
     seL4_SetCap(0, frame_cap);
@@ -64,7 +64,7 @@ int ads_client_attach(ads_client_context_t *conn, void* vaddr, size_t size, seL4
 
 int ads_client_getID(ads_client_context_t *conn, seL4_Word *ret_id)
 {
-    seL4_SetMR(ADSMSGREG_FUNC, FUNC_GETID_REQ);
+    seL4_SetMR(ADSMSGREG_FUNC, ADS_FUNC_GETID_REQ);
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0,
                                                   ADSMSGREG_GETID_REQ_END);
 
@@ -87,7 +87,7 @@ int ads_client_clone(ads_client_context_t *conn, vka_t* vka, void* omit_vaddr, a
         /* depth */         ret_conn->badged_server_ep_cspath.capDepth
     );
 
-    seL4_SetMR(ADSMSGREG_FUNC, FUNC_CLONE_REQ);
+    seL4_SetMR(ADSMSGREG_FUNC, ADS_FUNC_CLONE_REQ);
     seL4_SetMR(ADSMSGREG_CLONE_REQ_OMIT_VA, (uintptr_t)omit_vaddr);
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0,
                                                   ADSMSGREG_CLONE_REQ_END);

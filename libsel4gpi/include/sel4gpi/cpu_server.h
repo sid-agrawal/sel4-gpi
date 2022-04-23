@@ -39,20 +39,20 @@ enum cpu_server_errors {
 
 /* IPC Message register values for SSMSGREG_FUNC */
 enum cpu_server_funcs {
-    FUNC_CONNECT_REQ = 0,
-    FUNC_CONNECT_ACK,
+    CPU_FUNC_CONNECT_REQ = 0,
+    CPU_FUNC_CONNECT_ACK,
 
-    FUNC_SERVER_SPAWN_SYNC_REQ,
-    FUNC_SERVER_SPAWN_SYNC_ACK,
+    CPU_FUNC_SERVER_SPAWN_SYNC_REQ,
+    CPU_FUNC_SERVER_SPAWN_SYNC_ACK,
 
-    FUNC_START_REQ,
-    FUNC_START_ACK,
+    CPU_FUNC_START_REQ,
+    CPU_FUNC_START_ACK,
 
-    FUNC_CONFIG_REQ,
-    FUNC_CONFIG_ACK,
+    CPU_FUNC_CONFIG_REQ,
+    CPU_FUNC_CONFIG_ACK,
 
-    FUNC_DISCONNECT_REQ,
-    FUNC_DISCONNECT_ACK,
+    CPU_FUNC_DISCONNECT_REQ,
+    CPU_FUNC_DISCONNECT_ACK,
 };
 
 /* Designated purposes of each message register in the mini-protocol. */
