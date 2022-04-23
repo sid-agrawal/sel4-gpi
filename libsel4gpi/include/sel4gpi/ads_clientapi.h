@@ -75,7 +75,16 @@ int ads_client_bind_cpu(ads_client_context_t *conn, seL4_CPtr cpu_cap);
  * @param conn original ads connection object
  * @param omit_vaddr Do not clone the segment with this starting VA
  * @param ads_cap_ret return cap
- * @return int 
+ * @return int 0 on success, -1 on failure.
  */
 int ads_client_clone(ads_client_context_t *conn, vka_t *vka, void* omit_vaddr,    
                      ads_client_context_t *conn_ret);
+
+/**
+ * @brief Get the unique id of the ads.
+ * 
+ * @param conn ads connection object
+ * @param ret_id id of the ads as a return value
+ * @return int 0 on success, -1 on failure.
+ */
+int ads_client_getID(ads_client_context_t *conn, seL4_Word *ret_id);

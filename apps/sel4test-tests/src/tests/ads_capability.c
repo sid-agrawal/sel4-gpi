@@ -26,7 +26,6 @@ int test_ads_clone(env_t env)
 
 
 
-/*
     // Using a known EP, get a new ads CAP.
     ads_client_context_t ads_conn_clone;
     error = ads_client_clone(&conn, &env->vka,  (void *) 0x10001000, &ads_conn_clone);
