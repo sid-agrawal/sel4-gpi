@@ -41,7 +41,6 @@ char _cpio_archive_end[1];
 static seL4_CPtr endpoint;
 static seL4_CPtr ads_endpoint;
 static seL4_CPtr cpu_endpoint;
-static seL4_CPtr counter_endpoint;
 static seL4_CPtr self_as_cap;
 
 /* global static memory for init */
@@ -215,7 +214,7 @@ int main(int argc, char **argv)
     struct env env;
 
     /* parse args */
-    assert(argc == 6);
+    assert(argc == 5);
     endpoint = (seL4_CPtr) atoi(argv[0]);
 
     /* read in init data */
@@ -223,8 +222,7 @@ int main(int argc, char **argv)
 
     ads_endpoint = (seL4_CPtr) atoi(argv[2]);
     cpu_endpoint = (seL4_CPtr) atoi(argv[3]);
-    counter_endpoint = (seL4_CPtr) atoi(argv[4]);
-    self_as_cap = (seL4_CPtr) atoi(argv[5]);
+    self_as_cap = (seL4_CPtr) atoi(argv[4]);
 
     /* configure env */
     env.cspace_root = init_data->root_cnode;
@@ -232,7 +230,7 @@ int main(int argc, char **argv)
     env.endpoint = endpoint;
     env.self_as_cptr = self_as_cap;
     env.ads_endpoint = ads_endpoint;
-    env.counter_endpoint = counter_endpoint;
+    env.cpu_endpoint = cpu_endpoint;
     env.priority = init_data->priority;
     env.cspace_size_bits = init_data->cspace_size_bits;
     env.tcb = init_data->tcb;
@@ -259,8 +257,6 @@ int main(int argc, char **argv)
     printf("%s %d self_as_cptr is %d: ", __FUNCTION__, __LINE__, self_as_cap);
     debug_cap_identify(self_as_cap);
 
-    printf("%s %d counter_endpoint is %d: ", __FUNCTION__, __LINE__, counter_endpoint);
-    debug_cap_identify(counter_endpoint);
     printf("%s %d ads_endpoint is %d: ", __FUNCTION__, __LINE__, ads_endpoint);
     debug_cap_identify(ads_endpoint);
     /* initialise simple */

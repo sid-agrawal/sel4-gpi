@@ -33,4 +33,4 @@ int cpu_start(cpu_t *cpu);
  * @param vspace vspace i.e. root PT cap
  * @return int 0 on success, -1 on failure.
  */
-int cpu_config_vspace(cpu_t *cpu, vspace_t vspace);
+int cpu_config_vspace(cpu_t *cpu,  vka_t *vka, vspace_t *vspace, seL4_CNode cspace);
