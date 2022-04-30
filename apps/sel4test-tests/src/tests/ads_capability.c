@@ -20,44 +20,27 @@ int test_ads_clone(env_t env)
     vka_cspace_make_path(&env->vka, env->self_as_cptr, &path);
     ads_client_context_t conn;
     conn.badged_server_ep_cspath = path;
-    seL4_Word id;
-    error = ads_client_getID(&conn, &id);
-    test_error_eq(error, 0);
 
 
 
     // Using a known EP, get a new ads CAP.
-    ads_client_context_t ads_conn_clone;
-    error = ads_client_clone(&conn, &env->vka,  (void *) 0x10001000, &ads_conn_clone);
+    ads_client_context_t ads_conn_clone1;
+    error = ads_client_clone(&conn, &env->vka,  (void *) 0x10001000, &ads_conn_clone1);
     test_error_eq(error, 0);
 
-    // Allocate a frame
-    vka_object_t frame_obj;
-    size_t frame_size_bits = seL4_PageBits;
-    error = vka_alloc_frame(&env->vka, frame_size_bits, &frame_obj);
-    if (error) {
-        printf("Failed to allocate frame\n");
-        return 1;
-    }
-
-    // Attach it to the new ads cap.
-    error = ads_client_attach(&conn,  (void *)(0x10012000 + PAGE_SIZE_4K), PAGE_SIZE_4K, frame_obj.cptr);
-    test_error_eq(error, 0);
-
+    ads_client_context_t ads_conn_clone2;
+    error = ads_client_clone(&conn, &env->vka,  (void *) 0x10001000, &ads_conn_clone2);
+    
+    ads_client_context_t ads_conn_clone3;
+    error = ads_client_clone(&conn, &env->vka,  (void *) 0x10001000, &ads_conn_clone3);
+    
     // Allocate new CPU cap.
     cpu_client_context_t cpu_conn;
-    error = cpu_server_client_connect(env->cpu_endpoint, &env->vka, &cpu_conn);
+    error = ads_client_testing(&conn, &env->vka,
+                               &ads_conn_clone1, &ads_conn_clone2,
+                               &ads_conn_clone3);
     test_error_eq(error, 0);
     
-
-    // Config the CPU cap.
-    error = cpu_client_config(&cpu_conn, &ads_conn_clone);
-    test_error_eq(error, 0);
-
-
-    // Start CPU
-    error = cpu_client_start(&cpu_conn);
-    test_error_eq(error, 0);
     return sel4test_get_result();
 }
 DEFINE_TEST(GPIADS001, "Ensure the ads clone works", test_ads_clone, true)

@@ -100,7 +100,7 @@ static cpu_server_registry_entry_t *cpu_server_registry_get_entry_by_badge(seL4_
 
 static void handle_connect_req()
 {
-    printf(CPUSERVS "main: Got connect request from");
+    printf(CPUSERVS "main: Got connect request\n");
 
     /* Allocate a new registry entry for the client. */
     seL4_Word client_reg_ptr = (seL4_Word)malloc(sizeof(cpu_server_registry_entry_t));
@@ -152,7 +152,7 @@ static void handle_start_req(seL4_Word sender_badge, seL4_MessageInfo_t old_tag,
     }
     printf(CPUSERVS "main: found client_data %x.\n", client_data);
 
-    error = cpu_start(&client_data->cpu);
+    error = cpu_start(&client_data->cpu, 0x00);
     if (error) {
         printf(CPUSERVS "main: Failed to start CPU.\n");
         return;
@@ -166,14 +166,18 @@ static void handle_start_req(seL4_Word sender_badge, seL4_MessageInfo_t old_tag,
 
 static void handle_config_req(seL4_Word sender_badge,
                               seL4_MessageInfo_t old_tag,
-                              cspacepath_t ads_cap_path)
+                              cspacepath_t ads_cap_path,
+                              cspacepath_t cspace_root_cap_path)
 {
     // Find the client - like start
-    printf(CPUSERVS "main: Got config  request from client badge %x.\n",
-           sender_badge);
-    assert(seL4_MessageInfo_get_extraCaps(old_tag) == 1);
+    printf(CPUSERVS "-----main: Got config  request from client badge %x with %d extra caps.\n",
+           sender_badge, seL4_MessageInfo_get_extraCaps(old_tag));
+    // assert(seL4_MessageInfo_get_extraCaps(old_tag) == 1);
+    
+    assert(seL4_MessageInfo_get_label(old_tag) == 0);
     int error = 0;
-
+    
+    printf(CPUSERVS "capsUnwrapped: %d\n", seL4_MessageInfo_get_capsUnwrapped(old_tag));
     /* Find the client */
     cpu_server_registry_entry_t *client_data = cpu_server_registry_get_entry_by_badge(sender_badge);
     if (client_data == NULL)
@@ -183,45 +187,52 @@ static void handle_config_req(seL4_Word sender_badge,
         return;
     }
     printf(CPUSERVS "main: found client_data %x.\n", client_data);
+    debug_cap_identify(CPUSERVS, ads_cap_path.capPtr);
+    debug_cap_identify(CPUSERVS, ads_cap_path.capPtr+1);
+    debug_cap_identify(CPUSERVS, cspace_root_cap_path.capPtr);
+
+    printf(CPUSERVS "main: end of handle config request.\n");
 
 
+    // /* Get the vspace for the ads */
+    // ads_client_context_t ads_client_ctx;
+    // ads_client_ctx.badged_server_ep_cspath = ads_cap_path;
+    // seL4_Word ads_id;
+    // error = ads_client_getID(&ads_client_ctx, &ads_id);
+    // if (error) {
+    //     printf(CPUSERVS "main: Failed to get ads ID.\n");
+    //     return;
+    // }
+    // ads_server_registry_entry_t *asre = ads_server_registry_get_entry_by_badge(ads_id);
+    // if (asre == NULL) {
+    //     printf(CPUSERVS "main: Failed to find ads badge %x.\n",
+    //            ads_id);
+    //     return;
+    // }
 
-    /* Get the vspace for the ads */
-    ads_client_context_t ads_client_ctx;
-    ads_client_ctx.badged_server_ep_cspath = ads_cap_path;
-    seL4_Word ads_id;
-    error = ads_client_getID(&ads_client_ctx, &ads_id);
-    if (error) {
-        printf(CPUSERVS "main: Failed to get ads ID.\n");
-        return;
-    }
-    ads_server_registry_entry_t *asre = ads_server_registry_get_entry_by_badge(ads_id);
-    if (asre == NULL) {
-        printf(CPUSERVS "main: Failed to find ads badge %x.\n",
-               ads_id);
-        return;
-    }
-
-    /* Get the vspace for the ads */
-    vspace_t *ads_vspace = asre->ads.vspace;
+    // /* Get the vspace for the ads */
+    // vspace_t *ads_vspace = asre->ads.vspace;
 
 
 
 
 
     
-    error = cpu_config_vspace(&client_data->cpu, ads_vspace);
-    if (error) {
-        printf(CPUSERVS "main: Failed to config from client badge %x.\n",
-               sender_badge);
-        return;
-    }
+    // seL4_CNode cspace_root;
+    // error = cpu_config_vspace(&client_data->cpu,
+    //                           get_cpu_server()->server_vka,
+    //                           ads_vspace,
+    //                           cspace_root_cap_path.capPtr);
+    // if (error) {
+    //     printf(CPUSERVS "main: Failed to config from client badge %x.\n",
+    //            sender_badge);
+    //     return;
+    // }
     printf(CPUSERVS "main: config done.\n");
 
     seL4_SetMR(CPUMSGREG_FUNC, CPU_FUNC_CONFIG_ACK);
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(error, 0, 0, CPUMSGREG_CONFIG_ACK_END);
     return reply(tag);
-
 }
 
 /**
@@ -265,17 +276,40 @@ void cpu_server_main()
     printf(CPUSERVS"main: Entering main loop and accepting requests.\n");
     while (1) {
         /* Pre */
-        seL4_CPtr received_cap;
+        int error = 0;
         cspacepath_t received_cap_path;
-            /* Get the frame cap from the message */
-            vka_cspace_alloc(get_cpu_server()->server_vka, &received_cap);
-            vka_cspace_make_path(get_cpu_server()->server_vka, received_cap, &received_cap_path);
-            seL4_SetCapReceivePath(
-                /* _service */ received_cap_path.root,
-                /* index */ received_cap_path.capPtr,
-                /* depth */ received_cap_path.capDepth);
+        /* Get the frame cap from the message */
+        error = vka_cspace_alloc_path(get_cpu_server()->server_vka, &received_cap_path); // use "vka_cspace_alloc_path" instgead
+        assert(error == 0);
+        printf(CPUSERVS "==========main: allocated 1st slot: cptr: %d root: %d depth: %d\n",
+               received_cap_path.capPtr, received_cap_path.capDepth, received_cap_path.root);
+        debug_cap_identify(CPUSERVS, received_cap_path.capPtr);
+
+        /* Allocate another csapce slot */
+        cspacepath_t received_cap_path_2;
+        error = vka_cspace_alloc_path(get_cpu_server()->server_vka, &received_cap_path_2); // use "vka_cspace_alloc_path" instgead
+        assert(error == 0);
+        printf(CPUSERVS "==========main: allocated 1st slot: cptr: %d root: %d depth: %d\n",
+               received_cap_path_2.capPtr, received_cap_path_2.capDepth, received_cap_path_2.root);
+        debug_cap_identify(CPUSERVS, received_cap_path_2.capPtr);
+        
+
+        seL4_CPtr min_cptr = MIN(received_cap_path.capPtr, received_cap_path_2.capPtr);
+        
+        seL4_SetCapReceivePath(
+            /* _service */ received_cap_path.root,
+            /* index */ min_cptr,
+            /* depth */ received_cap_path.capDepth);
+
         tag = recv(&sender_badge);
-        printf(CPUSERVS "main: Got message from %x\n", sender_badge);
+        assert(seL4_MessageInfo_get_extraCaps(tag) == 2);
+        printf(CPUSERVS "------------main: Got message from %x with extraCap %d label: %d\n",
+               sender_badge,
+               seL4_MessageInfo_get_extraCaps(tag),
+               seL4_MessageInfo_get_label(tag));
+
+        debug_cap_identify(CPUSERVS, received_cap_path.capPtr);
+        debug_cap_identify(CPUSERVS, received_cap_path_2.capPtr);
 
         func = seL4_GetMR(CPUMSGREG_FUNC);
 
@@ -292,11 +326,12 @@ void cpu_server_main()
             break;
 
         case CPU_FUNC_START_REQ:
-            handle_start_req(sender_badge, tag, received_cap);
+            handle_start_req(sender_badge, tag, received_cap_path.capPtr);
             break;
 
         case CPU_FUNC_CONFIG_REQ:
-            handle_config_req(sender_badge, tag, received_cap_path);
+            /* TODO: Fix the args */
+            handle_config_req(sender_badge, tag, received_cap_path, received_cap_path_2);
             break;
 
         default:

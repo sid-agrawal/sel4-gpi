@@ -190,9 +190,26 @@ static void handle_attach_req(seL4_Word sender_badge, seL4_MessageInfo_t old_tag
     }
 
 
-    sel4utils_walk_vspace(client_data->ads.vspace, NULL);
+    // sel4utils_walk_vspace(client_data->ads.vspace, NULL);
     seL4_SetMR(ADSMSGREG_FUNC, ADS_FUNC_ATTACH_ACK);
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0, ADSMSGREG_ATTACH_ACK_END);
+    return reply(tag);
+}
+
+static void handle_testing_req(seL4_Word sender_badge, seL4_MessageInfo_t old_tag)
+{
+    printf(ADSSERVS "main: Got testing request from client badge %x."
+    " extraCaps: %d capsUnWrapped %d\n",
+           sender_badge, seL4_MessageInfo_get_extraCaps(old_tag), 
+           seL4_MessageInfo_get_capsUnwrapped(old_tag));
+    
+    for (int i = 0; i < 5; i++) {
+        printf(ADSSERVS "MR[%d] = %x\n", i, seL4_GetBadge(i));
+    }
+
+    // sel4utils_walk_vspace(client_data->ads.vspace, NULL);
+    seL4_SetMR(ADSMSGREG_FUNC, ADS_FUNC_TESTING_ACK);
+    seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0, ADSMSGREG_TESTING_ACK_END);
     return reply(tag);
 }
 
@@ -242,7 +259,7 @@ static void handle_clone_req(seL4_Word sender_badge)
                sender_badge);
         return;
     }
-    printf(ADSSERVS "main: Clone done.\n");
+    printf(ADSSERVS "main: Clone done. Badge: %x\n", client_reg_ptr);
 
     /* Create a badged endpoint for the client to send messages to.
      * Use the address of the client_registry_entry as the badge.
@@ -348,6 +365,9 @@ void ads_server_main()
             handle_attach_req(sender_badge, tag, received_cap);
             break;
 
+        case ADS_FUNC_TESTING_REQ:
+            handle_testing_req(sender_badge, tag);
+            break;
 
         default:
             ZF_LOGW(ADSSERVS "main: Unknown function %d requested.", func);

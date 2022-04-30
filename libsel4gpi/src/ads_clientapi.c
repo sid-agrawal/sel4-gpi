@@ -10,6 +10,8 @@
  */
 
 #include<sel4gpi/ads_clientapi.h>
+#include <vka/vka.h>
+#include <vka/capops.h>
 
 int ads_server_client_connect(seL4_CPtr server_ep_cap,
                               vka_t *client_vka,
@@ -29,7 +31,7 @@ int ads_server_client_connect(seL4_CPtr server_ep_cap,
     );
     
     printf(ADSSERVC"%s %d ads_endpoint is %d: ", __FUNCTION__, __LINE__, server_ep_cap);
-    debug_cap_identify(server_ep_cap);
+    debug_cap_identify(ADSSERVC, server_ep_cap);
 
     printf(ADSSERVC"Client: Set a receive path for the badged ep: %d\n", path.capPtr);
     seL4_SetMR(ADSMSGREG_FUNC, ADS_FUNC_CONNECT_REQ);
@@ -42,7 +44,7 @@ int ads_server_client_connect(seL4_CPtr server_ep_cap,
     ret_conn->badged_server_ep_cspath = path;;
 
     printf(ADSSERVC"Client: received badged endpoint and it was kept in %d:", path.capPtr);
-    debug_cap_identify(path.capPtr);
+    debug_cap_identify(ADSSERVC, path.capPtr);
     return 0;
 }
 
@@ -104,3 +106,35 @@ int ads_client_rm(ads_client_context_t *conn, void* vaddr, size_t size){
 int ads_client_bind_cpu(ads_client_context_t *conn, seL4_CPtr cpu_cap) {
     return 0;
 }
+
+int ads_client_testing(ads_client_context_t *conn, vka_t *vka, 
+                       ads_client_context_t *clone1,
+                       ads_client_context_t *clone2,
+                       ads_client_context_t *clone3) {
+
+    int error = 0;
+    cspacepath_t rand_cap_orig_path, rand_cap_badged_path;
+
+    seL4_CPtr rand_cap = vka_alloc_endpoint_leaky(vka);
+    vka_cspace_make_path(vka, rand_cap, &rand_cap_orig_path);
+    assert(error == 0);
+    
+    error = vka_cspace_alloc_path(vka, &rand_cap_badged_path);
+    assert(error == 0);
+    error = vka_cnode_mint(&rand_cap_badged_path,
+                               &rand_cap_orig_path,
+                               seL4_AllRights,
+                               0xdeedbeef);
+    assert(error == 0);
+
+    seL4_SetMR(ADSMSGREG_FUNC, ADS_FUNC_TESTING_REQ);
+    seL4_SetCap(0, clone1->badged_server_ep_cspath.capPtr);
+    seL4_SetCap(1, rand_cap_badged_path.capPtr);
+    //seL4_SetCap(1, clone2->badged_server_ep_cspath.capPtr);
+
+    seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 2,
+                                                  ADSMSGREG_TESTING_REQ_END);
+
+    tag = seL4_Call(conn->badged_server_ep_cspath.capPtr, tag);
+    return 0;
+                       }

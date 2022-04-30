@@ -30,7 +30,7 @@ int cpu_server_client_connect(seL4_CPtr server_ep_cap,
     );
     
     printf(CPUSERVC"%s %d cpu_endpoint is %d: ", __FUNCTION__, __LINE__, server_ep_cap);
-    debug_cap_identify(server_ep_cap);
+    debug_cap_identify(CPUSERVC, server_ep_cap);
 
     printf(CPUSERVC"Client: Set a receive path for the badged ep: %d\n", path.capPtr);
     seL4_SetMR(CPUMSGREG_FUNC, CPU_FUNC_CONNECT_REQ);
@@ -43,7 +43,7 @@ int cpu_server_client_connect(seL4_CPtr server_ep_cap,
     ret_conn->badged_server_ep_cspath = path;;
 
     printf(CPUSERVC"Client: received badged endpoint and it was kept in %d:", path.capPtr);
-    debug_cap_identify(path.capPtr);
+    debug_cap_identify(CPUSERVC, path.capPtr);
     return 0;
 }
 

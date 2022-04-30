@@ -92,6 +92,8 @@ enum cpu_server_msgregs
 /* Per-client context maintained by the server. */
 typedef struct _cpu_server_registry_entry {
     cpu_t cpu;
+    /* In our model each CPU can have its own cspace. */
+    seL4_CNode cspace_root;
     struct _cpu_server_registry_entry *next;
     
 } cpu_server_registry_entry_t;

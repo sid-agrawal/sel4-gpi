@@ -88,3 +88,8 @@ int ads_client_clone(ads_client_context_t *conn, vka_t *vka, void* omit_vaddr,
  * @return int 0 on success, -1 on failure.
  */
 int ads_client_getID(ads_client_context_t *conn, seL4_Word *ret_id);
+
+int ads_client_testing(ads_client_context_t *conn, vka_t *vka,
+                       ads_client_context_t *ads_conn_clone1,
+                       ads_client_context_t *ads_conn_clone2,
+                       ads_client_context_t *ads_conn_clone3);

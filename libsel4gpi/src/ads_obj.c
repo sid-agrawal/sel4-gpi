@@ -39,8 +39,6 @@ int ads_attach(ads_t *ads, vka_t *vka, void* vaddr, size_t size, seL4_CPtr frame
         return 1;
     }
  
-    printf("After attach\n");
-    sel4utils_walk_vspace(target, NULL);
     return 0;
 }
 
@@ -57,9 +55,9 @@ int ads_clone(vspace_t *loader, ads_t *ads, vka_t *vka, void* omit_vaddr, ads_t 
     vspace_t *from = ads->vspace;
     vspace_t *to = ret_ads->vspace;
 
-    printf("Cloning vspace\n");
-    printf("Old vspace details:\n");
-    sel4utils_walk_vspace(from, NULL);
+    // printf("Cloning vspace\n");
+    // printf("Old vspace details:\n");
+    // sel4utils_walk_vspace(from, NULL);
 
 
     // Give vspace root
@@ -140,7 +138,7 @@ int ads_clone(vspace_t *loader, ads_t *ads, vka_t *vka, void* omit_vaddr, ads_t 
         from_sel4_res = from_sel4_res->next;
     }
     printf("New vspace details:\n");
-    sel4utils_walk_vspace(to, NULL);
+    // sel4utils_walk_vspace(to, NULL);
     // For each reservation: call share_mem_at_vaddr
     return 0;
 

@@ -62,6 +62,9 @@ enum ads_server_funcs {
 
     ADS_FUNC_DISCONNECT_REQ,
     ADS_FUNC_DISCONNECT_ACK,
+
+    ADS_FUNC_TESTING_REQ,
+    ADS_FUNC_TESTING_ACK,
 };
 
 /* Designated purposes of each message register in the mini-protocol. */
@@ -106,6 +109,12 @@ enum ads_server_msgregs
     ADSMSGREG_RM_REQ_END,
 
     ADSMSGREG_RM_ACK_END = ADSMSGREG_LABEL0,
+    
+    /* Testing */
+    ADSMSGREG_TESTING_REQ_END = ADSMSGREG_LABEL0,
+
+    ADSMSGREG_TESTING_ACK_END = ADSMSGREG_LABEL0,
+
 
     /* Bind to CPU */
     ADSMSGREG_BIND_CPU_REQ_END = ADSMSGREG_LABEL0,

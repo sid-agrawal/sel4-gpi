@@ -499,7 +499,7 @@ void *main_continued(void *arg UNUSED)
     env.ads_endpoint_in_parent = ads_server_ep_for_clients;
     printf(ADSSERVP"Public EP is: %d\n", ads_server_ep_for_clients);
     printf(ADSSERVP"Public EP is: %d\n", env.ads_endpoint_in_parent);
-    debug_cap_identify(ads_server_ep_for_clients);
+    debug_cap_identify(ADSSERVP, ads_server_ep_for_clients);
     
     ZF_LOGD("Starting cpu server...");
     seL4_CPtr cpu_server_ep_for_clients;
@@ -511,7 +511,7 @@ void *main_continued(void *arg UNUSED)
     env.cpu_endpoint_in_parent = cpu_server_ep_for_clients;
     printf(CPUSERVP"Public EP is: %d\n", cpu_server_ep_for_clients);
     printf(CPUSERVP"Public EP is: %d\n", env.cpu_endpoint_in_parent);
-    debug_cap_identify(cpu_server_ep_for_clients);
+    debug_cap_identify(CPUSERVP, cpu_server_ep_for_clients);
     
 
     /* now run the tests */

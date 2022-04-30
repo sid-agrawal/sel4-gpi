@@ -52,6 +52,8 @@ int cpu_client_start(cpu_client_context_t *conn);
  * @brief Configure the cpu oject.
  * 
  * @param conn client connection object
+ * @param ads_conn ads connection object
+ * @param cspace_root cspace root for the cpu object.
  * @return int 0 on success, -1 on failure.
  */
 int cpu_client_config(cpu_client_context_t *conn, ads_client_context_t *ads_conn);
