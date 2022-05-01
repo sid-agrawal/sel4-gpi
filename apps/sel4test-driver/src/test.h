@@ -80,12 +80,10 @@ struct driver_env {
 
 
     /* Add for libsel4gpi */
-    seL4_CPtr ads_endpoint_in_parent;
-    seL4_CPtr cpu_endpoint_in_parent;
+    seL4_CPtr gpi_endpoint_in_parent;
     
-    seL4_CPtr child_as_cptr_in_child;
-    seL4_CPtr ads_endpoint_in_child;
-    seL4_CPtr cpu_endpoint_in_child;
+    seL4_CPtr child_as_cptr_in_child; //Child address-space cptr in child
+    seL4_CPtr gpi_endpoint_in_child;
 
 
     int num_untypeds;

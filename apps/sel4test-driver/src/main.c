@@ -47,7 +47,7 @@
 #include "timer.h"
 
 #include <sel4platsupport/io.h>
-#include <sel4gpi/ads_parentapi.h>
+#include <sel4gpi/gpi_server.h>
 #include <sel4gpi/cpu_parentapi.h>
 
 /* ammount of untyped memory to reserve for the driver (32mb) */
@@ -489,30 +489,14 @@ void *main_continued(void *arg UNUSED)
     }
 
     /* Start core services */
-    ZF_LOGD("Starting ads server...");
-    seL4_CPtr ads_server_ep_for_clients;
-    error = ads_server_parent_spawn_thread(&env.simple,
-                                        &env.vka,
-                                        &env.vspace,
-                                        ADS_SERVER_DEFAULT_PRIORITY,
-                                        &ads_server_ep_for_clients);
-    env.ads_endpoint_in_parent = ads_server_ep_for_clients;
-    printf(ADSSERVP"Public EP is: %d\n", ads_server_ep_for_clients);
-    printf(ADSSERVP"Public EP is: %d\n", env.ads_endpoint_in_parent);
-    debug_cap_identify(ADSSERVP, ads_server_ep_for_clients);
-    
-    ZF_LOGD("Starting cpu server...");
-    seL4_CPtr cpu_server_ep_for_clients;
-    error = cpu_server_parent_spawn_thread(&env.simple,
-                                        &env.vka,
-                                        &env.vspace,
-                                        CPU_SERVER_DEFAULT_PRIORITY,
-                                        &cpu_server_ep_for_clients);
-    env.cpu_endpoint_in_parent = cpu_server_ep_for_clients;
-    printf(CPUSERVP"Public EP is: %d\n", cpu_server_ep_for_clients);
-    printf(CPUSERVP"Public EP is: %d\n", env.cpu_endpoint_in_parent);
-    debug_cap_identify(CPUSERVP, cpu_server_ep_for_clients);
-    
+    printf(GPISERVP"Starting GPI server...");
+    error = gpi_server_parent_spawn_thread(&env.simple,
+                                           &env.vka,
+                                           &env.vspace,
+                                           GPI_SERVER_DEFAULT_PRIORITY,
+                                           &env.gpi_endpoint_in_parent);
+    printf(GPISERVP "Public EP is: %d\n", env.gpi_endpoint_in_parent);
+    debug_cap_identify(GPISERVP, env.gpi_endpoint_in_parent);
 
     /* now run the tests */
     sel4test_run_tests(&env);

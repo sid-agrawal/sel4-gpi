@@ -1,7 +1,7 @@
 /**
- * @file ads_parentapi.h
+ * @file gpi_server.h
  * @author Sid Agrawal(sid@sid-agrawal.ca)
- * @brief API for a parent to spawn a ads server.
+ * @brief API for a parent to spawn a GPI server.
  * @version 0.1
  * @date 2022-04-05
  * 
@@ -23,6 +23,7 @@
 #define GPI_SERVER_DEFAULT_PRIORITY    (seL4_MaxPrio - 1)
 
 #define GPISERVP     "GPIServ Parent: "
+#define GPISERVS     "GPIServ Server: "
 
 
 enum GPICAP_TYPE {
@@ -31,6 +32,8 @@ enum GPICAP_TYPE {
     GPICAP_TYPE_CPU,
     GPICAP_TYPE_MAX,
 };
+
+#define  GPI_SERVER_BADGE_PARENT_VALUE 0xdeadbeef// Change this to something which will not violate the badge range
 
 /** @file API for allowing a thread to act as the parent to a GPI server
  * thread.
@@ -59,7 +62,41 @@ seL4_Error gpi_server_parent_spawn_thread(simple_t *parent_simple,
                                           vka_t *parent_vka,
                                           vspace_t *parent_vspace,
                                           uint8_t priority,
-                                          seL4_CPtr server_endpoint);
+                                          seL4_CPtr *server_endpoint);
+
+/* Per-client context maintained by the server. */
+typedef struct _gpi_server_registry_entry {
+    //ads_t ads; // Make it a union
+    struct _gpi_server_registry_entry *next;
+    
+} gpi_server_registry_entry_t;
+
+/* State maintained by the server. */
+typedef struct _gpi_server_context {
+    simple_t *server_simple;
+    vka_t *server_vka;
+    seL4_CPtr server_cspace;
+    vspace_t *server_vspace;
+    sel4utils_thread_t server_thread;
+
+    // The server listens on this endpoint. 
+    vka_object_t server_ep_obj;
+
+    // Parent's badge value.
+    // There is only 1 parent and hence only 1 badge value.
+    seL4_Word parent_badge_value;
+    cspacepath_t _badged_server_ep_cspath;
+
+    int registry_n_entries;
+    gpi_server_registry_entry_t *client_registry;
+} gpi_server_context_t;
+
+/** 
+ * Internal library function: acts as the main() for the server thread.
+ **/
+void gpi_server_main(void);
+
+gpi_server_context_t *get_gpi_server(void);
 
 /*
  How we are using the badge.

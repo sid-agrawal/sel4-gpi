@@ -238,19 +238,16 @@ void basic_set_up(uintptr_t e)
     // For the child's as cap in the child
     // First forge a cap to the child's vspace
     seL4_CPtr child_as_cap_in_parent;
-    error = forge_ads_cap_from_vspace(&env->test_process.vspace, &env->vka, &child_as_cap_in_parent);
+    error = 0;//forge_ads_cap_from_vspace(&env->test_process.vspace, &env->vka, &child_as_cap_in_parent);
     if (error){
         ZF_LOGF("Failed to forge child's as cap");
     }
 
-    env->child_as_cptr_in_child = sel4utils_copy_cap_to_process(&(env->test_process),
-                                                                &env->vka, child_as_cap_in_parent);
+    env->child_as_cptr_in_child = 0;//sel4utils_copy_cap_to_process(&(env->test_process),
+                                      //                          &env->vka, child_as_cap_in_parent);
     // For the ads-server
-    env->ads_endpoint_in_child = sel4utils_copy_cap_to_process(&(env->test_process),
-                                                               &env->vka, env->ads_endpoint_in_parent);
-    // For the cpu-server
-    env->cpu_endpoint_in_child = sel4utils_copy_cap_to_process(&(env->test_process),
-                                                               &env->vka, env->cpu_endpoint_in_parent);
+    env->gpi_endpoint_in_child = sel4utils_copy_cap_to_process(&(env->test_process),
+                                                               &env->vka, env->gpi_endpoint_in_parent);
 
     /* copy the device frame, if any */
     if (env->init->device_frame_cap) {
@@ -270,7 +267,7 @@ void basic_set_up(uintptr_t e)
     if (env->init->device_frame_cap) {
         env->init->free_slots.start = env->init->device_frame_cap + 1;
     } else {
-        env->init->free_slots.start = env->cpu_endpoint_in_child + 1;
+        env->init->free_slots.start = env->gpi_endpoint_in_child + 1;
         printf("%s:%d: free_slot.start %d\n", __FUNCTION__, __LINE__, env->init->free_slots.start);
     }
     env->init->free_slots.end = (1u << TEST_PROCESS_CSPACE_SIZE_BITS);
@@ -291,15 +288,14 @@ test_result_t basic_run_test(struct testcase *test, uintptr_t e)
 #endif
 
     /* set up args for the test process */
-    seL4_Word argc = 5;
+    seL4_Word argc = 4;
     char string_args[argc][WORD_STRING_SIZE];
     char *argv[argc];
     sel4utils_create_word_args(string_args, argv, argc,
                                env->endpoint,
                                env->remote_vaddr,
-                               env->ads_endpoint_in_child,
-                               env->cpu_endpoint_in_child,
-                               env->child_as_cptr_in_child);
+                               env->child_as_cptr_in_child,
+                               env->gpi_endpoint_in_child);
 
     int num_res;
     /* spawn the process */

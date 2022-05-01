@@ -41,7 +41,7 @@ int ads_server_client_connect(seL4_CPtr server_ep_cap,
     tag = seL4_Call(server_ep_cap,tag);
     assert(seL4_MessageInfo_get_extraCaps(tag) == 1);
 
-    ret_conn->badged_server_ep_cspath = path;;
+    ret_conn->badged_server_ep_cspath = path;
 
     printf(ADSSERVC"Client: received badged endpoint and it was kept in %d:", path.capPtr);
     debug_cap_identify(ADSSERVC, path.capPtr);
