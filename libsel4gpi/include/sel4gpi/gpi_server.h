@@ -18,6 +18,8 @@
 #include <vka/vka.h>
 #include <vspace/vspace.h>
 #include <sel4utils/process.h>
+#include <sel4gpi/ads_server.h>
+#include <sel4gpi/cpu_server.h>
 
 
 #define GPI_SERVER_DEFAULT_PRIORITY    (seL4_MaxPrio - 1)
@@ -64,14 +66,10 @@ seL4_Error gpi_server_parent_spawn_thread(simple_t *parent_simple,
                                           uint8_t priority,
                                           seL4_CPtr *server_endpoint);
 
-/* Per-client context maintained by the server. */
-typedef struct _gpi_server_registry_entry {
-    //ads_t ads; // Make it a union
-    struct _gpi_server_registry_entry *next;
-    
-} gpi_server_registry_entry_t;
 
-/* State maintained by the server. */
+/* 
+Context of the server
+*/
 typedef struct _gpi_server_context {
     simple_t *server_simple;
     vka_t *server_vka;
@@ -87,8 +85,9 @@ typedef struct _gpi_server_context {
     seL4_Word parent_badge_value;
     cspacepath_t _badged_server_ep_cspath;
 
-    int registry_n_entries;
-    gpi_server_registry_entry_t *client_registry;
+    /* Per-client context maintained by the server. */
+    ads_component_context_t ads_server;
+    cpu_component_context_t cpu_server;
 } gpi_server_context_t;
 
 /** 

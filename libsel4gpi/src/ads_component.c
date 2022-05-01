@@ -25,15 +25,13 @@
 #include <sel4utils/strerror.h>
 
 #include <sel4gpi/ads_clientapi.h>
-#include <sel4gpi/ads_parentapi.h>
 #include <sel4gpi/ads_server.h>
+#include <sel4gpi/gpi_server.h>
 
 
-static ads_server_context_t ads_server;
-
-ads_server_context_t *get_ads_server(void)
+ads_component_context_t *get_ads_component(void)
 {
-    return &ads_server;
+    return &get_gpi_server()->ads_server;
 }
 
 static inline seL4_MessageInfo_t recv(seL4_Word *sender_badge_ptr)
@@ -43,14 +41,14 @@ static inline seL4_MessageInfo_t recv(seL4_Word *sender_badge_ptr)
      * the reply param of api_recv(third param) is only used in the MCS kernel.
      **/
 
-    return api_recv(get_ads_server()->server_ep_obj.cptr,
+    return api_recv(get_ads_component()->server_ep_obj.cptr,
                     sender_badge_ptr,
-                    get_ads_server()->server_thread.reply.cptr);
+                    get_ads_component()->server_thread.reply.cptr);
 }
 
 static inline void reply(seL4_MessageInfo_t tag)
 {
-    api_reply(get_ads_server()->server_thread.reply.cptr, tag);
+    api_reply(get_ads_component()->server_thread.reply.cptr, tag);
 }
 
 
@@ -63,10 +61,10 @@ static void ads_server_registry_insert(ads_server_registry_entry_t *new_node) {
         // TODO:Use a mutex
 
 
-    ads_server_registry_entry_t *head = get_ads_server()->client_registry;
+    ads_server_registry_entry_t *head = get_ads_component()->client_registry;
 
     if (head == NULL) {
-        get_ads_server()->client_registry = new_node;
+        get_ads_component()->client_registry = new_node;
         new_node->next = NULL;
         return;
     }
@@ -86,7 +84,7 @@ static void ads_server_registry_insert(ads_server_registry_entry_t *new_node) {
  */
 ads_server_registry_entry_t *ads_server_registry_get_entry_by_badge(seL4_Word badge){
 
-    ads_server_registry_entry_t *current_ctx = get_ads_server()->client_registry;
+    ads_server_registry_entry_t *current_ctx = get_ads_component()->client_registry;
 
     while (current_ctx != NULL) {
         if ((seL4_Word)current_ctx == badge) {
@@ -115,11 +113,11 @@ static void handle_connect_req()
      * Use the address of the client_registry_entry as the badge.
      */
     cspacepath_t src, dest;
-    vka_cspace_make_path(get_ads_server()->server_vka,
-                         get_ads_server()->server_ep_obj.cptr, &src);
+    vka_cspace_make_path(get_ads_component()->server_vka,
+                         get_ads_component()->server_ep_obj.cptr, &src);
     seL4_CPtr dest_cptr;
-    vka_cspace_alloc(get_ads_server()->server_vka, &dest_cptr);
-    vka_cspace_make_path(get_ads_server()->server_vka, dest_cptr, &dest);
+    vka_cspace_alloc(get_ads_component()->server_vka, &dest_cptr);
+    vka_cspace_make_path(get_ads_component()->server_vka, dest_cptr, &dest);
 
     int error = vka_cnode_mint(&dest, &src, seL4_AllRights, client_reg_ptr);
     if (error)
@@ -182,7 +180,7 @@ static void handle_attach_req(seL4_Word sender_badge, seL4_MessageInfo_t old_tag
     size_t size = (size_t) seL4_GetMR(ADSMSGREG_ATTACH_REQ_SZ);
     printf(ADSSERVS"main: vaddr %x, size %x\n", vaddr, size);
 
-    error = ads_attach(&client_data->ads, get_ads_server()->server_vka, vaddr, size, frame_cap, client_data->ads.vspace);
+    error = ads_attach(&client_data->ads, get_ads_component()->server_vka, vaddr, size, frame_cap, client_data->ads.vspace);
     if (error) {
         printf(ADSSERVS "main: Failed to attach at vaddr:%lx sz: %lx to client badge %x.\n",
                 vaddr, size, sender_badge);
@@ -249,9 +247,9 @@ static void handle_clone_req(seL4_Word sender_badge)
     void *omit_vaddr = (void *) seL4_GetMR(ADSMSGREG_CLONE_REQ_OMIT_VA);
     ads_t src_ads = client_data->ads;
     ads_t dst_ads = ((ads_server_registry_entry_t *)client_reg_ptr)->ads;
-    int error = ads_clone(get_ads_server()->server_vspace,
+    int error = ads_clone(get_ads_component()->server_vspace,
                           &src_ads,
-                          get_ads_server()->server_vka,
+                          get_ads_component()->server_vka,
                           omit_vaddr,
                           &dst_ads);
     if (error) {
@@ -265,11 +263,11 @@ static void handle_clone_req(seL4_Word sender_badge)
      * Use the address of the client_registry_entry as the badge.
      */
     cspacepath_t src_path, dest_path;
-    vka_cspace_make_path(get_ads_server()->server_vka,
-                         get_ads_server()->server_ep_obj.cptr, &src_path);
+    vka_cspace_make_path(get_ads_component()->server_vka,
+                         get_ads_component()->server_ep_obj.cptr, &src_path);
     seL4_CPtr dest_cptr;
-    vka_cspace_alloc(get_ads_server()->server_vka, &dest_cptr);
-    vka_cspace_make_path(get_ads_server()->server_vka, dest_cptr, &dest_path);
+    vka_cspace_alloc(get_ads_component()->server_vka, &dest_cptr);
+    vka_cspace_make_path(get_ads_component()->server_vka, dest_cptr, &dest_path);
 
     error = vka_cnode_mint(&dest_path, &src_path, seL4_AllRights, client_reg_ptr);
     if (error)
@@ -320,7 +318,7 @@ void ads_server_main()
     printf(ADSSERVS"ads_server_main: Got a call from the parent.\n");
     if (error != 0)
     {
-        seL4_TCB_Suspend(get_ads_server()->server_thread.tcb.cptr);
+        seL4_TCB_Suspend(get_ads_component()->server_thread.tcb.cptr);
     }
 
 
@@ -330,8 +328,8 @@ void ads_server_main()
         seL4_CPtr received_cap;
         cspacepath_t received_cap_path;
             /* Get the frame cap from the message */
-            vka_cspace_alloc(get_ads_server()->server_vka, &received_cap);
-            vka_cspace_make_path(get_ads_server()->server_vka, received_cap, &received_cap_path);
+            vka_cspace_alloc(get_ads_component()->server_vka, &received_cap);
+            vka_cspace_make_path(get_ads_component()->server_vka, received_cap, &received_cap_path);
             seL4_SetCapReceivePath(
                 /* _service */ received_cap_path.root,
                 /* index */ received_cap_path.capPtr,
@@ -378,7 +376,7 @@ void ads_server_main()
     //serial_server_func_kill();
     /* After we break out of the loop, seL4_TCB_Suspend ourselves */
     ZF_LOGI(ADSSERVS"main: Suspending.");
-    seL4_TCB_Suspend(get_ads_server()->server_thread.tcb.cptr);
+    seL4_TCB_Suspend(get_ads_component()->server_thread.tcb.cptr);
 }
 
 int forge_ads_cap_from_vspace(vspace_t *vspace, vka_t *vka, seL4_CPtr *cap_ret){
@@ -398,11 +396,11 @@ int forge_ads_cap_from_vspace(vspace_t *vspace, vka_t *vka, seL4_CPtr *cap_ret){
      * Use the address of the client_registry_entry as the badge.
      */
     cspacepath_t src, dest;
-    vka_cspace_make_path(get_ads_server()->server_vka,
-                         get_ads_server()->server_ep_obj.cptr, &src);
+    vka_cspace_make_path(get_ads_component()->server_vka,
+                         get_ads_component()->server_ep_obj.cptr, &src);
     seL4_CPtr dest_cptr;
-    vka_cspace_alloc(get_ads_server()->server_vka, &dest_cptr);
-    vka_cspace_make_path(get_ads_server()->server_vka, dest_cptr, &dest);
+    vka_cspace_alloc(get_ads_component()->server_vka, &dest_cptr);
+    vka_cspace_make_path(get_ads_component()->server_vka, dest_cptr, &dest);
 
     int error = vka_cnode_mint(&dest, &src, seL4_AllRights, client_reg_ptr);
     if (error)

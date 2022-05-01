@@ -67,11 +67,12 @@ gpi_server_parent_spawn_thread(simple_t *parent_simple, vka_t *parent_vka,
     /* Get a CPtr to the parent's root cnode. */
     vka_cspace_make_path(parent_vka, 0, &parent_cspace_cspath);
 
-    get_gpi_server()->server_vka = parent_vka;
-    get_gpi_server()->server_vspace = parent_vspace;
-    get_gpi_server()->server_cspace = parent_cspace_cspath.root;
     get_gpi_server()->server_simple = parent_simple;
+    get_gpi_server()->server_vka = parent_vka;
+    get_gpi_server()->server_cspace = parent_cspace_cspath.root;
+    get_gpi_server()->server_vspace = parent_vspace;
 
+    
     /* Allocate the Endpoint that the server will be listening on. */
     error = vka_alloc_endpoint(parent_vka, &get_gpi_server()->server_ep_obj);
     if (error != 0) {
@@ -81,6 +82,20 @@ gpi_server_parent_spawn_thread(simple_t *parent_simple, vka_t *parent_vka,
     }
 
     *server_ep_cap = get_gpi_server()->server_ep_obj.cptr; 
+
+    /* Setup the ADS Component */
+    ads_component_context_t *ads_server = &get_gpi_server()->ads_server;
+    ads_server->server_simple = parent_simple;
+    ads_server->server_vka = parent_vka;
+    ads_server->server_cspace = parent_cspace_cspath.root;
+    ads_server->server_vspace = parent_vspace;
+    ads_server->server_thread = get_gpi_server()->server_thread;
+    ads_server->server_ep_obj = get_gpi_server()->server_ep_obj;
+
+
+    /* Setup the CPU Component */
+
+
 
     /* And also allocate a badged copy of the Server's endpoint that the Parent
      * can use to send to the Server. This is used to allow the Server to report

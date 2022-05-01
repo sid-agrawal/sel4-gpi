@@ -48,7 +48,6 @@
 
 #include <sel4platsupport/io.h>
 #include <sel4gpi/gpi_server.h>
-#include <sel4gpi/cpu_parentapi.h>
 
 /* ammount of untyped memory to reserve for the driver (32mb) */
 #define DRIVER_UNTYPED_MEMORY (1 << 25)

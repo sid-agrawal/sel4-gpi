@@ -99,7 +99,7 @@ typedef struct _cpu_server_registry_entry {
 } cpu_server_registry_entry_t;
 
 /* State maintained by the server. */
-typedef struct _cpu_server_context {
+typedef struct _cpu_component_context {
     simple_t *server_simple;
     vka_t *server_vka;
     seL4_CPtr server_cspace;
@@ -109,14 +109,9 @@ typedef struct _cpu_server_context {
     // The server listens on this endpoint. 
     vka_object_t server_ep_obj;
 
-    // Parent's badge value.
-    // There is only 1 parent and hence only 1 badge value.
-    seL4_Word parent_badge_value;
-    cspacepath_t _badged_server_ep_cspath;
-
     int registry_n_entries;
     cpu_server_registry_entry_t *client_registry;
-} cpu_server_context_t;
+} cpu_component_context_t;
 
 /** 
  * Internal library function: acts as the main() for the server thread.
@@ -124,4 +119,4 @@ typedef struct _cpu_server_context {
 void cpu_server_main(void);
 
 /* Global server instance accessor functions. */
-cpu_server_context_t *get_cpu_server(void);
+cpu_component_context_t *get_cpu_server(void);

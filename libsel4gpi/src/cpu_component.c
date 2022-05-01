@@ -25,16 +25,14 @@
 #include <sel4utils/strerror.h>
 
 #include <sel4gpi/cpu_clientapi.h>
-#include <sel4gpi/cpu_parentapi.h>
 #include <sel4gpi/cpu_server.h>
 
 #include <sel4gpi/ads_clientapi.h>
+#include <sel4gpi/gpi_server.h>
 
-static cpu_server_context_t cpu_server;
-
-cpu_server_context_t *get_cpu_server(void)
+cpu_component_context_t *get_cpu_component(void)
 {
-    return &cpu_server;
+    return &get_gpi_server()->cpu_server;
 }
 
 static inline seL4_MessageInfo_t recv(seL4_Word *sender_badge_ptr)
@@ -44,14 +42,14 @@ static inline seL4_MessageInfo_t recv(seL4_Word *sender_badge_ptr)
      * the reply param of api_recv(third param) is only used in the MCS kernel.
      **/
 
-    return api_recv(get_cpu_server()->server_ep_obj.cptr,
+    return api_recv(get_cpu_component()->server_ep_obj.cptr,
                     sender_badge_ptr,
-                    get_cpu_server()->server_thread.reply.cptr);
+                    get_cpu_component()->server_thread.reply.cptr);
 }
 
 static inline void reply(seL4_MessageInfo_t tag)
 {
-    api_reply(get_cpu_server()->server_thread.reply.cptr, tag);
+    api_reply(get_cpu_component()->server_thread.reply.cptr, tag);
 }
 
 
@@ -64,10 +62,10 @@ static void cpu_server_registry_insert(cpu_server_registry_entry_t *new_node) {
         // TODO:Use a mutex
 
 
-    cpu_server_registry_entry_t *head = get_cpu_server()->client_registry;
+    cpu_server_registry_entry_t *head = get_cpu_component()->client_registry;
 
     if (head == NULL) {
-        get_cpu_server()->client_registry = new_node;
+        get_cpu_component()->client_registry = new_node;
         new_node->next = NULL;
         return;
     }
@@ -87,7 +85,7 @@ static void cpu_server_registry_insert(cpu_server_registry_entry_t *new_node) {
  */
 static cpu_server_registry_entry_t *cpu_server_registry_get_entry_by_badge(seL4_Word badge){
 
-    cpu_server_registry_entry_t *current_ctx = get_cpu_server()->client_registry;
+    cpu_server_registry_entry_t *current_ctx = get_cpu_component()->client_registry;
 
     while (current_ctx != NULL) {
         if ((seL4_Word)current_ctx == badge) {
@@ -116,11 +114,11 @@ static void handle_connect_req()
      * Use the address of the client_registry_entry as the badge.
      */
     cspacepath_t src, dest;
-    vka_cspace_make_path(get_cpu_server()->server_vka,
-                         get_cpu_server()->server_ep_obj.cptr, &src);
+    vka_cspace_make_path(get_cpu_component()->server_vka,
+                         get_cpu_component()->server_ep_obj.cptr, &src);
     seL4_CPtr dest_cptr;
-    vka_cspace_alloc(get_cpu_server()->server_vka, &dest_cptr);
-    vka_cspace_make_path(get_cpu_server()->server_vka, dest_cptr, &dest);
+    vka_cspace_alloc(get_cpu_component()->server_vka, &dest_cptr);
+    vka_cspace_make_path(get_cpu_component()->server_vka, dest_cptr, &dest);
 
     int error = vka_cnode_mint(&dest, &src, seL4_AllRights, client_reg_ptr);
     if (error)
@@ -269,7 +267,7 @@ void cpu_server_main()
     printf(CPUSERVS"cpu_server_main: Got a call from the parent.\n");
     if (error != 0)
     {
-        seL4_TCB_Suspend(get_cpu_server()->server_thread.tcb.cptr);
+        seL4_TCB_Suspend(get_cpu_component()->server_thread.tcb.cptr);
     }
 
 
@@ -279,7 +277,7 @@ void cpu_server_main()
         int error = 0;
         cspacepath_t received_cap_path;
         /* Get the frame cap from the message */
-        error = vka_cspace_alloc_path(get_cpu_server()->server_vka, &received_cap_path); // use "vka_cspace_alloc_path" instgead
+        error = vka_cspace_alloc_path(get_cpu_component()->server_vka, &received_cap_path); // use "vka_cspace_alloc_path" instgead
         assert(error == 0);
         printf(CPUSERVS "==========main: allocated 1st slot: cptr: %d root: %d depth: %d\n",
                received_cap_path.capPtr, received_cap_path.capDepth, received_cap_path.root);
@@ -287,7 +285,7 @@ void cpu_server_main()
 
         /* Allocate another csapce slot */
         cspacepath_t received_cap_path_2;
-        error = vka_cspace_alloc_path(get_cpu_server()->server_vka, &received_cap_path_2); // use "vka_cspace_alloc_path" instgead
+        error = vka_cspace_alloc_path(get_cpu_component()->server_vka, &received_cap_path_2); // use "vka_cspace_alloc_path" instgead
         assert(error == 0);
         printf(CPUSERVS "==========main: allocated 1st slot: cptr: %d root: %d depth: %d\n",
                received_cap_path_2.capPtr, received_cap_path_2.capDepth, received_cap_path_2.root);
@@ -343,5 +341,5 @@ void cpu_server_main()
     //serial_server_func_kill();
     /* After we break out of the loop, seL4_TCB_Suspend ourselves */
     ZF_LOGI(CPUSERVS"main: Suspending.");
-    seL4_TCB_Suspend(get_cpu_server()->server_thread.tcb.cptr);
+    seL4_TCB_Suspend(get_cpu_component()->server_thread.tcb.cptr);
 }

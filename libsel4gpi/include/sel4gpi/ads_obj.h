@@ -15,6 +15,7 @@
 
 typedef struct _ads {
     vspace_t *vspace;
+    uint32_t ads_obj_id;
 }ads_t;
 
 /**
