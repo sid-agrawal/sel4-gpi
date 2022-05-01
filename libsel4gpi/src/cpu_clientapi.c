@@ -12,7 +12,7 @@
 #include<sel4gpi/cpu_clientapi.h>
 #include<sel4gpi/ads_clientapi.h>
 
-int cpu_server_client_connect(seL4_CPtr server_ep_cap,
+int cpu_component_client_connect(seL4_CPtr server_ep_cap,
                               vka_t *client_vka,
                               cpu_client_context_t *ret_conn){
 

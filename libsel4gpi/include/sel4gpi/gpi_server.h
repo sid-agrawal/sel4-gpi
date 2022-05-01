@@ -18,8 +18,8 @@
 #include <vka/vka.h>
 #include <vspace/vspace.h>
 #include <sel4utils/process.h>
-#include <sel4gpi/ads_server.h>
-#include <sel4gpi/cpu_server.h>
+#include <sel4gpi/ads_component.h>
+#include <sel4gpi/cpu_component.h>
 
 
 #define GPI_SERVER_DEFAULT_PRIORITY    (seL4_MaxPrio - 1)
@@ -86,8 +86,8 @@ typedef struct _gpi_server_context {
     cspacepath_t _badged_server_ep_cspath;
 
     /* Per-client context maintained by the server. */
-    ads_component_context_t ads_server;
-    cpu_component_context_t cpu_server;
+    ads_component_context_t ads_component;
+    cpu_component_context_t cpu_component;
 } gpi_server_context_t;
 
 /** 

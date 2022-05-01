@@ -11,7 +11,7 @@
 #include <vka/object.h>
 #include <vspace/vspace.h>
 
-#include <sel4gpi/ads_server.h>
+#include <sel4gpi/ads_component.h>
 
 typedef struct _ads_client_context {
    cspacepath_t badged_server_ep_cspath;
@@ -26,7 +26,7 @@ typedef struct _ads_client_context {
  * @param ret_conn client's connection object
  * @return int 0 on success, -1 on failure.
  */
-int ads_server_client_connect(seL4_CPtr server_ep_cap,
+int ads_component_client_connect(seL4_CPtr server_ep_cap,
                                   vka_t *client_vka,
                                   ads_client_context_t *ret_conn);       
 
@@ -37,7 +37,7 @@ int ads_server_client_connect(seL4_CPtr server_ep_cap,
  * @param conn 
  * @return int 0 on success, -1 on failure.
  */
-int ads_server_client_disconnect(ads_client_context_t *conn);
+int ads_component_client_disconnect(ads_client_context_t *conn);
 
 /**
  * @brief 

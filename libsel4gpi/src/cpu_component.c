@@ -1,7 +1,7 @@
 /**
- * @file cpu_server.c
+ * @file cpu_component.c
  * @author Sid Agrawal(sid@sid-agrawal.ca)
- * @brief Implements the cpu server API from cpu_server.h.
+ * @brief Implements the cpu server API from cpu_component.h.
  * @version 0.1
  * @date 2022-04-05
  *
@@ -25,14 +25,14 @@
 #include <sel4utils/strerror.h>
 
 #include <sel4gpi/cpu_clientapi.h>
-#include <sel4gpi/cpu_server.h>
+#include <sel4gpi/cpu_component.h>
 
 #include <sel4gpi/ads_clientapi.h>
 #include <sel4gpi/gpi_server.h>
 
 cpu_component_context_t *get_cpu_component(void)
 {
-    return &get_gpi_server()->cpu_server;
+    return &get_gpi_server()->cpu_component;
 }
 
 static inline seL4_MessageInfo_t recv(seL4_Word *sender_badge_ptr)
@@ -58,11 +58,11 @@ static inline void reply(seL4_MessageInfo_t tag)
  * 
  * @param new_node 
  */
-static void cpu_server_registry_insert(cpu_server_registry_entry_t *new_node) {
+static void cpu_component_registry_insert(cpu_component_registry_entry_t *new_node) {
         // TODO:Use a mutex
 
 
-    cpu_server_registry_entry_t *head = get_cpu_component()->client_registry;
+    cpu_component_registry_entry_t *head = get_cpu_component()->client_registry;
 
     if (head == NULL) {
         get_cpu_component()->client_registry = new_node;
@@ -81,11 +81,11 @@ static void cpu_server_registry_insert(cpu_server_registry_entry_t *new_node) {
  * @brief Lookup the client registry entry for the give badge.
  * 
  * @param badge 
- * @return cpu_server_registry_entry_t* 
+ * @return cpu_component_registry_entry_t* 
  */
-static cpu_server_registry_entry_t *cpu_server_registry_get_entry_by_badge(seL4_Word badge){
+static cpu_component_registry_entry_t *cpu_component_registry_get_entry_by_badge(seL4_Word badge){
 
-    cpu_server_registry_entry_t *current_ctx = get_cpu_component()->client_registry;
+    cpu_component_registry_entry_t *current_ctx = get_cpu_component()->client_registry;
 
     while (current_ctx != NULL) {
         if ((seL4_Word)current_ctx == badge) {
@@ -101,14 +101,14 @@ static void handle_connect_req()
     printf(CPUSERVS "main: Got connect request\n");
 
     /* Allocate a new registry entry for the client. */
-    seL4_Word client_reg_ptr = (seL4_Word)malloc(sizeof(cpu_server_registry_entry_t));
+    seL4_Word client_reg_ptr = (seL4_Word)malloc(sizeof(cpu_component_registry_entry_t));
     if (client_reg_ptr == 0)
     {
         printf(CPUSERVS "main: Failed to allocate new badge for client.\n");
         return;
    }
-    memset((void *)client_reg_ptr, 0, sizeof(cpu_server_registry_entry_t));
-    cpu_server_registry_insert((cpu_server_registry_entry_t *)client_reg_ptr);
+    memset((void *)client_reg_ptr, 0, sizeof(cpu_component_registry_entry_t));
+    cpu_component_registry_insert((cpu_component_registry_entry_t *)client_reg_ptr);
 
     /* Create a badged endpoint for the client to send messages to.
      * Use the address of the client_registry_entry as the badge.
@@ -141,7 +141,7 @@ static void handle_start_req(seL4_Word sender_badge, seL4_MessageInfo_t old_tag,
 
     int error;
     /* Find the client */
-    cpu_server_registry_entry_t *client_data = cpu_server_registry_get_entry_by_badge(sender_badge);
+    cpu_component_registry_entry_t *client_data = cpu_component_registry_get_entry_by_badge(sender_badge);
     if (client_data == NULL)
     {
         printf(CPUSERVS "main: Failed to find client badge %x.\n",
@@ -177,7 +177,7 @@ static void handle_config_req(seL4_Word sender_badge,
     
     printf(CPUSERVS "capsUnwrapped: %d\n", seL4_MessageInfo_get_capsUnwrapped(old_tag));
     /* Find the client */
-    cpu_server_registry_entry_t *client_data = cpu_server_registry_get_entry_by_badge(sender_badge);
+    cpu_component_registry_entry_t *client_data = cpu_component_registry_get_entry_by_badge(sender_badge);
     if (client_data == NULL)
     {
         printf(CPUSERVS "main: Failed to find client badge %x.\n",
@@ -201,7 +201,7 @@ static void handle_config_req(seL4_Word sender_badge,
     //     printf(CPUSERVS "main: Failed to get ads ID.\n");
     //     return;
     // }
-    // ads_server_registry_entry_t *asre = ads_server_registry_get_entry_by_badge(ads_id);
+    // ads_component_registry_entry_t *asre = ads_component_registry_get_entry_by_badge(ads_id);
     // if (asre == NULL) {
     //     printf(CPUSERVS "main: Failed to find ads badge %x.\n",
     //            ads_id);
@@ -218,7 +218,7 @@ static void handle_config_req(seL4_Word sender_badge,
     
     // seL4_CNode cspace_root;
     // error = cpu_config_vspace(&client_data->cpu,
-    //                           get_cpu_server()->server_vka,
+    //                           get_cpu_component()->server_vka,
     //                           ads_vspace,
     //                           cspace_root_cap_path.capPtr);
     // if (error) {
@@ -237,10 +237,10 @@ static void handle_config_req(seL4_Word sender_badge,
  * @brief The starting point for the cpu server's thread.
  *
  */
-void cpu_server_main()
+void cpu_component_handle()
 {
     seL4_MessageInfo_t tag;
-    enum cpu_server_funcs func;
+    enum cpu_component_funcs func;
     seL4_Error error = 0;
     size_t buff_len, bytes_written;
 
@@ -264,7 +264,7 @@ void cpu_server_main()
      * that is possible).
      */
 
-    printf(CPUSERVS"cpu_server_main: Got a call from the parent.\n");
+    printf(CPUSERVS"cpu_component_handle: Got a call from the parent.\n");
     if (error != 0)
     {
         seL4_TCB_Suspend(get_cpu_component()->server_thread.tcb.cptr);

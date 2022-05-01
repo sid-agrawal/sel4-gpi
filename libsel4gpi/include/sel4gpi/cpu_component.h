@@ -22,15 +22,15 @@
  * server thread.
  */
 
-#define CPUSERVS     "CPUServ Server: "
-#define CPUSERVC     "CPUServ Client: "
+#define CPUSERVS     "CPUServ Component: "
+#define CPUSERVC     "CPUServ Client   : "
 
 #define CPU_SERVER_BADGE_VALUE_EMPTY (0)
 #define CPU_SERVER_BADGE_PARENT_VALUE (0xDEADBEEF)
 
 
 /* IPC values returned in the "label" message header. */
-enum cpu_server_errors {
+enum cpu_component_errors {
     CPU_SERVER_NOERROR = 0,
     /* No future collisions with seL4_Error.*/
     CPU_SERVER_ERROR_BIND_FAILED = seL4_NumErrors,
@@ -38,7 +38,7 @@ enum cpu_server_errors {
 };
 
 /* IPC Message register values for SSMSGREG_FUNC */
-enum cpu_server_funcs {
+enum cpu_component_funcs {
     CPU_FUNC_CONNECT_REQ = 0,
     CPU_FUNC_CONNECT_ACK,
 
@@ -56,7 +56,7 @@ enum cpu_server_funcs {
 };
 
 /* Designated purposes of each message register in the mini-protocol. */
-enum cpu_server_msgregs
+enum cpu_component_msgregs
 {
     /* These four are fixed headers in every serserv message. */
     CPUMSGREG_FUNC = 0,
@@ -90,13 +90,13 @@ enum cpu_server_msgregs
 };
 
 /* Per-client context maintained by the server. */
-typedef struct _cpu_server_registry_entry {
+typedef struct _cpu_component_registry_entry {
     cpu_t cpu;
     /* In our model each CPU can have its own cspace. */
     seL4_CNode cspace_root;
-    struct _cpu_server_registry_entry *next;
+    struct _cpu_component_registry_entry *next;
     
-} cpu_server_registry_entry_t;
+} cpu_component_registry_entry_t;
 
 /* State maintained by the server. */
 typedef struct _cpu_component_context {
@@ -110,13 +110,13 @@ typedef struct _cpu_component_context {
     vka_object_t server_ep_obj;
 
     int registry_n_entries;
-    cpu_server_registry_entry_t *client_registry;
+    cpu_component_registry_entry_t *client_registry;
 } cpu_component_context_t;
 
 /** 
  * Internal library function: acts as the main() for the server thread.
  **/
-void cpu_server_main(void);
+void cpu_component_handle(void);
 
 /* Global server instance accessor functions. */
-cpu_component_context_t *get_cpu_server(void);
+cpu_component_context_t *get_cpu_component(void);

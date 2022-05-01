@@ -13,7 +13,7 @@
 #include <vka/vka.h>
 #include <vka/capops.h>
 
-int ads_server_client_connect(seL4_CPtr server_ep_cap,
+int ads_component_client_connect(seL4_CPtr server_ep_cap,
                               vka_t *client_vka,
                               ads_client_context_t *ret_conn){
 

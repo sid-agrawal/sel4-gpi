@@ -52,7 +52,7 @@ int test_ads_attach(env_t env)
 {
     ads_client_context_t conn;
     // Using a known EP, get a new ads CAP.
-    int error = ads_server_client_connect(env->ads_endpoint, &env->vka, &conn);
+    int error = ads_component_client_connect(env->ads_endpoint, &env->vka, &conn);
     test_error_eq(error, 0);
 
     // Increment the ads cap.
@@ -69,7 +69,7 @@ int test_ads_bind_cpu(env_t env)
 {
     ads_client_context_t conn;
     // Using a known EP, get a new ads CAP.
-    int error = ads_server_client_connect(env->ads_endpoint, &env->vka, &conn);
+    int error = ads_component_client_connect(env->ads_endpoint, &env->vka, &conn);
     test_error_eq(error, 0);
 
     // Increment the ads cap.
@@ -87,7 +87,7 @@ int test_ads_clone(env_t env)
 {
     ads_client_context_t conn;
     // Using a known EP, get a new ads CAP.
-    int error = ads_server_client_connect(env->ads_endpoint, &env->vka, &conn);
+    int error = ads_component_client_connect(env->ads_endpoint, &env->vka, &conn);
     test_error_eq(error, 0);
 
     // Increment the ads cap.
@@ -104,7 +104,7 @@ int test_ads_stack_isolated(env_t env)
 {
     ads_client_context_t conn;
     // Using a known EP, get a new ads CAP.
-    int error = ads_server_client_connect(env->ads_endpoint, &env->vka, &conn);
+    int error = ads_component_client_connect(env->ads_endpoint, &env->vka, &conn);
     test_error_eq(error, 0);
 
     // Clone the ads,

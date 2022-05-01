@@ -22,15 +22,16 @@
  * server thread.
  */
 
-#define ADSSERVS     "ADSServ Server: "
-#define ADSSERVC     "ADSServ Client: "
+#define ADSSERVS     "ADSServ Component: "
+#define ADSSERVC     "ADSServ Client   : "
 
+// This needs to be removed.
 #define ADS_SERVER_BADGE_VALUE_EMPTY (0)
 #define ADS_SERVER_BADGE_PARENT_VALUE (0xDEADBEEF)
 
 
 /* IPC values returned in the "label" message header. */
-enum ads_server_errors {
+enum ads_component_errors {
     ADS_SERVER_NOERROR = 0,
     /* No future collisions with seL4_Error.*/
     ADS_SERVER_ERROR_BIND_FAILED = seL4_NumErrors,
@@ -38,7 +39,7 @@ enum ads_server_errors {
 };
 
 /* IPC Message register values for SSMSGREG_FUNC */
-enum ads_server_funcs {
+enum ads_component_funcs {
     ADS_FUNC_CONNECT_REQ = 0,
     ADS_FUNC_CONNECT_ACK,
 
@@ -68,7 +69,7 @@ enum ads_server_funcs {
 };
 
 /* Designated purposes of each message register in the mini-protocol. */
-enum ads_server_msgregs
+enum ads_component_msgregs
 {
     /* These four are fixed headers in every serserv message. */
     ADSMSGREG_FUNC = 0,
@@ -128,11 +129,11 @@ enum ads_server_msgregs
 };
 
 /* Per-client context maintained by the server. */
-typedef struct _ads_server_registry_entry {
+typedef struct _ads_component_registry_entry {
     ads_t ads;
-    struct _ads_server_registry_entry *next;
+    struct _ads_component_registry_entry *next;
     
-} ads_server_registry_entry_t;
+} ads_component_registry_entry_t;
 
 /* State maintained by the server. */
 typedef struct _ads_component_context {
@@ -146,16 +147,16 @@ typedef struct _ads_component_context {
     vka_object_t server_ep_obj;
 
     int registry_n_entries;
-    ads_server_registry_entry_t *client_registry;
+    ads_component_registry_entry_t *client_registry;
 } ads_component_context_t;
 
 /** 
  * Internal library function: acts as the main() for the server thread.
  **/
-void ads_server_main(void);
+void ads_component_handle(void);
 
 /* Global server instance accessor functions. */
-ads_component_context_t *get_ads_server(void);
+ads_component_context_t *get_ads_component(void);
 
 /**
  * @brief Given a vspace_t insert it into the ADS server's metadata and return a cap to it.
@@ -167,4 +168,4 @@ ads_component_context_t *get_ads_server(void);
  */
 int forge_ads_cap_from_vspace(vspace_t *vspace, vka_t *vka, seL4_CPtr *cap_ret);
 
-ads_server_registry_entry_t *ads_server_registry_get_entry_by_badge(seL4_Word badge);
+ads_component_registry_entry_t *ads_component_registry_get_entry_by_badge(seL4_Word badge);

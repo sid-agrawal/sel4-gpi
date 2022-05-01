@@ -1,7 +1,7 @@
 /**
- * @file ads_server.c
+ * @file ads_component.c
  * @author Sid Agrawal(sid@sid-agrawal.ca)
- * @brief Implements the ads server API from ads_server.h.
+ * @brief Implements the ads server API from ads_component.h.
  * @version 0.1
  * @date 2022-04-05
  *
@@ -25,13 +25,13 @@
 #include <sel4utils/strerror.h>
 
 #include <sel4gpi/ads_clientapi.h>
-#include <sel4gpi/ads_server.h>
+#include <sel4gpi/ads_component.h>
 #include <sel4gpi/gpi_server.h>
 
 
 ads_component_context_t *get_ads_component(void)
 {
-    return &get_gpi_server()->ads_server;
+    return &get_gpi_server()->ads_component;
 }
 
 static inline seL4_MessageInfo_t recv(seL4_Word *sender_badge_ptr)
@@ -57,11 +57,11 @@ static inline void reply(seL4_MessageInfo_t tag)
  * 
  * @param new_node 
  */
-static void ads_server_registry_insert(ads_server_registry_entry_t *new_node) {
+static void ads_component_registry_insert(ads_component_registry_entry_t *new_node) {
         // TODO:Use a mutex
 
 
-    ads_server_registry_entry_t *head = get_ads_component()->client_registry;
+    ads_component_registry_entry_t *head = get_ads_component()->client_registry;
 
     if (head == NULL) {
         get_ads_component()->client_registry = new_node;
@@ -80,11 +80,11 @@ static void ads_server_registry_insert(ads_server_registry_entry_t *new_node) {
  * @brief Lookup the client registry entry for the give badge.
  * 
  * @param badge 
- * @return ads_server_registry_entry_t* 
+ * @return ads_component_registry_entry_t* 
  */
-ads_server_registry_entry_t *ads_server_registry_get_entry_by_badge(seL4_Word badge){
+ads_component_registry_entry_t *ads_component_registry_get_entry_by_badge(seL4_Word badge){
 
-    ads_server_registry_entry_t *current_ctx = get_ads_component()->client_registry;
+    ads_component_registry_entry_t *current_ctx = get_ads_component()->client_registry;
 
     while (current_ctx != NULL) {
         if ((seL4_Word)current_ctx == badge) {
@@ -100,14 +100,14 @@ static void handle_connect_req()
     printf(ADSSERVS "main: Got connect request from");
 
     /* Allocate a new registry entry for the client. */
-    seL4_Word client_reg_ptr = (seL4_Word)malloc(sizeof(ads_server_registry_entry_t));
+    seL4_Word client_reg_ptr = (seL4_Word)malloc(sizeof(ads_component_registry_entry_t));
     if (client_reg_ptr == 0)
     {
         printf(ADSSERVS "main: Failed to allocate new badge for client.\n");
         return;
    }
-    memset((void *)client_reg_ptr, 0, sizeof(ads_server_registry_entry_t));
-    ads_server_registry_insert((ads_server_registry_entry_t *)client_reg_ptr);
+    memset((void *)client_reg_ptr, 0, sizeof(ads_component_registry_entry_t));
+    ads_component_registry_insert((ads_component_registry_entry_t *)client_reg_ptr);
 
     /* Create a badged endpoint for the client to send messages to.
      * Use the address of the client_registry_entry as the badge.
@@ -140,7 +140,7 @@ static void handle_getid_req(seL4_Word sender_badge)
 
     int error;
     /* Find the client */
-    ads_server_registry_entry_t *client_data = ads_server_registry_get_entry_by_badge(sender_badge);
+    ads_component_registry_entry_t *client_data = ads_component_registry_get_entry_by_badge(sender_badge);
     if (client_data == NULL)
     {
         printf(ADSSERVS "main: Failed to find client badge %x.\n",
@@ -167,7 +167,7 @@ static void handle_attach_req(seL4_Word sender_badge, seL4_MessageInfo_t old_tag
     assert(seL4_MessageInfo_get_extraCaps(old_tag) == 1);
     int error;
     /* Find the client */
-    ads_server_registry_entry_t *client_data = ads_server_registry_get_entry_by_badge(sender_badge);
+    ads_component_registry_entry_t *client_data = ads_component_registry_get_entry_by_badge(sender_badge);
     if (client_data == NULL)
     {
         printf(ADSSERVS "main: Failed to find client badge %x.\n",
@@ -219,7 +219,7 @@ static void handle_clone_req(seL4_Word sender_badge)
            sender_badge);
 
     /* Find the client */
-    ads_server_registry_entry_t *client_data = ads_server_registry_get_entry_by_badge(sender_badge);
+    ads_component_registry_entry_t *client_data = ads_component_registry_get_entry_by_badge(sender_badge);
     if (client_data == NULL)
     {
         printf(ADSSERVS "main: Failed to find client badge %x.\n",
@@ -233,20 +233,20 @@ static void handle_clone_req(seL4_Word sender_badge)
     // Make a new endpoint for the client to send messages to. like connect.
     printf(ADSSERVS "main: Making a new cap for the clone.\n");
     /* Allocate a new registry entry for the client. */
-    seL4_Word client_reg_ptr = (seL4_Word)malloc(sizeof(ads_server_registry_entry_t));
+    seL4_Word client_reg_ptr = (seL4_Word)malloc(sizeof(ads_component_registry_entry_t));
     if (client_reg_ptr == 0)
     {
         printf(ADSSERVS "main: Failed to allocate new badge for client.\n");
         return;
    }
-    memset((void *)client_reg_ptr, 0, sizeof(ads_server_registry_entry_t));
-    ads_server_registry_insert((ads_server_registry_entry_t *)client_reg_ptr);
+    memset((void *)client_reg_ptr, 0, sizeof(ads_component_registry_entry_t));
+    ads_component_registry_insert((ads_component_registry_entry_t *)client_reg_ptr);
 
 
     // Do the actual clone
     void *omit_vaddr = (void *) seL4_GetMR(ADSMSGREG_CLONE_REQ_OMIT_VA);
     ads_t src_ads = client_data->ads;
-    ads_t dst_ads = ((ads_server_registry_entry_t *)client_reg_ptr)->ads;
+    ads_t dst_ads = ((ads_component_registry_entry_t *)client_reg_ptr)->ads;
     int error = ads_clone(get_ads_component()->server_vspace,
                           &src_ads,
                           get_ads_component()->server_vka,
@@ -288,10 +288,10 @@ static void handle_clone_req(seL4_Word sender_badge)
  * @brief The starting point for the ads server's thread.
  *
  */
-void ads_server_main()
+void ads_component_handle()
 {
     seL4_MessageInfo_t tag;
-    enum ads_server_funcs func;
+    enum ads_component_funcs func;
     seL4_Error error = 0;
     size_t buff_len, bytes_written;
 
@@ -315,7 +315,7 @@ void ads_server_main()
      * that is possible).
      */
 
-    printf(ADSSERVS"ads_server_main: Got a call from the parent.\n");
+    printf(ADSSERVS"ads_component_handle: Got a call from the parent.\n");
     if (error != 0)
     {
         seL4_TCB_Suspend(get_ads_component()->server_thread.tcb.cptr);
@@ -382,16 +382,16 @@ void ads_server_main()
 int forge_ads_cap_from_vspace(vspace_t *vspace, vka_t *vka, seL4_CPtr *cap_ret){
 
     /* Allocate a new registry entry for the client. */
-    seL4_Word client_reg_ptr = (seL4_Word)malloc(sizeof(ads_server_registry_entry_t));
+    seL4_Word client_reg_ptr = (seL4_Word)malloc(sizeof(ads_component_registry_entry_t));
     if (client_reg_ptr == 0)
     {
         printf(ADSSERVS "main: Failed to allocate new badge for client.\n");
         return 1;
     }
-    memset((void *)client_reg_ptr, 0, sizeof(ads_server_registry_entry_t));
-    ads_server_registry_insert((ads_server_registry_entry_t *)client_reg_ptr);
+    memset((void *)client_reg_ptr, 0, sizeof(ads_component_registry_entry_t));
+    ads_component_registry_insert((ads_component_registry_entry_t *)client_reg_ptr);
 
-    ((ads_server_registry_entry_t *)client_reg_ptr)->ads.vspace = vspace;
+    ((ads_component_registry_entry_t *)client_reg_ptr)->ads.vspace = vspace;
     /* Create a badged endpoint for the client to send messages to.
      * Use the address of the client_registry_entry as the badge.
      */

@@ -14,7 +14,7 @@
 #include "test.h"
 #include "timer.h"
 #include <sel4rpc/server.h>
-#include <sel4gpi/ads_server.h>
+#include <sel4gpi/ads_component.h>
 #include <sel4testsupport/testreporter.h>
 
 /* Bootstrap test type. */

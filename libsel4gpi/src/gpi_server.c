@@ -20,7 +20,6 @@
 #include <vka/object.h>
 #include <vka/object_capops.h>
 
-#include <sel4gpi/ads_server.h>
 #include <sel4gpi/gpi_server.h>
 
 static gpi_server_context_t gpi_server;
@@ -84,13 +83,13 @@ gpi_server_parent_spawn_thread(simple_t *parent_simple, vka_t *parent_vka,
     *server_ep_cap = get_gpi_server()->server_ep_obj.cptr; 
 
     /* Setup the ADS Component */
-    ads_component_context_t *ads_server = &get_gpi_server()->ads_server;
-    ads_server->server_simple = parent_simple;
-    ads_server->server_vka = parent_vka;
-    ads_server->server_cspace = parent_cspace_cspath.root;
-    ads_server->server_vspace = parent_vspace;
-    ads_server->server_thread = get_gpi_server()->server_thread;
-    ads_server->server_ep_obj = get_gpi_server()->server_ep_obj;
+    ads_component_context_t *adsc = &get_gpi_server()->ads_component;
+    adsc->server_simple = parent_simple;
+    adsc->server_vka = parent_vka;
+    adsc->server_cspace = parent_cspace_cspath.root;
+    adsc->server_vspace = parent_vspace;
+    adsc->server_thread = get_gpi_server()->server_thread;
+    adsc->server_ep_obj = get_gpi_server()->server_ep_obj;
 
 
     /* Setup the CPU Component */
