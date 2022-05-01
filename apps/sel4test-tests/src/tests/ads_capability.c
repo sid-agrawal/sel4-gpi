@@ -13,39 +13,19 @@
 #include<sel4gpi/ads_clientapi.h>
 #include<sel4gpi/cpu_clientapi.h>
 
-int test_ads_clone(env_t env)
+int test_ads_connect(env_t env)
 {
-
-    return 0;
-    int error;
-    cspacepath_t path;
-    vka_cspace_make_path(&env->vka, env->self_as_cptr, &path);
-    ads_client_context_t conn;
-    conn.badged_server_ep_cspath = path;
-
-
-
     // Using a known EP, get a new ads CAP.
-    ads_client_context_t ads_conn_clone1;
-    error = ads_client_clone(&conn, &env->vka,  (void *) 0x10001000, &ads_conn_clone1);
+    ads_client_context_t ads_conn;
+    int error = ads_component_client_connect(env->gpi_endpoint, &env->vka, &ads_conn);
     test_error_eq(error, 0);
 
-    ads_client_context_t ads_conn_clone2;
-    error = ads_client_clone(&conn, &env->vka,  (void *) 0x10001000, &ads_conn_clone2);
-    
-    ads_client_context_t ads_conn_clone3;
-    error = ads_client_clone(&conn, &env->vka,  (void *) 0x10001000, &ads_conn_clone3);
-    
-    // Allocate new CPU cap.
-    cpu_client_context_t cpu_conn;
-    error = ads_client_testing(&conn, &env->vka,
-                               &ads_conn_clone1, &ads_conn_clone2,
-                               &ads_conn_clone3);
+    error = ads_client_attach(&ads_conn, 0, 0, 0);
     test_error_eq(error, 0);
     
     return sel4test_get_result();
 }
-DEFINE_TEST(GPIADS001, "Ensure the ads clone works", test_ads_clone, true)
+DEFINE_TEST(GPIADS001, "Ensure the ads clone works", test_ads_connect, true)
 
 #ifdef WQEAREREADY
 int test_ads_attach(env_t env)
@@ -72,7 +52,7 @@ int test_ads_bind_cpu(env_t env)
     int error = ads_component_client_connect(env->ads_endpoint, &env->vka, &conn);
     test_error_eq(error, 0);
 
-    // Increment the ads cap.
+            // Increment the ads cap.
     seL4_TCB tcb = 0; // Get a new CPU cap
     error = ads_client_bind_cpu(&conn, tcb);
     test_error_eq(error, 0);

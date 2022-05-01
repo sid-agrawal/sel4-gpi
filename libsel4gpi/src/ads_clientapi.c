@@ -9,9 +9,11 @@
  * 
  */
 
-#include<sel4gpi/ads_clientapi.h>
 #include <vka/vka.h>
 #include <vka/capops.h>
+
+#include<sel4gpi/ads_clientapi.h>
+#include<sel4gpi/badge_usage.h>
 
 int ads_component_client_connect(seL4_CPtr server_ep_cap,
                               vka_t *client_vka,
@@ -30,21 +32,21 @@ int ads_component_client_connect(seL4_CPtr server_ep_cap,
         /* depth */         path.capDepth
     );
     
-    printf(ADSSERVC"%s %d ads_endpoint is %d: ", __FUNCTION__, __LINE__, server_ep_cap);
+    printf(ADSSERVC"gpi endpoint is %d:", server_ep_cap);
     debug_cap_identify(ADSSERVC, server_ep_cap);
 
-    printf(ADSSERVC"Client: Set a receive path for the badged ep: %d\n", path.capPtr);
-    seL4_SetMR(ADSMSGREG_FUNC, ADS_FUNC_CONNECT_REQ);
-    seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0,
-                               ADSMSGREG_CONNECT_REQ_END);
+    printf(ADSSERVC"Set a receive path for the badged ep: %d\n", path.capPtr);
+
+    /* Set request type */
+    seL4_SetMR(0, GPICAP_TYPE_ADS);
+    seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0, 1);
 
     tag = seL4_Call(server_ep_cap,tag);
     assert(seL4_MessageInfo_get_extraCaps(tag) == 1);
 
     ret_conn->badged_server_ep_cspath = path;
-
-    printf(ADSSERVC"Client: received badged endpoint and it was kept in %d:", path.capPtr);
-    debug_cap_identify(ADSSERVC, path.capPtr);
+    printf(ADSSERVC"Received badged endpoint and it was kept in:");
+    debug_cap_identify(ADSSERVC, ret_conn->badged_server_ep_cspath.capPtr);
     return 0;
 }
 
@@ -59,20 +61,10 @@ int ads_client_attach(ads_client_context_t *conn, void* vaddr, size_t size, seL4
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 1,
                                                   ADSMSGREG_ATTACH_REQ_END);
 
+    printf(ADSSERVC "Sending attach request to server via EP: %d.\n",
+           conn->badged_server_ep_cspath.capPtr);
     tag = seL4_Call(conn->badged_server_ep_cspath.capPtr, tag);
 
-    return 0;
-}
-
-int ads_client_getID(ads_client_context_t *conn, seL4_Word *ret_id)
-{
-    seL4_SetMR(ADSMSGREG_FUNC, ADS_FUNC_GETID_REQ);
-    seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0,
-                                                  ADSMSGREG_GETID_REQ_END);
-
-    tag = seL4_Call(conn->badged_server_ep_cspath.capPtr, tag);
-
-    *ret_id = seL4_GetMR(ADSMSGREG_GETID_ACK_ID);
     return 0;
 }
 

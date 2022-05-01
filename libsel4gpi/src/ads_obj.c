@@ -13,7 +13,7 @@
 #include <sel4utils/process.h>
 
 int ads_attach(ads_t *ads, vka_t *vka, void* vaddr, size_t size, seL4_CPtr frame_cap, 
-               sel4utils_process_t *process_cookie)
+               /*sel4utils_process_t*/ vspace_t *process_cookie)
 {
     vspace_t *target = ads->vspace;
 
@@ -32,7 +32,13 @@ int ads_attach(ads_t *ads, vka_t *vka, void* vaddr, size_t size, seL4_CPtr frame
     seL4_CPtr caps[] = {frame_cap};
     size_t num_pages = size / PAGE_SIZE_4K;
     size_t size_bits = seL4_PageBits;
-    int error = sel4utils_map_pages_at_vaddr(target, caps, process_cookie, vaddr, num_pages, size_bits, res);
+    int error = sel4utils_map_pages_at_vaddr(target, 
+    caps, 
+    (uintptr_t *)process_cookie, // TODO: this is a hack
+    vaddr, 
+    num_pages, 
+    size_bits, 
+    res);
     if (error)
     {
         ZF_LOGE("Failed to map pages\n");

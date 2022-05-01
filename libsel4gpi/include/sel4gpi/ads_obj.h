@@ -28,8 +28,8 @@ typedef struct _ads {
  * @param frame_cap cap to the frame to attach
  * @return int 0 on success, -1 on failure.
  */
-int ads_attach(ads_t *ads, vka_t *vka, void* vaddr, size_t size, seL4_CPtr frame_cap, sel4utils_process_t *process_cookie);
-
+int ads_attach(ads_t *ads, vka_t *vka, void *vaddr, size_t size, seL4_CPtr frame_cap,
+               /*sel4utils_process_t*/ vspace_t *process_cookie);
 
 /**
  * @brief Remove a frame from the ads.

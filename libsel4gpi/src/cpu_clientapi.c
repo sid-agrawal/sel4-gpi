@@ -11,6 +11,7 @@
 
 #include<sel4gpi/cpu_clientapi.h>
 #include<sel4gpi/ads_clientapi.h>
+#include<sel4gpi/badge_usage.h>
 
 int cpu_component_client_connect(seL4_CPtr server_ep_cap,
                               vka_t *client_vka,
@@ -33,9 +34,9 @@ int cpu_component_client_connect(seL4_CPtr server_ep_cap,
     debug_cap_identify(CPUSERVC, server_ep_cap);
 
     printf(CPUSERVC"Client: Set a receive path for the badged ep: %d\n", path.capPtr);
-    seL4_SetMR(CPUMSGREG_FUNC, CPU_FUNC_CONNECT_REQ);
-    seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0,
-                               CPUMSGREG_CONNECT_REQ_END);
+    /* Set request type */
+    seL4_SetMR(0, GPICAP_TYPE_CPU);
+    seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0, 1);
 
     tag = seL4_Call(server_ep_cap,tag);
     assert(seL4_MessageInfo_get_extraCaps(tag) == 1);

@@ -39,13 +39,7 @@ enum cpu_component_errors {
 
 /* IPC Message register values for SSMSGREG_FUNC */
 enum cpu_component_funcs {
-    CPU_FUNC_CONNECT_REQ = 0,
-    CPU_FUNC_CONNECT_ACK,
-
-    CPU_FUNC_SERVER_SPAWN_SYNC_REQ,
-    CPU_FUNC_SERVER_SPAWN_SYNC_ACK,
-
-    CPU_FUNC_START_REQ,
+    CPU_FUNC_START_REQ = 0,
     CPU_FUNC_START_ACK,
 
     CPU_FUNC_CONFIG_REQ,
@@ -116,7 +110,12 @@ typedef struct _cpu_component_context {
 /** 
  * Internal library function: acts as the main() for the server thread.
  **/
-void cpu_component_handle(void);
+void cpu_component_handle(seL4_MessageInfo_t tag,
+                          seL4_Word badge,
+                          cspacepath_t *received_cap,
+                          seL4_MessageInfo_t *reply_tag);
 
 /* Global server instance accessor functions. */
 cpu_component_context_t *get_cpu_component(void);
+
+void cpu_handle_allocation_request(seL4_MessageInfo_t *reply_tag);

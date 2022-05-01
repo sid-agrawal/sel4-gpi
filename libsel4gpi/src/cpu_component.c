@@ -29,6 +29,7 @@
 
 #include <sel4gpi/ads_clientapi.h>
 #include <sel4gpi/gpi_server.h>
+#include <sel4gpi/badge_usage.h>
 
 cpu_component_context_t *get_cpu_component(void)
 {
@@ -96,19 +97,19 @@ static cpu_component_registry_entry_t *cpu_component_registry_get_entry_by_badge
     return current_ctx;
 }
 
-static void handle_connect_req()
+void cpu_handle_allocation_request(seL4_MessageInfo_t *reply_tag)
 {
     printf(CPUSERVS "main: Got connect request\n");
 
     /* Allocate a new registry entry for the client. */
-    seL4_Word client_reg_ptr = (seL4_Word)malloc(sizeof(cpu_component_registry_entry_t));
+    cpu_component_registry_entry_t *client_reg_ptr = malloc(sizeof(cpu_component_registry_entry_t));
     if (client_reg_ptr == 0)
     {
         printf(CPUSERVS "main: Failed to allocate new badge for client.\n");
         return;
    }
     memset((void *)client_reg_ptr, 0, sizeof(cpu_component_registry_entry_t));
-    cpu_component_registry_insert((cpu_component_registry_entry_t *)client_reg_ptr);
+    cpu_component_registry_insert(client_reg_ptr);
 
     /* Create a badged endpoint for the client to send messages to.
      * Use the address of the client_registry_entry as the badge.
@@ -120,17 +121,23 @@ static void handle_connect_req()
     vka_cspace_alloc(get_cpu_component()->server_vka, &dest_cptr);
     vka_cspace_make_path(get_cpu_component()->server_vka, dest_cptr, &dest);
 
-    int error = vka_cnode_mint(&dest, &src, seL4_AllRights, client_reg_ptr);
+    // Add the latest ID to the obj and to the badlge.
+    seL4_Word badge_val = gpi_new_badge(GPICAP_TYPE_CPU,
+                                        0x00,
+                                        0x00,
+                                        get_cpu_component()->registry_n_entries);
+    client_reg_ptr->cpu.cpu_obj_id = get_cpu_component()->registry_n_entries;
+    get_ads_component()->registry_n_entries++;
+
+    int error = vka_cnode_mint(&dest, &src, seL4_AllRights, badge_val);
     if (error)
     {
-        printf(CPUSERVS "main: Failed to mint client badge %x.\n",
-               client_reg_ptr);
+        printf(CPUSERVS "main: Failed to mint client badge %x.\n", badge_val);
         return;
     }
     /* Return this badged end point in the return message. */
     seL4_SetCap(0, dest.capPtr);
-    seL4_SetMR(CPUMSGREG_FUNC, CPU_FUNC_CONNECT_ACK);
-    seL4_MessageInfo_t tag = seL4_MessageInfo_new(error, 0, 1, CPUMSGREG_CONNECT_ACK_END);
+    seL4_MessageInfo_t tag = seL4_MessageInfo_new(error, 0, 1, 1);
     return reply(tag);
 }
 
@@ -161,6 +168,8 @@ static void handle_start_req(seL4_Word sender_badge, seL4_MessageInfo_t old_tag,
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0, CPUMSGREG_START_ACK_END);
     return reply(tag);
 }
+
+#if 0
 
 static void handle_config_req(seL4_Word sender_badge,
                               seL4_MessageInfo_t old_tag,
@@ -232,114 +241,34 @@ static void handle_config_req(seL4_Word sender_badge,
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(error, 0, 0, CPUMSGREG_CONFIG_ACK_END);
     return reply(tag);
 }
+#endif
 
 /**
  * @brief The starting point for the cpu server's thread.
  *
  */
-void cpu_component_handle()
+void cpu_component_handle(seL4_MessageInfo_t tag,
+                          seL4_Word sender_badge, 
+                          cspacepath_t *received_cap,
+                          seL4_MessageInfo_t *reply_tag)
 {
-    seL4_MessageInfo_t tag;
     enum cpu_component_funcs func;
     seL4_Error error = 0;
-    size_t buff_len, bytes_written;
-
-    /* The Parent will seL4_Call() to us, the Server, right after spawning us.
-     * It will expect us to seL4_Reply() with an error status code - we will
-     * send this Reply.
-     *
-     * First call seL4_Recv() to get the Reply cap back to the Parent, and then
-     * seL4_Reply to report our status.
-     */
-    seL4_Word sender_badge;
-    recv(&sender_badge);
-    assert(sender_badge == CPU_SERVER_BADGE_PARENT_VALUE);
-
-    seL4_SetMR(CPUMSGREG_FUNC, CPU_FUNC_SERVER_SPAWN_SYNC_ACK);
-    tag = seL4_MessageInfo_new(error, 0, 0, CPUMSGREG_SPAWN_SYNC_ACK_END);
-    reply(tag);
-
-    /* If the bind failed, this thread has essentially failed its mandate, so
-     * there is no reason to leave it scheduled. Kill it (to whatever extent
-     * that is possible).
-     */
-
-    printf(CPUSERVS"cpu_component_handle: Got a call from the parent.\n");
-    if (error != 0)
+    /* Post */
+    func = seL4_GetMR(CPUMSGREG_FUNC);
+    switch (func)
     {
-        seL4_TCB_Suspend(get_cpu_component()->server_thread.tcb.cptr);
+    case CPU_FUNC_START_REQ:
+        handle_start_req(sender_badge, tag, received_cap->capPtr);
+        break;
+
+    // case CPU_FUNC_CONFIG_REQ:
+    //     /* TODO: Fix the args */
+    //     handle_config_req(sender_badge, tag, received_cap, received_cap);
+    //     break;
+
+    default:
+        ZF_LOGW(CPUSERVS "main: Unknown function %d requested.", func);
+        break;
     }
-
-
-    printf(CPUSERVS"main: Entering main loop and accepting requests.\n");
-    while (1) {
-        /* Pre */
-        int error = 0;
-        cspacepath_t received_cap_path;
-        /* Get the frame cap from the message */
-        error = vka_cspace_alloc_path(get_cpu_component()->server_vka, &received_cap_path); // use "vka_cspace_alloc_path" instgead
-        assert(error == 0);
-        printf(CPUSERVS "==========main: allocated 1st slot: cptr: %d root: %d depth: %d\n",
-               received_cap_path.capPtr, received_cap_path.capDepth, received_cap_path.root);
-        debug_cap_identify(CPUSERVS, received_cap_path.capPtr);
-
-        /* Allocate another csapce slot */
-        cspacepath_t received_cap_path_2;
-        error = vka_cspace_alloc_path(get_cpu_component()->server_vka, &received_cap_path_2); // use "vka_cspace_alloc_path" instgead
-        assert(error == 0);
-        printf(CPUSERVS "==========main: allocated 1st slot: cptr: %d root: %d depth: %d\n",
-               received_cap_path_2.capPtr, received_cap_path_2.capDepth, received_cap_path_2.root);
-        debug_cap_identify(CPUSERVS, received_cap_path_2.capPtr);
-        
-
-        seL4_CPtr min_cptr = MIN(received_cap_path.capPtr, received_cap_path_2.capPtr);
-        
-        seL4_SetCapReceivePath(
-            /* _service */ received_cap_path.root,
-            /* index */ min_cptr,
-            /* depth */ received_cap_path.capDepth);
-
-        tag = recv(&sender_badge);
-        assert(seL4_MessageInfo_get_extraCaps(tag) == 2);
-        printf(CPUSERVS "------------main: Got message from %x with extraCap %d label: %d\n",
-               sender_badge,
-               seL4_MessageInfo_get_extraCaps(tag),
-               seL4_MessageInfo_get_label(tag));
-
-        debug_cap_identify(CPUSERVS, received_cap_path.capPtr);
-        debug_cap_identify(CPUSERVS, received_cap_path_2.capPtr);
-
-        func = seL4_GetMR(CPUMSGREG_FUNC);
-
-        // if the badge is not set, then it has to be a new connection request.
-        if (sender_badge == CPU_SERVER_BADGE_VALUE_EMPTY && func != CPU_FUNC_CONNECT_REQ){
-            printf(CPUSERVS "main: Badge not set, but not a connect request.\n");
-            continue;
-        }
-
-        /* Post */
-        switch (func) {
-        case CPU_FUNC_CONNECT_REQ:
-            handle_connect_req();
-            break;
-
-        case CPU_FUNC_START_REQ:
-            handle_start_req(sender_badge, tag, received_cap_path.capPtr);
-            break;
-
-        case CPU_FUNC_CONFIG_REQ:
-            /* TODO: Fix the args */
-            handle_config_req(sender_badge, tag, received_cap_path, received_cap_path_2);
-            break;
-
-        default:
-            ZF_LOGW(CPUSERVS "main: Unknown function %d requested.", func);
-            break;
-        }
-    }
-
-    //serial_server_func_kill();
-    /* After we break out of the loop, seL4_TCB_Suspend ourselves */
-    ZF_LOGI(CPUSERVS"main: Suspending.");
-    seL4_TCB_Suspend(get_cpu_component()->server_thread.tcb.cptr);
 }

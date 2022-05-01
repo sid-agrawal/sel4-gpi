@@ -16,6 +16,7 @@
 typedef struct _cpu {
     sel4utils_thread_config_t config;
     sel4utils_thread_t obj;
+    uint64_t cpu_obj_id;
 }cpu_t;
 
 /**

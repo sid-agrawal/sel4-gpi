@@ -27,6 +27,7 @@
 #include <sel4gpi/ads_clientapi.h>
 #include <sel4gpi/ads_component.h>
 #include <sel4gpi/gpi_server.h>
+#include <sel4gpi/badge_usage.h>
 
 
 ads_component_context_t *get_ads_component(void)
@@ -95,19 +96,19 @@ ads_component_registry_entry_t *ads_component_registry_get_entry_by_badge(seL4_W
     return current_ctx;
 }
 
-static void handle_connect_req()
+void ads_handle_allocation_request(seL4_MessageInfo_t *reply_tag)
 {
-    printf(ADSSERVS "main: Got connect request from");
+    printf(ADSSERVS "main: Got ADS connect request\n");
 
     /* Allocate a new registry entry for the client. */
-    seL4_Word client_reg_ptr = (seL4_Word)malloc(sizeof(ads_component_registry_entry_t));
+    ads_component_registry_entry_t *client_reg_ptr = malloc(sizeof(ads_component_registry_entry_t));
     if (client_reg_ptr == 0)
     {
         printf(ADSSERVS "main: Failed to allocate new badge for client.\n");
         return;
    }
     memset((void *)client_reg_ptr, 0, sizeof(ads_component_registry_entry_t));
-    ads_component_registry_insert((ads_component_registry_entry_t *)client_reg_ptr);
+    ads_component_registry_insert(client_reg_ptr);
 
     /* Create a badged endpoint for the client to send messages to.
      * Use the address of the client_registry_entry as the badge.
@@ -119,43 +120,23 @@ static void handle_connect_req()
     vka_cspace_alloc(get_ads_component()->server_vka, &dest_cptr);
     vka_cspace_make_path(get_ads_component()->server_vka, dest_cptr, &dest);
 
-    int error = vka_cnode_mint(&dest, &src, seL4_AllRights, client_reg_ptr);
+    // Add the latest ID to the obj and to the badlge.
+    seL4_Word badge_val = gpi_new_badge(GPICAP_TYPE_ADS,
+                                        0x00,
+                                        0x00,
+                                        get_ads_component()->registry_n_entries);
+    client_reg_ptr->ads.ads_obj_id = get_ads_component()->registry_n_entries;
+    get_ads_component()->registry_n_entries++;
+
+    int error = vka_cnode_mint(&dest, &src, seL4_AllRights, badge_val);
     if (error)
     {
-        printf(ADSSERVS "main: Failed to mint client badge %x.\n",
-               client_reg_ptr);
+        printf(ADSSERVS "main: Failed to mint client badge %x.\n", badge_val);
         return;
     }
     /* Return this badged end point in the return message. */
     seL4_SetCap(0, dest.capPtr);
-    seL4_SetMR(ADSMSGREG_FUNC, ADS_FUNC_CONNECT_ACK);
-    seL4_MessageInfo_t tag = seL4_MessageInfo_new(error, 0, 1, ADSMSGREG_CONNECT_ACK_END);
-    return reply(tag);
-}
-
-static void handle_getid_req(seL4_Word sender_badge)
-{
-    printf(ADSSERVS "main: Got getID request from client badge %x.\n",
-           sender_badge);
-
-    int error;
-    /* Find the client */
-    ads_component_registry_entry_t *client_data = ads_component_registry_get_entry_by_badge(sender_badge);
-    if (client_data == NULL)
-    {
-        printf(ADSSERVS "main: Failed to find client badge %x.\n",
-               sender_badge);
-        return;
-    }
-    printf(ADSSERVS "main: found client_data %x.\n", client_data);
-
-    assert(sender_badge == (seL4_Word)client_data);
-    
-    /* Get the ID */
-    seL4_Word id = sender_badge;
-    seL4_SetMR(ADSMSGREG_FUNC, ADS_FUNC_GETID_ACK);
-    seL4_SetMR(ADSMSGREG_GETID_ACK_ID, id);
-    seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0, ADSMSGREG_GETID_ACK_END);
+    seL4_MessageInfo_t tag = seL4_MessageInfo_new(error, 0, 1, 1);
     return reply(tag);
 }
 
@@ -288,95 +269,28 @@ static void handle_clone_req(seL4_Word sender_badge)
  * @brief The starting point for the ads server's thread.
  *
  */
-void ads_component_handle()
+void ads_component_handle(seL4_MessageInfo_t tag,
+                          seL4_Word sender_badge,
+                          cspacepath_t *received_cap,
+                          seL4_MessageInfo_t *reply_tag)
 {
-    seL4_MessageInfo_t tag;
     enum ads_component_funcs func;
-    seL4_Error error = 0;
-    size_t buff_len, bytes_written;
 
-    /* The Parent will seL4_Call() to us, the Server, right after spawning us.
-     * It will expect us to seL4_Reply() with an error status code - we will
-     * send this Reply.
-     *
-     * First call seL4_Recv() to get the Reply cap back to the Parent, and then
-     * seL4_Reply to report our status.
-     */
-    seL4_Word sender_badge;
-    recv(&sender_badge);
-    assert(sender_badge == ADS_SERVER_BADGE_PARENT_VALUE);
-
-    seL4_SetMR(ADSMSGREG_FUNC, ADS_FUNC_SERVER_SPAWN_SYNC_ACK);
-    tag = seL4_MessageInfo_new(error, 0, 0, ADSMSGREG_SPAWN_SYNC_ACK_END);
-    reply(tag);
-
-    /* If the bind failed, this thread has essentially failed its mandate, so
-     * there is no reason to leave it scheduled. Kill it (to whatever extent
-     * that is possible).
-     */
-
-    printf(ADSSERVS"ads_component_handle: Got a call from the parent.\n");
-    if (error != 0)
+    func = seL4_GetMR(ADSMSGREG_FUNC);
+    /* Post */
+    switch (func)
     {
-        seL4_TCB_Suspend(get_ads_component()->server_thread.tcb.cptr);
+    case ADS_FUNC_CLONE_REQ:
+        handle_clone_req(sender_badge);
+        break;
+
+    case ADS_FUNC_ATTACH_REQ:
+        handle_attach_req(sender_badge, tag, received_cap->capPtr);
+        break;
+    default:
+        ZF_LOGW(ADSSERVS "main: Unknown function %d requested.", func);
+        break;
     }
-
-
-    printf(ADSSERVS"main: Entering main loop and accepting requests.\n");
-    while (1) {
-        /* Pre */
-        seL4_CPtr received_cap;
-        cspacepath_t received_cap_path;
-            /* Get the frame cap from the message */
-            vka_cspace_alloc(get_ads_component()->server_vka, &received_cap);
-            vka_cspace_make_path(get_ads_component()->server_vka, received_cap, &received_cap_path);
-            seL4_SetCapReceivePath(
-                /* _service */ received_cap_path.root,
-                /* index */ received_cap_path.capPtr,
-                /* depth */ received_cap_path.capDepth);
-        tag = recv(&sender_badge);
-        printf(ADSSERVS "main: Got message from %x\n", sender_badge);
-
-        func = seL4_GetMR(ADSMSGREG_FUNC);
-
-        // if the badge is not set, then it has to be a new connection request.
-        if (sender_badge == ADS_SERVER_BADGE_VALUE_EMPTY && func != ADS_FUNC_CONNECT_REQ){
-            printf(ADSSERVS "main: Badge not set, but not a connect request.\n");
-            continue;
-        }
-
-        /* Post */
-        switch (func) {
-        case ADS_FUNC_CONNECT_REQ:
-            handle_connect_req();
-            break;
-
-        case ADS_FUNC_GETID_REQ:
-            handle_getid_req(sender_badge);
-            break;
-
-        case ADS_FUNC_CLONE_REQ:
-            handle_clone_req(sender_badge);
-            break;
-
-        case ADS_FUNC_ATTACH_REQ:
-            handle_attach_req(sender_badge, tag, received_cap);
-            break;
-
-        case ADS_FUNC_TESTING_REQ:
-            handle_testing_req(sender_badge, tag);
-            break;
-
-        default:
-            ZF_LOGW(ADSSERVS "main: Unknown function %d requested.", func);
-            break;
-        }
-    }
-
-    //serial_server_func_kill();
-    /* After we break out of the loop, seL4_TCB_Suspend ourselves */
-    ZF_LOGI(ADSSERVS"main: Suspending.");
-    seL4_TCB_Suspend(get_ads_component()->server_thread.tcb.cptr);
 }
 
 int forge_ads_cap_from_vspace(vspace_t *vspace, vka_t *vka, seL4_CPtr *cap_ret){

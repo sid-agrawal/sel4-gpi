@@ -21,6 +21,9 @@
 #include <vka/object_capops.h>
 
 #include <sel4gpi/gpi_server.h>
+#include <sel4gpi/ads_component.h>
+#include <sel4gpi/cpu_component.h>
+#include <sel4gpi/badge_usage.h>
 
 static gpi_server_context_t gpi_server;
 
@@ -175,6 +178,31 @@ out:
 }
 
 
+void handle_untyped_request(seL4_MessageInfo_t tag,
+                           cspacepath_t *received_cap_path,
+                           seL4_MessageInfo_t *reply_tag)
+{
+
+    gpi_cap_t req_cap_type = seL4_GetMR(0);
+    printf(GPISERVS"handle_untyped_request: Got request for cap type %d\n",
+           req_cap_type);    
+
+    switch (req_cap_type)
+    {
+    case GPICAP_TYPE_ADS:
+        ads_handle_allocation_request(
+            reply_tag); /*unused*/
+        break;
+
+    case GPICAP_TYPE_CPU:
+        cpu_handle_allocation_request(
+            reply_tag); /*unused*/
+        break;
+    default:
+        gpi_panic(GPISERVS "handle_untyped_request: Unknown request type.\n");
+        break;
+    }
+}
 
 /**
  * @brief The starting point for the gpi server's thread.
@@ -212,8 +240,54 @@ void gpi_server_main()
 
 
     printf(GPISERVS"main: Entering main loop and accepting requests.\n");
-    while (1) {
+    
+    while (1)
+    {
         /* Pre */
+        cspacepath_t received_cap_path;
+        int error = 0;
+       /* Get the frame cap from the message */
+        error = vka_cspace_alloc_path(get_gpi_server()->server_vka, &received_cap_path);
+        assert(error == 0);
+
+        seL4_SetCapReceivePath(
+            /* _service */ received_cap_path.root,
+            /* index */ received_cap_path.capPtr,
+            /* depth */ received_cap_path.capDepth);
+        tag = recv(&sender_badge);
+        printf(GPISERVS "Got message on EP with BADGE:%d\n", sender_badge);
+
+
+        seL4_MessageInfo_t reply_tag;
+        if (sender_badge == 0) { /* Handle Typed Request */
+            handle_untyped_request(tag,
+                                   &received_cap_path,
+                                   &reply_tag); /*unused*/
+        } else { /* Handle Typed Request */
+            gpi_cap_t cap_type = get_cap_type_from_badge(sender_badge);
+            switch (cap_type)
+            {
+            case GPICAP_TYPE_ADS:
+                ads_component_handle(tag,
+                                     sender_badge,
+                                     &received_cap_path,
+                                     &reply_tag); /*unused*/
+                break;
+
+            case GPICAP_TYPE_CPU:
+                cpu_component_handle(tag,
+                                     sender_badge,
+                                     &received_cap_path,
+                                     &reply_tag); /*unused*/
+                break;
+            default:
+                gpi_panic("gpi_server_main: Unknown cap type.");
+                break;
+            }
+        }
+        // Send a reply, but for now let the handlers handle it.
+        //reply(reply_tag);
+
     }
 
     //serial_server_func_kill();

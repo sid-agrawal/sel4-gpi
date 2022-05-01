@@ -40,16 +40,7 @@ enum ads_component_errors {
 
 /* IPC Message register values for SSMSGREG_FUNC */
 enum ads_component_funcs {
-    ADS_FUNC_CONNECT_REQ = 0,
-    ADS_FUNC_CONNECT_ACK,
-
-    ADS_FUNC_GETID_REQ,
-    ADS_FUNC_GETID_ACK,
-
-    ADS_FUNC_SERVER_SPAWN_SYNC_REQ,
-    ADS_FUNC_SERVER_SPAWN_SYNC_ACK,
-
-    ADS_FUNC_ATTACH_REQ,
+    ADS_FUNC_ATTACH_REQ = 0,
     ADS_FUNC_ATTACH_ACK,
 
     ADS_FUNC_CLONE_REQ,
@@ -132,7 +123,6 @@ enum ads_component_msgregs
 typedef struct _ads_component_registry_entry {
     ads_t ads;
     struct _ads_component_registry_entry *next;
-    
 } ads_component_registry_entry_t;
 
 /* State maintained by the server. */
@@ -153,7 +143,13 @@ typedef struct _ads_component_context {
 /** 
  * Internal library function: acts as the main() for the server thread.
  **/
-void ads_component_handle(void);
+void ads_component_handle(seL4_MessageInfo_t tag,
+                          seL4_Word badge,
+                          cspacepath_t *received_cap,
+                          seL4_MessageInfo_t *reply_tag);
+
+
+void ads_handle_allocation_request(seL4_MessageInfo_t *reply_tag);
 
 /* Global server instance accessor functions. */
 ads_component_context_t *get_ads_component(void);
