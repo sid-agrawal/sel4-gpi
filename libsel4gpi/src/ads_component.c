@@ -92,7 +92,7 @@ static void ads_component_registry_insert(ads_component_registry_entry_t *new_no
 }
 
 /**
- * @brief Lookup the client registry entry for the give badge.
+ * @brief Lookup the client registry entry for the given objectID in the badge.
  * 
  * @param badge 
  * @return ads_component_registry_entry_t* 
@@ -219,7 +219,7 @@ static void handle_clone_req(seL4_Word sender_badge)
                sender_badge);
         return;
     }
-    printf(ADSSERVS "main: found client_data %x.\n", client_data);
+    printf(ADSSERVS "main: found client_data with objID %d.\n", client_data->ads.ads_obj_id);
 
 
 
@@ -233,23 +233,24 @@ static void handle_clone_req(seL4_Word sender_badge)
         return;
    }
     memset((void *)client_reg_ptr, 0, sizeof(ads_component_registry_entry_t));
-    ads_component_registry_insert(client_reg_ptr);
 
 
     // Do the actual clone
     void *omit_vaddr = (void *) seL4_GetMR(ADSMSGREG_CLONE_REQ_OMIT_VA);
-    ads_t src_ads = client_data->ads;
-    ads_t dst_ads = ((ads_component_registry_entry_t *)client_reg_ptr)->ads;
+    ads_t *src_ads = &client_data->ads;
+    ads_t *dst_ads = &client_reg_ptr->ads;
     int error = ads_clone(get_ads_component()->server_vspace,
-                          &src_ads,
+                          src_ads,
                           get_ads_component()->server_vka,
                           omit_vaddr,
-                          &dst_ads);
+                          dst_ads);
     if (error) {
         printf(ADSSERVS "main: Failed to clone from client badge %x.\n",
                sender_badge);
         return;
     }
+    assert(client_reg_ptr->ads.vspace != NULL);
+    ads_component_registry_insert(client_reg_ptr);
     printf(ADSSERVS "Clone done.\n");
 
     /* Create a badged endpoint for the client to send messages to.
@@ -316,6 +317,7 @@ void ads_component_handle(seL4_MessageInfo_t tag,
 
 int forge_ads_cap_from_vspace(vspace_t *vspace, vka_t *vka, seL4_CPtr *cap_ret){
 
+    assert(vspace != NULL);
     /* Allocate a new registry entry for the client. */
     ads_component_registry_entry_t *client_reg_ptr = malloc(sizeof(ads_component_registry_entry_t));
     if (client_reg_ptr == 0)
@@ -324,9 +326,7 @@ int forge_ads_cap_from_vspace(vspace_t *vspace, vka_t *vka, seL4_CPtr *cap_ret){
         return 1;
     }
     memset((void *)client_reg_ptr, 0, sizeof(ads_component_registry_entry_t));
-    ads_component_registry_insert(client_reg_ptr);
 
-    ((ads_component_registry_entry_t *)client_reg_ptr)->ads.vspace = vspace;
     /* Create a badged endpoint for the client to send messages to.
      * Use the address of the client_registry_entry as the badge.
      */
@@ -337,7 +337,10 @@ int forge_ads_cap_from_vspace(vspace_t *vspace, vka_t *vka, seL4_CPtr *cap_ret){
     vka_cspace_alloc(get_ads_component()->server_vka, &dest_cptr);
     vka_cspace_make_path(get_ads_component()->server_vka, dest_cptr, &dest);
 
+    /* Update the info in the registry entry. */
+    client_reg_ptr->ads.vspace = vspace;
     seL4_Word badge = ads_assign_new_badge_and_objectID(client_reg_ptr);
+    ads_component_registry_insert(client_reg_ptr);
     int error = vka_cnode_mint(&dest,
                                &src,
                                seL4_AllRights,

@@ -8,9 +8,11 @@
  * @copyright Copyright (c) 2022
  * 
  */
+#include <sel4utils/process.h>
+#include <stdio.h>
 
 #include <sel4gpi/ads_obj.h>
-#include <sel4utils/process.h>
+#include <sel4gpi/ads_component.h>
 
 int ads_attach(ads_t *ads, vka_t *vka, void* vaddr, size_t size, seL4_CPtr frame_cap, 
                /*sel4utils_process_t*/ vspace_t *process_cookie)
@@ -58,7 +60,12 @@ int ads_bind(ads_t *ads, vka_t *vka, seL4_CPtr* cpu_cap) {
 int ads_clone(vspace_t *loader, ads_t *ads, vka_t *vka, void* omit_vaddr, ads_t *ret_ads) {
 
     ret_ads->vspace = malloc(sizeof(vspace_t));
+    if (ret_ads->vspace == NULL) {
+        ZF_LOGE("Failed to allocate vspace\n");
+        goto error_exit;
+    }
     vspace_t *from = ads->vspace;
+    assert(from != NULL);
     vspace_t *to = ret_ads->vspace;
 
     // printf("Cloning vspace\n");
@@ -69,7 +76,11 @@ int ads_clone(vspace_t *loader, ads_t *ads, vka_t *vka, void* omit_vaddr, ads_t 
     // Give vspace root
     // assign asid pool
     static vka_object_t vspace_root_object;
-    static sel4utils_alloc_data_t alloc_data; // remove from stack.
+    sel4utils_alloc_data_t *alloc_data = malloc(sizeof(sel4utils_alloc_data_t));
+    if (alloc_data == NULL) {
+        ZF_LOGE("Failed to allocate memory for alloc data\n");
+        goto error_exit;
+    }
 
     int error = vka_alloc_vspace_root(vka, &vspace_root_object);
     if (error)
@@ -87,11 +98,10 @@ int ads_clone(vspace_t *loader, ads_t *ads, vka_t *vka, void* omit_vaddr, ads_t 
     // Create empty vspace
 
 
-    // It is stuck here...
     error = sel4utils_get_vspace(
          loader,
          to,
-         &alloc_data,
+         alloc_data,
          vka,
          vspace_root_object.cptr,
          NULL, //sel4utils_allocated_object,
@@ -149,5 +159,7 @@ int ads_clone(vspace_t *loader, ads_t *ads, vka_t *vka, void* omit_vaddr, ads_t 
     return 0;
 
 error_exit:
+    free(alloc_data);
+    free(ret_ads->vspace);
     return -1;
 }
