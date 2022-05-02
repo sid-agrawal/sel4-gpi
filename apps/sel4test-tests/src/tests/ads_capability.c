@@ -43,7 +43,7 @@ int test_ads_clone(env_t env)
 }
 
 void test_func_die(void) {
-    printf("hello from hell\n");
+    printf("-------hello from hell\n");
 }
 
 // DEFINE_TEST(GPIADS001, "Ensure the ads clone works", test_ads_clone, true)

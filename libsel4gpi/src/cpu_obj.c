@@ -33,6 +33,8 @@ int cpu_config_vspace(cpu_t *cpu,
 {
 
     printf(CPUSERVS"config_vspace: configuring vspace for cpu\n");
+    printf(CPUSERVS"cspace info:");
+    debug_cap_identify(CPUSERVS, cspace);
     seL4_CPtr fault_endpoint = seL4_CapNull;
     cpu->thread_config = thread_config_fault_endpoint(cpu->thread_config, fault_endpoint);
     cpu->thread_config = thread_config_cspace(cpu->thread_config, cspace, 0 /*cspace_root_data*/);

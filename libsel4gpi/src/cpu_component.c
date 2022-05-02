@@ -172,7 +172,7 @@ static void handle_start_req(seL4_Word sender_badge, seL4_MessageInfo_t old_tag,
         printf(CPUSERVS "MR[%d] = %lx\n", i, seL4_GetMR(i));
     }
 
-    error = cpu_start(&client_data->cpu, 0x00);
+    error = cpu_start(&client_data->cpu, seL4_GetMR(1));
     if (error) {
         printf(CPUSERVS "main: Failed to start CPU.\n");
         return;
@@ -234,7 +234,7 @@ static void handle_config_req(seL4_Word sender_badge,
     // /* Get the vspace for the ads */
     vspace_t *ads_vspace = asre->ads.vspace;
 
-    seL4_CNode cspace_root;
+    seL4_CNode cspace_root = received_cap;
     error = cpu_config_vspace(&client_data->cpu,
                               get_cpu_component()->server_vka,
                               ads_vspace,
