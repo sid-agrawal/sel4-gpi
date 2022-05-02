@@ -6,6 +6,7 @@
 
 #include <sel4test/test.h>
 #include <sel4test/macros.h>
+#include <sel4utils/thread.h>
 #include "../test.h"
 #include "../helpers.h"
 #include <stdio.h>
@@ -40,7 +41,56 @@ int test_ads_clone(env_t env)
     
     return sel4test_get_result();
 }
-DEFINE_TEST(GPIADS001, "Ensure the ads clone works", test_ads_clone, true)
+
+void test_func_die(void) {
+    printf("hello from hell\n");
+}
+
+// DEFINE_TEST(GPIADS001, "Ensure the ads clone works", test_ads_clone, true)
+int test_ads_stack_isolated(env_t env)
+{
+    int error;
+    cspacepath_t path;
+    vka_cspace_make_path(&env->vka, env->self_as_cptr, &path);
+    ads_client_context_t conn;
+    conn.badged_server_ep_cspath = path;
+
+
+
+    // Using a known EP, get a new ads CAP.
+    ads_client_context_t ads_conn_clone1;
+    error = ads_client_clone(&conn, &env->vka,  (void *) 0x10001000, &ads_conn_clone1);
+    test_error_eq(error, 0);
+    
+    // Attach a new stack
+    // stack_cap
+    // ads_client_attach()
+    // Attach a new stack
+
+    // Allocate new CPU
+    cpu_client_context_t cpu_conn;
+    error = cpu_component_client_connect(env->gpi_endpoint,
+                                         &env->vka,
+                                         &cpu_conn);
+    test_error_eq(error, 0);
+
+    // Config its ads and cspace
+    error = cpu_client_config(&cpu_conn,
+                              &ads_conn_clone1,
+                              env->cspace_root);
+    test_error_eq(error, 0);
+
+    // Start it.
+    printf("ADDRESS OF FUNC: %p\n", test_func_die);
+    error = cpu_client_start(&cpu_conn, (sel4utils_thread_entry_fn)test_func_die);
+    test_error_eq(error, 0);
+
+    // Decrement the cap. TODO(siagraw)
+    // Delete the ads cap. TODO(siagraw)
+    return sel4test_get_result();
+}
+
+DEFINE_TEST(GPIADS002, "Ensure that thread stack works", test_ads_stack_isolated, true)
 #ifdef WQEAREREADY
 int test_ads_attach(env_t env)
 {

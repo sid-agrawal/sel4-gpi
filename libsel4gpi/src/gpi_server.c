@@ -96,6 +96,13 @@ gpi_server_parent_spawn_thread(simple_t *parent_simple, vka_t *parent_vka,
 
 
     /* Setup the CPU Component */
+    cpu_component_context_t *cpuc = &get_gpi_server()->cpu_component;
+    cpuc->server_simple = parent_simple;
+    cpuc->server_vka = parent_vka;
+    cpuc->server_cspace = parent_cspace_cspath.root;
+    cpuc->server_vspace = parent_vspace;
+    cpuc->server_thread = get_gpi_server()->server_thread;
+    cpuc->server_ep_obj = get_gpi_server()->server_ep_obj;
 
 
 

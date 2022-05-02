@@ -44,9 +44,11 @@ int cpu_component_client_disconnect(cpu_client_context_t *conn);
  * @brief 
  * 
  * @param conn client connection object
+ * @param entry_fn the address of the function to be called when the thread starts.
  * @return int 0 on success, -1 on failure.
  */
-int cpu_client_start(cpu_client_context_t *conn);
+int cpu_client_start(cpu_client_context_t *conn,
+                     sel4utils_thread_entry_fn entry_fn);
 
 /**
  * @brief Configure the cpu oject.
@@ -56,4 +58,6 @@ int cpu_client_start(cpu_client_context_t *conn);
  * @param cspace_root cspace root for the cpu object.
  * @return int 0 on success, -1 on failure.
  */
-int cpu_client_config(cpu_client_context_t *conn, ads_client_context_t *ads_conn);
+int cpu_client_config(cpu_client_context_t *conn,
+                      ads_client_context_t *ads_conn,
+                      seL4_CPtr cspace_root);

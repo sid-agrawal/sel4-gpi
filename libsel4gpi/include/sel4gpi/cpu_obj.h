@@ -14,8 +14,8 @@
 #include <sel4utils/process.h>
 
 typedef struct _cpu {
-    sel4utils_thread_config_t config;
-    sel4utils_thread_t obj;
+    sel4utils_thread_config_t thread_config;
+    sel4utils_thread_t thread_obj;
     uint64_t cpu_obj_id;
 }cpu_t;
 

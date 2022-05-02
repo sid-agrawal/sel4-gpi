@@ -30,10 +30,10 @@ int cpu_component_client_connect(seL4_CPtr server_ep_cap,
         /* depth */         path.capDepth
     );
     
-    printf(CPUSERVC"%s %d cpu_endpoint is %d: ", __FUNCTION__, __LINE__, server_ep_cap);
+    printf(CPUSERVC"%s %d cpu_endpoint is %d:__ \n", __FUNCTION__, __LINE__, server_ep_cap);
     debug_cap_identify(CPUSERVC, server_ep_cap);
 
-    printf(CPUSERVC"Client: Set a receive path for the badged ep: %d\n", path.capPtr);
+    printf(CPUSERVC"Set a receive path for the badged ep: %d\n", path.capPtr);
     /* Set request type */
     seL4_SetMR(0, GPICAP_TYPE_CPU);
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0, 1);
@@ -43,31 +43,37 @@ int cpu_component_client_connect(seL4_CPtr server_ep_cap,
 
     ret_conn->badged_server_ep_cspath = path;;
 
-    printf(CPUSERVC"Client: received badged endpoint and it was kept in %d:", path.capPtr);
+    printf(CPUSERVC"received badged endpoint and it was kept in %d:__\n", path.capPtr);
     debug_cap_identify(CPUSERVC, path.capPtr);
     return 0;
 }
 
-
-int cpu_client_start(cpu_client_context_t *conn) 
-{ 
-    seL4_SetMR(CPUMSGREG_FUNC, CPU_FUNC_START_REQ);
-    seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0,
-                                                  CPUMSGREG_START_REQ_END);
-    tag = seL4_Call(conn->badged_server_ep_cspath.capPtr, tag);
-    return 0;
-}
-
-int cpu_client_config(cpu_client_context_t *conn, ads_client_context_t *ads_conn)
+int cpu_client_config(cpu_client_context_t *conn,
+                      ads_client_context_t *ads_conn,
+                      seL4_CPtr cspace_root)
 { 
     seL4_SetMR(CPUMSGREG_FUNC, CPU_FUNC_CONFIG_REQ);
 
     /* Send the badged endpoint cap of the ads client as a cap */
-    seL4_SetCap(0, ads_conn->badged_server_ep_cspath.capPtr);
+    seL4_SetCap(0, ads_conn->badged_server_ep_cspath.capPtr); /*vspace*/
+    seL4_SetCap(1, cspace_root); /*cspace*/
 
-    seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 1,
+    seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 2,
                                                   CPUMSGREG_CONFIG_REQ_END);
 
     tag = seL4_Call(conn->badged_server_ep_cspath.capPtr, tag);
+    assert(seL4_MessageInfo_ptr_get_label(&tag) == 0);
+    return 0;
+}
+
+int cpu_client_start(cpu_client_context_t *conn,
+                     sel4utils_thread_entry_fn entry_fn)
+{ 
+    seL4_SetMR(CPUMSGREG_FUNC, CPU_FUNC_START_REQ);
+    seL4_SetMR(CPUMSGREG_START_FUNC_VADDR, entry_fn);
+    seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0,
+                                                  CPUMSGREG_START_REQ_END);
+    tag = seL4_Call(conn->badged_server_ep_cspath.capPtr, tag);
+    assert(seL4_MessageInfo_ptr_get_label(&tag) == 0);
     return 0;
 }
