@@ -91,6 +91,32 @@ uint64_t gpi_new_badge(gpi_cap_t cap_type,
 
 }
 
+char *cap_type_to_str(gpi_cap_t cap_type)
+{
+    switch(cap_type)
+    {
+        case GPICAP_TYPE_ADS:
+            return "ADS";
+            break;
+       case GPICAP_TYPE_CPU:
+            return "CPU";
+            break;
+        default:
+            gpi_panic("Unknown cap type");
+            break;
+    }
+}
+
+void badge_print(seL4_Word badge)
+{
+    printf("BG: %lx\t", badge);
+    printf("Cap: %s\t", cap_type_to_str(get_cap_type_from_badge(badge)));
+    printf("P: %u\t", get_perms_from_badge(badge));
+    printf("CID: %u\t", get_client_id_from_badge(badge));
+    printf("OID: %u\n", get_object_id_from_badge(badge));
+}
+
+
 void gpi_panic(char *reason){
     printf("PANIC: %s\n", reason);
     assert(0);

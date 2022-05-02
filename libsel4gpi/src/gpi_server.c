@@ -255,16 +255,19 @@ void gpi_server_main()
             /* index */ received_cap_path.capPtr,
             /* depth */ received_cap_path.capDepth);
         tag = recv(&sender_badge);
-        printf(GPISERVS "Got message on EP with BADGE:%lx\n", sender_badge);
 
 
         seL4_MessageInfo_t reply_tag;
         if (sender_badge == 0) { /* Handle Typed Request */
+            printf(GPISERVS "Got message on EP with no-BADGE_VALUE\n");
             handle_untyped_request(tag,
                                    &received_cap_path,
                                    &reply_tag); /*unused*/
         } else { /* Handle Typed Request */
             gpi_cap_t cap_type = get_cap_type_from_badge(sender_badge);
+            printf(GPISERVS "Got message on EP with ");
+            badge_print(sender_badge);
+
             switch (cap_type)
             {
             case GPICAP_TYPE_ADS:

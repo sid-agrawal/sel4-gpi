@@ -40,7 +40,7 @@ uint64_t ads_assign_new_badge_and_objectID(ads_component_registry_entry_t *reg) 
 
     assert(badge_val != 0);
     reg->ads.ads_obj_id = get_ads_component()->registry_n_entries;
-    printf("ads_assign_new_badge_and_objectID: new badge: %lx\n", badge_val);
+    printf(ADSSERVS"ads_assign_new_badge_and_objectID: new badge: %lx\n", badge_val);
     return badge_val;
 }
 
@@ -166,7 +166,8 @@ static void handle_attach_req(seL4_Word sender_badge, seL4_MessageInfo_t old_tag
                sender_badge);
         return;
     }
-    printf(ADSSERVS "main: found client_data %x.\n", client_data);
+    printf(ADSSERVS "main: found client_data badge details:");
+    badge_print(sender_badge);
 
     void *vaddr = (void *) seL4_GetMR(ADSMSGREG_ATTACH_REQ_VA);
     size_t size = (size_t) seL4_GetMR(ADSMSGREG_ATTACH_REQ_SZ);
@@ -194,7 +195,7 @@ static void handle_testing_req(seL4_Word sender_badge, seL4_MessageInfo_t old_ta
            seL4_MessageInfo_get_capsUnwrapped(old_tag));
     
     for (int i = 0; i < 5; i++) {
-        printf(ADSSERVS "MR[%d] = %x\n", i, seL4_GetBadge(i));
+        printf(ADSSERVS "MR[%d] = %lx\n", i, seL4_GetBadge(i));
     }
 
     // sel4utils_walk_vspace(client_data->ads.vspace, NULL);
@@ -249,7 +250,7 @@ static void handle_clone_req(seL4_Word sender_badge)
                sender_badge);
         return;
     }
-    printf(ADSSERVS "main: Clone done. Badge: %x\n", client_reg_ptr);
+    printf(ADSSERVS "Clone done.\n");
 
     /* Create a badged endpoint for the client to send messages to.
      * Use the address of the client_registry_entry as the badge.
@@ -268,9 +269,11 @@ static void handle_clone_req(seL4_Word sender_badge)
                                badge);
     if (error)
     {
-        printf(ADSSERVS "main: Failed to mint client badge %x.\n", badge);
+        printf(ADSSERVS "Failed to mint client badge %x.\n", badge);
         return;
     }
+    printf(ADSSERVS "Clone assigned:");
+    badge_print(badge);
     /* Return this badged end point in the return message. */
     seL4_SetCap(0, dest_path.capPtr);
     seL4_SetMR(ADSMSGREG_FUNC, ADS_FUNC_CLONE_ACK);
@@ -301,8 +304,12 @@ void ads_component_handle(seL4_MessageInfo_t tag,
     case ADS_FUNC_ATTACH_REQ:
         handle_attach_req(sender_badge, tag, received_cap->capPtr);
         break;
+
+    case ADS_FUNC_TESTING_REQ:
+        handle_testing_req(sender_badge, tag);
+        break;
     default:
-        ZF_LOGW(ADSSERVS "main: Unknown function %d requested.", func);
+        gpi_panic(ADSSERVS"Unknown cap type.");
         break;
     }
 }

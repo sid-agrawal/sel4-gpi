@@ -107,24 +107,10 @@ int ads_client_testing(ads_client_context_t *conn, vka_t *vka,
                        ads_client_context_t *clone3) {
 
     int error = 0;
-    cspacepath_t rand_cap_orig_path, rand_cap_badged_path;
-
-    seL4_CPtr rand_cap = vka_alloc_endpoint_leaky(vka);
-    vka_cspace_make_path(vka, rand_cap, &rand_cap_orig_path);
-    assert(error == 0);
-    
-    error = vka_cspace_alloc_path(vka, &rand_cap_badged_path);
-    assert(error == 0);
-    error = vka_cnode_mint(&rand_cap_badged_path,
-                               &rand_cap_orig_path,
-                               seL4_AllRights,
-                               0xdeedbeef);
-    assert(error == 0);
 
     seL4_SetMR(ADSMSGREG_FUNC, ADS_FUNC_TESTING_REQ);
     seL4_SetCap(0, clone1->badged_server_ep_cspath.capPtr);
-    seL4_SetCap(1, rand_cap_badged_path.capPtr);
-    //seL4_SetCap(1, clone2->badged_server_ep_cspath.capPtr);
+    seL4_SetCap(1, clone2->badged_server_ep_cspath.capPtr);
 
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 2,
                                                   ADSMSGREG_TESTING_REQ_END);

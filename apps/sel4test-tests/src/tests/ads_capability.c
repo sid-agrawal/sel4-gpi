@@ -33,14 +33,15 @@ int test_ads_clone(env_t env)
     test_error_eq(error, 0);
     
     ads_client_context_t ads_conn_clone3;
-    error = ads_client_clone(&conn, &env->vka,  (void *) 0x10001000, &ads_conn_clone3);
+    Clone of should is hanging and it shouldn't have.
+    error = ads_client_clone(&ads_conn_clone2, &env->vka,  (void *) 0x10001000, &ads_conn_clone3);
     test_error_eq(error, 0);
     
-    // Allocate new CPU cap.
-    // error = ads_client_testing(&conn, &env->vka,
-    //                            &ads_conn_clone1, &ads_conn_clone2,
-    //                            &ads_conn_clone3);
-    // test_error_eq(error, 0);
+
+    error = ads_client_testing(&conn, &env->vka,
+                               &ads_conn_clone1, &ads_conn_clone2,
+                               &ads_conn_clone3);
+    test_error_eq(error, 0);
     
     return sel4test_get_result();
 }

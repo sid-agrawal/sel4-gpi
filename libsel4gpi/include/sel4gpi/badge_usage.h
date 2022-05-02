@@ -61,4 +61,5 @@ uint64_t gpi_new_badge(gpi_cap_t cap_type,
                             uint64_t client_id,
                             uint64_t object_id);
 
+void print_badge(seL4_Word badge);
 void gpi_panic(char *reason);

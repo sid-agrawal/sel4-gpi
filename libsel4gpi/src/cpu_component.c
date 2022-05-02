@@ -278,7 +278,7 @@ void cpu_component_handle(seL4_MessageInfo_t tag,
     //     break;
 
     default:
-        ZF_LOGW(CPUSERVS "main: Unknown function %d requested.", func);
+        gpi_panic(ADSSERVS"Unknown cap type.");
         break;
     }
 }
