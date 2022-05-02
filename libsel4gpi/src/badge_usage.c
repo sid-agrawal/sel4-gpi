@@ -81,11 +81,14 @@ uint64_t gpi_new_badge(gpi_cap_t cap_type,
                             uint64_t client_id,
                             uint64_t object_id)
 {
-    return set_cap_type_to_badge(
-        set_perms_to_badge(
-            set_client_id_to_badge(
-                set_object_id_to_badge(0, object_id), client_id), perms), cap_type);
-    
+
+    uint64_t badge_value = 0;
+    badge_value = set_cap_type_to_badge(badge_value, cap_type);
+    badge_value = set_perms_to_badge(badge_value, perms);
+    badge_value = set_object_id_to_badge(badge_value, object_id);
+    badge_value = set_client_id_to_badge(badge_value, client_id);
+    return badge_value;
+
 }
 
 void gpi_panic(char *reason){

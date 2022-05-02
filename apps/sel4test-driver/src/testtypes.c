@@ -238,13 +238,13 @@ void basic_set_up(uintptr_t e)
     // For the child's as cap in the child
     // First forge a cap to the child's vspace
     seL4_CPtr child_as_cap_in_parent;
-    error = 0;//forge_ads_cap_from_vspace(&env->test_process.vspace, &env->vka, &child_as_cap_in_parent);
+    error = forge_ads_cap_from_vspace(&env->test_process.vspace, &env->vka, &child_as_cap_in_parent);
     if (error){
         ZF_LOGF("Failed to forge child's as cap");
     }
 
-    env->child_as_cptr_in_child = 0;//sel4utils_copy_cap_to_process(&(env->test_process),
-                                      //                          &env->vka, child_as_cap_in_parent);
+    env->child_as_cptr_in_child = sel4utils_copy_cap_to_process(&(env->test_process),
+                                                                &env->vka, child_as_cap_in_parent);
     // For the ads-server
     env->gpi_endpoint_in_child = sel4utils_copy_cap_to_process(&(env->test_process),
                                                                &env->vka, env->gpi_endpoint_in_parent);

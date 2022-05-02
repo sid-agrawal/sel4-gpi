@@ -255,7 +255,7 @@ void gpi_server_main()
             /* index */ received_cap_path.capPtr,
             /* depth */ received_cap_path.capDepth);
         tag = recv(&sender_badge);
-        printf(GPISERVS "Got message on EP with BADGE:%d\n", sender_badge);
+        printf(GPISERVS "Got message on EP with BADGE:%lx\n", sender_badge);
 
 
         seL4_MessageInfo_t reply_tag;

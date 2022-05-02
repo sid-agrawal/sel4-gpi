@@ -31,6 +31,19 @@
 #include <sel4gpi/gpi_server.h>
 #include <sel4gpi/badge_usage.h>
 
+uint64_t cpu_assign_new_badge_and_objectID(cpu_component_registry_entry_t *reg) {
+    get_cpu_component()->registry_n_entries++;
+    // Add the latest ID to the obj and to the badlge.
+    seL4_Word badge_val = gpi_new_badge(GPICAP_TYPE_CPU,
+                                        0x00,
+                                        0x00,
+                                        get_cpu_component()->registry_n_entries);
+
+    assert(badge_val != 0);
+    reg->cpu.cpu_obj_id = get_cpu_component()->registry_n_entries;
+    printf("cpu_assign_new_badge_and_objectID: new badge: %lx\n", badge_val);
+    return badge_val;
+}
 cpu_component_context_t *get_cpu_component(void)
 {
     return &get_gpi_server()->cpu_component;
@@ -122,17 +135,14 @@ void cpu_handle_allocation_request(seL4_MessageInfo_t *reply_tag)
     vka_cspace_make_path(get_cpu_component()->server_vka, dest_cptr, &dest);
 
     // Add the latest ID to the obj and to the badlge.
-    seL4_Word badge_val = gpi_new_badge(GPICAP_TYPE_CPU,
-                                        0x00,
-                                        0x00,
-                                        get_cpu_component()->registry_n_entries);
-    client_reg_ptr->cpu.cpu_obj_id = get_cpu_component()->registry_n_entries;
-    get_ads_component()->registry_n_entries++;
-
-    int error = vka_cnode_mint(&dest, &src, seL4_AllRights, badge_val);
+    seL4_Word badge = cpu_assign_new_badge_and_objectID(client_reg_ptr);
+    int error = vka_cnode_mint(&dest,
+                               &src,
+                               seL4_AllRights,
+                               badge);
     if (error)
     {
-        printf(CPUSERVS "main: Failed to mint client badge %x.\n", badge_val);
+        printf(CPUSERVS "main: Failed to mint client badge %lx.\n", badge);
         return;
     }
     /* Return this badged end point in the return message. */

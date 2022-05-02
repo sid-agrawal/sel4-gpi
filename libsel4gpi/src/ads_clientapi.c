@@ -86,6 +86,8 @@ int ads_client_clone(ads_client_context_t *conn, vka_t* vka, void* omit_vaddr, a
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0,
                                                   ADSMSGREG_CLONE_REQ_END);
 
+    printf(ADSSERVC "Sending clone request to server via EP: %d.\n",
+           conn->badged_server_ep_cspath.capPtr);
     tag = seL4_Call(conn->badged_server_ep_cspath.capPtr, tag);
     assert(seL4_MessageInfo_get_extraCaps(tag) == 1);
     return 0;

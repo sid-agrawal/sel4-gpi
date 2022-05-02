@@ -30,6 +30,20 @@
 #include <sel4gpi/badge_usage.h>
 
 
+uint64_t ads_assign_new_badge_and_objectID(ads_component_registry_entry_t *reg) {
+    get_ads_component()->registry_n_entries++;
+    // Add the latest ID to the obj and to the badlge.
+    seL4_Word badge_val = gpi_new_badge(GPICAP_TYPE_ADS,
+                                        0x00,
+                                        0x00,
+                                        get_ads_component()->registry_n_entries);
+
+    assert(badge_val != 0);
+    reg->ads.ads_obj_id = get_ads_component()->registry_n_entries;
+    printf("ads_assign_new_badge_and_objectID: new badge: %lx\n", badge_val);
+    return badge_val;
+}
+
 ads_component_context_t *get_ads_component(void)
 {
     return &get_gpi_server()->ads_component;
@@ -85,10 +99,11 @@ static void ads_component_registry_insert(ads_component_registry_entry_t *new_no
  */
 ads_component_registry_entry_t *ads_component_registry_get_entry_by_badge(seL4_Word badge){
 
+    uint64_t objectID = get_object_id_from_badge(badge);
     ads_component_registry_entry_t *current_ctx = get_ads_component()->client_registry;
 
     while (current_ctx != NULL) {
-        if ((seL4_Word)current_ctx == badge) {
+        if (current_ctx->ads.ads_obj_id == objectID) {
             break;
         }
         current_ctx = current_ctx->next;
@@ -111,7 +126,7 @@ void ads_handle_allocation_request(seL4_MessageInfo_t *reply_tag)
     ads_component_registry_insert(client_reg_ptr);
 
     /* Create a badged endpoint for the client to send messages to.
-     * Use the address of the client_registry_entry as the badge.
+     * Use the address of the client_registry_entry as the badge
      */
     cspacepath_t src, dest;
     vka_cspace_make_path(get_ads_component()->server_vka,
@@ -120,18 +135,14 @@ void ads_handle_allocation_request(seL4_MessageInfo_t *reply_tag)
     vka_cspace_alloc(get_ads_component()->server_vka, &dest_cptr);
     vka_cspace_make_path(get_ads_component()->server_vka, dest_cptr, &dest);
 
-    // Add the latest ID to the obj and to the badlge.
-    seL4_Word badge_val = gpi_new_badge(GPICAP_TYPE_ADS,
-                                        0x00,
-                                        0x00,
-                                        get_ads_component()->registry_n_entries);
-    client_reg_ptr->ads.ads_obj_id = get_ads_component()->registry_n_entries;
-    get_ads_component()->registry_n_entries++;
-
-    int error = vka_cnode_mint(&dest, &src, seL4_AllRights, badge_val);
+    seL4_Word badge = ads_assign_new_badge_and_objectID(client_reg_ptr);
+    int error = vka_cnode_mint(&dest,
+                               &src,
+                               seL4_AllRights,
+                               badge);
     if (error)
     {
-        printf(ADSSERVS "main: Failed to mint client badge %x.\n", badge_val);
+        printf(ADSSERVS "main: Failed to mint client badge %x.\n", badge);
         return;
     }
     /* Return this badged end point in the return message. */
@@ -151,7 +162,7 @@ static void handle_attach_req(seL4_Word sender_badge, seL4_MessageInfo_t old_tag
     ads_component_registry_entry_t *client_data = ads_component_registry_get_entry_by_badge(sender_badge);
     if (client_data == NULL)
     {
-        printf(ADSSERVS "main: Failed to find client badge %x.\n",
+        printf(ADSSERVS "main: Failed to find client badge %lx.\n",
                sender_badge);
         return;
     }
@@ -214,14 +225,14 @@ static void handle_clone_req(seL4_Word sender_badge)
     // Make a new endpoint for the client to send messages to. like connect.
     printf(ADSSERVS "main: Making a new cap for the clone.\n");
     /* Allocate a new registry entry for the client. */
-    seL4_Word client_reg_ptr = (seL4_Word)malloc(sizeof(ads_component_registry_entry_t));
+    ads_component_registry_entry_t *client_reg_ptr = malloc(sizeof(ads_component_registry_entry_t));
     if (client_reg_ptr == 0)
     {
         printf(ADSSERVS "main: Failed to allocate new badge for client.\n");
         return;
    }
     memset((void *)client_reg_ptr, 0, sizeof(ads_component_registry_entry_t));
-    ads_component_registry_insert((ads_component_registry_entry_t *)client_reg_ptr);
+    ads_component_registry_insert(client_reg_ptr);
 
 
     // Do the actual clone
@@ -250,11 +261,14 @@ static void handle_clone_req(seL4_Word sender_badge)
     vka_cspace_alloc(get_ads_component()->server_vka, &dest_cptr);
     vka_cspace_make_path(get_ads_component()->server_vka, dest_cptr, &dest_path);
 
-    error = vka_cnode_mint(&dest_path, &src_path, seL4_AllRights, client_reg_ptr);
+    seL4_Word badge = ads_assign_new_badge_and_objectID(client_reg_ptr);
+    error = vka_cnode_mint(&dest_path,
+                               &src_path,
+                               seL4_AllRights,
+                               badge);
     if (error)
     {
-        printf(ADSSERVS "main: Failed to mint client badge %x.\n",
-               client_reg_ptr);
+        printf(ADSSERVS "main: Failed to mint client badge %x.\n", badge);
         return;
     }
     /* Return this badged end point in the return message. */
@@ -296,14 +310,14 @@ void ads_component_handle(seL4_MessageInfo_t tag,
 int forge_ads_cap_from_vspace(vspace_t *vspace, vka_t *vka, seL4_CPtr *cap_ret){
 
     /* Allocate a new registry entry for the client. */
-    seL4_Word client_reg_ptr = (seL4_Word)malloc(sizeof(ads_component_registry_entry_t));
+    ads_component_registry_entry_t *client_reg_ptr = malloc(sizeof(ads_component_registry_entry_t));
     if (client_reg_ptr == 0)
     {
         printf(ADSSERVS "main: Failed to allocate new badge for client.\n");
         return 1;
     }
     memset((void *)client_reg_ptr, 0, sizeof(ads_component_registry_entry_t));
-    ads_component_registry_insert((ads_component_registry_entry_t *)client_reg_ptr);
+    ads_component_registry_insert(client_reg_ptr);
 
     ((ads_component_registry_entry_t *)client_reg_ptr)->ads.vspace = vspace;
     /* Create a badged endpoint for the client to send messages to.
@@ -316,14 +330,18 @@ int forge_ads_cap_from_vspace(vspace_t *vspace, vka_t *vka, seL4_CPtr *cap_ret){
     vka_cspace_alloc(get_ads_component()->server_vka, &dest_cptr);
     vka_cspace_make_path(get_ads_component()->server_vka, dest_cptr, &dest);
 
-    int error = vka_cnode_mint(&dest, &src, seL4_AllRights, client_reg_ptr);
+    seL4_Word badge = ads_assign_new_badge_and_objectID(client_reg_ptr);
+    int error = vka_cnode_mint(&dest,
+                               &src,
+                               seL4_AllRights,
+                               badge);
     if (error)
     {
-        printf(ADSSERVS "main: Failed to mint client badge %x.\n",
-               client_reg_ptr);
+        printf(ADSSERVS "main: Failed to mint client badge %lx.\n", badge);
         return 1;
     }
-    printf(ADSSERVS "main: Forged a new ADS cap with badge value: %x\n", client_reg_ptr);
+    printf(ADSSERVS "main: Forged a new ADS cap(EP: %d) with badge value: %lx\n", 
+    dest.capPtr, badge);
 
     *cap_ret = dest_cptr;
     return 0;
