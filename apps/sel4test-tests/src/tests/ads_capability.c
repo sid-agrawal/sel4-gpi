@@ -34,20 +34,24 @@ int test_ads_clone(env_t env)
     test_error_eq(error, 0);
     
 
-    error = ads_client_testing(&conn, &env->vka,
-                               &ads_conn_clone1, &ads_conn_clone2,
-                               &ads_conn_clone2);
-    test_error_eq(error, 0);
-    
     return sel4test_get_result();
 }
 
+DEFINE_TEST(GPIADS001, "Ensure that as clone works", test_ads_clone, true)
+
+
+static volatile uint64_t shared_var_ds = 1;
 void test_func_die(void) {
-    printf("-------hello from hell\n");
+
+    uint64_t shared_var_stack;
+    printf("test_func_die: %p\n", &shared_var_stack);
+
+    while(1);
 }
+    
 
 // DEFINE_TEST(GPIADS001, "Ensure the ads clone works", test_ads_clone, true)
-int test_ads_stack_isolated(env_t env)
+int test_ads_stack_isolated_stack_die(env_t env)
 {
     int error;
     cspacepath_t path;
@@ -56,6 +60,8 @@ int test_ads_stack_isolated(env_t env)
     conn.badged_server_ep_cspath = path;
 
 
+    // This shared var is on the stack an hence should not work.
+    volatile uint64_t shared_var_stack = 1;
 
     // Using a known EP, get a new ads CAP.
     ads_client_context_t ads_conn_clone1;
@@ -85,12 +91,25 @@ int test_ads_stack_isolated(env_t env)
     error = cpu_client_start(&cpu_conn, (sel4utils_thread_entry_fn)test_func_die);
     test_error_eq(error, 0);
 
-    // Decrement the cap. TODO(siagraw)
-    // Delete the ads cap. TODO(siagraw)
+    printf("%d: main_thread: shared_var(%p) = %d\n", __LINE__, &shared_var_stack, shared_var_stack);
+    
+    shared_var_stack = 4;
+     
+     uint64_t *other_thread_stack = (uintptr_t*)0x10022fb8;
+     *other_thread_stack = 5;
+
+
+    
+
+    printf("%d: main_thread: shared_var(%p) = %d\n", __LINE__, &shared_var_stack, shared_var_stack);
+    
+
+    // Send a message to the thread.
+
     return sel4test_get_result();
 }
 
-DEFINE_TEST(GPIADS002, "Ensure that thread stack works", test_ads_stack_isolated, true)
+//DEFINE_TEST(GPIADS002, "Ensure that thread stack works", test_ads_stack_isolated_stack_die, true)
 #ifdef WQEAREREADY
 int test_ads_attach(env_t env)
 {

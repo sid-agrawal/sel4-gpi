@@ -172,7 +172,7 @@ static void handle_start_req(seL4_Word sender_badge, seL4_MessageInfo_t old_tag,
         printf(CPUSERVS "MR[%d] = %lx\n", i, seL4_GetMR(i));
     }
 
-    error = cpu_start(&client_data->cpu, seL4_GetMR(1));
+    error = cpu_start(&client_data->cpu, (sel4utils_thread_entry_fn)seL4_GetMR(1));
     if (error) {
         printf(CPUSERVS "main: Failed to start CPU.\n");
         return;
