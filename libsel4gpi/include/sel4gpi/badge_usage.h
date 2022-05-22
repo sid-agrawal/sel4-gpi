@@ -50,10 +50,10 @@ uint64_t get_client_id_from_badge(seL4_Word badge);
 // Bits: 39:20 are for the client id. Total of 20 bits, so 2^20 clients.
 uint64_t set_client_id_to_badge(seL4_Word badge, uint64_t client_id);
 
-// Bits: 19:0 are for the object id. Total of 32 bits, so 2^20 objects.
+// Bits: 19:0 are for the object id. Total of 20 bits, so 2^20 objects.
 uint64_t get_object_id_from_badge(seL4_Word badge);
 
-// Bits: 31:0 are for the object id. Total of 32 bits, so 2^32 objects.
+// Bits: 19:0 are for the object id. Total of 20 bits, so 2^20 objects.
 uint64_t set_object_id_to_badge(seL4_Word badge, uint64_t object_id);
 
 uint64_t gpi_new_badge(gpi_cap_t cap_type,

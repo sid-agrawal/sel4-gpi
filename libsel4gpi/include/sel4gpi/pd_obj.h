@@ -15,6 +15,8 @@ typedef struct _pd {
     seL4_CPtr cspace_root;
 }pd_t;
 
-int pd_new(pd_t *pd, vka_t *vka, void* vaddr, size_t size);
-int pd_rm(pd_t *pd, vka_t *vka, void* vaddr, size_t size);
-int pd_bind(pd_t *pd, vka_t *vka, seL4_CPtr* cpu_cap);
+int pd_new(pd_t *pd, vka_t *vka);
+
+int pd_load(pd_t *pd, vka_t *vka, const char *image);
+
+int pd_start(pd_t *pd, vka_t *vka);

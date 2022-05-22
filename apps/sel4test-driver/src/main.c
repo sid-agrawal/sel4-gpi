@@ -494,8 +494,8 @@ void *main_continued(void *arg UNUSED)
                                            &env.vspace,
                                            GPI_SERVER_DEFAULT_PRIORITY,
                                            &env.gpi_endpoint_in_parent);
-    printf(GPISERVP "Public EP is: %d\n", env.gpi_endpoint_in_parent);
-    debug_cap_identify(GPISERVP, env.gpi_endpoint_in_parent);
+    // printf(GPISERVP "Public EP is: %d\n", env.gpi_endpoint_in_parent);
+    // debug_cap_identify(GPISERVP, env.gpi_endpoint_in_parent);
 
     /* now run the tests */
     sel4test_run_tests(&env);

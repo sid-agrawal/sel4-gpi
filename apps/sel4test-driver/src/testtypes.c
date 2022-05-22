@@ -7,6 +7,7 @@
 /* Include Kconfig variables. */
 #include <autoconf.h>
 #include <sel4test-driver/gen_config.h>
+#include <utils/util.h>
 
 #include <sel4debug/register_dump.h>
 #include <vka/capops.h>
@@ -45,12 +46,18 @@ static DEFINE_TEST_TYPE(BOOTSTRAP, BOOTSTRAP,
 
 /* Basic test type. Each test is launched as its own process. */
 /* copy untyped caps into a processes cspace, return the cap range they can be found in */
-static seL4_SlotRegion copy_untypeds_to_process(sel4utils_process_t *process, vka_object_t *untypeds, int num_untypeds,
+static seL4_SlotRegion copy_untypeds_to_process(sel4utils_process_t *process,
+                                                vka_object_t *untypeds,
+                                                int num_untypeds,
                                                 driver_env_t env)
 {
     seL4_SlotRegion range = {0};
 
     for (int i = 0; i < num_untypeds; i++) {
+        printf("DRIVER: Adding untyped to process: cap: %lu ut: %lu sz: %s\n ",
+               untypeds[i].cptr,
+               untypeds[i].ut,
+               human_readable_size(1ULL << untypeds[i].size_bits));
         seL4_CPtr slot = sel4utils_copy_cap_to_process(process, &env->vka, untypeds[i].cptr);
 
         /* set up the cap range */
@@ -230,7 +237,10 @@ void basic_set_up(uintptr_t e)
         }
     }
     /* setup data about untypeds */
-    env->init->untypeds = copy_untypeds_to_process(&(env->test_process), env->untypeds, env->num_untypeds, env);
+    env->init->untypeds = copy_untypeds_to_process(&(env->test_process),
+                                                   env->untypeds,
+                                                   env->num_untypeds,
+                                                   env);
     /* copy the fault endpoint - we wait on the endpoint for a message
      * or a fault to see when the test finishes */
     env->endpoint = sel4utils_copy_cap_to_process(&(env->test_process), &env->vka, env->test_process.fault_endpoint.cptr);
@@ -268,7 +278,7 @@ void basic_set_up(uintptr_t e)
         env->init->free_slots.start = env->init->device_frame_cap + 1;
     } else {
         env->init->free_slots.start = env->gpi_endpoint_in_child + 1;
-        printf("%s:%d: free_slot.start %d\n", __FUNCTION__, __LINE__, env->init->free_slots.start);
+        printf("%s:%d: free_slot.start %lu\n", __FUNCTION__, __LINE__, env->init->free_slots.start);
     }
     env->init->free_slots.end = (1u << TEST_PROCESS_CSPACE_SIZE_BITS);
     assert(env->init->free_slots.start < env->init->free_slots.end);

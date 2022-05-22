@@ -86,6 +86,9 @@ if(NOT Sel4testAllowSettingsOverride)
         set(Sel4testHaveTimer ON CACHE BOOL "" FORCE)
     endif()
 
+    # siagraw
+    #set(Sel4testHaveTimer ON CACHE BOOL "" FORCE)
+
     # Check the hardware debug API non simulated (except for ia32, which can be simulated),
     # or platforms that don't support it.
     if(((NOT SIMULATION) OR KernelSel4ArchIA32) AND NOT KernelHardwareDebugAPIUnsupported)
