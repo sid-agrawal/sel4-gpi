@@ -24,6 +24,7 @@
 #include <test_init_data.h>
 
 #define TESTS_APP "sel4test-tests"
+#define HELLO_APP "hello"
 
 #define MAX_TIMER_IRQS 4
 

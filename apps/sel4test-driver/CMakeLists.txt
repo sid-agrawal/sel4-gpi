@@ -60,8 +60,9 @@ file(
 
 # Import build rules for test app
 add_subdirectory(../sel4test-tests sel4test-tests)
+add_subdirectory(../hello hello)
 include(cpio)
-MakeCPIO(archive.o "$<TARGET_FILE:sel4test-tests>")
+MakeCPIO(archive.o "$<TARGET_FILE:sel4test-tests> $<TARGET_FILE:hello>")
 
 add_executable(sel4test-driver EXCLUDE_FROM_ALL ${static} archive.o)
 target_include_directories(sel4test-driver PRIVATE "include")
