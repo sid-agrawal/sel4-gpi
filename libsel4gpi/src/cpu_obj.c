@@ -1,7 +1,7 @@
 /**
- * @file ads_obj.c
+ * @file cpu_obj.c
  * @author Sid Agrawal(sid@sid-agrawal.ca)
- * @brief Implements the methods to manipulate the ads object
+ * @brief Implements the methods to manipulate the cpu object
  * @version 0.1
  * @date 2022-04-05
  * 

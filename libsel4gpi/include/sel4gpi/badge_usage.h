@@ -19,6 +19,7 @@ typedef enum GPICAP_TYPE {
     GPICAP_TYPE_NONE = 0,
     GPICAP_TYPE_ADS,
     GPICAP_TYPE_CPU,
+    GPICAP_TYPE_PD,
     GPICAP_TYPE_MAX,
 }gpi_cap_t;
 

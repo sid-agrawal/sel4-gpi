@@ -278,7 +278,7 @@ void basic_set_up(uintptr_t e)
         env->init->free_slots.start = env->init->device_frame_cap + 1;
     } else {
         env->init->free_slots.start = env->gpi_endpoint_in_child + 1;
-        printf("%s:%d: free_slot.start %lu\n", __FUNCTION__, __LINE__, env->init->free_slots.start);
+        printf("%s:%d: free_slot.start %d\n", __FUNCTION__, __LINE__, env->init->free_slots.start);
     }
     env->init->free_slots.end = (1u << TEST_PROCESS_CSPACE_SIZE_BITS);
     assert(env->init->free_slots.start < env->init->free_slots.end);

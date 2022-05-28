@@ -13,10 +13,14 @@
 
 typedef struct _pd {
     seL4_CPtr cspace_root;
+    uint32_t pd_obj_id;
 }pd_t;
 
 int pd_new(pd_t *pd, vka_t *vka);
 
-int pd_load(pd_t *pd, vka_t *vka, const char *image);
+int pd_load_image(pd_t *pd,
+                      vka_t *vka,
+                      vspace_t *vspace,
+                      seL4_CNode cspace);
 
 int pd_start(pd_t *pd, vka_t *vka);

@@ -200,9 +200,12 @@ void handle_untyped_request(seL4_MessageInfo_t tag,
         ads_handle_allocation_request(
             reply_tag); /*unused*/
         break;
-
     case GPICAP_TYPE_CPU:
         cpu_handle_allocation_request(
+            reply_tag); /*unused*/
+        break;
+    case GPICAP_TYPE_PD:
+        pd_handle_allocation_request(
             reply_tag); /*unused*/
         break;
     default:
@@ -283,9 +286,13 @@ void gpi_server_main()
                                      &received_cap_path,
                                      &reply_tag); /*unused*/
                 break;
-
             case GPICAP_TYPE_CPU:
                 cpu_component_handle(tag,
+                                     sender_badge,
+                                     &received_cap_path,
+                                     &reply_tag); /*unused*/
+            case GPICAP_TYPE_PD:
+                pd_component_handle(tag,
                                      sender_badge,
                                      &received_cap_path,
                                      &reply_tag); /*unused*/
