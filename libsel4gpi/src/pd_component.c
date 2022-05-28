@@ -118,7 +118,8 @@ void pd_handle_allocation_request(seL4_MessageInfo_t *reply_tag)
     printf(PDSERVS "main: Got connect request\n");
 
     /* Allocate a new registry entry for the client. */
-    pd_component_registry_entry_t *client_reg_ptr = malloc(sizeof(pd_component_registry_entry_t));
+    pd_component_registry_entry_t *client_reg_ptr =
+        malloc(sizeof(pd_component_registry_entry_t));
     if (client_reg_ptr == 0)
     {
         printf(PDSERVS "main: Failed to allocate new badge for client.\n");
@@ -130,8 +131,8 @@ void pd_handle_allocation_request(seL4_MessageInfo_t *reply_tag)
     // Allocate a new cspace
     // TODO
 
-    int error = pd_new(&client_reg_ptr->pd, 
-    get_pd_component()->server_vka);
+    int error = pd_new(&client_reg_ptr->pd,
+                       get_pd_component()->server_vka);
 
     /* Create a badged endpoint for the client to send messages to.
      * Use the address of the client_registry_entry as the badge.
@@ -157,6 +158,59 @@ void pd_handle_allocation_request(seL4_MessageInfo_t *reply_tag)
     /* Return this badged end point in the return message. */
     seL4_SetCap(0, dest.capPtr);
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(error, 0, 1, 1);
+    return reply(tag);
+}
+
+
+static void handle_load_req(seL4_Word sender_badge,
+                              seL4_MessageInfo_t old_tag,
+                              seL4_CPtr received_cap)
+{
+    // Find the client - like start
+    printf(PDSERVS "-----main: Got pd-load request\n");
+    badge_print(sender_badge);
+
+    printf(PDSERVS " received_cap: ");
+    debug_cap_identify("", received_cap);
+
+    assert(seL4_MessageInfo_get_label(old_tag) == 0);
+
+    int error = 0;
+
+    printf(PDSERVS "capsUnwrapped: %d\n", seL4_MessageInfo_get_capsUnwrapped(old_tag));
+    printf(PDSERVS "extraCap: %d\n", seL4_MessageInfo_ptr_get_extraCaps(&old_tag));
+    for (int i = 0; i < 5; i++)
+    {
+        printf(PDSERVS "MR[%d] = %lx\n", i, seL4_GetBadge(i));
+    }
+
+    /* Find the client */
+    pd_component_registry_entry_t *client_data = pd_component_registry_get_entry_by_badge(sender_badge);
+    if (client_data == NULL)
+    {
+        printf(PDSERVS "main: Failed to find client badge %x.\n",
+               sender_badge);
+        assert(0);
+        return;
+    }
+
+
+    seL4_CNode cspace_root = received_cap;
+    error = pd_load_image(&client_data->pd,
+                              get_pd_component()->server_vka,
+                              NULL, // old vspace arg, delete
+                              cspace_root);
+    if (error)
+    {
+        printf(PDSERVS "main: Failed to config from client badge:");
+        badge_print(sender_badge);
+        assert(0);
+        return;
+    }
+    printf(PDSERVS "main: config done.\n");
+
+    seL4_SetMR(PDMSGREG_FUNC, PD_FUNC_LOAD_ACK);
+    seL4_MessageInfo_t tag = seL4_MessageInfo_new(error, 0, 0, PDMSGREG_LOAD_ACK_END);
     return reply(tag);
 }
 
@@ -192,76 +246,6 @@ static void handle_start_req(seL4_Word sender_badge, seL4_MessageInfo_t old_tag,
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0, PDMSGREG_START_ACK_END);
     return reply(tag);
 }
-
-
-static void handle_load_req(seL4_Word sender_badge,
-                              seL4_MessageInfo_t old_tag,
-                              seL4_CPtr received_cap)
-{
-    // Find the client - like start
-    printf(PDSERVS "-----main: Got config  request from:");
-    badge_print(sender_badge);
-
-    printf(PDSERVS " received_cap: ");
-    debug_cap_identify("", received_cap);
-
-    assert(seL4_MessageInfo_get_extraCaps(old_tag) == 2);
-    assert(seL4_MessageInfo_ptr_get_capsUnwrapped(&old_tag) == 1);
-    assert(seL4_MessageInfo_get_label(old_tag) == 0);
-
-    int error = 0;
-
-    printf(PDSERVS "capsUnwrapped: %d\n", seL4_MessageInfo_get_capsUnwrapped(old_tag));
-    printf(PDSERVS "extraCap: %d\n", seL4_MessageInfo_ptr_get_extraCaps(&old_tag));
-    for (int i = 0; i < 5; i++)
-    {
-        printf(PDSERVS "MR[%d] = %lx\n", i, seL4_GetBadge(i));
-    }
-
-    /* Find the client */
-    pd_component_registry_entry_t *client_data = pd_component_registry_get_entry_by_badge(sender_badge);
-    if (client_data == NULL)
-    {
-        printf(PDSERVS "main: Failed to find client badge %x.\n",
-               sender_badge);
-        assert(0);
-        return;
-    }
-
-    /* Get the vspace for the ads */
-    seL4_Word ads_cap_badge = seL4_GetBadge(0);
-    ads_t ads;
-    ads_component_registry_entry_t *asre = ads_component_registry_get_entry_by_badge(ads_cap_badge);
-    if (asre == NULL)
-    {
-        printf(PDSERVS "main: Failed to find ads badge %x.\n", ads_cap_badge);
-        assert(0);
-        return;
-    }
-
-    printf(PDSERVS "Found ads_data with object ID: %x.\n", asre->ads.ads_obj_id);
-    // /* Get the vspace for the ads */
-    vspace_t *ads_vspace = asre->ads.vspace;
-
-    seL4_CNode cspace_root = received_cap;
-    error = pd_load_image(&client_data->pd,
-                              get_pd_component()->server_vka,
-                              ads_vspace,
-                              cspace_root);
-    if (error)
-    {
-        printf(PDSERVS "main: Failed to config from client badge:");
-        badge_print(sender_badge);
-        assert(0);
-        return;
-    }
-    printf(PDSERVS "main: config done.\n");
-
-    seL4_SetMR(PDMSGREG_FUNC, PD_FUNC_LOAD_ACK);
-    seL4_MessageInfo_t tag = seL4_MessageInfo_new(error, 0, 0, PDMSGREG_LOAD_ACK_END);
-    return reply(tag);
-}
-
 /**
  * @brief The starting point for the pd server's thread.
  *

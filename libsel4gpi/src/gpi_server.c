@@ -105,6 +105,15 @@ gpi_server_parent_spawn_thread(simple_t *parent_simple, vka_t *parent_vka,
     cpuc->server_ep_obj = get_gpi_server()->server_ep_obj;
 
 
+    /* Setup the PD Component */
+    pd_component_context_t *pdc = &get_gpi_server()->pd_component;
+    pdc->server_simple = parent_simple;
+    pdc->server_vka = parent_vka;
+    pdc->server_cspace = parent_cspace_cspath.root;
+    pdc->server_vspace = parent_vspace;
+    pdc->server_thread = get_gpi_server()->server_thread;
+    pdc->server_ep_obj = get_gpi_server()->server_ep_obj;
+
 
     /* And also allocate a badged copy of the Server's endpoint that the Parent
      * can use to send to the Server. This is used to allow the Server to report
@@ -277,6 +286,7 @@ void gpi_server_main()
             gpi_cap_t cap_type = get_cap_type_from_badge(sender_badge);
             printf(GPISERVS "Got message on EP with ");
             badge_print(sender_badge);
+            printf("\n");
 
             switch (cap_type)
             {
@@ -298,6 +308,7 @@ void gpi_server_main()
                                      &reply_tag); /*unused*/
                 break;
             default:
+                printf("CapType: %d\n", cap_type);
                 gpi_panic("gpi_server_main: Unknown cap type.");
                 break;
             }

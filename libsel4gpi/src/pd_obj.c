@@ -15,13 +15,22 @@
 #include <sel4gpi/pd_component.h>
 #include <sel4gpi/pd_obj.h>
 
+
+int pd_new(pd_t *pd,
+           vka_t *vka)
+{
+
+    printf(PDSERVS"new PD: \n");
+    return 0;
+}
+
 int pd_load_image(pd_t *pd,
                       vka_t *vka,
                       vspace_t *vspace,
                       seL4_CNode cspace)
 {
 
-    printf(PDSERVS"config_vspace: configuring vspace for pd\n");
+    printf(PDSERVS"load_image: loading image for pd %p\n", pd);
     // printf(PDSERVS"cspace info:");
     // debug_cap_identify(PDSERVS, cspace);
     // seL4_CPtr fault_endpoint = seL4_CapNull;
@@ -32,16 +41,8 @@ int pd_load_image(pd_t *pd,
     // return sel4utils_configure_thread_config(vka, NULL, vspace, pd->thread_config, &pd->thread_obj);
     return 0;
 }
-
-int pd_new(pd_t *pd,
-           vka_t *vka)
-{
-
-    return 0;
-}
-
 int pd_start(pd_t *pd, vka_t *vka){
 
     printf(PDSERVS"pd_start: starting PD\n");
-    return 1;
+    return 0;
 }
