@@ -62,8 +62,11 @@ file(
 add_subdirectory(../sel4test-tests sel4test-tests)
 add_subdirectory(../hello hello)
 include(cpio)
-# MakeCPIO(archive.o "$<TARGET_FILE:sel4test-tests>")
-MakeCPIO(archive.o "$<TARGET_FILE:sel4test-tests> $<TARGET_FILE:hello>")
+set(cpio_files "")
+# New binaries in the CPIO go here.
+list(APPEND cpio_files "$<TARGET_FILE:sel4test-tests>")
+list(APPEND cpio_files "$<TARGET_FILE:hello>")
+MakeCPIO(archive.o "${cpio_files}")
 
 add_executable(sel4test-driver EXCLUDE_FROM_ALL ${static} archive.o)
 target_include_directories(sel4test-driver PRIVATE "include")

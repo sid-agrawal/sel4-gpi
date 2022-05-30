@@ -8,30 +8,11 @@
 
 #include <stdio.h>
 #include <stdlib.h>
-#include <assert.h>
-#include <arch_stdio.h>
-#include <allocman/vka.h>
-#include <allocman/bootstrap.h>
-
-#include <sel4/sel4.h>
-#include <sel4/types.h>
-
-#include <sel4platsupport/timer.h>
-
-#include <sel4utils/util.h>
-#include <sel4utils/mapping.h>
-#include <sel4utils/vspace.h>
-
-#include <sel4test/test.h>
-
-#include <vka/capops.h>
-
 #include "hello.h"
-#include <rpc.pb.h>
 
 int main(int argc, char **argv)
 {
-    sel4muslcsys_register_stdio_write_fn(write_buf);
+//    sel4muslcsys_register_stdio_write_fn(write_buf);
 
     printf("hello works!\n");
 
