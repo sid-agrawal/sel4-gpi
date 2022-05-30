@@ -26,8 +26,7 @@ int pd_new(pd_t *pd,
 
 int pd_load_image(pd_t *pd,
                       vka_t *vka,
-                      vspace_t *vspace,
-                      seL4_CNode cspace)
+                      const char *image_path)
 {
 
     printf(PDSERVS"load_image: loading image for pd %p\n", pd);

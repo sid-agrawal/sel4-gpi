@@ -197,9 +197,8 @@ static void handle_load_req(seL4_Word sender_badge,
 
     seL4_CNode cspace_root = received_cap;
     error = pd_load_image(&client_data->pd,
-                              get_pd_component()->server_vka,
-                              NULL, // old vspace arg, delete
-                              cspace_root);
+                          get_pd_component()->server_vka,
+                          "hello");
     if (error)
     {
         printf(PDSERVS "main: Failed to config from client badge:");
