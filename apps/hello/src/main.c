@@ -26,9 +26,7 @@
 
 #include <vka/capops.h>
 
-#include "helpers.h"
-#include "test.h"
-#include "init.h"
+#include "hello.h"
 #include <rpc.pb.h>
 
 int main(int argc, char **argv)
