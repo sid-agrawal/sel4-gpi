@@ -54,7 +54,7 @@ int pd_client_load(pd_client_context_t *conn,
 
     /* Send the badged endpoint cap of the ads client as a cap */
     int image_id = 1;
-    seL4_SetMR(PDMSGREG_CONNECT_REQ_END, image_id);
+    seL4_SetMR(PDMSGREG_LOAD_FUNC_IMAGE, image_id);
 
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0,
                                                   PDMSGREG_LOAD_REQ_END);

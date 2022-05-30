@@ -177,13 +177,8 @@ static void handle_load_req(seL4_Word sender_badge,
 
     int error = 0;
 
-    printf(PDSERVS "capsUnwrapped: %d\n", seL4_MessageInfo_get_capsUnwrapped(old_tag));
-    printf(PDSERVS "extraCap: %d\n", seL4_MessageInfo_ptr_get_extraCaps(&old_tag));
-    for (int i = 0; i < 5; i++)
-    {
-        printf(PDSERVS "MR[%d] = %lx\n", i, seL4_GetBadge(i));
-    }
 
+    assert(seL4_GetMR(PDMSGREG_LOAD_FUNC_IMAGE) == 1);
     /* Find the client */
     pd_component_registry_entry_t *client_data = pd_component_registry_get_entry_by_badge(sender_badge);
     if (client_data == NULL)
