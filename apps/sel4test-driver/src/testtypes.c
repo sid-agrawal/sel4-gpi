@@ -213,6 +213,10 @@ void basic_set_up(uintptr_t e)
         env->init->timer_ntfn = sel4utils_copy_cap_to_process(&(env->test_process), &env->vka, env->timer_notify_test.cptr);
     }
 
+    /* NOTE:
+       The return from sel4utils_copy_cap_to_process is the slot in the cnode where the cap was placed
+       in the child process' cspace
+    */
     env->init->domain = sel4utils_copy_cap_to_process(&(env->test_process), &env->vka, simple_get_init_cap(&env->simple,
                                                                                                            seL4_CapDomain));
     env->init->asid_pool = sel4utils_copy_cap_to_process(&(env->test_process), &env->vka, simple_get_init_cap(&env->simple,
@@ -253,7 +257,7 @@ void basic_set_up(uintptr_t e)
         ZF_LOGF("Failed to forge child's as cap");
     }
 
-    env->child_as_cptr_in_child = sel4utils_copy_cap_to_process(&(env->test_process),
+    env->child_ads_cptr_in_child = sel4utils_copy_cap_to_process(&(env->test_process),
                                                                 &env->vka, child_as_cap_in_parent);
     // For the ads-server
     env->gpi_endpoint_in_child = sel4utils_copy_cap_to_process(&(env->test_process),
@@ -278,7 +282,7 @@ void basic_set_up(uintptr_t e)
         env->init->free_slots.start = env->init->device_frame_cap + 1;
     } else {
         env->init->free_slots.start = env->gpi_endpoint_in_child + 1;
-        printf("%s:%d: free_slot.start %d\n", __FUNCTION__, __LINE__, env->init->free_slots.start);
+        printf("%s:%d: free_slot.start %ld\n", __FUNCTION__, __LINE__, env->init->free_slots.start);
     }
     env->init->free_slots.end = (1u << TEST_PROCESS_CSPACE_SIZE_BITS);
     assert(env->init->free_slots.start < env->init->free_slots.end);
@@ -304,7 +308,7 @@ test_result_t basic_run_test(struct testcase *test, uintptr_t e)
     sel4utils_create_word_args(string_args, argv, argc,
                                env->endpoint,
                                env->remote_vaddr,
-                               env->child_as_cptr_in_child,
+                               env->child_ads_cptr_in_child,
                                env->gpi_endpoint_in_child);
 
     int num_res;

@@ -14,6 +14,13 @@
 typedef struct _pd {
     seL4_CPtr cspace_root;
     uint32_t pd_obj_id;
+    // AS_CAP
+    // CPU_CAP
+    simple_t *simple;
+    vka_t *vka;
+    vspace_t *vspace;
+
+
 }pd_t;
 
 int pd_new(pd_t *pd, vka_t *vka);
