@@ -97,12 +97,11 @@ typedef struct _pd {
 
 int pd_new(pd_t *pd,
            vka_t *vka,
-              vspace_t *vspace,
+           vspace_t *vspace,
            simple_t *simple);
 
 int pd_load_image(pd_t *pd,
-                      vka_t *vka,
-                     const char *image_path);
+                  const char *image_path);
 
-int pd_start(pd_t *pd, vka_t *vka,
-              vspace_t *vspace);
+int pd_start(pd_t *pd, 
+             vspace_t *vspace);

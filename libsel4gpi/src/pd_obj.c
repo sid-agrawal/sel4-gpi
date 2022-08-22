@@ -124,8 +124,8 @@ int pd_new(pd_t *pd,
 }
 
 int pd_load_image(pd_t *pd,
-                      vka_t *vka,
-                      const char *image_path)
+                  const char *image_path)
+                  
 {
 
     printf(PDSERVS"load_image: loading image for pd %p\n", pd);
@@ -142,8 +142,7 @@ int pd_load_image(pd_t *pd,
     // Asign a CPU Cap
     return 0;
 }
-int pd_start(pd_t *pd, vka_t *vka,
-    vspace_t *server_vspace){
+int pd_start(pd_t *pd, vspace_t *server_vspace){
 
     // Phase1: Start it.
     // Phase2: start the CPU thread.

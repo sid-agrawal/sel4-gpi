@@ -195,7 +195,6 @@ static void handle_load_req(seL4_Word sender_badge,
 
     seL4_CNode cspace_root = received_cap;
     error = pd_load_image(&client_data->pd,
-                          get_pd_component()->server_vka,
                           "hello");
     if (error)
     {
@@ -231,10 +230,7 @@ static void handle_start_req(seL4_Word sender_badge, seL4_MessageInfo_t old_tag,
         printf(PDSERVS "MR[%d] = %lx\n", i, seL4_GetMR(i));
     }
 
-    error = pd_start(&client_data->pd,
-    get_pd_component()->server_vka,
-    get_pd_component()->server_vspace
-    );
+    error = pd_start(&client_data->pd, get_pd_component()->server_vspace);
     if (error) {
         printf(PDSERVS "main: Failed to start PD.\n");
         return;
