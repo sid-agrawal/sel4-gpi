@@ -14,7 +14,7 @@ int main(int argc, char **argv)
 {
 //    sel4muslcsys_register_stdio_write_fn(write_buf);
 
-    printf("hello works!\n");
+    printf("hello works!47293847293874\n");
 
     return 0;
 }

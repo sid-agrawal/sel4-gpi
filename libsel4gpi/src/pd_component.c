@@ -132,7 +132,10 @@ void pd_handle_allocation_request(seL4_MessageInfo_t *reply_tag)
     // TODO
 
     int error = pd_new(&client_reg_ptr->pd,
-                       get_pd_component()->server_vka);
+                       get_pd_component()->server_vka,
+                       get_pd_component()->server_vspace,
+                       get_pd_component()->server_simple
+                       );
 
     /* Create a badged endpoint for the client to send messages to.
      * Use the address of the client_registry_entry as the badge.
@@ -229,7 +232,9 @@ static void handle_start_req(seL4_Word sender_badge, seL4_MessageInfo_t old_tag,
     }
 
     error = pd_start(&client_data->pd,
-    get_pd_component()->server_vka);
+    get_pd_component()->server_vka,
+    get_pd_component()->server_vspace
+    );
     if (error) {
         printf(PDSERVS "main: Failed to start PD.\n");
         return;
