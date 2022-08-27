@@ -254,7 +254,7 @@ int main(int argc, char **argv)
     printf("%s %d self_as_cptr is %d: ", __FUNCTION__, __LINE__, self_as_cap);
     debug_cap_identify("test-main", self_as_cap);
 
-    printf("%s %d ads_endpoint is %d: ", __FUNCTION__, __LINE__, gpi_endpoint);
+    printf("%s %d ads_endpoint is %ld: ", __FUNCTION__, __LINE__, gpi_endpoint);
     debug_cap_identify("test-main", gpi_endpoint);
     /* initialise simple */
     init_simple(&env, init_data);
