@@ -50,7 +50,8 @@ static sel4utils_alloc_data_t alloc_data;
 
 /* allocator static pool */
 #define ALLOCATOR_STATIC_POOL_SIZE ((1 << seL4_PageBits) * 20)
-static char allocator_mem_pool[ALLOCATOR_STATIC_POOL_SIZE];
+static char allocator_mem_pool1[ALLOCATOR_STATIC_POOL_SIZE];
+static char allocator_mem_pool2[ALLOCATOR_STATIC_POOL_SIZE];
 
 
 void thread_testing(void) {
@@ -109,21 +110,42 @@ static void init_allocator(env_t env, test_init_data_t *init_data)
     UNUSED int error;
     UNUSED reservation_t virtual_reservation;
 
+    size_t cspace_size_bits;
+    seL4_CPtr cnode_start, cnode_end;
+    size_t factor = 2;
+    cspace_size_bits = init_data->cspace_size_bits - factor;
+    cnode_start = init_data->free_slots.start;
+    cnode_end = init_data->free_slots.end >> factor;
+
+
+
     /* initialise allocator */
-    allocman_t *allocator = bootstrap_use_current_1level(init_data->root_cnode,
-                                                         init_data->cspace_size_bits, init_data->free_slots.start,
-                                                         init_data->free_slots.end, ALLOCATOR_STATIC_POOL_SIZE,
-                                                         allocator_mem_pool);
-    if (allocator == NULL) {
+    allocman_t *allocator1 = bootstrap_use_current_1level(init_data->root_cnode,
+                                                         cspace_size_bits, 
+                                                         cnode_start,
+                                                         cnode_end,
+                                                         ALLOCATOR_STATIC_POOL_SIZE,
+                                                         allocator_mem_pool1);
+                                                         /*
+    allocman_t *allocator1 = bootstrap_use_current_1level(init_data->root_cnode, 
+                                                         cspace_size_bits, cnode_start, 
+                                                         cnode_end, ALLOCATOR_STATIC_POOL_SIZE,
+                                                         allocator_mem_pool1);
+                                                         */
+
+    printf("cspace details1: root: %ld\t size_bits: %ld\t start: %ld\t end:%ld\n",
+           init_data->root_cnode, cspace_size_bits, cnode_start, cnode_end);
+    if (allocator1 == NULL) {
         ZF_LOGF("Failed to bootstrap allocator");
     }
-    allocman_make_vka(&env->vka, allocator);
+    allocman_make_vka(&env->vka, allocator1);
 
     /* fill the allocator with untypeds */
     seL4_CPtr slot;
     unsigned int size_bits_index;
     size_t size_bits;
     cspacepath_t path;
+    size_t alloc1_size = 0;
     for (slot = init_data->untypeds.start, size_bits_index = 0;
          slot <= init_data->untypeds.end;
          slot++, size_bits_index++) {
@@ -132,10 +154,22 @@ static void init_allocator(env_t env, test_init_data_t *init_data)
         /* allocman doesn't require the paddr unless we need to ask for phys addresses,
          * which we don't. */
         size_bits = init_data->untyped_size_bits_list[size_bits_index];
-        error = allocman_utspace_add_uts(allocator, 1, &path, &size_bits, NULL,
+        error = allocman_utspace_add_uts(allocator1, 1, &path, &size_bits, NULL,
                                          ALLOCMAN_UT_KERNEL);
+        
+        
         if (error) {
             ZF_LOGF("Failed to add untyped objects to allocator");
+        }
+        printf("Added untyped to allocator: [%ld]: sz: %s\n", slot, 
+               human_readable_size(1ULL<<size_bits));
+        alloc1_size += 1ULL<<size_bits;
+
+        if (alloc1_size > 400 * 1024 * 1024) {
+            printf("Allocator1 is big enough");
+            slot++;
+            size_bits_index++;
+            break;
         }
     }
 
@@ -162,9 +196,77 @@ static void init_allocator(env_t env, test_init_data_t *init_data)
         ZF_LOGF("Failed to switch allocator to virtual memory pool");
     }
 
-    bootstrap_configure_virtual_pool(allocator, vaddr, ALLOCATOR_VIRTUAL_POOL_SIZE,
+    bootstrap_configure_virtual_pool(allocator1, vaddr, ALLOCATOR_VIRTUAL_POOL_SIZE,
+                                     env->page_directory);
+    
+    /* setup a secodn allocator */
+    size_t cspace_size_bits2;
+    seL4_CPtr cnode_start2, cnode_end2;
+    cspace_size_bits2 = cspace_size_bits;
+    cnode_start2 = cnode_end +1;
+    cnode_end2 = cnode_start2 + (1 << cspace_size_bits2);
+
+    printf("====cspace details2: root: %ld\t size_bits: %ld\t start: %lx\t end:%lx\n",
+           init_data->root_cnode, cspace_size_bits2, cnode_start2, cnode_end2-1);
+    allocman_t *allocator2 = bootstrap_use_current_1level(init_data->root_cnode,
+                                                         cspace_size_bits2, 
+                                                         cnode_start2,
+                                                         cnode_end2,
+                                                         ALLOCATOR_STATIC_POOL_SIZE,
+                                                         allocator_mem_pool2);
+    if (allocator2 == NULL) {
+        ZF_LOGF("Failed to bootstrap allocator");
+    }
+    vka_t vka2;
+    allocman_make_vka(&vka2, allocator1);
+
+
+
+    // Add UTS
+    for (;
+         slot <= init_data->untypeds.end;
+         slot++, size_bits_index++) {
+
+        vka_cspace_make_path(&env->vka, slot, &path);
+        /* allocman doesn't require the paddr unless we need to ask for phys addresses,
+         * which we don't. */
+        size_bits = init_data->untyped_size_bits_list[size_bits_index];
+        error = allocman_utspace_add_uts(allocator2, 1, &path, &size_bits, NULL,
+                                         ALLOCMAN_UT_KERNEL);
+        
+        
+        if (error) {
+            ZF_LOGF("Failed to add untyped objects to allocator");
+        }
+        printf("Added untyped to allocator2: [%ld]: sz: %s\n", slot, 
+               human_readable_size(1ULL<<size_bits));
+        alloc1_size += 1ULL<<size_bits;
+
+    }
+
+    /* switch the allocator to a virtual memory pool */
+    virtual_reservation = vspace_reserve_range(&env->vspace, ALLOCATOR_VIRTUAL_POOL_SIZE,
+                                               seL4_AllRights, 1, &vaddr);
+    if (virtual_reservation.res == 0) {
+        ZF_LOGF("Failed to switch allocator to virtual memory pool");
+    }
+
+    bootstrap_configure_virtual_pool(allocator2, vaddr, ALLOCATOR_VIRTUAL_POOL_SIZE,
                                      env->page_directory);
 
+    for (int i = 0; i < 10; i++)
+    {
+        vka_object_t obj;
+        error = vka_alloc_frame(&vka2, 21, &obj);
+        if (error)
+        {
+            ZF_LOGF("Failed to allocate cslot for vka2");
+        }
+        else
+        {
+            printf("Allocated cslot for vka2: %ld\n", obj.cptr);
+        }
+    }
 }
 
 static uint8_t cnode_size_bits(void *data)
@@ -251,7 +353,7 @@ int main(int argc, char **argv)
 
     /* initialse cspace, vspace and untyped memory allocation */
     init_allocator(&env, init_data);
-    printf("%s %d self_as_cptr is %d: ", __FUNCTION__, __LINE__, self_as_cap);
+    printf("%s %d self_as_cptr is %ld: ", __FUNCTION__, __LINE__, self_as_cap);
     debug_cap_identify("test-main", self_as_cap);
 
     printf("%s %d ads_endpoint is %ld: ", __FUNCTION__, __LINE__, gpi_endpoint);

@@ -103,6 +103,8 @@ static void init_env(driver_env_t env)
         ZF_LOGF("Failed to bootstrap vspace");
     }
 
+    // TODO: Move code from sel4test-test/src/main.c to here
+
     /* fill the allocator with virtual memory */
     void *vaddr;
     virtual_reservation = vspace_reserve_range(&env->vspace,
