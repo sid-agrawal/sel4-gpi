@@ -218,7 +218,7 @@ void handle_untyped_request(seL4_MessageInfo_t tag,
             reply_tag); /*unused*/
         break;
     default:
-        gpi_panic(GPISERVS "handle_untyped_request: Unknown request type.\n");
+        gpi_panic(GPISERVS "handle_untyped_request: Unknown request type.\n", req_cap_type);
         break;
     }
 }
@@ -309,8 +309,7 @@ void gpi_server_main()
                                      &reply_tag); /*unused*/
                 break;
             default:
-                printf("CapType: %d\n", cap_type);
-                gpi_panic("gpi_server_main: Unknown cap type.");
+                gpi_panic("gpi_server_main: Unknown cap type.", cap_type);
                 break;
             }
         }

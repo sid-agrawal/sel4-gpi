@@ -310,7 +310,7 @@ void ads_component_handle(seL4_MessageInfo_t tag,
         handle_testing_req(sender_badge, tag);
         break;
     default:
-        gpi_panic(ADSSERVS"Unknown cap type.");
+        gpi_panic(ADSSERVS"Unknown func type.", (seL4_Word) func);
         break;
     }
 }

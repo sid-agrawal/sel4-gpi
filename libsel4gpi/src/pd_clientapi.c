@@ -16,7 +16,7 @@ int pd_component_client_connect(seL4_CPtr server_ep_cap,
                               vka_t *client_vka,
                               pd_client_context_t *ret_conn){
 
-    /* Send a REQ message to the server on its public EP */
+    /* Send a REQ message to the server on its publicS EP */
 
     // Alloc a slot for the incoming cap.
     seL4_CPtr dest_cptr;

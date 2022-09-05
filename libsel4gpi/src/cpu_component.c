@@ -249,7 +249,8 @@ static void handle_config_req(seL4_Word sender_badge,
     printf(CPUSERVS "main: config done.\n");
 
     seL4_SetMR(CPUMSGREG_FUNC, CPU_FUNC_CONFIG_ACK);
-    seL4_MessageInfo_t tag = seL4_MessageInfo_new(error, 0, 0, CPUMSGREG_CONFIG_ACK_END);
+    seL4_SetMR(1, 0xdead);
+    seL4_MessageInfo_t tag = seL4_MessageInfo_new(error, 0, 0, 1+ CPUMSGREG_CONFIG_ACK_END);
     return reply(tag);
 }
 
@@ -276,7 +277,7 @@ void cpu_component_handle(seL4_MessageInfo_t tag,
         handle_config_req(sender_badge, tag, received_cap->capPtr);
         break;
     default:
-        gpi_panic(ADSSERVS "Unknown cap type.");
+        gpi_panic(CPUSERVS "Unknown func type.", (seL4_Word) func);
         break;
     }
 }

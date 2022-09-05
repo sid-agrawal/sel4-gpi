@@ -254,6 +254,7 @@ void pd_component_handle(seL4_MessageInfo_t tag,
     seL4_Error error = 0;
     /* Post */
     func = seL4_GetMR(PDMSGREG_FUNC);
+    uint64_t blah = seL4_GetMR(1);
     switch (func)
     {
     case PD_FUNC_LOAD_REQ:
@@ -263,7 +264,8 @@ void pd_component_handle(seL4_MessageInfo_t tag,
         handle_start_req(sender_badge, tag, received_cap->capPtr);
         break;
     default:
-        gpi_panic(ADSSERVS "Unknown cap type.");
+        printf(PDSERVS"blah: %lx\n", blah);
+        gpi_panic(PDSERVS "Unknown func type.", (seL4_Word)func);
         break;
     }
 }

@@ -44,6 +44,7 @@ target_link_libraries(
         sel4vka
         sel4utils
         sel4rpc
+        sel4bench
         sel4test
         sel4sync
         sel4muslcsys

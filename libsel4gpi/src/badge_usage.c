@@ -105,7 +105,7 @@ char *cap_type_to_str(gpi_cap_t cap_type)
             return "PD";
             break;
         default:
-            gpi_panic("Unknown cap type");
+            gpi_panic("Unknown cap type", cap_type);
             break;
     }
 }
@@ -120,7 +120,7 @@ void badge_print(seL4_Word badge)
 }
 
 
-void gpi_panic(char *reason){
-    printf("PANIC: %s\n", reason);
+void gpi_panic(char *reason, uint64_t code){
+    printf("PANIC: %s. CODE: %d\n", reason, code);
     assert(0);
 }

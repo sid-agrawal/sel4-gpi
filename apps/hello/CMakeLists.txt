@@ -31,6 +31,7 @@ target_link_libraries(
     PUBLIC
         sel4_autoconf
         muslc
+        sel4bench
         sel4
         sel4runtime
         sel4allocman
