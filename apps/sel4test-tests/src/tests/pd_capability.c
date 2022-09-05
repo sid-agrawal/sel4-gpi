@@ -29,15 +29,10 @@ int test_new_process_osmosis(env_t env)
     /* create an endpoint for the parent to listen on*/
     vka_object_t ep_object = {0};
     error = vka_alloc_endpoint(&env->vka, &ep_object);
-    ZF_LOGF_IFERR(error, "Failed to allocate new endpoint object.\n");
-
-    cspacepath_t ep_cap_path;
-    seL4_CPtr new_ep_cap = 0;
-    vka_cspace_make_path(vka, ep_object.cptr, &ep_cap_path);
+    assert(!error);
 
 
-
-
+    /* Create a new PD */
     pd_client_context_t conn;
     error = pd_component_client_connect(env->gpi_endpoint, &env->vka, &conn);
     assert(error == 0);
@@ -46,8 +41,13 @@ int test_new_process_osmosis(env_t env)
     error = pd_client_load(&conn, "hello");
     assert(error == 0);
 
+    // Copy the ep_object to the new PD
+    seL4_Word slot;
+    //error = pd_client_copy_cap(&conn, ep_object.cptr, &slot);
+    assert(error == 0);
+
     // Start it.
-    error = pd_client_start(&conn);
+    error = pd_client_start(&conn, 0xaa); // with this arg.
     assert(error == 0);
 
     // Wait for it to finish.

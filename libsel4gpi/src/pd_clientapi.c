@@ -64,9 +64,10 @@ int pd_client_load(pd_client_context_t *conn,
     return 0;
 }
 
-int pd_client_start(pd_client_context_t *conn)
+int pd_client_start(pd_client_context_t *conn, seL4_Word arg0)
 { 
     seL4_SetMR(PDMSGREG_FUNC, PD_FUNC_START_REQ);
+    seL4_SetMR(PDMSGREG_START_ARG0, arg0);
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0,
                                                   PDMSGREG_START_REQ_END);
     tag = seL4_Call(conn->badged_server_ep_cspath.capPtr, tag);

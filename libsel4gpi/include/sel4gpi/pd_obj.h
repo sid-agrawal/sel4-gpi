@@ -104,4 +104,5 @@ int pd_load_image(pd_t *pd,
                   const char *image_path);
 
 int pd_start(pd_t *pd, 
-             vspace_t *vspace);
+             vspace_t *vspace,
+             seL4_Word arg0);

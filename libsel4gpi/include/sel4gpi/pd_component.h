@@ -74,7 +74,9 @@ enum pd_component_msgregs
     PDMSGREG_LOAD_ACK_END = PDMSGREG_LABEL0,
 
     /* Start */
-    PDMSGREG_START_REQ_END = PDMSGREG_LABEL0,
+    /* (XXX) For now,  we only pass 1 arg, which clearly needs fixing */
+    PDMSGREG_START_ARG0 = PDMSGREG_LABEL0,
+    PDMSGREG_START_REQ_END,
 
     PDMSGREG_START_ACK_END = PDMSGREG_LABEL0,
 

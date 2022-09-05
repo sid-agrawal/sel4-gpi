@@ -16,9 +16,10 @@ int main(int argc, char **argv)
 {
 //    sel4muslcsys_register_stdio_write_fn(write_buf);
 
+
+    printf("Hello: arg0: %s\n", argv[0]);
     ccnt_t end;
     SEL4BENCH_READ_CCNT(end);
-    // printf("Hello: End time was: %lu\n", end);
 
     /*
      * send a message to our parent, and wait for a reply

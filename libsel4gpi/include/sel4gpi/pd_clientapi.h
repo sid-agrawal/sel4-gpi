@@ -54,6 +54,7 @@ int pd_client_load(pd_client_context_t *conn,
  * @brief Start the pd oject.
  * 
  * @param conn client connection object
+ * @param arg0 arg0 (XXX: Need to extend this to pass more args)
  * @return int 0 on success, -1 on failure.
  */
-int pd_client_start(pd_client_context_t *conn);
+int pd_client_start(pd_client_context_t *conn, seL4_Word arg0);

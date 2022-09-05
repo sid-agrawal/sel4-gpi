@@ -216,6 +216,8 @@ static void handle_start_req(seL4_Word sender_badge, seL4_MessageInfo_t old_tag,
            sender_badge);
 
     int error;
+    seL4_Word arg0;
+    arg0 = seL4_GetMR(PDMSGREG_START_ARG0);
     /* Find the client */
     pd_component_registry_entry_t *client_data = pd_component_registry_get_entry_by_badge(sender_badge);
     if (client_data == NULL)
@@ -230,7 +232,7 @@ static void handle_start_req(seL4_Word sender_badge, seL4_MessageInfo_t old_tag,
         printf(PDSERVS "MR[%d] = %lx\n", i, seL4_GetMR(i));
     }
 
-    error = pd_start(&client_data->pd, get_pd_component()->server_vspace);
+    error = pd_start(&client_data->pd, get_pd_component()->server_vspace, arg0);
     if (error) {
         printf(PDSERVS "main: Failed to start PD.\n");
         return;

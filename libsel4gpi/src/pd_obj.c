@@ -142,7 +142,7 @@ int pd_load_image(pd_t *pd,
     // Asign a CPU Cap
     return 0;
 }
-int pd_start(pd_t *pd, vspace_t *server_vspace){
+int pd_start(pd_t *pd, vspace_t *server_vspace, seL4_Word arg0){
 
     // Phase1: Start it.
     // Phase2: start the CPU thread.
@@ -152,6 +152,11 @@ int pd_start(pd_t *pd, vspace_t *server_vspace){
     char string_args[argc][WORD_STRING_SIZE];
     char *argv[argc];
     sel4utils_create_word_args(string_args, argv, argc);
+
+    argc = 1;
+    snprintf(argv[0], WORD_STRING_SIZE, "%d", arg0);
+
+
 
     int num_res;
     /* spawn the process */
