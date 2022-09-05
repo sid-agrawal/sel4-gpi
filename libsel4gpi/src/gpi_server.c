@@ -301,6 +301,7 @@ void gpi_server_main()
                                      sender_badge,
                                      &received_cap_path,
                                      &reply_tag); /*unused*/
+                break;
             case GPICAP_TYPE_PD:
                 pd_component_handle(tag,
                                      sender_badge,
