@@ -172,7 +172,8 @@ static void handle_start_req(seL4_Word sender_badge, seL4_MessageInfo_t old_tag,
         printf(CPUSERVS "MR[%d] = %lx\n", i, seL4_GetMR(i));
     }
 
-    error = cpu_start(&client_data->cpu, (sel4utils_thread_entry_fn)seL4_GetMR(1));
+    error = cpu_start(&client_data->cpu, (sel4utils_thread_entry_fn)seL4_GetMR(1),
+        client_data->cpu.thread_obj.ipc_buffer_addr);
     if (error) {
         printf(CPUSERVS "main: Failed to start CPU.\n");
         return;
@@ -219,6 +220,8 @@ static void handle_config_req(seL4_Word sender_badge,
         return;
     }
 
+    /* Get Fault EP */
+    seL4_CPtr fault_ep = seL4_GetMR(CPUMSGREG_CONFIG_FAULT_EP);
     /* Get the vspace for the ads */
     seL4_Word ads_cap_badge = seL4_GetBadge(0);
     ads_t ads;
@@ -238,7 +241,8 @@ static void handle_config_req(seL4_Word sender_badge,
     error = cpu_config_vspace(&client_data->cpu,
                               get_cpu_component()->server_vka,
                               ads_vspace,
-                              cspace_root);
+                              cspace_root,
+                              fault_ep);
     if (error)
     {
         printf(CPUSERVS "main: Failed to config from client badge:");

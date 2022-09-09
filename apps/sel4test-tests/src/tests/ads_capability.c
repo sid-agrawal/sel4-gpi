@@ -127,7 +127,7 @@ vka_object_t ep_for_thread;
 void test_func_die(seL4_Word arg0, seL4_Word arg1, seL4_Word arg2) {
     
     // This is nasty hack to get the IPC buffers address for the thread.
-    seL4_SetIPCBuffer(arg2);
+    seL4_SetIPCBuffer((seL4_IPCBuffer *)arg2);
     
 
 
@@ -196,7 +196,8 @@ int test_ads_stack_isolated_stack_die(env_t env)
     // Config its ads and cspace
     error = cpu_client_config(&cpu_conn,
                               &ads_conn_clone1,
-                              env->cspace_root);
+                              env->cspace_root,
+                              env->endpoint);
     test_error_eq(error, 0);
 
     // Start it.

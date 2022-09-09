@@ -56,8 +56,10 @@ int cpu_client_start(cpu_client_context_t *conn,
  * @param conn client connection object
  * @param ads_conn ads connection object
  * @param cspace_root cspace root for the cpu object.
+ * @param fault_ep W.r.t of the CPU's cspace, the fault endpoint.
  * @return int 0 on success, -1 on failure.
  */
 int cpu_client_config(cpu_client_context_t *conn,
                       ads_client_context_t *ads_conn,
-                      seL4_CPtr cspace_root);
+                      seL4_CPtr cspace_root,
+                      seL4_CPtr fault_ep);
