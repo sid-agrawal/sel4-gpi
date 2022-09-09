@@ -226,7 +226,7 @@ int main(int argc, char **argv)
     env.cspace_root = init_data->root_cnode;
     env.page_directory = init_data->page_directory;
     env.endpoint = endpoint;
-    env.self_as_cptr = self_as_cap;
+    env.self_ads_cptr = self_as_cap;
     env.gpi_endpoint = gpi_endpoint;
     env.priority = init_data->priority;
     env.cspace_size_bits = init_data->cspace_size_bits;

@@ -77,7 +77,7 @@ int test_ads_clone(env_t env)
 {
     int error;
     cspacepath_t path;
-    vka_cspace_make_path(&env->vka, env->self_as_cptr, &path);
+    vka_cspace_make_path(&env->vka, env->self_ads_cptr, &path);
     ads_client_context_t conn;
     conn.badged_server_ep_cspath = path;
 
@@ -158,7 +158,7 @@ int test_ads_stack_isolated_stack_die(env_t env)
 {
     int error;
     cspacepath_t path;
-    vka_cspace_make_path(&env->vka, env->self_as_cptr, &path);
+    vka_cspace_make_path(&env->vka, env->self_ads_cptr, &path);
     ads_client_context_t conn;
     conn.badged_server_ep_cspath = path;
 
