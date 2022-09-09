@@ -45,6 +45,9 @@ enum pd_component_funcs {
     PD_FUNC_START_REQ,
     PD_FUNC_START_ACK,
 
+    PD_FUNC_SENDCAP_REQ,
+    PD_FUNC_SENDCAP_ACK,
+
     PD_FUNC_DISCONNECT_REQ,
     PD_FUNC_DISCONNECT_ACK,
 };
@@ -72,6 +75,15 @@ enum pd_component_msgregs
     PDMSGREG_LOAD_REQ_END,
 
     PDMSGREG_LOAD_ACK_END = PDMSGREG_LABEL0,
+
+    /* Send Cap */
+    PDMSGREG_SEND_CAP_CAP = PDMSGREG_LABEL0,
+    PDMSGREG_SEND_CAP_REQ_END,
+
+    PDMSGREG_SEND_CAP_PD_SLOT = PDMSGREG_LABEL0,
+    PDMSGREG_SEND_CAP_ACK_END,
+
+
 
     /* Start */
     /* (XXX) For now,  we only pass 1 arg, which clearly needs fixing */

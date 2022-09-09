@@ -210,6 +210,40 @@ static void handle_load_req(seL4_Word sender_badge,
     return reply(tag);
 }
 
+static void handle_send_cap_req(seL4_Word sender_badge, seL4_MessageInfo_t old_tag, seL4_CPtr received_cap)
+{
+    printf(PDSERVS "main: Got send-cap request from client badge %x.\n",
+           sender_badge);
+
+
+    printf(PDSERVS " received_cap: ");
+    debug_cap_identify("", received_cap);
+
+    assert(seL4_MessageInfo_get_extraCaps(old_tag) == 1);
+    assert(seL4_MessageInfo_get_label(old_tag) == 0);
+
+    /* Find the client */
+    pd_component_registry_entry_t *client_data = pd_component_registry_get_entry_by_badge(sender_badge);
+    if (client_data == NULL)
+    {
+        printf(PDSERVS "main: Failed to find client badge %x.\n",
+               sender_badge);
+        return;
+    }
+
+    seL4_Word slot;
+    int error = pd_send_cap(&client_data->pd,
+                            received_cap, &slot);
+
+    seL4_SetMR(PDMSGREG_FUNC, PD_FUNC_SENDCAP_ACK);
+    seL4_SetMR(PDMSGREG_SEND_CAP_PD_SLOT, slot);
+
+    seL4_MessageInfo_t tag = seL4_MessageInfo_new(error, 0, 0,
+                                                  PDMSGREG_SEND_CAP_ACK_END);
+    return reply(tag);
+}
+
+
 static void handle_start_req(seL4_Word sender_badge, seL4_MessageInfo_t old_tag, seL4_CPtr received_cap)
 {
     printf(PDSERVS "main: Got start request from client badge %x.\n",
@@ -262,11 +296,13 @@ void pd_component_handle(seL4_MessageInfo_t tag,
     case PD_FUNC_LOAD_REQ:
         handle_load_req(sender_badge, tag, received_cap->capPtr);
         break;
+    case PD_FUNC_SENDCAP_REQ:
+        handle_send_cap_req(sender_badge, tag, received_cap->capPtr);
+        break;
     case PD_FUNC_START_REQ:
         handle_start_req(sender_badge, tag, received_cap->capPtr);
         break;
     default:
-        printf(PDSERVS"blah: %lx\n", blah);
         gpi_panic(PDSERVS "Unknown func type.", (seL4_Word)func);
         break;
     }

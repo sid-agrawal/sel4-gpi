@@ -100,17 +100,17 @@ int test_ads_clone(env_t env)
     ads_client_context_t ads_conn_clone2;
     ccnt_t start, end;
     COMPILER_MEMORY_FENCE();
-    isb();
+    // isb();
 
     printf("DOing something ....\n");
     printf("DOing something ....\n");
     printf("DOing something ....\n");
     printf("DOing something ....\n");
 
-    isb();
+    // isb();
     SEL4BENCH_READ_CCNT(end);
     COMPILER_MEMORY_FENCE();
-    printf("Time taken to clone: %llu cycles\n", end - start);
+    printf("Time taken to clone: %lu cycles\n", end - start);
     // error = ads_client_clone(&ads_conn_clone1, &env->vka,  (void *) 0x10001000, &ads_conn_clone2);
     test_error_eq(error, 0);
     

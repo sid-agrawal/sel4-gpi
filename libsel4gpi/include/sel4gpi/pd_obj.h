@@ -103,6 +103,9 @@ int pd_new(pd_t *pd,
 int pd_load_image(pd_t *pd,
                   const char *image_path);
 
+int pd_send_cap(pd_t *pd, 
+                seL4_CPtr cap, seL4_Word *slot);
+
 int pd_start(pd_t *pd, 
              vspace_t *vspace,
              seL4_Word arg0);

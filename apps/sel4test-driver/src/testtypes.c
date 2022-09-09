@@ -54,10 +54,10 @@ static seL4_SlotRegion copy_untypeds_to_process(sel4utils_process_t *process,
     seL4_SlotRegion range = {0};
 
     for (int i = 0; i < num_untypeds; i++) {
-        printf("DRIVER: Adding untyped to process: cap: %lu ut: %lu sz: %s\n ",
-               untypeds[i].cptr,
-               untypeds[i].ut,
-               human_readable_size(1ULL << untypeds[i].size_bits));
+        // printf("DRIVER: Adding untyped to process: cap: %lu ut: %lu sz: %s\n ",
+        //        untypeds[i].cptr,
+        //        untypeds[i].ut,
+        //        human_readable_size(1ULL << untypeds[i].size_bits));
         seL4_CPtr slot = sel4utils_copy_cap_to_process(process, &env->vka, untypeds[i].cptr);
 
         /* set up the cap range */

@@ -50,6 +50,17 @@ int pd_component_client_disconnect(pd_client_context_t *conn);
 int pd_client_load(pd_client_context_t *conn,
                    const char *image);
 
+
+/** 
+ * @brief Send a cap to PD and gets the slot number in the PD.
+ * 
+ * @param conn client connection object
+ * @param cap_to_send cap to send to the PD
+ * @param slot slot in the PD where the cap was installed
+ * @return int 0 on success, -1 on failure.
+ */
+int pd_client_send_cap(pd_client_context_t *conn, seL4_CPtr cap_to_send,
+                       seL4_Word *slot);
 /**
  * @brief Start the pd oject.
  * 

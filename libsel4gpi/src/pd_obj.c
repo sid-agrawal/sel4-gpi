@@ -123,6 +123,19 @@ int pd_new(pd_t *pd,
     assert(pd->free_slots.start < pd->free_slots.end);
 }
 
+int pd_send_cap(pd_t *pd, seL4_CPtr cap, seL4_Word * slot){
+
+    // Phase1: Start it.
+    // Phase2: start the CPU thread.
+    assert(cap != 0);
+
+    *slot = sel4utils_copy_cap_to_process(&(pd->proc), pd->vka, cap);
+    assert(*slot);
+    printf(PDSERVS"pd_send_cap: copied cap at %ld to child\n", *slot);
+
+    return 0;
+}
+
 int pd_load_image(pd_t *pd,
                   const char *image_path)
                   

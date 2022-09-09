@@ -37,7 +37,7 @@ int main(int argc, char **argv)
 
     seL4_Word msg = seL4_GetMR(0);
 
-    // printf("hello: got a reply: %lu\n", msg);
+    printf("hello: got a reply: %lx\n", msg);
 
     return 0;
 }

@@ -64,6 +64,20 @@ int pd_client_load(pd_client_context_t *conn,
     return 0;
 }
 
+int pd_client_send_cap(pd_client_context_t *conn, seL4_CPtr cap_to_send,
+                       seL4_Word *slot)
+{ 
+    seL4_SetMR(PDMSGREG_FUNC, PD_FUNC_SENDCAP_REQ);
+    seL4_SetCap(0, cap_to_send);
+    seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 1,
+                                                  PDMSGREG_START_REQ_END);
+    tag = seL4_Call(conn->badged_server_ep_cspath.capPtr, tag);
+    *slot = seL4_GetMR(PDMSGREG_SEND_CAP_PD_SLOT);
+    assert(seL4_MessageInfo_ptr_get_label(&tag) == 0);
+    assert(*slot != 0);
+    return 0;
+}
+
 int pd_client_start(pd_client_context_t *conn, seL4_Word arg0)
 { 
     seL4_SetMR(PDMSGREG_FUNC, PD_FUNC_START_REQ);
