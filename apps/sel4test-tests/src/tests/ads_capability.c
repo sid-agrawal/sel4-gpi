@@ -121,7 +121,6 @@ int test_ads_clone(env_t env)
 // DEFINE_TEST(GPIADS001, "Ensure that as clone works", test_ads_clone, true)
 
 
-static volatile uint64_t shared_var_ds = 1;
 vka_object_t ep_for_thread;
 
 void test_func_die(seL4_Word arg0, seL4_Word arg1, seL4_Word arg2) {
@@ -136,19 +135,19 @@ void test_func_die(seL4_Word arg0, seL4_Word arg1, seL4_Word arg2) {
 
     assert(ep_for_thread.cptr != 0);
     uint64_t shared_var_stack;
-    // printf("test_func_die: %p\n", &shared_var_stack);
+    printf("test_func_die: addr of var on this stack: %p\n", &shared_var_stack);
 
     // Send IPC back to main thread.
         /* set the data to send. We smains_epend it in the first message register */
-    seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0, 1);
-
-    printf("%s__sel4_ipc_buffer: %p\n", __FUNCTION__, __sel4_ipc_buffer); 
+    seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0, 2);
     seL4_SetMR(0, end);
+    seL4_SetMR(1, (seL4_Word) &shared_var_stack);
     tag = seL4_Call(ep_for_thread.cptr, tag);
 
-    seL4_Word msg = seL4_GetMR(0);
-    printf("new_thread: got a reply: %lu\n", msg);
-
+    int *msg = seL4_GetMR(0);
+    printf("new_thread: got a reply: %p\n", msg);
+    printf("Will try and write to it\n");
+    // *msg = 0xdeadbeef;
     while(1);
 }
     
@@ -181,7 +180,7 @@ int test_ads_stack_isolated_stack_die(env_t env)
     error = ads_client_clone(&conn, &env->vka,  (void *) 0x10001000, &ads_conn_clone1);
     test_error_eq(error, 0);
     
-    // Attach a new stack
+    // TODO: Attach a new stack, this is done inside clinet_config for now.
     // stack_cap
     // ads_client_attach()
     // Attach a new stack
@@ -220,7 +219,7 @@ int test_ads_stack_isolated_stack_die(env_t env)
     seL4_Word msg;
 
     tag = seL4_Recv(ep_for_thread.cptr, NULL);
-    ZF_LOGF_IF(seL4_MessageInfo_get_length(tag) != 1,
+    ZF_LOGF_IF(seL4_MessageInfo_get_length(tag) != 2,
                "Response data from the new process was not the length expected.\n"
                "\tHow many registers did you set with seL4_SetMR within the new process?\n");
 
@@ -230,14 +229,20 @@ int test_ads_stack_isolated_stack_die(env_t env)
     printf("root-task: \tStart: %010ld\n\t, End: %ld\n\t, Diff: %ld\n",
            start, end, end - start);
 
+    uint64_t *other_thread_stack = (uintptr_t*)seL4_GetMR(1);
+    printf("root-task: \t Writing to Other thread's stack: %p\n", other_thread_stack);
+   // *other_thread_stack = 5;
     /* modify the message */
-    seL4_SetMR(0, ~msg);
+    seL4_Word main_thread_stack = 5;
+    seL4_SetMR(0, (seL4_Word) &main_thread_stack);
+    seL4_ReplyRecv(ep_for_thread.cptr, tag, NULL);
     
 
     // printf("%d: main_thread: shared_var(%p) = %d\n", __LINE__, &shared_var_stack, shared_var_stack);
     
 
     // Send a message to the thread.
+    seL4_DebugDumpScheduler();
 
     return sel4test_get_result();
 }
