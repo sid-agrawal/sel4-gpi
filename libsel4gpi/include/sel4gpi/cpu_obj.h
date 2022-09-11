@@ -17,6 +17,9 @@ typedef struct _cpu {
     sel4utils_thread_config_t thread_config;
     sel4utils_thread_t thread_obj;
     uint64_t cpu_obj_id;
+    vka_object_t tcb;
+    void *stack_top;
+    void *ipc_buffer_addr;
 }cpu_t;
 
 /**
@@ -26,7 +29,8 @@ typedef struct _cpu {
  * @return int 0 on success, -1 on failure.
  */
 int cpu_start(cpu_t *cpu,
-              sel4utils_thread_entry_fn entry_point);
+              sel4utils_thread_entry_fn entry_point,
+              seL4_Word arg0);
 
 /**
  * @brief Config the cpu object
@@ -35,4 +39,10 @@ int cpu_start(cpu_t *cpu,
  * @param vspace vspace i.e. root PT cap
  * @return int 0 on success, -1 on failure.
  */
-int cpu_config_vspace(cpu_t *cpu,  vka_t *vka, vspace_t *vspace, seL4_CNode cspace);
+int cpu_config_vspace(cpu_t *cpu,
+                      vka_t *vka,
+                      vspace_t *vspace,
+                      seL4_CNode cspace,
+                      seL4_CPtr fault_ep,
+                      void *stack_top,
+                      void *ipc_buff);
