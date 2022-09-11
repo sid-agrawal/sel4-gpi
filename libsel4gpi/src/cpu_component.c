@@ -30,6 +30,7 @@
 #include <sel4gpi/ads_clientapi.h>
 #include <sel4gpi/gpi_server.h>
 #include <sel4gpi/badge_usage.h>
+#include <sel4gpi/debug.h>
 
 uint64_t cpu_assign_new_badge_and_objectID(cpu_component_registry_entry_t *reg) {
     get_cpu_component()->registry_n_entries++;
@@ -41,7 +42,7 @@ uint64_t cpu_assign_new_badge_and_objectID(cpu_component_registry_entry_t *reg) 
 
     assert(badge_val != 0);
     reg->cpu.cpu_obj_id = get_cpu_component()->registry_n_entries;
-    printf("cpu_assign_new_badge_and_objectID: new badge: %lx\n", badge_val);
+    OSDB_PRINTF("cpu_assign_new_badge_and_objectID: new badge: %lx\n", badge_val);
     return badge_val;
 }
 cpu_component_context_t *get_cpu_component(void)
@@ -114,13 +115,13 @@ static cpu_component_registry_entry_t *cpu_component_registry_get_entry_by_badge
 // (XXX): Somwehere here we should call cpu_new
 void cpu_handle_allocation_request(seL4_MessageInfo_t *reply_tag)
 {
-    printf(CPUSERVS "main: Got connect request\n");
+    OSDB_PRINTF(CPUSERVS "main: Got connect request\n");
 
     /* Allocate a new registry entry for the client. */
     cpu_component_registry_entry_t *client_reg_ptr = malloc(sizeof(cpu_component_registry_entry_t));
     if (client_reg_ptr == 0)
     {
-        printf(CPUSERVS "main: Failed to allocate new badge for client.\n");
+        OSDB_PRINTF(CPUSERVS "main: Failed to allocate new badge for client.\n");
         return;
     }
     memset((void *)client_reg_ptr, 0, sizeof(cpu_component_registry_entry_t));
@@ -144,7 +145,7 @@ void cpu_handle_allocation_request(seL4_MessageInfo_t *reply_tag)
                                badge);
     if (error)
     {
-        printf(CPUSERVS "main: Failed to mint client badge %lx.\n", badge);
+        OSDB_PRINTF(CPUSERVS "main: Failed to mint client badge %lx.\n", badge);
         return;
     }
     /* Return this badged end point in the return message. */
@@ -155,7 +156,7 @@ void cpu_handle_allocation_request(seL4_MessageInfo_t *reply_tag)
 
 static void handle_start_req(seL4_Word sender_badge, seL4_MessageInfo_t old_tag, seL4_CPtr received_cap)
 {
-    printf(CPUSERVS "main: Got start request from client badge %x.\n",
+    OSDB_PRINTF(CPUSERVS "main: Got start request from client badge %x.\n",
            sender_badge);
 
     int error;
@@ -163,21 +164,21 @@ static void handle_start_req(seL4_Word sender_badge, seL4_MessageInfo_t old_tag,
     cpu_component_registry_entry_t *client_data = cpu_component_registry_get_entry_by_badge(sender_badge);
     if (client_data == NULL)
     {
-        printf(CPUSERVS "main: Failed to find client badge %x.\n",
+        OSDB_PRINTF(CPUSERVS "main: Failed to find client badge %x.\n",
                sender_badge);
         return;
     }
-    printf(CPUSERVS "main: found client_data %x.\n", client_data);
+    OSDB_PRINTF(CPUSERVS "main: found client_data %x.\n", client_data);
     for (int i = 0; i < 5; i++)
     {
-        printf(CPUSERVS "MR[%d] = %lx\n", i, seL4_GetMR(i));
+        OSDB_PRINTF(CPUSERVS "MR[%d] = %lx\n", i, seL4_GetMR(i));
     }
 
     error = cpu_start(&client_data->cpu,
                       (sel4utils_thread_entry_fn)seL4_GetMR(1), // entry poin:2ut
                       0);
     if (error) {
-        printf(CPUSERVS "main: Failed to start CPU.\n");
+        OSDB_PRINTF(CPUSERVS "main: Failed to start CPU.\n");
         return;
     }
 
@@ -193,11 +194,11 @@ static void handle_config_req(seL4_Word sender_badge,
                               seL4_CPtr received_cap)
 {
     // Find the client - like start
-    printf(CPUSERVS "-----main: Got config  request from:");
+    OSDB_PRINTF(CPUSERVS "-----main: Got config  request from:");
     badge_print(sender_badge);
 
-    printf(CPUSERVS " received_cap: ");
-    debug_cap_identify("", received_cap);
+    OSDB_PRINTF(CPUSERVS " received_cap: ");
+    // debug_cap_identify("", received_cap);
 
     assert(seL4_MessageInfo_get_extraCaps(old_tag) == 2);
     assert(seL4_MessageInfo_ptr_get_capsUnwrapped(&old_tag) == 1);
@@ -205,18 +206,18 @@ static void handle_config_req(seL4_Word sender_badge,
 
     int error = 0;
 
-    printf(CPUSERVS "capsUnwrapped: %d\n", seL4_MessageInfo_get_capsUnwrapped(old_tag));
-    printf(CPUSERVS "extraCap: %d\n", seL4_MessageInfo_ptr_get_extraCaps(&old_tag));
+    OSDB_PRINTF(CPUSERVS "capsUnwrapped: %d\n", seL4_MessageInfo_get_capsUnwrapped(old_tag));
+    OSDB_PRINTF(CPUSERVS "extraCap: %d\n", seL4_MessageInfo_ptr_get_extraCaps(&old_tag));
     for (int i = 0; i < 5; i++)
     {
-        printf(CPUSERVS "MR[%d] = %lx\n", i, seL4_GetBadge(i));
+        OSDB_PRINTF(CPUSERVS "MR[%d] = %lx\n", i, seL4_GetBadge(i));
     }
 
     /* Find the client */
     cpu_component_registry_entry_t *client_data = cpu_component_registry_get_entry_by_badge(sender_badge);
     if (client_data == NULL)
     {
-        printf(CPUSERVS "main: Failed to find client badge %x.\n",
+        OSDB_PRINTF(CPUSERVS "main: Failed to find client badge %x.\n",
                sender_badge);
         assert(0);
         return;
@@ -231,12 +232,12 @@ static void handle_config_req(seL4_Word sender_badge,
     ads_component_registry_entry_t *asre = ads_component_registry_get_entry_by_badge(ads_cap_badge);
     if (asre == NULL)
     {
-        printf(CPUSERVS "main: Failed to find ads badge %x.\n", ads_cap_badge);
+        OSDB_PRINTF(CPUSERVS "main: Failed to find ads badge %x.\n", ads_cap_badge);
         assert(0);
         return;
     }
 
-    printf(CPUSERVS "Found ads_data with object ID: %x.\n", asre->ads.ads_obj_id);
+    OSDB_PRINTF(CPUSERVS "Found ads_data with object ID: %x.\n", asre->ads.ads_obj_id);
     // /* Get the vspace for the ads */
     vspace_t *ads_vspace = asre->ads.vspace;
 
@@ -248,12 +249,12 @@ static void handle_config_req(seL4_Word sender_badge,
                               fault_ep);
     if (error)
     {
-        printf(CPUSERVS "main: Failed to config from client badge:");
+        OSDB_PRINTF(CPUSERVS "main: Failed to config from client badge:");
         badge_print(sender_badge);
         assert(0);
         return;
     }
-    printf(CPUSERVS "main: config done.\n");
+    OSDB_PRINTF(CPUSERVS "main: config done.\n");
 
     seL4_SetMR(CPUMSGREG_FUNC, CPU_FUNC_CONFIG_ACK);
     seL4_SetMR(1, 0xdead);

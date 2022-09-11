@@ -56,15 +56,11 @@ int test_new_process_osmosis(env_t env)
     seL4_Word sender_badge = 0;
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0, 0);
     tag = seL4_Recv(ep_object.cptr, NULL);
-    ccnt_t end = seL4_GetMR(0);
-
-
-    printf("root-task: Time to start process: %lu\n", end - start);
 
     /* modify the message */
-    seL4_SetMR(0, 0xdeadbeef);
-    printf("------------------ENDING: %s------------------\n", __func__);
+    seL4_SetMR(0, start);
     seL4_ReplyRecv(ep_object.cptr, tag, NULL);
+    printf("------------------ENDING: %s------------------\n", __func__);
     return sel4test_get_result();
 }
 DEFINE_TEST(GPIPD001, "OSMO: Ensure that as new process works", test_new_process_osmosis, true)

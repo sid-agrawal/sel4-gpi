@@ -13,6 +13,7 @@
 
 #include<sel4gpi/ads_clientapi.h>
 #include<sel4gpi/cpu_clientapi.h>
+#include<sel4gpi/debug.h>
 
 #include <sel4bench/arch/sel4bench.h>
 
@@ -21,22 +22,12 @@ vka_object_t ep_for_thread_normal;
 
 void test_func(seL4_Word arg0, seL4_Word arg1, seL4_Word arg2) {
 
-    // size_t tls_size = sel4runtime_get_tls_size();
-    // seL4_Word initial_sp = arg0;
-    // seL4_Word ipc_buffer_addr = arg1; 
-    // uintptr_t tls_base = (uintptr_t)arg0 - tls_size;
-    // uintptr_t tp = (uintptr_t)sel4runtime_write_tls_image((void *)tls_base);
-    printf("Hello from test_func: ipc_buffer_add %p\n", arg0);
-    //sel4runtime_set_tls_variable(tp, __sel4_ipc_buffer, arg0);
+    ccnt_t ctx_start, ctx_end;
+    ccnt_t creation_start, creation_end;
+    SEL4BENCH_READ_CCNT(creation_end);
+
     seL4_SetIPCBuffer((seL4_IPCBuffer *)arg0);
-    // error = seL4_TCB_SetTLSBase(env->tcb.cptr, tp);
-    
-    // printf("%s__sel4_ipc_buffer: %p\n", __FUNCTION__, __sel4_ipc_buffer); 
-
-
-    ccnt_t end;
-    SEL4BENCH_READ_CCNT(end);
-
+    OSDB_PRINTF("Hello from test_func: ipc_buffer_add %p\n", arg0);
     assert(ep_for_thread_normal.cptr != 0);
     uint64_t shared_var_stack;
 
@@ -44,18 +35,21 @@ void test_func(seL4_Word arg0, seL4_Word arg1, seL4_Word arg2) {
         /* set the data to send. We smains_epend it in the first message register */
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0, 1);
 
-    seL4_SetMR(0, end);
-    tag = seL4_Call(ep_for_thread_normal.cptr, tag);
 
-    seL4_Word msg = seL4_GetMR(0);
-    printf("new_thread: got a reply: %lu\n", msg);
+    SEL4BENCH_READ_CCNT(ctx_start);
+    tag = seL4_Call(ep_for_thread_normal.cptr, tag);
+    SEL4BENCH_READ_CCNT(ctx_end);
+    creation_start = seL4_GetMR(0);
+    printf("test-func: Creationg Time : %lu cycles\n", creation_end - creation_start);
+    printf("test-func: Same AS IPC RTT: %lu cycles\n", ctx_end - ctx_start);
 
     while(1);
 }
     
 
-int test_cpu_normal_therad(env_t env)
+int test_cpu_normal_thread(env_t env)
 {
+    printf("------------ STARTING TEST: %s ------------\n", __FUNCTION__);
     int error;
     cspacepath_t path;
     vka_cspace_make_path(&env->vka, env->self_ads_cptr, &path);
@@ -90,36 +84,27 @@ int test_cpu_normal_therad(env_t env)
     test_error_eq(error, 0);
 
     // Start it.
-    printf("ADDRESS OF FUNC: %p\n", test_func);
-    // Add args.
+    // (XXX)dd args.
     error = cpu_client_start(&cpu_conn, (sel4utils_thread_entry_fn)test_func);
     test_error_eq(error, 0);
 
-    printf("%d: main_thread: shared_var(%p) = %ld\n", __LINE__, &shared_var_stack, shared_var_stack);
-        
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0, 0);
     seL4_Word msg;
 
     tag = seL4_Recv(ep_for_thread_normal.cptr, NULL);
-    ZF_LOGF_IF(seL4_MessageInfo_get_length(tag) != 1,
-               "Response data from the new process was not the length expected.\n"
-               "\tHow many registers did you set with seL4_SetMR within the new process?\n");
+    assert(seL4_MessageInfo_get_length(tag) == 1);
 
 
-    /* get the message stored in the first message register */
-    ccnt_t   end = seL4_GetMR(0);
-    printf("root-task: \tStart: %010ld\n\t, End: %ld\n\t, Diff: %ld\n",
-           start, end, end - start);
-
-    /* modify the message */
-    seL4_SetMR(0, ~msg);
+    /* Send the start time as a reply */
+    seL4_SetMR(0, start);
+    seL4_ReplyRecv(ep_for_thread_normal.cptr, tag, NULL);
     
+    printf("------------ ENDING TEST: %s ------------\n", __FUNCTION__);
 
-    printf("%d: main_thread: shared_var(%p) = %d\n", __LINE__, &shared_var_stack, shared_var_stack);
-    
+    // printf("%d: main_thread: shared_var(%p) = %d\n", __LINE__, &shared_var_stack, shared_var_stack);
 
     // Send a message to the thread.
 
     return sel4test_get_result();
 }
-DEFINE_TEST(GPICPU001, "Ensure that normal thread works", test_cpu_normal_therad, true)
+DEFINE_TEST(GPICPU001, "Ensure that normal thread works", test_cpu_normal_thread, true)

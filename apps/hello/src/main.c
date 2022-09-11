@@ -16,8 +16,9 @@ int main(int argc, char **argv)
 {
 //    sel4muslcsys_register_stdio_write_fn(write_buf);
 
-    ccnt_t start, end;
-    SEL4BENCH_READ_CCNT(end);
+    ccnt_t ctx_start, ctx_end;
+    ccnt_t creation_start, creation_end;
+    SEL4BENCH_READ_CCNT(creation_end);
 
     printf("Hello: arg0: %s\n", argv[0]);
 
@@ -27,17 +28,16 @@ int main(int argc, char **argv)
 
     /* set the data to send. We send it in the first message register */
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0, 1);
-    seL4_SetMR(0, end);
     seL4_CPtr ep = (seL4_CPtr) atol(argv[0]);
 
-    SEL4BENCH_READ_CCNT(start);
+    SEL4BENCH_READ_CCNT(ctx_start);
     tag = seL4_Call(ep, tag);
-    SEL4BENCH_READ_CCNT(end);
+    SEL4BENCH_READ_CCNT(ctx_end);
 
-    seL4_Word msg = seL4_GetMR(0);
+    creation_start = seL4_GetMR(0);
 
-    printf("hello: got a reply: %lx\n", msg);
-    printf("hello: Cross AS IPC RTT: %lu cycles\n", end - start);
+    printf("hello: Creationg Time : %lu cycles\n", creation_end - creation_start);
+    printf("hello: Cross AS IPC RTT: %lu cycles\n", ctx_end - ctx_start);
 
     return 0;
 }

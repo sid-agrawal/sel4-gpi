@@ -11,17 +11,18 @@
 
 #include <sel4utils/process.h>
 #include <sel4utils/vspace.h>
-
-#include <sel4gpi/cpu_component.h>
-#include <sel4gpi/cpu_obj.h>
 #include <sel4utils/util.h>
 #include <sel4utils/helpers.h>
 
+#include <sel4gpi/cpu_component.h>
+#include <sel4gpi/cpu_obj.h>
+#include <sel4gpi/debug.h>
+
 int cpu_start(cpu_t *cpu, sel4utils_thread_entry_fn entry_point, seL4_Word arg0){
 
-    printf(CPUSERVS"cpu_start: starting CPU at entry point %p and arg0 %lx\n", entry_point, arg0);
+    OSDB_PRINTF(CPUSERVS "cpu_start: starting CPU at entry point %p and arg0 %lx\n", entry_point, arg0);
 
-   UNUSED seL4_UserContext regs = {0};
+    UNUSED seL4_UserContext regs = {0};
     int error = seL4_TCB_ReadRegisters(cpu->tcb.cptr,
                                        0, 0, sizeof(regs) / sizeof(seL4_Word), &regs);
     assert(error == 0);
@@ -46,7 +47,7 @@ int cpu_config_vspace(cpu_t *cpu,
                       seL4_CNode root_cnode,
                       seL4_CPtr fault_ep)
 {
-    printf(CPUSERVS"cpu_config_vspace: Configuring CPU\n");
+    OSDB_PRINTF(CPUSERVS"cpu_config_vspace: Configuring CPU\n");
 
     int error = vka_alloc_tcb(vka, &cpu->tcb);
     assert(error == 0);
@@ -56,9 +57,9 @@ int cpu_config_vspace(cpu_t *cpu,
     
     cpu->ipc_buffer_addr =  vspace_new_ipc_buffer(vspace, &cpu->ipc_buffer_frame);
     assert(cpu->ipc_buffer_addr != NULL);
-    printf(CPUSERVS"%s: line %d\n", __func__, __LINE__);
+    OSDB_PRINTF(CPUSERVS"%s: line %d\n", __func__, __LINE__);
 
-    printf(CPUSERVS"%s: %d\n", __func__, __LINE__);
+    OSDB_PRINTF(CPUSERVS"%s: %d\n", __func__, __LINE__);
     cpu->stack_top = vspace_new_sized_stack(vspace, 8);
     assert(cpu->stack_top != NULL);
 

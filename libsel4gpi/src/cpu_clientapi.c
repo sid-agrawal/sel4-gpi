@@ -12,6 +12,7 @@
 #include<sel4gpi/cpu_clientapi.h>
 #include<sel4gpi/ads_clientapi.h>
 #include<sel4gpi/badge_usage.h>
+#include<sel4gpi/debug.h>
 
 int cpu_component_client_connect(seL4_CPtr server_ep_cap,
                               vka_t *client_vka,
@@ -30,10 +31,10 @@ int cpu_component_client_connect(seL4_CPtr server_ep_cap,
         /* depth */         path.capDepth
     );
     
-    printf(CPUSERVC"%s %d cpu_endpoint is %d:__ \n", __FUNCTION__, __LINE__, server_ep_cap);
-    debug_cap_identify(CPUSERVC, server_ep_cap);
+    OSDB_PRINTF(CPUSERVC"%s %d cpu_endpoint is %d:__ \n", __FUNCTION__, __LINE__, server_ep_cap);
+    // debug_cap_identify(CPUSERVC, server_ep_cap);
 
-    printf(CPUSERVC"Set a receive path for the badged ep: %d\n", path.capPtr);
+    OSDB_PRINTF(CPUSERVC"Set a receive path for the badged ep: %d\n", path.capPtr);
     /* Set request type */
     seL4_SetMR(0, GPICAP_TYPE_CPU);
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0, 1);
@@ -43,8 +44,8 @@ int cpu_component_client_connect(seL4_CPtr server_ep_cap,
 
     ret_conn->badged_server_ep_cspath = path;;
 
-    printf(CPUSERVC"received badged endpoint and it was kept in %d:__\n", path.capPtr);
-    debug_cap_identify(CPUSERVC, path.capPtr);
+    OSDB_PRINTF(CPUSERVC"received badged endpoint and it was kept in %d:__\n", path.capPtr);
+    // debug_cap_identify(CPUSERVC, path.capPtr);
     return 0;
 }
 
