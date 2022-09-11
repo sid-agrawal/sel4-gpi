@@ -18,19 +18,22 @@
 
 
 vka_object_t ep_for_thread_normal;
+static char stack_top[4096] __attribute__ ((aligned (16)));
+static char ipc_buf[4096] __attribute__ ((aligned (4096)));
 
 void test_func(seL4_Word arg0, seL4_Word arg1, seL4_Word arg2) {
 
-    size_t tls_size = sel4runtime_get_tls_size();
-    seL4_Word initial_sp = arg0;
-    seL4_Word ipc_buffer_addr = arg1; 
-    uintptr_t tls_base = (uintptr_t)arg0 - tls_size;
-    uintptr_t tp = (uintptr_t)sel4runtime_write_tls_image((void *)tls_base);
-    sel4runtime_set_tls_variable(tp, __sel4_ipc_buffer, ipc_buffer_addr);
-    error = seL4_TCB_SetTLSBase(env->tcb.cptr, tp);
+    // size_t tls_size = sel4runtime_get_tls_size();
+    // seL4_Word initial_sp = arg0;
+    // seL4_Word ipc_buffer_addr = arg1; 
+    // uintptr_t tls_base = (uintptr_t)arg0 - tls_size;
+    // uintptr_t tp = (uintptr_t)sel4runtime_write_tls_image((void *)tls_base);
+    printf("Hello from test_func: ipc_buffer_add %p\n", arg0);
+    //sel4runtime_set_tls_variable(tp, __sel4_ipc_buffer, arg0);
+    seL4_SetIPCBuffer((seL4_IPCBuffer *)arg0);
+    // error = seL4_TCB_SetTLSBase(env->tcb.cptr, tp);
     
-    printf("Hello from test_func\n");
-    printf("%s__sel4_ipc_buffer: %p\n", __FUNCTION__, __sel4_ipc_buffer); 
+    // printf("%s__sel4_ipc_buffer: %p\n", __FUNCTION__, __sel4_ipc_buffer); 
 
 
     ccnt_t end;
@@ -85,7 +88,9 @@ int test_cpu_normal_therad(env_t env)
     error = cpu_client_config(&cpu_conn,
                               &ads_conn,
                               env->cspace_root,
-                              env->endpoint); // Fault EP
+                              env->endpoint,// Fault EP
+                              (void *) stack_top,
+                              (void *) ipc_buf); 
     test_error_eq(error, 0);
 
     // Start it.

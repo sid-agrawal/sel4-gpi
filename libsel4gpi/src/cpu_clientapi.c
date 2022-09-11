@@ -51,10 +51,14 @@ int cpu_component_client_connect(seL4_CPtr server_ep_cap,
 int cpu_client_config(cpu_client_context_t *conn,
                       ads_client_context_t *ads_conn,
                       seL4_CPtr cspace_root,
-                      seL4_CPtr fault_ep_position)
+                      seL4_CPtr fault_ep_position,
+                      void *stack_top,
+                      void *ipc_buff)
 { 
     seL4_SetMR(CPUMSGREG_FUNC, CPU_FUNC_CONFIG_REQ);
     seL4_SetMR(CPUMSGREG_CONFIG_FAULT_EP, fault_ep_position);
+    seL4_SetMR(CPUMSGREG_CONFIG_STACK_TOP, (seL4_Word)stack_top);
+    seL4_SetMR(CPUMSGREG_CONFIG_IPC_BUFF, (seL4_Word)ipc_buff);
 
     /* Send the badged endpoint cap of the ads client as a cap */
     seL4_SetCap(0, ads_conn->badged_server_ep_cspath.capPtr); /*vspace*/

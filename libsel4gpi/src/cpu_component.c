@@ -111,6 +111,7 @@ static cpu_component_registry_entry_t *cpu_component_registry_get_entry_by_badge
     return current_ctx;
 }
 
+// (XXX): Somwehere here we should call cpu_new
 void cpu_handle_allocation_request(seL4_MessageInfo_t *reply_tag)
 {
     printf(CPUSERVS "main: Got connect request\n");
@@ -222,6 +223,9 @@ static void handle_config_req(seL4_Word sender_badge,
 
     /* Get Fault EP */
     seL4_CPtr fault_ep = seL4_GetMR(CPUMSGREG_CONFIG_FAULT_EP);
+    void *stack_top = seL4_GetMR(CPUMSGREG_CONFIG_STACK_TOP);
+    void *ipc_buff = seL4_GetMR(CPUMSGREG_CONFIG_IPC_BUFF);
+
     /* Get the vspace for the ads */
     seL4_Word ads_cap_badge = seL4_GetBadge(0);
     ads_t ads;
@@ -242,7 +246,9 @@ static void handle_config_req(seL4_Word sender_badge,
                               get_cpu_component()->server_vka,
                               ads_vspace,
                               cspace_root,
-                              fault_ep);
+                              fault_ep,
+                              stack_top,
+                              ipc_buff);
     if (error)
     {
         printf(CPUSERVS "main: Failed to config from client badge:");

@@ -73,6 +73,8 @@ static inline timestamp_t timestamp_sid(void)
 }
 #endif
 
+static char stack_top[4096] __attribute__ ((aligned (16)));
+static char ipc_buff[4096] __attribute__ ((aligned (4096)));
 int test_ads_clone(env_t env)
 {
     int error;
@@ -127,7 +129,7 @@ vka_object_t ep_for_thread;
 void test_func_die(seL4_Word arg0, seL4_Word arg1, seL4_Word arg2) {
     
     // This is nasty hack to get the IPC buffers address for the thread.
-    seL4_SetIPCBuffer((seL4_IPCBuffer *)arg2);
+    seL4_SetIPCBuffer((seL4_IPCBuffer *)arg0);
     
 
 
@@ -197,7 +199,9 @@ int test_ads_stack_isolated_stack_die(env_t env)
     error = cpu_client_config(&cpu_conn,
                               &ads_conn_clone1,
                               env->cspace_root,
-                              env->endpoint);
+                              env->endpoint,
+                              stack_top,
+                              ipc_buff);
     test_error_eq(error, 0);
 
     // Start it.
