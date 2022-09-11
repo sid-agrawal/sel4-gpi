@@ -24,6 +24,7 @@
 #include <sel4gpi/ads_component.h>
 #include <sel4gpi/cpu_component.h>
 #include <sel4gpi/badge_usage.h>
+#include <sel4gpi/debug.h>
 
 static gpi_server_context_t gpi_server;
 
@@ -179,12 +180,12 @@ gpi_server_parent_spawn_thread(simple_t *parent_simple, vka_t *parent_vka,
         goto out;
     }
 
-    printf(GPISERVP"spawn_thread: Server thread binded well. at public EP %d\n",
+    OSDB_PRINTF(GPISERVP"spawn_thread: Server thread binded well. at public EP %d\n",
            get_gpi_server()->server_ep_obj.cptr);
     return 0;
 
 out:
-    printf("spawn_thread: Server ran into an error.\n");
+    OSDB_PRINTF("spawn_thread: Server ran into an error.\n");
     if (get_gpi_server()->_badged_server_ep_cspath.capPtr != 0) {
         vka_cspace_free_path(parent_vka, get_gpi_server()->_badged_server_ep_cspath);
     }
@@ -200,7 +201,7 @@ void handle_untyped_request(seL4_MessageInfo_t tag,
 {
 
     gpi_cap_t req_cap_type = seL4_GetMR(0);
-    printf(GPISERVS"handle_untyped_request: Got request for cap type %d\n",
+    OSDB_PRINTF(GPISERVS"handle_untyped_request: Got request for cap type %d\n",
            req_cap_type);    
 
     switch (req_cap_type)
@@ -251,14 +252,14 @@ void gpi_server_main()
      * that is possible).
      */
 
-    printf(GPISERVS"gpi_server_main: Got a call from the parent.\n");
+    OSDB_PRINTF(GPISERVS"gpi_server_main: Got a call from the parent.\n");
     if (error != 0)
     {
         seL4_TCB_Suspend(get_gpi_server()->server_thread.tcb.cptr);
     }
 
 
-    printf(GPISERVS"main: Entering main loop and accepting requests.\n");
+    OSDB_PRINTF(GPISERVS"main: Entering main loop and accepting requests.\n");
     
     while (1)
     {
@@ -278,15 +279,15 @@ void gpi_server_main()
 
         seL4_MessageInfo_t reply_tag;
         if (sender_badge == 0) { /* Handle Typed Request */
-            printf(GPISERVS "Got message on EP with no-BADGE_VALUE\n");
+            OSDB_PRINTF(GPISERVS "Got message on EP with no-BADGE_VALUE\n");
             handle_untyped_request(tag,
                                    &received_cap_path,
                                    &reply_tag); /*unused*/
         } else { /* Handle Typed Request */
             gpi_cap_t cap_type = get_cap_type_from_badge(sender_badge);
-            printf(GPISERVS "Got message on EP with ");
+            OSDB_PRINTF(GPISERVS "Got message on EP with ");
             badge_print(sender_badge);
-            printf("\n");
+            OSDB_PRINTF("\n");
 
             switch (cap_type)
             {

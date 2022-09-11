@@ -10,6 +10,7 @@
  */
 
 #include <sel4gpi/badge_usage.h>
+#include <sel4gpi/debug.h>
 #include <assert.h>
 #include <stdio.h>
 
@@ -112,11 +113,11 @@ char *cap_type_to_str(gpi_cap_t cap_type)
 
 void badge_print(seL4_Word badge)
 {
-    printf("BG: %lx\t", badge);
-    printf("CapType: %s\t", cap_type_to_str(get_cap_type_from_badge(badge)));
-    printf("Perms: %u\t", get_perms_from_badge(badge));
-    printf("CID: %u\t", get_client_id_from_badge(badge));
-    printf("OID: %u\n", get_object_id_from_badge(badge));
+    OSDB_PRINTF("BG: %lx\t", badge);
+    OSDB_PRINTF("CapType: %s\t", cap_type_to_str(get_cap_type_from_badge(badge)));
+    OSDB_PRINTF("Perms: %u\t", get_perms_from_badge(badge));
+    OSDB_PRINTF("CID: %u\t", get_client_id_from_badge(badge));
+    OSDB_PRINTF("OID: %u\n", get_object_id_from_badge(badge));
 }
 
 

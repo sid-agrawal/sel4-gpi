@@ -7,6 +7,8 @@
 #include <sel4test/test.h>
 #include <sel4test/macros.h>
 #include <sel4gpi/pd_obj.h>
+#include <sel4gpi/debug.h>
+
 #include <sel4utils/thread.h>
 #include "../test.h"
 #include "../helpers.h"
@@ -18,8 +20,8 @@
 int test_new_process_osmosis(env_t env)
 {
     int error;
+    printf("------------------STARTING: %s------------------\n", __func__);
 
-    
     sel4bench_init();
     // Make new PD i.e. CSspace
     ccnt_t start;
@@ -53,24 +55,16 @@ int test_new_process_osmosis(env_t env)
     // Wait for it to finish.
     seL4_Word sender_badge = 0;
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0, 0);
-    seL4_Word msg;
-
     tag = seL4_Recv(ep_object.cptr, NULL);
-   /* make sure it is what we expected */
-
-
-    /* get the message stored in the first message register */
     ccnt_t end = seL4_GetMR(0);
-    printf("root-task: \tStart: %010ld\n\t, End: %ld\n\t, Diff: %ld\n",
-           start, end, end - start);
+
+
+    printf("root-task: Time to start process: %lu\n", end - start);
 
     /* modify the message */
     seL4_SetMR(0, 0xdeadbeef);
-
-    
-    
+    printf("------------------ENDING: %s------------------\n", __func__);
     seL4_ReplyRecv(ep_object.cptr, tag, NULL);
-
     return sel4test_get_result();
 }
 DEFINE_TEST(GPIPD001, "OSMO: Ensure that as new process works", test_new_process_osmosis, true)

@@ -14,6 +14,7 @@
 
 #include <sel4gpi/pd_component.h>
 #include <sel4gpi/pd_obj.h>
+#include <sel4gpi/debug.h>
 
 
 int pd_new(pd_t *pd,
@@ -22,7 +23,7 @@ int pd_new(pd_t *pd,
            simple_t *simple
 ){
 
-    printf(PDSERVS"new PD: \n");
+    OSDB_PRINTF(PDSERVS"new PD: \n");
 
 
     pd->vka = vka;
@@ -117,7 +118,7 @@ int pd_new(pd_t *pd,
     } else {
         //pd->free_slots.start = pd->gpi_endpoint_in_child + 1;
         pd->free_slots.start = pd->fault_endpoint + 1;
-        printf("%s:%d: free_slot.start %ld\n", __FUNCTION__, __LINE__, pd->free_slots.start);
+        OSDB_PRINTF("%s:%d: free_slot.start %ld\n", __FUNCTION__, __LINE__, pd->free_slots.start);
     }
     pd->free_slots.end = (1u << 17);
     assert(pd->free_slots.start < pd->free_slots.end);
@@ -131,7 +132,7 @@ int pd_send_cap(pd_t *pd, seL4_CPtr cap, seL4_Word * slot){
 
     *slot = sel4utils_copy_cap_to_process(&(pd->proc), pd->vka, cap);
     assert(*slot);
-    printf(PDSERVS"pd_send_cap: copied cap at %ld to child\n", *slot);
+    OSDB_PRINTF(PDSERVS"pd_send_cap: copied cap at %ld to child\n", *slot);
 
     return 0;
 }
@@ -141,8 +142,8 @@ int pd_load_image(pd_t *pd,
                   
 {
 
-    printf(PDSERVS"load_image: loading image for pd %p\n", pd);
-    // printf(PDSERVS"cspace info:");
+    OSDB_PRINTF(PDSERVS"load_image: loading image for pd %p\n", pd);
+    // OSDB_PRINTF(PDSERVS"cspace info:");
     // debug_cap_identify(PDSERVS, cspace);
     // seL4_CPtr fault_endpoint = seL4_CapNull;
     // pd->thread_config = thread_config_fault_endpoint(pd->thread_config, fault_endpoint);
@@ -176,6 +177,6 @@ int pd_start(pd_t *pd, vspace_t *server_vspace, seL4_Word arg0){
     int  error = sel4utils_spawn_process_v(&(pd->proc), pd->vka, server_vspace,
                                       argc, argv, 1);
     ZF_LOGF_IF(error != 0, "Failed to start test process!");
-    printf(PDSERVS"pd_start: starting PD\n");
+    OSDB_PRINTF(PDSERVS"pd_start: starting PD\n");
     return 0;
 }

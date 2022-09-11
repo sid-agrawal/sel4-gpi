@@ -26,10 +26,12 @@
 
 #include <sel4gpi/pd_clientapi.h>
 #include <sel4gpi/pd_component.h>
+#include <sel4gpi/pd_component.h>
 
 #include <sel4gpi/ads_clientapi.h>
 #include <sel4gpi/gpi_server.h>
 #include <sel4gpi/badge_usage.h>
+#include <sel4gpi/debug.h>
 
 uint64_t pd_assign_new_badge_and_objectID(pd_component_registry_entry_t *reg) {
     get_pd_component()->registry_n_entries++;
@@ -41,7 +43,7 @@ uint64_t pd_assign_new_badge_and_objectID(pd_component_registry_entry_t *reg) {
 
     assert(badge_val != 0);
     reg->pd.pd_obj_id = get_pd_component()->registry_n_entries;
-    printf("pd_assign_new_badge_and_objectID: new badge: %lx\n", badge_val);
+    OSDB_PRINTF("pd_assign_new_badge_and_objectID: new badge: %lx\n", badge_val);
     return badge_val;
 }
 
@@ -115,14 +117,14 @@ static pd_component_registry_entry_t *pd_component_registry_get_entry_by_badge(s
 
 void pd_handle_allocation_request(seL4_MessageInfo_t *reply_tag)
 {
-    printf(PDSERVS "main: Got connect request\n");
+    OSDB_PRINTF(PDSERVS "main: Got connect request\n");
 
     /* Allocate a new registry entry for the client. */
     pd_component_registry_entry_t *client_reg_ptr =
         malloc(sizeof(pd_component_registry_entry_t));
     if (client_reg_ptr == 0)
     {
-        printf(PDSERVS "main: Failed to allocate new badge for client.\n");
+        OSDB_PRINTF(PDSERVS "main: Failed to allocate new badge for client.\n");
         return;
     }
     memset((void *)client_reg_ptr, 0, sizeof(pd_component_registry_entry_t));
@@ -155,7 +157,7 @@ void pd_handle_allocation_request(seL4_MessageInfo_t *reply_tag)
                                badge);
     if (error)
     {
-        printf(PDSERVS "main: Failed to mint client badge %lx.\n", badge);
+        OSDB_PRINTF(PDSERVS "main: Failed to mint client badge %lx.\n", badge);
         return;
     }
     /* Return this badged end point in the return message. */
@@ -170,11 +172,11 @@ static void handle_load_req(seL4_Word sender_badge,
                               seL4_CPtr received_cap)
 {
     // Find the client - like start
-    printf(PDSERVS "-----main: Got pd-load request\n");
+    OSDB_PRINTF(PDSERVS "-----main: Got pd-load request\n");
     badge_print(sender_badge);
 
-    printf(PDSERVS " received_cap: ");
-    debug_cap_identify("", received_cap);
+    OSDB_PRINTF(PDSERVS " received_cap: ");
+    // debug_cap_identify("", received_cap);
 
     assert(seL4_MessageInfo_get_label(old_tag) == 0);
 
@@ -186,7 +188,7 @@ static void handle_load_req(seL4_Word sender_badge,
     pd_component_registry_entry_t *client_data = pd_component_registry_get_entry_by_badge(sender_badge);
     if (client_data == NULL)
     {
-        printf(PDSERVS "main: Failed to find client badge %x.\n",
+        OSDB_PRINTF(PDSERVS "main: Failed to find client badge %x.\n",
                sender_badge);
         assert(0);
         return;
@@ -198,12 +200,12 @@ static void handle_load_req(seL4_Word sender_badge,
                           "hello");
     if (error)
     {
-        printf(PDSERVS "main: Failed to config from client badge:");
+        OSDB_PRINTF(PDSERVS "main: Failed to config from client badge:");
         badge_print(sender_badge);
         assert(0);
         return;
     }
-    printf(PDSERVS "main: config done.\n");
+    OSDB_PRINTF(PDSERVS "main: config done.\n");
 
     seL4_SetMR(PDMSGREG_FUNC, PD_FUNC_LOAD_ACK);
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(error, 0, 0, PDMSGREG_LOAD_ACK_END);
@@ -212,12 +214,12 @@ static void handle_load_req(seL4_Word sender_badge,
 
 static void handle_send_cap_req(seL4_Word sender_badge, seL4_MessageInfo_t old_tag, seL4_CPtr received_cap)
 {
-    printf(PDSERVS "main: Got send-cap request from client badge %x.\n",
+    OSDB_PRINTF(PDSERVS "main: Got send-cap request from client badge %x.\n",
            sender_badge);
 
 
-    printf(PDSERVS " received_cap: ");
-    debug_cap_identify("", received_cap);
+    OSDB_PRINTF(PDSERVS " received_cap: ");
+    // debug_cap_identify("", received_cap);
 
     assert(seL4_MessageInfo_get_extraCaps(old_tag) == 1);
     assert(seL4_MessageInfo_get_label(old_tag) == 0);
@@ -226,7 +228,7 @@ static void handle_send_cap_req(seL4_Word sender_badge, seL4_MessageInfo_t old_t
     pd_component_registry_entry_t *client_data = pd_component_registry_get_entry_by_badge(sender_badge);
     if (client_data == NULL)
     {
-        printf(PDSERVS "main: Failed to find client badge %x.\n",
+        OSDB_PRINTF(PDSERVS "main: Failed to find client badge %x.\n",
                sender_badge);
         return;
     }
@@ -246,7 +248,7 @@ static void handle_send_cap_req(seL4_Word sender_badge, seL4_MessageInfo_t old_t
 
 static void handle_start_req(seL4_Word sender_badge, seL4_MessageInfo_t old_tag, seL4_CPtr received_cap)
 {
-    printf(PDSERVS "main: Got start request from client badge %x.\n",
+    OSDB_PRINTF(PDSERVS "main: Got start request from client badge %x.\n",
            sender_badge);
 
     int error;
@@ -256,19 +258,19 @@ static void handle_start_req(seL4_Word sender_badge, seL4_MessageInfo_t old_tag,
     pd_component_registry_entry_t *client_data = pd_component_registry_get_entry_by_badge(sender_badge);
     if (client_data == NULL)
     {
-        printf(PDSERVS "main: Failed to find client badge %x.\n",
+        OSDB_PRINTF(PDSERVS "main: Failed to find client badge %x.\n",
                sender_badge);
         return;
     }
-    printf(PDSERVS "main: found client_data %x.\n", client_data);
+    OSDB_PRINTF(PDSERVS "main: found client_data %x.\n", client_data);
     for (int i = 0; i < 5; i++)
     {
-        printf(PDSERVS "MR[%d] = %lx\n", i, seL4_GetMR(i));
+        OSDB_PRINTF(PDSERVS "MR[%d] = %lx\n", i, seL4_GetMR(i));
     }
 
     error = pd_start(&client_data->pd, get_pd_component()->server_vspace, arg0);
     if (error) {
-        printf(PDSERVS "main: Failed to start PD.\n");
+        OSDB_PRINTF(PDSERVS "main: Failed to start PD.\n");
         return;
     }
 
