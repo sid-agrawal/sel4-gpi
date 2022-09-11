@@ -146,10 +146,10 @@ void test_func_die(seL4_Word arg0, seL4_Word arg1, seL4_Word arg2) {
     seL4_SetMR(1, (seL4_Word) &shared_var_stack);
     tag = seL4_Call(ep_for_thread.cptr, tag);
 
-    int *msg = seL4_GetMR(0);
+    int *msg = (int *) seL4_GetMR(0);
     printf("new_thread: got a reply: %p\n", msg);
     printf("Will try and write to it\n");
-    // *msg = 0xdeadbeef;
+    //*msg = 0xdeadbeef;
     while(1);
 }
     
@@ -198,9 +198,7 @@ int test_ads_stack_isolated_stack_die(env_t env)
     error = cpu_client_config(&cpu_conn,
                               &ads_conn_clone1,
                               env->cspace_root,
-                              env->endpoint,
-                              stack_top,
-                              ipc_buff);
+                              env->endpoint);
     test_error_eq(error, 0);
 
     // Start it.

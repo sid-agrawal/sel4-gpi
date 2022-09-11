@@ -19,7 +19,9 @@ typedef struct _cpu {
     uint64_t cpu_obj_id;
     vka_object_t tcb;
     void *stack_top;
+    void *tls_base;
     void *ipc_buffer_addr;
+    seL4_CPtr ipc_buffer_frame;
 }cpu_t;
 
 /**
@@ -43,6 +45,4 @@ int cpu_config_vspace(cpu_t *cpu,
                       vka_t *vka,
                       vspace_t *vspace,
                       seL4_CNode cspace,
-                      seL4_CPtr fault_ep,
-                      void *stack_top,
-                      void *ipc_buff);
+                      seL4_CPtr fault_ep);

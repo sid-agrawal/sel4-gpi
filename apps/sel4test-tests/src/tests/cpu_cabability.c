@@ -18,8 +18,6 @@
 
 
 vka_object_t ep_for_thread_normal;
-static char stack_top[4096] __attribute__ ((aligned (16)));
-static char ipc_buf[4096] __attribute__ ((aligned (4096)));
 
 void test_func(seL4_Word arg0, seL4_Word arg1, seL4_Word arg2) {
 
@@ -88,9 +86,7 @@ int test_cpu_normal_therad(env_t env)
     error = cpu_client_config(&cpu_conn,
                               &ads_conn,
                               env->cspace_root,
-                              env->endpoint,// Fault EP
-                              (void *) stack_top,
-                              (void *) ipc_buf); 
+                              env->endpoint); // Fault EP
     test_error_eq(error, 0);
 
     // Start it.
