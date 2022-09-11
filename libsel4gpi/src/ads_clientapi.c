@@ -14,6 +14,7 @@
 
 #include<sel4gpi/ads_clientapi.h>
 #include<sel4gpi/badge_usage.h>
+#include<sel4gpi/debug.h>
 
 int ads_component_client_connect(seL4_CPtr server_ep_cap,
                               vka_t *client_vka,
@@ -32,10 +33,10 @@ int ads_component_client_connect(seL4_CPtr server_ep_cap,
         /* depth */         path.capDepth
     );
     
-    printf(ADSSERVC"gpi endpoint is %d:", server_ep_cap);
-    debug_cap_identify(ADSSERVC, server_ep_cap);
+    OSDB_PRINTF(ADSSERVC"gpi endpoint is %d:", server_ep_cap);
+    // debug_cap_identify(ADSSERVC, server_ep_cap);
 
-    printf(ADSSERVC"Set a receive path for the badged ep: %d\n", path.capPtr);
+    OSDB_PRINTF(ADSSERVC"Set a receive path for the badged ep: %d\n", path.capPtr);
 
     /* Set request type */
     seL4_SetMR(0, GPICAP_TYPE_ADS);
@@ -45,8 +46,8 @@ int ads_component_client_connect(seL4_CPtr server_ep_cap,
     assert(seL4_MessageInfo_get_extraCaps(tag) == 1);
 
     ret_conn->badged_server_ep_cspath = path;
-    printf(ADSSERVC"Received badged endpoint and it was kept in:");
-    debug_cap_identify(ADSSERVC, ret_conn->badged_server_ep_cspath.capPtr);
+    OSDB_PRINTF(ADSSERVC"Received badged endpoint and it was kept in:");
+    // debug_cap_identify(ADSSERVC, ret_conn->badged_server_ep_cspath.capPtr);
     return 0;
 }
 
@@ -61,7 +62,7 @@ int ads_client_attach(ads_client_context_t *conn, void* vaddr, size_t size, seL4
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 1,
                                                   ADSMSGREG_ATTACH_REQ_END);
 
-    printf(ADSSERVC "Sending attach request to server via EP: %d.\n",
+    OSDB_PRINTF(ADSSERVC "Sending attach request to server via EP: %d.\n",
            conn->badged_server_ep_cspath.capPtr);
     tag = seL4_Call(conn->badged_server_ep_cspath.capPtr, tag);
 
@@ -86,7 +87,7 @@ int ads_client_clone(ads_client_context_t *conn, vka_t* vka, void* omit_vaddr, a
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0,
                                                   ADSMSGREG_CLONE_REQ_END);
 
-    printf(ADSSERVC "Sending clone request to server via EP: %d.\n",
+    OSDB_PRINTF(ADSSERVC "Sending clone request to server via EP: %d.\n",
            conn->badged_server_ep_cspath.capPtr);
     tag = seL4_Call(conn->badged_server_ep_cspath.capPtr, tag);
     assert(seL4_MessageInfo_get_extraCaps(tag) == 1);

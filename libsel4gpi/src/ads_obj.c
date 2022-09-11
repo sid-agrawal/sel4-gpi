@@ -13,6 +13,7 @@
 
 #include <sel4gpi/ads_obj.h>
 #include <sel4gpi/ads_component.h>
+#include <sel4gpi/debug.h>
 
 int ads_attach(ads_t *ads, vka_t *vka, void* vaddr, size_t size, seL4_CPtr frame_cap, 
                /*sel4utils_process_t*/ vspace_t *process_cookie)
@@ -68,7 +69,7 @@ int ads_clone(vspace_t *loader, ads_t *ads, vka_t *vka, void* omit_vaddr, ads_t 
     assert(from != NULL);
     vspace_t *to = ret_ads->vspace;
 
-    // printf("Cloning vspace\n");
+    // OSDB_PRINTF("Cloning vspace\n");
     // printf("Old vspace details:\n");
     // sel4utils_walk_vspace(from, NULL);
 
@@ -118,13 +119,13 @@ int ads_clone(vspace_t *loader, ads_t *ads, vka_t *vka, void* omit_vaddr, ads_t 
     sel4utils_alloc_data_t *from_data = get_alloc_data(from);
     sel4utils_res_t *from_sel4_res = from_data->reservation_head;
 
-    printf("===========Start of interesting output================\n");
+    OSDB_PRINTF("===========Start of interesting output================\n");
 
     /* walk all the reservations */
     int num_pages;
     while (from_sel4_res != NULL)
     {
-        printf("Reservation: %p\n", from_sel4_res->start);
+        OSDB_PRINTF("Reservation: %p\n", from_sel4_res->start);
         // Reserver
         reservation_t new_res = sel4utils_reserve_range_at(to,
                                                            (void *)from_sel4_res->start,
@@ -134,7 +135,7 @@ int ads_clone(vspace_t *loader, ads_t *ads, vka_t *vka, void* omit_vaddr, ads_t 
         num_pages = (from_sel4_res->end - from_sel4_res->start) / PAGE_SIZE_4K;
         if (from_sel4_res->start == (uintptr_t)omit_vaddr)
         {
-            printf("Skipping the region, with start vaddr of %p\n", omit_vaddr);
+            OSDB_PRINTF("Skipping the region, with start vaddr of %p\n", omit_vaddr);
             from_sel4_res = from_sel4_res->next;
             continue;
         }
@@ -153,7 +154,7 @@ int ads_clone(vspace_t *loader, ads_t *ads, vka_t *vka, void* omit_vaddr, ads_t 
         // Move to next node.
         from_sel4_res = from_sel4_res->next;
     }
-    printf("New vspace details:\n");
+    OSDB_PRINTF("New vspace details:\n");
     // sel4utils_walk_vspace(to, NULL);
     // For each reservation: call share_mem_at_vaddr
     return 0;

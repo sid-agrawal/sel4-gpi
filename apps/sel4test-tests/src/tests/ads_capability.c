@@ -13,6 +13,7 @@
 
 #include<sel4gpi/ads_clientapi.h>
 #include<sel4gpi/cpu_clientapi.h>
+#include<sel4gpi/debug.h>
 
 #include <sel4bench/arch/sel4bench.h>
 
@@ -127,29 +128,32 @@ vka_object_t ep_for_thread;
 
 void test_func_die(seL4_Word arg0, seL4_Word arg1, seL4_Word arg2) {
     
+    ccnt_t ctx_start, ctx_end;
+    ccnt_t creation_start, creation_end;
+    sel4bench_init();
+    SEL4BENCH_READ_CCNT(creation_end);
+    printf("%s: END TIME: %lu\n", __func__, creation_end);
+
     // This is nasty hack to get the IPC buffers address for the thread.
     seL4_SetIPCBuffer((seL4_IPCBuffer *)arg0);
-    
-
-
-    ccnt_t end;
-    SEL4BENCH_READ_CCNT(end);
 
     assert(ep_for_thread.cptr != 0);
     uint64_t shared_var_stack;
-    printf("test_func_die: addr of var on this stack: %p\n", &shared_var_stack);
+    // printf("test_func_die: addr of var on this stack: %p\n", &shared_var_stack);
 
     // Send IPC back to main thread.
         /* set the data to send. We smains_epend it in the first message register */
-    seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0, 2);
-    seL4_SetMR(0, end);
-    seL4_SetMR(1, (seL4_Word) &shared_var_stack);
+    seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0, 1);
+    seL4_SetMR(0, (seL4_Word) &shared_var_stack);
+    SEL4BENCH_READ_CCNT(ctx_start);
     tag = seL4_Call(ep_for_thread.cptr, tag);
+    SEL4BENCH_READ_CCNT(ctx_end);
 
-    int *msg = (int *) seL4_GetMR(0);
-    printf("new_thread: got a reply: %p\n", msg);
-    printf("Will try and write to it\n");
-    //*msg = 0xdeadbeef;
+    creation_start = seL4_GetMR(0);
+    printf("%s: START TIME: %lu\n", __func__, creation_start);
+    printf("test_func_die: Creating Time: %lu cycles\n", creation_end - creation_start);
+    printf("test_func_die: Cross AS IPC Time: %lu cycles\n", ctx_end - ctx_start);
+    //*other_stack = 0xdeadbeef;
     while(1);
 }
     
@@ -157,6 +161,7 @@ void test_func_die(seL4_Word arg0, seL4_Word arg1, seL4_Word arg2) {
 // DEFINE_TEST(GPIADS001, "Ensure the ads clone works", test_ads_clone, true)
 int test_ads_stack_isolated_stack_die(env_t env)
 {
+    printf("------------------- STARTING : %s -------------------\n", __func__);
     int error;
     cspacepath_t path;
     vka_cspace_make_path(&env->vka, env->self_ads_cptr, &path);
@@ -202,13 +207,11 @@ int test_ads_stack_isolated_stack_die(env_t env)
     test_error_eq(error, 0);
 
     // Start it.
-    printf("ADDRESS OF FUNC: %p\n", test_func_die);
     // Add args.
     error = cpu_client_start(&cpu_conn, (sel4utils_thread_entry_fn)test_func_die);
     test_error_eq(error, 0);
 
-    printf("%d: main_thread: shared_var(%p) = %ld\n", __LINE__, &shared_var_stack, shared_var_stack);
-        
+    OSDB_PRINTF("%d: main_thread: shared_var(%p) = %ld\n", __LINE__, &shared_var_stack, shared_var_stack);
     shared_var_stack = 4;
      
     //  uint64_t *other_thread_stack = (uintptr_t*)0x10022fb8;
@@ -219,26 +222,18 @@ int test_ads_stack_isolated_stack_die(env_t env)
         /* Wait for the thread to finish */
 
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0, 0);
-    seL4_Word msg;
 
     tag = seL4_Recv(ep_for_thread.cptr, NULL);
-    ZF_LOGF_IF(seL4_MessageInfo_get_length(tag) != 2,
-               "Response data from the new process was not the length expected.\n"
-               "\tHow many registers did you set with seL4_SetMR within the new process?\n");
+    assert(seL4_MessageInfo_get_length(tag) == 1);
+    // uint64_t *other_thread_stack = (uintptr_t*)seL4_GetMR(0);
+    // OSDB_PRINTF("root-task: \t Writing to Other thread's stack: %p\n", other_thread_stack);
 
-
-    /* get the message stored in the first message register */
-    ccnt_t   end = seL4_GetMR(0);
-    printf("root-task: \tStart: %010ld\n\t, End: %ld\n\t, Diff: %ld\n",
-           start, end, end - start);
-
-    uint64_t *other_thread_stack = (uintptr_t*)seL4_GetMR(1);
-    printf("root-task: \t Writing to Other thread's stack: %p\n", other_thread_stack);
-   // *other_thread_stack = 5;
+    // *other_thread_stack = 5;
     /* modify the message */
     seL4_Word main_thread_stack = 5;
-    seL4_SetMR(0, (seL4_Word) &main_thread_stack);
+    seL4_SetMR(0, (seL4_Word) start);
     seL4_ReplyRecv(ep_for_thread.cptr, tag, NULL);
+    printf("------------------- ENDING : %s -------------------\n", __func__);
     
 
     // printf("%d: main_thread: shared_var(%p) = %d\n", __LINE__, &shared_var_stack, shared_var_stack);
