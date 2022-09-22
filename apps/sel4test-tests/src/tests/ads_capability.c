@@ -150,13 +150,35 @@ void test_func_die(seL4_Word arg0, seL4_Word arg1, seL4_Word arg2) {
     SEL4BENCH_READ_CCNT(ctx_end);
 
     creation_start = seL4_GetMR(0);
-    printf("%s: START TIME: %lu\n", __func__, creation_start);
-    printf("test_func_die: Creating Time: %lu cycles\n", creation_end - creation_start);
-    printf("test_func_die: Cross AS IPC Time: %lu cycles\n", ctx_end - ctx_start);
+    // printf("%s: START TIME: %lu\n", __func__, creation_start);
+    printf("test_func_die: Creating Time: %lu cycles\n", (creation_end - creation_start)/1000);
+    //printf("test_func_die: Cross AS IPC Time: %lu cycles\n", ctx_end - ctx_start);
     //*other_stack = 0xdeadbeef;
+
+    
+    float data[1000];
+    // printf("test_func_die: addr of var on other stack: %p\n", other_stack); 
+    printf("test_func_die: Cross AS IPC Time\n");
+    int count = 1000;
+    int i = 0;
+    for(int i = 0; i < count; i++) {
+
+        tag = seL4_MessageInfo_new(0, 0, 0, 1);
+        SEL4BENCH_READ_CCNT(ctx_start);
+        tag = seL4_Call(ep_for_thread.cptr, tag);
+        SEL4BENCH_READ_CCNT(ctx_end);
+        data[i] = (ctx_end - ctx_start)/2;
+    }
+    
+    float mean, sd;
+    calculateSD(data, &mean, &sd, 1, 99);
+    printf("MEAN: %f, SD: %f \n", mean/1000, sd/1000);
+
+
+
     while(1);
 }
-    
+
 
 // DEFINE_TEST(GPIADS001, "Ensure the ads clone works", test_ads_clone, true)
 int test_ads_stack_isolated_stack_die(env_t env)
@@ -221,7 +243,8 @@ int test_ads_stack_isolated_stack_die(env_t env)
 
         /* Wait for the thread to finish */
 
-    seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0, 0);
+    seL4_MessageInfo_t tag;
+    tag= seL4_MessageInfo_new(0, 0, 0, 0);
 
     tag = seL4_Recv(ep_for_thread.cptr, NULL);
     assert(seL4_MessageInfo_get_length(tag) == 1);
@@ -233,9 +256,14 @@ int test_ads_stack_isolated_stack_die(env_t env)
     seL4_Word main_thread_stack = 5;
     seL4_SetMR(0, (seL4_Word) start);
     seL4_ReplyRecv(ep_for_thread.cptr, tag, NULL);
+    printf("------------------- Phase 2 : %s -------------------\n", __func__);
+    
+    while (1){
+      //  printf("main responding to other thread\n");
+    seL4_ReplyRecv(ep_for_thread.cptr, tag, NULL);
+    }
     printf("------------------- ENDING : %s -------------------\n", __func__);
     
-
     // printf("%d: main_thread: shared_var(%p) = %d\n", __LINE__, &shared_var_stack, shared_var_stack);
     
 

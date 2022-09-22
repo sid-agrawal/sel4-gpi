@@ -10,6 +10,7 @@
 #include <sel4gpi/debug.h>
 
 #include <sel4utils/thread.h>
+#include <sel4gpi/debug.h>
 #include "../test.h"
 #include "../helpers.h"
 #include <stdio.h>
@@ -60,6 +61,12 @@ int test_new_process_osmosis(env_t env)
     /* modify the message */
     seL4_SetMR(0, start);
     seL4_ReplyRecv(ep_object.cptr, tag, NULL);
+    printf("------------ Phase 2: %s ------------\n", __FUNCTION__);
+    while (1)
+    {
+        //  printf("main responding to other thread\n");
+        seL4_ReplyRecv(ep_object.cptr, tag, NULL);
+    }
     printf("------------------ENDING: %s------------------\n", __func__);
     return sel4test_get_result();
 }

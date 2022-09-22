@@ -570,3 +570,21 @@ void set_helper_tfep(env_t env, helper_thread_t *thread, seL4_CPtr tfep)
     }
 #endif
 }
+void calculateSD(float data[], float *mean, float *sd,
+                 int start, int end)
+{
+    int i;
+
+    int n = end - start +1;
+    float sum = 0.0;
+    for (i = 1; i < n; ++i) {
+        sum += data[i];
+    }
+    *mean = sum / n;
+    for (i = start; i < end; ++i) {
+        *sd += pow(data[i] - *mean, 2);
+    }
+    *sd = *sd / n;
+    *sd = sqrt(*sd);
+    return;
+}

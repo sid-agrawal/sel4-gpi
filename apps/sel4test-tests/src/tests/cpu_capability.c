@@ -33,15 +33,36 @@ void test_func(seL4_Word arg0, seL4_Word arg1, seL4_Word arg2) {
 
     // Send IPC back to main thread.
         /* set the data to send. We smains_epend it in the first message register */
-    seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0, 1);
+    seL4_MessageInfo_t tag;
+    tag = seL4_MessageInfo_new(0, 0, 0, 1);
 
 
     SEL4BENCH_READ_CCNT(ctx_start);
     tag = seL4_Call(ep_for_thread_normal.cptr, tag);
     SEL4BENCH_READ_CCNT(ctx_end);
     creation_start = seL4_GetMR(0);
-    printf("test-func: Creationg Time : %lu cycles\n", creation_end - creation_start);
-    printf("test-func: Same AS IPC RTT: %lu cycles\n", ctx_end - ctx_start);
+    printf("test-func: Creationg Time : %lu cycles\n", (creation_end - creation_start)/1000);
+
+
+        float data[1000];
+    // printf("test_func_die: addr of var on other stack: %p\n", other_stack); 
+    printf("test_func_die: Cross AS IPC Time\n");
+    int count = 1000;
+    int i = 0;
+    for(int i = 0; i < count; i++) {
+
+        tag = seL4_MessageInfo_new(0, 0, 0, 1);
+        SEL4BENCH_READ_CCNT(ctx_start);
+        tag = seL4_Call(ep_for_thread_normal.cptr, tag);
+        SEL4BENCH_READ_CCNT(ctx_end);
+        data[i] = (ctx_end - ctx_start)/2;
+    }
+    
+    float mean, sd;
+    calculateSD(data, &mean, &sd, 1, 99);
+    printf("MEAN: %f, SD: %f \n", mean/1000, sd/1000);
+
+
 
     while(1);
 }
@@ -99,6 +120,12 @@ int test_cpu_normal_thread(env_t env)
     seL4_SetMR(0, start);
     seL4_ReplyRecv(ep_for_thread_normal.cptr, tag, NULL);
     
+    printf("------------ Phase 2: %s ------------\n", __FUNCTION__);
+    while (1)
+    {
+        //  printf("main responding to other thread\n");
+        seL4_ReplyRecv(ep_for_thread_normal.cptr, tag, NULL);
+    }
     printf("------------ ENDING TEST: %s ------------\n", __FUNCTION__);
 
     // printf("%d: main_thread: shared_var(%p) = %d\n", __LINE__, &shared_var_stack, shared_var_stack);

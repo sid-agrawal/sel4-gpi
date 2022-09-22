@@ -11,6 +11,7 @@
 #include <sel4utils/process.h>
 #include <sel4utils/mapping.h>
 #include <sel4test/test.h>
+#include <math.h>
 
 #include <sel4platsupport/timer.h>
 #include <platsupport/timer.h>
@@ -195,3 +196,6 @@ void sel4test_ntfn_timer_wait(env_t env);
 
 /* helper for creating a thread to handle timer interrupts */
 int create_timer_interrupt_thread(env_t env, helper_thread_t *thread);
+
+void calculateSD(float data[], float *mean, float *sd,
+                 int start, int end);
