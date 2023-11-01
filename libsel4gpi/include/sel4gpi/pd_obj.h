@@ -92,8 +92,18 @@ typedef struct _pd {
     /* number of available cores */
     seL4_Word cores;
 
+    /* All caps and their types */
+
 
 }pd_t;
+
+/*
+What caps data
+Type:
+Permissions:
+EP if applicable
+
+*/
 
 int pd_new(pd_t *pd,
            vka_t *vka,
@@ -103,9 +113,9 @@ int pd_new(pd_t *pd,
 int pd_load_image(pd_t *pd,
                   const char *image_path);
 
-int pd_send_cap(pd_t *pd, 
+int pd_send_cap(pd_t *pd,
                 seL4_CPtr cap, seL4_Word *slot);
 
-int pd_start(pd_t *pd, 
+int pd_start(pd_t *pd,
              vspace_t *vspace,
              seL4_Word arg0);

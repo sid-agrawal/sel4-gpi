@@ -4,9 +4,9 @@
  * @brief Implements the methods to manipulate the pd object
  * @version 0.1
  * @date 2022-04-05
- * 
+ *
  * @copyright Copyright (c) 2022
- * 
+ *
  */
 
 #include <sel4utils/process.h>
@@ -139,7 +139,7 @@ int pd_send_cap(pd_t *pd, seL4_CPtr cap, seL4_Word * slot){
 
 int pd_load_image(pd_t *pd,
                   const char *image_path)
-                  
+
 {
 
     OSDB_PRINTF(PDSERVS"load_image: loading image for pd %p\n", pd);
@@ -168,7 +168,7 @@ int pd_start(pd_t *pd, vspace_t *server_vspace, seL4_Word arg0){
     sel4utils_create_word_args(string_args, argv, argc);
 
     argc = 1;
-    snprintf(argv[0], WORD_STRING_SIZE, "%d", arg0);
+    snprintf(argv[0], WORD_STRING_SIZE, "%ld", arg0);
 
 
 
