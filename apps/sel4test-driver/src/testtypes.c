@@ -256,6 +256,7 @@ void basic_set_up(uintptr_t e)
     if (error){
         ZF_LOGF("Failed to forge child's as cap");
     }
+    ads_component_registry_entry_t *head = get_ads_component()->client_registry;
 
     env->child_ads_cptr_in_child = sel4utils_copy_cap_to_process(&(env->test_process),
                                                                 &env->vka, child_as_cap_in_parent);

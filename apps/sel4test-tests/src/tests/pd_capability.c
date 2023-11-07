@@ -40,6 +40,8 @@ int test_new_process_osmosis(env_t env)
     error = pd_component_client_connect(env->gpi_endpoint, &env->vka, &conn);
     assert(error == 0);
 
+    /* Create a new ADS Cap, which will be in the context of a PD and image */
+
     // Make a new AS, loads an image
     error = pd_client_load(&conn, "hello");
     assert(error == 0);

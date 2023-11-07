@@ -5,9 +5,9 @@
  * @brief API for a parent to spawn a GPI server.
  * @version 0.1
  * @date 2022-04-05
- * 
+ *
  * @copyright Copyright (c) 2022
- * 
+ *
  */
 
 #include <stdint.h>
@@ -29,7 +29,7 @@ typedef enum GPICAP_TYPE {
 63:56  8 bits for the type of cap.
 55:40 16 bits for permissions, as a bit mask.
 39:20 20 bits for client ID
-19:0  20 bits for object ID 
+19:0  20 bits for object ID
 */
 
 

@@ -57,6 +57,9 @@ enum ads_component_funcs {
 
     ADS_FUNC_TESTING_REQ,
     ADS_FUNC_TESTING_ACK,
+
+    ADS_FUNC_GET_RR_REQ,
+    ADS_FUNC_GET_RR_ACK,
 };
 
 /* Designated purposes of each message register in the mini-protocol. */
@@ -101,12 +104,16 @@ enum ads_component_msgregs
     ADSMSGREG_RM_REQ_END,
 
     ADSMSGREG_RM_ACK_END = ADSMSGREG_LABEL0,
-    
+
     /* Testing */
     ADSMSGREG_TESTING_REQ_END = ADSMSGREG_LABEL0,
 
     ADSMSGREG_TESTING_ACK_END = ADSMSGREG_LABEL0,
 
+    /* Get RR */
+    ADSMSGREG_GET_RR_REQ_END = ADSMSGREG_LABEL0,
+
+    ADSMSGREG_GET_RR_ACK_END = ADSMSGREG_LABEL0,
 
     /* Bind to CPU */
     ADSMSGREG_BIND_CPU_REQ_END = ADSMSGREG_LABEL0,
@@ -133,14 +140,14 @@ typedef struct _ads_component_context {
     vspace_t *server_vspace;
     sel4utils_thread_t server_thread;
 
-    // The server listens on this endpoint. 
+    // The server listens on this endpoint.
     vka_object_t server_ep_obj;
 
     int registry_n_entries;
     ads_component_registry_entry_t *client_registry;
 } ads_component_context_t;
 
-/** 
+/**
  * Internal library function: acts as the main() for the server thread.
  **/
 void ads_component_handle(seL4_MessageInfo_t tag,
@@ -156,11 +163,11 @@ ads_component_context_t *get_ads_component(void);
 
 /**
  * @brief Given a vspace_t insert it into the ADS server's metadata and return a cap to it.
- * 
+ *
  * @param vspace The vspace to insert.
  * @param vka The vka instance to use for allocating the cap.
  * @param cap_ret The cap to the vspace.
- * @return int 
+ * @return int
  */
 int forge_ads_cap_from_vspace(vspace_t *vspace, vka_t *vka, seL4_CPtr *cap_ret);
 

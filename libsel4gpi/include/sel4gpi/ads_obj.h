@@ -20,7 +20,7 @@ typedef struct _ads {
 
 /**
  * @brief Attach a frame at a given address to the ads.
- * 
+ *
  * @param ads ads object
  * @param vka vka object to allocate cspace slots and PT from
  * @param vaddr virtual address to attach the frame to
@@ -33,7 +33,7 @@ int ads_attach(ads_t *ads, vka_t *vka, void *vaddr, size_t size, seL4_CPtr frame
 
 /**
  * @brief Remove a frame from the ads.
- * 
+ *
  * @param ads ads object
  * @param vka vka object to allocate cspace slots and PT from
  * @param vaddr virtual address to remove the frame from
@@ -44,12 +44,12 @@ int ads_rm(ads_t *ads, vka_t *vka, void* vaddr, size_t size);
 
 
 /**
- * @brief 
- * 
+ * @brief
+ *
  * @param ads ads object
  * @param vka vka object to allocate cspace slots and PT from
  * @param cpu_cap use this as the ads for the give TCB
- * @return int 
+ * @return int
  */
 int ads_bind(ads_t *ads, vka_t *vka, seL4_CPtr* cpu_cap);
 
@@ -64,6 +64,14 @@ int ads_bind(ads_t *ads, vka_t *vka, seL4_CPtr* cpu_cap);
  * @return int
  */
 int ads_clone(vspace_t *loader, ads_t *ads, vka_t *vka, void* omit_vaddr, ads_t *ret_ads);
+
+/**
+ * @brief
+ *
+ * @param ads ads object to dump the RR for
+ * @return void
+ */
+void ads_dump_rr(ads_t *ads);
 
 
 static seL4_CPtr get_asid_pool(seL4_CPtr asid_pool)

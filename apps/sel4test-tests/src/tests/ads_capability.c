@@ -116,7 +116,7 @@ int test_ads_clone(env_t env)
     printf("Time taken to clone: %lu cycles\n", end - start);
     // error = ads_client_clone(&ads_conn_clone1, &env->vka,  (void *) 0x10001000, &ads_conn_clone2);
     test_error_eq(error, 0);
-    
+
 
     return sel4test_get_result();
 }
@@ -127,7 +127,7 @@ int test_ads_clone(env_t env)
 vka_object_t ep_for_thread;
 
 void test_func_die(seL4_Word arg0, seL4_Word arg1, seL4_Word arg2) {
-    
+
     ccnt_t ctx_start, ctx_end;
     ccnt_t creation_start, creation_end;
     sel4bench_init();
@@ -155,9 +155,9 @@ void test_func_die(seL4_Word arg0, seL4_Word arg1, seL4_Word arg2) {
     //printf("test_func_die: Cross AS IPC Time: %lu cycles\n", ctx_end - ctx_start);
     //*other_stack = 0xdeadbeef;
 
-    
+
     float data[1000];
-    // printf("test_func_die: addr of var on other stack: %p\n", other_stack); 
+    // printf("test_func_die: addr of var on other stack: %p\n", other_stack);
     printf("test_func_die: Cross AS IPC Time\n");
     int count = 1000;
     int i = 0;
@@ -169,7 +169,7 @@ void test_func_die(seL4_Word arg0, seL4_Word arg1, seL4_Word arg2) {
         SEL4BENCH_READ_CCNT(ctx_end);
         data[i] = (ctx_end - ctx_start)/2;
     }
-    
+
     float mean, sd;
     calculateSD(data, &mean, &sd, 1, 99);
     printf("MEAN: %f, SD: %f \n", mean/1000, sd/1000);
@@ -208,7 +208,7 @@ int test_ads_stack_isolated_stack_die(env_t env)
     ads_client_context_t ads_conn_clone1;
     error = ads_client_clone(&conn, &env->vka,  (void *) 0x10001000, &ads_conn_clone1);
     test_error_eq(error, 0);
-    
+
     // TODO: Attach a new stack, this is done inside clinet_config for now.
     // stack_cap
     // ads_client_attach()
@@ -235,7 +235,7 @@ int test_ads_stack_isolated_stack_die(env_t env)
 
     OSDB_PRINTF("%d: main_thread: shared_var(%p) = %ld\n", __LINE__, &shared_var_stack, shared_var_stack);
     shared_var_stack = 4;
-     
+
     //  uint64_t *other_thread_stack = (uintptr_t*)0x10022fb8;
     //  *other_thread_stack = 5;
 
@@ -257,15 +257,15 @@ int test_ads_stack_isolated_stack_die(env_t env)
     seL4_SetMR(0, (seL4_Word) start);
     seL4_ReplyRecv(ep_for_thread.cptr, tag, NULL);
     printf("------------------- Phase 2 : %s -------------------\n", __func__);
-    
+
     while (1){
       //  printf("main responding to other thread\n");
     seL4_ReplyRecv(ep_for_thread.cptr, tag, NULL);
     }
     printf("------------------- ENDING : %s -------------------\n", __func__);
-    
+
     // printf("%d: main_thread: shared_var(%p) = %d\n", __LINE__, &shared_var_stack, shared_var_stack);
-    
+
 
     // Send a message to the thread.
     seL4_DebugDumpScheduler();
@@ -353,3 +353,17 @@ DEFINE_TEST(GPIADS005, "Ensure the threads with isolated stack works", test_ads_
 
 #endif
 
+
+int test_ads_dump_rr(env_t env)
+{
+    int error;
+    cspacepath_t path;
+    vka_cspace_make_path(&env->vka, env->self_ads_cptr, &path);
+    ads_client_context_t conn;
+    conn.badged_server_ep_cspath = path;
+
+    // Dump the ads rr
+    ads_client_dump_rr(&conn);
+    return sel4test_get_result();
+}
+DEFINE_TEST(GPIADS006, "Dump the RR of the ads", test_ads_dump_rr, true)

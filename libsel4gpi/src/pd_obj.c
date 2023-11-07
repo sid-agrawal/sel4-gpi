@@ -26,6 +26,12 @@ int pd_new(pd_t *pd,
     OSDB_PRINTF(PDSERVS"new PD: \n");
 
 
+    for (int i = 0; i < 500; i++)
+    {
+        pd->osm_caps[i].type = GPICAP_TYPE_MAX;
+        pd->osm_caps[i].slot = 0;
+    }
+
     pd->vka = vka;
     // Allocate a new cspace
 
@@ -126,13 +132,14 @@ int pd_new(pd_t *pd,
 
 int pd_send_cap(pd_t *pd, seL4_CPtr cap, seL4_Word * slot){
 
-    // Phase1: Start it.
-    // Phase2: start the CPU thread.
     assert(cap != 0);
 
     *slot = sel4utils_copy_cap_to_process(&(pd->proc), pd->vka, cap);
     assert(*slot);
     OSDB_PRINTF(PDSERVS"pd_send_cap: copied cap at %ld to child\n", *slot);
+
+    /* Add to our caps data struct */
+
 
     return 0;
 }

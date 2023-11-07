@@ -4,9 +4,9 @@
  * @brief Implements the ads client API from ads_client.h.
  * @version 0.1
  * @date 2022-04-05
- * 
+ *
  * @copyright Copyright (c) 2022
- * 
+ *
  */
 
 #include <vka/vka.h>
@@ -32,7 +32,7 @@ int ads_component_client_connect(seL4_CPtr server_ep_cap,
         /* index */         path.capPtr,
         /* depth */         path.capDepth
     );
-    
+
     OSDB_PRINTF(ADSSERVC"gpi endpoint is %d:", server_ep_cap);
     // debug_cap_identify(ADSSERVC, server_ep_cap);
 
@@ -53,7 +53,7 @@ int ads_component_client_connect(seL4_CPtr server_ep_cap,
 
 
 int ads_client_attach(ads_client_context_t *conn, void* vaddr, size_t size, seL4_CPtr frame_cap)
-{ 
+{
     seL4_SetMR(ADSMSGREG_FUNC, ADS_FUNC_ATTACH_REQ);
     seL4_SetMR(ADSMSGREG_ATTACH_REQ_VA, (seL4_Word) vaddr);
     seL4_SetMR(ADSMSGREG_ATTACH_REQ_SZ, (seL4_Word) size);
@@ -70,7 +70,7 @@ int ads_client_attach(ads_client_context_t *conn, void* vaddr, size_t size, seL4
 }
 
 int ads_client_clone(ads_client_context_t *conn, vka_t* vka, void* omit_vaddr, ads_client_context_t *ret_conn)
-{ 
+{
     // Alloc a slot for the incoming cap.
     seL4_CPtr dest_cptr;
     vka_cspace_alloc(vka, &dest_cptr);
@@ -94,6 +94,19 @@ int ads_client_clone(ads_client_context_t *conn, vka_t* vka, void* omit_vaddr, a
     return 0;
 }
 
+int ads_client_dump_rr(ads_client_context_t *conn) {
+
+    seL4_SetMR(ADSMSGREG_FUNC, ADS_FUNC_GET_RR_REQ);
+    seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0,
+                                                  ADSMSGREG_GET_RR_REQ_END);
+
+    OSDB_PRINTF(ADSSERVC "Sending dump RR request to server via EP: %d.\n",
+           conn->badged_server_ep_cspath.capPtr);
+    tag = seL4_Call(conn->badged_server_ep_cspath.capPtr, tag);
+    return 0;
+
+}
+
 int ads_client_rm(ads_client_context_t *conn, void* vaddr, size_t size){
     return 0;
 }
@@ -102,7 +115,7 @@ int ads_client_bind_cpu(ads_client_context_t *conn, seL4_CPtr cpu_cap) {
     return 0;
 }
 
-int ads_client_testing(ads_client_context_t *conn, vka_t *vka, 
+int ads_client_testing(ads_client_context_t *conn, vka_t *vka,
                        ads_client_context_t *clone1,
                        ads_client_context_t *clone2,
                        ads_client_context_t *clone3) {

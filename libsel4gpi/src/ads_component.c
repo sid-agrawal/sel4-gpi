@@ -70,8 +70,8 @@ static inline void reply(seL4_MessageInfo_t tag)
 
 /**
  * @brief Insert a new client into the client registry Linked List.
- * 
- * @param new_node 
+ *
+ * @param new_node
  */
 static void ads_component_registry_insert(ads_component_registry_entry_t *new_node) {
         // TODO:Use a mutex
@@ -94,9 +94,9 @@ static void ads_component_registry_insert(ads_component_registry_entry_t *new_no
 
 /**
  * @brief Lookup the client registry entry for the given objectID in the badge.
- * 
- * @param badge 
- * @return ads_component_registry_entry_t* 
+ *
+ * @param badge
+ * @return ads_component_registry_entry_t*
  */
 ads_component_registry_entry_t *ads_component_registry_get_entry_by_badge(seL4_Word badge){
 
@@ -192,9 +192,9 @@ static void handle_testing_req(seL4_Word sender_badge, seL4_MessageInfo_t old_ta
 {
     OSDB_PRINTF(ADSSERVS "main: Got testing request from client badge %x."
     " extraCaps: %d capsUnWrapped %d\n",
-           sender_badge, seL4_MessageInfo_get_extraCaps(old_tag), 
+           sender_badge, seL4_MessageInfo_get_extraCaps(old_tag),
            seL4_MessageInfo_get_capsUnwrapped(old_tag));
-    
+
     for (int i = 0; i < 5; i++) {
         OSDB_PRINTF(ADSSERVS "MR[%d] = %lx\n", i, seL4_GetBadge(i));
     }
@@ -205,6 +205,31 @@ static void handle_testing_req(seL4_Word sender_badge, seL4_MessageInfo_t old_ta
     return reply(tag);
 }
 
+static void handle_get_rr_req(seL4_Word sender_badge, seL4_MessageInfo_t old_tag)
+{
+    OSDB_PRINTF(ADSSERVS "main: Got get rr request from client badge %x."
+    " extraCaps: %d capsUnWrapped %d\n",
+           sender_badge, seL4_MessageInfo_get_extraCaps(old_tag),
+           seL4_MessageInfo_get_capsUnwrapped(old_tag));
+
+    for (int i = 0; i < 5; i++) {
+        OSDB_PRINTF(ADSSERVS "MR[%d] = %lx\n", i, seL4_GetBadge(i));
+    }
+    ads_component_registry_entry_t *client_data = ads_component_registry_get_entry_by_badge(sender_badge);
+    if (client_data == NULL)
+    {
+        OSDB_PRINTF(ADSSERVS "main: Failed to find client badge %x.\n",
+               sender_badge);
+        return;
+    }
+    OSDB_PRINTF(ADSSERVS "main: found client_data with objID %d.\n", client_data->ads.ads_obj_id);
+
+
+    ads_dump_rr(client_data->ads.vspace);
+    seL4_SetMR(ADSMSGREG_FUNC, ADS_FUNC_GET_RR_ACK);
+    seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0, ADSMSGREG_TESTING_ACK_END);
+    return reply(tag);
+}
 
 static void handle_clone_req(seL4_Word sender_badge)
 {
@@ -306,9 +331,11 @@ void ads_component_handle(seL4_MessageInfo_t tag,
     case ADS_FUNC_ATTACH_REQ:
         handle_attach_req(sender_badge, tag, received_cap->capPtr);
         break;
-
     case ADS_FUNC_TESTING_REQ:
         handle_testing_req(sender_badge, tag);
+        break;
+    case ADS_FUNC_GET_RR_REQ:
+        handle_get_rr_req(sender_badge, tag);
         break;
     default:
         gpi_panic(ADSSERVS"Unknown func type.", (seL4_Word) func);
@@ -339,9 +366,9 @@ int forge_ads_cap_from_vspace(vspace_t *vspace, vka_t *vka, seL4_CPtr *cap_ret){
     vka_cspace_make_path(get_ads_component()->server_vka, dest_cptr, &dest);
 
     /* Update the info in the registry entry. */
-    client_reg_ptr->ads.vspace = vspace;
     seL4_Word badge = ads_assign_new_badge_and_objectID(client_reg_ptr);
     ads_component_registry_insert(client_reg_ptr);
+    client_reg_ptr->ads.vspace = vspace;
     int error = vka_cnode_mint(&dest,
                                &src,
                                seL4_AllRights,
@@ -351,8 +378,22 @@ int forge_ads_cap_from_vspace(vspace_t *vspace, vka_t *vka, seL4_CPtr *cap_ret){
         OSDB_PRINTF(ADSSERVS "main: Failed to mint client badge %lx.\n", badge);
         return 1;
     }
-    OSDB_PRINTF(ADSSERVS "main: Forged a new ADS cap(EP: %d) with badge value: %lx\n", 
+    OSDB_PRINTF(ADSSERVS "main: Forged a new ADS cap(EP: %d) with badge value: %lx\n",
     dest.capPtr, badge);
+
+    /* Iterate and print reservation_list*/
+    sel4utils_res_t *res = get_alloc_data(vspace)->reservation_head;
+    while (res != NULL) {
+        OSDB_PRINTF(ADSSERVS "\tmain: Reservation: %p --> %p\n", res->start, res->end);
+        /* print cap for each page in the reservation*/
+        for (void *va = res->start; va < res->end; va += PAGE_SIZE_4K) {
+            seL4_CPtr cap;
+            cap = vspace_get_cap(vspace, va);
+            OSDB_PRINTF(ADSSERVS "\tmain: Cap for va: %p is %d TYPE: %d\n", va, cap, seL4_DebugCapIdentify(cap));
+        }
+
+        res = res->next;
+    }
 
     *cap_ret = dest_cptr;
     return 0;

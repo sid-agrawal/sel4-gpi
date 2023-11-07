@@ -12,7 +12,14 @@
 #include <vka/object.h>
 #include <vspace/vspace.h>
 
+#include<sel4gpi/badge_usage.h>
+
 #define TEST_NAME_MAX (64 - 4 * sizeof(seL4_Word))
+
+typedef struct osmosis_cap {
+    gpi_cap_t type;
+    seL4_Word slot;
+} osmosis_cap_t;
 typedef struct _pd {
     seL4_CPtr cspace_root;
     seL4_CPtr fault_endpoint;
@@ -93,9 +100,11 @@ typedef struct _pd {
     seL4_Word cores;
 
     /* All caps and their types */
+    osmosis_cap_t osm_caps[500];
 
 
 }pd_t;
+
 
 /*
 What caps data

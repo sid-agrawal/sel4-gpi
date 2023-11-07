@@ -4,9 +4,9 @@
  * @brief Implements the methods to manipulate the ads object
  * @version 0.1
  * @date 2022-04-05
- * 
+ *
  * @copyright Copyright (c) 2022
- * 
+ *
  */
 #include <sel4utils/process.h>
 #include <stdio.h>
@@ -15,7 +15,7 @@
 #include <sel4gpi/ads_component.h>
 #include <sel4gpi/debug.h>
 
-int ads_attach(ads_t *ads, vka_t *vka, void* vaddr, size_t size, seL4_CPtr frame_cap, 
+int ads_attach(ads_t *ads, vka_t *vka, void* vaddr, size_t size, seL4_CPtr frame_cap,
                /*sel4utils_process_t*/ vspace_t *process_cookie)
 {
     vspace_t *target = ads->vspace;
@@ -35,19 +35,19 @@ int ads_attach(ads_t *ads, vka_t *vka, void* vaddr, size_t size, seL4_CPtr frame
     seL4_CPtr caps[] = {frame_cap};
     size_t num_pages = size / PAGE_SIZE_4K;
     size_t size_bits = seL4_PageBits;
-    int error = sel4utils_map_pages_at_vaddr(target, 
-    caps, 
+    int error = sel4utils_map_pages_at_vaddr(target,
+    caps,
     (uintptr_t *)process_cookie, // TODO: this is a hack
-    vaddr, 
-    num_pages, 
-    size_bits, 
+    vaddr,
+    num_pages,
+    size_bits,
     res);
     if (error)
     {
         ZF_LOGE("Failed to map pages\n");
         return 1;
     }
- 
+
     return 0;
 }
 
@@ -58,6 +58,33 @@ int ads_rm(ads_t *ads, vka_t *vka, void* vaddr, size_t size) {
 int ads_bind(ads_t *ads, vka_t *vka, seL4_CPtr* cpu_cap) {
     return 0;
 }
+
+void ads_dump_rr(ads_t *ads) {
+
+    vspace_t *from = ads->vspace;
+    assert(from != NULL);
+    OSDB_PRINTF(ADSSERVS "vspace: %p\n", from);
+    assert(0);
+
+    OSDB_PRINTF(ADSSERVS "===========Start of interesting output================\n");
+    sel4utils_alloc_data_t *from_data = get_alloc_data(from);
+    assert(from_data != NULL);
+    OSDB_PRINTF(ADSSERVS "From_data: %p\n", from_data);
+    sel4utils_res_t *from_sel4_res = from_data->reservation_head;
+    assert(from_sel4_res != NULL);
+
+    while (from_sel4_res != NULL)
+    {
+        OSDB_PRINTF(ADSSERVS "Reservation: %p\n", from_sel4_res->start);
+        void *va = (void *)from_sel4_res->start;
+        OSDB_PRINTF(ADSSERVS  "VA: %p\n", va);
+
+        from_sel4_res = from_sel4_res->next;
+    }
+
+    OSDB_PRINTF(ADSSERVS "===========END of interesting output================\n");
+}
+
 int ads_clone(vspace_t *loader, ads_t *ads, vka_t *vka, void* omit_vaddr, ads_t *ret_ads) {
 
     ret_ads->vspace = malloc(sizeof(vspace_t));
