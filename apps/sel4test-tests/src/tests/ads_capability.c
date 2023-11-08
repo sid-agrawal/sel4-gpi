@@ -117,7 +117,6 @@ int test_ads_clone(env_t env)
     // error = ads_client_clone(&ads_conn_clone1, &env->vka,  (void *) 0x10001000, &ads_conn_clone2);
     test_error_eq(error, 0);
 
-
     return sel4test_get_result();
 }
 
@@ -127,7 +126,6 @@ int test_ads_clone(env_t env)
 vka_object_t ep_for_thread;
 
 void test_func_die(seL4_Word arg0, seL4_Word arg1, seL4_Word arg2) {
-
     ccnt_t ctx_start, ctx_end;
     ccnt_t creation_start, creation_end;
     sel4bench_init();

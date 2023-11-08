@@ -61,16 +61,9 @@ int ads_bind(ads_t *ads, vka_t *vka, seL4_CPtr* cpu_cap) {
 
 void ads_dump_rr(ads_t *ads) {
 
-    vspace_t *from = ads->vspace;
-    assert(from != NULL);
-    OSDB_PRINTF(ADSSERVS "vspace: %p\n", from);
-    assert(0);
-
+    vspace_t *ads_vspace = ads->vspace;
     OSDB_PRINTF(ADSSERVS "===========Start of interesting output================\n");
-    sel4utils_alloc_data_t *from_data = get_alloc_data(from);
-    assert(from_data != NULL);
-    OSDB_PRINTF(ADSSERVS "From_data: %p\n", from_data);
-    sel4utils_res_t *from_sel4_res = from_data->reservation_head;
+    sel4utils_res_t *from_sel4_res = get_alloc_data(ads_vspace)->reservation_head;
     assert(from_sel4_res != NULL);
 
     while (from_sel4_res != NULL)

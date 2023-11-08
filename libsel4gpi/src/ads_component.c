@@ -225,7 +225,7 @@ static void handle_get_rr_req(seL4_Word sender_badge, seL4_MessageInfo_t old_tag
     OSDB_PRINTF(ADSSERVS "main: found client_data with objID %d.\n", client_data->ads.ads_obj_id);
 
 
-    ads_dump_rr(client_data->ads.vspace);
+    ads_dump_rr(&client_data->ads);
     seL4_SetMR(ADSMSGREG_FUNC, ADS_FUNC_GET_RR_ACK);
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0, ADSMSGREG_TESTING_ACK_END);
     return reply(tag);
@@ -389,7 +389,7 @@ int forge_ads_cap_from_vspace(vspace_t *vspace, vka_t *vka, seL4_CPtr *cap_ret){
         for (void *va = res->start; va < res->end; va += PAGE_SIZE_4K) {
             seL4_CPtr cap;
             cap = vspace_get_cap(vspace, va);
-            OSDB_PRINTF(ADSSERVS "\tmain: Cap for va: %p is %d TYPE: %d\n", va, cap, seL4_DebugCapIdentify(cap));
+            // OSDB_PRINTF(ADSSERVS "\tmain: Cap for va: %p is %d TYPE: %d\n", va, cap, seL4_DebugCapIdentify(cap));
         }
 
         res = res->next;
