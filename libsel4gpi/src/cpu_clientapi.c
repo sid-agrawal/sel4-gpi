@@ -4,9 +4,9 @@
  * @brief Implements the cpu client API from cpu_client.h.
  * @version 0.1
  * @date 2022-04-05
- * 
+ *
  * @copyright Copyright (c) 2022
- * 
+ *
  */
 
 #include<sel4gpi/cpu_clientapi.h>
@@ -30,11 +30,11 @@ int cpu_component_client_connect(seL4_CPtr server_ep_cap,
         /* index */         path.capPtr,
         /* depth */         path.capDepth
     );
-    
-    OSDB_PRINTF(CPUSERVC"%s %d cpu_endpoint is %d:__ \n", __FUNCTION__, __LINE__, server_ep_cap);
+
+    OSDB_PRINTF(CPUSERVC"%s %d cpu_endpoint is %lu:__ \n", __FUNCTION__, __LINE__, server_ep_cap);
     // debug_cap_identify(CPUSERVC, server_ep_cap);
 
-    OSDB_PRINTF(CPUSERVC"Set a receive path for the badged ep: %d\n", path.capPtr);
+    OSDB_PRINTF(CPUSERVC"Set a receive path for the badged ep: %lu\n", path.capPtr);
     /* Set request type */
     seL4_SetMR(0, GPICAP_TYPE_CPU);
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0, 1);
@@ -44,7 +44,7 @@ int cpu_component_client_connect(seL4_CPtr server_ep_cap,
 
     ret_conn->badged_server_ep_cspath = path;;
 
-    OSDB_PRINTF(CPUSERVC"received badged endpoint and it was kept in %d:__\n", path.capPtr);
+    OSDB_PRINTF(CPUSERVC"received badged endpoint and it was kept in %lu:__\n", path.capPtr);
     // debug_cap_identify(CPUSERVC, path.capPtr);
     return 0;
 }
@@ -53,7 +53,7 @@ int cpu_client_config(cpu_client_context_t *conn,
                       ads_client_context_t *ads_conn,
                       seL4_CPtr cspace_root,
                       seL4_CPtr fault_ep_position)
-{ 
+{
     seL4_SetMR(CPUMSGREG_FUNC, CPU_FUNC_CONFIG_REQ);
     seL4_SetMR(CPUMSGREG_CONFIG_FAULT_EP, fault_ep_position);
 
@@ -71,7 +71,7 @@ int cpu_client_config(cpu_client_context_t *conn,
 
 int cpu_client_start(cpu_client_context_t *conn,
                      sel4utils_thread_entry_fn entry_fn)
-{ 
+{
     seL4_SetMR(CPUMSGREG_FUNC, CPU_FUNC_START_REQ);
     seL4_SetMR(CPUMSGREG_START_FUNC_VADDR, (seL4_Word)entry_fn);
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0,

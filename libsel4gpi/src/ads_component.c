@@ -143,7 +143,7 @@ void ads_handle_allocation_request(seL4_MessageInfo_t *reply_tag)
                                badge);
     if (error)
     {
-        OSDB_PRINTF(ADSSERVS "main: Failed to mint client badge %x.\n", badge);
+        OSDB_PRINTF(ADSSERVS "main: Failed to mint client badge %lx.\n", badge);
         return;
     }
     /* Return this badged end point in the return message. */
@@ -154,7 +154,7 @@ void ads_handle_allocation_request(seL4_MessageInfo_t *reply_tag)
 
 static void handle_attach_req(seL4_Word sender_badge, seL4_MessageInfo_t old_tag, seL4_CPtr frame_cap)
 {
-    OSDB_PRINTF(ADSSERVS "main: Got attach request from client badge %x.\n",
+    OSDB_PRINTF(ADSSERVS "main: Got attach request from client badge %lx.\n",
            sender_badge);
 
     assert(seL4_MessageInfo_get_extraCaps(old_tag) == 1);
@@ -172,11 +172,11 @@ static void handle_attach_req(seL4_Word sender_badge, seL4_MessageInfo_t old_tag
 
     void *vaddr = (void *) seL4_GetMR(ADSMSGREG_ATTACH_REQ_VA);
     size_t size = (size_t) seL4_GetMR(ADSMSGREG_ATTACH_REQ_SZ);
-    OSDB_PRINTF(ADSSERVS"main: vaddr %x, size %x\n", vaddr, size);
+    OSDB_PRINTF(ADSSERVS"main: vaddr %p, size %lu\n", vaddr, size);
 
     error = ads_attach(&client_data->ads, get_ads_component()->server_vka, vaddr, size, frame_cap, client_data->ads.vspace);
     if (error) {
-        OSDB_PRINTF(ADSSERVS "main: Failed to attach at vaddr:%lx sz: %lx to client badge %x.\n",
+        OSDB_PRINTF(ADSSERVS "main: Failed to attach at vaddr:%p sz: %lx to client badge %lx.\n",
                 vaddr, size, sender_badge);
         return;
     }
@@ -190,10 +190,10 @@ static void handle_attach_req(seL4_Word sender_badge, seL4_MessageInfo_t old_tag
 
 static void handle_testing_req(seL4_Word sender_badge, seL4_MessageInfo_t old_tag)
 {
-    OSDB_PRINTF(ADSSERVS "main: Got testing request from client badge %x."
-    " extraCaps: %d capsUnWrapped %d\n",
-           sender_badge, seL4_MessageInfo_get_extraCaps(old_tag),
-           seL4_MessageInfo_get_capsUnwrapped(old_tag));
+    OSDB_PRINTF(ADSSERVS "main: Got testing request from client badge %lx."
+                         " extraCaps: %lu capsUnWrapped %lu\n",
+                sender_badge, seL4_MessageInfo_get_extraCaps(old_tag),
+                seL4_MessageInfo_get_capsUnwrapped(old_tag));
 
     for (int i = 0; i < 5; i++) {
         OSDB_PRINTF(ADSSERVS "MR[%d] = %lx\n", i, seL4_GetBadge(i));
@@ -207,10 +207,10 @@ static void handle_testing_req(seL4_Word sender_badge, seL4_MessageInfo_t old_ta
 
 static void handle_get_rr_req(seL4_Word sender_badge, seL4_MessageInfo_t old_tag)
 {
-    OSDB_PRINTF(ADSSERVS "main: Got get rr request from client badge %x."
-    " extraCaps: %d capsUnWrapped %d\n",
-           sender_badge, seL4_MessageInfo_get_extraCaps(old_tag),
-           seL4_MessageInfo_get_capsUnwrapped(old_tag));
+    OSDB_PRINTF(ADSSERVS "main: Got get rr request from client badge %lx."
+                         " extraCaps: %lu capsUnWrapped %lu\n",
+                sender_badge, seL4_MessageInfo_get_extraCaps(old_tag),
+                seL4_MessageInfo_get_capsUnwrapped(old_tag));
 
     for (int i = 0; i < 5; i++) {
         OSDB_PRINTF(ADSSERVS "MR[%d] = %lx\n", i, seL4_GetBadge(i));
@@ -218,11 +218,11 @@ static void handle_get_rr_req(seL4_Word sender_badge, seL4_MessageInfo_t old_tag
     ads_component_registry_entry_t *client_data = ads_component_registry_get_entry_by_badge(sender_badge);
     if (client_data == NULL)
     {
-        OSDB_PRINTF(ADSSERVS "main: Failed to find client badge %x.\n",
+        OSDB_PRINTF(ADSSERVS "main: Failed to find client badge %lx.\n",
                sender_badge);
         return;
     }
-    OSDB_PRINTF(ADSSERVS "main: found client_data with objID %d.\n", client_data->ads.ads_obj_id);
+    OSDB_PRINTF(ADSSERVS "main: found client_data with objID %u.\n", client_data->ads.ads_obj_id);
 
 
     ads_dump_rr(&client_data->ads);
@@ -234,18 +234,18 @@ static void handle_get_rr_req(seL4_Word sender_badge, seL4_MessageInfo_t old_tag
 static void handle_clone_req(seL4_Word sender_badge)
 {
     // Find the client - like attach
-    OSDB_PRINTF(ADSSERVS "main: Got clone  request from client badge %x.\n",
+    OSDB_PRINTF(ADSSERVS "main: Got clone  request from client badge %lx.\n",
            sender_badge);
 
     /* Find the client */
     ads_component_registry_entry_t *client_data = ads_component_registry_get_entry_by_badge(sender_badge);
     if (client_data == NULL)
     {
-        OSDB_PRINTF(ADSSERVS "main: Failed to find client badge %x.\n",
+        OSDB_PRINTF(ADSSERVS "main: Failed to find client badge %lx.\n",
                sender_badge);
         return;
     }
-    OSDB_PRINTF(ADSSERVS "main: found client_data with objID %d.\n", client_data->ads.ads_obj_id);
+    OSDB_PRINTF(ADSSERVS "main: found client_data with objID %u.\n", client_data->ads.ads_obj_id);
 
 
 
@@ -271,7 +271,7 @@ static void handle_clone_req(seL4_Word sender_badge)
                           omit_vaddr,
                           dst_ads);
     if (error) {
-        OSDB_PRINTF(ADSSERVS "main: Failed to clone from client badge %x.\n",
+        OSDB_PRINTF(ADSSERVS "main: Failed to clone from client badge %lx.\n",
                sender_badge);
         return;
     }
@@ -296,7 +296,7 @@ static void handle_clone_req(seL4_Word sender_badge)
                                badge);
     if (error)
     {
-        OSDB_PRINTF(ADSSERVS "Failed to mint client badge %x.\n", badge);
+        OSDB_PRINTF(ADSSERVS "Failed to mint client badge %lx.\n", badge);
         return;
     }
     OSDB_PRINTF(ADSSERVS "Clone assigned:");
@@ -378,15 +378,15 @@ int forge_ads_cap_from_vspace(vspace_t *vspace, vka_t *vka, seL4_CPtr *cap_ret){
         OSDB_PRINTF(ADSSERVS "main: Failed to mint client badge %lx.\n", badge);
         return 1;
     }
-    OSDB_PRINTF(ADSSERVS "main: Forged a new ADS cap(EP: %d) with badge value: %lx\n",
-    dest.capPtr, badge);
+    OSDB_PRINTF(ADSSERVS "main: Forged a new ADS cap(EP: %lx) with badge value: %lx\n",
+                dest.capPtr, badge);
 
     /* Iterate and print reservation_list*/
     sel4utils_res_t *res = get_alloc_data(vspace)->reservation_head;
     while (res != NULL) {
-        OSDB_PRINTF(ADSSERVS "\tmain: Reservation: %p --> %p\n", res->start, res->end);
+        OSDB_PRINTF(ADSSERVS "\tmain: Reservation: 0x%lx --> 0x%lx\n", res->start, res->end);
         /* print cap for each page in the reservation*/
-        for (void *va = res->start; va < res->end; va += PAGE_SIZE_4K) {
+        for (void *va = (void *)res->start; va <(void *) res->end; va += PAGE_SIZE_4K) {
             seL4_CPtr cap;
             cap = vspace_get_cap(vspace, va);
             // OSDB_PRINTF(ADSSERVS "\tmain: Cap for va: %p is %d TYPE: %d\n", va, cap, seL4_DebugCapIdentify(cap));

@@ -68,7 +68,7 @@ void ads_dump_rr(ads_t *ads) {
 
     while (from_sel4_res != NULL)
     {
-        OSDB_PRINTF(ADSSERVS "Reservation: %p -- %p = %s %s\n",
+        OSDB_PRINTF(ADSSERVS "Reservation: 0x%lx -- 0x%lx = %s %s\n",
                     from_sel4_res->start, from_sel4_res->end,
             human_readable_size(from_sel4_res->end - from_sel4_res->start),
             human_readable_va_res_type(from_sel4_res->type));
@@ -164,7 +164,7 @@ int ads_clone(vspace_t *loader, ads_t *ads, vka_t *vka, void* omit_vaddr, ads_t 
     int num_pages;
     while (from_sel4_res != NULL)
     {
-        OSDB_PRINTF("Reservation: %p\n", from_sel4_res->start);
+        OSDB_PRINTF("Reservation: %p\n", (void *) from_sel4_res->start);
         // Reserver
         reservation_t new_res = sel4utils_reserve_range_at(to,
                                                            (void *)from_sel4_res->start,

@@ -1,12 +1,12 @@
 /**
- * @file gpi_server.c    
+ * @file gpi_server.c
  * @author Sid Agrawal(sid@sid-agrawal.c)
  * @brief Implements functions needed by a parent to interact with the gpi server.
  * @version 0.1
  * @date 2022-04-05
- * 
+ *
  * @copyright Copyright (c) 2022
- * 
+ *
  */
 #include <stdio.h>
 #include <string.h>
@@ -75,7 +75,7 @@ gpi_server_parent_spawn_thread(simple_t *parent_simple, vka_t *parent_vka,
     get_gpi_server()->server_cspace = parent_cspace_cspath.root;
     get_gpi_server()->server_vspace = parent_vspace;
 
-    
+
     /* Allocate the Endpoint that the server will be listening on. */
     error = vka_alloc_endpoint(parent_vka, &get_gpi_server()->server_ep_obj);
     if (error != 0) {
@@ -84,7 +84,7 @@ gpi_server_parent_spawn_thread(simple_t *parent_simple, vka_t *parent_vka,
         return error;
     }
 
-    *server_ep_cap = get_gpi_server()->server_ep_obj.cptr; 
+    *server_ep_cap = get_gpi_server()->server_ep_obj.cptr;
 
     /* Setup the ADS Component */
     ads_component_context_t *adsc = &get_gpi_server()->ads_component;
@@ -180,7 +180,7 @@ gpi_server_parent_spawn_thread(simple_t *parent_simple, vka_t *parent_vka,
         goto out;
     }
 
-    OSDB_PRINTF(GPISERVP"spawn_thread: Server thread binded well. at public EP %d\n",
+    OSDB_PRINTF(GPISERVP "spawn_thread: Server thread binded well. at public EP %lu\n",
            get_gpi_server()->server_ep_obj.cptr);
     return 0;
 
@@ -201,8 +201,8 @@ void handle_untyped_request(seL4_MessageInfo_t tag,
 {
 
     gpi_cap_t req_cap_type = seL4_GetMR(0);
-    OSDB_PRINTF(GPISERVS"handle_untyped_request: Got request for cap type %d\n",
-           req_cap_type);    
+    OSDB_PRINTF(GPISERVS"handle_untyped_request: Got request for cap type %u\n",
+           req_cap_type);
 
     switch (req_cap_type)
     {
@@ -260,7 +260,7 @@ void gpi_server_main()
 
 
     OSDB_PRINTF(GPISERVS"main: Entering main loop and accepting requests.\n");
-    
+
     while (1)
     {
         /* Pre */

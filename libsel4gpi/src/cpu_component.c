@@ -70,8 +70,8 @@ static inline void reply(seL4_MessageInfo_t tag)
 
 /**
  * @brief Insert a new client into the client registry Linked List.
- * 
- * @param new_node 
+ *
+ * @param new_node
  */
 static void cpu_component_registry_insert(cpu_component_registry_entry_t *new_node) {
         // TODO:Use a mutex
@@ -94,9 +94,9 @@ static void cpu_component_registry_insert(cpu_component_registry_entry_t *new_no
 
 /**
  * @brief Lookup the client registry entry for the give badge.
- * 
- * @param badge 
- * @return cpu_component_registry_entry_t* 
+ *
+ * @param badge
+ * @return cpu_component_registry_entry_t*
  */
 static cpu_component_registry_entry_t *cpu_component_registry_get_entry_by_badge(seL4_Word badge){
 
@@ -156,7 +156,7 @@ void cpu_handle_allocation_request(seL4_MessageInfo_t *reply_tag)
 
 static void handle_start_req(seL4_Word sender_badge, seL4_MessageInfo_t old_tag, seL4_CPtr received_cap)
 {
-    OSDB_PRINTF(CPUSERVS "main: Got start request from client badge %x.\n",
+    OSDB_PRINTF(CPUSERVS "main: Got start request from client badge %lx.\n",
            sender_badge);
 
     int error;
@@ -164,11 +164,10 @@ static void handle_start_req(seL4_Word sender_badge, seL4_MessageInfo_t old_tag,
     cpu_component_registry_entry_t *client_data = cpu_component_registry_get_entry_by_badge(sender_badge);
     if (client_data == NULL)
     {
-        OSDB_PRINTF(CPUSERVS "main: Failed to find client badge %x.\n",
-               sender_badge);
+        OSDB_PRINTF(CPUSERVS "main: Failed to find client badge %lx.\n", sender_badge);
         return;
     }
-    OSDB_PRINTF(CPUSERVS "main: found client_data %x.\n", client_data);
+    OSDB_PRINTF(CPUSERVS "main: found client_data %p.\n", client_data);
     for (int i = 0; i < 5; i++)
     {
         OSDB_PRINTF(CPUSERVS "MR[%d] = %lx\n", i, seL4_GetMR(i));
@@ -206,8 +205,8 @@ static void handle_config_req(seL4_Word sender_badge,
 
     int error = 0;
 
-    OSDB_PRINTF(CPUSERVS "capsUnwrapped: %d\n", seL4_MessageInfo_get_capsUnwrapped(old_tag));
-    OSDB_PRINTF(CPUSERVS "extraCap: %d\n", seL4_MessageInfo_ptr_get_extraCaps(&old_tag));
+    OSDB_PRINTF(CPUSERVS "capsUnwrapped: %lu\n", seL4_MessageInfo_get_capsUnwrapped(old_tag));
+    OSDB_PRINTF(CPUSERVS "extraCap: %lu\n", seL4_MessageInfo_ptr_get_extraCaps(&old_tag));
     for (int i = 0; i < 5; i++)
     {
         OSDB_PRINTF(CPUSERVS "MR[%d] = %lx\n", i, seL4_GetBadge(i));
@@ -217,7 +216,7 @@ static void handle_config_req(seL4_Word sender_badge,
     cpu_component_registry_entry_t *client_data = cpu_component_registry_get_entry_by_badge(sender_badge);
     if (client_data == NULL)
     {
-        OSDB_PRINTF(CPUSERVS "main: Failed to find client badge %x.\n",
+        OSDB_PRINTF(CPUSERVS "main: Failed to find client badge %lx.\n",
                sender_badge);
         assert(0);
         return;
@@ -232,12 +231,12 @@ static void handle_config_req(seL4_Word sender_badge,
     ads_component_registry_entry_t *asre = ads_component_registry_get_entry_by_badge(ads_cap_badge);
     if (asre == NULL)
     {
-        OSDB_PRINTF(CPUSERVS "main: Failed to find ads badge %x.\n", ads_cap_badge);
+        OSDB_PRINTF(CPUSERVS "main: Failed to find ads badge %lx.\n", ads_cap_badge);
         assert(0);
         return;
     }
 
-    OSDB_PRINTF(CPUSERVS "Found ads_data with object ID: %x.\n", asre->ads.ads_obj_id);
+    OSDB_PRINTF(CPUSERVS "Found ads_data with object ID: %u.\n", asre->ads.ads_obj_id);
     // /* Get the vspace for the ads */
     vspace_t *ads_vspace = asre->ads.vspace;
 
@@ -267,7 +266,7 @@ static void handle_config_req(seL4_Word sender_badge,
  *
  */
 void cpu_component_handle(seL4_MessageInfo_t tag,
-                          seL4_Word sender_badge, 
+                          seL4_Word sender_badge,
                           cspacepath_t *received_cap,
                           seL4_MessageInfo_t *reply_tag) /* reply_tag not used right now*/
 {

@@ -115,9 +115,9 @@ void badge_print(seL4_Word badge)
 {
     OSDB_PRINTF("BG: %lx\t", badge);
     OSDB_PRINTF("CapType: %s\t", cap_type_to_str(get_cap_type_from_badge(badge)));
-    OSDB_PRINTF("Perms: %u\t", get_perms_from_badge(badge));
-    OSDB_PRINTF("CID: %u\t", get_client_id_from_badge(badge));
-    OSDB_PRINTF("OID: %u\n", get_object_id_from_badge(badge));
+    OSDB_PRINTF("Perms: %lu\t", get_perms_from_badge(badge));
+    OSDB_PRINTF("CID: %lu\t", get_client_id_from_badge(badge));
+    OSDB_PRINTF("OID: %lu\n", get_object_id_from_badge(badge));
 }
 
 
