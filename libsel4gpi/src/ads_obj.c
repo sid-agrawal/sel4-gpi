@@ -68,12 +68,31 @@ void ads_dump_rr(ads_t *ads) {
 
     while (from_sel4_res != NULL)
     {
-        OSDB_PRINTF(ADSSERVS "Reservation: %p\n", from_sel4_res->start);
-        void *va = (void *)from_sel4_res->start;
-        OSDB_PRINTF(ADSSERVS  "VA: %p\n", va);
+        OSDB_PRINTF(ADSSERVS "Reservation: %p -- %p = %s %s\n",
+                    from_sel4_res->start, from_sel4_res->end,
+            human_readable_size(from_sel4_res->end - from_sel4_res->start),
+            human_readable_va_res_type(from_sel4_res->type));
 
+        /* Print all the caps of this reservation */
+        #if 0
+        void *va = (void *)from_sel4_res->start;
+        for (void * start = from_sel4_res->start, *end = from_sel4_res->end; start < end; start += PAGE_SIZE_4K)
+        {
+            seL4_CPtr cap = vspace_get_cap(ads_vspace, start);
+            if (cap == 0)
+            {
+                OSDB_PRINTF(ADSSERVS "No cap for %p\n", start);
+            }
+            else
+            {
+                OSDB_PRINTF(ADSSERVS "Cap for %p: %d Type: %u\n", start, cap, seL4_DebugCapIdentify(cap));
+            }
+        }
+
+        #endif
         from_sel4_res = from_sel4_res->next;
     }
+
 
     OSDB_PRINTF(ADSSERVS "===========END of interesting output================\n");
 }
