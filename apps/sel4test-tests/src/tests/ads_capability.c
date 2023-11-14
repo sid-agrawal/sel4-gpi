@@ -360,8 +360,31 @@ int test_ads_dump_rr(env_t env)
     ads_client_context_t conn;
     conn.badged_server_ep_cspath = path;
 
+    // Using a known EP, get a new ads CAP.
+    ads_client_context_t clone_conn;
+    error = ads_client_clone(&conn, &env->vka,  (void *) 0x10001000, &clone_conn);
+    test_error_eq(error, 0);
+
+    cpu_client_context_t cpu_conn;
+    error = cpu_component_client_connect(env->gpi_endpoint,
+                                         &env->vka,
+                                         &cpu_conn);
+    test_error_eq(error, 0);
+
+    // Config its ads and cspace
+    error = cpu_client_config(&cpu_conn,
+                              &clone_conn,
+                              env->cspace_root,
+                              env->endpoint);
+    test_error_eq(error, 0);
+
     // Dump the ads rr
     ads_client_dump_rr(&conn);
+
+
+    ads_client_dump_rr(&clone_conn);
+
+
     return sel4test_get_result();
 }
 DEFINE_TEST(GPIADS006, "Dump the RR of the ads", test_ads_dump_rr, true)

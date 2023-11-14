@@ -158,6 +158,7 @@ int ads_clone(vspace_t *loader, ads_t *ads, vka_t *vka, void* omit_vaddr, ads_t 
     sel4utils_alloc_data_t *from_data = get_alloc_data(from);
     sel4utils_res_t *from_sel4_res = from_data->reservation_head;
 
+
     OSDB_PRINTF("===========Start of interesting output================\n");
 
     /* walk all the reservations */
@@ -170,6 +171,12 @@ int ads_clone(vspace_t *loader, ads_t *ads, vka_t *vka, void* omit_vaddr, ads_t 
                                                            (void *)from_sel4_res->start,
                                                            from_sel4_res->end - from_sel4_res->start,
                                                            from_sel4_res->rights, from_sel4_res->cacheable);
+
+
+    sel4utils_res_t *to_sel4_res = reservation_to_res(new_res);
+    assert(to_sel4_res != NULL);
+    to_sel4_res->type = from_sel4_res->type;
+
 
         num_pages = (from_sel4_res->end - from_sel4_res->start) / PAGE_SIZE_4K;
         if (from_sel4_res->start == (uintptr_t)omit_vaddr)
@@ -190,6 +197,7 @@ int ads_clone(vspace_t *loader, ads_t *ads, vka_t *vka, void* omit_vaddr, ads_t 
             ZF_LOGE("Failed to map memory while making copy: %d\n", error);
             goto error_exit;
         }
+
         // Move to next node.
         from_sel4_res = from_sel4_res->next;
     }
