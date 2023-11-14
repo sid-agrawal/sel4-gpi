@@ -74,9 +74,11 @@ void ads_dump_rr(ads_t *ads) {
             human_readable_va_res_type(from_sel4_res->type));
 
         /* Print all the caps of this reservation */
-        #if 0
+        #if 1
         void *va = (void *)from_sel4_res->start;
-        for (void * start = from_sel4_res->start, *end = from_sel4_res->end; start < end; start += PAGE_SIZE_4K)
+        for (void *start = (void *)from_sel4_res->start;
+             start < (void *) from_sel4_res->end;
+             start += PAGE_SIZE_4K)
         {
             seL4_CPtr cap = vspace_get_cap(ads_vspace, start);
             if (cap == 0)
@@ -85,7 +87,7 @@ void ads_dump_rr(ads_t *ads) {
             }
             else
             {
-                OSDB_PRINTF(ADSSERVS "Cap for %p: %d Type: %u\n", start, cap, seL4_DebugCapIdentify(cap));
+                OSDB_PRINTF(ADSSERVS "Cap for %p: %lu Type: %u\n", start, cap, seL4_DebugCapIdentify(cap));
             }
         }
 
