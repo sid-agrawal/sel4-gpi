@@ -5,9 +5,9 @@
  * @brief API for a parent to spawn a GPI server.
  * @version 0.1
  * @date 2022-04-05
- * 
+ *
  * @copyright Copyright (c) 2022
- * 
+ *
  */
 #pragma once
 
@@ -22,6 +22,7 @@
 #include <sel4gpi/ads_component.h>
 #include <sel4gpi/pd_component.h>
 #include <sel4gpi/cpu_component.h>
+#include <sel4gpi/cap_tracking.h>
 
 
 #define GPI_SERVER_DEFAULT_PRIORITY    (seL4_MaxPrio - 1)
@@ -63,7 +64,7 @@ seL4_Error gpi_server_parent_spawn_thread(simple_t *parent_simple,
                                           seL4_CPtr *server_endpoint);
 
 
-/* 
+/*
 Context of the server
 */
 typedef struct _gpi_server_context {
@@ -73,7 +74,7 @@ typedef struct _gpi_server_context {
     vspace_t *server_vspace;
     sel4utils_thread_t server_thread;
 
-    // The server listens on this endpoint. 
+    // The server listens on this endpoint.
     vka_object_t server_ep_obj;
 
     // Parent's badge value.
@@ -85,9 +86,11 @@ typedef struct _gpi_server_context {
     ads_component_context_t ads_component;
     cpu_component_context_t cpu_component;
     pd_component_context_t  pd_component;
+
+    osmosis_cap_t osm_caps[MAX_OSM_CAPS];
 } gpi_server_context_t;
 
-/** 
+/**
  * Internal library function: acts as the main() for the server thread.
  **/
 void gpi_server_main(void);

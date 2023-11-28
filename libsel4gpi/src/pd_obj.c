@@ -26,11 +26,11 @@ int pd_new(pd_t *pd,
     OSDB_PRINTF(PDSERVS"new PD: \n");
 
 
-    for (int i = 0; i < 500; i++)
-    {
-        pd->osm_caps[i].type = GPICAP_TYPE_MAX;
-        pd->osm_caps[i].slot = 0;
-    }
+    // for (int i = 0; i < MAX_OSM_CAPS; i++)
+    // {
+    //     pd->osm_caps[i].type = GPICAP_TYPE_MAX;
+    //     pd->osm_caps[i].slot = 0;
+    // }
 
     pd->vka = vka;
     // Allocate a new cspace

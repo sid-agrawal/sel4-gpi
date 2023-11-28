@@ -15,6 +15,7 @@
 
 typedef struct _ads {
     vspace_t *vspace;
+    sel4utils_process_t *process_for_cookies;
     uint32_t ads_obj_id;
 }ads_t;
 

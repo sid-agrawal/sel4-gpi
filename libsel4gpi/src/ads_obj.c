@@ -14,6 +14,7 @@
 #include <sel4gpi/ads_obj.h>
 #include <sel4gpi/ads_component.h>
 #include <sel4gpi/debug.h>
+#include <sel4gpi/cap_tracking.h>
 
 int ads_attach(ads_t *ads, vka_t *vka, void* vaddr, size_t size, seL4_CPtr frame_cap,
                /*sel4utils_process_t*/ vspace_t *process_cookie)
@@ -66,6 +67,10 @@ void ads_dump_rr(ads_t *ads) {
     sel4utils_res_t *from_sel4_res = get_alloc_data(ads_vspace)->reservation_head;
     assert(from_sel4_res != NULL);
 
+    vka_t  *vka = get_alloc_data(ads_vspace)->vka;;
+    assert(vka != NULL);
+    OSDB_PRINTF(ADSSERVS "vka address: %p\n", vka);
+
     while (from_sel4_res != NULL)
     {
         OSDB_PRINTF(ADSSERVS "Reservation: 0x%lx -- 0x%lx = %s %s\n",
@@ -87,7 +92,34 @@ void ads_dump_rr(ads_t *ads) {
             }
             else
             {
-                OSDB_PRINTF(ADSSERVS "Cap for %p: %lu Type: %u\n", start, cap, seL4_DebugCapIdentify(cap));
+                /*
+                    From the cap we want
+                    1. Type
+                    2. PA (if frame cap)
+                    3. Size (if frame cap)
+                    4. Rights
+                    5. Endpoint badge (if endpoint cap)
+                    6. Endpoint badge (PD responsible for this EP)
+                */
+                //    osmosis_cap_t cap_data;
+                //    int error = retrive_cap_data(cap, &cap_data);
+                //    assert(error == 0);
+
+
+
+                //    cap_data.paddr);
+                // OSDB_PRINTF(ADSSERVS "\tGetting paddr for cap %ld\n", cap);
+
+                void *paddr = 0;
+                uintptr_t cookie = vspace_get_cookie(ads_vspace, start);
+                if (cookie) {
+                    paddr = (void *) sel4utils_get_paddr(ads_vspace, start, seL4_ARM_SmallPageObject, seL4_PageBits);
+                }
+                OSDB_PRINTF(ADSSERVS "Cap for %p: %lu Type: %u Paddr: %p\n",
+                            start,
+                            cap,
+                            seL4_DebugCapIdentify(cap),
+                            paddr);
             }
         }
 
@@ -104,6 +136,11 @@ int ads_clone(vspace_t *loader, ads_t *ads, vka_t *vka, void* omit_vaddr, ads_t 
     ret_ads->vspace = malloc(sizeof(vspace_t));
     if (ret_ads->vspace == NULL) {
         ZF_LOGE("Failed to allocate vspace\n");
+        goto error_exit;
+    }
+    ret_ads->process_for_cookies = malloc(sizeof(sel4utils_process_t));
+    if (ret_ads->process_for_cookies == NULL) {
+        ZF_LOGE("Failed to allocate process struct for coolies in ads_clone\n");
         goto error_exit;
     }
     vspace_t *from = ads->vspace;
@@ -138,16 +175,20 @@ int ads_clone(vspace_t *loader, ads_t *ads, vka_t *vka, void* omit_vaddr, ads_t 
         goto error_exit;
     }
     // Create empty vspace
-
-
     error = sel4utils_get_vspace(
          loader,
          to,
          alloc_data,
          vka,
          vspace_root_object.cptr,
-         NULL, //sel4utils_allocated_object,
-         NULL // (void *) process
+         sel4utils_allocated_object,
+
+        /*
+            sel4utils_allocated_object expects a process struct as a cookie
+            Instead use a different function which suited are needs better.
+        */
+
+         &(ret_ads->process_for_cookies)
      );
     if (error)
     {
