@@ -76,6 +76,7 @@ target_link_libraries(
         sel4_autoconf
         muslc
         sel4
+        sel4gpi
         sel4runtime
         sel4allocman
         sel4vka
@@ -83,7 +84,6 @@ target_link_libraries(
         sel4rpc
         sel4test
         sel4platsupport
-        sel4gpi
         sel4muslcsys
         sel4testsupport
     PRIVATE sel4test-driver_Config

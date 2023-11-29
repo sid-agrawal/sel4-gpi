@@ -23,22 +23,22 @@ typedef struct osmosis_cap {
     osmosis_pd_id_t pd_id;
 
     /* If this cap is a minted cap */
-    bool is_minted;
+    bool isMinted;
     seL4_Word minted_from;
 } osmosis_cap_t;
 
 /*
     Add cap to the cap tracking object.
 */
-int add_cap_data(osmosis_cap_t *new_cap_data);
+int gpi_add_cap_data(osmosis_cap_t *new_cap_data);
 
 /*
     Remove cap from the cap tracking object.
 */
-int remove_cap_data(seL4_CPtr cap_to_remove);
+int gpi_remove_cap_data(seL4_CPtr cap_to_remove);
 
 /*
-    Retrive cap's data from the cap tracking object.
+    Retrieve cap's data from the cap tracking object.
 */
-int retrive_cap_data(seL4_CPtr cap_to_find,
+int gpi_retrieve_cap_data(seL4_CPtr cap_to_find,
                      osmosis_cap_t *return_data);

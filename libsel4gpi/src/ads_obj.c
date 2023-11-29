@@ -111,14 +111,14 @@ void ads_dump_rr(ads_t *ads) {
                 // OSDB_PRINTF(ADSSERVS "\tGetting paddr for cap %ld\n", cap);
 
                 void *paddr = 0;
-                uintptr_t cookie = vspace_get_cookie(ads_vspace, start);
-                if (cookie) {
-                    paddr = (void *) sel4utils_get_paddr(ads_vspace, start, seL4_ARM_SmallPageObject, seL4_PageBits);
-                }
+                seL4_CPtr page_frame_cap = vspace_get_cap(ads_vspace, start);
+                assert(page_frame_cap != RESERVED && page_frame_cap != EMPTY);
+                osmosis_cap_t cap_info;
+                assert(gpi_retrieve_cap_data(page_frame_cap, &cap_info)== 0);
                 OSDB_PRINTF(ADSSERVS "Cap for %p: %lu Type: %u Paddr: %p\n",
                             start,
-                            cap,
-                            seL4_DebugCapIdentify(cap),
+                            page_frame_cap,
+                            seL4_DebugCapIdentify(page_frame_cap),
                             paddr);
             }
         }

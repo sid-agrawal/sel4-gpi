@@ -21,7 +21,7 @@
 /*
     Add cap to the cap tracking object.
 */
-int add_cap_data(osmosis_cap_t *new_cap_data)
+int gpi_add_cap_data(osmosis_cap_t *new_cap_data)
 {
     gpi_server_context_t *env = get_gpi_server();
     for (int i = 0; i < MAX_OSM_CAPS; i++) {
@@ -47,7 +47,7 @@ int add_cap_data(osmosis_cap_t *new_cap_data)
 /*
     Remove cap from the cap tracking object.
 */
-int remove_cap_data(seL4_CPtr cap_to_remove)
+int gpi_remove_cap_data(seL4_CPtr cap_to_remove)
 {
 
     gpi_server_context_t *env = get_gpi_server();
@@ -98,7 +98,7 @@ int remove_cap_data(seL4_CPtr cap_to_remove)
 /*
     Retrive cap's data from the cap tracking object.
 */
-int retrive_cap_data(seL4_CPtr cap_to_find,
+int gpi_retrieve_cap_data(seL4_CPtr cap_to_find,
                      osmosis_cap_t *return_data)
 {
     gpi_server_context_t *env = get_gpi_server();
@@ -119,6 +119,6 @@ int retrive_cap_data(seL4_CPtr cap_to_find,
             return 0;
         }
     }
-    ZF_LOGE("Could not find cap in cap tracking object");
+    ZF_LOGE("Could not find cap in cap tracking object for cap %lu", cap_to_find);
     return 1;
 }

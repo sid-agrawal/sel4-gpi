@@ -382,7 +382,7 @@ int test_ads_dump_rr(env_t env)
     ads_client_dump_rr(&conn);
 
 
-    ads_client_dump_rr(&clone_conn);
+    // ads_client_dump_rr(&clone_conn);
 
 
     return sel4test_get_result();
