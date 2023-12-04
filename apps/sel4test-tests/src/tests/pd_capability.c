@@ -63,6 +63,15 @@ int test_new_process_osmosis(env_t env)
     /* modify the message */
     seL4_SetMR(0, start);
     seL4_ReplyRecv(ep_object.cptr, tag, NULL);
+
+    // allocate a frame for testing syscall
+    vka_object_t frame_object = {0};
+    error = vka_alloc_frame(&env->vka, PAGE_BITS_4K, &frame_object);
+    assert(!error);
+
+    uintptr_t addr = seL4_DebugCapAddr(frame_object.cptr);
+    printf("frame cap paddr: %lx\n", addr);
+
     printf("------------ Phase 2: %s ------------\n", __FUNCTION__);
     while (1)
     {
