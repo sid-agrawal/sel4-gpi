@@ -29,18 +29,20 @@ int gpi_add_cap_data(osmosis_cap_t *new_cap_data)
         /* Check that slot is free */
         if (env->osm_caps[i].slot == 0) {
             /* If the slot is free then the type should be cleared too*/
-            assert (new_cap_data->type == GPICAP_TYPE_MAX);
+            assert (env->osm_caps[i].type == GPICAP_TYPE_NONE);
 
             /* Initilize the slot field*/
             env->osm_caps[i].slot = new_cap_data->slot;
             env->osm_caps[i].type = new_cap_data->type;
             env->osm_caps[i].isUntyped = new_cap_data->isUntyped;
             env->osm_caps[i].paddr = new_cap_data->paddr;
+            env->osm_caps[i].isMinted = new_cap_data->isMinted;
+            env->osm_caps[i].minted_from = new_cap_data->minted_from;
             return 0;
         }
 
     }
-    ZF_LOGE("Could not an empty entry in the cap tracking object");
+    ZF_LOGF("Could not an empty entry in the cap tracking object");
     return 1;
 }
 
@@ -91,7 +93,7 @@ int gpi_remove_cap_data(seL4_CPtr cap_to_remove)
             return 0;
         }
     }
-    ZF_LOGE("Could not find cap in cap tracking object");
+    // ZF_LOGE("Could not find cap in cap tracking object");
     return 1;
 }
 
@@ -116,9 +118,12 @@ int gpi_retrieve_cap_data(seL4_CPtr cap_to_find,
             return_data->type = env->osm_caps[i].type;
             return_data->isUntyped = env->osm_caps[i].isUntyped;
             return_data->paddr = env->osm_caps[i].paddr;
+            return_data->isMinted = env->osm_caps[i].isMinted;
+            return_data->minted_from = env->osm_caps[i].minted_from;
+            // ZF_LOGE("Found cap in cap tracking object for cap %lu, type: %u\n", cap_to_find, seL4_DebugCapIdentify(cap_to_find));
             return 0;
         }
     }
-    ZF_LOGE("Could not find cap in cap tracking object for cap %lu", cap_to_find);
+    ZF_LOGE("Could not find cap in cap tracking object for cap %lu, type: %u\n", cap_to_find, seL4_DebugCapIdentify(cap_to_find));
     return 1;
 }

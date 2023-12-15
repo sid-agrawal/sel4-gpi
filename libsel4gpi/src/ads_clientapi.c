@@ -94,9 +94,22 @@ int ads_client_clone(ads_client_context_t *conn, vka_t* vka, void* omit_vaddr, a
     return 0;
 }
 
-int ads_client_dump_rr(ads_client_context_t *conn) {
+/* To Change:
+    Alloc a page frame cap:
+    Pass it to the server
+
+    On return from the server,
+    map the page frame cap to the vaddr
+    copy the contents to a malloced region of memory
+    unmap the page frame cap
+    free the page frame cap
+
+*/
+int ads_client_dump_rr(ads_client_context_t *conn, char * ads_rr, size_t size) {
 
     seL4_SetMR(ADSMSGREG_FUNC, ADS_FUNC_GET_RR_REQ);
+    seL4_SetMR(ADSMSGREG_GET_RR_REQ_BUF_VA, (seL4_Word) ads_rr);
+    seL4_SetMR(ADSMSGREG_GET_RR_REQ_BUF_SZ, (seL4_Word) size);
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0,
                                                   ADSMSGREG_GET_RR_REQ_END);
 

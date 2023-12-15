@@ -16,7 +16,7 @@
 #include<sel4gpi/cap_tracking.h>
 
 #define TEST_NAME_MAX (64 - 4 * sizeof(seL4_Word))
-#define MAX_OSM_CAPS 500
+#define MAX_OSM_CAPS 5000
 
 typedef struct _pd {
     seL4_CPtr cspace_root;

@@ -11,10 +11,13 @@
 #include <sel4utils/process.h>
 #include <stdio.h>
 
+#include <vka/capops.h>
+
 #include <sel4gpi/ads_obj.h>
 #include <sel4gpi/ads_component.h>
 #include <sel4gpi/debug.h>
 #include <sel4gpi/cap_tracking.h>
+#include <sel4gpi/gpi_server.h>
 
 int ads_attach(ads_t *ads, vka_t *vka, void* vaddr, size_t size, seL4_CPtr frame_cap,
                /*sel4utils_process_t*/ vspace_t *process_cookie)
@@ -60,14 +63,68 @@ int ads_bind(ads_t *ads, vka_t *vka, seL4_CPtr* cpu_cap) {
     return 0;
 }
 
-void ads_dump_rr(ads_t *ads) {
+void ads_dump_rr(ads_t *ads, void *buff, size_t size)
+{
+
+    assert(buff != NULL);
 
     vspace_t *ads_vspace = ads->vspace;
+    /* Get the page frame cap for the client buf VA */
+    seL4_CPtr buf_cap = vspace_get_cap(ads_vspace, buff);
+    assert(buf_cap != 0);
+
+    /* Clone the cap */
+    /* Fix up this copy of cap*/
+#if 1
+    /* create a path to the cap */
+    cspacepath_t from_path, to_path;
+    vka_cspace_make_path(get_gpi_server()->server_vka, buf_cap, &from_path);
+
+    /* allocate a path to put the copy in the destination */
+    int error = vka_cspace_alloc_path(get_gpi_server()->server_vka, &to_path);
+    if (error)
+    {
+        ZF_LOGF("Failed to allocate slot in to cspace, error: %d", error);
+    }
+
+    /* copy the frame cap into the to cspace */
+    error = vka_cnode_copy(&to_path, &from_path, seL4_AllRights);
+    if (error)
+    {
+        ZF_LOGF("Failed to copy cap, error %d num_pages: %d\n",
+                error, 1);
+    }
+
+#endif
+
+    /* a. Create a reservation in the server vspace*/
+    /* Find the page where the buffer lies*/
+    vspace_t *server_vspace = get_gpi_server()->server_vspace;
+    void *server_buffer_va = sel4utils_map_pages(server_vspace,
+                                                 &to_path.capPtr,
+                                                 NULL,
+                                                 seL4_AllRights,
+                                                 1,
+                                                 seL4_PageBits,
+                                                 1);
+
+    /**/
+
+    server_buffer_va += (uintptr_t)buff % PAGE_SIZE_4K;
+
+    /* Dump the info */
+
+    /* Unmap the page */
+
     OSDB_PRINTF(ADSSERVS "===========Start of interesting output================\n");
+    OSDB_PRINTF(ADSSERVS "===========Buf value is %p================\n", buff);
+    OSDB_PRINTF(ADSSERVS "===========server VA value is %p================\n",
+                server_buffer_va);
     sel4utils_res_t *from_sel4_res = get_alloc_data(ads_vspace)->reservation_head;
     assert(from_sel4_res != NULL);
 
-    vka_t  *vka = get_alloc_data(ads_vspace)->vka;;
+    vka_t *vka = get_alloc_data(ads_vspace)->vka;
+    ;
     assert(vka != NULL);
     OSDB_PRINTF(ADSSERVS "vka address: %p\n", vka);
 
@@ -75,14 +132,14 @@ void ads_dump_rr(ads_t *ads) {
     {
         OSDB_PRINTF(ADSSERVS "Reservation: 0x%lx -- 0x%lx = %s %s\n",
                     from_sel4_res->start, from_sel4_res->end,
-            human_readable_size(from_sel4_res->end - from_sel4_res->start),
-            human_readable_va_res_type(from_sel4_res->type));
+                    human_readable_size(from_sel4_res->end - from_sel4_res->start),
+                    human_readable_va_res_type(from_sel4_res->type));
 
-        /* Print all the caps of this reservation */
-        #if 1
+/* Print all the caps of this reservation */
+#if 1
         void *va = (void *)from_sel4_res->start;
         for (void *start = (void *)from_sel4_res->start;
-             start < (void *) from_sel4_res->end;
+             start < (void *)from_sel4_res->end;
              start += PAGE_SIZE_4K)
         {
             seL4_CPtr cap = vspace_get_cap(ads_vspace, start);
@@ -105,28 +162,42 @@ void ads_dump_rr(ads_t *ads) {
                 //    int error = retrive_cap_data(cap, &cap_data);
                 //    assert(error == 0);
 
-
-
                 //    cap_data.paddr);
                 // OSDB_PRINTF(ADSSERVS "\tGetting paddr for cap %ld\n", cap);
 
-                void *paddr = 0;
+                void *paddr = (void *)0;
                 seL4_CPtr page_frame_cap = vspace_get_cap(ads_vspace, start);
                 assert(page_frame_cap != RESERVED && page_frame_cap != EMPTY);
                 osmosis_cap_t cap_info;
-                assert(gpi_retrieve_cap_data(page_frame_cap, &cap_info)== 0);
-                OSDB_PRINTF(ADSSERVS "Cap for %p: %lu Type: %u Paddr: %p\n",
+                if (gpi_retrieve_cap_data(page_frame_cap, &cap_info) == 0)
+                {
+                    paddr = (void *)cap_info.paddr;
+                }
+
+                while (cap_info.isMinted)
+                {
+                    if (gpi_retrieve_cap_data(cap_info.minted_from, &cap_info) == 0)
+                    {
+                        paddr = (void *)cap_info.paddr;
+                    }
+                    else
+                    {
+                        break;
+                    }
+                }
+
+                OSDB_PRINTF(ADSSERVS "Cap for %p: %lu Type: %u Paddr: %p isMinted: %d\n",
                             start,
                             page_frame_cap,
                             seL4_DebugCapIdentify(page_frame_cap),
-                            paddr);
+                            paddr,
+                            cap_info.isMinted);
             }
         }
 
-        #endif
+#endif
         from_sel4_res = from_sel4_res->next;
     }
-
 
     OSDB_PRINTF(ADSSERVS "===========END of interesting output================\n");
 }

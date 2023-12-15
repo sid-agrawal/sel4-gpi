@@ -379,10 +379,12 @@ int test_ads_dump_rr(env_t env)
     test_error_eq(error, 0);
 
     // Dump the ads rr
-    ads_client_dump_rr(&conn);
+    char * ads_rr = malloc(4096);
+    assert(ads_rr != NULL);
 
-
-    // ads_client_dump_rr(&clone_conn);
+    ads_client_dump_rr(&conn, ads_rr, 4096);
+    printf("ADS RR: %s\n", ads_rr);
+    // ads_client_dump_rr(&clone_conn, ads_rr, 4096);
 
 
     return sel4test_get_result();

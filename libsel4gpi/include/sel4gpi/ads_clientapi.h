@@ -85,7 +85,7 @@ int ads_client_clone(ads_client_context_t *conn, vka_t *vka, void* omit_vaddr,
  * @param conn ads connection object
  * @return int 0 on success, -1 on failure.
  */
-int ads_client_dump_rr(ads_client_context_t *conn);
+int ads_client_dump_rr(ads_client_context_t *conn, char *buf, size_t buf_size);
 
 /**
  * @brief Get the unique id of the ads.

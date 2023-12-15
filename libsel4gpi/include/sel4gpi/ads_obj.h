@@ -70,9 +70,11 @@ int ads_clone(vspace_t *loader, ads_t *ads, vka_t *vka, void* omit_vaddr, ads_t 
  * @brief
  *
  * @param ads ads object to dump the RR for
+ * @param buf address in the client's address space where we need to dump the RR info.
+ * @param size size of the buffer above.
  * @return void
  */
-void ads_dump_rr(ads_t *ads);
+void ads_dump_rr(ads_t *ads, void *buf, size_t size);
 
 
 static seL4_CPtr get_asid_pool(seL4_CPtr asid_pool)

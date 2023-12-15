@@ -65,6 +65,7 @@ gpi_server_parent_spawn_thread(simple_t *parent_simple, vka_t *parent_vka,
         return seL4_InvalidArgument;
     }
 
+    /* This will clear out all the fields in osm_caps too*/
     memset(get_gpi_server(), 0, sizeof(gpi_server_context_t));
 
     /* Get a CPtr to the parent's root cnode. */
