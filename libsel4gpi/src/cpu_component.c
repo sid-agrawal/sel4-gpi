@@ -261,6 +261,54 @@ static void handle_config_req(seL4_Word sender_badge,
     return reply(tag);
 }
 
+
+
+int forge_cpu_cap_from_tcb(vka_object_t *tcb_obj, vka_t *vka, seL4_CPtr *cap_ret){
+
+    assert(tcb_obj != NULL);
+    /* Allocate a new registry entry for the client. */
+    cpu_component_registry_entry_t *client_reg_ptr = malloc(sizeof(cpu_component_registry_entry_t));
+    if (client_reg_ptr == 0)
+    {
+        OSDB_PRINTF(CPUSERVS "main: Failed to allocate new badge for client.\n");
+        return 1;
+    }
+    memset((void *)client_reg_ptr, 0, sizeof(cpu_component_registry_entry_t));
+
+    /* Create a badged endpoint for the client to send messages to.
+     * Use the address of the client_registry_entry as the badge.
+     */
+    cspacepath_t src, dest;
+    vka_cspace_make_path(get_cpu_component()->server_vka,
+                         get_cpu_component()->server_ep_obj.cptr, &src);
+    seL4_CPtr dest_cptr;
+    vka_cspace_alloc(get_cpu_component()->server_vka, &dest_cptr);
+    vka_cspace_make_path(get_cpu_component()->server_vka, dest_cptr, &dest);
+
+    /* Update the info in the registry entry. */
+    seL4_Word badge = cpu_assign_new_badge_and_objectID(client_reg_ptr);
+    cpu_component_registry_insert(client_reg_ptr);
+
+
+    // (XXX) A lot more will go here.
+    client_reg_ptr->cpu.tcb = tcb_obj;
+
+    int error = vka_cnode_mint(&dest,
+                               &src,
+                               seL4_AllRights,
+                               badge);
+    if (error)
+    {
+        OSDB_PRINTF(CPUSERVS "main: Failed to mint client badge %lx.\n", badge);
+        return 1;
+    }
+    OSDB_PRINTF(CPUSERVS "main: Forged a new CPU cap(EP: %lx) with badge value: %lx\n",
+                dest.capPtr, badge);
+
+    *cap_ret = dest_cptr;
+    return 0;
+}
+
 /**
  * @brief The starting point for the cpu server's thread.
  *

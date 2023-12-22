@@ -16,6 +16,7 @@
 #include "timer.h"
 #include <sel4rpc/server.h>
 #include <sel4gpi/ads_component.h>
+#include <sel4gpi/cpu_component.h>
 #include <sel4testsupport/testreporter.h>
 
 /* Bootstrap test type. */
@@ -194,7 +195,7 @@ static int sel4test_driver_wait(driver_env_t env, struct testcase *test)
 void basic_set_up(uintptr_t e)
 {
     int error;
-    driver_env_t env = (driver_env_t)e;
+        driver_env_t env = (driver_env_t)e;
 
     sel4utils_process_config_t config = process_config_default_simple(&env->simple, TESTS_APP, env->init->priority);
     config = process_config_mcp(config, seL4_MaxPrio);
@@ -256,13 +257,31 @@ void basic_set_up(uintptr_t e)
     if (error){
         ZF_LOGF("Failed to forge child's as cap");
     }
-    ads_component_registry_entry_t *head = get_ads_component()->client_registry;
+    // ads_component_registry_entry_t *head = get_ads_component()->client_registry;
 
     env->child_ads_cptr_in_child = sel4utils_copy_cap_to_process(&(env->test_process),
                                                                 &env->vka, child_as_cap_in_parent);
+
+    // Here, do the same for the CPU cap too
+    seL4_CPtr child_cpu_cap_in_parent;
+    error = forge_cpu_cap_from_tcb(&env->test_process.thread.tcb, &env->vka, &child_cpu_cap_in_parent);
+    if (error){
+        ZF_LOGF("Failed to forge child's CPU cap");
+    }
+    // cpu_component_registry_entry_t *head_cpu = get_cpu_component()->client_registry;
+
+    env->child_cpu_cptr_in_child = sel4utils_copy_cap_to_process(&(env->test_process),
+                                                                &env->vka, child_cpu_cap_in_parent);
+
+
     // For the ads-server
+    // Keep this one as the last COPY, so that  init->free_slot.start a few lines below stays valid.
+    // See at label "Waring"
     env->gpi_endpoint_in_child = sel4utils_copy_cap_to_process(&(env->test_process),
                                                                &env->vka, env->gpi_endpoint_in_parent);
+
+
+
 
     /* copy the device frame, if any */
     if (env->init->device_frame_cap) {
@@ -274,6 +293,8 @@ void basic_set_up(uintptr_t e)
                                          seL4_AllRights, 1);
 
     assert(env->remote_vaddr != 0);
+
+Warning:
 
     /* WARNING: DO NOT COPY MORE CAPS TO THE PROCESS BEYOND THIS POINT,
      * AS THE SLOTS WILL BE CONSIDERED FREE AND OVERRIDDEN BY THE TEST PROCESS. */
@@ -303,13 +324,14 @@ test_result_t basic_run_test(struct testcase *test, uintptr_t e)
 #endif
 
     /* set up args for the test process */
-    seL4_Word argc = 4;
+    seL4_Word argc = 5;
     char string_args[argc][WORD_STRING_SIZE];
     char *argv[argc];
     sel4utils_create_word_args(string_args, argv, argc,
                                env->endpoint,
                                env->remote_vaddr,
                                env->child_ads_cptr_in_child,
+                               env->child_cpu_cptr_in_child,
                                env->gpi_endpoint_in_child);
 
     int num_res;

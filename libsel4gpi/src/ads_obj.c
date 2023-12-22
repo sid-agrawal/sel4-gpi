@@ -312,6 +312,12 @@ int ads_clone(vspace_t *loader, ads_t *ads, vka_t *vka, void* omit_vaddr, ads_t 
             goto error_exit;
         }
 
+
+        /*
+
+
+        */
+
         // Move to next node.
         from_sel4_res = from_sel4_res->next;
     }

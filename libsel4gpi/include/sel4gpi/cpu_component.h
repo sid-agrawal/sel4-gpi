@@ -92,7 +92,7 @@ typedef struct _cpu_component_registry_entry {
     /* In our model each CPU can have its own cspace. */
     seL4_CNode cspace_root;
     struct _cpu_component_registry_entry *next;
-    
+
 } cpu_component_registry_entry_t;
 
 /* State maintained by the server. */
@@ -103,14 +103,14 @@ typedef struct _cpu_component_context {
     vspace_t *server_vspace;
     sel4utils_thread_t server_thread;
 
-    // The server listens on this endpoint. 
+    // The server listens on this endpoint.
     vka_object_t server_ep_obj;
 
     int registry_n_entries;
     cpu_component_registry_entry_t *client_registry;
 } cpu_component_context_t;
 
-/** 
+/**
  * Internal library function: acts as the main() for the server thread.
  **/
 void cpu_component_handle(seL4_MessageInfo_t tag,
@@ -122,3 +122,4 @@ void cpu_component_handle(seL4_MessageInfo_t tag,
 cpu_component_context_t *get_cpu_component(void);
 
 void cpu_handle_allocation_request(seL4_MessageInfo_t *reply_tag);
+int forge_cpu_cap_from_tcb(vka_object_t *tcb, vka_t *vka, seL4_CPtr *cap_ret);

@@ -4,9 +4,9 @@
  * @brief Implements the methods to manipulate the cpu object
  * @version 0.1
  * @date 2022-04-05
- * 
+ *
  * @copyright Copyright (c) 2022
- * 
+ *
  */
 
 #include <sel4utils/process.h>
@@ -23,24 +23,24 @@ int cpu_start(cpu_t *cpu, sel4utils_thread_entry_fn entry_point, seL4_Word arg0)
     OSDB_PRINTF(CPUSERVS "cpu_start: starting CPU at entry point %p and arg0 %lx\n", entry_point, arg0);
 
     UNUSED seL4_UserContext regs = {0};
-    int error = seL4_TCB_ReadRegisters(cpu->tcb.cptr,
+    int error = seL4_TCB_ReadRegisters(cpu->tcb->cptr,
                                        0, 0, sizeof(regs) / sizeof(seL4_Word), &regs);
     assert(error == 0);
     sel4utils_arch_init_local_context((void *)entry_point, cpu->ipc_buffer_addr,
                                       NULL, NULL, cpu->stack_top, &regs);
     assert(error == 0);
 
-    error = seL4_TCB_WriteRegisters(cpu->tcb.cptr, 0, 0, sizeof(regs)/sizeof(seL4_Word), &regs);
+    error = seL4_TCB_WriteRegisters(cpu->tcb->cptr, 0, 0, sizeof(regs)/sizeof(seL4_Word), &regs);
     assert(error == 0);
 
 
     // resume the new thread
-    error = seL4_TCB_Resume(cpu->tcb.cptr);
+    error = seL4_TCB_Resume(cpu->tcb->cptr);
     assert(error == 0);
     return 0;
 }
 
-
+// (XXX) This does the allocation which is weird.
 int cpu_config_vspace(cpu_t *cpu,
                       vka_t *vka,
                       vspace_t *vspace,
@@ -49,12 +49,15 @@ int cpu_config_vspace(cpu_t *cpu,
 {
     OSDB_PRINTF(CPUSERVS"cpu_config_vspace: Configuring CPU\n");
 
-    int error = vka_alloc_tcb(vka, &cpu->tcb);
+    cpu->tcb = malloc(sizeof(vka_object_t)) ;
+    assert (cpu->tcb != NULL);
+
+    int error = vka_alloc_tcb(vka, cpu->tcb);
     assert(error == 0);
 
     seL4_CPtr vspace_root  = vspace->get_root(vspace); // root page table
     assert(vspace_root != 0);
-    
+
     cpu->ipc_buffer_addr =  vspace_new_ipc_buffer(vspace, &cpu->ipc_buffer_frame);
     assert(cpu->ipc_buffer_addr != NULL);
     OSDB_PRINTF(CPUSERVS"%s: line %d\n", __func__, __LINE__);
@@ -66,7 +69,7 @@ int cpu_config_vspace(cpu_t *cpu,
     cpu->tls_base = cpu->stack_top;
     cpu->stack_top -= 0x100;
 
-    error = seL4_TCB_Configure(cpu->tcb.cptr,
+    error = seL4_TCB_Configure(cpu->tcb->cptr,
                                seL4_CapNull,             // fault endpoint
                                root_cnode,               // root cnode
                                0,                        // root cnode size
@@ -76,11 +79,11 @@ int cpu_config_vspace(cpu_t *cpu,
                                cpu->ipc_buffer_frame);
     assert(error == 0);
 
-    error = seL4_TCB_SetPriority(cpu->tcb.cptr, seL4_CapInitThreadTCB, 254);
+    error = seL4_TCB_SetPriority(cpu->tcb->cptr, seL4_CapInitThreadTCB, 254);
     assert(error == 0);
 
-                                
-    error = seL4_TCB_SetTLSBase(cpu->tcb.cptr, (seL4_Word) cpu->stack_top);
+
+    error = seL4_TCB_SetTLSBase(cpu->tcb->cptr, (seL4_Word) cpu->stack_top);
     assert(error == 0);
 
     cpu->stack_top -= 0x100;

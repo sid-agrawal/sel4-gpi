@@ -84,6 +84,7 @@ struct driver_env {
     seL4_CPtr gpi_endpoint_in_parent;
 
     seL4_CPtr child_ads_cptr_in_child; //Child address-space cptr in child
+    seL4_CPtr child_cpu_cptr_in_child; //Child address-space cptr in child
     seL4_CPtr gpi_endpoint_in_child;
 
 
