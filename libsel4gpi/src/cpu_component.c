@@ -127,6 +127,17 @@ void cpu_handle_allocation_request(seL4_MessageInfo_t *reply_tag)
     memset((void *)client_reg_ptr, 0, sizeof(cpu_component_registry_entry_t));
     cpu_component_registry_insert(client_reg_ptr);
 
+    /* Createa a new CPU object */
+
+    int error = cpu_new(&client_reg_ptr->cpu,
+                        get_cpu_component()->server_vka);
+    if (error)
+    {
+        OSDB_PRINTF(CPUSERVS "main: Failed to create new CPU object\n");
+        return;
+    }
+
+
     /* Create a badged endpoint for the client to send messages to.
      * Use the address of the client_registry_entry as the badge.
      */
@@ -139,7 +150,7 @@ void cpu_handle_allocation_request(seL4_MessageInfo_t *reply_tag)
 
     // Add the latest ID to the obj and to the badlge.
     seL4_Word badge = cpu_assign_new_badge_and_objectID(client_reg_ptr);
-    int error = vka_cnode_mint(&dest,
+    error = vka_cnode_mint(&dest,
                                &src,
                                seL4_AllRights,
                                badge);
@@ -261,11 +272,78 @@ static void handle_config_req(seL4_Word sender_badge,
     return reply(tag);
 }
 
+static void handle_change_vspace_req(seL4_Word sender_badge,
+                              seL4_MessageInfo_t old_tag,
+                              seL4_CPtr received_cap)
+{
+    // Find the client - like start
+    OSDB_PRINTF(CPUSERVS "-----main: Got change vsspace  request from:");
+    badge_print(sender_badge);
 
+    OSDB_PRINTF(CPUSERVS " received_cap: ");
+    // debug_cap_identify("", received_cap);
 
-int forge_cpu_cap_from_tcb(vka_object_t *tcb_obj, vka_t *vka, seL4_CPtr *cap_ret){
+    assert(seL4_MessageInfo_get_extraCaps(old_tag) == 1);
+    assert(seL4_MessageInfo_ptr_get_capsUnwrapped(&old_tag) == 0);
+    assert(seL4_MessageInfo_get_label(old_tag) == 0);
 
-    assert(tcb_obj != NULL);
+    int error = 0;
+
+    OSDB_PRINTF(CPUSERVS "capsUnwrapped: %lu\n", seL4_MessageInfo_get_capsUnwrapped(old_tag));
+    OSDB_PRINTF(CPUSERVS "extraCap: %lu\n", seL4_MessageInfo_ptr_get_extraCaps(&old_tag));
+    for (int i = 0; i < 5; i++)
+    {
+        OSDB_PRINTF(CPUSERVS "MR[%d] = %lx\n", i, seL4_GetBadge(i));
+    }
+
+    /* Find the client */
+    cpu_component_registry_entry_t *client_data = cpu_component_registry_get_entry_by_badge(sender_badge);
+    if (client_data == NULL)
+    {
+        OSDB_PRINTF(CPUSERVS "main: Failed to find client badge %lx.\n",
+               sender_badge);
+        assert(0);
+        return;
+    }
+
+    /* Get the vspace for the ads */
+    seL4_Word ads_cap_badge = seL4_GetBadge(0);
+    ads_t ads;
+    ads_component_registry_entry_t *asre = ads_component_registry_get_entry_by_badge(ads_cap_badge);
+    if (asre == NULL)
+    {
+        OSDB_PRINTF(CPUSERVS "main: Failed to find ads badge %lx.\n", ads_cap_badge);
+        assert(0);
+        return;
+    }
+
+    OSDB_PRINTF(CPUSERVS "Found ads_data with object ID: %u.\n", asre->ads.ads_obj_id);
+    // /* Get the vspace for the ads */
+    vspace_t *ads_vspace = asre->ads.vspace;
+
+    error = cpu_change_vspace(&client_data->cpu,
+                              get_cpu_component()->server_vka,
+                              ads_vspace);
+    if (error)
+    {
+        OSDB_PRINTF(CPUSERVS "main: Failed to config from client badge:");
+        badge_print(sender_badge);
+        assert(0);
+        return;
+    }
+    OSDB_PRINTF(CPUSERVS "main: config done.\n");
+
+    seL4_SetMR(CPUMSGREG_FUNC, CPU_FUNC_CONFIG_ACK);
+    seL4_SetMR(1, 0xdead);
+    seL4_MessageInfo_t tag = seL4_MessageInfo_new(error, 0, 0, 1+ CPUMSGREG_CONFIG_ACK_END);
+    return reply(tag);
+}
+
+int forge_cpu_cap_from_tcb(sel4utils_process_t *process, // Change this to the sel4utils_thread_t
+                           vka_t *vka, seL4_CPtr *cap_ret)
+{
+
+    assert(process != NULL);
     /* Allocate a new registry entry for the client. */
     cpu_component_registry_entry_t *client_reg_ptr = malloc(sizeof(cpu_component_registry_entry_t));
     if (client_reg_ptr == 0)
@@ -291,7 +369,13 @@ int forge_cpu_cap_from_tcb(vka_object_t *tcb_obj, vka_t *vka, seL4_CPtr *cap_ret
 
 
     // (XXX) A lot more will go here.
-    client_reg_ptr->cpu.tcb = tcb_obj;
+    client_reg_ptr->cpu.tcb = &(process->thread.tcb);
+    client_reg_ptr->cpu.ipc_buffer_addr = (void *)  process->thread.ipc_buffer_addr;
+    client_reg_ptr->cpu.ipc_buffer_frame = process->thread.ipc_buffer;
+    client_reg_ptr->cpu.stack_top = process->thread.stack_top;
+    // client_reg_ptr->cpu.tls_base = &process->thread.tls_base;
+    client_reg_ptr->cpu.cspace = process->cspace.cptr;
+
 
     int error = vka_cnode_mint(&dest,
                                &src,
@@ -330,6 +414,9 @@ void cpu_component_handle(seL4_MessageInfo_t tag,
 
     case CPU_FUNC_CONFIG_REQ:
         handle_config_req(sender_badge, tag, received_cap->capPtr);
+        break;
+    case CPU_FUNC_CHANGE_VSPACE_REQ:
+        handle_change_vspace_req(sender_badge, tag, received_cap->capPtr);
         break;
     default:
         gpi_panic(CPUSERVS "Unknown func type.", (seL4_Word) func);

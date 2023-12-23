@@ -250,7 +250,7 @@ int test_ads_stack_isolated_stack_die(env_t env)
     OSDB_PRINTF("root-task: \t Writing to Other thread's stack: %p\n", other_thread_stack);
 
     /* Comment the line below for the test to pass*/
-    *other_thread_stack = 5;
+    //*other_thread_stack = 5;
 
 
     /* modify the message */

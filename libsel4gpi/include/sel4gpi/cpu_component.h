@@ -6,6 +6,7 @@
 
 #include <simple/simple.h>
 #include <sel4utils/thread.h>
+#include <sel4utils/process.h>
 #include <vka/vka.h>
 #include <vka/object.h>
 #include <vspace/vspace.h>
@@ -45,6 +46,9 @@ enum cpu_component_funcs {
     CPU_FUNC_CONFIG_REQ,
     CPU_FUNC_CONFIG_ACK,
 
+    CPU_FUNC_CHANGE_VSPACE_REQ,
+    CPU_FUNC_CHANGE_VSPACE_ACK,
+
     CPU_FUNC_DISCONNECT_REQ,
     CPU_FUNC_DISCONNECT_ACK,
 };
@@ -79,6 +83,11 @@ enum cpu_component_msgregs
     CPUMSGREG_CONFIG_REQ_END,
 
     CPUMSGREG_CONFIG_ACK_END = CPUMSGREG_LABEL0,
+
+    /* Change VSpace */
+    CPUMSGREG_CHANGE_VSPACE_REQ_END = CPUMSGREG_LABEL0,
+
+    CPUMSGREG_CHANGE_VSPACE_ACK_END = CPUMSGREG_LABEL0,
 
     /* Disconnect / Delete*/
     CPUMSGREG_DISCONNECT_REQ_END = CPUMSGREG_LABEL0,
@@ -122,4 +131,4 @@ void cpu_component_handle(seL4_MessageInfo_t tag,
 cpu_component_context_t *get_cpu_component(void);
 
 void cpu_handle_allocation_request(seL4_MessageInfo_t *reply_tag);
-int forge_cpu_cap_from_tcb(vka_object_t *tcb, vka_t *vka, seL4_CPtr *cap_ret);
+int forge_cpu_cap_from_tcb(sel4utils_process_t *proc, vka_t *vka, seL4_CPtr *cap_ret);

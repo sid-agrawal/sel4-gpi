@@ -14,14 +14,15 @@
 #include <sel4utils/process.h>
 
 typedef struct _cpu {
-    sel4utils_thread_config_t thread_config;
-    sel4utils_thread_t thread_obj;
+    // sel4utils_thread_config_t thread_config;
+    // sel4utils_thread_t thread_obj;
     uint64_t cpu_obj_id;
     vka_object_t *tcb;
     void *stack_top;
     void *tls_base;
     void *ipc_buffer_addr;
     seL4_CPtr ipc_buffer_frame;
+    seL4_CPtr cspace;
 }cpu_t;
 
 /**
@@ -46,3 +47,22 @@ int cpu_config_vspace(cpu_t *cpu,
                       vspace_t *vspace,
                       seL4_CNode cspace,
                       seL4_CPtr fault_ep);
+
+/**
+ * @brief Change the vspace of the CPU object
+ *
+ * @param cpu cpu object
+ * @param vspace vspace i.e. root PT cap
+ * @return int 0 on success, -1 on failure.
+ */
+int cpu_change_vspace(cpu_t *cpu,
+                      vka_t *vka,
+                      vspace_t *vspace);
+/**
+ * @brief Create a new cpu object
+ *
+ * @param cpu cpu object
+ * @return int 0 on success, -1 on failure.
+ */
+int cpu_new(cpu_t *cpu,
+                      vka_t *vka);

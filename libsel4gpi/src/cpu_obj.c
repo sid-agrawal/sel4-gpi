@@ -49,11 +49,6 @@ int cpu_config_vspace(cpu_t *cpu,
 {
     OSDB_PRINTF(CPUSERVS"cpu_config_vspace: Configuring CPU\n");
 
-    cpu->tcb = malloc(sizeof(vka_object_t)) ;
-    assert (cpu->tcb != NULL);
-
-    int error = vka_alloc_tcb(vka, cpu->tcb);
-    assert(error == 0);
 
     seL4_CPtr vspace_root  = vspace->get_root(vspace); // root page table
     assert(vspace_root != 0);
@@ -68,8 +63,9 @@ int cpu_config_vspace(cpu_t *cpu,
 
     cpu->tls_base = cpu->stack_top;
     cpu->stack_top -= 0x100;
+    cpu->cspace = root_cnode;
 
-    error = seL4_TCB_Configure(cpu->tcb->cptr,
+    int error = seL4_TCB_Configure(cpu->tcb->cptr,
                                seL4_CapNull,             // fault endpoint
                                root_cnode,               // root cnode
                                0,                        // root cnode size
@@ -89,13 +85,49 @@ int cpu_config_vspace(cpu_t *cpu,
     cpu->stack_top -= 0x100;
 
     return 0;
-
-
-
 }
+int cpu_change_vspace(cpu_t *cpu,
+                      vka_t *vka,
+                      vspace_t *vspace)
+{
+    OSDB_PRINTF(CPUSERVS"cpu_change_vspace: Configuring CPU\n");
 
-int cpu_new(cpu_t *cpu){
+    /* Wheres is the cspace?*/
+
+    seL4_CPtr vspace_root  = vspace->get_root(vspace); // root page table
+    assert(vspace_root != 0);
+
+    int error = seL4_TCB_Configure(cpu->tcb->cptr,
+                               seL4_CapNull,             // fault endpoint
+                               cpu->cspace,               // root cnode
+                               0,                        // root cnode size
+                               vspace_root,
+                               0,                        // domain
+                               (seL4_Word)cpu->ipc_buffer_addr,
+                               cpu->ipc_buffer_frame);
+    assert(error == 0);
+    return 0;
+}
+int cpu_new(cpu_t *cpu,
+            vka_t *vka)
+{
+
+    cpu->tcb = malloc(sizeof(vka_object_t)) ;
+    assert (cpu->tcb != NULL);
+
+    int error = vka_alloc_tcb(vka, cpu->tcb);
+    assert(error == 0);
 
 
 
+/*
+        sel4utils_thread_config_t thread_config;
+    sel4utils_thread_t thread_obj;
+    uint64_t cpu_obj_id;
+    vka_object_t *tcb;
+    void *stack_top;
+    void *tls_base;
+    void *ipc_buffer_addr;
+    seL4_CPtr ipc_buffer_frame;
+*/
 }

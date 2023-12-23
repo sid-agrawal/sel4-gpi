@@ -264,7 +264,7 @@ void basic_set_up(uintptr_t e)
 
     // Here, do the same for the CPU cap too
     seL4_CPtr child_cpu_cap_in_parent;
-    error = forge_cpu_cap_from_tcb(&env->test_process.thread.tcb, &env->vka, &child_cpu_cap_in_parent);
+    error = forge_cpu_cap_from_tcb(&env->test_process, &env->vka, &child_cpu_cap_in_parent);
     if (error){
         ZF_LOGF("Failed to forge child's CPU cap");
     }
