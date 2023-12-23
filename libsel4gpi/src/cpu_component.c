@@ -284,7 +284,7 @@ static void handle_change_vspace_req(seL4_Word sender_badge,
     // debug_cap_identify("", received_cap);
 
     assert(seL4_MessageInfo_get_extraCaps(old_tag) == 1);
-    assert(seL4_MessageInfo_ptr_get_capsUnwrapped(&old_tag) == 0);
+    assert(seL4_MessageInfo_ptr_get_capsUnwrapped(&old_tag) == 1);
     assert(seL4_MessageInfo_get_label(old_tag) == 0);
 
     int error = 0;
@@ -386,8 +386,8 @@ int forge_cpu_cap_from_tcb(sel4utils_process_t *process, // Change this to the s
         OSDB_PRINTF(CPUSERVS "main: Failed to mint client badge %lx.\n", badge);
         return 1;
     }
-    OSDB_PRINTF(CPUSERVS "main: Forged a new CPU cap(EP: %lx) with badge value: %lx\n",
-                dest.capPtr, badge);
+    OSDB_PRINTF(CPUSERVS "main: Forged a new CPU cap(EP: %lx) with badge value: %lx IPC_Buff %p stack %p\n",
+                dest.capPtr, badge, client_reg_ptr->cpu.ipc_buffer_addr, client_reg_ptr->cpu.stack_top);
 
     *cap_ret = dest_cptr;
     return 0;

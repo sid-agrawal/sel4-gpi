@@ -100,7 +100,7 @@ int cpu_change_vspace(cpu_t *cpu,
     int error = seL4_TCB_Configure(cpu->tcb->cptr,
                                seL4_CapNull,             // fault endpoint
                                cpu->cspace,               // root cnode
-                               0,                        // root cnode size
+                               api_make_guard_skip_word(seL4_WordBits - 17),    // root cnode size bits
                                vspace_root,
                                0,                        // domain
                                (seL4_Word)cpu->ipc_buffer_addr,

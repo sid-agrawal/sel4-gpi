@@ -10,6 +10,7 @@
 #include <stdio.h>
 
 #include<sel4gpi/pd_clientapi.h>
+#include<sel4gpi/cpu_clientapi.h>
 #include <sel4bench/arch/sel4bench.h>
 
 bool lwc_server_in_local = true;
@@ -88,6 +89,8 @@ int lwcCreate(env_t env, char key[])
                                  /* We cannot use this, as in this case when the parent clears the key, it will clear in the child too */
                                  &lwc_ads_conn);
         test_error_eq(error, 0);
+
+
     }
     else
     {
@@ -115,7 +118,7 @@ int lwcSwitch () {
 
 }
 
-char key[256] = "Hello World";
+char key[256];
 int sign(char *data) {
 
     if (lwc_server_in_local) {
@@ -125,8 +128,7 @@ int sign(char *data) {
     // For now, let's just call it the PFrame
 
 
-    printf ("Signing data: %s \n "
-            "    with key: %s", data, key);
+    printf ("Signing data: %s \t   with key: %s\n", data, key);
     /* attach new DS to the LWC's AS*/
 
     /* Change AS */
@@ -159,24 +161,47 @@ int test_lwc(env_t env)
     printf("------------------STARTING: %s------------------\n", __func__);
 
     /* Load Key from file*/
-    // key = "Hello World";
+    snprintf(key, 256, "%s", "Hello World");
 
 
     /* create LWC the LWC has access to the key*/
-    int lwc_id = lwcCreate(env, key); /* copy the entire AS, say which func to run*/
+    // int lwc_id = lwcCreate(env, key); /* copy the entire AS, say which func to run*/
 
+    cspacepath_t path;
+    vka_cspace_make_path(&env->vka, env->self_ads_cptr, &path);
+    ads_client_context_t conn;
+    conn.badged_server_ep_cspath = path;
 
+    // Using a known EP, get a new ads CAP.
+    ads_client_context_t lwc_ads_conn;
+    error = ads_client_clone(&conn, &env->vka, (void *)0,
+                             /* We cannot use this, as in this case when the parent clears the key, it will clear in the child too */
+                             &lwc_ads_conn);
+    test_error_eq(error, 0);
 
+    vka_cspace_make_path(&env->vka, env->self_cpu_cptr, &path);
+    cpu_client_context_t cpu_conn;
+    cpu_conn.badged_server_ep_cspath = path;
+
+    printf("Change to new VSpace \n");
+     error = cpu_client_change_vspace(&cpu_conn, &lwc_ads_conn);
+     test_error_eq(error, 0);
 
 
     /* Delete cap to child's AS This is similar to lwcRestrict */
+    printf("Start of signing\n");
 
 
     /* call sign */
-        char *data = malloc(256);
-        data = "foobar";
-        sign(data);
+    char *data = malloc(256);
+    assert(data != NULL);
+    data = "foobar";
+    sign(data);
 
+    // while (1);
+    printf("Change to old VSpace \n");
+     error = cpu_client_change_vspace(&cpu_conn, &conn);
+     test_error_eq(error, 0);
 
 
     return 0;

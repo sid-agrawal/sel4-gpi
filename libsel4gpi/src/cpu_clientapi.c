@@ -80,6 +80,8 @@ int cpu_client_change_vspace(cpu_client_context_t *conn,
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 2,
                                                   CPUMSGREG_CHANGE_VSPACE_REQ_END);
 
+
+    OSDB_PRINTF(CPUSERVC"INVOKING CAP %d\n", conn->badged_server_ep_cspath.capPtr);
     tag = seL4_Call(conn->badged_server_ep_cspath.capPtr, tag);
     assert(seL4_MessageInfo_ptr_get_label(&tag) == 0);
     return 0;
