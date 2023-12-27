@@ -81,7 +81,7 @@ int cpu_client_change_vspace(cpu_client_context_t *conn,
                                                   CPUMSGREG_CHANGE_VSPACE_REQ_END);
 
 
-    OSDB_PRINTF(CPUSERVC"INVOKING CAP %d\n", conn->badged_server_ep_cspath.capPtr);
+    OSDB_PRINTF(CPUSERVC"INVOKING CAP %lu\n", conn->badged_server_ep_cspath.capPtr);
     tag = seL4_Call(conn->badged_server_ep_cspath.capPtr, tag);
     assert(seL4_MessageInfo_ptr_get_label(&tag) == 0);
     return 0;
