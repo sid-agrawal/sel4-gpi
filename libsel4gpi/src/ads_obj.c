@@ -18,6 +18,7 @@
 #include <sel4gpi/debug.h>
 #include <sel4gpi/cap_tracking.h>
 #include <sel4gpi/gpi_server.h>
+#include <sel4gpi/model_exporting.h>
 
 int ads_attach(ads_t *ads, vka_t *vka, void* vaddr, size_t size, seL4_CPtr frame_cap,
                /*sel4utils_process_t*/ vspace_t *process_cookie)
@@ -68,75 +69,110 @@ void ads_dump_rr(ads_t *ads, void *buff, size_t size)
 
     assert(buff != NULL);
 
+    ZF_LOGE("Dumping RR for ads object %d\n", ads->ads_obj_id);
+    ZF_LOGE("Buf: [%p, %p) num_pages: %lu\n", buff, buff + size, size / PAGE_SIZE_4K);
+
+    void *buff_start_aligned = (void *) ROUND_DOWN((uintptr_t)buff, PAGE_SIZE_4K);
+    void *buff_end_aligned = (void *) ROUND_UP((uintptr_t)(buff + size), PAGE_SIZE_4K);
+    uint64_t num_pages = (buff_end_aligned - buff_start_aligned) / PAGE_SIZE_4K;
+    ZF_LOGE("Buf _alg: [%p, %p) num_pages: %lu\n", buff_start_aligned, buff_end_aligned, num_pages);
+
+
+
+
     vspace_t *ads_vspace = ads->vspace;
+
+    //=============================================================================
     /* Get the page frame cap for the client buf VA */
-    seL4_CPtr buf_cap = vspace_get_cap(ads_vspace, buff);
-    assert(buf_cap != 0);
+    seL4_CPtr * caps = malloc(sizeof(seL4_CPtr) * num_pages);
+    assert (caps != NULL);
 
-    /* Clone the cap */
-    /* Fix up this copy of cap*/
-#if 1
-    /* create a path to the cap */
-    cspacepath_t from_path, to_path;
-    vka_cspace_make_path(get_gpi_server()->server_vka, buf_cap, &from_path);
-
-    /* allocate a path to put the copy in the destination */
-    int error = vka_cspace_alloc_path(get_gpi_server()->server_vka, &to_path);
-    if (error)
+    for (int i = 0; i < num_pages; i++)
     {
-        ZF_LOGF("Failed to allocate slot in to cspace, error: %d", error);
-    }
+        seL4_CPtr buf_cap = vspace_get_cap(ads_vspace, buff_start_aligned + i * PAGE_SIZE_4K);
+        assert(buf_cap != 0);
 
-    /* copy the frame cap into the to cspace */
-    error = vka_cnode_copy(&to_path, &from_path, seL4_AllRights);
-    if (error)
-    {
-        ZF_LOGF("Failed to copy cap, error %d num_pages: %d\n",
-                error, 1);
-    }
+        /* Clone the cap */
+        /* Fix up this copy of cap*/
+        /* create a path to the cap */
+        cspacepath_t from_path, to_path;
+        vka_cspace_make_path(get_gpi_server()->server_vka, buf_cap, &from_path);
 
-#endif
+        /* allocate a path to put the copy in the destination */
+        int error = vka_cspace_alloc_path(get_gpi_server()->server_vka, &to_path);
+        if (error)
+        {
+            ZF_LOGF("Failed to allocate slot in to cspace, error: %d", error);
+        }
+
+        /* copy the frame cap into the to cspace */
+        error = vka_cnode_copy(&to_path, &from_path, seL4_AllRights);
+        if (error)
+        {
+            ZF_LOGF("Failed to copy cap, error %d num_pages: %d\n",
+                    error, 1);
+        }
+        caps[i] = to_path.capPtr;
+    }
 
     /* a. Create a reservation in the server vspace*/
     /* Find the page where the buffer lies*/
     vspace_t *server_vspace = get_gpi_server()->server_vspace;
+
+
+
+
     void *server_buffer_va = sel4utils_map_pages(server_vspace,
-                                                 &to_path.capPtr,
+                                                 caps,
                                                  NULL,
                                                  seL4_AllRights,
-                                                 1,
+                                                 num_pages,
                                                  seL4_PageBits,
                                                  1);
 
-    /**/
-
+    /*
+        Move the buf to the correct offset.
+    */
     server_buffer_va += (uintptr_t)buff % PAGE_SIZE_4K;
 
+
+
+    //=============================================================================
+
     /* Dump the info */
-
-    /* Unmap the page */
-
-    OSDB_PRINTF(ADSSERVS "===========Start of interesting output================\n");
-    OSDB_PRINTF(ADSSERVS "===========Buf value is %p================\n", buff);
-    OSDB_PRINTF(ADSSERVS "===========server VA value is %p================\n",
-                server_buffer_va);
     sel4utils_res_t *from_sel4_res = get_alloc_data(ads_vspace)->reservation_head;
     assert(from_sel4_res != NULL);
 
     vka_t *vka = get_alloc_data(ads_vspace)->vka;
-    ;
+
     assert(vka != NULL);
     OSDB_PRINTF(ADSSERVS "vka address: %p\n", vka);
 
+    model_state_t *ms = (model_state_t *)malloc(sizeof(model_state_t));
+    assert(ms != NULL);
+    init_model_state(ms);
+
     while (from_sel4_res != NULL)
     {
+#if 0
         OSDB_PRINTF(ADSSERVS "Reservation: 0x%lx -- 0x%lx = %s %s\n",
                     from_sel4_res->start, from_sel4_res->end,
                     human_readable_size(from_sel4_res->end - from_sel4_res->start),
                     human_readable_va_res_type(from_sel4_res->type));
+#else
 
-/* Print all the caps of this reservation */
-#if 1
+        char res_type[CSV_MAX_STRING_SIZE];
+        char res_id[CSV_MAX_STRING_SIZE];
+        snprintf(res_type, CSV_MAX_STRING_SIZE, "%s", human_readable_va_res_type(from_sel4_res->type));
+        snprintf(res_id, CSV_MAX_STRING_SIZE, "%u_%lx_%lx",
+                 ads->ads_obj_id, from_sel4_res->start,
+                 from_sel4_res->end);
+        add_resource(ms, res_type, res_id);
+
+
+#endif
+
+        /* Print all the caps of this reservation */
         void *va = (void *)from_sel4_res->start;
         for (void *start = (void *)from_sel4_res->start;
              start < (void *)from_sel4_res->end;
@@ -186,20 +222,33 @@ void ads_dump_rr(ads_t *ads, void *buff, size_t size)
                     }
                 }
 
+#if 0
                 OSDB_PRINTF(ADSSERVS "Cap for %p: %lu Type: %u Paddr: %p isMinted: %d\n",
                             start,
                             page_frame_cap,
                             seL4_DebugCapIdentify(page_frame_cap),
                             paddr,
                             cap_info.isMinted);
+#else
+
+        char page_res_type[CSV_MAX_STRING_SIZE];
+        char page_res_id[CSV_MAX_STRING_SIZE];
+        snprintf(page_res_type, CSV_MAX_STRING_SIZE, "PhysicalPage");
+        snprintf(page_res_id, CSV_MAX_STRING_SIZE, "%p", paddr);
+        add_resource(ms, page_res_type, page_res_id);
+
+        add_resource_depends_on(ms, res_id, page_res_id);
+#endif
             }
         }
 
-#endif
         from_sel4_res = from_sel4_res->next;
     }
+    OSDB_PRINTF(ADSSERVS "Done with while loop\n");
 
-    OSDB_PRINTF(ADSSERVS "===========END of interesting output================\n");
+    export_model_state(ms, server_buffer_va, size);
+    OSDB_PRINTF(ADSSERVS "Done with model expoert loop\n");
+    /*(XXX) Unmap the page */
 }
 
 int ads_clone(vspace_t *loader, ads_t *ads, vka_t *vka, void* omit_vaddr, ads_t *ret_ads) {

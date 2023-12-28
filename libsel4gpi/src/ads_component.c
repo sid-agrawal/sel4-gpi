@@ -212,9 +212,9 @@ static void handle_get_rr_req(seL4_Word sender_badge, seL4_MessageInfo_t old_tag
                 sender_badge, seL4_MessageInfo_get_extraCaps(old_tag),
                 seL4_MessageInfo_get_capsUnwrapped(old_tag));
 
-    for (int i = 0; i < 5; i++) {
-        OSDB_PRINTF(ADSSERVS "MR[%d] = %lx\n", i, seL4_GetBadge(i));
-    }
+    // for (int i = 0; i < 5; i++) {
+    //     OSDB_PRINTF(ADSSERVS "MR[%d] = %lx\n", i, seL4_GetBadge(i));
+    // }
     ads_component_registry_entry_t *client_data = ads_component_registry_get_entry_by_badge(sender_badge);
     if (client_data == NULL)
     {

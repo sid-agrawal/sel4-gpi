@@ -382,11 +382,12 @@ int test_ads_dump_rr(env_t env)
     test_error_eq(error, 0);
 
     // Dump the ads rr
-    char * ads_rr = malloc(4096);
+    size_t buf_num_pages = 15;
+    char * ads_rr = malloc(buf_num_pages*4096);
     assert(ads_rr != NULL);
 
-    ads_client_dump_rr(&conn, ads_rr, 4096);
-    printf("ADS RR: %s\n", ads_rr);
+    ads_client_dump_rr(&conn, ads_rr, buf_num_pages*4096);
+    printf("ADS RR: \n%s\n", ads_rr);
     // ads_client_dump_rr(&clone_conn, ads_rr, 4096);
 
 

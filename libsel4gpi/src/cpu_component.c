@@ -216,12 +216,12 @@ static void handle_config_req(seL4_Word sender_badge,
 
     int error = 0;
 
-    OSDB_PRINTF(CPUSERVS "capsUnwrapped: %lu\n", seL4_MessageInfo_get_capsUnwrapped(old_tag));
-    OSDB_PRINTF(CPUSERVS "extraCap: %lu\n", seL4_MessageInfo_ptr_get_extraCaps(&old_tag));
-    for (int i = 0; i < 5; i++)
-    {
-        OSDB_PRINTF(CPUSERVS "MR[%d] = %lx\n", i, seL4_GetBadge(i));
-    }
+    // OSDB_PRINTF(CPUSERVS "capsUnwrapped: %lu\n", seL4_MessageInfo_get_capsUnwrapped(old_tag));
+    // OSDB_PRINTF(CPUSERVS "extraCap: %lu\n", seL4_MessageInfo_ptr_get_extraCaps(&old_tag));
+    // for (int i = 0; i < 5; i++)
+    // {
+    //     OSDB_PRINTF(CPUSERVS "MR[%d] = %lx\n", i, seL4_GetBadge(i));
+    // }
 
     /* Find the client */
     cpu_component_registry_entry_t *client_data = cpu_component_registry_get_entry_by_badge(sender_badge);
