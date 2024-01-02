@@ -65,6 +65,23 @@ int pd_client_load(pd_client_context_t *conn,
     return 0;
 }
 
+int pd_client_dump(pd_client_context_t *conn,
+                    char *buf,
+                    size_t buf_sz)
+{
+    seL4_SetMR(PDMSGREG_FUNC, PD_FUNC_DUMP_REQ);
+
+    seL4_SetMR(PDMSGREG_DUMP_REQ_BUF_VA, (seL4_Word) buf);
+    seL4_SetMR(PDMSGREG_DUMP_REQ_BUF_SZ, (seL4_Word) buf_sz);
+    seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0,
+                                                    PDMSGREG_DUMP_REQ_END);
+
+    OSDB_PRINTF(ADSSERVC "Sending dump RR request to PD via EP: %lu.\n",
+           conn->badged_server_ep_cspath.capPtr);
+    tag = seL4_Call(conn->badged_server_ep_cspath.capPtr, tag);
+    return 0;
+}
+
 int pd_client_send_cap(pd_client_context_t *conn, seL4_CPtr cap_to_send,
                        seL4_Word *slot)
 {

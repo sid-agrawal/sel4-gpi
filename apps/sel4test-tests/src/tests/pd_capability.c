@@ -60,6 +60,9 @@ int test_new_process_osmosis(env_t env)
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0, 0);
     tag = seL4_Recv(ep_object.cptr, NULL);
 
+    error = pd_client_dump(&conn, NULL, 0);
+    assert(error == 0);
+
     /* modify the message */
     seL4_SetMR(0, start);
     seL4_ReplyRecv(ep_object.cptr, tag, NULL);

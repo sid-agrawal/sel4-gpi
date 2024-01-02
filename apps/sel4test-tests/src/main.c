@@ -42,6 +42,7 @@ static seL4_CPtr endpoint;
 static seL4_CPtr gpi_endpoint;
 static seL4_CPtr self_as_cap;
 static seL4_CPtr self_cpu_cap;
+static seL4_CPtr self_pd_cap;
 
 /* global static memory for init */
 static sel4utils_alloc_data_t alloc_data;
@@ -214,7 +215,7 @@ int main(int argc, char **argv)
     struct env env;
 
     /* parse args */
-    assert(argc == 5);
+    assert(argc == 6);
     endpoint = (seL4_CPtr) atoi(argv[0]);
 
     /* read in init data */
@@ -222,7 +223,8 @@ int main(int argc, char **argv)
 
     self_as_cap = (seL4_CPtr) atoi(argv[2]);
     self_cpu_cap = (seL4_CPtr) atoi(argv[3]);
-    gpi_endpoint = (seL4_CPtr) atoi(argv[4]);
+    self_pd_cap = (seL4_CPtr) atoi(argv[4]);
+    gpi_endpoint = (seL4_CPtr) atoi(argv[5]);
 
     /* configure env */
     env.cspace_root = init_data->root_cnode;
@@ -230,6 +232,7 @@ int main(int argc, char **argv)
     env.endpoint = endpoint;
     env.self_ads_cptr = self_as_cap;
     env.self_cpu_cptr = self_cpu_cap;
+    env.self_pd_cptr = self_pd_cap;
     env.gpi_endpoint = gpi_endpoint;
     env.priority = init_data->priority;
     env.cspace_size_bits = init_data->cspace_size_bits;

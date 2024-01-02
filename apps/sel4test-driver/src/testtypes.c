@@ -17,6 +17,7 @@
 #include <sel4rpc/server.h>
 #include <sel4gpi/ads_component.h>
 #include <sel4gpi/cpu_component.h>
+#include <sel4gpi/pd_component.h>
 #include <sel4testsupport/testreporter.h>
 
 /* Bootstrap test type. */
@@ -262,6 +263,8 @@ void basic_set_up(uintptr_t e)
     env->child_ads_cptr_in_child = sel4utils_copy_cap_to_process(&(env->test_process),
                                                                 &env->vka, child_as_cap_in_parent);
 
+    assert(env->child_ads_cptr_in_child != 0);
+
     // Here, do the same for the CPU cap too
     seL4_CPtr child_cpu_cap_in_parent;
     error = forge_cpu_cap_from_tcb(&env->test_process, &env->vka, &child_cpu_cap_in_parent);
@@ -272,7 +275,25 @@ void basic_set_up(uintptr_t e)
 
     env->child_cpu_cptr_in_child = sel4utils_copy_cap_to_process(&(env->test_process),
                                                                 &env->vka, child_cpu_cap_in_parent);
+    assert(env->child_cpu_cptr_in_child != 0);
 
+    // Here, do the same for the CPU cap too
+    // We have a cathc 22 here. The
+
+
+    //--------------------------------------------------------------------
+#define PD_FORGE 1
+#ifdef PD_FORGE
+    seL4_CPtr child_pd_cap_in_parent;
+    error = forge_pd_cap_from_init_data(env->init, &env->vka, &child_pd_cap_in_parent);
+    if (error){
+        ZF_LOGF("Failed to forge child's PD cap");
+    }
+    env->child_pd_cptr_in_child = sel4utils_copy_cap_to_process(&(env->test_process),
+                                                                &env->vka, child_pd_cap_in_parent);
+    assert(env->child_pd_cptr_in_child != 0);
+    //--------------------------------------------------------------------
+#endif
 
     // For the ads-server
     // Keep this one as the last COPY, so that  init->free_slot.start a few lines below stays valid.
@@ -308,6 +329,10 @@ Warning:
     }
     env->init->free_slots.end = (1u << TEST_PROCESS_CSPACE_SIZE_BITS);
     assert(env->init->free_slots.start < env->init->free_slots.end);
+
+#ifdef PD_FORGE
+    update_forged_pd_cap_from_init_data(env->init, env->child_pd_cptr_in_child);
+#endif
 }
 
 test_result_t basic_run_test(struct testcase *test, uintptr_t e)
@@ -324,7 +349,7 @@ test_result_t basic_run_test(struct testcase *test, uintptr_t e)
 #endif
 
     /* set up args for the test process */
-    seL4_Word argc = 5;
+    seL4_Word argc = 6;
     char string_args[argc][WORD_STRING_SIZE];
     char *argv[argc];
     sel4utils_create_word_args(string_args, argv, argc,
@@ -332,6 +357,7 @@ test_result_t basic_run_test(struct testcase *test, uintptr_t e)
                                env->remote_vaddr,
                                env->child_ads_cptr_in_child,
                                env->child_cpu_cptr_in_child,
+                               env->child_pd_cptr_in_child,
                                env->gpi_endpoint_in_child);
 
     int num_res;

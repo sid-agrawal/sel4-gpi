@@ -391,6 +391,7 @@ int test_ads_dump_rr(env_t env)
     // ads_client_dump_rr(&clone_conn, ads_rr, 4096);
 
 
+    // pd_dump_rr(&conn, ads_rr, buf_num_pages*4096);
     return sel4test_get_result();
 }
 DEFINE_TEST(GPIADS006, "Dump the RR of the ads", test_ads_dump_rr, true)

@@ -26,7 +26,7 @@ int pd_new(pd_t *pd,
     OSDB_PRINTF(PDSERVS"new PD: \n");
 
 
-    // for (int i = 0; i < MAX_OSM_CAPS; i++)
+    // for (int i = 0; i < MAX_SYS_OSM_CAPS; i++)
     // {
     //     pd->osm_caps[i].type = GPICAP_TYPE_MAX;
     //     pd->osm_caps[i].slot = 0;
@@ -46,9 +46,9 @@ int pd_new(pd_t *pd,
     /* set up caps about the process */
     pd->stack_pages = CONFIG_SEL4UTILS_STACK_SIZE / PAGE_SIZE_4K;
     pd->stack = pd->proc.thread.stack_top - CONFIG_SEL4UTILS_STACK_SIZE;
-    pd->page_directory = sel4utils_copy_cap_to_process(&(pd->proc), pd->vka, pd->proc.pd.cptr);
-    pd->root_cnode = SEL4UTILS_CNODE_SLOT;
-    pd->tcb = sel4utils_copy_cap_to_process(&(pd->proc), pd->vka, pd->proc.thread.tcb.cptr);
+    pd->page_directory_in_pd = sel4utils_copy_cap_to_process(&(pd->proc), pd->vka, pd->proc.pd.cptr);
+    pd->root_cnode_in_pd = SEL4UTILS_CNODE_SLOT;
+    pd->tcb_in_pd = sel4utils_copy_cap_to_process(&(pd->proc), pd->vka, pd->proc.thread.tcb.cptr);
     // if (config_set(CONFIG_HAVE_TIMER)) {
     //     pd->timer_ntfn = sel4utils_copy_cap_to_process(&(pd->proc), pd->vka, env->timer_notify_test.cptr);
     // }
@@ -57,11 +57,11 @@ int pd_new(pd_t *pd,
        The return from sel4utils_copy_cap_to_process is the slot in the cnode where the cap was placed
        in the child process' cspace
     */
-    pd->domain = sel4utils_copy_cap_to_process(&(pd->proc), pd->vka, simple_get_init_cap(simple,
+    pd->domain_in_pd = sel4utils_copy_cap_to_process(&(pd->proc), pd->vka, simple_get_init_cap(simple,
                                                                                                            seL4_CapDomain));
-    pd->asid_pool = sel4utils_copy_cap_to_process(&(pd->proc), pd->vka, simple_get_init_cap(simple,
+    pd->asid_pool_in_pd = sel4utils_copy_cap_to_process(&(pd->proc), pd->vka, simple_get_init_cap(simple,
                                                                                                               seL4_CapInitThreadASIDPool));
-    pd->asid_ctrl = sel4utils_copy_cap_to_process(&(pd->proc), pd->vka, simple_get_init_cap(simple,
+    pd->asid_ctrl_in_pd = sel4utils_copy_cap_to_process(&(pd->proc), pd->vka, simple_get_init_cap(simple,
                                                                                                               seL4_CapASIDControl));
 #ifdef CONFIG_IOMMU
     pd->io_space = sel4utils_copy_cap_to_process(&(pd->proc), pd->vka, simple_get_init_cap(simple,
@@ -74,7 +74,7 @@ int pd_new(pd_t *pd,
     /* copy the sched ctrl caps to the remote process */
     if (config_set(CONFIG_KERNEL_MCS)) {
         seL4_CPtr sched_ctrl = simple_get_sched_ctrl(simple, 0);
-        pd->sched_ctrl = sel4utils_copy_cap_to_process(&(pd->proc), pd->vka, sched_ctrl);
+        pd->sched_ctrl_in_pd = sel4utils_copy_cap_to_process(&(pd->proc), pd->vka, sched_ctrl);
         for (int i = 1; i < pd->cores; i++) {
             sched_ctrl = simple_get_sched_ctrl(simple, i);
             sel4utils_copy_cap_to_process(&(pd->proc), pd->vka, sched_ctrl);
@@ -87,7 +87,7 @@ int pd_new(pd_t *pd,
     //                                                env);
     /* copy the fault endpoint - we wait on the endpoint for a message
      * or a fault to see when the test finishes */
-    pd->fault_endpoint = sel4utils_copy_cap_to_process(&(pd->proc), pd->vka, pd->proc.fault_endpoint.cptr);
+    pd->fault_endpoint_in_pd = sel4utils_copy_cap_to_process(&(pd->proc), pd->vka, pd->proc.fault_endpoint.cptr);
 
     // For the child's as cap in the child
     // First forge a cap to the child's vspace
@@ -123,7 +123,7 @@ int pd_new(pd_t *pd,
         pd->free_slots.start = pd->device_frame_cap + 1;
     } else {
         //pd->free_slots.start = pd->gpi_endpoint_in_child + 1;
-        pd->free_slots.start = pd->fault_endpoint + 1;
+        pd->free_slots.start = pd->fault_endpoint_in_pd + 1;
         OSDB_PRINTF("%s:%d: free_slot.start %ld\n", __FUNCTION__, __LINE__, pd->free_slots.start);
     }
     pd->free_slots.end = (1u << 17);
@@ -141,6 +141,12 @@ int pd_send_cap(pd_t *pd, seL4_CPtr cap, seL4_Word * slot){
     /* Add to our caps data struct */
 
 
+    return 0;
+}
+
+int pd_dump(pd_t *pd){
+
+    OSDB_PRINTF(PDSERVS"pd_dump_cap: Dumping all details of PD:%u\n", pd->pd_obj_id);
     return 0;
 }
 

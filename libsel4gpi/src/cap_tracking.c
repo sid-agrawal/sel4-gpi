@@ -24,7 +24,7 @@
 int gpi_add_cap_data(osmosis_cap_t *new_cap_data)
 {
     gpi_server_context_t *env = get_gpi_server();
-    for (int i = 0; i < MAX_OSM_CAPS; i++) {
+    for (int i = 0; i < MAX_SYS_OSM_CAPS; i++) {
 
         /* Check that slot is free */
         if (env->osm_caps[i].slot == 0) {
@@ -54,7 +54,7 @@ int gpi_remove_cap_data(seL4_CPtr cap_to_remove)
 
     gpi_server_context_t *env = get_gpi_server();
 
-    for (int i = 0; i < MAX_OSM_CAPS; i++)
+    for (int i = 0; i < MAX_SYS_OSM_CAPS; i++)
     {
         if (env->osm_caps[i].slot == cap_to_remove)
         {
@@ -72,7 +72,7 @@ int gpi_remove_cap_data(seL4_CPtr cap_to_remove)
             /* (TODO) Find all caps, where this cap is a
                 parent and delete those too.
             */
-            for (int j = 0; j < MAX_OSM_CAPS; j++) {
+            for (int j = 0; j < MAX_SYS_OSM_CAPS; j++) {
 
                 if (env->osm_caps[i].minted_from ==
                     cap_to_remove)
@@ -105,7 +105,7 @@ int gpi_retrieve_cap_data(seL4_CPtr cap_to_find,
 {
     gpi_server_context_t *env = get_gpi_server();
 
-    for (int i = 0; i < MAX_OSM_CAPS; i++)
+    for (int i = 0; i < MAX_SYS_OSM_CAPS; i++)
     {
         if (env->osm_caps[i].slot == cap_to_find) {
             /* Check that a type is set */

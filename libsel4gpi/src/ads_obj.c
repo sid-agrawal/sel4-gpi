@@ -69,6 +69,7 @@ void ads_dump_rr(ads_t *ads, void *buff, size_t size)
 
     assert(buff != NULL);
 
+/*===================start=====================*/
     ZF_LOGE("Dumping RR for ads object %d\n", ads->ads_obj_id);
     ZF_LOGE("Buf: [%p, %p) num_pages: %lu\n", buff, buff + size, size / PAGE_SIZE_4K);
 
@@ -82,7 +83,6 @@ void ads_dump_rr(ads_t *ads, void *buff, size_t size)
 
     vspace_t *ads_vspace = ads->vspace;
 
-    //=============================================================================
     /* Get the page frame cap for the client buf VA */
     seL4_CPtr * caps = malloc(sizeof(seL4_CPtr) * num_pages);
     assert (caps != NULL);
@@ -129,6 +129,7 @@ void ads_dump_rr(ads_t *ads, void *buff, size_t size)
                                                  num_pages,
                                                  seL4_PageBits,
                                                  1);
+/*===================end ======================*/
 
     /*
         Move the buf to the correct offset.
@@ -168,6 +169,10 @@ void ads_dump_rr(ads_t *ads, void *buff, size_t size)
                  ads->ads_obj_id, from_sel4_res->start,
                  from_sel4_res->end);
         add_resource(ms, res_type, res_id);
+
+        /* These two do not belong here*/
+        add_has_access_to(ms, "PD.1.0", res_id, "true");
+        add_pd(ms, "Proc1", "PD.1.0");
 
 
 #endif

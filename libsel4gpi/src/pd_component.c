@@ -27,6 +27,7 @@
 #include <sel4gpi/pd_clientapi.h>
 #include <sel4gpi/pd_component.h>
 #include <sel4gpi/pd_component.h>
+#include <sel4gpi/test_init_data.h>
 
 #include <sel4gpi/ads_clientapi.h>
 #include <sel4gpi/gpi_server.h>
@@ -113,6 +114,109 @@ static pd_component_registry_entry_t *pd_component_registry_get_entry_by_badge(s
         current_ctx = current_ctx->next;
     }
     return current_ctx;
+}
+
+int forge_pd_cap_from_init_data(
+    test_init_data_t *init_data, // Change this to something else
+    vka_t *vka,
+    seL4_CPtr *cap_ret)
+{
+
+    assert(init_data != NULL);
+    /* Allocate a new registry entry for the client. */
+    pd_component_registry_entry_t *client_reg_ptr = malloc(sizeof(pd_component_registry_entry_t));
+    if (client_reg_ptr == 0)
+    {
+        OSDB_PRINTF(PDSERVS "main: Failed to allocate new badge for client.\n");
+        return 1;
+    }
+    memset((void *)client_reg_ptr, 0, sizeof(pd_component_registry_entry_t));
+
+    /* Create a badged endpoint for the client to send messages to.
+     * Use the address of the client_registry_entry as the badge.
+     */
+    cspacepath_t src, dest;
+    vka_cspace_make_path(get_pd_component()->server_vka,
+                         get_pd_component()->server_ep_obj.cptr, &src);
+    seL4_CPtr dest_cptr;
+    vka_cspace_alloc(get_pd_component()->server_vka, &dest_cptr);
+    vka_cspace_make_path(get_pd_component()->server_vka, dest_cptr, &dest);
+
+    /* Update the info in the registry entry. */
+    seL4_Word badge = pd_assign_new_badge_and_objectID(client_reg_ptr);
+    pd_component_registry_insert(client_reg_ptr);
+
+
+    // (XXX) A lot more will go here.
+    // client_reg_ ptr->pd ...
+    client_reg_ptr->pd.vka = vka;
+    client_reg_ptr->pd.stack_pages = init_data->stack_pages;
+    client_reg_ptr->pd.stack = init_data->stack;
+    client_reg_ptr->pd.page_directory_in_pd = init_data->page_directory;
+    client_reg_ptr->pd.root_cnode_in_pd = init_data->root_cnode;
+    client_reg_ptr->pd.tcb_in_pd = init_data->tcb;
+    client_reg_ptr->pd.domain_in_pd = init_data->domain;
+    client_reg_ptr->pd.asid_pool_in_pd = init_data->asid_pool;
+    client_reg_ptr->pd.asid_ctrl_in_pd = init_data->asid_ctrl;
+
+
+    // Look at device frame caps and anyother relevant caps
+
+
+#ifdef CONFIG_IOMMU
+    client_reg_ptr-pd.io_space = init_data->io_space;
+#endif /* CONFIG_IOMMU */
+
+#ifdef CONFIG_TK1_SMMU
+    client_reg_ptr->pd.io_space_caps = init_data->io_space_caps;
+#endif
+
+    client_reg_ptr->pd.cores = init_data->cores;
+    /* copy the sched ctrl caps to the remote process */
+    if (config_set(CONFIG_KERNEL_MCS)) {
+        client_reg_ptr->pd.sched_ctrl_in_pd = init_data->sched_ctrl;
+    }
+
+    client_reg_ptr->pd.untypeds = init_data->untypeds;
+    memcpy(
+           client_reg_ptr->pd.untyped_size_bits_list,
+        init_data->untyped_size_bits_list,
+            sizeof(uint8_t) * CONFIG_MAX_NUM_BOOTINFO_UNTYPED_CAPS);
+
+
+    // client_reg_ptr->pd.cspace_size_bits = init_data->cspace_size_bits;
+    // client_reg_ptr->pd.free_slots = init_data->free_slots;
+    // assert(client_reg_ptr->pd.free_slots.start < client_reg_ptr->pd.free_slots.end);
+
+    int error = vka_cnode_mint(&dest,
+                               &src,
+                               seL4_AllRights,
+                               badge);
+    if (error)
+    {
+        OSDB_PRINTF(CPUSERVS "main: Failed to mint client badge %lx.\n", badge);
+        return 1;
+    }
+    OSDB_PRINTF(CPUSERVS "main: Forged a new PD cap(EP: %lx) with badge value: %lx \n",
+                dest.capPtr, badge);
+
+    *cap_ret = dest_cptr;
+    return 0;
+}
+
+void update_forged_pd_cap_from_init_data(test_init_data_t * init_data, seL4_CPtr cap)
+{
+    assert(init_data != NULL);
+
+    pd_t *pd = &get_pd_component()->client_registry->pd;
+    assert(pd != NULL);
+    assert (pd->pd_obj_id == 0x1);
+    pd->free_slots = init_data->free_slots;
+    pd->cspace_size_bits = init_data->cspace_size_bits;
+
+    assert(pd->free_slots.start < pd->free_slots.end);
+
+
 }
 
 void pd_handle_allocation_request(seL4_MessageInfo_t *reply_tag)
@@ -245,6 +349,32 @@ static void handle_send_cap_req(seL4_Word sender_badge, seL4_MessageInfo_t old_t
     return reply(tag);
 }
 
+static void handle_dump_cap_req(seL4_Word sender_badge, seL4_MessageInfo_t old_tag, seL4_CPtr received_cap)
+{
+    OSDB_PRINTF(PDSERVS "main: Got dump-cap request from client badge %lx.\n",
+           sender_badge);
+
+
+    assert(seL4_MessageInfo_get_extraCaps(old_tag) == 0);
+    assert(seL4_MessageInfo_get_label(old_tag) == 0);
+
+    /* Find the client */
+    pd_component_registry_entry_t *client_data = pd_component_registry_get_entry_by_badge(sender_badge);
+    if (client_data == NULL)
+    {
+        OSDB_PRINTF(PDSERVS "main: Failed to find client badge %lx.\n",
+               sender_badge);
+        return;
+    }
+
+    int error = pd_dump(&client_data->pd);
+
+    seL4_SetMR(PDMSGREG_FUNC, PD_FUNC_DUMP_ACK);
+
+    seL4_MessageInfo_t tag = seL4_MessageInfo_new(error, 0, 0,
+                                                  PDMSGREG_DUMP_ACK_END);
+    return reply(tag);
+}
 
 static void handle_start_req(seL4_Word sender_badge, seL4_MessageInfo_t old_tag, seL4_CPtr received_cap)
 {
@@ -300,6 +430,9 @@ void pd_component_handle(seL4_MessageInfo_t tag,
         break;
     case PD_FUNC_SENDCAP_REQ:
         handle_send_cap_req(sender_badge, tag, received_cap->capPtr);
+        break;
+    case PD_FUNC_DUMP_REQ:
+        handle_dump_cap_req(sender_badge, tag, received_cap->capPtr);
         break;
     case PD_FUNC_START_REQ:
         handle_start_req(sender_badge, tag, received_cap->capPtr);

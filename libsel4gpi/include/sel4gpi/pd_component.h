@@ -11,6 +11,7 @@
 #include <vspace/vspace.h>
 
 #include <sel4gpi/pd_obj.h>
+#include <sel4gpi/test_init_data.h>
 
 /** @file APIs for managing and interacting with the serial server thread.
  *
@@ -48,6 +49,9 @@ enum pd_component_funcs {
     PD_FUNC_SENDCAP_REQ,
     PD_FUNC_SENDCAP_ACK,
 
+    PD_FUNC_DUMP_REQ,
+    PD_FUNC_DUMP_ACK,
+
     PD_FUNC_DISCONNECT_REQ,
     PD_FUNC_DISCONNECT_ACK,
 };
@@ -83,6 +87,12 @@ enum pd_component_msgregs
     PDMSGREG_SEND_CAP_PD_SLOT = PDMSGREG_LABEL0,
     PDMSGREG_SEND_CAP_ACK_END,
 
+    /* Dump Cap */
+    PDMSGREG_DUMP_REQ_BUF_VA = PDMSGREG_LABEL0,
+    PDMSGREG_DUMP_REQ_BUF_SZ,
+    PDMSGREG_DUMP_REQ_END,
+
+    PDMSGREG_DUMP_ACK_END = PDMSGREG_LABEL0,
 
 
     /* Start */
@@ -104,7 +114,7 @@ typedef struct _pd_component_registry_entry {
     /* In our model each PD can have its own cspace. */
     seL4_CNode cspace_root;
     struct _pd_component_registry_entry *next;
-    
+
 } pd_component_registry_entry_t;
 
 /* State maintained by the server. */
@@ -115,14 +125,14 @@ typedef struct _pd_component_context {
     vspace_t *server_vspace;
     sel4utils_thread_t server_thread;
 
-    // The server listens on this endpoint. 
+    // The server listens on this endpoint.
     vka_object_t server_ep_obj;
 
     int registry_n_entries;
     pd_component_registry_entry_t *client_registry;
 } pd_component_context_t;
 
-/** 
+/**
  * Internal library function: acts as the main() for the server thread.
  **/
 void pd_component_handle(seL4_MessageInfo_t tag,
@@ -134,3 +144,10 @@ void pd_component_handle(seL4_MessageInfo_t tag,
 pd_component_context_t *get_pd_component(void);
 
 void pd_handle_allocation_request(seL4_MessageInfo_t *reply_tag);
+
+int forge_pd_cap_from_init_data(
+    test_init_data_t *init_data, // Change this to something else
+    vka_t *vka,
+    seL4_CPtr *cap_ret);
+
+void update_forged_pd_cap_from_init_data(test_init_data_t * init_data, seL4_CPtr cap);

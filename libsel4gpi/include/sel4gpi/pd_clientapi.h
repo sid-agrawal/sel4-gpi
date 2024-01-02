@@ -21,7 +21,7 @@ typedef struct _pd_client_context {
 
 /**
  * @brief   Initialize the pd client.
- * 
+ *
  * @param server_ep_cap Well known server endpoint cap.
  * @param client_vka client's cka for allocating memory.
  * @param ret_conn client's connection object
@@ -29,20 +29,20 @@ typedef struct _pd_client_context {
  */
 int pd_component_client_connect(seL4_CPtr server_ep_cap,
                               vka_t *client_vka,
-                              pd_client_context_t *ret_conn);       
+                              pd_client_context_t *ret_conn);
 
 
 /**
  * @brief   Disconnect the pd client.
- * 
- * @param conn 
+ *
+ * @param conn
  * @return int 0 on success, -1 on failure.
  */
 int pd_component_client_disconnect(pd_client_context_t *conn);
 
 /**
- * @brief 
- * 
+ * @brief
+ *
  * @param conn client connection object
  * @param image elf image to load in the PD
  * @return int 0 on success, -1 on failure.
@@ -51,9 +51,9 @@ int pd_client_load(pd_client_context_t *conn,
                    const char *image);
 
 
-/** 
+/**
  * @brief Send a cap to PD and gets the slot number in the PD.
- * 
+ *
  * @param conn client connection object
  * @param cap_to_send cap to send to the PD
  * @param slot slot in the PD where the cap was installed
@@ -61,9 +61,20 @@ int pd_client_load(pd_client_context_t *conn,
  */
 int pd_client_send_cap(pd_client_context_t *conn, seL4_CPtr cap_to_send,
                        seL4_Word *slot);
+
+/**
+ * @brief Dump the PD.
+ * @param conn client connection object
+ * @param buf buffer to dump the PD into
+ * @param size size of the buffer
+ * @return int 0 on success, -1 on failure.
+*/
+int pd_client_dump(pd_client_context_t *conn,
+                   char *buf , size_t size);
+
 /**
  * @brief Start the pd oject.
- * 
+ *
  * @param conn client connection object
  * @param arg0 arg0 (XXX: Need to extend this to pass more args)
  * @return int 0 on success, -1 on failure.

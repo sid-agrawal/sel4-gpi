@@ -12,6 +12,9 @@ typedef struct osmosis_pd_id {
     seL4_Word l3_pd_id;
 } osmosis_pd_id_t;
 
+
+
+
 typedef struct osmosis_cap {
     // The type of the cap as per seL4
     seL4_Word slot;
@@ -20,7 +23,7 @@ typedef struct osmosis_cap {
     seL4_Word paddr;
 
     /*OSmosis generated PD ID*/
-    osmosis_pd_id_t pd_id;
+    osmosis_pd_id_t pd_obj_id;
 
     /* If this cap is a minted cap */
     bool isMinted;

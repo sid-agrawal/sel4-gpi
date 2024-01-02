@@ -16,12 +16,27 @@
 #include<sel4gpi/cap_tracking.h>
 
 #define TEST_NAME_MAX (64 - 4 * sizeof(seL4_Word))
-#define MAX_OSM_CAPS 5000
+#define MAX_SYS_OSM_CAPS 5000
+
+#define MAX_PD_NAME 64
+#define MAX_PD_OSM_CAPS 512
+
+typedef struct pd_name {
+    char top[MAX_PD_NAME];
+    char mid[MAX_PD_NAME];
+    char end[MAX_PD_NAME];
+} pd_name_t;
+
 
 typedef struct _pd {
-    seL4_CPtr cspace_root;
-    seL4_CPtr fault_endpoint;
+    // seL4_CPtr cspace_root;
+    seL4_CPtr fault_endpoint_in_pd;
+
+    /* One of these we will keep */
     uint32_t pd_obj_id;
+
+
+
     sel4utils_process_t proc;
     // AS_CAP
     // CPU_CAP
@@ -30,16 +45,16 @@ typedef struct _pd {
     vspace_t *vspace;
 
     /* page directory of the test process */
-    seL4_CPtr page_directory;
+    seL4_CPtr page_directory_in_pd;
     /* root cnode of the test process */
-    seL4_CPtr root_cnode;
+    seL4_CPtr root_cnode_in_pd;
     /* tcb of the test process */
-    seL4_CPtr tcb;
+    seL4_CPtr tcb_in_pd;
     /* the domain cap */
-    seL4_CPtr domain;
+    seL4_CPtr domain_in_pd;
     /* asid pool cap for the test process to use when creating new processes */
-    seL4_CPtr asid_pool;
-    seL4_CPtr asid_ctrl;
+    seL4_CPtr asid_pool_in_pd;
+    seL4_CPtr asid_ctrl_in_pd;
 #ifdef CONFIG_IOMMU
     seL4_CPtr io_space;
 #endif /* CONFIG_IOMMU */
@@ -51,7 +66,7 @@ typedef struct _pd {
      * on when requesting a time service from sel4test-driver (e.g. sleep),
      * and expecting a signal and/or notification.
      */
-    seL4_CPtr timer_ntfn;
+    seL4_CPtr timer_ntfn_in_pd;
 
     /* size of the test processes cspace */
     seL4_Word cspace_size_bits;
@@ -69,7 +84,7 @@ typedef struct _pd {
     int priority;
 
     /* sched control cap */
-    seL4_CPtr sched_ctrl;
+    seL4_CPtr sched_ctrl_in_pd;
 
     /* device frame cap */
     seL4_CPtr device_frame_cap;
@@ -97,7 +112,16 @@ typedef struct _pd {
     /* number of available cores */
     seL4_Word cores;
 
-    /* All caps and their types */
+    /*
+        All caps and their types
+        -----------------------
+
+        We do not want to keep two copies of this data.
+        So if we keep track of the caps in the gpi_server,
+        then we do not need to keep this information in the pd.
+    */
+    osmosis_cap_t has_access_to[MAX_PD_OSM_CAPS];
+
 
 
 }pd_t;
@@ -118,6 +142,8 @@ int pd_new(pd_t *pd,
 
 int pd_load_image(pd_t *pd,
                   const char *image_path);
+
+int pd_dump(pd_t *pd);
 
 int pd_send_cap(pd_t *pd,
                 seL4_CPtr cap, seL4_Word *slot);
