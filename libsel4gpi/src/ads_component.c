@@ -152,7 +152,7 @@ void ads_handle_allocation_request(seL4_MessageInfo_t *reply_tag)
     return reply(tag);
 }
 
-static void handle_attach_req(seL4_Word sender_badge, seL4_MessageInfo_t old_tag, seL4_CPtr frame_cap)
+static void handle_attach_req(seL4_Word sender_badge, seL4_MessageInfo_t old_tag, seL4_CPtr mo_cap)
 {
     OSDB_PRINTF(ADSSERVS "main: Got attach request from client badge %lx.\n",
            sender_badge);
@@ -171,19 +171,41 @@ static void handle_attach_req(seL4_Word sender_badge, seL4_MessageInfo_t old_tag
     badge_print(sender_badge);
 
     void *vaddr = (void *) seL4_GetMR(ADSMSGREG_ATTACH_REQ_VA);
-    size_t size = (size_t) seL4_GetMR(ADSMSGREG_ATTACH_REQ_SZ);
-    OSDB_PRINTF(ADSSERVS"main: vaddr %p, size %lu\n", vaddr, size);
+    OSDB_PRINTF(ADSSERVS"main: vaddr %p \n", vaddr);
 
-    error = ads_attach(&client_data->ads, get_ads_component()->server_vka, vaddr, size, frame_cap, client_data->ads.vspace);
+
+    /*
+        The MO will be one of the caps Unwrapped.
+        Get its badge using seL4_GetBadge(0) see handle_config_req
+        where ads cap is passed.
+        Get frame cap from the MO cap.
+    */
+
+   mo_component_registry_entry_t *mo_reg = mo_component_registry_get_entry_by_badge(seL4_GetBadge(0));
+   assert (mo_reg != NULL);
+
+
+   uint32_t num_pages = mo_reg->mo.num_pages;
+   seL4_CPtr *frame_caps = mo_reg->mo.frame_caps_in_root_task;
+   void *ret_vaddr = NULL;
+
+    error = ads_attach(&client_data->ads,
+                       get_ads_component()->server_vka,
+                       vaddr,
+                       num_pages,
+                       frame_caps,
+                       &ret_vaddr,
+                       client_data->ads.vspace);
     if (error) {
-        OSDB_PRINTF(ADSSERVS "main: Failed to attach at vaddr:%p sz: %lx to client badge %lx.\n",
-                vaddr, size, sender_badge);
+        OSDB_PRINTF(ADSSERVS "main: Failed to attach at vaddr:%p num_pages: %u to client badge %lx.\n",
+                vaddr, num_pages, sender_badge);
         return;
     }
 
 
     // sel4utils_walk_vspace(client_data->ads.vspace, NULL);
     seL4_SetMR(ADSMSGREG_FUNC, ADS_FUNC_ATTACH_ACK);
+    seL4_SetMR(ADSMSGREG_ATTACH_ACK_VA, (seL4_Word)ret_vaddr);
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0, ADSMSGREG_ATTACH_ACK_END);
     return reply(tag);
 }

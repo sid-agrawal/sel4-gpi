@@ -97,6 +97,15 @@ gpi_server_parent_spawn_thread(simple_t *parent_simple, vka_t *parent_vka,
     adsc->server_ep_obj = get_gpi_server()->server_ep_obj;
 
 
+    /* Setup MO Component */
+    mo_component_context_t *moc = &get_gpi_server()->mo_component;
+    moc->server_simple = parent_simple;
+    moc->server_vka = parent_vka;
+    moc->server_cspace = parent_cspace_cspath.root;
+    moc->server_vspace = parent_vspace;
+    moc->server_thread = get_gpi_server()->server_thread;
+    moc->server_ep_obj = get_gpi_server()->server_ep_obj;
+
     /* Setup the CPU Component */
     cpu_component_context_t *cpuc = &get_gpi_server()->cpu_component;
     cpuc->server_simple = parent_simple;
@@ -211,6 +220,10 @@ void handle_untyped_request(seL4_MessageInfo_t tag,
         ads_handle_allocation_request(
             reply_tag); /*unused*/
         break;
+    case GPICAP_TYPE_MO:
+        mo_handle_allocation_request(
+            reply_tag); /*unused*/
+        break;
     case GPICAP_TYPE_CPU:
         cpu_handle_allocation_request(
             reply_tag); /*unused*/
@@ -294,6 +307,12 @@ void gpi_server_main()
             {
             case GPICAP_TYPE_ADS:
                 ads_component_handle(tag,
+                                     sender_badge,
+                                     &received_cap_path,
+                                     &reply_tag); /*unused*/
+                break;
+            case GPICAP_TYPE_MO:
+                mo_component_handle(tag,
                                      sender_badge,
                                      &received_cap_path,
                                      &reply_tag); /*unused*/

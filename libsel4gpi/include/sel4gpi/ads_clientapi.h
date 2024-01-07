@@ -12,6 +12,7 @@
 #include <vspace/vspace.h>
 
 #include <sel4gpi/ads_component.h>
+#include <sel4gpi/mo_clientapi.h>
 
 typedef struct _ads_client_context {
    cspacepath_t badged_server_ep_cspath;
@@ -43,12 +44,15 @@ int ads_component_client_disconnect(ads_client_context_t *conn);
  * @brief
  *
  * @param conn client connection object
- * @param vaddr virtual address to attach at
- * @param size size of the attached region
- * @param frame_cap frame cap of the memory to attach(this will be changed to a MR cap (TODO(siagraw)))
- * @return int 0 on success, -1 on failure.
+ * @param vaddr virtual address to attach at, can be NULL
+ * @param mo_cap MO cap of the memory to attach
+ * @param ret_vaddr virtual address where the MO was attached.
+* @return int 0 on success, -1 on failure.
  */
-int ads_client_attach(ads_client_context_t *conn, void* vaddr, size_t size, seL4_CPtr frame_cap);
+int ads_client_attach(ads_client_context_t *conn,
+                      void *vaddr,
+                      mo_client_context_t *mo_cap,
+                      void **ret_vaddr);
 
 /**
  * @brief   Remove a memory region from the ads.

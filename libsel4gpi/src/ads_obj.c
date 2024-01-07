@@ -20,7 +20,12 @@
 #include <sel4gpi/gpi_server.h>
 #include <sel4gpi/model_exporting.h>
 
-int ads_attach(ads_t *ads, vka_t *vka, void* vaddr, size_t size, seL4_CPtr frame_cap,
+int ads_attach(ads_t *ads,
+               vka_t *vka,
+               void *vaddr,
+               uint32_t num_pages,
+               seL4_CPtr *frame_caps,
+               void ** ret_vaddr,
                /*sel4utils_process_t*/ vspace_t *process_cookie)
 {
     vspace_t *target = ads->vspace;
@@ -28,7 +33,23 @@ int ads_attach(ads_t *ads, vka_t *vka, void* vaddr, size_t size, seL4_CPtr frame
 
     /* Reserver the range in the vspace */
     seL4_CapRights_t rights;
-    reservation_t res = sel4utils_reserve_range_at(target, vaddr, size, rights, 1);
+    reservation_t res;
+
+    if (vaddr == NULL) {
+        res = sel4utils_reserve_range_aligned(target,
+                                              num_pages * PAGE_SIZE_4K,
+                                              seL4_PageBits,
+                                              rights,
+                                              1,
+                                              &vaddr);
+    }
+    else
+    {
+        res = sel4utils_reserve_range_at(target,
+                                         vaddr,
+                                         num_pages * PAGE_SIZE_4K,
+                                         rights, 1);
+    }
     if (res.res == NULL)
     {
         ZF_LOGE("Failed to reserve range\n");
@@ -37,21 +58,21 @@ int ads_attach(ads_t *ads, vka_t *vka, void* vaddr, size_t size, seL4_CPtr frame
 
     /* Map the frame cap into the vspace */
 
-    seL4_CPtr caps[] = {frame_cap};
-    size_t num_pages = size / PAGE_SIZE_4K;
     size_t size_bits = seL4_PageBits;
     int error = sel4utils_map_pages_at_vaddr(target,
-    caps,
-    (uintptr_t *)process_cookie, // TODO: this is a hack
-    vaddr,
-    num_pages,
-    size_bits,
-    res);
+                                             frame_caps,
+                                             (uintptr_t *)process_cookie, // TODO: this is a hack
+                                             vaddr,
+                                             num_pages,
+                                             size_bits,
+                                             res);
     if (error)
     {
         ZF_LOGE("Failed to map pages\n");
         return 1;
     }
+    *ret_vaddr = vaddr;
+    OSDB_PRINTF(ADSSERVS "attached %u pages at %p\n", num_pages, *ret_vaddr);
 
     return 0;
 }

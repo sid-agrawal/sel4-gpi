@@ -1,4 +1,4 @@
-        /*
+/*
  * Copyright 2017, Data61, CSIRO (ABN 41 687 119 230)
  *
  * SPDX-License-Identifier: BSD-2-Clause
@@ -13,6 +13,8 @@
 
 #include<sel4gpi/ads_clientapi.h>
 #include<sel4gpi/cpu_clientapi.h>
+#include<sel4gpi/mo_clientapi.h>
+#include<sel4gpi/mo_component.h>
 #include<sel4gpi/debug.h>
 
 #include <sel4bench/arch/sel4bench.h>
@@ -275,26 +277,36 @@ int test_ads_stack_isolated_stack_die(env_t env)
 }
 DEFINE_TEST(GPIADS002, "Ensure that thread stack works", test_ads_stack_isolated_stack_die, true)
 
-#ifdef WQEAREREADY
 
-DEFINE_TEST(GPIADS002, "Ensure that new process create works", test_new_process, true)
 int test_ads_attach(env_t env)
 {
-    ads_client_context_t conn;
-    // Using a known EP, get a new ads CAP.
-    int error = ads_component_client_connect(env->ads_endpoint, &env->vka, &conn);
+    ads_client_context_t ads_conn;
+    cspacepath_t path;
+    vka_cspace_make_path(&env->vka, env->self_ads_cptr, &path);
+    ads_conn.badged_server_ep_cspath = path;
+
+    // allocate a new MO
+    mo_client_context_t mo_conn;
+    int error = mo_component_client_connect(env->gpi_endpoint,
+                                        &env->vka,
+                                        5,
+                                        &mo_conn);
     test_error_eq(error, 0);
 
-    // Increment the ads cap.
-    error = ads_client_attach(&conn, 0, 0, 0);
-    test_error_eq(error, 0);
+    void *ret_vaddr;
+    error = ads_client_attach(&ads_conn,
+                              0, /*vaddr*/
+                              &mo_conn,
+                              &ret_vaddr);
+    assert(error == 0);
+    assert(ret_vaddr != NULL);
 
-    // Decrement the cap. TODO(siagraw)
-    // Delete the ads cap. TODO(siagraw)
+
     return sel4test_get_result();
 }
-DEFINE_TEST(GPIADS002, "Ensure the ads attach works", test_ads_attach, true)
+DEFINE_TEST(GPIADS010, "Ensure the ads attach works", test_ads_attach, true)
 
+#ifdef WQEAREREADY
 int test_ads_bind_cpu(env_t env)
 {
     ads_client_context_t conn;

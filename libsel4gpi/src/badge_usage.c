@@ -99,6 +99,9 @@ char *cap_type_to_str(gpi_cap_t cap_type)
         case GPICAP_TYPE_ADS:
             return "ADS";
             break;
+        case GPICAP_TYPE_MO:
+            return "MO";
+            break;
        case GPICAP_TYPE_CPU:
             return "CPU";
             break;

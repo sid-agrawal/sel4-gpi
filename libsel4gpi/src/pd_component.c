@@ -367,6 +367,10 @@ static void handle_dump_cap_req(seL4_Word sender_badge, seL4_MessageInfo_t old_t
         return;
     }
 
+    // Extract buffer and VA
+    // Find out which AS it belongs too.
+
+
     int error = pd_dump(&client_data->pd);
 
     seL4_SetMR(PDMSGREG_FUNC, PD_FUNC_DUMP_ACK);

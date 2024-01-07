@@ -13,6 +13,7 @@
 #include <vka/capops.h>
 
 #include<sel4gpi/ads_clientapi.h>
+#include<sel4gpi/mo_clientapi.h>
 #include<sel4gpi/badge_usage.h>
 #include<sel4gpi/debug.h>
 
@@ -51,13 +52,15 @@ int ads_component_client_connect(seL4_CPtr server_ep_cap,
     return 0;
 }
 
-
-int ads_client_attach(ads_client_context_t *conn, void* vaddr, size_t size, seL4_CPtr frame_cap)
+int ads_client_attach(ads_client_context_t *conn,
+                      void *vaddr,
+                      mo_client_context_t *mo_cap,
+                      void **ret_vaddr)
 {
     seL4_SetMR(ADSMSGREG_FUNC, ADS_FUNC_ATTACH_REQ);
     seL4_SetMR(ADSMSGREG_ATTACH_REQ_VA, (seL4_Word) vaddr);
-    seL4_SetMR(ADSMSGREG_ATTACH_REQ_SZ, (seL4_Word) size);
-    seL4_SetCap(0, frame_cap);
+    // seL4_SetMR(ADSMSGREG_ATTACH_REQ_SZ, (seL4_Word) size);
+    seL4_SetCap(0, mo_cap->badged_server_ep_cspath.capPtr);
 
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 1,
                                                   ADSMSGREG_ATTACH_REQ_END);
@@ -65,6 +68,8 @@ int ads_client_attach(ads_client_context_t *conn, void* vaddr, size_t size, seL4
     OSDB_PRINTF(ADSSERVC "Sending attach request to server via EP: %lu.\n",
            conn->badged_server_ep_cspath.capPtr);
     tag = seL4_Call(conn->badged_server_ep_cspath.capPtr, tag);
+    *ret_vaddr = (void *)seL4_GetMR(ADSMSGREG_ATTACH_REQ_VA);
+    assert(*ret_vaddr != NULL);
 
     return 0;
 }

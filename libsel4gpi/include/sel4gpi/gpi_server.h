@@ -20,6 +20,7 @@
 #include <vspace/vspace.h>
 #include <sel4utils/process.h>
 #include <sel4gpi/ads_component.h>
+#include <sel4gpi/mo_component.h>
 #include <sel4gpi/pd_component.h>
 #include <sel4gpi/cpu_component.h>
 #include <sel4gpi/cap_tracking.h>
@@ -84,6 +85,7 @@ typedef struct _gpi_server_context {
 
     /* Per-client context maintained by the server. */
     ads_component_context_t ads_component;
+    mo_component_context_t  mo_component;
     cpu_component_context_t cpu_component;
     pd_component_context_t  pd_component;
 

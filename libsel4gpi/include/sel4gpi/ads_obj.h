@@ -25,11 +25,16 @@ typedef struct _ads {
  * @param ads ads object
  * @param vka vka object to allocate cspace slots and PT from
  * @param vaddr virtual address to attach the frame to
- * @param size size of the frame
- * @param frame_cap cap to the frame to attach
+ * @param num_pages num of pages to attach
+ * @param frame_caps caps to the frames to attach
  * @return int 0 on success, -1 on failure.
  */
-int ads_attach(ads_t *ads, vka_t *vka, void *vaddr, size_t size, seL4_CPtr frame_cap,
+int ads_attach(ads_t *ads,
+               vka_t *vka,
+               void *vaddr,
+               uint32_t num_pages,
+               seL4_CPtr *frame_cap,
+               void ** ret_vaddr,
                /*sel4utils_process_t*/ vspace_t *process_cookie);
 
 /**
