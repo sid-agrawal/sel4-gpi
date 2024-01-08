@@ -188,6 +188,59 @@ void mo_handle_allocation_request(seL4_MessageInfo_t *reply_tag)
     return reply(tag);
 }
 
+int forge_mo_caps_from_vspace(vspace_t *child_vspace,
+                              vka_t *vka,
+                              uint32_t *num_ret_caps,
+                              seL4_CPtr *cap_ret)
+{
+    /* Walk every reservation */
+
+    sel4utils_alloc_data_t *child_data = get_alloc_data(child_vspace);
+    sel4utils_res_t *res = child_data->reservation_head;
+
+    while (res != NULL) {
+        *num_ret_caps = *num_ret_caps + 1 ;
+        res = res->next;
+    }
+
+    /* For each reservation, forge an MO */
+    int j = 0;
+    res = child_data->reservation_head;
+    while (res != NULL) {
+
+        /* Get the caps in a reservation */
+        uint32_t num_frames = (res->end - res->start)/PAGE_SIZE_4K;
+        seL4_CPtr *frame_caps = malloc(sizeof(seL4_CPtr) * num_frames);
+        assert(frame_caps != NULL);
+
+        int i = 0;
+        for (void *start = (void *)res->start;
+             start < (void *)res->end;
+             start += PAGE_SIZE_4K)
+        {
+            frame_caps[i] = vspace_get_cap(child_vspace, start);
+            i++;
+        }
+
+        int error = forge_mo_cap_from_frames(frame_caps,
+                                        num_frames,
+                                         vka,
+                                         &cap_ret[j]);
+        assert(error == 0);
+
+        res = res->next;
+        j++;
+    }
+
+
+    /* Add the MO's cap to the cap_ret*/
+
+    assert(*num_ret_caps < 10);
+    return 0;
+}
+
+
+
 int forge_mo_cap_from_frames(seL4_CPtr *frame_caps,
                               uint32_t num_pages,
                            vka_t *vka,
@@ -197,7 +250,7 @@ int forge_mo_cap_from_frames(seL4_CPtr *frame_caps,
     assert(frame_caps != NULL);
     /* Allocate a new registry entry for the client. */
     mo_component_registry_entry_t *client_reg_ptr = malloc(sizeof(mo_component_registry_entry_t));
-    if (client_reg_ptr == 0)
+    if (client_reg_ptr == NULL)
     {
         OSDB_PRINTF(MOSERVS "main: Failed to allocate new badge for client.\n");
         return 1;
@@ -217,6 +270,10 @@ int forge_mo_cap_from_frames(seL4_CPtr *frame_caps,
     /* Update the info in the registry entry. */
     seL4_Word badge = mo_assign_new_badge_and_objectID(client_reg_ptr);
     mo_component_registry_insert(client_reg_ptr);
+
+
+    client_reg_ptr->mo.frame_caps_in_root_task = malloc(sizeof(seL4_CPtr) * num_pages);
+    assert(client_reg_ptr->mo.frame_caps_in_root_task != NULL);
 
 
     // (XXX) A lot more will go here.

@@ -300,7 +300,11 @@ int test_ads_attach(env_t env)
                               &ret_vaddr);
     assert(error == 0);
     assert(ret_vaddr != NULL);
-
+    printf("Attached MO at vaddr: %p\n", ret_vaddr);
+    // for (int i = 0; i < 5*PAGE_SIZE_4K; i++) {
+    //     printf("MO[%u]: %u\n", i, ((char *)ret_vaddr)[i]);
+    // }
+    printf("Finished reading the new MO: %p\n", ret_vaddr);
 
     return sel4test_get_result();
 }

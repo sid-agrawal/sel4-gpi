@@ -97,8 +97,15 @@ void mo_component_handle(seL4_MessageInfo_t tag,
 mo_component_context_t *get_mo_component(void);
 
 void mo_handle_allocation_request(seL4_MessageInfo_t *reply_tag);
+
 int forge_mo_cap_from_frames(seL4_CPtr *frame_caps,
                               uint32_t num_pages,
                            vka_t *vka,
                            seL4_CPtr *cap_ret);
+
+int forge_mo_caps_from_vspace(vspace_t *child_vspace,
+                              vka_t *vka,
+                              uint32_t *num_return_caps,
+                              seL4_CPtr *cap_ret);
+
 mo_component_registry_entry_t *mo_component_registry_get_entry_by_badge(seL4_Word badge);

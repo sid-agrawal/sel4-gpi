@@ -16,6 +16,7 @@
 #include "timer.h"
 #include <sel4rpc/server.h>
 #include <sel4gpi/ads_component.h>
+#include <sel4gpi/mo_component.h>
 #include <sel4gpi/cpu_component.h>
 #include <sel4gpi/pd_component.h>
 #include <sel4testsupport/testreporter.h>
@@ -260,10 +261,31 @@ void basic_set_up(uintptr_t e)
     }
     // ads_component_registry_entry_t *head = get_ads_component()->client_registry;
 
-    env->child_ads_cptr_in_child = sel4utils_copy_cap_to_process(&(env->test_process),
-                                                                &env->vka, child_as_cap_in_parent);
-
+    env->child_ads_cptr_in_child = sel4utils_copy_cap_to_process(
+        &(env->test_process),
+        &env->vka, child_as_cap_in_parent);
     assert(env->child_ads_cptr_in_child != 0);
+
+
+    /* Forge MO caps for the ADS */
+    seL4_CPtr mo_caps[MAX_MO_CHILD];
+    uint32_t ret_num_mo;
+
+    error = forge_mo_caps_from_vspace(
+        &env->test_process.vspace,
+        &env->vka,
+        &ret_num_mo,
+        mo_caps);
+        assert(error == 0);
+
+    for (int i = 0; i < ret_num_mo; i++){
+        ZF_LOGE("MO CAP[%d]: %lu", i, mo_caps[i]);
+        env->child_mo_cptr_in_child[i] = sel4utils_copy_cap_to_process(
+            &(env->test_process),
+            &env->vka,
+            mo_caps[i]);
+        assert(env->child_mo_cptr_in_child[i] != 0);
+    }
 
     // Here, do the same for the CPU cap too
     seL4_CPtr child_cpu_cap_in_parent;

@@ -25,6 +25,7 @@
 
 #define TESTS_APP "sel4test-tests"
 #define HELLO_APP "hello"
+#define MAX_MO_CHILD 10
 
 #define MAX_TIMER_IRQS 4
 
@@ -84,8 +85,9 @@ struct driver_env {
     seL4_CPtr gpi_endpoint_in_parent;
 
     seL4_CPtr child_ads_cptr_in_child; //Child address-space cptr in child
-    seL4_CPtr child_cpu_cptr_in_child; //Child address-space cptr in child
-    seL4_CPtr child_pd_cptr_in_child; //Child address-space cptr in child
+    seL4_CPtr child_cpu_cptr_in_child; //Child cpu cptr in child
+    seL4_CPtr child_pd_cptr_in_child; //Child PD cptr in child
+    seL4_CPtr child_mo_cptr_in_child[10]; //Child PD cptr in child
     seL4_CPtr gpi_endpoint_in_child;
 
 
