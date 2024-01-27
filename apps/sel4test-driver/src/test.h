@@ -91,6 +91,9 @@ struct driver_env {
     seL4_CPtr child_mo_cptr_in_child[10]; //Child PD cptr in child
     seL4_CPtr gpi_endpoint_in_child;
 
+    /* Add for libramdisk */
+    seL4_CPtr ramdisk_endpoint_in_parent;
+    seL4_CPtr ramdisk_endpoint_in_child;
 
     int num_untypeds;
     vka_object_t *untypeds;

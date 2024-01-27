@@ -48,6 +48,7 @@
 
 #include <sel4platsupport/io.h>
 #include <sel4gpi/gpi_server.h>
+#include <ramdisk/ramdisk.h>
 
 
 #define RT_MALLOC_SIZE 16 * 1024 * 1024
@@ -111,7 +112,8 @@ static void init_env(driver_env_t env)
     error = sel4utils_bootstrap_vspace_with_bootinfo_leaky(&env->vspace,
                                                            &data, simple_get_pd(&env->simple),
                                                            &env->vka, platsupport_get_bootinfo());
-    if (error) {
+    if (error)
+    {
         ZF_LOGF("Failed to bootstrap vspace");
     }
 
@@ -119,7 +121,8 @@ static void init_env(driver_env_t env)
     void *vaddr;
     virtual_reservation = vspace_reserve_range(&env->vspace,
                                                ALLOCATOR_VIRTUAL_POOL_SIZE, seL4_AllRights, 1, &vaddr);
-    if (virtual_reservation.res == 0) {
+    if (virtual_reservation.res == 0)
+    {
         ZF_LOGF("Failed to provide virtual memory for allocator");
     }
 
@@ -133,7 +136,8 @@ static void init_env(driver_env_t env)
 /* Free a list of objects */
 static void free_objects(vka_object_t *objects, unsigned int num)
 {
-    for (unsigned int i = 0; i < num; i++) {
+    for (unsigned int i = 0; i < num; i++)
+    {
         vka_free_object(&env.vka, &objects[i]);
     }
 }
@@ -146,12 +150,14 @@ static unsigned int allocate_untypeds(vka_object_t *untypeds, size_t bytes, unsi
     size_t allocated = 0;
 
     /* try to allocate as many of each possible untyped size as possible */
-    for (uint8_t size_bits = seL4_WordBits - 1; size_bits > PAGE_BITS_4K; size_bits--) {
+    for (uint8_t size_bits = seL4_WordBits - 1; size_bits > PAGE_BITS_4K; size_bits--)
+    {
         /* keep allocating until we run out, or if allocating would
          * cause us to allocate too much memory*/
         while (num_untypeds < max_untypeds &&
                allocated + BIT(size_bits) <= bytes &&
-               vka_alloc_untyped(&env.vka, size_bits, &untypeds[num_untypeds]) == 0) {
+               vka_alloc_untyped(&env.vka, size_bits, &untypeds[num_untypeds]) == 0)
+        {
             allocated += BIT(size_bits);
             num_untypeds++;
         }
@@ -169,7 +175,8 @@ static unsigned int populate_untypeds(vka_object_t *untypeds)
     /* Now allocate everything else for the tests */
     unsigned int num_untypeds = allocate_untypeds(untypeds, TEST_UNTYPED_SIZE, ARRAY_SIZE(untyped_size_bits_list));
     /* Fill out the size_bits list */
-    for (unsigned int i = 0; i < num_untypeds; i++) {
+    for (unsigned int i = 0; i < num_untypeds; i++)
+    {
         untyped_size_bits_list[i] = untypeds[i].size_bits;
     }
 
@@ -177,7 +184,8 @@ static unsigned int populate_untypeds(vka_object_t *untypeds)
     free_objects(reserve, reserve_num);
 
     /* Return number of untypeds for tests */
-    if (num_untypeds == 0) {
+    if (num_untypeds == 0)
+    {
         ZF_LOGF("No untypeds for tests!");
     }
 
@@ -186,7 +194,8 @@ static unsigned int populate_untypeds(vka_object_t *untypeds)
 
 static void init_timer(void)
 {
-    if (config_set(CONFIG_HAVE_TIMER)) {
+    if (config_set(CONFIG_HAVE_TIMER))
+    {
         int error;
 
         /* setup the timers and have our wrapper around simple capture the IRQ caps */
@@ -206,18 +215,24 @@ static void init_timer(void)
 
 void sel4test_start_suite(const char *name, int num_types, int num_tests)
 {
-    if (config_set(CONFIG_PRINT_XML)) {
+    if (config_set(CONFIG_PRINT_XML))
+    {
         printf("<testsuite>\n");
-    } else {
+    }
+    else
+    {
         printf("Starting test suite %s TT: %d Count: %d\n", name, num_types, num_tests);
     }
 }
 
 void sel4test_start_test(const char *name, int n)
 {
-    if (config_set(CONFIG_PRINT_XML)) {
+    if (config_set(CONFIG_PRINT_XML))
+    {
         printf("\t<testcase classname=\"%s\" name=\"%s\">\n", "sel4test", name);
-    } else {
+    }
+    else
+    {
         printf("Starting test %d: %s\n", n, name);
     }
     sel4test_reset();
@@ -229,23 +244,31 @@ void sel4test_end_test(test_result_t result)
     sel4test_end_printf_buffer();
     test_check(result == SUCCESS);
 
-    if (config_set(CONFIG_PRINT_XML)) {
+    if (config_set(CONFIG_PRINT_XML))
+    {
         printf("\t</testcase>\n");
     }
 
-    if (config_set(CONFIG_HAVE_TIMER)) {
+    if (config_set(CONFIG_HAVE_TIMER))
+    {
         timer_reset(&env);
     }
 }
 
 void sel4test_end_suite(int num_tests, int num_tests_passed, int skipped_tests)
 {
-    if (config_set(CONFIG_PRINT_XML)) {
+    if (config_set(CONFIG_PRINT_XML))
+    {
         printf("</testsuite>\n");
-    } else {
-        if (num_tests_passed != num_tests) {
+    }
+    else
+    {
+        if (num_tests_passed != num_tests)
+        {
             printf("Test suite failed. %d/%d tests passed.\n", num_tests_passed, num_tests);
-        } else {
+        }
+        else
+        {
             printf("Test suite passed. %d tests passed. %d tests disabled.\n", num_tests, skipped_tests);
         }
     }
@@ -254,7 +277,8 @@ void sel4test_end_suite(int num_tests, int num_tests_passed, int skipped_tests)
 void sel4test_stop_tests(test_result_t result, int tests_done, int tests_failed, int num_tests, int skipped_tests)
 {
     /* if its a special abort case, output why we are aborting */
-    switch (result) {
+    switch (result)
+    {
     case ABORT:
         printf("Halting on fatal assertion...\n");
         break;
@@ -270,7 +294,8 @@ void sel4test_stop_tests(test_result_t result, int tests_done, int tests_failed,
     /* last test - test all tests ran */
     sel4test_start_test("Test all tests ran", num_tests + 1);
     test_eq(tests_done, num_tests);
-    if (sel4test_get_result() != SUCCESS) {
+    if (sel4test_get_result() != SUCCESS)
+    {
         tests_failed++;
     }
     tests_done++;
@@ -279,11 +304,16 @@ void sel4test_stop_tests(test_result_t result, int tests_done, int tests_failed,
 
     sel4test_end_suite(tests_done, tests_done - tests_failed, skipped_tests);
 
-    if (tests_failed > 0) {
+    if (tests_failed > 0)
+    {
         printf("*** FAILURES DETECTED ***\n");
-    } else if (tests_done < num_tests) {
+    }
+    else if (tests_done < num_tests)
+    {
         printf("*** ALL tests not run ***\n");
-    } else {
+    }
+    else
+    {
         printf("All is well in the universe\n");
     }
     printf("\n\n");
@@ -292,14 +322,19 @@ void sel4test_stop_tests(test_result_t result, int tests_done, int tests_failed,
 static int collate_tests(testcase_t *tests_in, int n, testcase_t *tests_out[], int out_index,
                          regex_t *reg, int *skipped_tests)
 {
-    for (int i = 0; i < n; i++) {
+    for (int i = 0; i < n; i++)
+    {
         /* make sure the string is null terminated */
         tests_in[i].name[TEST_NAME_MAX - 1] = '\0';
-        if (regexec(reg, tests_in[i].name, 0, NULL, 0) == 0) {
-            if (tests_in[i].enabled) {
+        if (regexec(reg, tests_in[i].name, 0, NULL, 0) == 0)
+        {
+            if (tests_in[i].enabled)
+            {
                 tests_out[out_index] = &tests_in[i];
                 out_index++;
-            } else {
+            }
+            else
+            {
                 (*skipped_tests)++;
             }
         }
@@ -314,7 +349,8 @@ void sel4test_run_tests(struct driver_env *e)
     int max_test_types = (int)(__stop__test_type - __start__test_type);
     struct test_type *test_types[max_test_types];
     int num_test_types = 0;
-    for (struct test_type *i = __start__test_type; i < __stop__test_type; i++) {
+    for (struct test_type *i = __start__test_type; i < __stop__test_type; i++)
+    {
         test_types[num_test_types] = i;
         num_test_types++;
     }
@@ -327,9 +363,10 @@ void sel4test_run_tests(struct driver_env *e)
     // there. To run the test we still call the binary directly.
     int driver_tests = (int)(__stop__test_case - __start__test_case);
     uint64_t tc_size = 0;
-    testcase_t *sel4test_tests = (testcase_t *) sel4utils_elf_get_section(&tests_elf, "_test_case", &tc_size);
-    if (sel4test_tests == NULL) {
-        ZF_LOGF(TESTS_APP": Failed to find section: _test_case");
+    testcase_t *sel4test_tests = (testcase_t *)sel4utils_elf_get_section(&tests_elf, "_test_case", &tc_size);
+    if (sel4test_tests == NULL)
+    {
+        ZF_LOGF(TESTS_APP ": Failed to find section: _test_case");
     }
     int tc_tests = tc_size / sizeof(testcase_t);
     int all_tests = driver_tests + tc_tests;
@@ -355,7 +392,8 @@ void sel4test_run_tests(struct driver_env *e)
     /* Now that they are sorted we can easily ensure there are no duplicate tests.
      * this just ensures some sanity as if there are duplicates, they could have some
      * arbitrary ordering, which might result in difficulty reproducing test failures */
-    for (int i = 1; i < num_tests; i++) {
+    for (int i = 1; i < num_tests; i++)
+    {
         ZF_LOGF_IF(strcmp(tests[i]->name, tests[i - 1]->name) == 0, "tests have no strict order! %s %s",
                    tests[i]->name, tests[i - 1]->name);
     }
@@ -372,31 +410,39 @@ void sel4test_run_tests(struct driver_env *e)
     tests_done++;
 
     /* Iterate through test types so that we run them in order of test type, then name.
-       * Test types are ordered by ID in test.h. */
-      // siagraw: skip bootstram test. by setting tt=1
-    for (int tt = 0; tt < num_test_types; tt++) {
+     * Test types are ordered by ID in test.h. */
+    // siagraw: skip bootstram test. by setting tt=1
+    for (int tt = 0; tt < num_test_types; tt++)
+    {
         /* set up */
-        if (test_types[tt]->set_up_test_type != NULL) {
+        if (test_types[tt]->set_up_test_type != NULL)
+        {
             test_types[tt]->set_up_test_type((uintptr_t)e);
         }
 
-        for (int i = 0; i < num_tests; i++) {
-            if (tests[i]->test_type == test_types[tt]->id) {
-                    sel4test_start_test(tests[i]->name, tests_done);
-                if (test_types[tt]->set_up != NULL) {
+        for (int i = 0; i < num_tests; i++)
+        {
+            if (tests[i]->test_type == test_types[tt]->id)
+            {
+                sel4test_start_test(tests[i]->name, tests_done);
+                if (test_types[tt]->set_up != NULL)
+                {
                     test_types[tt]->set_up((uintptr_t)e);
                 }
 
                 test_result_t result = test_types[tt]->run_test(tests[i], (uintptr_t)e);
 
-                if (test_types[tt]->tear_down != NULL) {
+                if (test_types[tt]->tear_down != NULL)
+                {
                     test_types[tt]->tear_down((uintptr_t)e);
                 }
                 sel4test_end_test(result);
 
-                if (result != SUCCESS) {
+                if (result != SUCCESS)
+                {
                     tests_failed++;
-                    if (config_set(CONFIG_TESTPRINTER_HALT_ON_TEST_FAILURE) || result == ABORT) {
+                    if (config_set(CONFIG_TESTPRINTER_HALT_ON_TEST_FAILURE) || result == ABORT)
+                    {
                         sel4test_stop_tests(result, tests_done + 1, tests_failed, num_tests + 1, skipped_tests);
                         return;
                     }
@@ -406,7 +452,8 @@ void sel4test_run_tests(struct driver_env *e)
         }
 
         /* tear down */
-        if (test_types[tt]->tear_down_test_type != NULL) {
+        if (test_types[tt]->tear_down_test_type != NULL)
+        {
             test_types[tt]->tear_down_test_type((uintptr_t)e);
         }
     }
@@ -445,17 +492,21 @@ void *main_continued(void *arg UNUSED)
 
     /* allocate a piece of device untyped memory for the frame tests,
      * note that spike doesn't have any device untypes so the tests that require device untypes are turned off */
-    if (!config_set(CONFIG_PLAT_SPIKE)) {
+    if (!config_set(CONFIG_PLAT_SPIKE))
+    {
         bool allocated = false;
         int untyped_count = simple_get_untyped_count(&env.simple);
-        for (int i = 0; i < untyped_count; i++) {
+        for (int i = 0; i < untyped_count; i++)
+        {
             bool device = false;
             uintptr_t ut_paddr = 0;
             size_t ut_size_bits = 0;
             seL4_CPtr ut_cptr = simple_get_nth_untyped(&env.simple, i, &ut_size_bits, &ut_paddr, &device);
-            if (device) {
+            if (device)
+            {
                 error = vka_alloc_frame_at(&env.vka, seL4_PageBits, ut_paddr, &env.device_obj);
-                if (!error) {
+                if (!error)
+                {
                     allocated = true;
                     /* we've allocated a single device frame and that's all we need */
                     break;
@@ -471,7 +522,7 @@ void *main_continued(void *arg UNUSED)
 
     /* create a frame that will act as the init data, we can then map that
      * in to target processes */
-    env.init = (test_init_data_t *) vspace_new_pages(&env.vspace, seL4_AllRights, 1, PAGE_BITS_4K);
+    env.init = (test_init_data_t *)vspace_new_pages(&env.vspace, seL4_AllRights, 1, PAGE_BITS_4K);
     assert(env.init != NULL);
 
     /* copy the untyped size bits list across to the init frame */
@@ -489,18 +540,20 @@ void *main_continued(void *arg UNUSED)
 
     /* setup init data that won't change test-to-test */
     env.init->priority = seL4_MaxPrio - 1;
-    if (plat_init) {
+    if (plat_init)
+    {
         plat_init(&env);
     }
 
     /* Allocate a reply object for the RT kernel. */
-    if (config_set(CONFIG_KERNEL_MCS)) {
+    if (config_set(CONFIG_KERNEL_MCS))
+    {
         error = vka_alloc_reply(&env.vka, &env.reply);
         ZF_LOGF_IF(error, "Failed to allocate reply");
     }
 
     /* Start core services */
-    printf(GPISERVP"Starting GPI server...");
+    printf(GPISERVP "Starting GPI server...");
     error = gpi_server_parent_spawn_thread(&env.simple,
                                            &env.vka,
                                            &env.vspace,
@@ -508,6 +561,13 @@ void *main_continued(void *arg UNUSED)
                                            &env.gpi_endpoint_in_parent);
     // printf(GPISERVP "Public EP is: %d\n", env.gpi_endpoint_in_parent);
     // debug_cap_identify(GPISERVP, env.gpi_endpoint_in_parent);
+
+    printf(RAMDISK_S "Starting ramdisk server...\n");
+    error = ramdisk_server_spawn_thread(&env.simple,
+                                        &env.vka,
+                                        &env.vspace,
+                                        RAMDISK_SERVER_DEFAULT_PRIORITY,
+                                        &env.ramdisk_endpoint_in_parent);
 
     /* now run the tests */
     sel4test_run_tests(&env);
@@ -529,7 +589,8 @@ static vka_utspace_alloc_at_fn vka_utspace_alloc_at_base;
  * is initialised and then unset afterwards. */
 static bool serial_utspace_record = false;
 
-typedef struct uspace_alloc_at_args {
+typedef struct uspace_alloc_at_args
+{
     uintptr_t paddr;
     seL4_Word type;
     seL4_Word size_bits;
@@ -548,26 +609,31 @@ static int serial_utspace_alloc_at_fn(void *data, const cspacepath_t *dest, seL4
     static size_t num_alloc = 0;
 
     ZF_LOGF_IF(!vka_utspace_alloc_at_base, "vka_utspace_alloc_at_base not initialised.");
-    if (!serial_utspace_record) {
-        for (int i = 0; i < num_alloc; i++) {
+    if (!serial_utspace_record)
+    {
+        for (int i = 0; i < num_alloc; i++)
+        {
             if (paddr == args_prev[i].paddr &&
                 type == args_prev[i].type &&
-                size_bits == args_prev[i].size_bits) {
+                size_bits == args_prev[i].size_bits)
+            {
                 return vka_cnode_copy(dest, &args_prev[i].dest, seL4_AllRights);
             }
         }
         return vka_utspace_alloc_at_base(data, dest, type, size_bits, paddr, cookie);
-    } else {
+    }
+    else
+    {
         ZF_LOGF_IF(num_alloc >= NUM_ALLOC_AT_TO_TRACK, "Trying to allocate too many utspace objects");
         int ret = vka_utspace_alloc_at_base(data, dest, type, size_bits, paddr, cookie);
-        if (ret) {
+        if (ret)
+        {
             return ret;
         }
         uspace_alloc_at_args_t a = {.paddr = paddr, .type = type, .size_bits = size_bits, .dest = *dest};
         args_prev[num_alloc] = a;
         num_alloc++;
         return ret;
-
     }
 }
 
@@ -590,7 +656,8 @@ static irq_id_t sel4test_timer_irq_register(UNUSED void *cookie, ps_irq_t irq, i
     ZF_LOGF_IF(error, "Failed to allocate IRQ handler");
 
     /* Allocate the root notifitcation if we haven't already done so */
-    if (env.timer_notification.cptr == seL4_CapNull) {
+    if (env.timer_notification.cptr == seL4_CapNull)
+    {
         error = vka_alloc_notification(&env.vka, &env.timer_notification);
         ZF_LOGF_IF(error, "Failed to allocate notification object");
     }

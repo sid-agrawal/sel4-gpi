@@ -58,7 +58,8 @@ static seL4_SlotRegion copy_untypeds_to_process(sel4utils_process_t *process,
 {
     seL4_SlotRegion range = {0};
 
-    for (int i = 0; i < num_untypeds; i++) {
+    for (int i = 0; i < num_untypeds; i++)
+    {
         // printf("DRIVER: Adding untyped to process: cap: %lu ut: %lu sz: %s\n ",
         //        untypeds[i].cptr,
         //        untypeds[i].ut,
@@ -66,7 +67,8 @@ static seL4_SlotRegion copy_untypeds_to_process(sel4utils_process_t *process,
         seL4_CPtr slot = sel4utils_copy_cap_to_process(process, &env->vka, untypeds[i].cptr);
 
         /* set up the cap range */
-        if (i == 0) {
+        if (i == 0)
+        {
             range.start = slot;
         }
         range.end = slot;
@@ -82,7 +84,8 @@ static void handle_timer_requests(driver_env_t env, sel4test_output_t test_outpu
     uint64_t timeServer_ns;
     seL4_Word timeServer_timeoutType;
 
-    switch (test_output) {
+    switch (test_output)
+    {
 
     case SEL4TEST_TIME_TIMEOUT:
 
@@ -116,7 +119,6 @@ static void handle_timer_requests(driver_env_t env, sel4test_output_t test_outpu
         ZF_LOGF("Invalid time request");
         break;
     }
-
 }
 
 /* This function waits on:
@@ -136,7 +138,8 @@ static int sel4test_driver_wait(driver_env_t env, struct testcase *test)
     sel4rpc_server_init(&rpc_server, &env->vka, sel4rpc_default_handler, env,
                         &env->reply, &env->simple);
 
-    while (1) {
+    while (1)
+    {
         /* wait for tests to finish or fault, receive test request or report result */
         info = api_recv(env->test_process.fault_endpoint.cptr, &badge, env->reply.cptr);
         test_output = seL4_GetMR(0);
@@ -151,11 +154,13 @@ static int sel4test_driver_wait(driver_env_t env, struct testcase *test)
          * For now, assume it is a timer interrupt, handle it and signal any test processes
          * that might be waiting on it.
          */
-        if (badge != 0) {
+        if (badge != 0)
+        {
             assert(config_set(CONFIG_HAVE_TIMER));
         }
 
-        if (config_set(CONFIG_HAVE_TIMER) && badge != 0) {
+        if (config_set(CONFIG_HAVE_TIMER) && badge != 0)
+        {
             /* handle timer interrupts in hardware */
             handle_timer_interrupts(env, badge);
             /* Driver does extra work to check whether timeout succeeded and signals
@@ -166,29 +171,37 @@ static int sel4test_driver_wait(driver_env_t env, struct testcase *test)
             continue;
         }
 
-        if (sel4test_isTimerRPC(test_output)) {
+        if (sel4test_isTimerRPC(test_output))
+        {
 
-            if (config_set(CONFIG_HAVE_TIMER)) {
+            if (config_set(CONFIG_HAVE_TIMER))
+            {
                 handle_timer_requests(env, test_output);
                 continue;
-            } else {
+            }
+            else
+            {
                 ZF_LOGF("Requesting a timer service from sel4test-driver while there is no"
                         "supported HW timer.");
             }
-        } else if (test_output == SEL4TEST_PROTOBUF_RPC) {
+        }
+        else if (test_output == SEL4TEST_PROTOBUF_RPC)
+        {
             sel4rpc_server_recv(&rpc_server);
             continue;
         }
 
         result = test_output;
-        if (seL4_MessageInfo_get_label(info) != seL4_Fault_NullFault) {
+        if (seL4_MessageInfo_get_label(info) != seL4_Fault_NullFault)
+        {
             sel4utils_print_fault_message(info, test->name);
             printf("Register of root thread in test (may not be the thread that faulted)\n");
             sel4debug_dump_registers(env->test_process.thread.tcb.cptr);
             result = FAILURE;
         }
 
-        if (config_set(CONFIG_HAVE_TIMER)) {
+        if (config_set(CONFIG_HAVE_TIMER))
+        {
             timer_cleanup(env);
         }
 
@@ -199,7 +212,7 @@ static int sel4test_driver_wait(driver_env_t env, struct testcase *test)
 void basic_set_up(uintptr_t e)
 {
     int error;
-        driver_env_t env = (driver_env_t)e;
+    driver_env_t env = (driver_env_t)e;
 
     sel4utils_process_config_t config = process_config_default_simple(&env->simple, TESTS_APP, env->init->priority);
     config = process_config_mcp(config, seL4_MaxPrio);
@@ -214,7 +227,8 @@ void basic_set_up(uintptr_t e)
     env->init->page_directory = sel4utils_copy_cap_to_process(&(env->test_process), &env->vka, env->test_process.pd.cptr);
     env->init->root_cnode = SEL4UTILS_CNODE_SLOT;
     env->init->tcb = sel4utils_copy_cap_to_process(&(env->test_process), &env->vka, env->test_process.thread.tcb.cptr);
-    if (config_set(CONFIG_HAVE_TIMER)) {
+    if (config_set(CONFIG_HAVE_TIMER))
+    {
         env->init->timer_ntfn = sel4utils_copy_cap_to_process(&(env->test_process), &env->vka, env->timer_notify_test.cptr);
     }
 
@@ -238,18 +252,19 @@ void basic_set_up(uintptr_t e)
                                                                                                               seL4_CapASIDControl));
     env->init->irq_handler = sel4utils_copy_cap_to_process(&(env->test_process), &env->vka, path.capPtr);
 #ifdef CONFIG_IOMMU
-    env->init->io_space = sel4utils_copy_cap_to_process(&(env->test_process), &env->vka, simple_get_init_cap(&env->simple,
-                                                                                                             seL4_CapIOSpace));
+    env->init->io_space = sel4utils_copy_cap_to_process(&(env->test_process), &env->vka, simple_get_init_cap(&env->simple, seL4_CapIOSpace));
 #endif /* CONFIG_IOMMU */
 #ifdef CONFIG_TK1_SMMU
     env->init->io_space_caps = arch_copy_iospace_caps_to_process(&(env->test_process), &env);
 #endif
     env->init->cores = simple_get_core_count(&env->simple);
     /* copy the sched ctrl caps to the remote process */
-    if (config_set(CONFIG_KERNEL_MCS)) {
+    if (config_set(CONFIG_KERNEL_MCS))
+    {
         seL4_CPtr sched_ctrl = simple_get_sched_ctrl(&env->simple, 0);
         env->init->sched_ctrl = sel4utils_copy_cap_to_process(&(env->test_process), &env->vka, sched_ctrl);
-        for (int i = 1; i < env->init->cores; i++) {
+        for (int i = 1; i < env->init->cores; i++)
+        {
             sched_ctrl = simple_get_sched_ctrl(&env->simple, i);
             sel4utils_copy_cap_to_process(&(env->test_process), &env->vka, sched_ctrl);
         }
@@ -267,14 +282,15 @@ void basic_set_up(uintptr_t e)
     // First forge a cap to the child's vspace
     seL4_CPtr child_as_cap_in_parent;
     error = forge_ads_cap_from_vspace(&env->test_process.vspace, &env->vka, &child_as_cap_in_parent);
-    if (error){
+    if (error)
+    {
         ZF_LOGF("Failed to forge child's as cap");
     }
     // ads_component_registry_entry_t *head = get_ads_component()->client_registry;
 
-    env->child_ads_cptr_in_child = sel4utils_copy_cap_to_process(
-        &(env->test_process),
-        &env->vka, child_as_cap_in_parent);
+    env->child_ads_cptr_in_child = sel4utils_copy_cap_to_process(&(env->test_process),
+                                                                 &env->vka, child_as_cap_in_parent);
+
     assert(env->child_ads_cptr_in_child != 0);
 
 
@@ -301,25 +317,26 @@ void basic_set_up(uintptr_t e)
     // Here, do the same for the CPU cap too
     seL4_CPtr child_cpu_cap_in_parent;
     error = forge_cpu_cap_from_tcb(&env->test_process, &env->vka, &child_cpu_cap_in_parent);
-    if (error){
+    if (error)
+    {
         ZF_LOGF("Failed to forge child's CPU cap");
     }
     // cpu_component_registry_entry_t *head_cpu = get_cpu_component()->client_registry;
 
     env->child_cpu_cptr_in_child = sel4utils_copy_cap_to_process(&(env->test_process),
-                                                                &env->vka, child_cpu_cap_in_parent);
+                                                                 &env->vka, child_cpu_cap_in_parent);
     assert(env->child_cpu_cptr_in_child != 0);
 
     // Here, do the same for the CPU cap too
     // We have a cathc 22 here. The
-
 
     //--------------------------------------------------------------------
 #define PD_FORGE 1
 #ifdef PD_FORGE
     seL4_CPtr child_pd_cap_in_parent;
     error = forge_pd_cap_from_init_data(env->init, &env->vka, &child_pd_cap_in_parent);
-    if (error){
+    if (error)
+    {
         ZF_LOGF("Failed to forge child's PD cap");
     }
     env->child_pd_cptr_in_child = sel4utils_copy_cap_to_process(&(env->test_process),
@@ -329,17 +346,22 @@ void basic_set_up(uintptr_t e)
 #endif
 
     // For the ads-server
-    // Keep this one as the last COPY, so that  init->free_slot.start a few lines below stays valid.
-    // See at label "Waring"
     env->gpi_endpoint_in_child = sel4utils_copy_cap_to_process(&(env->test_process),
                                                                &env->vka, env->gpi_endpoint_in_parent);
 
+    // For the ramdisk server
+    env->ramdisk_endpoint_in_child = sel4utils_copy_cap_to_process(&(env->test_process),
+                                                                   &env->vka, env->ramdisk_endpoint_in_parent);
 
-
+    // Keep this one as the last COPY, so that  init->free_slot.start a few lines below stays valid.
+    // See at label "Warning"
+    seL4_CPtr free_slot_start = env->ramdisk_endpoint_in_child + 1;
 
     /* copy the device frame, if any */
-    if (env->init->device_frame_cap) {
+    if (env->init->device_frame_cap)
+    {
         env->init->device_frame_cap = sel4utils_copy_cap_to_process(&(env->test_process), &env->vka, env->device_obj.cptr);
+        free_slot_start = env->init->device_frame_cap + 1;
     }
 
     /* map the cap into remote vspace */
@@ -354,12 +376,8 @@ Warning:
      * AS THE SLOTS WILL BE CONSIDERED FREE AND OVERRIDDEN BY THE TEST PROCESS. */
     /* set up free slot range */
     env->init->cspace_size_bits = TEST_PROCESS_CSPACE_SIZE_BITS;
-    if (env->init->device_frame_cap) {
-        env->init->free_slots.start = env->init->device_frame_cap + 1;
-    } else {
-        env->init->free_slots.start = env->gpi_endpoint_in_child + 1;
-        printf("%s:%d: free_slot.start %ld\n", __FUNCTION__, __LINE__, env->init->free_slots.start);
-    }
+    env->init->free_slots.start = free_slot_start;
+    printf("%s:%d: free_slot.start %ld\n", __FUNCTION__, __LINE__, env->init->free_slots.start);
     env->init->free_slots.end = (1u << TEST_PROCESS_CSPACE_SIZE_BITS);
     assert(env->init->free_slots.start < env->init->free_slots.end);
 
@@ -382,7 +400,7 @@ test_result_t basic_run_test(struct testcase *test, uintptr_t e)
 #endif
 
     /* set up args for the test process */
-    seL4_Word argc = 6;
+    seL4_Word argc = 7;
     char string_args[argc][WORD_STRING_SIZE];
     char *argv[argc];
     sel4utils_create_word_args(string_args, argv, argc,
@@ -391,7 +409,8 @@ test_result_t basic_run_test(struct testcase *test, uintptr_t e)
                                env->child_ads_cptr_in_child,
                                env->child_cpu_cptr_in_child,
                                env->child_pd_cptr_in_child,
-                               env->gpi_endpoint_in_child);
+                               env->gpi_endpoint_in_child,
+                               env->ramdisk_endpoint_in_child);
 
     int num_res;
     /* spawn the process */
@@ -399,11 +418,11 @@ test_result_t basic_run_test(struct testcase *test, uintptr_t e)
                                       argc, argv, 1);
     ZF_LOGF_IF(error != 0, "Failed to start test process!");
 
-    if (config_set(CONFIG_HAVE_TIMER)) {
+    if (config_set(CONFIG_HAVE_TIMER))
+    {
         error = tm_alloc_id_at(&env->tm, TIMER_ID);
         ZF_LOGF_IF(error != 0, "Failed to alloc time id %d", TIMER_ID);
     }
-
 
     /* wait on it to finish or fault, report result */
     int result = sel4test_driver_wait(env, test);
@@ -420,7 +439,8 @@ void basic_tear_down(uintptr_t e)
     vspace_unmap_pages(&(env->test_process).vspace, env->remote_vaddr, 1, PAGE_BITS_4K, NULL);
 
     /* reset all the untypeds for the next test */
-    for (int i = 0; i < env->num_untypeds; i++) {
+    for (int i = 0; i < env->num_untypeds; i++)
+    {
         cspacepath_t path;
         vka_cspace_make_path(&env->vka, env->untypeds[i].cptr, &path);
         vka_cnode_revoke(&path);
