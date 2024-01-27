@@ -61,6 +61,7 @@ file(
 # Import build rules for test app
 add_subdirectory(../sel4test-tests sel4test-tests)
 add_subdirectory(../hello hello)
+add_subdirectory(../vmm vmm)
 include(cpio)
 set(cpio_files "")
 # New binaries in the CPIO go here.
