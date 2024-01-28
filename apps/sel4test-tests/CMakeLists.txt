@@ -51,5 +51,6 @@ target_link_libraries(
         sel4testsupport
         sel4gpi
         sel4serialserver_tests
+        ramdisk
     PRIVATE sel4test-driver_Config
 )
