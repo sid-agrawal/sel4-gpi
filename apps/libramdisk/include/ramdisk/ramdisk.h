@@ -1,6 +1,6 @@
 /**
  * @file ramdisk.h
- * @author 
+ * @author
  * @brief Implements functions needed by a parent to interact with the ramdisk server.
  * @version 0.1
  * @date 2024-01-25
@@ -12,17 +12,12 @@
 #include <sel4/types.h>
 
 #define RAMDISK_S "RamDisk Server: "
-#define RAMDISK_SERVER_DEFAULT_PRIORITY    (seL4_MaxPrio - 100)
-
-/* ramdisk operations */
-#define RAMDISK_read	0
-#define RAMDISK_write	1
-#define RAMDISK_flush	2
+#define RAMDISK_SERVER_DEFAULT_PRIORITY (seL4_MaxPrio - 100)
 
 /* ramdisk configuration */
-#define RAMDISK_SIZE_BITS 21
+#define RAMDISK_BLOCK_SIZE SIZE_BITS_TO_BYTES(seL4_PageBits) // Block size for the ramdisk
+#define RAMDISK_SIZE_BITS 21                                 // Size of total ramdisk
 #define RAMDISK_SIZE_BYTES SIZE_BITS_TO_BYTES(RAMDISK_SIZE_BITS)
-
 
 /** @file API for allowing a thread to act as the parent to a ramdisk server
  * thread.
@@ -56,7 +51,8 @@ ramdisk_server_spawn_thread(simple_t *parent_simple, vka_t *parent_vka,
 /*
 Context of the server
 */
-typedef struct _ramdisk_server_context {
+typedef struct _ramdisk_server_context
+{
     simple_t *server_simple;
     vka_t *server_vka;
     seL4_CPtr server_cspace;
@@ -69,6 +65,10 @@ typedef struct _ramdisk_server_context {
     // Memory for ramdisk
     void *ramdisk_buf;
     vka_object_t ramdisk_buf_obj;
+
+    // Shared memory with client
+    // NOTE: only supports one client at this time
+    void *shared_mem;
 } ramdisk_server_context_t;
 
 /**
@@ -77,3 +77,37 @@ typedef struct _ramdisk_server_context {
 void ramdisk_server_main(void);
 
 ramdisk_server_context_t *get_ramdisk_server(void);
+
+/**
+ * Initializes a process as a ramdisk client
+ *
+ * CAUTION:
+ * All vka_t and vspace_t instances passed to this library by
+ * reference must remain functional for future ramdisk requests.
+ *
+ * @param client_vka Initialized vka_t for the client process
+ * @param client_vspace Initialized vspace_t for client process
+ * @param server_ep_cap Server thread's endpoint cap.
+ * @return seL4_Error value.
+ */
+seL4_Error
+ramdisk_client_init(vka_t *client_vka,
+                    vspace_t *client_vspace,
+                    seL4_CPtr server_ep_cap);
+
+int ramdisk_read(unsigned int sector, void *buf);
+
+int ramdisk_write(unsigned int sector, void *buf);
+
+int ramdisk_flush(void);
+
+/*
+Context of the client
+*/
+typedef struct _ramdisk_client_context
+{
+    vka_t *client_vka;
+    vspace_t *client_vspace;
+    seL4_CPtr server_ep_cap;
+    void *shared_mem;
+} ramdisk_client_context_t;
