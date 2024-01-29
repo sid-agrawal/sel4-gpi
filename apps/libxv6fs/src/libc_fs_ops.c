@@ -103,39 +103,21 @@ int xv6fs_fstat(int fd, struct stat *buf)
         printf("%s: fd_get failed\n", __func__);
         return -1;
     }
-    uint64 t_mem[2]; // return ino & size
-    xv6fs_sys_stat((char *)file, (uint64 *)t_mem);
-    memset(buf, 0, sizeof(struct stat));
-    buf->type = 0; // V_TYPE_FILE | V_IRWXU; // ARYA-TODO what is going on here
-    buf->ino = t_mem[1];
-    buf->size = t_mem[0];
-    buf->dev = ROOTDEV;
-    buf->nlink = 1;      // ARYA-TODO what is going on here
 
-    return 0;
+    return xv6fs_sys_stat(file , (void *)buf);
 }
 
 int xv6fs_stat(const char *pathname, struct stat *buf)
 {
 
-    void *file = (void *)xv6fs_sys_open((char *)pathname, O_CREATE | O_RDWR);
+    void *file = (void *)xv6fs_sys_open((char *)pathname, O_CREAT | O_RDWR);
     if (!file)
     {
         printf("%s failed, pathname(%s)\n", __func__, pathname);
         return -1;
     }
-    uint64 t_mem[2]; // return ino & size
-    xv6fs_sys_stat((char *)file, (uint64 *)t_mem);
-    memset(buf, 0, sizeof(struct stat));
-    buf->type = 0; // V_TYPE_FILE | V_IRWXU; // ARYA-TODO what is going on here
-    buf->ino = t_mem[1];
-    buf->size = t_mem[0];
-    buf->dev = ROOTDEV;
-    buf->nlink = 1;      // ARYA-TODO what is going on here
 
-    xv6fs_sys_fileclose(file);
-
-    return 0;
+    return xv6fs_sys_stat(file , (void *)buf);
 }
 
 int xv6fs_lseek(int fd, off_t offset, int whence)
