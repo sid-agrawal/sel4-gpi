@@ -18,6 +18,7 @@ typedef unsigned int microkit_channel;
 typedef unsigned int microkit_id;
 typedef seL4_MessageInfo_t microkit_msginfo;
 
+
 #define MONITOR_EP 5
 #define REPLY_CAP 4
 #define MONITOR_ENDPOINT_CAP 5
@@ -31,6 +32,7 @@ typedef seL4_MessageInfo_t microkit_msginfo;
 #define BASE_VCPU_CAP 330
 
 #define MICROKIT_MAX_CHANNELS 62
+
 
 /* User provided functions */
 void init(void);

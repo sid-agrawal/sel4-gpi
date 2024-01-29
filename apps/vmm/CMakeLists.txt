@@ -1,7 +1,5 @@
 cmake_minimum_required(VERSION 3.7.2)
-enable_language(C ASM)
-set(CMAKE_VERBOSE_MAKEFILE ON)
-project(hello C CXX)
+project(vmm C CXX ASM)
 
 # Use arm arch source files on RISCV
 set(arch ${KernelArch})
@@ -14,6 +12,11 @@ find_program(DTC_TOOL dtc)
         message(FATAL_ERROR "Cannot find 'dtc' program.")
     endif()
 
+find_program(LD_LINKER ld)
+    if("${LD_LINKER}" STREQUAL "LD-LINKER-NOTFOUND")
+        message(FATAL_ERROR "Cannot find 'ld' program.")
+    endif()
+
 set(
     VmDTSPath "${CMAKE_CURRENT_SOURCE_DIR}/board/qemu_arm_virt/linux.dts" # TODO: don't hardcode this
     CACHE INTERNAL "Location of VM DTS file"
@@ -24,19 +27,21 @@ set(
 )
 
 # Compile DTS to DTB
-execute_process(
-    COMMAND
-        echo ${DTC_TOOL} -I dts -O dtb ${VmDTSPath} > ${VmDTBPath}
-    RESULT_VARIABLE error
-)
-if(error)
-    message(FATAL_ERROR "Failed to compile DTS to DTB: ${VmDTSPath}")
-endif()
+# execute_process(
+#     COMMAND
+#         ${DTC_TOOL} -I dts -O dtb ${VmDTSPath} > ${VmDTBPath}
+#     RESULT_VARIABLE error
+# )
+# if(error)
+#     message(FATAL_ERROR "Failed to compile DTS to DTB: ${VmDTSPath}")
+# endif()
 
 file(
     GLOB
         deps
         src/*.c
+        src/util/*.c
+        src/arch/aarch64/*.c
 )
 
 string(CONCAT package_guest_image_defs
@@ -58,11 +63,13 @@ list(
     tools/package_guest_images.S
 )
 
+# add_link_options("-fuse-ld=lld")
+
 add_executable(vmm EXCLUDE_FROM_ALL ${deps})
 
 target_include_directories(
     vmm
-    PRIVATE include src src/arch/aarch64 src/util src/microkit
+    PRIVATE include src src/arch/aarch64 src/util
 )
 
 target_link_libraries(
@@ -70,3 +77,7 @@ target_link_libraries(
     PUBLIC muslc sel4 sel4_autoconf sel4utils
     PRIVATE sel4test-driver_Config
 )
+
+target_compile_options(vmm PRIVATE "-DBOARD_qemu_arm_virt")
+
+
