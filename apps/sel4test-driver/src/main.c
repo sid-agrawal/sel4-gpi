@@ -49,6 +49,7 @@
 #include <sel4platsupport/io.h>
 #include <sel4gpi/gpi_server.h>
 #include <ramdisk/ramdisk.h>
+#include <xv6fs/xv6fs.h>
 
 
 #define RT_MALLOC_SIZE 16 * 1024 * 1024
@@ -568,6 +569,19 @@ void *main_continued(void *arg UNUSED)
                                         &env.vspace,
                                         RAMDISK_SERVER_DEFAULT_PRIORITY,
                                         &env.ramdisk_endpoint_in_parent);
+
+    ramdisk_client_init(&env.vka,
+                        &env.vspace,
+                        env.ramdisk_endpoint_in_parent);
+
+    printf(XV6FS_S "Starting xv6fs server...\n");
+    error = xv6fs_server_spawn_thread(&env.simple,
+                                        &env.vka,
+                                        &env.vspace,
+                                        ramdisk_read,
+                                        ramdisk_write,
+                                        XV6FSK_SERVER_DEFAULT_PRIORITY,
+                                        &env.xv6fs_endpoint_in_parent); 
 
     /* now run the tests */
     sel4test_run_tests(&env);

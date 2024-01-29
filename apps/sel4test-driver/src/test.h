@@ -95,6 +95,10 @@ struct driver_env {
     seL4_CPtr ramdisk_endpoint_in_parent;
     seL4_CPtr ramdisk_endpoint_in_child;
 
+    /* Add for xv6fs */
+    seL4_CPtr xv6fs_endpoint_in_parent;
+    seL4_CPtr xv6fs_endpoint_in_child;
+
     int num_untypeds;
     vka_object_t *untypeds;
 
