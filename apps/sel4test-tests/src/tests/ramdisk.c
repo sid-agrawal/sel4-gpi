@@ -1,17 +1,11 @@
 
-#include <sel4test/test.h>
-#include <sel4test/macros.h>
-#include <sel4gpi/pd_obj.h>
-#include <sel4gpi/debug.h>
-
-#include <sel4utils/thread.h>
-#include <sel4gpi/debug.h>
-#include "../test.h"
-#include "../helpers.h"
 #include <stdio.h>
 
-#include <sel4gpi/pd_clientapi.h>
-#include <sel4bench/arch/sel4bench.h>
+#include <sel4test/test.h>
+#include <sel4test/macros.h>
+#include "../test.h"
+#include "../helpers.h"
+
 #include <ramdisk/ramdisk.h>
 
 #define TEST_STR_1 "Fuzzy Wuzzy was a bear"
@@ -67,4 +61,4 @@ int test_ramdisk(env_t env)
     printf("------------------ENDING: %s------------------\n", __func__);
     return sel4test_get_result();
 }
-DEFINE_TEST(GPIRD001, "OSMO: Ensure that the ramdisk is functioning", test_ramdisk, true)
+DEFINE_TEST(GPIRD001, "Ensure that the ramdisk is functioning", test_ramdisk, true)

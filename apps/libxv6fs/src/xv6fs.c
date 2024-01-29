@@ -11,6 +11,7 @@
 #include <vka/vka.h>
 #include <vka/capops.h>
 #include <vspace/vspace.h>
+#include <libc_fs_helpers.h>
 
 #include <xv6fs/xv6fs.h>
 #include <xv6fs/defs.h>
@@ -25,8 +26,31 @@
 /* Memory regions for IPC to xv6fs server */
 #define XV6FS_OP 0
 
+// open
+#define XV6FS_FLAGS 1
+#define XV6FS_MODE 2
+
+// read / write
+#define XV6FS_FD 1
+#define XV6FS_COUNT 2
+
+// seek
+#define XV6FS_OFFSET 2
+#define XV6FS_WHENCE 3
+
+// return values
+#define XV6FS_RET 0
+
 /* xv6fs opcodes */
 #define XV6FS_REGISTER_CLIENT 0
+#define XV6FS_OPEN 1
+#define XV6FS_READ 2
+#define XV6FS_WRITE 3
+#define XV6FS_STAT 4
+#define XV6FS_FSTAT 5
+#define XV6FS_LSEEK 6
+#define XV6FS_CLOSE 7
+#define XV6FS_UNLINK 8
 
 /* Other constants */
 #define IPC_FRAME_PAGE_BITS seL4_PageBits
@@ -91,35 +115,6 @@ static inline void reply(seL4_MessageInfo_t tag)
   api_reply(get_xv6fs_server()->server_thread.reply.cptr, tag);
 }
 
-static void test_fs(void) {
-  char *test_string = "a little hedgehog";
-  char buf[128];
-
-  // Write test string to file
-  XV6FS_PRINTF("Opening file\n");
-
-  int fd = xv6fs_open("test-file.txt", O_CREATE | O_RDWR, 0);
-  XV6FS_PRINTF("Opened file\n");
-
-  int nwrite = xv6fs_write(fd, test_string, strlen(test_string) + 1);
-  assert(nwrite == strlen(test_string) + 1);
-
-  XV6FS_PRINTF("Wrote string to file: %s\n", test_string);
-
-  // Seek beginning of file and read back
-  int error = xv6fs_lseek(fd, 0, 0);
-  assert(error == 0);
-  XV6FS_PRINTF("Seeked file offset 0\n");
-
-  int nread = xv6fs_read(fd, buf, 128);
-  assert(nread == strlen(test_string) + 1);
-
-  XV6FS_PRINTF("Read string from file: %s\n", buf);
-
-  error = xv6fs_close(fd);
-  assert(error == 0);
-}
-
 seL4_Error
 xv6fs_server_spawn_thread(simple_t *parent_simple, vka_t *parent_vka,
                           vspace_t *parent_vspace,
@@ -168,8 +163,6 @@ xv6fs_server_spawn_thread(simple_t *parent_simple, vka_t *parent_vka,
   fd_init();
 
   XV6FS_PRINTF("initialized\n");
-
-  test_fs();
 
   /* Configure thread */
   sel4utils_thread_config_t config = thread_config_default(parent_simple,
@@ -262,8 +255,7 @@ void xv6fs_server_main()
     tag = recv(&sender_badge);
     unsigned int op = seL4_GetMR(XV6FS_OP);
 
-    seL4_MessageInfo_t reply_tag;
-
+    int ret;
     switch (op)
     {
     case XV6FS_REGISTER_CLIENT:
@@ -282,6 +274,37 @@ void xv6fs_server_main()
           /* depth */ received_cap_path.capDepth);
 
       break;
+    case XV6FS_OPEN:
+      const char *pathname = get_xv6fs_server()->shared_mem;
+      ret = xv6fs_open(pathname, seL4_GetMR(XV6FS_FLAGS), seL4_GetMR(XV6FS_MODE));
+      break;
+    case XV6FS_READ:
+      void *readbuf = get_xv6fs_server()->shared_mem;
+      ret = xv6fs_read(seL4_GetMR(XV6FS_FD), readbuf, seL4_GetMR(XV6FS_COUNT));
+      break;
+    case XV6FS_WRITE:
+      const void *writebuf = get_xv6fs_server()->shared_mem;
+      ret = xv6fs_write(seL4_GetMR(XV6FS_FD), writebuf, seL4_GetMR(XV6FS_COUNT));
+      break;
+    case XV6FS_STAT:
+      pathname = get_xv6fs_server()->shared_mem;
+      struct stat* statbuf = get_xv6fs_server()->shared_mem;
+      ret = xv6fs_stat(pathname, statbuf);
+      break;
+    case XV6FS_FSTAT:
+      statbuf = get_xv6fs_server()->shared_mem;
+      ret = xv6fs_fstat(seL4_GetMR(XV6FS_FD), statbuf);
+      break;
+    case XV6FS_LSEEK:
+      ret = xv6fs_lseek(seL4_GetMR(XV6FS_FD), seL4_GetMR(XV6FS_OFFSET), seL4_GetMR(XV6FS_WHENCE));
+      break;
+    case XV6FS_CLOSE:
+      ret = xv6fs_close(seL4_GetMR(XV6FS_FD));
+      break;
+    case XV6FS_UNLINK:
+      pathname = get_xv6fs_server()->shared_mem;
+      ret = xv6fs_unlink(pathname);
+      break;
     default:
       ZF_LOGE(XV6FS_S "%s: got unexpected opcode %d\n",
               __func__,
@@ -290,8 +313,8 @@ void xv6fs_server_main()
       error = 1;
     }
 
-  done:
-    reply_tag = seL4_MessageInfo_new(error, 0, 0, 1);
+    seL4_MessageInfo_t reply_tag = seL4_MessageInfo_new(error, 0, 0, 1);
+    seL4_SetMR(XV6FS_RET, ret);
     reply(reply_tag);
   }
 
@@ -306,6 +329,7 @@ exit:
 /*--- XV6FS CLIENT ---*/
 
 static xv6fs_client_context_t xv6fs_client;
+void init_global_libc_fs_ops(void);
 
 xv6fs_client_context_t *get_xv6fs_client(void)
 {
@@ -339,10 +363,182 @@ xv6fs_client_init(vka_t *client_vka,
   error = seL4_MessageInfo_get_label(tag);
   CHECK_ERROR(error, "failed to register client with xv6fs server\n");
 
+  /* Override libc fs ops */
+  init_global_libc_fs_ops();
+
   return error;
 }
 
-/* Custom implementations of functions for xv6 */
+/* Remote fs access functions to override libc fs ops */
+int xv6fs_remote_open(const char *pathname, int flags, int modes)
+{
+  // Copy pathname to ipc frame
+  memcpy(get_xv6fs_client()->shared_mem, pathname, strlen(pathname) + 1);
+
+  // Send IPC to fs server
+  seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0, 3);
+  seL4_SetMR(XV6FS_OP, XV6FS_OPEN);
+  seL4_SetMR(XV6FS_FLAGS, flags);
+  seL4_SetMR(XV6FS_MODE, modes);
+  tag = seL4_Call(get_xv6fs_client()->server_ep_cap, tag);
+  
+  if (seL4_MessageInfo_get_label(tag) != seL4_NoError) {
+    return -1;
+  }
+
+  return seL4_GetMR(XV6FS_RET);
+}
+
+int xv6fs_remote_read(int fd, void *buf, int count)
+{
+  // Send IPC to fs server
+  seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0, 3);
+  seL4_SetMR(XV6FS_OP, XV6FS_READ);
+  seL4_SetMR(XV6FS_FD, fd);
+  seL4_SetMR(XV6FS_COUNT, count);
+  tag = seL4_Call(get_xv6fs_client()->server_ep_cap, tag);
+
+  if (seL4_MessageInfo_get_label(tag) != seL4_NoError) {
+    return -1;
+  }
+
+  // Copy ipc frame to buf
+  int res = seL4_GetMR(XV6FS_RET);
+  if (res > 0)
+  {
+    memcpy(buf, get_xv6fs_client()->shared_mem, res);
+  }
+
+  return res;
+}
+
+int xv6fs_remote_write(int fd, const void *buf, int count)
+{
+  // Copy buf to ipc frame
+  memcpy(get_xv6fs_client()->shared_mem, buf, count);
+
+  // Send IPC to fs server
+  seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0, 3);
+  seL4_SetMR(XV6FS_OP, XV6FS_WRITE);
+  seL4_SetMR(XV6FS_FD, fd);
+  seL4_SetMR(XV6FS_COUNT, count);
+  tag = seL4_Call(get_xv6fs_client()->server_ep_cap, tag);
+
+  if (seL4_MessageInfo_get_label(tag) != seL4_NoError) {
+    return -1;
+  }
+
+  return seL4_GetMR(XV6FS_RET);
+}
+
+int xv6fs_remote_fstat(int fd, struct stat *buf)
+{
+  // Send IPC to fs server
+  seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0, 2);
+  seL4_SetMR(XV6FS_OP, XV6FS_FSTAT);
+  seL4_SetMR(XV6FS_FD, fd);
+  tag = seL4_Call(get_xv6fs_client()->server_ep_cap, tag);
+
+  if (seL4_MessageInfo_get_label(tag) != seL4_NoError) {
+    return -1;
+  }
+
+  // Copy ipc frame to buf
+  int res = seL4_GetMR(XV6FS_RET);
+  if (res > 0)
+  {
+    memcpy(buf, get_xv6fs_client()->shared_mem, sizeof(struct stat));
+  }
+
+  return res;
+}
+
+int xv6fs_remote_stat(const char *pathname, struct stat *buf)
+{
+  // Copy pathname to ipc frame
+  memcpy(get_xv6fs_client()->shared_mem, pathname, strlen(pathname) + 1);
+
+  // Send IPC to fs server
+  seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0, 1);
+  seL4_SetMR(XV6FS_OP, XV6FS_STAT);
+  tag = seL4_Call(get_xv6fs_client()->server_ep_cap, tag);
+  
+  if (seL4_MessageInfo_get_label(tag) != seL4_NoError) {
+    return -1;
+  }
+
+  // Copy ipc frame to buf
+  int res = seL4_GetMR(XV6FS_RET);
+  if (res > 0)
+  {
+    memcpy(buf, get_xv6fs_client()->shared_mem, sizeof(struct stat));
+  }
+
+  return res;
+}
+
+int xv6fs_remote_lseek(int fd, off_t offset, int whence)
+{
+  // Send IPC to fs server
+  seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0, 4);
+  seL4_SetMR(XV6FS_OP, XV6FS_LSEEK);
+  seL4_SetMR(XV6FS_FD, fd);
+  seL4_SetMR(XV6FS_OFFSET, offset);
+  seL4_SetMR(XV6FS_WHENCE, whence);
+  tag = seL4_Call(get_xv6fs_client()->server_ep_cap, tag);
+
+  if (seL4_MessageInfo_get_label(tag) != seL4_NoError) {
+    return -1;
+  }
+
+  return seL4_GetMR(XV6FS_RET);
+}
+
+int xv6fs_remote_close(int fd)
+{
+  // Send IPC to fs server
+  seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0, 2);
+  seL4_SetMR(XV6FS_OP, XV6FS_CLOSE);
+  seL4_SetMR(XV6FS_FD, fd);
+  tag = seL4_Call(get_xv6fs_client()->server_ep_cap, tag);
+
+  if (seL4_MessageInfo_get_label(tag) != seL4_NoError) {
+    return -1;
+  }
+
+  return seL4_GetMR(XV6FS_RET);
+}
+
+int xv6fs_remote_unlink(const char *pathname)
+{
+  // Copy pathname to ipc frame
+  memcpy(get_xv6fs_client()->shared_mem, pathname, strlen(pathname) + 1);
+
+  // Send IPC to fs server
+  seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0, 1);
+  seL4_SetMR(XV6FS_OP, XV6FS_UNLINK);
+  tag = seL4_Call(get_xv6fs_client()->server_ep_cap, tag);
+  
+  if (seL4_MessageInfo_get_label(tag) != seL4_NoError) {
+    return -1;
+  }
+
+  return seL4_GetMR(XV6FS_RET);
+}
+
+void init_global_libc_fs_ops(void)
+{
+  libc_fs_ops.open = xv6fs_remote_open;
+  libc_fs_ops.read = xv6fs_remote_read;
+  libc_fs_ops.write = xv6fs_remote_write;
+  libc_fs_ops.stat = xv6fs_remote_stat;
+  libc_fs_ops.fstat = xv6fs_remote_fstat;
+  libc_fs_ops.lseek = xv6fs_remote_lseek;
+  libc_fs_ops.close = xv6fs_remote_close;
+  libc_fs_ops.unlink = xv6fs_remote_unlink;
+}
+
+/* Override xv6 block read/write functions */
 void xv6fs_bread(uint sec, void *buf)
 {
   get_xv6fs_server()->block_read(sec, buf);

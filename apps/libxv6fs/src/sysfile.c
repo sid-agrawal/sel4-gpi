@@ -113,7 +113,7 @@ xv6fs_sys_open(char *path, int omode)
 
   begin_op();
 
-  if (omode & O_CREATE)
+  if (omode & O_CREAT)
   {
     ip = create(path, T_FILE, 0, 0);
     if (ip == 0)
@@ -399,11 +399,14 @@ int xv6fs_sys_utime(char *path, int time)
   return 0;
 }
 
-int xv6fs_sys_stat(void *fh, uint64 *t_mem)
+int xv6fs_sys_stat(void *fh, void *sth)
 {
   struct file *f = (struct file *)fh;
-  t_mem[0] = f->ip->size;
-  t_mem[1] = f->ip->inum;
+  struct stat *st = (struct stat *)sth;
+
+  ilock(f->ip);
+  stati(f->ip, st);
+  iunlock(f->ip);
   return 0;
 }
 
@@ -413,7 +416,16 @@ int xv6fs_sys_seek(void *fh, uint64 off, int whence)
   if (f == 0)
     return -1;
 
-  f->off = off + whence;
+  switch(whence) {
+    case SEEK_SET:
+      f->off = off;
+      break;
+    case SEEK_CUR:
+      f->off += off;
+      break;
+    case SEEK_END:
+      f->off = f->ip->size + off;
+  }
 
   return f->off;
 }

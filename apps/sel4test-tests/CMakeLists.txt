@@ -54,5 +54,6 @@ target_link_libraries(
         sel4serialserver_tests
         sel4vmm
         ramdisk
+        xv6fs
     PRIVATE sel4test-driver_Config
 )

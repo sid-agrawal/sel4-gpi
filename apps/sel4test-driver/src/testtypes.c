@@ -353,9 +353,13 @@ void basic_set_up(uintptr_t e)
     env->ramdisk_endpoint_in_child = sel4utils_copy_cap_to_process(&(env->test_process),
                                                                    &env->vka, env->ramdisk_endpoint_in_parent);
 
+    // For the fs server
+    env->xv6fs_endpoint_in_child = sel4utils_copy_cap_to_process(&(env->test_process),
+                                                                 &env->vka, env->xv6fs_endpoint_in_parent);
+
     // Keep this one as the last COPY, so that  init->free_slot.start a few lines below stays valid.
     // See at label "Warning"
-    seL4_CPtr free_slot_start = env->ramdisk_endpoint_in_child + 1;
+    seL4_CPtr free_slot_start = env->xv6fs_endpoint_in_child + 1;
 
     /* copy the device frame, if any */
     if (env->init->device_frame_cap)
@@ -400,7 +404,7 @@ test_result_t basic_run_test(struct testcase *test, uintptr_t e)
 #endif
 
     /* set up args for the test process */
-    seL4_Word argc = 7;
+    seL4_Word argc = 8;
     char string_args[argc][WORD_STRING_SIZE];
     char *argv[argc];
     sel4utils_create_word_args(string_args, argv, argc,
@@ -410,7 +414,8 @@ test_result_t basic_run_test(struct testcase *test, uintptr_t e)
                                env->child_cpu_cptr_in_child,
                                env->child_pd_cptr_in_child,
                                env->gpi_endpoint_in_child,
-                               env->ramdisk_endpoint_in_child);
+                               env->ramdisk_endpoint_in_child,
+                               env->xv6fs_endpoint_in_child);
 
     int num_res;
     /* spawn the process */
