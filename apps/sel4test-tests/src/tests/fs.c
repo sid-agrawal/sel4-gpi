@@ -33,6 +33,10 @@ int test_fs(env_t env)
     error = close(f);
     assert(error == 0);
 
+    // Test file close
+    nbytes = write(f, TEST_STR_1, strlen(TEST_STR_1) + 1);
+    assert(nbytes == -1); // write should fail on closed file
+
     // Test file open/read
     f = open(TEST_FNAME, O_RDONLY);
     assert(f > 0);
@@ -79,9 +83,6 @@ int test_fs(env_t env)
 
     f = open(TEST_FNAME, O_RDONLY);
     assert(f == -1); // File should no longer exist
-
-    // ARYA-TODO add more tests
-    // ARYA-TODO test fopen/fwrite api?
     
     printf("------------------ENDING: %s------------------\n", __func__);
     return sel4test_get_result();

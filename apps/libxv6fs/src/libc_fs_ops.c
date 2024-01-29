@@ -22,12 +22,14 @@ void xv6fs_panic(char *s)
         ;
 }
 
+// ARYA-TODO track the actual process by client
 static struct proc curproc;
 
 struct proc *myproc(void) {
   return &curproc;
 }
 
+// ARYA-TODO set up a better fd table
 #define FD_TABLE_SIZE 5120
 
 void *fd_table[FD_TABLE_SIZE];
@@ -58,6 +60,14 @@ void *fd_get(long fd)
         return fd_table[fd];
     }
     return NULL;
+}
+
+void fd_close(long fd)
+{
+    if (fd >= 0 && fd < FD_TABLE_SIZE)
+    {
+        fd_table[fd] = NULL;
+    }
 }
 
 int xv6fs_open(const char *pathname, int flags, int modes)
@@ -139,6 +149,7 @@ int xv6fs_close(int fd)
         printf("%s fd_get failed\n", __func__);
         return -1;
     }
+    fd_close(fd);
     return xv6fs_sys_fileclose((void *)file);
 }
 
