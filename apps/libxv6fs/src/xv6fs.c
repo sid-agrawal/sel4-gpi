@@ -15,7 +15,6 @@
 
 #include <xv6fs/xv6fs.h>
 #include <xv6fs/defs.h>
-#include <xv6fs/stat.h>
 #include <xv6fs/spinlock.h>
 #include <xv6fs/sleeplock.h>
 #include <xv6fs/proc.h>
@@ -90,6 +89,8 @@
     }                                \
   } while (0);
 
+void init_global_libc_fs_ops(void);
+
 /*--- XV6FS SERVER ---*/
 static xv6fs_server_context_t xv6fs_server;
 
@@ -154,7 +155,8 @@ xv6fs_server_spawn_thread(simple_t *parent_simple, vka_t *parent_vka,
 
   *server_ep_cap = get_xv6fs_server()->server_ep_obj.cptr;
 
-  // Initialize the fs
+  /* Initialize the fs */
+  init_global_libc_fs_ops();
   error = init_disk_file();
   CHECK_ERROR(error, "failed to initialize disk file");
   binit();
@@ -329,7 +331,6 @@ exit:
 /*--- XV6FS CLIENT ---*/
 
 static xv6fs_client_context_t xv6fs_client;
-void init_global_libc_fs_ops(void);
 
 xv6fs_client_context_t *get_xv6fs_client(void)
 {
@@ -518,7 +519,7 @@ int xv6fs_remote_unlink(const char *pathname)
   seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0, 1);
   seL4_SetMR(XV6FS_OP, XV6FS_UNLINK);
   tag = seL4_Call(get_xv6fs_client()->server_ep_cap, tag);
-  
+
   if (seL4_MessageInfo_get_label(tag) != seL4_NoError) {
     return -1;
   }

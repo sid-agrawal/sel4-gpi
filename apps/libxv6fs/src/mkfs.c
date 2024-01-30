@@ -7,7 +7,6 @@
 #define stat xv6_stat // avoid clash with host struct stat
 #include <xv6fs/defs.h>
 #include <xv6fs/fs.h>
-#include <xv6fs/stat.h>
 
 #ifndef static_assert
 #define static_assert(a, b) \
@@ -43,7 +42,6 @@ void rinode(uint inum, struct dinode *ip);
 void rsect(uint sec, void *buf);
 uint mkfs_ialloc(ushort type);
 void iappend(uint inum, void *p, int n);
-void die(const char *);
 
 // convert to riscv byte order
 ushort
@@ -141,13 +139,6 @@ int init_disk_file(void)
 
 void wsect(uint sec, void *buf)
 {
-  /*
-  if (lseek(fsfd, sec * BSIZE, 0) != sec * BSIZE)
-    die("lseek");
-  if (write(fsfd, buf, BSIZE) != BSIZE)
-    die("write");
-  */
-
   xv6fs_bwrite(sec, buf);
 }
 
@@ -178,13 +169,6 @@ void rinode(uint inum, struct dinode *ip)
 
 void rsect(uint sec, void *buf)
 {
-  /*
-  if (lseek(fsfd, sec * BSIZE, 0) != sec * BSIZE)
-    die("lseek");
-  if (read(fsfd, buf, BSIZE) != BSIZE)
-    die("read");
-    */
-
   xv6fs_bread(sec, buf);
 }
 
@@ -267,10 +251,4 @@ void iappend(uint inum, void *xp, int n)
   }
   din.size = xint(off);
   winode(inum, &din);
-}
-
-void die(const char *s)
-{
-  perror(s);
-  exit(1);
 }

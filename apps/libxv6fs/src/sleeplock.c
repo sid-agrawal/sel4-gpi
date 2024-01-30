@@ -5,6 +5,8 @@
 #include <xv6fs/sleeplock.h>
 #include <xv6fs/proc.h>
 
+// ARYA-TODO implement real locks?
+
 void
 initsleeplock(struct sleeplock *lk, char *name)
 {

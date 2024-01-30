@@ -1,5 +1,7 @@
 // On-disk file system format.
-// Both the kernel and user programs use this header file.
+// Both the kernel and user programs use this header file
+
+#pragma once
 
 #define ROOTINO 1  // root i-number
 #define BSIZE 4096 // block size
@@ -50,8 +52,6 @@ struct dinode
 
 // Block of free map containing bit for block b
 #define BBLOCK(b, sb) ((b) / BPB + sb.bmapstart)
-
-#pragma once
 
 // Directory is a file containing a sequence of dirent structures.
 #define DIRSIZ 14
