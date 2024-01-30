@@ -20,7 +20,7 @@ int test_ramdisk(env_t env)
 
     // Should get failure before initializing client
     error = ramdisk_read(0, buf);
-    assert(error != seL4_NoError);
+    test_assert(error != seL4_NoError);
 
     // Initialize the ramdisk client
     ramdisk_client_init(&env->vka, &env->vspace, env->ramdisk_endpoint);
