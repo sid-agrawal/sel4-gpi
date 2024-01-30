@@ -4,6 +4,8 @@
 #include <xv6fs/spinlock.h>
 #include <xv6fs/proc.h>
 
+// ARYA-TODO implement real locks?
+
 void
 initlock(struct spinlock *lk, char *name)
 {
@@ -17,14 +19,12 @@ initlock(struct spinlock *lk, char *name)
 void
 acquire(struct spinlock *lk)
 {
-  // ARYA-TODO implement real locks?
 }
 
 // Release the lock.
 void
 release(struct spinlock *lk)
 {
-  // ARYA-TODO implement real locks?
 }
 
 void

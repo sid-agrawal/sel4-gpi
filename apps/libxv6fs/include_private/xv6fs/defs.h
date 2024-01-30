@@ -1,12 +1,16 @@
 #pragma once
 
+#define __NEED_time_t
+#define __NEED_struct_timespec
+
 #include <stdio.h>
+#include <fcntl.h>
+#include <sys/stat.h>
+
 #include <xv6fs/types.h>
 #include <xv6fs/param.h>
-#include <xv6fs/fcntl.h>
 
 struct buf;
-struct context;
 struct dirent;
 struct file;
 struct inode;
@@ -16,6 +20,12 @@ struct spinlock;
 struct sleeplock;
 struct stat;
 struct superblock;
+
+// file types
+#define T_DIR 1    // Directory
+#define T_FILE 2   // File
+#define T_DEVICE 3 // Device
+#define T_SOCK 4   // Unix-domain socket
 
 // bio.c
 void binit(void);
@@ -56,79 +66,31 @@ int writei(struct inode *, int, uint64, uint, uint);
 void itrunc(struct inode *);
 static void xv6fs_bzero(int dev, int bno);
 
-// ramdisk.c
-void ramdiskinit(void);
-void ramdiskintr(void);
-void ramdiskrw(struct buf *);
-
-// kalloc.c
-void *kalloc(void);
-void kfree(void *);
-void kinit(void);
-
 // log.c
 void initlog(int, struct superblock *);
 void log_write(struct buf *);
 void begin_op(void);
 void end_op(void);
 
-// pipe.c
-int pipealloc(struct file **, struct file **);
-void pipeclose(struct pipe *, int);
-int piperead(struct pipe *, uint64, int);
-int pipewrite(struct pipe *, uint64, int);
-
 // printf.c
-__attribute__((noreturn))
-void xv6fs_panic(char *s);
+__attribute__((noreturn)) void xv6fs_panic(char *s);
 
 // proc.c
-int cpuid(void);
-void exit(int);
-int fork(void);
-int growproc(int);
-int kill(int);
-int killed(struct proc *);
-void setkilled(struct proc *);
-struct cpu *mycpu(void);
-struct cpu *getmycpu(void);
 struct proc *myproc();
-void procinit(void);
-void scheduler(void) __attribute__((noreturn));
-void sched(void);
 void xv6fs_sleep(void *, struct spinlock *);
-void userinit(void);
-int wait(uint64);
 void wakeup(void *);
-void yield(void);
-int either_copyout(int user_dst, uint64 dst, void *src, uint64 len);
-int either_copyin(void *dst, int user_src, uint64 src, uint64 len);
-void procdump(void);
 
 // spinlock.c
 void acquire(struct spinlock *);
 int holding(struct spinlock *);
 void initlock(struct spinlock *, char *);
 void release(struct spinlock *);
-void push_off(void);
-void pop_off(void);
 
 // sleeplock.c
 void acquiresleep(struct sleeplock *);
 void releasesleep(struct sleeplock *);
 int holdingsleep(struct sleeplock *);
 void initsleeplock(struct sleeplock *, char *);
-
-// string.c
-/*
-int             memcmp(const void*, const void*, uint);
-void*           memmove(void*, const void*, uint);
-void*           memset(void*, int, uint);
-char*           safestrcpy(char*, const char*, int);
-int             strlen(const char*);
-int             strncmp(const char*, const char*, uint);
-char*           strncpy(char*, const char*, int);
-*/
 
 // functions for port to osmosis
 void xv6fs_bread(uint sec, void *buf);

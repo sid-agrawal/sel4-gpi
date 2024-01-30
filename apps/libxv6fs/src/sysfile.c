@@ -7,7 +7,6 @@
 #include <stdio.h>
 #include <string.h>
 #include <xv6fs/defs.h>
-#include <xv6fs/stat.h>
 #include <xv6fs/spinlock.h>
 #include <xv6fs/sleeplock.h>
 #include <xv6fs/proc.h>

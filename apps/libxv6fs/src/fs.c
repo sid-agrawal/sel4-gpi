@@ -11,9 +11,8 @@
 
 #include <string.h>
 #include <stdio.h>
-#include <sys/stat.h>
+#include <stdlib.h>
 #include <xv6fs/defs.h>
-#include <xv6fs/stat.h>
 #include <xv6fs/spinlock.h>
 #include <xv6fs/sleeplock.h>
 #include <xv6fs/proc.h>
@@ -467,15 +466,42 @@ void itrunc(struct inode *ip)
   iupdate(ip);
 }
 
+/* Meaning of the stat structure, for reference */
+// struct stat
+// {
+//   dev_t st_dev;         /* ID of device containing file */
+//   ino_t st_ino;         /* Inode number */
+//   mode_t st_mode;       /* File type and mode */
+//   nlink_t st_nlink;     /* Number of hard links */
+//   uid_t st_uid;         /* User ID of owner */
+//   gid_t st_gid;         /* Group ID of owner */
+//   dev_t st_rdev;        /* Device ID (if special file) */
+//   off_t st_size;        /* Total size, in bytes */
+//   blksize_t st_blksize; /* Block size for filesystem I/O */
+//   blkcnt_t st_blocks;   /* Number of 512 B blocks allocated */
+
+//   /* Since POSIX.1-2008, this structure supports nanosecond
+//     precision for the following timestamp fields.
+//     For the details before POSIX.1-2008, see VERSIONS. */
+
+//   struct timespec st_atim; /* Time of last access */
+//   struct timespec st_mtim; /* Time of last modification */
+//   struct timespec st_ctim; /* Time of last status change */
+// };
+
 // Copy stat information from inode.
 // Caller must hold ip->lock.
 void stati(struct inode *ip, struct stat *st)
 {
   st->st_dev = ip->dev;
   st->st_ino = ip->inum;
-  //st->type = ip->type;
   st->st_nlink = ip->nlink;
   st->st_size = ip->size;
+  st->st_blksize = BSIZE;
+  // ARYA-TODO what about st_blocks?
+  st->st_ctim.tv_sec = ip->ctime;
+  st->st_atim.tv_sec = ip->atime;
+  st->st_mtim.tv_sec = ip->mtime;
 }
 
 // Read data from inode.
@@ -529,7 +555,7 @@ int writei(struct inode *ip, int user_src, uint64 src, uint off, uint n)
       break;
     bp = bread(ip->dev, addr);
     m = min(n - tot, BSIZE - off % BSIZE);
-    memmove(bp->data + (off % BSIZE), (void *) src, m);
+    memmove(bp->data + (off % BSIZE), (void *)src, m);
     log_write(bp);
     brelse(bp);
   }

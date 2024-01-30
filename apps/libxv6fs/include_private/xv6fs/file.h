@@ -1,7 +1,14 @@
 #pragma once
 
-struct file {
-  enum { FD_NONE, FD_PIPE, FD_INODE, FD_DEVICE } type;
+struct file
+{
+  enum
+  {
+    FD_NONE,
+    FD_PIPE,
+    FD_INODE,
+    FD_DEVICE
+  } type;
   int ref; // reference count
   char readable;
   char writable;
@@ -12,14 +19,16 @@ struct file {
 };
 
 // in-memory copy of an inode
-struct inode {
-  uint dev;           // Device number
-  uint inum;          // Inode number
-  int ref;            // Reference count
-  struct sleeplock lock; // protects everything below here
-  int valid;          // inode has been read from disk?
+struct inode
+{
+  // ARYA-TODO we have no mode / permissions / ownership, does that matter?
 
-  short type;         // copy of disk inode
+  uint dev;              // Device number
+  uint inum;             // Inode number
+  int ref;               // Reference count
+  struct sleeplock lock; // protects everything below here
+  int valid;             // inode has been read from disk?
+  short type;
   short major;
   short minor;
   short nlink;
@@ -27,11 +36,12 @@ struct inode {
   int ctime;
   int atime;
   int mtime;
-  uint addrs[NDIRECT+1];
+  uint addrs[NDIRECT + 1];
 };
 
 // map major device number to device functions.
-struct devsw {
+struct devsw
+{
   int (*read)(int, uint64, int);
   int (*write)(int, uint64, int);
 };

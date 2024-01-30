@@ -9,7 +9,6 @@
 #include <xv6fs/spinlock.h>
 #include <xv6fs/sleeplock.h>
 #include <xv6fs/file.h>
-#include <xv6fs/stat.h>
 #include <xv6fs/proc.h>
 
 #define NO_OFFSET -1
