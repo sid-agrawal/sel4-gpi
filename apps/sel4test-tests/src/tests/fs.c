@@ -25,64 +25,64 @@ int test_fs(env_t env)
 
     // Test file open/write
     int f = open(TEST_FNAME, O_CREAT | O_RDWR);
-    assert(f > 0);
+    test_assert(f > 0);
 
     int nbytes = write(f, TEST_STR_1, strlen(TEST_STR_1) + 1);
-    assert(nbytes == strlen(TEST_STR_1) + 1);
+    test_assert(nbytes == strlen(TEST_STR_1) + 1);
 
     error = close(f);
-    assert(error == 0);
+    test_assert(error == 0);
 
     // Test file close
     nbytes = write(f, TEST_STR_1, strlen(TEST_STR_1) + 1);
-    assert(nbytes == -1); // write should fail on closed file
+    test_assert(nbytes == -1); // write should fail on closed file
 
     // Test file open/read
     f = open(TEST_FNAME, O_RDONLY);
-    assert(f > 0);
+    test_assert(f > 0);
 
     nbytes = read(f, buf, strlen(TEST_STR_1) + 1);
-    assert(nbytes == strlen(TEST_STR_1) + 1);
-    assert(strcmp(buf, TEST_STR_1) == 0);
+    test_assert(nbytes == strlen(TEST_STR_1) + 1);
+    test_assert(strcmp(buf, TEST_STR_1) == 0);
 
     error = close(f);
-    assert(error == 0);
+    test_assert(error == 0);
 
     // Test creating multiple files
     for (int i = 0; i < 10; i++) {
         char fname[16];
-        sprintf(fname, "%s-%d\0", TEST_FNAME, i);
+        sprintf(fname, "%s-%d", TEST_FNAME, i);
         f = open(fname, O_CREAT | O_RDWR);
-        assert(f > 0);
+        test_assert(f > 0);
 
         nbytes = write(f, TEST_STR_1, strlen(TEST_STR_1) + 1);
-        assert(nbytes == strlen(TEST_STR_1) + 1);
+        test_assert(nbytes == strlen(TEST_STR_1) + 1);
 
         error = close(f);
-        assert(error == 0);
+        test_assert(error == 0);
     }
 
     // Test lseek
     f = open(TEST_FNAME, O_RDONLY);
-    assert(f > 0);
+    test_assert(f > 0);
 
     int offset = 5;
     nbytes = lseek(f, offset, 0);
-    assert(nbytes == offset);
+    test_assert(nbytes == offset);
 
     nbytes = read(f, buf, strlen(TEST_STR_1) + 1);
-    assert(nbytes == strlen(TEST_STR_1) + 1 - offset);
-    assert(strcmp(buf, TEST_STR_1 + offset) == 0);
+    test_assert(nbytes == strlen(TEST_STR_1) + 1 - offset);
+    test_assert(strcmp(buf, TEST_STR_1 + offset) == 0);
 
     error = close(f);
-    assert(error == 0);
+    test_assert(error == 0);
 
     // Test unlink
     error = unlink(TEST_FNAME);
-    assert(error == 0);
+    test_assert(error == 0);
 
     f = open(TEST_FNAME, O_RDONLY);
-    assert(f == -1); // File should no longer exist
+    test_assert(f == -1); // File should no longer exist
     
     printf("------------------ENDING: %s------------------\n", __func__);
     return sel4test_get_result();
