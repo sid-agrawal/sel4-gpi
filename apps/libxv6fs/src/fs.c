@@ -43,6 +43,7 @@ void fsinit(int dev)
     xv6fs_panic("invalid file system");
   initlog(dev, &sb);
 
+  strcpy(myproc()->cwd_path, "/");
   myproc()->cwd = namei("/");
 }
 

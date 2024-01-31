@@ -27,6 +27,10 @@ file(
         src/arch/${KernelArch}/tests/*.S
 )
 
+<<<<<<< HEAD
+=======
+add_subdirectory(../sqlite3 sqlite3)
+>>>>>>> e565884 (Add sqlite)
 
 add_executable(sel4test-tests EXCLUDE_FROM_ALL ${deps})
 target_include_directories(
@@ -55,5 +59,6 @@ target_link_libraries(
         sel4vmm
         ramdisk
         xv6fs
+        sqlite3
     PRIVATE sel4test-driver_Config
 )
