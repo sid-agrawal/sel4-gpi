@@ -95,18 +95,19 @@ fail:
   return 0;
 }
 
-/* Custom functions based on skybridge */
+/* xv6 "system call" functions */
 
 uint xv6fs_file_ino(void *file)
 {
   struct file *f = (struct file *)file;
   return (f->ip)->inum;
-  // struct inode *ip;
 }
 
 struct file *
 xv6fs_sys_open(char *path, int omode)
 {
+  //printf("%s: for path %s\n", __func__, path);
+
   struct file *f;
   struct inode *ip;
 
@@ -154,6 +155,7 @@ xv6fs_sys_open(char *path, int omode)
   f->off = 0;
   f->readable = !(omode & O_WRONLY);
   f->writable = (omode & O_WRONLY) || (omode & O_RDWR);
+  f->flags = omode;
   return f;
 }
 
@@ -172,7 +174,7 @@ int xv6fs_sys_read(void *fh, char *buf, size_t sz, uint off)
   if (off != NO_OFFSET)
     f->off = off;
 
-  return fileread(f, (uint64) buf, sz);
+  return fileread(f, (uint64)buf, sz);
 }
 
 int xv6fs_sys_write(void *fh, char *buf, size_t sz, uint off)
@@ -183,16 +185,17 @@ int xv6fs_sys_write(void *fh, char *buf, size_t sz, uint off)
   if (off != NO_OFFSET)
     f->off = off;
 
-  int r = filewrite(f, (uint64) buf, sz);
+  int r = filewrite(f, (uint64)buf, sz);
   return r;
 }
 
 int xv6fs_sys_fstat(char *path, void *buf)
 {
+  //printf("xv6fs_sys_fstat opening %s\n", path);
   struct file *f = xv6fs_sys_open(path, O_RDONLY);
   if (f == 0)
     return -1;
-  int r = filestat(f, (uint64) buf);
+  int r = filestat(f, (uint64)buf);
   fileclose(f);
   return r;
 }
@@ -205,12 +208,13 @@ int xv6fs_sys_readdirent(void *fh, struct dirent *e, uint off)
   if (off >= f->ip->size)
     return 0;
   f->off = off;
-  int r = fileread(f, (uint64) e, sizeof(*e));
+  int r = fileread(f, (uint64)e, sizeof(*e));
   return r;
 }
 
 int xv6fs_sys_truncate(char *path)
 {
+  //printf("xv6fs_sys_truncate opening %s\n", path);
   struct file *f = xv6fs_sys_open(path, O_RDWR);
   if (f == 0)
     return -1;
@@ -290,7 +294,7 @@ int xv6fs_sys_dounlink(char *path)
   }
 
   memset(&de, 0, sizeof(de));
-  if (writei(dp, 1, (uint64) &de, off, sizeof(de)) != sizeof(de))
+  if (writei(dp, 1, (uint64)&de, off, sizeof(de)) != sizeof(de))
     xv6fs_panic("unlink: writei");
   if (ip->type == T_DIR)
   {
@@ -385,6 +389,7 @@ int xv6fs_sys_rename(char *path1, char *path2)
 
 int xv6fs_sys_utime(char *path, int time)
 {
+  //printf("xv6fs_sys_utime opening %s\n", path);
   struct file *f = xv6fs_sys_open(path, O_WRONLY);
   if (f == 0)
     return -1;
@@ -415,16 +420,79 @@ int xv6fs_sys_seek(void *fh, uint64 off, int whence)
   if (f == 0)
     return -1;
 
-  switch(whence) {
-    case SEEK_SET:
-      f->off = off;
-      break;
-    case SEEK_CUR:
-      f->off += off;
-      break;
-    case SEEK_END:
-      f->off = f->ip->size + off;
+  switch (whence)
+  {
+  case SEEK_SET:
+    f->off = off;
+    break;
+  case SEEK_CUR:
+    f->off += off;
+    break;
+  case SEEK_END:
+    f->off = f->ip->size + off;
   }
 
   return f->off;
+}
+
+// ARYA-TODO do we need to keep proper track of cwd?
+char *xv6fs_sys_getcwd(char *buf, size_t size)
+{
+  char *name = myproc()->cwd_path;
+  if (strlen(name) >= size)
+  {
+    return NULL;
+  }
+
+  strcpy(buf, name);
+  return buf;
+}
+
+// ARYA-TODO support real locks?
+int xv6fs_sys_fcntl(void *fh, int cmd, unsigned long arg)
+{
+  struct file *f = (struct file *)fh;
+
+  int res = 0;
+
+  switch (cmd)
+  {
+  case F_SETFL:
+    uint64 flags_mask = O_APPEND | O_ASYNC | O_NONBLOCK;
+    f->flags = (f->flags & ~flags_mask) | (arg & flags_mask);
+    //printf("xv6fs_sys_fcntl: F_SETFL\n");
+    break;
+  case F_GETFL:
+    res = f->flags;
+    //printf("xv6fs_sys_fcntl: F_GETFL\n");
+    break;
+  case F_GETOWN:
+    printf("xv6fs_sys_fcntl: Unsupported cmd F_GETOWN\n");
+    break;
+  case F_DUPFD_CLOEXEC:
+    printf("xv6fs_sys_fcntl: Unsupported cmd F_DUPFD_CLOEXEC\n");
+    break;
+  case F_SETLK:
+    //printf("xv6fs_sys_fcntl: F_SETLK\n");
+    break;
+  case F_SETLKW:
+    //printf("xv6fs_sys_fcntl: F_SETLKW\n");
+    break;
+  case F_GETLK:
+    struct flock* lk = (struct flock*) arg;
+    lk->l_type = F_UNLCK;
+    //printf("xv6fs_sys_fcntl: F_GETLK\n");
+    break;
+  case F_GETOWN_EX:
+    printf("xv6fs_sys_fcntl: Unsupported cmd F_GETOWN_EX\n");
+    break;
+  case F_SETOWN_EX:
+    printf("xv6fs_sys_fcntl: Unsupported cmd F_SETOWN_EX\n");
+    break;
+  default:
+    printf("xv6fs_sys_fcntl: Unknown cmd %d\n", cmd);
+    break;
+  }
+
+  return 0;
 }

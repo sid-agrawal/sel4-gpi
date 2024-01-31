@@ -116,16 +116,21 @@ int xv6fs_sys_rename(char *path1, char *path2);
 int xv6fs_sys_utime(char *path, int time);
 int xv6fs_sys_stat(void *fh, void *sth);
 int xv6fs_sys_seek(void *fh, uint64 off, int whence);
+char *xv6fs_sys_getcwd(char *buf, size_t size);
+int xv6fs_sys_fcntl(void *fh, int cmd, unsigned long arg);
 
 // libc functions
 int xv6fs_open(const char *pathname, int flags, int modes);
 int xv6fs_read(int fd, void *buf, int count);
+int xv6fs_pread(int fd, void *buf, int count, int offset);
 int xv6fs_write(int fd, const void *buf, int count);
 int xv6fs_fstat(int fd, struct stat *buf);
 int xv6fs_stat(const char *pathname, struct stat *buf);
 int xv6fs_lseek(int fd, off_t offset, int whence);
 int xv6fs_close(int fd);
 int xv6fs_unlink(const char *pathname);
+char *xv6fs_getcwd(char *buf, size_t size);
+int xv6fs_fcntl(int fd, int cmd, unsigned long arg);
 
 // number of elements in fixed-size array
 #define NELEM(x) (sizeof(x) / sizeof((x)[0]))

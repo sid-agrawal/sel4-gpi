@@ -1,0 +1,10 @@
+#ifdef __linux__
+#undef __linux__
+#endif
+
+#define SQLITE_OMIT_DEPRECATED 1
+#define SQLITE_THREADSAFE 0
+#define SQLITE_OMIT_LOAD_EXTENSION 1
+#define SQLITE_OMIT_WAL 1
+#define SQLITE_OMIT_RANDOMNESS 1
+#define SQLITE_OMIT_AUTHORIZATION 1
