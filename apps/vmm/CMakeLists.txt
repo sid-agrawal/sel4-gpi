@@ -27,14 +27,14 @@ set(
 )
 
 # Compile DTS to DTB
-# execute_process(
-#     COMMAND
-#         ${DTC_TOOL} -I dts -O dtb ${VmDTSPath} > ${VmDTBPath}
-#     RESULT_VARIABLE error
-# )
-# if(error)
-#     message(FATAL_ERROR "Failed to compile DTS to DTB: ${VmDTSPath}")
-# endif()
+execute_process(
+    COMMAND
+        ${DTC_TOOL} -I dts -O dtb -o ${VmDTBPath} ${VmDTSPath}
+    RESULT_VARIABLE error
+)
+if(error)
+    message(FATAL_ERROR "Failed to compile DTS to DTB: ${VmDTSPath}")
+endif()
 
 file(
     GLOB
