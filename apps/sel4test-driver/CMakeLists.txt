@@ -46,6 +46,7 @@ set(LibNanopb ON CACHE BOOL "" FORCE)
 sel4_projects_libs_import_libraries()
 add_subdirectory(../../libsel4testsupport libsel4testsupport)
 add_subdirectory(../../libsel4gpi libsel4gpi)
+add_subdirectory(../vmm libsel4vmm)
 
 file(
     GLOB
@@ -61,7 +62,6 @@ file(
 # Import build rules for test app
 add_subdirectory(../sel4test-tests sel4test-tests)
 add_subdirectory(../hello hello)
-add_subdirectory(../vmm vmm)
 include(cpio)
 set(cpio_files "")
 # New binaries in the CPIO go here.

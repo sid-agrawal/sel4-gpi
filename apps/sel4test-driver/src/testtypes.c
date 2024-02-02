@@ -21,6 +21,8 @@
 #include <sel4gpi/pd_component.h>
 #include <sel4testsupport/testreporter.h>
 
+#define QEMU_SERIAL_IRQ 33
+
 /* Bootstrap test type. */
 static inline void bootstrap_set_up_test_type(uintptr_t e)
 {
@@ -216,6 +218,14 @@ void basic_set_up(uintptr_t e)
         env->init->timer_ntfn = sel4utils_copy_cap_to_process(&(env->test_process), &env->vka, env->timer_notify_test.cptr);
     }
 
+    /* Get an IRQ Handler for serial device */
+    cspacepath_t path;
+    error = vka_cspace_alloc_path(&env->vka, &path);
+    ZF_LOGF_IFERR(error, "Failed to allocate path for IRQ handler\n");
+
+    error = simple_get_IRQ_handler(&env->simple, QEMU_SERIAL_IRQ, path);
+    ZF_LOGF_IFERR(error, "Failed to make QEMU UART IRQ Handler\n");
+
     /* NOTE:
        The return from sel4utils_copy_cap_to_process is the slot in the cnode where the cap was placed
        in the child process' cspace
@@ -226,6 +236,7 @@ void basic_set_up(uintptr_t e)
                                                                                                               seL4_CapInitThreadASIDPool));
     env->init->asid_ctrl = sel4utils_copy_cap_to_process(&(env->test_process), &env->vka, simple_get_init_cap(&env->simple,
                                                                                                               seL4_CapASIDControl));
+    env->init->irq_handler = sel4utils_copy_cap_to_process(&(env->test_process), &env->vka, path.capPtr);
 #ifdef CONFIG_IOMMU
     env->init->io_space = sel4utils_copy_cap_to_process(&(env->test_process), &env->vka, simple_get_init_cap(&env->simple,
                                                                                                              seL4_CapIOSpace));

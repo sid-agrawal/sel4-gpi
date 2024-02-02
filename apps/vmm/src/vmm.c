@@ -5,8 +5,6 @@
  */
 #include <stddef.h>
 #include <stdint.h>
-#include <microkit/microkit.h>
-#include "util/util.h"
 #include "arch/aarch64/vgic/vgic.h"
 #include "arch/aarch64/linux.h"
 #include "arch/aarch64/fault.h"
@@ -14,6 +12,14 @@
 #include "virq.h"
 #include "tcb.h"
 #include "vcpu.h"
+#include "vmm/vmm.h"
+#include <vka/vka.h>
+#include <sel4/sel4.h>
+#include <vka/object.h>
+#include <vka/capops.h>
+#include <utils/zf_log.h>
+#include <sel4utils/sel4_zf_logif.h>
+
 
 // @ivanv: ideally we would have none of these hardcoded values
 // initrd, ram size come from the DTB
@@ -81,69 +87,88 @@ static void serial_ack(size_t vcpu_id, int irq, void *cookie) {
      * For now we by default simply ack the serial IRQ, we have not
      * come across a case yet where more than this needs to be done.
      */
-    microkit_irq_ack(SERIAL_IRQ_CH);
+    // microkit_irq_ack(SERIAL_IRQ_CH);
+    printf("should ack here\n");
 }
 
-void init(void) {
+void vm_init(seL4_IRQHandler irq_handler, vka_t *vka) {
+    seL4_Error error;
     /* Initialise the VMM, the VCPU(s), and start the guest */
-    LOG_VMM("starting \"%s\"\n", microkit_name);
+    printf("starting\n");
+    vka_object_t ntfn;
+    error = vka_alloc_notification(vka, &ntfn);
+    ZF_LOGF_IFERR(error, "Failed to allocate notification");
+
+    cspacepath_t path;
+    error = vka_cspace_alloc_path(vka, &path);
+    ZF_LOGF_IFERR(error, "Failed to allocate path for the badged notification");
+    
+    cspacepath_t ntfn_path;
+    vka_cspace_make_path(vka, ntfn.cptr, &ntfn_path);
+
+    error = vka_cnode_mint(&path, &ntfn_path, seL4_AllRights, 1);
+    ZF_LOGF_IFERR(error, "Failed to mint notification badge");
+
+    error = seL4_IRQHandler_SetNotification(irq_handler, path.capPtr);
+    ZF_LOGF_IFERR(error, "Failed to set IRQ notification");
+
     /* Place all the binaries in the right locations before starting the guest */
-    size_t kernel_size = _guest_kernel_image_end - _guest_kernel_image;
-    size_t dtb_size = _guest_dtb_image_end - _guest_dtb_image;
-    size_t initrd_size = _guest_initrd_image_end - _guest_initrd_image;
+    // size_t kernel_size = _guest_kernel_image_end - _guest_kernel_image;
+    // size_t dtb_size = _guest_dtb_image_end - _guest_dtb_image;
+    // size_t initrd_size = _guest_initrd_image_end - _guest_initrd_image;
     uintptr_t kernel_pc = linux_setup_images(guest_ram_vaddr,
                                       (uintptr_t) _guest_kernel_image,
-                                      kernel_size,
+                                      1,
                                       (uintptr_t) _guest_dtb_image,
                                       GUEST_DTB_VADDR,
-                                      dtb_size,
+                                      1,
                                       (uintptr_t) _guest_initrd_image,
                                       GUEST_INIT_RAM_DISK_VADDR,
-                                      initrd_size
+                                      1
                                       );
-    if (!kernel_pc) {
-        LOG_VMM_ERR("Failed to initialise guest images\n");
-        return;
-    }
-    /* Initialise the virtual GIC driver */
-    bool success = virq_controller_init(GUEST_VCPU_ID);
-    if (!success) {
-        LOG_VMM_ERR("Failed to initialise emulated interrupt controller\n");
-        return;
-    }
-    // @ivanv: Note that remove this line causes the VMM to fault if we
-    // actually get the interrupt. This should be avoided by making the VGIC driver more stable.
-    success = virq_register(GUEST_VCPU_ID, SERIAL_IRQ, &serial_ack, NULL);
-    /* Just in case there is already an interrupt available to handle, we ack it here. */
-    microkit_irq_ack(SERIAL_IRQ_CH);
-    /* Finally start the guest */
-    guest_start(GUEST_VCPU_ID, kernel_pc, GUEST_DTB_VADDR, GUEST_INIT_RAM_DISK_VADDR);
+    // if (!kernel_pc) {
+    //     ZF_LOGE("Failed to initialise guest images\n");
+    //     return;
+    // }
+    // /* Initialise the virtual GIC driver */
+    // bool success = virq_controller_init(GUEST_VCPU_ID);
+    // if (!success) {
+    //     ZF_LOGE("Failed to initialise emulated interrupt controller\n");
+    //     return;
+    // }
+    // // @ivanv: Note that remove this line causes the VMM to fault if we
+    // // actually get the interrupt. This should be avoided by making the VGIC driver more stable.
+    // success = virq_register(GUEST_VCPU_ID, SERIAL_IRQ, &serial_ack, NULL);
+    // /* Just in case there is already an interrupt available to handle, we ack it here. */
+    // // microkit_irq_ack(SERIAL_IRQ_CH);
+    // /* Finally start the guest */
+    // guest_start(GUEST_VCPU_ID, kernel_pc, GUEST_DTB_VADDR, GUEST_INIT_RAM_DISK_VADDR);
 }
 
-void notified(microkit_channel ch) {
-    switch (ch) {
-        case SERIAL_IRQ_CH: {
-            bool success = virq_inject(GUEST_VCPU_ID, SERIAL_IRQ);
-            if (!success) {
-                LOG_VMM_ERR("IRQ %d dropped on vCPU %d\n", SERIAL_IRQ, GUEST_VCPU_ID);
-            }
-            break;
-        }
-        default:
-            printf("Unexpected channel, ch: 0x%lx\n", ch);
-    }
-}
+// void notified(microkit_channel ch) {
+//     switch (ch) {
+//         case SERIAL_IRQ_CH: {
+//             bool success = virq_inject(GUEST_VCPU_ID, SERIAL_IRQ);
+//             if (!success) {
+//                 LOG_VMM_ERR("IRQ %d dropped on vCPU %d\n", SERIAL_IRQ, GUEST_VCPU_ID);
+//             }
+//             break;
+//         }
+//         default:
+//             printf("Unexpected channel, ch: 0x%lx\n", ch);
+//     }
+// }
 
 /*
  * The primary purpose of the VMM after initialisation is to act as a fault-handler,
  * whenever our guest causes an exception, it gets delivered to this entry point for
  * the VMM to handle.
  */
-void fault(microkit_id id, microkit_msginfo msginfo) {
-    bool success = fault_handle(id, msginfo);
-    if (success) {
-        /* Now that we have handled the fault successfully, we reply to it so
-         * that the guest can resume execution. */
-        microkit_fault_reply(microkit_msginfo_new(0, 0));
-    }
-}
+// void fault(microkit_id id, microkit_msginfo msginfo) {
+//     bool success = fault_handle(id, msginfo);
+//     if (success) {
+//         /* Now that we have handled the fault successfully, we reply to it so
+//          * that the guest can resume execution. */
+//         microkit_fault_reply(microkit_msginfo_new(0, 0));
+//     }
+// }
