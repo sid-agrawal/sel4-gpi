@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.7.2)
-project(vmm C CXX ASM)
+project(libsel4vmm C CXX ASM)
 
 # Use arm arch source files on RISCV
 set(arch ${KernelArch})
@@ -36,16 +36,16 @@ if(error)
     message(FATAL_ERROR "Failed to compile DTS to DTB: ${VmDTSPath}")
 endif()
 
-file(
-    GLOB
-        deps
-        src/*.c
-        src/util/*.c
-        src/arch/aarch64/*.c
-)
+# file(
+#     GLOB
+#         deps
+#         src/*.c
+#         src/util/*.c
+#         src/arch/aarch64/*.c
+# )
 
 string(CONCAT package_guest_image_defs
-    "GUEST_KERNEL_IMAGE_PATH=\"${CMAKE_CURRENT_SOURCE_DIR}/board/qemu_arm_virt/linux\"\;"
+    "GUEST_KERNEL_IMAGE_PATH=\"${CMAKE_CURRENT_SOURCE_DIR}/board/qemu_arm_virt/test\"\;"
     "GUEST_DTB_IMAGE_PATH=\"${VmDTBPath}\"\;"
     "GUEST_INITRD_IMAGE_PATH=\"${CMAKE_CURRENT_SOURCE_DIR}/board/qemu_arm_virt/rootfs.cpio.gz\"\;")
 
@@ -59,25 +59,28 @@ set_source_files_properties(
 list(
     APPEND
     deps
+    src/vmm.c
+    src/arch/aarch64/linux.c
     ${VmDTBPath}
     tools/package_guest_images.S
 )
 
 # add_link_options("-fuse-ld=lld")
 
-add_executable(vmm EXCLUDE_FROM_ALL ${deps})
+# add_executable(vmm EXCLUDE_FROM_ALL ${deps})
+
+add_library(sel4vmm STATIC EXCLUDE_FROM_ALL ${deps})
 
 target_include_directories(
-    vmm
-    PRIVATE include src src/arch/aarch64 src/util
+    sel4vmm
+    PUBLIC include
 )
 
 target_link_libraries(
-    vmm
-    PUBLIC muslc sel4 sel4_autoconf sel4utils
-    PRIVATE sel4test-driver_Config
+    sel4vmm
+    PUBLIC muslc sel4 sel4_autoconf sel4utils sel4vka
 )
 
-target_compile_options(vmm PRIVATE "-DBOARD_qemu_arm_virt")
+target_compile_options(sel4vmm PUBLIC  "-DBOARD_qemu_arm_virt")
 
 

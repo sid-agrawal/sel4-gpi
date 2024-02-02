@@ -18,27 +18,17 @@
 
 #include<sel4gpi/pd_clientapi.h>
 #include <sel4bench/arch/sel4bench.h>
+#include <sel4/sel4.h>
+#include <vka/capops.h>
+#include <vmm/vmm.h>
+
 
 int test_new_vmm(env_t env)
 {
     int error;
     printf("------------------STARTING: %s------------------\n", __func__);
-    sel4utils_process_config_t config = process_config_default_simple(&env->simple, "vmm", env->priority);
-    sel4utils_process_t p;
-    error = sel4utils_configure_process_custom(&p, &env->vka, &env->vspace, config);
-    assert(error == 0);
-
-    char *argv[2];
-    argv[0] = "hello";
-    argv[1] = "world";
-    error = sel4utils_spawn_process_v(&p, &env->vka, &env->vspace, 1, &argv, 1);
-    assert(error == 0);
-
-    while (1)
-    {
-        seL4_Yield();
-    }
     
+    vm_init(env->irq_handler, &env->vka);
     return sel4test_get_result();
 }
 DEFINE_TEST(GPIVM001, "Test running VM", test_new_vmm, true)
