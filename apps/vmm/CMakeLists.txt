@@ -45,7 +45,7 @@ endif()
 # )
 
 string(CONCAT package_guest_image_defs
-    "GUEST_KERNEL_IMAGE_PATH=\"${CMAKE_CURRENT_SOURCE_DIR}/board/qemu_arm_virt/test\"\;"
+    "GUEST_KERNEL_IMAGE_PATH=\"${CMAKE_CURRENT_SOURCE_DIR}/board/qemu_arm_virt/linux\"\;"
     "GUEST_DTB_IMAGE_PATH=\"${VmDTBPath}\"\;"
     "GUEST_INITRD_IMAGE_PATH=\"${CMAKE_CURRENT_SOURCE_DIR}/board/qemu_arm_virt/rootfs.cpio.gz\"\;")
 
