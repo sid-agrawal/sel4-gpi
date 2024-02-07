@@ -27,12 +27,6 @@ file(
         src/arch/${KernelArch}/tests/*.S
 )
 
-# include(cpio)
-# set(cpio_files "")
-# New binaries in the CPIO go here.
-# list(APPEND cpio_files "$<TARGET_FILE:hello>")
-# list(APPEND cpio_files "$<TARGET_FILE:vmm>")
-# MakeCPIO(archive.o "${cpio_files}")
 
 add_executable(sel4test-tests EXCLUDE_FROM_ALL ${deps})
 target_include_directories(
