@@ -64,11 +64,13 @@ uintptr_t morecore_top = (uintptr_t) &morecore_area[RT_MALLOC_SIZE];
 #define DRIVER_NUM_UNTYPEDS 20
 
 /* dimensions of virtual memory for the allocator to use */
-#define ALLOCATOR_VIRTUAL_POOL_SIZE ((1 << seL4_PageBits) * 1000)
+#define ALLOCATOR_VIRTUAL_POOL_SIZE ((1 << seL4_PageBits) * 10240)
 
 /* static memory for the allocator to bootstrap with */
 #define ALLOCATOR_STATIC_POOL_SIZE ((1 << seL4_PageBits) * 20)
 static char allocator_mem_pool[ALLOCATOR_STATIC_POOL_SIZE];
+
+#define BOOTSTRAP_CNODE_SIZE 12
 
 /* static memory for virtual memory bootstrapping */
 static sel4utils_alloc_data_t data;
@@ -92,8 +94,8 @@ static void init_env(driver_env_t env)
     reservation_t virtual_reservation;
     int error;
 
-    /* create an allocator */
-    allocman = bootstrap_use_current_simple(&env->simple, ALLOCATOR_STATIC_POOL_SIZE, allocator_mem_pool);
+    /* create an allocator, we need a larger CSpace due to the sel4test's huge image size */
+    allocman = bootstrap_new_2level_simple(&env->simple, BOOTSTRAP_CNODE_SIZE, BOOTSTRAP_CNODE_SIZE, ALLOCATOR_STATIC_POOL_SIZE, allocator_mem_pool);
     if (allocman == NULL) {
         ZF_LOGF("Failed to create allocman");
     }
@@ -163,7 +165,7 @@ static unsigned int populate_untypeds(vka_object_t *untypeds)
     unsigned int reserve_num = allocate_untypeds(reserve, DRIVER_UNTYPED_MEMORY, DRIVER_NUM_UNTYPEDS);
 
     /* Now allocate everything else for the tests */
-    unsigned int num_untypeds = allocate_untypeds(untypeds, UINT_MAX, ARRAY_SIZE(untyped_size_bits_list));
+    unsigned int num_untypeds = allocate_untypeds(untypeds, BIT(seL4_PageBits) * 2560, ARRAY_SIZE(untyped_size_bits_list));
     /* Fill out the size_bits list */
     for (unsigned int i = 0; i < num_untypeds; i++) {
         untyped_size_bits_list[i] = untypeds[i].size_bits;

@@ -78,9 +78,16 @@ target_include_directories(
 
 target_link_libraries(
     sel4vmm
-    PUBLIC muslc sel4 sel4_autoconf sel4utils sel4vka
+    PUBLIC 
+        muslc 
+        sel4 
+        sel4_autoconf 
+        sel4utils 
+        sel4vka 
+        sel4allocman 
+        sel4muslcsys
 )
 
 target_compile_options(sel4vmm PUBLIC  "-DBOARD_qemu_arm_virt")
 
-
+message(STATUS "${CROSS_COMPILER_PREFIX}")
