@@ -38,6 +38,22 @@ target_include_directories(
     PRIVATE include arch/${KernelArch} sel4_arch/${KernelSel4Arch}
 )
 
+# Add custom linker script
+set(linkerScript "${CMAKE_CURRENT_LIST_DIR}/src/linker.lds")
+
+set_target_properties(
+    sel4test-tests
+    PROPERTIES LINK_DEPENDS ${linkerScript}
+)
+add_dependencies(elfloader elfloader_linker)
+set_property(
+    TARGET sel4test-tests
+    APPEND_STRING
+    PROPERTY
+        LINK_FLAGS
+        " -Wl,-T ${linkerScript} -static -Wl,--build-id=none"
+)
+
 target_link_libraries(
     sel4test-tests
     PUBLIC
