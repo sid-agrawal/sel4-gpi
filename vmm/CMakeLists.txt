@@ -36,13 +36,13 @@ if(error)
     message(FATAL_ERROR "Failed to compile DTS to DTB: ${VmDTSPath}")
 endif()
 
-# file(
-#     GLOB
-#         deps
-#         src/*.c
-#         src/util/*.c
-#         src/arch/aarch64/*.c
-# )
+file(
+    GLOB
+        deps
+        src/*.c
+        src/arch/aarch64/*.c
+        src/arch/aarch64/vgic/*.c
+)
 
 string(CONCAT package_guest_image_defs
     "GUEST_KERNEL_IMAGE_PATH=\"${CMAKE_CURRENT_SOURCE_DIR}/board/qemu_arm_virt/linux\"\;"
@@ -59,10 +59,15 @@ set_source_files_properties(
 list(
     APPEND
     deps
-    src/vmm.c
-    src/arch/aarch64/linux.c
     ${VmDTBPath}
     tools/package_guest_images.S
+)
+
+list(
+    REMOVE_ITEM
+    deps
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/arch/aarch64/vgic/vgic_v3.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/arch/aarch64/vcpu.c
 )
 
 # add_link_options("-fuse-ld=lld")
@@ -73,7 +78,7 @@ add_library(sel4vmm STATIC EXCLUDE_FROM_ALL ${deps})
 
 target_include_directories(
     sel4vmm
-    PUBLIC include
+    PUBLIC include arch/aarch64
 )
 
 target_link_libraries(
@@ -89,5 +94,3 @@ target_link_libraries(
 )
 
 target_compile_options(sel4vmm PUBLIC  "-DBOARD_qemu_arm_virt")
-
-message(STATUS "${CROSS_COMPILER_PREFIX}")

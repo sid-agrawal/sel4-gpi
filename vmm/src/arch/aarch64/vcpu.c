@@ -4,7 +4,6 @@
  * SPDX-License-Identifier: BSD-2-Clause
  */
 
-#include <microkit.h>
 #include "util.h"
 #include "vcpu.h"
 

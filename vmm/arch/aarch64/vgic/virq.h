@@ -9,7 +9,9 @@
 
 #include <stdint.h>
 #include <stdbool.h>
-#include "util.h"
+#include <virq.h>
+#include <assert.h>
+#include <vmm/vmm.h>
 
 /* The ARM GIC architecture defines 16 SGIs (0 - 7 is recommended for non-secure
  * state, 8 - 15 for secure state), 16 PPIs (interrupt 16 - 31) and 988 SPIs
@@ -127,7 +129,7 @@ static inline bool virq_spi_add(vgic_t *vgic, struct virq_handle *virq_data)
         }
     }
 
-    LOG_VMM_ERR("Could not add SPI IRQ (0x%lx), ran out of slots.\n", virq_data->virq);
+    ZF_LOGE("Could not add SPI IRQ (0x%x), ran out of slots.\n", virq_data->virq);
     return false;
 }
 
@@ -140,7 +142,7 @@ static inline bool virq_sgi_ppi_add(size_t vcpu_id, vgic_t *vgic, struct virq_ha
     assert((irq >= 0) && (irq < ARRAY_SIZE(vgic_vcpu->local_virqs)));
     struct virq_handle *slot = &vgic_vcpu->local_virqs[irq];
     if (slot->virq != VIRQ_INVALID) {
-        LOG_VMM_ERR("IRQ %d already registered on VCPU %u", virq_data->virq, vcpu_id);
+        ZF_LOGE("IRQ %d already registered on VCPU %lu", virq_data->virq, vcpu_id);
         return false;
     }
     *slot = *virq_data;
@@ -206,7 +208,7 @@ static inline bool vgic_vcpu_load_list_reg(vgic_t *vgic, size_t vcpu_id, int idx
     assert(vgic_vcpu);
     assert((idx >= 0) && (idx < ARRAY_SIZE(vgic_vcpu->lr_shadow)));
     // @ivanv: why is the priority 0?
-    microkit_arm_vcpu_inject_irq(vcpu_id, virq->virq, 0, group, idx);
+    // microkit_arm_vcpu_inject_irq(vcpu_id, virq->virq, 0, group, idx); // XXX
     vgic_vcpu->lr_shadow[idx] = *virq;
 
     return true;

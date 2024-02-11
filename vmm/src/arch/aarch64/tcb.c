@@ -4,9 +4,10 @@
  * SPDX-License-Identifier: BSD-2-Clause
  */
 
-#include <microkit.h>
-#include "util.h"
 #include "tcb.h"
+#include <sel4/sel4.h>
+#include <utils/zf_log.h>
+#include <vmm/vmm.h>
 
 void tcb_print_regs(size_t vcpu_id) {
     /*
@@ -20,11 +21,11 @@ void tcb_print_regs(size_t vcpu_id) {
     seL4_Error err = seL4_TCB_ReadRegisters(BASE_VM_TCB_CAP + vcpu_id, false, 0, SEL4_USER_CONTEXT_SIZE, &regs);
     assert(err == seL4_NoError);
     if (err != seL4_NoError) {
-        LOG_VMM_ERR("Could not read TCB registers when trying to print TCB registers\n");
+        ZF_LOGE("Could not read TCB registers when trying to print TCB registers\n");
         return;
     }
     /* Now dump the TCB registers. */
-    LOG_VMM("dumping TCB (ID 0x%lx) registers:\n", vcpu_id);
+    ZF_LOGI("dumping TCB (ID 0x%lx) registers:\n", vcpu_id);
     /* Frame registers */
     printf("    pc: 0x%016lx\n", regs.pc);
     printf("    sp: 0x%016lx\n", regs.sp);

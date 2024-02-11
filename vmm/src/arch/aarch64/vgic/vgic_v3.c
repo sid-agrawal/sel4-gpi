@@ -35,15 +35,15 @@
  *         will never occur again.
  */
 
-#include "vgic.h"
+#include "vgic/vgic.h"
 
 #include <stdint.h>
 #include <stdlib.h>
 
-#include "../fault.h"
-#include "virq.h"
-#include "vgic_v3.h"
-#include "vdist.h"
+#include "fault.h"
+#include "vgic/virq.h"
+#include "vgic/vgic_v3.h"
+#include "vgic/vdist.h"
 
 vgic_t vgic;
 

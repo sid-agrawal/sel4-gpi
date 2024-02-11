@@ -8,7 +8,8 @@
 #pragma once
 
 #include <stddef.h>
-#include <microkit.h>
+#include <stdint.h>
+#include <sel4/sel4.h>
 
 /* PSCI function IDs */
 typedef enum psci {

@@ -1,7 +1,9 @@
-#include <microkit/microkit.h>
-#include "util/util.h"
 #include "vcpu.h"
 #include "guest.h"
+#include <stdbool.h>
+#include "vmm/vmm.h"
+#include <sel4utils/sel4_zf_logif.h>
+#include <utils/zf_log.h>
 
 bool guest_start(size_t boot_vcpu_id, uintptr_t kernel_pc, uintptr_t dtb, uintptr_t initrd) {
     /*
@@ -15,7 +17,7 @@ bool guest_start(size_t boot_vcpu_id, uintptr_t kernel_pc, uintptr_t dtb, uintpt
     regs.spsr = 5; // PMODE_EL1h
     regs.pc = kernel_pc;
     /* Write out all the TCB registers */
-    seL4_Word err = seL4_TCB_WriteRegisters(
+    seL4_Error err = seL4_TCB_WriteRegisters(
         BASE_VM_TCB_CAP + boot_vcpu_id,
         false, // We'll explcitly start the guest below rather than in this call
         0, // No flags
@@ -24,41 +26,53 @@ bool guest_start(size_t boot_vcpu_id, uintptr_t kernel_pc, uintptr_t dtb, uintpt
     );
     assert(err == seL4_NoError);
     if (err != seL4_NoError) {
-        LOG_VMM_ERR("Failed to write registers to boot vCPU's TCB (id is 0x%lx), error is: 0x%lx\n", boot_vcpu_id, err);
+        ZF_LOGE("Failed to write registers to boot vCPU's TCB (id is 0x%lx), error is: 0x%d\n", boot_vcpu_id, err);
         return false;
     }
-    LOG_VMM("starting guest at 0x%lx, DTB at 0x%lx, initial RAM disk at 0x%lx\n",
+    ZF_LOGI("starting guest at 0x%lx, DTB at 0x%lx, initial RAM disk at 0x%lx\n",
         regs.pc, regs.x0, initrd);
     /* Restart the boot vCPU to the program counter of the TCB associated with it */
-    microkit_vm_restart(boot_vcpu_id, regs.pc);
+    // microkit_vm_restart(boot_vcpu_id, regs.pc);
+    seL4_UserContext ctxt = {0};
+    // memzero(&ctxt, sizeof(seL4_UserContext));
+    ctxt.pc = regs.pc;
+    err = seL4_TCB_WriteRegisters(
+        BASE_VM_TCB_CAP + boot_vcpu_id,
+        true,
+        0, /* No flags */
+        1, /* writing 1 register */
+        &ctxt
+    );
+
+    ZF_LOGF_IFERR(err, "Failed to write registers");
 
     return true;
 }
 
 void guest_stop(size_t boot_vcpu_id) {
-    LOG_VMM("Stopping guest\n");
-    microkit_vm_stop(boot_vcpu_id);
-    LOG_VMM("Stopped guest\n");
+    ZF_LOGI("Stopping guest\n");
+    // microkit_vm_stop(boot_vcpu_id); // XXX
+    ZF_LOGI("Stopped guest\n");
 }
 
 bool guest_restart(size_t boot_vcpu_id, uintptr_t guest_ram_vaddr, size_t guest_ram_size) {
-    LOG_VMM("Attempting to restart guest\n");
+    ZF_LOGI("Attempting to restart guest\n");
     // First, stop the guest
-    microkit_vm_stop(boot_vcpu_id);
-    LOG_VMM("Stopped guest\n");
+    // microkit_vm_stop(boot_vcpu_id); // XXX
+    ZF_LOGI("Stopped guest\n");
     // Then, we need to clear all of RAM
-    LOG_VMM("Clearing guest RAM\n");
+    ZF_LOGI("Clearing guest RAM\n");
     memset((char *)guest_ram_vaddr, 0, guest_ram_size);
     // Copy back the images into RAM
     // bool success = guest_init_images();
     // if (!success) {
-    //     LOG_VMM_ERR("Failed to initialise guest images\n");
+    //     ZF_LOGE("Failed to initialise guest images\n");
     //     return false;
     // }
-    vcpu_reset(boot_vcpu_id);
+    // vcpu_reset(boot_vcpu_id); // XXX
     // Now we need to re-initialise all the VMM state
     // vmm_init();
     // linux_start(GUEST_VCPU_ID, kernel_pc, GUEST_DTB_VADDR, GUEST_INIT_RAM_DISK_VADDR);
-    LOG_VMM("Restarted guest\n");
+    ZF_LOGI("Restarted guest\n");
     return true;
 }

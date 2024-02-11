@@ -10,7 +10,7 @@
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
-#include <microkit.h>
+#include <sel4/sel4.h>
 
 /* SMC vCPU fault handler */
 bool handle_smc(size_t vcpu_id, uint32_t hsr);

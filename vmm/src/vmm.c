@@ -5,9 +5,9 @@
  */
 #include <stddef.h>
 #include <stdint.h>
-#include "arch/aarch64/vgic/vgic.h"
-#include "arch/aarch64/linux.h"
-#include "arch/aarch64/fault.h"
+#include "vgic/vgic.h"
+#include "linux.h"
+#include "fault.h"
 #include "guest.h"
 #include "virq.h"
 #include "tcb.h"
@@ -19,6 +19,7 @@
 #include <vka/capops.h>
 #include <utils/zf_log.h>
 #include <sel4utils/sel4_zf_logif.h>
+#include <vspace/vspace.h>
 
 
 // @ivanv: ideally we would have none of these hardcoded values
@@ -33,7 +34,7 @@
  * guest's "RAM" the same for all platforms. For just booting Linux with a
  * simple user-space, 0x10000000 bytes (256MB) is plenty.
  */
-#define GUEST_RAM_SIZE 0x10000000
+#define GUEST_RAM_SIZE 0x2800000 // 40 MB
 
 #if defined(BOARD_qemu_arm_virt)
 #define GUEST_DTB_VADDR 0x4f000000
@@ -79,8 +80,6 @@ extern char _guest_dtb_image_end[];
 /* Data for the initial RAM disk to be passed to the kernel. */
 extern char _guest_initrd_image[];
 extern char _guest_initrd_image_end[];
-/* Microkit will set this variable to the start of the guest RAM memory region. */
-uintptr_t guest_ram_vaddr;
 
 static void serial_ack(size_t vcpu_id, int irq, void *cookie) {
     /*
@@ -91,7 +90,7 @@ static void serial_ack(size_t vcpu_id, int irq, void *cookie) {
     printf("should ack here\n");
 }
 
-void vm_init(seL4_IRQHandler irq_handler, vka_t *vka) {
+void vm_init(seL4_IRQHandler irq_handler, vka_t *vka, vspace_t *vspace) {
     seL4_Error error;
     /* Initialise the VMM, the VCPU(s), and start the guest */
     printf("starting\n");
@@ -113,29 +112,34 @@ void vm_init(seL4_IRQHandler irq_handler, vka_t *vka) {
     ZF_LOGF_IFERR(error, "Failed to set IRQ notification");
 
     /* Place all the binaries in the right locations before starting the guest */
-    // size_t kernel_size = _guest_kernel_image_end - _guest_kernel_image;
-    // size_t dtb_size = _guest_dtb_image_end - _guest_dtb_image;
-    // size_t initrd_size = _guest_initrd_image_end - _guest_initrd_image;
-    uintptr_t kernel_pc = linux_setup_images(guest_ram_vaddr,
+    size_t kernel_size = _guest_kernel_image_end - _guest_kernel_image;
+    size_t dtb_size = _guest_dtb_image_end - _guest_dtb_image;
+    size_t initrd_size = _guest_initrd_image_end - _guest_initrd_image;
+
+    void *guest_ram_vaddr = vspace_new_pages(vspace, seL4_AllRights, DIV_ROUND_UP(GUEST_RAM_SIZE, BIT(seL4_LargePageBits)), seL4_LargePageBits);
+    void *guest_dtb_vaddr = vspace_new_pages(vspace, seL4_AllRights, DIV_ROUND_UP(dtb_size, BIT(seL4_PageBits)), seL4_PageBits);
+    void *guest_initrd_vaddr = vspace_new_pages(vspace, seL4_AllRights, DIV_ROUND_UP(initrd_size, BIT(seL4_PageBits)), seL4_PageBits);
+
+    uintptr_t kernel_pc = linux_setup_images((uintptr_t) guest_ram_vaddr,
                                       (uintptr_t) _guest_kernel_image,
-                                      1,
+                                      kernel_size,
                                       (uintptr_t) _guest_dtb_image,
-                                      GUEST_DTB_VADDR,
-                                      1,
+                                      (uintptr_t) guest_dtb_vaddr,
+                                      dtb_size,
                                       (uintptr_t) _guest_initrd_image,
-                                      GUEST_INIT_RAM_DISK_VADDR,
-                                      1
+                                      (uintptr_t) guest_initrd_vaddr,
+                                      initrd_size
                                       );
-    // if (!kernel_pc) {
-    //     ZF_LOGE("Failed to initialise guest images\n");
-    //     return;
-    // }
-    // /* Initialise the virtual GIC driver */
-    // bool success = virq_controller_init(GUEST_VCPU_ID);
-    // if (!success) {
-    //     ZF_LOGE("Failed to initialise emulated interrupt controller\n");
-    //     return;
-    // }
+    if (!kernel_pc) {
+        ZF_LOGE("Failed to initialise guest images\n");
+        return;
+    }
+    /* Initialise the virtual GIC driver */
+    bool success = virq_controller_init(GUEST_VCPU_ID);
+    if (!success) {
+        ZF_LOGE("Failed to initialise emulated interrupt controller\n");
+        return;
+    }
     // // @ivanv: Note that remove this line causes the VMM to fault if we
     // // actually get the interrupt. This should be avoided by making the VGIC driver more stable.
     // success = virq_register(GUEST_VCPU_ID, SERIAL_IRQ, &serial_ack, NULL);

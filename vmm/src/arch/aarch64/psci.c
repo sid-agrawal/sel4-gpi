@@ -9,8 +9,9 @@
 #include "psci.h"
 #include "smc.h"
 #include "fault.h"
-#include "../../util/util.h"
-#include "../../guest.h"
+#include "guest.h"
+#include <assert.h>
+#include <utils/zf_log.h>
 
 /*
  * The PSCI version is represented by a 32-bit unsigned integer.
@@ -96,7 +97,7 @@ bool handle_psci(size_t vcpu_id, seL4_UserContext *regs, uint64_t fn_number, uin
             guest_stop(vcpu_id);
             return true;
         default:
-            LOG_VMM_ERR("Unhandled PSCI function ID 0x%lx\n", fn_number);
+            ZF_LOGE("Unhandled PSCI function ID 0x%lx\n", fn_number);
             return false;
     }
 

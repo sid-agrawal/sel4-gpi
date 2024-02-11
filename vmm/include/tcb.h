@@ -7,5 +7,6 @@
 #pragma once
 
 #include <stdint.h>
+#include <stddef.h>
 
 void tcb_print_regs(size_t vcpu_id);

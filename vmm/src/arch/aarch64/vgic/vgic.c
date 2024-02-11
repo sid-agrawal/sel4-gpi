@@ -4,21 +4,19 @@
  *
  * SPDX-License-Identifier: BSD-2-Clause
  */
-#include <microkit.h>
-#include "vgic.h"
-#include "virq.h"
+#include "vgic/vgic.h"
+#include "vgic/virq.h"
 #include "fault.h"
-#include "../../util/util.h"
 
 #if defined(GIC_V2)
-#include "vgic_v2.h"
+#include "vgic/vgic_v2.h"
 #elif defined(GIC_V3)
-#include "vgic_v3.h"
+#include "vgic/vgic_v3.h"
 #else
 #error "Unknown GIC version"
 #endif
 
-#include "vdist.h"
+#include "vgic/vdist.h"
 
 /* The driver expects the VGIC state to be initialised before calling any of the driver functionality. */
 extern vgic_t vgic;
@@ -27,7 +25,7 @@ bool fault_handle_vgic_maintenance(size_t vcpu_id)
 {
     // @ivanv: reivist, also inconsistency between int and bool
     bool success = true;
-    int idx = microkit_mr_get(seL4_VGICMaintenance_IDX);
+    int idx = seL4_GetMR(seL4_VGICMaintenance_IDX);
     /* Currently not handling spurious IRQs */
     // @ivanv: wtf, this comment seems irrelevant to the code.
     assert(idx >= 0);

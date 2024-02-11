@@ -7,7 +7,8 @@
 
 #include "smc.h"
 #include "psci.h"
-#include "../../util/util.h"
+#include <assert.h>
+#include <vmm/vmm.h>
 
 // Values in this file are taken from:
 // SMC CALLING CONVENTION
@@ -70,7 +71,7 @@ uint64_t smc_get_arg(seL4_UserContext *u, uint64_t arg)
         case 5: return u->x5;
         case 6: return u->x6;
         default:
-            LOG_VMM_ERR("trying to get SMC arg: 0x%lx, SMC only has 6 argument registers\n", arg);
+            ZF_LOGE("trying to get SMC arg: 0x%lx, SMC only has 6 argument registers\n", arg);
             // @ivanv: come back to this
             return 0;
     }
@@ -86,7 +87,7 @@ static void smc_set_arg(seL4_UserContext *u, size_t arg, size_t val)
         case 5: u->x5 = val; break;
         case 6: u->x6 = val; break;
         default:
-            LOG_VMM_ERR("trying to set SMC arg: 0x%lx, with val: 0x%lx, SMC only has 6 argument registers\n", arg, val);
+            ZF_LOGE("trying to set SMC arg: 0x%lx, with val: 0x%lx, SMC only has 6 argument registers\n", arg, val);
     }
 }
 
@@ -107,10 +108,10 @@ bool handle_smc(size_t vcpu_id, uint32_t hsr)
             if (fn_number < PSCI_MAX) {
                 return handle_psci(vcpu_id, &regs, fn_number, hsr);
             }
-            LOG_VMM_ERR("Unhandled SMC: standard service call %lu\n", fn_number);
+            ZF_LOGE("Unhandled SMC: standard service call %lu\n", fn_number);
             break;
         default:
-            LOG_VMM_ERR("Unhandled SMC: unknown value service: 0x%lx, function number: 0x%lx\n", service, fn_number);
+            ZF_LOGE("Unhandled SMC: unknown value service: 0x%lx, function number: 0x%lx\n", service, fn_number);
             break;
     }
 

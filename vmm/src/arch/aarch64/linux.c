@@ -5,11 +5,10 @@
  */
 
 #include "dtb.h"
-#include "arch/aarch64/linux.h"
+#include "linux.h"
 #include <assert.h>
 #include <string.h>
 #include <utils/zf_log.h>
-
 
 uintptr_t linux_setup_images(uintptr_t ram_start,
                              uintptr_t kernel,

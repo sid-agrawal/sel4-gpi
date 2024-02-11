@@ -41,15 +41,13 @@
  */
 
 #include <stdint.h>
-#include <microkit.h>
 
-#include "vgic.h"
-#include "vgic_v2.h"
-#include "virq.h"
-#include "vdist.h"
-#include "../../util/util.h"
+#include "vgic/vgic.h"
+#include "vgic/vgic_v2.h"
+#include "vgic/virq.h"
+#include "vgic/vdist.h"
 #include "fault.h"
-#include "../../../virq.h"
+#include "virq.h"
 
 vgic_t vgic;
 struct gic_dist_map dist;
