@@ -14,4 +14,4 @@ list(SORT deps)
 
 add_library(ramdisk STATIC EXCLUDE_FROM_ALL ${deps})
 target_include_directories(ramdisk PUBLIC include)
-target_link_libraries(ramdisk muslc sel4 utils sel4test sel4serialserver)
+target_link_libraries(ramdisk muslc sel4 utils sel4test sel4gpi)

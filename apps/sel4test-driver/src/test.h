@@ -27,6 +27,8 @@
 #define TESTS_APP "sel4test-tests"
 #define HELLO_APP "hello"
 #define MAX_MO_CHILD 10
+#define START_RAMDISK 1
+// #define START_XV6FS 1
 
 #define MAX_TIMER_IRQS 4
 

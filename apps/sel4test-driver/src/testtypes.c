@@ -349,17 +349,23 @@ void basic_set_up(uintptr_t e)
     env->gpi_endpoint_in_child = sel4utils_copy_cap_to_process(&(env->test_process),
                                                                &env->vka, env->gpi_endpoint_in_parent);
 
-    // For the ramdisk server
-    env->ramdisk_endpoint_in_child = sel4utils_copy_cap_to_process(&(env->test_process),
-                                                                   &env->vka, env->ramdisk_endpoint_in_parent);
-
-    // For the fs server
-    env->xv6fs_endpoint_in_child = sel4utils_copy_cap_to_process(&(env->test_process),
-                                                                 &env->vka, env->xv6fs_endpoint_in_parent);
-
     // Keep this one as the last COPY, so that  init->free_slot.start a few lines below stays valid.
     // See at label "Warning"
-    seL4_CPtr free_slot_start = env->xv6fs_endpoint_in_child + 1;
+    seL4_CPtr free_slot_start = env->gpi_endpoint_in_child + 1;
+
+// For the ramdisk server
+#ifdef START_RAMDISK
+    env->ramdisk_endpoint_in_child = sel4utils_copy_cap_to_process(&(env->test_process),
+                                                                   &env->vka, env->ramdisk_endpoint_in_parent);
+    free_slot_start = env->ramdisk_endpoint_in_child + 1;
+#endif
+
+// For the fs server
+#ifdef START_XV6FS
+    env->xv6fs_endpoint_in_child = sel4utils_copy_cap_to_process(&(env->test_process),
+                                                                 &env->vka, env->xv6fs_endpoint_in_parent);
+    free_slot_start = env->xv6fs_endpoint_in_child + 1;
+#endif
 
     /* copy the device frame, if any */
     if (env->init->device_frame_cap)

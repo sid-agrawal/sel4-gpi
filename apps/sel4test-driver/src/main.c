@@ -563,25 +563,26 @@ void *main_continued(void *arg UNUSED)
     // printf(GPISERVP "Public EP is: %d\n", env.gpi_endpoint_in_parent);
     // debug_cap_identify(GPISERVP, env.gpi_endpoint_in_parent);
 
+#ifdef START_RAMDISK
     printf(RAMDISK_S "Starting ramdisk server...\n");
     error = ramdisk_server_spawn_thread(&env.simple,
                                         &env.vka,
                                         &env.vspace,
+                                        env.gpi_endpoint_in_parent,
                                         RAMDISK_SERVER_DEFAULT_PRIORITY,
                                         &env.ramdisk_endpoint_in_parent);
+#endif
 
-    ramdisk_client_init(&env.vka,
-                        &env.vspace,
-                        env.ramdisk_endpoint_in_parent);
-
+#ifdef START_XV6FS
     printf(XV6FS_S "Starting xv6fs server...\n");
     error = xv6fs_server_spawn_thread(&env.simple,
-                                        &env.vka,
-                                        &env.vspace,
-                                        ramdisk_read,
-                                        ramdisk_write,
-                                        XV6FSK_SERVER_DEFAULT_PRIORITY,
-                                        &env.xv6fs_endpoint_in_parent); 
+                                      &env.vka,
+                                      &env.vspace,
+                                      NULL,
+                                      NULL,
+                                      XV6FSK_SERVER_DEFAULT_PRIORITY,
+                                      &env.xv6fs_endpoint_in_parent);
+#endif
 
     /* now run the tests */
     sel4test_run_tests(&env);

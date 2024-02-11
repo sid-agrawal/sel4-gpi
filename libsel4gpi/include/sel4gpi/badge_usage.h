@@ -16,12 +16,18 @@
 
 
 typedef enum GPICAP_TYPE {
+    // Core cap types
     GPICAP_TYPE_NONE = 0,
     GPICAP_TYPE_ADS,
     GPICAP_TYPE_MO,
     GPICAP_TYPE_CPU,
     GPICAP_TYPE_PD,
     GPICAP_TYPE_seL4,
+
+    // Non-core cap types
+    GPICAP_TYPE_BLOCK,
+    GPICAP_TYPE_FILE,
+
     GPICAP_TYPE_MAX,
 }gpi_cap_t;
 

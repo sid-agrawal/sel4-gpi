@@ -108,6 +108,12 @@ char *cap_type_to_str(gpi_cap_t cap_type)
        case GPICAP_TYPE_PD:
             return "PD";
             break;
+       case GPICAP_TYPE_BLOCK:
+            return "BLOCK";
+            break;
+       case GPICAP_TYPE_FILE:
+            return "FILE";
+            break;
         default:
             return "UNKNOWN";
             break;
