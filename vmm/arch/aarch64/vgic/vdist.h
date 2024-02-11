@@ -6,7 +6,6 @@
  */
 
 #include "fault.h"
-#include "util.h"
 
 /* GIC Distributor register access utilities */
 #define GIC_DIST_REGN(offset, reg) ((offset-reg)/sizeof(uint32_t))
@@ -181,13 +180,13 @@ static bool vgic_dist_set_pending_irq(vgic_t *vgic, size_t vcpu_id, int irq)
 
     if (virq_data->virq == VIRQ_INVALID || !vgic_dist_is_enabled(dist) || !is_enabled(dist, irq, vcpu_id)) {
         if (virq_data->virq == VIRQ_INVALID) {
-            LOG_VMM_ERR("vIRQ data could not be found for IRQ 0x%lx\n", irq);
+            ZF_LOGE("vIRQ data could not be found for IRQ 0x%x\n", irq);
         }
         if (!vgic_dist_is_enabled(dist)) {
-            LOG_VMM_ERR("vGIC distributor is not enabled for IRQ 0x%lx\n", irq);
+            ZF_LOGE("vGIC distributor is not enabled for IRQ 0x%x\n", irq);
         }
         if (!is_enabled(dist, irq, vcpu_id)) {
-            LOG_VMM_ERR("vIRQ 0x%lx is not enabled\n", irq);
+            ZF_LOGE("vIRQ 0x%x is not enabled\n", irq);
         }
         return false;
     }
@@ -205,7 +204,7 @@ static bool vgic_dist_set_pending_irq(vgic_t *vgic, size_t vcpu_id, int irq)
      */
     bool success = vgic_irq_enqueue(vgic, vcpu_id, virq_data);
     if (!success) {
-        LOG_VMM_ERR("Failure enqueueing IRQ, increase MAX_IRQ_QUEUE_LEN");
+        ZF_LOGE("Failure enqueueing IRQ, increase MAX_IRQ_QUEUE_LEN");
         assert(0);
         return false;
     }
@@ -395,7 +394,7 @@ static bool vgic_dist_reg_read(size_t vcpu_id, vgic_t *vgic, uint64_t offset, ui
         break;
 #endif
     default:
-        LOG_VMM_ERR("Unknown register offset 0x%x", offset);
+        ZF_LOGE("Unknown register offset 0x%lx", offset);
         // err = ignore_fault(fault);
         success = fault_advance_vcpu(vcpu_id, regs);
         assert(success);
@@ -436,7 +435,7 @@ static bool vgic_dist_reg_write(size_t vcpu_id, vgic_t *vgic, uint64_t offset, u
         } else if (data == 0) {
             vgic_dist_disable(gic_dist);
         } else {
-            LOG_VMM_ERR("Unknown enable register encoding");
+            ZF_LOGE("Unknown enable register encoding");
             // @ivanv: goto ignore fault?
         }
         break;
@@ -575,7 +574,7 @@ static bool vgic_dist_reg_write(size_t vcpu_id, vgic_t *vgic, uint64_t offset, u
             target_list = (1 << vcpu_id);
             break;
         default:
-            LOG_VMM_ERR("Unknown SGIR Target List Filter mode");
+            ZF_LOGE("Unknown SGIR Target List Filter mode");
             goto ignore_fault;
         }
         // @ivanv: Here we're making the assumption that there's only one vCPU, and
@@ -607,7 +606,7 @@ static bool vgic_dist_reg_write(size_t vcpu_id, vgic_t *vgic, uint64_t offset, u
         break;
 #endif
     default:
-        LOG_VMM_ERR("Unknown register offset 0x%x", offset);
+        ZF_LOGE("Unknown register offset 0x%lx", offset);
         assert(0);
     }
 ignore_fault:

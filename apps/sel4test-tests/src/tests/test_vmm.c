@@ -28,7 +28,7 @@ int test_new_vmm(env_t env)
     int error;
     printf("------------------STARTING: %s------------------\n", __func__);
     
-    vm_init(env->irq_handler, &env->vka);
+    vm_init(env->irq_handler, &env->vka, &env->vspace);
     return sel4test_get_result();
 }
 DEFINE_TEST(GPIVM001, "Test running VM", test_new_vmm, true)

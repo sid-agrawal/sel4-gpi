@@ -56,13 +56,15 @@
 #define DRIVER_NUM_UNTYPEDS 16
 
 /* dimensions of virtual memory for the allocator to use */
-#define ALLOCATOR_VIRTUAL_POOL_SIZE ((1 << seL4_PageBits) * 10240)
+#define ALLOCATOR_VIRTUAL_POOL_SIZE ((1 << seL4_PageBits) * 12800) // 40 MB
 
 /* static memory for the allocator to bootstrap with */
 #define ALLOCATOR_STATIC_POOL_SIZE ((1 << seL4_PageBits) * 20)
 static char allocator_mem_pool[ALLOCATOR_STATIC_POOL_SIZE];
 
 #define BOOTSTRAP_CNODE_SIZE 12
+
+#define TEST_UNTYPED_SIZE BIT(seL4_PageBits) * 12800 // 40 MB
 
 /* static memory for virtual memory bootstrapping */
 static sel4utils_alloc_data_t data;
@@ -157,7 +159,7 @@ static unsigned int populate_untypeds(vka_object_t *untypeds)
     unsigned int reserve_num = allocate_untypeds(reserve, DRIVER_UNTYPED_MEMORY, DRIVER_NUM_UNTYPEDS);
 
     /* Now allocate everything else for the tests */
-    unsigned int num_untypeds = allocate_untypeds(untypeds, BIT(seL4_PageBits) * 2560, ARRAY_SIZE(untyped_size_bits_list));
+    unsigned int num_untypeds = allocate_untypeds(untypeds, TEST_UNTYPED_SIZE, ARRAY_SIZE(untyped_size_bits_list));
     /* Fill out the size_bits list */
     for (unsigned int i = 0; i < num_untypeds; i++) {
         untyped_size_bits_list[i] = untypeds[i].size_bits;

@@ -4,10 +4,9 @@
  *
  * SPDX-License-Identifier: BSD-2-Clause
  */
-
 #include <stdbool.h>
 #include <stdint.h>
-#include "../../../virq.h"
+#include <virq.h>
 #include <sel4/sel4.h>
 
 // @ivanv: this should all come from the DTS!
