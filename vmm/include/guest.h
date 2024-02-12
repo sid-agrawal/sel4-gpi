@@ -6,7 +6,8 @@
 #include <stddef.h>
 #include <stdint.h>
 #include <stdbool.h>
+#include <vmm/vmm.h>
 
-bool guest_start(size_t boot_vcpu_id, uintptr_t kernel_pc, uintptr_t dtb, uintptr_t initrd);
+bool guest_start(vmm_env_t *vmm_env, size_t boot_vcpu_id, uintptr_t kernel_pc, uintptr_t dtb, uintptr_t initrd);
 void guest_stop(size_t boot_vcpu_id);
 bool guest_restart(size_t boot_vcpu_id, uintptr_t guest_ram_vaddr, size_t guest_ram_size);
