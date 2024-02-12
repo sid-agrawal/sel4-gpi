@@ -30,9 +30,9 @@ int test_ramdisk(env_t env)
     test_assert(error == 0);
     printf("Finished ads_component_client_connect\n");
     */
-
     ads_client_context_t ads_conn;
     vka_cspace_make_path(&env->vka, env->self_ads_cptr, &ads_conn.badged_server_ep_cspath);
+    test_assert(error == 0);
 
     /* Create a memory object for the buffer */
     mo_client_context_t mo_conn;
@@ -46,9 +46,8 @@ int test_ramdisk(env_t env)
     error = ads_client_attach(&ads_conn,
                               NULL,
                               &mo_conn,
-                              (void **) &buf);
+                              (void **)&buf);
     test_assert(error == 0);
-    printf("Finished ads_client_attach\n");
 
     printf("------------------STARTING TESTS: %s------------------\n", __func__);
 
@@ -92,6 +91,23 @@ int test_ramdisk(env_t env)
     test_assert(error == seL4_NoError);
     test_assert(buf[0] == 0x42);
     test_assert(buf[RAMDISK_BLOCK_SIZE - 1] == 0x42);
+
+    // Allocate a number of blocks
+    for (int i = 0; i < 20; i++) {
+        error = ramdisk_client_alloc_block(env->ramdisk_endpoint, &env->vka, &block);
+        test_assert(error == seL4_NoError);
+
+        buf[0] = i;
+        error = ramdisk_client_write(&block, &mo_conn);
+        test_assert(error == seL4_NoError);
+
+        buf[0] = 0;
+        error = ramdisk_client_read(&block, &mo_conn);
+        test_assert(error == seL4_NoError);
+        test_assert(buf[0] == i);
+    }
+
+    // TODO: test freeing blocks, if implemented
 
     printf("------------------ENDING: %s------------------\n", __func__);
     return sel4test_get_result();

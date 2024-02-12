@@ -51,7 +51,7 @@ enum RAMDISK_OPCODE
 #define CHECK_ERROR_GOTO(check, msg, loc) \
     do                                    \
     {                                     \
-        if (check != seL4_NoError)        \
+        if ((check) != seL4_NoError)      \
         {                                 \
             ZF_LOGE(RAMDISK_S "%s: %s"    \
                               ", %d.",    \
@@ -141,7 +141,8 @@ ramdisk_server_spawn_thread(simple_t *parent_simple, vka_t *parent_vka,
     /* Setup disk block data structure */
     server->free_blocks = malloc(sizeof(ramdisk_block_node_t));
     server->free_blocks->blockno = 0;
-    server->free_blocks->n_blocks = n_pages;
+    server->free_blocks->n_blocks = RAMDISK_SIZE_BYTES / RAMDISK_BLOCK_SIZE;
+    server->free_blocks->next = NULL;
 
     /* Configure thread */
     sel4utils_thread_config_t config = thread_config_default(parent_simple,
@@ -233,6 +234,8 @@ void ramdisk_server_main()
             CHECK_ERROR_GOTO(get_ramdisk_server()->free_blocks == NULL, "no more free blocks to assign", done);
             uint64_t blockno = get_ramdisk_server()->free_blocks->blockno;
 
+            RAMDISK_PRINTF("Allocating blockno %d\n", blockno);
+
             // Update free block list
             get_ramdisk_server()->free_blocks->blockno++;
             get_ramdisk_server()->free_blocks->n_blocks--;
@@ -260,6 +263,10 @@ void ramdisk_server_main()
             /* Return this badged end point in the return message. */
             seL4_SetCap(0, dest.capPtr);
             reply_tag = seL4_MessageInfo_new(error, 0, 1, 1);
+
+            RAMDISK_PRINTF("Replying with badged EP: ");
+            badge_print(badge);
+            printf("\n");
         }
         else
         { /* Handle Typed Request */
