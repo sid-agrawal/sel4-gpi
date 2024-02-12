@@ -64,7 +64,7 @@ static char allocator_mem_pool[ALLOCATOR_STATIC_POOL_SIZE];
 
 #define BOOTSTRAP_CNODE_SIZE 12
 
-#define TEST_UNTYPED_SIZE BIT(seL4_PageBits) * 12800 // 40 MB
+#define TEST_UNTYPED_SIZE BIT(seL4_PageBits) * 25600 // 100 MB
 
 /* static memory for virtual memory bootstrapping */
 static sel4utils_alloc_data_t data;

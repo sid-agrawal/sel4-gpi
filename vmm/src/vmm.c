@@ -16,10 +16,13 @@
 #include <vka/vka.h>
 #include <sel4/sel4.h>
 #include <vka/object.h>
+#include <vka/arch/object.h>
 #include <vka/capops.h>
 #include <utils/zf_log.h>
 #include <sel4utils/sel4_zf_logif.h>
 #include <vspace/vspace.h>
+#include <sel4utils/vspace.h>
+#include <sel4utils/api.h>
 
 
 // @ivanv: ideally we would have none of these hardcoded values
@@ -35,10 +38,12 @@
  * simple user-space, 0x10000000 bytes (256MB) is plenty.
  */
 #define GUEST_RAM_SIZE 0x2800000 // 40 MB
+#define GUEST_RAM_VADDR 0x40000000 // expected by linux's dts
 
 #if defined(BOARD_qemu_arm_virt)
 #define GUEST_DTB_VADDR 0x4f000000
 #define GUEST_INIT_RAM_DISK_VADDR 0x4d700000
+#define SERIAL_PADDR 0x9000000
 #elif defined(BOARD_rpi4b_hyp)
 #define GUEST_DTB_VADDR 0x2e000000
 #define GUEST_INIT_RAM_DISK_VADDR 0x2d700000
@@ -71,6 +76,8 @@
 #error Need to define serial interrupt
 #endif
 
+#define VM_CNODE_BITS 7
+
 /* Data for the guest's kernel image. */
 extern char _guest_kernel_image[];
 extern char _guest_kernel_image_end[];
@@ -81,53 +88,165 @@ extern char _guest_dtb_image_end[];
 extern char _guest_initrd_image[];
 extern char _guest_initrd_image_end[];
 
+// static vmm_env_t vmm_env;
+
 static void serial_ack(size_t vcpu_id, int irq, void *cookie) {
     /*
      * For now we by default simply ack the serial IRQ, we have not
      * come across a case yet where more than this needs to be done.
      */
     // microkit_irq_ack(SERIAL_IRQ_CH);
-    printf("should ack here\n");
+    vmm_env_t *vmm_e = (vmm_env_t *) cookie;
+    seL4_Error error = seL4_IRQHandler_Ack(vmm_e->serial_irq_handler); // XXX + serial channel
+    ZF_LOGE_IFERR(error, "Failed to ACK serial interrupt");
 }
 
-void vm_init(seL4_IRQHandler irq_handler, vka_t *vka, vspace_t *vspace) {
-    seL4_Error error;
-    /* Initialise the VMM, the VCPU(s), and start the guest */
-    printf("starting\n");
+vmm_env_t *vm_setup(seL4_IRQHandler irq_handler, vka_t *vka, vspace_t *vspace, seL4_CPtr vspace_root, seL4_CPtr asid_pool) {
+    int error;
+    seL4_Error serr;
+    vmm_env_t *vmm_e = malloc(sizeof(vmm_env_t));
+    vmm_e->vka = vka;
+    vmm_e->vspace = vspace;
+    vmm_e->serial_irq_handler = irq_handler;
+
+    /* vm's vspace */
+    error = vka_alloc_vspace_root(vka, &vmm_e->vm_vspace_root);
+    ZF_LOGF_IF(error, "Failed to allocate vm's page directory");
+
+    serr = seL4_ARCH_ASIDPool_Assign(asid_pool, vmm_e->vm_vspace_root.cptr);
+    ZF_LOGF_IFERR(serr, "Failed to assign vm's vspace to an asid pool");
+
+    error = sel4utils_get_empty_vspace(vspace, &vmm_e->vm_vspace, &vmm_e->vm_vspace_data, vka, vmm_e->vm_vspace_root.cptr, NULL, NULL);
+    ZF_LOGF_IF(error, "Failed to make vm's vspace");
+
+    /* fault endpoint */
+    error = vka_alloc_endpoint(vka, &vmm_e->vm_fault_ep);
+    ZF_LOGF_IF(error, "Failed to allocate vm's fault endpoint");
+
+    /* vm's cspace */
+    error = vka_alloc_cnode_object(vka, VM_CNODE_BITS, &vmm_e->vm_cspace);
+    ZF_LOGF_IF(error, "Failed to allocate vm's cspace");
+    int curr_slot = 1;
+
+    cspacepath_t src;
+    vka_cspace_make_path(vka, vmm_e->vm_cspace.cptr, &src);
+
+    cspacepath_t dest = {
+        .capPtr = curr_slot,
+        .root = vmm_e->vm_cspace.cptr,
+        .capDepth = VM_CNODE_BITS
+    };
+    
+    error = vka_cnode_mint(&dest, &src, seL4_AllRights, 1); // TODO create badges properly
+    ZF_LOGF_IF(error, "Failed to mint vm's cnode to its cspace");
+
+    // TODO: copy fault EP to VM's cspace
+
+    vka_cspace_make_path(vka, vmm_e->vm_vspace_root.cptr, &src);
+    dest.capPtr++;
+    error = vka_cnode_copy(&dest, &src, seL4_AllRights);
+    ZF_LOGF_IF(error, "Failed to copy vm's page directory to its cspace");
+
+    /* vcpu */
+    error = vka_alloc_vcpu(vka, &vmm_e->vcpu);
+    ZF_LOGF_IF(error, "Failed to allocate a vcpu");
+
+    /* tcb */
+    error = vka_alloc_tcb(vka, &vmm_e->vm_tcb);
+    ZF_LOGF_IF(error, "Failed to make vm's TCB");
+
+    /* scheduler context for MCS kernel */
+    // should also set scheduling parameters when this is enabled
+    // error = vka_alloc_sched_context(vmm_e->vka, &vmm_e->vm_sched_ctxt);
+    // ZF_LOGF_IF(error, "Failed to make vm's scheduler context");
+
+    // XXX do we need a cnode guard?
+    serr = api_tcb_set_space(vmm_e->vm_tcb.cptr, vmm_e->vm_fault_ep.cptr, vmm_e->vm_cspace.cptr, 0, vmm_e->vm_vspace_root.cptr, 0);
+    ZF_LOGF_IFERR(serr, "Failed to set TCB cspace and vspace");
+
+    serr = seL4_ARM_VCPU_SetTCB(vmm_e->vcpu.cptr, vmm_e->vm_tcb.cptr);
+    ZF_LOGF_IFERR(serr, "Failed to bind TCB to VCPU");
+
+    char vcpu_name[32];
+    snprintf(vcpu_name, sizeof(vcpu_name), "%s", "vcpu");
+    seL4_DebugNameThread(vmm_e->vm_tcb.cptr, vcpu_name);
+
+    /* setup serial IRQ and notification */
     vka_object_t ntfn;
     error = vka_alloc_notification(vka, &ntfn);
-    ZF_LOGF_IFERR(error, "Failed to allocate notification");
+    ZF_LOGF_IF(error, "Failed to allocate notification");
 
     cspacepath_t path;
     error = vka_cspace_alloc_path(vka, &path);
-    ZF_LOGF_IFERR(error, "Failed to allocate path for the badged notification");
+    ZF_LOGF_IF(error, "Failed to allocate path for the badged notification");
     
     cspacepath_t ntfn_path;
     vka_cspace_make_path(vka, ntfn.cptr, &ntfn_path);
 
-    error = vka_cnode_mint(&path, &ntfn_path, seL4_AllRights, 1);
-    ZF_LOGF_IFERR(error, "Failed to mint notification badge");
+    error = vka_cnode_mint(&path, &ntfn_path, seL4_AllRights, 2); // TODO create badges properly
+    ZF_LOGF_IF(error, "Failed to mint notification badge");
 
-    error = seL4_IRQHandler_SetNotification(irq_handler, path.capPtr);
-    ZF_LOGF_IFERR(error, "Failed to set IRQ notification");
+    serr = seL4_IRQHandler_SetNotification(irq_handler, path.capPtr);
+    ZF_LOGF_IFERR(serr, "Failed to set IRQ notification");
 
+    /* map in serial device region */
+    error = vka_alloc_frame_at(vka, seL4_PageBits, (uintptr_t) SERIAL_PADDR, &vmm_e->serial_dev_frame);
+    ZF_LOGF_IF(error, "Failed to allocate serial device frame");
+
+    reservation_t res = vspace_reserve_range_at(&vmm_e->vm_vspace, (void *) SERIAL_PADDR, BIT(seL4_PageBits), seL4_AllRights, 1);
+    // error = vspace_new_pages_at_vaddr(&vmm_e->vm_vspace, (void *) SERIAL_PADDR, 1, seL4_PageBits, res);
+    seL4_CPtr caps[1] = { vmm_e->serial_dev_frame.cptr };
+    error = vspace_map_pages_at_vaddr(&vmm_e->vm_vspace, caps, NULL, (void *) SERIAL_PADDR, 1, seL4_PageBits, res);
+    ZF_LOGF_IF(error, "Failed to map serial device to VM");
+
+    return vmm_e;
+}
+
+void vm_init(vmm_env_t *vmm_e) {
+    seL4_Error error;
+    /* Initialise the VMM, the VCPU(s), and start the guest */
     /* Place all the binaries in the right locations before starting the guest */
     size_t kernel_size = _guest_kernel_image_end - _guest_kernel_image;
     size_t dtb_size = _guest_dtb_image_end - _guest_dtb_image;
     size_t initrd_size = _guest_initrd_image_end - _guest_initrd_image;
 
-    void *guest_ram_vaddr = vspace_new_pages(vspace, seL4_AllRights, DIV_ROUND_UP(GUEST_RAM_SIZE, BIT(seL4_LargePageBits)), seL4_LargePageBits);
-    void *guest_dtb_vaddr = vspace_new_pages(vspace, seL4_AllRights, DIV_ROUND_UP(dtb_size, BIT(seL4_PageBits)), seL4_PageBits);
-    void *guest_initrd_vaddr = vspace_new_pages(vspace, seL4_AllRights, DIV_ROUND_UP(initrd_size, BIT(seL4_PageBits)), seL4_PageBits);
+    /* guest ram */
+    reservation_t vm_res = vspace_reserve_range_at(&vmm_e->vm_vspace, (void *) GUEST_RAM_VADDR, GUEST_RAM_SIZE, seL4_AllRights, 1);
+    error = vspace_new_pages_at_vaddr(&vmm_e->vm_vspace, (void *) GUEST_RAM_VADDR, DIV_ROUND_UP(GUEST_RAM_SIZE, BIT(seL4_LargePageBits)), seL4_LargePageBits, vm_res);
+    ZF_LOGF_IF(error, "Failed to allocate guest RAM in VM's vspace");
+    
+    reservation_t vmm_res = vspace_reserve_range_at(vmm_e->vspace, (void *) GUEST_RAM_VADDR, GUEST_RAM_SIZE, seL4_AllRights, 1);
+    error = vspace_new_pages_at_vaddr(vmm_e->vspace, (void *) GUEST_RAM_VADDR, DIV_ROUND_UP(GUEST_RAM_SIZE, BIT(seL4_LargePageBits)), seL4_LargePageBits, vmm_res);
+    ZF_LOGF_IF(error, "Failed to allocate guest RAM in VMM's vspace");
+    
+    /* guest dtb */
+    vm_res = vspace_reserve_range_at(&vmm_e->vm_vspace, (void *) GUEST_DTB_VADDR, dtb_size, seL4_AllRights, 1);
+    error = vspace_new_pages_at_vaddr(&vmm_e->vm_vspace, (void *) GUEST_DTB_VADDR, DIV_ROUND_UP(dtb_size, BIT(seL4_PageBits)), seL4_PageBits, vm_res);
+    ZF_LOGF_IF(error, "Failed to map guest DTB in VM's vspace");
+    
+    vmm_res = vspace_reserve_range_at(vmm_e->vspace, (void *) GUEST_DTB_VADDR, dtb_size, seL4_AllRights, 1);
+    error = vspace_new_pages_at_vaddr(vmm_e->vspace, (void *) GUEST_DTB_VADDR, DIV_ROUND_UP(dtb_size, BIT(seL4_PageBits)), seL4_PageBits, vmm_res);
+    ZF_LOGF_IF(error, "Failed to map guest DTB in VMM's vspace");
 
-    uintptr_t kernel_pc = linux_setup_images((uintptr_t) guest_ram_vaddr,
+    /* guest init ram disk */
+    vm_res = vspace_reserve_range_at(&vmm_e->vm_vspace, (void *) GUEST_INIT_RAM_DISK_VADDR, initrd_size, seL4_AllRights, 1);
+    error = vspace_new_pages_at_vaddr(&vmm_e->vm_vspace, (void *) GUEST_INIT_RAM_DISK_VADDR, DIV_ROUND_UP(initrd_size, BIT(seL4_PageBits)), seL4_PageBits, vm_res);
+    ZF_LOGF_IF(error, "Failed to map guest init ram disk in VM's vspace");
+    
+    vmm_res = vspace_reserve_range_at(vmm_e->vspace, (void *) GUEST_INIT_RAM_DISK_VADDR, initrd_size, seL4_AllRights, 1);
+    error = vspace_new_pages_at_vaddr(vmm_e->vspace, (void *) GUEST_INIT_RAM_DISK_VADDR, DIV_ROUND_UP(initrd_size, BIT(seL4_PageBits)), seL4_PageBits, vmm_res);
+    ZF_LOGF_IF(error, "Failed to map guest init ram disk in VMM's vspace");
+    
+    // void *guest_initrd_vaddr = vspace_new_pages(vmm_e->vspace, seL4_AllRights, DIV_ROUND_UP(initrd_size, BIT(seL4_PageBits)), seL4_PageBits);
+
+    uintptr_t kernel_pc = linux_setup_images((uintptr_t) GUEST_RAM_VADDR,
                                       (uintptr_t) _guest_kernel_image,
                                       kernel_size,
                                       (uintptr_t) _guest_dtb_image,
-                                      (uintptr_t) guest_dtb_vaddr,
+                                      (uintptr_t) GUEST_DTB_VADDR,
                                       dtb_size,
                                       (uintptr_t) _guest_initrd_image,
-                                      (uintptr_t) guest_initrd_vaddr,
+                                      (uintptr_t) GUEST_INIT_RAM_DISK_VADDR,
                                       initrd_size
                                       );
     if (!kernel_pc) {
@@ -140,13 +259,15 @@ void vm_init(seL4_IRQHandler irq_handler, vka_t *vka, vspace_t *vspace) {
         ZF_LOGE("Failed to initialise emulated interrupt controller\n");
         return;
     }
-    // // @ivanv: Note that remove this line causes the VMM to fault if we
-    // // actually get the interrupt. This should be avoided by making the VGIC driver more stable.
-    // success = virq_register(GUEST_VCPU_ID, SERIAL_IRQ, &serial_ack, NULL);
+    // @ivanv: Note that remove this line causes the VMM to fault if we
+    // actually get the interrupt. This should be avoided by making the VGIC driver more stable.
+    success = virq_register(GUEST_VCPU_ID, SERIAL_IRQ, &serial_ack, (void *) vmm_e);
     // /* Just in case there is already an interrupt available to handle, we ack it here. */
     // // microkit_irq_ack(SERIAL_IRQ_CH);
+    error = seL4_IRQHandler_Ack(vmm_e->serial_irq_handler); // XXX + serial channel num
+    ZF_LOGE_IFERR(error, "Failed to ACK interrupt");
     // /* Finally start the guest */
-    // guest_start(GUEST_VCPU_ID, kernel_pc, GUEST_DTB_VADDR, GUEST_INIT_RAM_DISK_VADDR);
+    guest_start(vmm_e, GUEST_VCPU_ID, kernel_pc, (uintptr_t) GUEST_DTB_VADDR, (uintptr_t) GUEST_INIT_RAM_DISK_VADDR);
 }
 
 // void notified(microkit_channel ch) {

@@ -74,7 +74,7 @@ bool handle_psci(size_t vcpu_id, seL4_UserContext *regs, uint64_t fn_number, uin
             break;
         case PSCI_SYSTEM_RESET: {
             // @refactor come back to
-            // bool success = guest_restart();
+            // bool success = guest_restart(); // XXX
             // if (!success) {
             //     LOG_VMM_ERR("Failed to restart guest\n");
             //     smc_set_return_value(regs, PSCI_INTERNAL_FAILURE);

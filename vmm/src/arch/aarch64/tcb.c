@@ -6,7 +6,7 @@
 
 #include "tcb.h"
 #include <sel4/sel4.h>
-#include <utils/zf_log.h>
+// #include <utils/zf_log.h>
 #include <vmm/vmm.h>
 
 void tcb_print_regs(size_t vcpu_id) {

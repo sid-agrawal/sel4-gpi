@@ -28,7 +28,15 @@ int test_new_vmm(env_t env)
     int error;
     printf("------------------STARTING: %s------------------\n", __func__);
     
-    vm_init(env->irq_handler, &env->vka, &env->vspace);
+    vmm_env_t *vmm_e = vm_setup(env->irq_handler, &env->vka, &env->vspace, env->page_directory, env->asid_pool);
+    vm_init(vmm_e);
+
+    seL4_DebugDumpScheduler();
+
+    while (1) {
+        seL4_Yield();
+    }
+    
     return sel4test_get_result();
 }
 DEFINE_TEST(GPIVM001, "Test running VM", test_new_vmm, true)

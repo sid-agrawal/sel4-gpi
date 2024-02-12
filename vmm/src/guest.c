@@ -4,8 +4,9 @@
 #include "vmm/vmm.h"
 #include <sel4utils/sel4_zf_logif.h>
 #include <utils/zf_log.h>
+#include <vka/object.h>
 
-bool guest_start(size_t boot_vcpu_id, uintptr_t kernel_pc, uintptr_t dtb, uintptr_t initrd) {
+bool guest_start(vmm_env_t *vmm_env, size_t boot_vcpu_id, uintptr_t kernel_pc, uintptr_t dtb, uintptr_t initrd) {
     /*
      * Set the TCB registers to what the virtual machine expects to be started with.
      * You will note that this is currently Linux specific as we currently do not support
@@ -18,7 +19,7 @@ bool guest_start(size_t boot_vcpu_id, uintptr_t kernel_pc, uintptr_t dtb, uintpt
     regs.pc = kernel_pc;
     /* Write out all the TCB registers */
     seL4_Error err = seL4_TCB_WriteRegisters(
-        BASE_VM_TCB_CAP + boot_vcpu_id,
+        vmm_env->vm_tcb.cptr, // XXX + boot_vcpu_id?
         false, // We'll explcitly start the guest below rather than in this call
         0, // No flags
         SEL4_USER_CONTEXT_SIZE, // Writing to x0, pc, and spsr // @ivanv: for some reason having the number of registers here does not work... (in this case 2)
@@ -32,19 +33,19 @@ bool guest_start(size_t boot_vcpu_id, uintptr_t kernel_pc, uintptr_t dtb, uintpt
     ZF_LOGI("starting guest at 0x%lx, DTB at 0x%lx, initial RAM disk at 0x%lx\n",
         regs.pc, regs.x0, initrd);
     /* Restart the boot vCPU to the program counter of the TCB associated with it */
-    // microkit_vm_restart(boot_vcpu_id, regs.pc);
-    seL4_UserContext ctxt = {0};
-    // memzero(&ctxt, sizeof(seL4_UserContext));
-    ctxt.pc = regs.pc;
-    err = seL4_TCB_WriteRegisters(
-        BASE_VM_TCB_CAP + boot_vcpu_id,
-        true,
-        0, /* No flags */
-        1, /* writing 1 register */
-        &ctxt
-    );
 
-    ZF_LOGF_IFERR(err, "Failed to write registers");
+    err = seL4_TCB_Resume(vmm_env->vm_tcb.cptr);
+    // seL4_UserContext ctxt = {0};
+    // ctxt.pc = regs.pc;
+    // err = seL4_TCB_WriteRegisters(
+    //     vmm_env->vm_tcb.cptr, // XXX + boot_vcpu_id?
+    //     true,
+    //     0, /* No flags */
+    //     1, /* writing 1 register */
+    //     &ctxt
+    // );
+
+    ZF_LOGF_IFERR(err, "Failed to write TCB registers");
 
     return true;
 }
