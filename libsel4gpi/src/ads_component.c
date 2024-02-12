@@ -211,7 +211,6 @@ static void handle_attach_req(seL4_Word sender_badge, seL4_MessageInfo_t old_tag
         Get frame cap from the MO cap.
     */
 
-
    seL4_Word mo_badge = seL4_GetBadge(0);
    OSDB_PRINTF(ADSSERVS "Extra Caps: %s Badge: %lx\n",
    seL4_MessageInfo_get_extraCaps(old_tag) ? "true" : "false", mo_badge);
@@ -219,15 +218,43 @@ static void handle_attach_req(seL4_Word sender_badge, seL4_MessageInfo_t old_tag
    assert (mo_reg != NULL);
 
 
-   uint32_t num_pages = mo_reg->mo.num_pages;
-   seL4_CPtr *frame_caps = mo_reg->mo.frame_caps_in_root_task;
-   void *ret_vaddr = NULL;
+    uint32_t num_pages = mo_reg->mo.num_pages;
+    seL4_CPtr *root_frame_caps = mo_reg->mo.frame_caps_in_root_task;
+    void *ret_vaddr = NULL;
+
+    /* Make a copy of the frame caps for this new mapping */
+    attach_node_t *attach_node = malloc(sizeof(attach_node_t));
+    attach_node->ads_obj_id = client_data->ads.ads_obj_id;
+    attach_node->frame_caps = malloc(sizeof(seL4_CPtr) * num_pages);
+    attach_node->next = mo_reg->mo.attach_nodes;
+    mo_reg->mo.attach_nodes = attach_node;
+
+    for (int i = 0; i < num_pages; i++) {
+        cspacepath_t from_path, to_path;
+        vka_cspace_make_path(get_ads_component()->server_vka, mo_reg->mo.frame_caps_in_root_task[i], &from_path);
+
+        /* allocate a path for the copy*/
+        int error = vka_cspace_alloc_path(get_ads_component()->server_vka, &to_path);
+        if (error) {
+            OSDB_PRINTF(ADSSERVS "main: Failed to allocate slot in root cspace, error: %d", error);
+            return;
+        }
+
+        /* copy the frame cap */
+        error = vka_cnode_copy(&to_path, &from_path, seL4_AllRights);
+        if (error) {
+            OSDB_PRINTF(ADSSERVS "main: Failed to copy cap, error: %d", error);
+            return;
+        }
+
+        attach_node->frame_caps[i] = to_path.capPtr;
+    }
 
     error = ads_attach(&client_data->ads,
                        get_ads_component()->server_vka,
                        vaddr,
                        num_pages,
-                       frame_caps,
+                       attach_node->frame_caps,
                        &ret_vaddr,
                        client_data->ads.vspace);
     if (error) {
@@ -235,7 +262,7 @@ static void handle_attach_req(seL4_Word sender_badge, seL4_MessageInfo_t old_tag
                 vaddr, num_pages, sender_badge);
         return;
     }
-
+    attach_node->vaddr = ret_vaddr;
 
     // sel4utils_walk_vspace(client_data->ads.vspace, NULL);
     seL4_SetMR(ADSMSGREG_FUNC, ADS_FUNC_ATTACH_ACK);
