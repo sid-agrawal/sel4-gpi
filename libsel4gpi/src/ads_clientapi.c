@@ -47,7 +47,7 @@ int ads_component_client_connect(seL4_CPtr server_ep_cap,
     assert(seL4_MessageInfo_get_extraCaps(tag) == 1);
 
     ret_conn->badged_server_ep_cspath = path;
-    OSDB_PRINTF(ADSSERVC"Received badged endpoint and it was kept in:");
+    // OSDB_PRINTF(ADSSERVC"Received badged endpoint and it was kept in:");
     // debug_cap_identify(ADSSERVC, ret_conn->badged_server_ep_cspath.capPtr);
     return 0;
 }
@@ -74,7 +74,7 @@ int ads_client_attach(ads_client_context_t *conn,
     return 0;
 }
 
-int ads_client_clone(ads_client_context_t *conn, vka_t* vka, void* omit_vaddr, ads_client_context_t *ret_conn)
+int ads_client_shallow_copy(ads_client_context_t *conn, vka_t* vka, void* omit_vaddr, ads_client_context_t *ret_conn)
 {
     // Alloc a slot for the incoming cap.
     seL4_CPtr dest_cptr;
@@ -87,10 +87,10 @@ int ads_client_clone(ads_client_context_t *conn, vka_t* vka, void* omit_vaddr, a
         /* depth */         ret_conn->badged_server_ep_cspath.capDepth
     );
 
-    seL4_SetMR(ADSMSGREG_FUNC, ADS_FUNC_CLONE_REQ);
-    seL4_SetMR(ADSMSGREG_CLONE_REQ_OMIT_VA, (uintptr_t)omit_vaddr);
+    seL4_SetMR(ADSMSGREG_FUNC, ADS_FUNC_SHALLOW_COPY_REQ);
+    seL4_SetMR(ADSMSGREG_SHALLOW_COPY_REQ_OMIT_VA, (uintptr_t)omit_vaddr);
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0,
-                                                  ADSMSGREG_CLONE_REQ_END);
+                                                  ADSMSGREG_SHALLOW_COPY_REQ_END);
 
     OSDB_PRINTF(ADSSERVC "Sending clone request to server via EP: %lu.\n",
            conn->badged_server_ep_cspath.capPtr);

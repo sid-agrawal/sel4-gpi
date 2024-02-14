@@ -21,6 +21,7 @@ typedef enum GPICAP_TYPE {
     GPICAP_TYPE_MO,
     GPICAP_TYPE_CPU,
     GPICAP_TYPE_PD,
+    GPICAP_TYPE_seL4,
     GPICAP_TYPE_MAX,
 }gpi_cap_t;
 
@@ -65,3 +66,4 @@ uint64_t gpi_new_badge(gpi_cap_t cap_type,
 
 void badge_print(seL4_Word badge);
 void gpi_panic(char *reason, uint64_t code);
+char *cap_type_to_str(gpi_cap_t cap_type);

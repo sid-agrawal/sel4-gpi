@@ -43,8 +43,8 @@ enum ads_component_funcs {
     ADS_FUNC_ATTACH_REQ = 0,
     ADS_FUNC_ATTACH_ACK,
 
-    ADS_FUNC_CLONE_REQ,
-    ADS_FUNC_CLONE_ACK,
+    ADS_FUNC_SHALLOW_COPY_REQ,
+    ADS_FUNC_SHALLOW_COPY_ACK,
 
     ADS_FUNC_RM_REQ,
     ADS_FUNC_RM_ACK,
@@ -93,11 +93,11 @@ enum ads_component_msgregs
     ADSMSGREG_ATTACH_ACK_VA = ADSMSGREG_LABEL0,
     ADSMSGREG_ATTACH_ACK_END,
 
-    /* Clone */
-    ADSMSGREG_CLONE_REQ_OMIT_VA = ADSMSGREG_LABEL0,
-    ADSMSGREG_CLONE_REQ_END,
+    /* Shallow Copy */
+    ADSMSGREG_SHALLOW_COPY_REQ_OMIT_VA = ADSMSGREG_LABEL0,
+    ADSMSGREG_SHALLOW_COPY_REQ_END,
 
-    ADSMSGREG_CLONE_ACK_END = ADSMSGREG_LABEL0,
+    ADSMSGREG_SHALLOW_COPY_ACK_END = ADSMSGREG_LABEL0,
 
     /* Remove */
     ADSMSGREG_RM_REQ_VA = ADSMSGREG_LABEL0,
@@ -174,3 +174,5 @@ ads_component_context_t *get_ads_component(void);
 int forge_ads_cap_from_vspace(vspace_t *vspace, vka_t *vka, seL4_CPtr *cap_ret);
 
 ads_component_registry_entry_t *ads_component_registry_get_entry_by_badge(seL4_Word badge);
+
+ads_component_registry_entry_t *ads_component_registry_get_entry_by_id(seL4_Word object_ID);

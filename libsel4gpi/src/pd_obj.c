@@ -12,16 +12,23 @@
 #include <sel4utils/process.h>
 #include <sel4utils/vspace.h>
 
+#include <vka/capops.h>
+
 #include <sel4gpi/pd_component.h>
+#include <sel4gpi/gpi_server.h>
+#include <sel4gpi/mo_component.h>
+#include <sel4gpi/ads_component.h>
+#include <sel4gpi/cap_tracking.h>
 #include <sel4gpi/pd_obj.h>
+#include <sel4gpi/ads_obj.h>
 #include <sel4gpi/debug.h>
 
 
 int pd_new(pd_t *pd,
            vka_t *vka,
            vspace_t *server_vspace,
-           simple_t *simple
-){
+           simple_t *simple)
+{
 
     OSDB_PRINTF(PDSERVS"new PD: \n");
 
@@ -36,12 +43,46 @@ int pd_new(pd_t *pd,
     // Allocate a new cspace
 
 
-    sel4utils_process_config_t config = process_config_default_simple(simple, "hello", 255);
-    config = process_config_mcp(config, seL4_MaxPrio);
-    config = process_config_auth(config, simple_get_tcb(simple));
-    config = process_config_create_cnode(config, 17);
-    int error = sel4utils_configure_process_custom(&(pd->proc), pd->vka, server_vspace, config);
+    /* There are just setting up the config */
+    pd->config   = process_config_default_simple(simple, "hello", 255);
+    pd->config = process_config_mcp(pd->config, seL4_MaxPrio);
+    pd->config = process_config_auth(pd->config, simple_get_tcb(simple));
+    pd->config = process_config_create_cnode(pd->config, 17);
+
+}
+
+int pd_next_slot(pd_t *pd,
+                  vka_t *vka,
+                  seL4_CPtr *next_free_slot) {
+
+    cspacepath_t path;
+    int error = vka_cspace_alloc_path(vka, &path);
+    *next_free_slot = error == seL4_NoError ? path.capPtr : seL4_CapNull;
+    return error;
+}
+
+int pd_load_image(pd_t *pd,
+                  vka_t *vka,
+                  simple_t *simple,
+                  const char *image_path,
+                  vspace_t *server_vspace,
+                  vspace_t *target_vspace,
+                  vka_object_t *target_vspace_root_page_dir)
+{
+
+    OSDB_PRINTF(PDSERVS"load_image: loading image for pd %p\n", pd);
+    sel4utils_process_config_t config = pd->config;
+    /* This is doing actual works of setting up the PD's address space */
+    int error = sel4utils_osm_configure_process_custom(&(pd->proc),
+                                                       pd->vka,
+                                                       server_vspace,
+                                                       target_vspace,
+                                                       target_vspace_root_page_dir,
+                                                       config);
     assert(error == 0);
+
+    /* Add the forged MOs*/
+
 
     /* set up caps about the process */
     pd->stack_pages = CONFIG_SEL4UTILS_STACK_SIZE / PAGE_SIZE_4K;
@@ -90,18 +131,27 @@ int pd_new(pd_t *pd,
     pd->fault_endpoint_in_pd = sel4utils_copy_cap_to_process(&(pd->proc), pd->vka, pd->proc.fault_endpoint.cptr);
 
     // For the child's as cap in the child
-    // First forge a cap to the child's vspace
-    // seL4_CPtr child_ads_cap_in_parent;
-    // error = forge_ads_cap_from_vspace(&pd->proc.vspace, pd->vka, &child_ads_cap_in_parent);
-    // if (error){
-    //     ZF_LOGF("Failed to forge child's as cap");
-    // }
 
-    // env->child_ads_cptr_in_child = sel4utils_copy_cap_to_process(&(pd->proc),
-    //                                                             pd->vka, child_ads_cap_in_parent);
-    // For the ads-server
-    // pd->gpi_endpoint_in_child = sel4utils_copy_cap_to_process(&(pd->proc),
-                                                                // pd->vka, env->gpi_endpoint_in_parent);
+    /*
+        These are RDE Entries.
+
+    */
+    seL4_CPtr child_ads_cap_in_parent;
+    error = forge_ads_cap_from_vspace(&pd->proc.vspace, pd->vka, &child_ads_cap_in_parent);
+    if (error){
+        ZF_LOGF("Failed to forge child's as cap");
+    }
+    pd->child_ads_cptr_in_child = sel4utils_copy_cap_to_process(&(pd->proc),
+                                                                pd->vka, child_ads_cap_in_parent);
+    assert(pd->child_ads_cptr_in_child != 0);
+
+
+    // For the GPI server, no need to forge
+    pd->gpi_endpoint_in_child = sel4utils_copy_cap_to_process(&(pd->proc),
+                                                                 pd->vka,
+                                                                get_gpi_server()->server_ep_obj.cptr);
+    assert(pd->gpi_endpoint_in_child != 0);
+
 
     /* copy the device frame, if any */
     // if (pd->device_frame_cap) {
@@ -128,15 +178,106 @@ int pd_new(pd_t *pd,
     }
     pd->free_slots.end = (1u << 17);
     assert(pd->free_slots.start < pd->free_slots.end);
+
+    printf("%s: %d\n", __FUNCTION__, __LINE__);
+    uint32_t num_mo_caps = 0;
+    seL4_CPtr mo_caps[MAX_MO_CHILD];
+    printf("%s: %d\n", __FUNCTION__, __LINE__);
+    error = forge_mo_caps_from_vspace(target_vspace,
+                                    pd->vka,
+                                    &num_mo_caps,
+                                    mo_caps);
+    assert(error == 0);
+
+    memcpy(&pd->proc.vspace, target_vspace, sizeof(vspace_t));
+
+    return 0;
 }
 
-int pd_send_cap(pd_t *pd, seL4_CPtr cap, seL4_Word * slot){
+int pd_send_cap(pd_t *to_pd,
+                seL4_CPtr cap,
+                seL4_Word badge,
+                seL4_Word *slot)
+{
 
+    /*
+        (XXX): Need to handle how sending OSM caps would leand to additional data tracking.
+    */
     assert(cap != 0);
+    ZF_LOGE("pd_send_cap: Sending cap %ld(badge:%lx) to pd %p\n", cap, badge, to_pd);
 
-    *slot = sel4utils_copy_cap_to_process(&(pd->proc), pd->vka, cap);
-    assert(*slot);
-    OSDB_PRINTF(PDSERVS"pd_send_cap: copied cap at %ld to child\n", *slot);
+
+
+    /*
+        Find out if the cap is an OSmosis cap or not.
+    */
+    if (badge) {
+        // Find the pd from where ths cap came (do we need it)
+        gpi_cap_t cap_type = get_cap_type_from_badge(badge);
+        switch (cap_type){
+            case GPICAP_TYPE_ADS:
+                ZF_LOGF("Sending ADS cap is not supported yet");
+                break;
+            case GPICAP_TYPE_MO:
+                seL4_Word new_badge = gpi_new_badge(cap_type,
+                                                    get_perms_from_badge(badge),
+                                                    to_pd->pd_obj_id, /* Client ID*/
+                                                    get_object_id_from_badge(badge));
+                // Increment the counter in the mo_t object.
+                mo_component_registry_entry_t *mo_reg = mo_component_registry_get_entry_by_badge(badge);
+                assert(mo_reg != NULL);
+                mo_reg->count++;
+
+                // Mint a new cap for the child.
+                cspacepath_t src, dest;
+                vka_cspace_make_path(get_mo_component()->server_vka,
+                                     get_mo_component()->server_ep_obj.cptr, &src);
+                seL4_CPtr dest_cptr;
+                vka_cspace_alloc(get_mo_component()->server_vka, &dest_cptr);
+                vka_cspace_make_path(get_mo_component()->server_vka, dest_cptr, &dest);
+
+                int error = vka_cnode_mint(&dest,
+                                           &src,
+                                           seL4_AllRights,
+                                           new_badge);
+                if (error)
+                {
+                    OSDB_PRINTF(PDSERVS "%s: Failed to mint new_badge %lx.\n",
+                                __FUNCTION__, new_badge);
+                    return 1;
+                }
+                cap = dest_cptr;
+                break;
+            case GPICAP_TYPE_CPU:
+                ZF_LOGF("Sending CPU cap is not supported yet");
+                break;
+            case GPICAP_TYPE_PD:
+                ZF_LOGF("Sending PD cap is not supported yet");
+                break;
+            default:
+                ZF_LOGF("Unknown cap type in %s", __FUNCTION__);
+            }
+
+        // Find the pd where the cap is going, and basd
+        // Create a new badge and then badge the unbadged gpi-server cap with the new badge
+        // new badge = (old badge & client id mask) | (new client id << client id offset)
+
+        // forge a copy of the cap with the type, perms, and obj id, but different client id
+        // Insert it in the appropirate list
+
+        // do the same copy as above
+    } else {
+        // This is a cap from the kernel.
+        // Just copy it to the child.
+    }
+
+    *slot = sel4utils_copy_cap_to_process(&(to_pd->proc), to_pd->vka, cap);
+    if (*slot == 0)
+    {
+        ZF_LOGF("Failed to copy cap to process");
+        return -1;
+    }
+    OSDB_PRINTF(PDSERVS "pd_send_cap: copied cap at %ld to child\n", *slot);
 
     /* Add to our caps data struct */
 
@@ -144,33 +285,23 @@ int pd_send_cap(pd_t *pd, seL4_CPtr cap, seL4_Word * slot){
     return 0;
 }
 
-int pd_dump(pd_t *pd){
-
-    OSDB_PRINTF(PDSERVS"pd_dump_cap: Dumping all details of PD:%u\n", pd->pd_obj_id);
-    return 0;
-}
-
-int pd_load_image(pd_t *pd,
-                  const char *image_path)
-
+int pd_start(pd_t *pd,
+             vka_t *vka,
+             seL4_CPtr pd_endpoint_in_root,
+             vspace_t *server_vspace,
+             seL4_Word arg0)
 {
 
-    OSDB_PRINTF(PDSERVS"load_image: loading image for pd %p\n", pd);
-    // OSDB_PRINTF(PDSERVS"cspace info:");
-    // debug_cap_identify(PDSERVS, cspace);
-    // seL4_CPtr fault_endpoint = seL4_CapNull;
-    // pd->thread_config = thread_config_fault_endpoint(pd->thread_config, fault_endpoint);
-    // pd->thread_config = thread_config_cspace(pd->thread_config, cspace, 0 /*cspace_root_data*/);
-    // pd->thread_config = thread_config_create_reply(pd->thread_config);
+    OSDB_PRINTF(PDSERVS "pd_start: ARGS: pd_endpoint_in_root: %ld, arg0: %ld\n",
+                pd_endpoint_in_root, arg0);
+    // For the PD server, forge and copy
+    /* No need to forge, you already have it */
+    assert(&pd->proc != NULL);
+    assert(&pd->proc.vspace != NULL);
 
-    // return sel4utils_configure_thread_config(vka, NULL, vspace, pd->thread_config, &pd->thread_obj);
-
-    // Asign a AS_CAP
-    // Asign a CPU Cap
-    return 0;
-}
-int pd_start(pd_t *pd, vspace_t *server_vspace, seL4_Word arg0){
-
+    seL4_CPtr pd_cptr_in_child = sel4utils_copy_cap_to_process(&(pd->proc),
+                                                                vka, pd_endpoint_in_root);
+    assert(pd_cptr_in_child!= 0);
     // Phase1: Start it.
     // Phase2: start the CPU thread.
 
@@ -187,9 +318,78 @@ int pd_start(pd_t *pd, vspace_t *server_vspace, seL4_Word arg0){
 
     int num_res;
     /* spawn the process */
-    int  error = sel4utils_spawn_process_v(&(pd->proc), pd->vka, server_vspace,
-                                      argc, argv, 1);
+    seL4_CPtr osm_caps[] = {pd->child_ads_cptr_in_child,
+                            pd->gpi_endpoint_in_child,
+                            pd_cptr_in_child
+                            };
+    int error = sel4utils_osm_spawn_process_v(&(pd->proc),
+                                              osm_caps,
+
+                                              pd->vka,
+                                              server_vspace,
+                                              argc,
+                                              argv,
+                                              1);
     ZF_LOGF_IF(error != 0, "Failed to start test process!");
     OSDB_PRINTF(PDSERVS"pd_start: starting PD\n");
     return 0;
+}
+
+int pd_dump(pd_t *pd){
+    OSDB_PRINTF(PDSERVS"pd_dump_cap: Dumping all details of PD:%u\n", pd->pd_obj_id);
+
+    /*
+        For all caps that belong to this PD
+            switch {
+                case: seL4:
+                    Print Debug Info
+                case: OSmosis:
+                    Get the RR for that cap
+            }
+    */
+   gpi_server_context_t * gpis = get_gpi_server();
+   for (int idx = 0 ; idx < MAX_PD_OSM_CAPS; idx++  ) {
+        //if type seL4 cap
+        // print_pd_osm_cap_info(&pd->has_access_to[idx]);
+        // else if type osmosis cap
+        // get the RR for that cap
+        switch (pd->has_access_to[idx].type) {
+            case GPICAP_TYPE_ADS:
+                //get_ads_model_state
+                ads_dump_rr_no_buf(
+                    pd->has_access_to[idx].res_id);
+                break;
+            case GPICAP_TYPE_MO:
+                break;
+            case GPICAP_TYPE_CPU:
+                break;
+            case GPICAP_TYPE_PD:
+                break;
+            default:
+            break;
+                ZF_LOGF("Calling anothe PD to get the info %s", __FUNCTION__);
+        }
+   }
+
+    /* Print RDE Info*/
+#if 0
+   for (int idx = 0 ; idx < MAX_PD_OSM_RDE; idx++  ) {
+        print_osm_rde_info(&pd->rde[idx]);
+
+        // Find pd from the pd_id
+        // if pd found
+            // pd_dump(&pd->rde[idx].pd_obj_id);
+   }
+#endif
+
+
+return 0;
+}
+
+void print_pd_osm_cap_info (osmosis_pd_cap_t *o) {
+    printf("Slot_RT:%lx\t Slot_PD: %lx\t Slot_ServerPD: %lx\t T: %s\n",
+           o->slot_in_RT,
+           o->slot_in_PD,
+           o->slot_in_ServerPD,
+           cap_type_to_str(o->type));
 }

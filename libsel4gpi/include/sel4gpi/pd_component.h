@@ -43,6 +43,9 @@ enum pd_component_funcs {
     PD_FUNC_LOAD_REQ = 0,
     PD_FUNC_LOAD_ACK,
 
+    PD_FUNC_NEXT_SLOT_REQ,
+    PD_FUNC_NEXT_SLOT_ACK,
+
     PD_FUNC_START_REQ,
     PD_FUNC_START_ACK,
 
@@ -80,9 +83,14 @@ enum pd_component_msgregs
 
     PDMSGREG_LOAD_ACK_END = PDMSGREG_LABEL0,
 
+    /* Next Slot */
+    PDMSGREG_NEXT_SLOT_REQ_END = PDMSGREG_LABEL0,
+
+    PDMSGREG_NEXT_SLOT_PD_SLOT = PDMSGREG_LABEL0,
+    PDMSGREG_NEXT_SLOT_ACK_END,
+
     /* Send Cap */
-    PDMSGREG_SEND_CAP_CAP = PDMSGREG_LABEL0,
-    PDMSGREG_SEND_CAP_REQ_END,
+    PDMSGREG_SEND_CAP_REQ_END = PDMSGREG_LABEL0,
 
     PDMSGREG_SEND_CAP_PD_SLOT = PDMSGREG_LABEL0,
     PDMSGREG_SEND_CAP_ACK_END,
@@ -113,6 +121,7 @@ typedef struct _pd_component_registry_entry {
     pd_t pd;
     /* In our model each PD can have its own cspace. */
     seL4_CNode cspace_root;
+    seL4_CPtr raw_cap_in_root;
     struct _pd_component_registry_entry *next;
 
 } pd_component_registry_entry_t;

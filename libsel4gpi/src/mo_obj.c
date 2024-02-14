@@ -18,12 +18,10 @@
 #include <sel4gpi/mo_obj.h>
 #include <sel4gpi/debug.h>
 
-
-int mo_new(
-            mo_t *mo,
-            seL4_CPtr *caps,
-            uint32_t num_caps,
-            vka_t *vka)
+int mo_new(mo_t *mo,
+           seL4_CPtr *caps,
+           uint32_t num_caps,
+           vka_t *vka)
 {
     assert (caps != NULL);
 

@@ -50,6 +50,7 @@ void init_model_state(model_state_t *model_state)
 {
 
     csv_row_t *new_row = (csv_row_t *)malloc(sizeof(csv_row_t));
+    assert(new_row != NULL);
     snprintf(new_row->resource_from, CSV_MAX_STRING_SIZE, "%s", "RESOURCE_FROM");
     snprintf(new_row->resource_to, CSV_MAX_STRING_SIZE, "%s", "RESOURCE_TO");
     snprintf(new_row->resource_type, CSV_MAX_STRING_SIZE, "%s", "RES_TYPE");

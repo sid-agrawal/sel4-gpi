@@ -112,6 +112,24 @@ ads_component_registry_entry_t *ads_component_registry_get_entry_by_badge(seL4_W
     return current_ctx;
 }
 
+/**
+ * @brief Lookup the client registry entry for the given objectID
+ *
+ * @param res_id
+ * @return ads_component_registry_entry_t*
+ */
+ads_component_registry_entry_t *ads_component_registry_get_entry_by_id(seL4_Word objectID){
+
+    ads_component_registry_entry_t *current_ctx = get_ads_component()->client_registry;
+
+    while (current_ctx != NULL) {
+        if (current_ctx->ads.ads_obj_id == objectID) {
+            break;
+        }
+        current_ctx = current_ctx->next;
+    }
+    return current_ctx;
+}
 void ads_handle_allocation_request(seL4_MessageInfo_t *reply_tag)
 {
     OSDB_PRINTF(ADSSERVS "main: Got ADS connect request\n");
@@ -126,6 +144,16 @@ void ads_handle_allocation_request(seL4_MessageInfo_t *reply_tag)
     memset((void *)client_reg_ptr, 0, sizeof(ads_component_registry_entry_t));
     ads_component_registry_insert(client_reg_ptr);
 
+    // We never created a new vpsace...
+    int error = ads_new(get_ads_component()->server_vspace,
+                          get_ads_component()->server_vka,
+                          &client_reg_ptr->ads);
+    if (error)
+    {
+        OSDB_PRINTF(ADSSERVS "main: Failed to create new ads object\n");
+        return;
+    }
+
     /* Create a badged endpoint for the client to send messages to.
      * Use the address of the client_registry_entry as the badge
      */
@@ -137,7 +165,7 @@ void ads_handle_allocation_request(seL4_MessageInfo_t *reply_tag)
     vka_cspace_make_path(get_ads_component()->server_vka, dest_cptr, &dest);
 
     seL4_Word badge = ads_assign_new_badge_and_objectID(client_reg_ptr);
-    int error = vka_cnode_mint(&dest,
+    error = vka_cnode_mint(&dest,
                                &src,
                                seL4_AllRights,
                                badge);
@@ -149,6 +177,7 @@ void ads_handle_allocation_request(seL4_MessageInfo_t *reply_tag)
     /* Return this badged end point in the return message. */
     seL4_SetCap(0, dest.capPtr);
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(error, 0, 1, 1);
+    OSDB_PRINTF(ADSSERVS "main: Successfully allocated a new ads %lx.\n", badge);
     return reply(tag);
 }
 
@@ -157,7 +186,8 @@ static void handle_attach_req(seL4_Word sender_badge, seL4_MessageInfo_t old_tag
     OSDB_PRINTF(ADSSERVS "main: Got attach request from client badge %lx.\n",
            sender_badge);
 
-    assert(seL4_MessageInfo_get_extraCaps(old_tag) == 1);
+    // No longer needed as we are now sending slots.
+    // assert(seL4_MessageInfo_get_extraCaps(old_tag) == 1);
     int error;
     /* Find the client */
     ads_component_registry_entry_t *client_data = ads_component_registry_get_entry_by_badge(sender_badge);
@@ -181,7 +211,11 @@ static void handle_attach_req(seL4_Word sender_badge, seL4_MessageInfo_t old_tag
         Get frame cap from the MO cap.
     */
 
-   mo_component_registry_entry_t *mo_reg = mo_component_registry_get_entry_by_badge(seL4_GetBadge(0));
+
+   seL4_Word mo_badge = seL4_GetBadge(0);
+   OSDB_PRINTF(ADSSERVS "Extra Caps: %s Badge: %lx\n",
+   seL4_MessageInfo_get_extraCaps(old_tag) ? "true" : "false", mo_badge);
+   mo_component_registry_entry_t *mo_reg = mo_component_registry_get_entry_by_badge(mo_badge);
    assert (mo_reg != NULL);
 
 
@@ -249,16 +283,16 @@ static void handle_get_rr_req(seL4_Word sender_badge, seL4_MessageInfo_t old_tag
 
     void *buffer_addr = (void *) seL4_GetMR(ADSMSGREG_GET_RR_REQ_BUF_VA);
     size_t buffer_size = seL4_GetMR(ADSMSGREG_GET_RR_REQ_BUF_SZ);
-    ads_dump_rr(&client_data->ads, buffer_addr, buffer_size);
+    ads_dump_rr(&client_data->ads, buffer_addr, buffer_size, false);
     seL4_SetMR(ADSMSGREG_FUNC, ADS_FUNC_GET_RR_ACK);
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0, ADSMSGREG_TESTING_ACK_END);
     return reply(tag);
 }
 
-static void handle_clone_req(seL4_Word sender_badge)
+static void handle_shallow_copy_req(seL4_Word sender_badge)
 {
     // Find the client - like attach
-    OSDB_PRINTF(ADSSERVS "main: Got clone  request from client badge %lx.\n",
+    OSDB_PRINTF(ADSSERVS "main: Got Shallow COpy  request from client badge %lx.\n",
            sender_badge);
 
     /* Find the client */
@@ -274,7 +308,7 @@ static void handle_clone_req(seL4_Word sender_badge)
 
 
     // Make a new endpoint for the client to send messages to. like connect.
-    OSDB_PRINTF(ADSSERVS "main: Making a new cap for the clone.\n");
+    OSDB_PRINTF(ADSSERVS "main: Making a new cap for the shallow copy.\n");
     /* Allocate a new registry entry for the client. */
     ads_component_registry_entry_t *client_reg_ptr = malloc(sizeof(ads_component_registry_entry_t));
     if (client_reg_ptr == 0)
@@ -285,14 +319,15 @@ static void handle_clone_req(seL4_Word sender_badge)
     memset((void *)client_reg_ptr, 0, sizeof(ads_component_registry_entry_t));
 
 
-    // Do the actual clone
-    void *omit_vaddr = (void *) seL4_GetMR(ADSMSGREG_CLONE_REQ_OMIT_VA);
+    // Do the actual shallow copy
+    void *omit_vaddr = (void *) seL4_GetMR(ADSMSGREG_SHALLOW_COPY_REQ_OMIT_VA);
     ads_t *src_ads = &client_data->ads;
     ads_t *dst_ads = &client_reg_ptr->ads;
-    int error = ads_clone(get_ads_component()->server_vspace,
+    int error = ads_shallow_copy(get_ads_component()->server_vspace,
                           src_ads,
                           get_ads_component()->server_vka,
                           omit_vaddr,
+                          false,//true,
                           dst_ads);
     if (error) {
         OSDB_PRINTF(ADSSERVS "main: Failed to clone from client badge %lx.\n",
@@ -301,7 +336,7 @@ static void handle_clone_req(seL4_Word sender_badge)
     }
     assert(client_reg_ptr->ads.vspace != NULL);
     ads_component_registry_insert(client_reg_ptr);
-    OSDB_PRINTF(ADSSERVS "Clone done.\n");
+    OSDB_PRINTF(ADSSERVS "Shallow Copy done.\n");
 
     /* Create a badged endpoint for the client to send messages to.
      * Use the address of the client_registry_entry as the badge.
@@ -327,8 +362,8 @@ static void handle_clone_req(seL4_Word sender_badge)
     badge_print(badge);
     /* Return this badged end point in the return message. */
     seL4_SetCap(0, dest_path.capPtr);
-    seL4_SetMR(ADSMSGREG_FUNC, ADS_FUNC_CLONE_ACK);
-    seL4_MessageInfo_t tag = seL4_MessageInfo_new(error, 0, 1, ADSMSGREG_CLONE_ACK_END);
+    seL4_SetMR(ADSMSGREG_FUNC, ADS_FUNC_SHALLOW_COPY_ACK);
+    seL4_MessageInfo_t tag = seL4_MessageInfo_new(error, 0, 1, ADSMSGREG_SHALLOW_COPY_ACK_END);
     return reply(tag);
 
 }
@@ -348,8 +383,8 @@ void ads_component_handle(seL4_MessageInfo_t tag,
     /* Post */
     switch (func)
     {
-    case ADS_FUNC_CLONE_REQ:
-        handle_clone_req(sender_badge);
+    case ADS_FUNC_SHALLOW_COPY_REQ:
+        handle_shallow_copy_req(sender_badge);
         break;
 
     case ADS_FUNC_ATTACH_REQ:

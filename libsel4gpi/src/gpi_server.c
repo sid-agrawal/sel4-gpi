@@ -211,8 +211,8 @@ void handle_untyped_request(seL4_MessageInfo_t tag,
 {
 
     gpi_cap_t req_cap_type = seL4_GetMR(0);
-    OSDB_PRINTF(GPISERVS"handle_untyped_request: Got request for cap type %u\n",
-           req_cap_type);
+    OSDB_PRINTF(GPISERVS "handle_untyped_request: Got request for cap type %s\n",
+                cap_type_to_str(req_cap_type));
 
     switch (req_cap_type)
     {

@@ -48,19 +48,21 @@ int pd_component_client_connect(seL4_CPtr server_ep_cap,
     return 0;
 }
 
-int pd_client_load(pd_client_context_t *conn,
-                  const char *image)
+int pd_client_load(pd_client_context_t *pd_os_cap,
+                   ads_client_context_t *ads_os_cap,
+                   const char *image)
 {
     seL4_SetMR(PDMSGREG_FUNC, PD_FUNC_LOAD_REQ);
 
     /* Send the badged endpoint cap of the ads client as a cap */
     int image_id = 1;
     seL4_SetMR(PDMSGREG_LOAD_FUNC_IMAGE, image_id);
+    seL4_SetCap(0, ads_os_cap->badged_server_ep_cspath.capPtr);
 
-    seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0,
+    seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 1,
                                                   PDMSGREG_LOAD_REQ_END);
 
-    tag = seL4_Call(conn->badged_server_ep_cspath.capPtr, tag);
+    tag = seL4_Call(pd_os_cap->badged_server_ep_cspath.capPtr, tag);
     assert(seL4_MessageInfo_ptr_get_label(&tag) == 0);
     return 0;
 }
@@ -88,9 +90,22 @@ int pd_client_send_cap(pd_client_context_t *conn, seL4_CPtr cap_to_send,
     seL4_SetMR(PDMSGREG_FUNC, PD_FUNC_SENDCAP_REQ);
     seL4_SetCap(0, cap_to_send);
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 1,
-                                                  PDMSGREG_START_REQ_END);
+                                                  PDMSGREG_SEND_CAP_REQ_END);
     tag = seL4_Call(conn->badged_server_ep_cspath.capPtr, tag);
     *slot = seL4_GetMR(PDMSGREG_SEND_CAP_PD_SLOT);
+    assert(seL4_MessageInfo_ptr_get_label(&tag) == 0);
+    assert(*slot != 0);
+    return 0;
+}
+
+int pd_client_next_slot(pd_client_context_t *conn,
+                        seL4_Word *slot)
+{
+    seL4_SetMR(PDMSGREG_FUNC, PD_FUNC_NEXT_SLOT_REQ);
+   seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0,
+                                                  PDMSGREG_NEXT_SLOT_REQ_END);
+    tag = seL4_Call(conn->badged_server_ep_cspath.capPtr, tag);
+    *slot = seL4_GetMR(PDMSGREG_NEXT_SLOT_PD_SLOT);
     assert(seL4_MessageInfo_ptr_get_label(&tag) == 0);
     assert(*slot != 0);
     return 0;

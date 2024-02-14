@@ -179,10 +179,10 @@ static void handle_start_req(seL4_Word sender_badge, seL4_MessageInfo_t old_tag,
         return;
     }
     OSDB_PRINTF(CPUSERVS "main: found client_data %p.\n", client_data);
-    for (int i = 0; i < 5; i++)
-    {
-        OSDB_PRINTF(CPUSERVS "MR[%d] = %lx\n", i, seL4_GetMR(i));
-    }
+    // for (int i = 0; i < 5; i++)
+    // {
+    //     OSDB_PRINTF(CPUSERVS "MR[%d] = %lx\n", i, seL4_GetMR(i));
+    // }
 
     error = cpu_start(&client_data->cpu,
                       (sel4utils_thread_entry_fn)seL4_GetMR(1), // entry poin:2ut
@@ -291,10 +291,10 @@ static void handle_change_vspace_req(seL4_Word sender_badge,
 
     OSDB_PRINTF(CPUSERVS "capsUnwrapped: %lu\n", seL4_MessageInfo_get_capsUnwrapped(old_tag));
     OSDB_PRINTF(CPUSERVS "extraCap: %lu\n", seL4_MessageInfo_ptr_get_extraCaps(&old_tag));
-    for (int i = 0; i < 5; i++)
-    {
-        OSDB_PRINTF(CPUSERVS "MR[%d] = %lx\n", i, seL4_GetBadge(i));
-    }
+    // for (int i = 0; i < 5; i++)
+    // {
+    //     OSDB_PRINTF(CPUSERVS "MR[%d] = %lx\n", i, seL4_GetBadge(i));
+    // }
 
     /* Find the client */
     cpu_component_registry_entry_t *client_data = cpu_component_registry_get_entry_by_badge(sender_badge);

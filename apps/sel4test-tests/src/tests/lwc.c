@@ -85,7 +85,7 @@ int lwcCreate(env_t env, char key[])
 
         // Using a known EP, get a new ads CAP.
         ads_client_context_t lwc_ads_conn;
-        error = ads_client_clone(&conn, &env->vka, (void *)0,
+        error = ads_client_shallow_copy(&conn, &env->vka, (void *)0,
                                  /* We cannot use this, as in this case when the parent clears the key, it will clear in the child too */
                                  &lwc_ads_conn);
         test_error_eq(error, 0);
@@ -172,24 +172,31 @@ int test_lwc(env_t env)
     ads_client_context_t conn;
     conn.badged_server_ep_cspath = path;
 
-    // Using a known EP, get a new ads CAP.
-    ads_client_context_t lwc_ads_conn;
-    error = ads_client_clone(&conn, &env->vka, (void *)0,
-                             /* We cannot use this, as in this case when the parent clears the key, it will clear in the child too */
-                             &lwc_ads_conn);
-    test_error_eq(error, 0);
 
     vka_cspace_make_path(&env->vka, env->self_cpu_cptr, &path);
     cpu_client_context_t cpu_conn;
     cpu_conn.badged_server_ep_cspath = path;
 
     printf("Change to new VSpace \n");
-     error = cpu_client_change_vspace(&cpu_conn, &lwc_ads_conn);
-     test_error_eq(error, 0);
+    // Using a known EP, get a new ads CAP.
+    ads_client_context_t lwc_ads_conn;
 
+    error = ads_client_shallow_copy(&conn, &env->vka, (void *)0,
+                             /* We cannot use this, as in this case when the parent clears the key, it will clear in the child too */
+                             &lwc_ads_conn);
+    test_error_eq(error, 0);
+
+    printf("%d: KEY: %s\n", __LINE__, key);
+
+    key[0] = '\0';
+    printf("%d: KEY: %s\n", __LINE__, key);
+
+    error = cpu_client_change_vspace(&cpu_conn, &lwc_ads_conn);
+    test_error_eq(error, 0);
 
     /* Delete cap to child's AS This is similar to lwcRestrict */
-    printf("Start of signing\n");
+    printf("Start of signing with key: %s\n", key);
+    printf("%d: KEY: %s\n", __LINE__, key);
 
 
     /* call sign */
@@ -198,11 +205,13 @@ int test_lwc(env_t env)
     data = "foobar";
     sign(data);
 
+    printf("%d: KEY: %s\n", __LINE__, key);
     // while (1);
     printf("Change to old VSpace \n");
      error = cpu_client_change_vspace(&cpu_conn, &conn);
      test_error_eq(error, 0);
 
+    printf("%d: KEY: %s\n", __LINE__, key);
 
     return 0;
 }

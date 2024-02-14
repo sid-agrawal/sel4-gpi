@@ -276,7 +276,7 @@ void basic_set_up(uintptr_t e)
         &env->vka,
         &ret_num_mo,
         mo_caps);
-        assert(error == 0);
+    assert(error == 0);
 
     for (int i = 0; i < ret_num_mo; i++){
         ZF_LOGE("MO CAP[%d]: %lu", i, mo_caps[i]);

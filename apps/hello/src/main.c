@@ -12,19 +12,68 @@
 #include <math.h>
 
 #include <sel4bench/arch/sel4bench.h>
+ #include <sel4runtime.h>
+/* dummy global for libsel4muslcsys */
+char _cpio_archive[1];
+char _cpio_archive_end[1];
+
+#include<sel4gpi/mo_clientapi.h>
+#include<sel4gpi/ads_clientapi.h>
+#include<sel4gpi/pd_clientapi.h>
 
 void calculateSD(float data[], float *mean, float *sd,
                  int start, int end);
 int main(int argc, char **argv)
 {
-//    sel4muslcsys_register_stdio_write_fn(write_buf);
+    // sel4muslcsys_register_stdio_write_fn(write_buf);
 
     ccnt_t ctx_start, ctx_end;
     ccnt_t creation_start, creation_end;
     SEL4BENCH_READ_CCNT(creation_end);
 
-    printf("Hello: arg0: %s\n", argv[0]);
+    // Do we need to initialize a vka?
+    // No we can add a function called, next PD slot.
 
+
+    seL4_CPtr ads_cap  = sel4runtime_get_initial_ads_cap();
+    seL4_CPtr gpi_cap  = sel4runtime_get_gpi_cap();
+    seL4_CPtr pd_cap  = sel4runtime_get_pd_cap();
+
+    printf("Hello: ADS_CAP: %ld\n", (seL4_Word) ads_cap);
+    printf("Hello: GPI_CAP: %ld\n", (seL4_Word) gpi_cap);
+    printf("Hello: PD_CAP: %ld\n", (seL4_Word) pd_cap);
+
+    ads_client_context_t ads_conn;
+    ads_conn.badged_server_ep_cspath.capPtr = ads_cap;
+
+
+    seL4_CPtr slot;
+    pd_client_context_t pd_conn;
+    pd_conn.badged_server_ep_cspath.capPtr = pd_cap;
+    int error = pd_client_next_slot(&pd_conn, &slot);
+    assert(error == 0);
+    printf("Next free slot is %ld\n", (seL4_Word) slot);
+
+    mo_client_context_t mo_conn;
+    error = mo_component_client_connect(gpi_cap,
+                                        slot,
+                                        5,
+                                        &mo_conn);
+
+    assert(error == 0);
+
+    void *ret_vaddr;
+    error = ads_client_attach(&ads_conn,
+                              0, /*vaddr*/
+                              &mo_conn,
+                              &ret_vaddr);
+    assert(error == 0);
+    printf("Attached to vaddr %p\n", ret_vaddr);
+    printf(".... Goodbye Cruel World\n");
+#if 0
+#endif
+    return 0;
+#if 0
     /*
      * send a message to our parent, and wait for a reply
      */
@@ -53,11 +102,12 @@ int main(int argc, char **argv)
         SEL4BENCH_READ_CCNT(ctx_end);
         data[i] = (ctx_end - ctx_start)/2;
     }
-    
+
     float mean, sd;
     calculateSD(data, &mean, &sd, 1, 99);
     printf("MEAN: %f, SD: %f \n", mean/1000, sd/1000);
     return 0;
+#endif
 }
 
 void calculateSD(float data[], float *mean, float *sd,

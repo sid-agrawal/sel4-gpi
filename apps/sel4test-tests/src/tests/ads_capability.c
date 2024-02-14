@@ -13,6 +13,7 @@
 
 #include<sel4gpi/ads_clientapi.h>
 #include<sel4gpi/cpu_clientapi.h>
+#include<sel4gpi/pd_clientapi.h>
 #include<sel4gpi/mo_clientapi.h>
 #include<sel4gpi/mo_component.h>
 #include<sel4gpi/debug.h>
@@ -78,7 +79,7 @@ static inline timestamp_t timestamp_sid(void)
 
 static char stack_top[4096] __attribute__ ((aligned (16)));
 static char ipc_buff[4096] __attribute__ ((aligned (4096)));
-int test_ads_clone(env_t env)
+int test_ads_shallow_copy(env_t env)
 {
     int error;
     cspacepath_t path;
@@ -91,18 +92,18 @@ int test_ads_clone(env_t env)
     sel4bench_init();
 
     // Using a known EP, get a new ads CAP.
-    ads_client_context_t ads_conn_clone1;
+    ads_client_context_t ads_conn_shallow_copy1;
     // uint64_t start = timestamp_sid();
-    // error = ads_client_clone(&conn, &env->vka,  (void *) 0x10001000, &ads_conn_clone1);
+    // error = ads_client_shallow_copy(&conn, &env->vka,  (void *) 0x10001000, &ads_conn_shallow_copy1);
     // test_error_eq(error, 0);
 
     // uint64_t end = timestamp_sid();
     /* calculate diff in ns */
     // uint64_t diff = (end - start);
-    // printf("Time taken to clone: %llu cycles\n", diff);
-    // printf("Time taken to clone: %llu million cycles\n", diff/(1000*1000));
+    // printf("Time taken to shallow_copy: %llu cycles\n", diff);
+    // printf("Time taken to shallow_copy: %llu million cycles\n", diff/(1000*1000));
 
-    ads_client_context_t ads_conn_clone2;
+    ads_client_context_t ads_conn_shallow_copy2;
     ccnt_t start, end;
     COMPILER_MEMORY_FENCE();
     // isb();
@@ -115,14 +116,14 @@ int test_ads_clone(env_t env)
     // isb();
     SEL4BENCH_READ_CCNT(end);
     COMPILER_MEMORY_FENCE();
-    printf("Time taken to clone: %lu cycles\n", end - start);
-    // error = ads_client_clone(&ads_conn_clone1, &env->vka,  (void *) 0x10001000, &ads_conn_clone2);
+    printf("Time taken to shallow_copy: %lu cycles\n", end - start);
+    // error = ads_client_shallow_copy(&ads_conn_shallow_copy1, &env->vka,  (void *) 0x10001000, &ads_conn_shallow_copy2);
     test_error_eq(error, 0);
 
     return sel4test_get_result();
 }
 
-// DEFINE_TEST(GPIADS001, "Ensure that as clone works", test_ads_clone, true)
+// DEFINE_TEST(GPIADS001, "Ensure that as shallow_copy works", test_ads_shallow_copy, true)
 
 
 vka_object_t ep_for_thread;
@@ -180,7 +181,7 @@ void test_func_die(seL4_Word arg0, seL4_Word arg1, seL4_Word arg2) {
 }
 
 
-// DEFINE_TEST(GPIADS001, "Ensure the ads clone works", test_ads_clone, true)
+// DEFINE_TEST(GPIADS001, "Ensure the ads shallow_copy works", test_ads_shallow_copy, true)
 int test_ads_stack_isolated_stack_die(env_t env)
 {
     printf("------------------- STARTING : %s -------------------\n", __func__);
@@ -205,8 +206,8 @@ int test_ads_stack_isolated_stack_die(env_t env)
     volatile uint64_t shared_var_stack = 1;
 
     // Using a known EP, get a new ads CAP.
-    ads_client_context_t ads_conn_clone1;
-    error = ads_client_clone(&conn, &env->vka,  (void *) 0x10001000, &ads_conn_clone1);
+    ads_client_context_t ads_conn_shallow_copy1;
+    error = ads_client_shallow_copy(&conn, &env->vka,  (void *) 0x10001000, &ads_conn_shallow_copy1);
     test_error_eq(error, 0);
 
     // TODO: Attach a new stack, this is done inside clinet_config for now.
@@ -223,7 +224,7 @@ int test_ads_stack_isolated_stack_die(env_t env)
 
     // Config its ads and cspace
     error = cpu_client_config(&cpu_conn,
-                              &ads_conn_clone1,
+                              &ads_conn_shallow_copy1,
                               env->cspace_root,
                               env->endpoint);
     test_error_eq(error, 0);
@@ -280,19 +281,35 @@ DEFINE_TEST(GPIADS002, "Ensure that thread stack works", test_ads_stack_isolated
 
 int test_ads_attach(env_t env)
 {
-    ads_client_context_t ads_conn;
     cspacepath_t path;
-    vka_cspace_make_path(&env->vka, env->self_ads_cptr, &path);
-    ads_conn.badged_server_ep_cspath = path;
+/*
+    pd_client_context_t pd_conn;
+    vka_cspace_make_path(&env->vka, env->self_pd_cptr, &path);
+    pd_conn.badged_server_ep_cspath = path;
+
+    seL4_CPtr slot;
+    int error = pd_client_next_slot(&pd_conn, &slot);
+    assert(error == 0);
+    printf("Next free slot is %ld\n", (seL4_Word) slot);
+*/
+
+    seL4_CPtr slot;
+    vka_cspace_alloc(&env->vka, &slot);
+    vka_cspace_make_path(&env->vka, slot, &path);
+    cspacepath_t_print(&path);
+
 
     // allocate a new MO
     mo_client_context_t mo_conn;
     int error = mo_component_client_connect(env->gpi_endpoint,
-                                        &env->vka,
+                                        slot,
                                         5,
                                         &mo_conn);
     test_error_eq(error, 0);
 
+    ads_client_context_t ads_conn;
+    vka_cspace_make_path(&env->vka, env->self_ads_cptr, &path);
+    ads_conn.badged_server_ep_cspath = path;
     void *ret_vaddr;
     error = ads_client_attach(&ads_conn,
                               0, /*vaddr*/
@@ -329,7 +346,7 @@ int test_ads_bind_cpu(env_t env)
 }
 DEFINE_TEST(GPIADS003, "Ensure the ads bind to cpu works", test_ads_bind_cpu, true)
 
-int test_ads_clone(env_t env)
+int test_ads_shallow_copy(env_t env)
 {
     ads_client_context_t conn;
     // Using a known EP, get a new ads CAP.
@@ -337,14 +354,14 @@ int test_ads_clone(env_t env)
     test_error_eq(error, 0);
 
     // Increment the ads cap.
-    error = 0 ;// Call clone
+    error = 0 ;// Call shallow_copy
     test_error_eq(error, 0);
 
     // Decrement the cap. TODO(siagraw)
     // Delete the ads cap. TODO(siagraw)
     return sel4test_get_result();
 }
-DEFINE_TEST(GPIADS004, "Ensure the ads clone works", test_ads_clone, true)
+DEFINE_TEST(GPIADS004, "Ensure the ads shallow_copy works", test_ads_shallow_copy, true)
 
 int test_ads_stack_isolated(env_t env)
 {
@@ -353,11 +370,11 @@ int test_ads_stack_isolated(env_t env)
     int error = ads_component_client_connect(env->ads_endpoint, &env->vka, &conn);
     test_error_eq(error, 0);
 
-    // Clone the ads,
-    // ads_client_clone(&conn, 0, 0, 0);
+    // shallow_copy the ads,
+    // ads_client_shallow_copy(&conn, 0, 0, 0);
     // Attach a new stack
     // stack_cap
-    // ads_client_clone(&conn, 0, 0, 0);
+    // ads_client_shallow_copy(&conn, 0, 0, 0);
     // Attach a new stack
     // Allocate a new PD i.e. cspace.
     // Allocate a new TCB and attach this ADS to it.
@@ -380,8 +397,8 @@ int test_ads_dump_rr(env_t env)
     conn.badged_server_ep_cspath = path;
 
     // Using a known EP, get a new ads CAP.
-    ads_client_context_t clone_conn;
-    error = ads_client_clone(&conn, &env->vka,  (void *) 0x10001000, &clone_conn);
+    ads_client_context_t shallow_copy_conn;
+    error = ads_client_shallow_copy(&conn, &env->vka,  (void *) 0x10001000, &shallow_copy_conn);
     test_error_eq(error, 0);
 
     cpu_client_context_t cpu_conn;
@@ -392,7 +409,7 @@ int test_ads_dump_rr(env_t env)
 
     // Config its ads and cspace
     error = cpu_client_config(&cpu_conn,
-                              &clone_conn,
+                              &shallow_copy_conn,
                               env->cspace_root,
                               env->endpoint);
     test_error_eq(error, 0);
@@ -404,10 +421,21 @@ int test_ads_dump_rr(env_t env)
 
     ads_client_dump_rr(&conn, ads_rr, buf_num_pages*4096);
     printf("ADS RR: \n%s\n", ads_rr);
-    // ads_client_dump_rr(&clone_conn, ads_rr, 4096);
+    // ads_client_dump_rr(&shallow_copy_conn, ads_rr, 4096);
 
 
     // pd_dump_rr(&conn, ads_rr, buf_num_pages*4096);
     return sel4test_get_result();
 }
 DEFINE_TEST(GPIADS006, "Dump the RR of the ads", test_ads_dump_rr, true)
+
+
+/*
+    shallow_copy at a lib level.
+    1. Get all the MO from the ads.
+    2. Allocate a new MO.
+    3. Copy the data from the old MO to the new MO.
+        a. For this both need to be attached to current ads
+    4. Attach the new MO to the new ads.
+    5. Attach the new ads to the new thread.
+*/

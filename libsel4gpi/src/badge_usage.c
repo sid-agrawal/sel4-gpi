@@ -109,7 +109,7 @@ char *cap_type_to_str(gpi_cap_t cap_type)
             return "PD";
             break;
         default:
-            gpi_panic("Unknown cap type", cap_type);
+            return "UNKNOWN";
             break;
     }
 }

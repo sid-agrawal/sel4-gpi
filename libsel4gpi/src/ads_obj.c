@@ -20,6 +20,79 @@
 #include <sel4gpi/gpi_server.h>
 #include <sel4gpi/model_exporting.h>
 
+int ads_new(vspace_t *loader,
+            vka_t *vka,
+            ads_t *ret_ads)
+{
+
+    ret_ads->vspace = malloc(sizeof(vspace_t));
+    if (ret_ads->vspace == NULL) {
+        ZF_LOGE("Failed to allocate vspace\n");
+        goto error_exit;
+    }
+    ret_ads->process_for_cookies = malloc(sizeof(sel4utils_process_t));
+    if (ret_ads->process_for_cookies == NULL) {
+        ZF_LOGE("Failed to allocate process struct for coolies in ads_new\n");
+        goto error_exit;
+    }
+    vspace_t *new_vspace = ret_ads->vspace;
+    assert(new_vspace != NULL);
+
+    // Give vspace root
+    // assign asid pool
+    vka_object_t *vspace_root_object = malloc(sizeof(vka_object_t));
+    assert(vspace_root_object != NULL);
+
+
+    sel4utils_alloc_data_t *alloc_data = malloc(sizeof(sel4utils_alloc_data_t));
+    if (alloc_data == NULL) {
+        ZF_LOGE("Failed to allocate memory for alloc data\n");
+        goto error_exit;
+    }
+
+    int error = vka_alloc_vspace_root(vka, vspace_root_object);
+    if (error)
+    {
+        ZF_LOGE("Failed to allocate page directory for new process: %d\n", error);
+        goto error_exit;
+    }
+
+    /* assign an asid pool */
+    if (!config_set(CONFIG_X86_64) &&
+        assign_asid_pool(seL4_CapInitThreadASIDPool, vspace_root_object->cptr) != seL4_NoError)
+    {
+        goto error_exit;
+    }
+    // Create empty vspace
+    error = sel4utils_get_vspace(
+         loader,
+         new_vspace,
+         alloc_data,
+         vka,
+         vspace_root_object->cptr,
+         sel4utils_allocated_object,
+
+        /*
+            sel4utils_allocated_object expects a process struct as a cookie
+            Instead use a different function which suited are needs better.
+        */
+
+         &(ret_ads->process_for_cookies)
+     );
+    if (error)
+    {
+        ZF_LOGE("Failed to get new vspace while making copy: %d\n in %s", error, __FUNCTION__);
+        goto error_exit;
+    }
+    ret_ads->root_page_dir = vspace_root_object;
+
+    return 0;
+
+error_exit:
+    free(alloc_data);
+    free(ret_ads->vspace);
+    return -1;
+}
 int ads_attach(ads_t *ads,
                vka_t *vka,
                void *vaddr,
@@ -85,79 +158,98 @@ int ads_bind(ads_t *ads, vka_t *vka, seL4_CPtr* cpu_cap) {
     return 0;
 }
 
-void ads_dump_rr(ads_t *ads, void *buff, size_t size)
+void ads_dump_rr_no_buf(seL4_Word res_id) {
+
+    size_t buf_len = 50*PAGE_SIZE_4K;
+    char * buf = malloc(buf_len);
+    assert(buf != NULL);
+
+    ads_component_registry_entry_t *client_data =
+        ads_component_registry_get_entry_by_id(res_id);
+    assert(client_data != NULL);
+
+    ads_t *ads = &client_data->ads;
+    assert(ads != NULL);
+
+    ads_dump_rr(ads, buf, buf_len, true);
+
+    printf("Dumped RR for ads object %d\n", ads->ads_obj_id);
+    printf("%s\n", buf);
+    free(buf);
+
+}
+
+void ads_dump_rr(ads_t *ads, void *buff, size_t size, bool buf_in_server)
 {
-
-    assert(buff != NULL);
-
-/*===================start=====================*/
-    ZF_LOGE("Dumping RR for ads object %d\n", ads->ads_obj_id);
-    ZF_LOGE("Buf: [%p, %p) num_pages: %lu\n", buff, buff + size, size / PAGE_SIZE_4K);
-
-    void *buff_start_aligned = (void *) ROUND_DOWN((uintptr_t)buff, PAGE_SIZE_4K);
-    void *buff_end_aligned = (void *) ROUND_UP((uintptr_t)(buff + size), PAGE_SIZE_4K);
-    uint64_t num_pages = (buff_end_aligned - buff_start_aligned) / PAGE_SIZE_4K;
-    ZF_LOGE("Buf _alg: [%p, %p) num_pages: %lu\n", buff_start_aligned, buff_end_aligned, num_pages);
-
-
-
-
     vspace_t *ads_vspace = ads->vspace;
+    void *server_buffer_va = NULL;
 
-    /* Get the page frame cap for the client buf VA */
-    seL4_CPtr * caps = malloc(sizeof(seL4_CPtr) * num_pages);
-    assert (caps != NULL);
-
-    for (int i = 0; i < num_pages; i++)
-    {
-        seL4_CPtr buf_cap = vspace_get_cap(ads_vspace, buff_start_aligned + i * PAGE_SIZE_4K);
-        assert(buf_cap != 0);
-
-        /* Clone the cap */
-        /* Fix up this copy of cap*/
-        /* create a path to the cap */
-        cspacepath_t from_path, to_path;
-        vka_cspace_make_path(get_gpi_server()->server_vka, buf_cap, &from_path);
-
-        /* allocate a path to put the copy in the destination */
-        int error = vka_cspace_alloc_path(get_gpi_server()->server_vka, &to_path);
-        if (error)
-        {
-            ZF_LOGF("Failed to allocate slot in to cspace, error: %d", error);
-        }
-
-        /* copy the frame cap into the to cspace */
-        error = vka_cnode_copy(&to_path, &from_path, seL4_AllRights);
-        if (error)
-        {
-            ZF_LOGF("Failed to copy cap, error %d num_pages: %d\n",
-                    error, 1);
-        }
-        caps[i] = to_path.capPtr;
+    if (buf_in_server) {
+        server_buffer_va = buff;
     }
+    else
+    {
+        assert(buff != NULL);
 
-    /* a. Create a reservation in the server vspace*/
-    /* Find the page where the buffer lies*/
-    vspace_t *server_vspace = get_gpi_server()->server_vspace;
+        /*===================start=====================*/
+        ZF_LOGE("Dumping RR for ads object %d\n", ads->ads_obj_id);
+        ZF_LOGE("Buf: [%p, %p) num_pages: %lu\n", buff, buff + size, size / PAGE_SIZE_4K);
 
+        void *buff_start_aligned = (void *)ROUND_DOWN((uintptr_t)buff, PAGE_SIZE_4K);
+        void *buff_end_aligned = (void *)ROUND_UP((uintptr_t)(buff + size), PAGE_SIZE_4K);
+        uint64_t num_pages = (buff_end_aligned - buff_start_aligned) / PAGE_SIZE_4K;
+        ZF_LOGE("Buf _alg: [%p, %p) num_pages: %lu\n", buff_start_aligned, buff_end_aligned, num_pages);
 
+        /* Get the page frame cap for the client buf VA */
+        seL4_CPtr *caps = malloc(sizeof(seL4_CPtr) * num_pages);
+        assert(caps != NULL);
 
+        for (int i = 0; i < num_pages; i++)
+        {
+            seL4_CPtr buf_cap = vspace_get_cap(ads_vspace, buff_start_aligned + i * PAGE_SIZE_4K);
+            assert(buf_cap != 0);
 
-    void *server_buffer_va = sel4utils_map_pages(server_vspace,
-                                                 caps,
-                                                 NULL,
-                                                 seL4_AllRights,
-                                                 num_pages,
-                                                 seL4_PageBits,
-                                                 1);
-/*===================end ======================*/
+            /* Clone the cap */
+            /* Fix up this copy of cap*/
+            /* create a path to the cap */
+            cspacepath_t from_path, to_path;
+            vka_cspace_make_path(get_gpi_server()->server_vka, buf_cap, &from_path);
 
-    /*
-        Move the buf to the correct offset.
-    */
-    server_buffer_va += (uintptr_t)buff % PAGE_SIZE_4K;
+            /* allocate a path to put the copy in the destination */
+            int error = vka_cspace_alloc_path(get_gpi_server()->server_vka, &to_path);
+            if (error)
+            {
+                ZF_LOGF("Failed to allocate slot in to cspace, error: %d", error);
+            }
 
+            /* copy the frame cap into the to cspace */
+            error = vka_cnode_copy(&to_path, &from_path, seL4_AllRights);
+            if (error)
+            {
+                ZF_LOGF("Failed to copy cap, error %d num_pages: %d\n",
+                        error, 1);
+            }
+            caps[i] = to_path.capPtr;
+        }
 
+        /* a. Create a reservation in the server vspace*/
+        /* Find the page where the buffer lies*/
+        vspace_t *server_vspace = get_gpi_server()->server_vspace;
+
+        void *server_buffer_va = sel4utils_map_pages(server_vspace,
+                                                     caps,
+                                                     NULL,
+                                                     seL4_AllRights,
+                                                     num_pages,
+                                                     seL4_PageBits,
+                                                     1);
+        /*===================end ======================*/
+
+        /*
+            Move the buf to the correct offset.
+        */
+        server_buffer_va += (uintptr_t)buff % PAGE_SIZE_4K;
+    }
 
     //=============================================================================
 
@@ -277,16 +369,24 @@ void ads_dump_rr(ads_t *ads, void *buff, size_t size)
     /*(XXX) Unmap the page */
 }
 
-int ads_clone(vspace_t *loader, ads_t *ads, vka_t *vka, void* omit_vaddr, ads_t *ret_ads) {
+int ads_shallow_copy(vspace_t *loader,
+                     ads_t *ads,
+                     vka_t *vka,
+                     void *omit_vaddr,
+                     bool shallow_copy,
+                     ads_t *ret_ads)
+{
 
     ret_ads->vspace = malloc(sizeof(vspace_t));
-    if (ret_ads->vspace == NULL) {
+    if (ret_ads->vspace == NULL)
+    {
         ZF_LOGE("Failed to allocate vspace\n");
         goto error_exit;
     }
     ret_ads->process_for_cookies = malloc(sizeof(sel4utils_process_t));
-    if (ret_ads->process_for_cookies == NULL) {
-        ZF_LOGE("Failed to allocate process struct for coolies in ads_clone\n");
+    if (ret_ads->process_for_cookies == NULL)
+    {
+        ZF_LOGE("Failed to allocate process struct for coolies in ads_shallow_copy\n");
         goto error_exit;
     }
     vspace_t *from = ads->vspace;
@@ -297,12 +397,12 @@ int ads_clone(vspace_t *loader, ads_t *ads, vka_t *vka, void* omit_vaddr, ads_t 
     // printf("Old vspace details:\n");
     // sel4utils_walk_vspace(from, NULL);
 
-
     // Give vspace root
     // assign asid pool
     static vka_object_t vspace_root_object;
     sel4utils_alloc_data_t *alloc_data = malloc(sizeof(sel4utils_alloc_data_t));
-    if (alloc_data == NULL) {
+    if (alloc_data == NULL)
+    {
         ZF_LOGE("Failed to allocate memory for alloc data\n");
         goto error_exit;
     }
@@ -322,31 +422,27 @@ int ads_clone(vspace_t *loader, ads_t *ads, vka_t *vka, void* omit_vaddr, ads_t 
     }
     // Create empty vspace
     error = sel4utils_get_vspace(
-         loader,
-         to,
-         alloc_data,
-         vka,
-         vspace_root_object.cptr,
-         sel4utils_allocated_object,
+        loader,
+        to,
+        alloc_data,
+        vka,
+        vspace_root_object.cptr,
+        sel4utils_allocated_object,
 
         /*
             sel4utils_allocated_object expects a process struct as a cookie
             Instead use a different function which suited are needs better.
         */
 
-         &(ret_ads->process_for_cookies)
-     );
+        &(ret_ads->process_for_cookies));
     if (error)
     {
         ZF_LOGE("Failed to get new vspace while making copy: %d\n in %s", error, __FUNCTION__);
         goto error_exit;
     }
 
-
-
     sel4utils_alloc_data_t *from_data = get_alloc_data(from);
     sel4utils_res_t *from_sel4_res = from_data->reservation_head;
-
 
     OSDB_PRINTF("===========Start of interesting output================\n");
 
@@ -354,18 +450,16 @@ int ads_clone(vspace_t *loader, ads_t *ads, vka_t *vka, void* omit_vaddr, ads_t 
     int num_pages;
     while (from_sel4_res != NULL)
     {
-        OSDB_PRINTF("Reservation: %p\n", (void *) from_sel4_res->start);
+        OSDB_PRINTF("Reservation: %p\n", (void *)from_sel4_res->start);
         // Reserver
         reservation_t new_res = sel4utils_reserve_range_at(to,
                                                            (void *)from_sel4_res->start,
                                                            from_sel4_res->end - from_sel4_res->start,
                                                            from_sel4_res->rights, from_sel4_res->cacheable);
 
-
-    sel4utils_res_t *to_sel4_res = reservation_to_res(new_res);
-    assert(to_sel4_res != NULL);
-    to_sel4_res->type = from_sel4_res->type;
-
+        sel4utils_res_t *to_sel4_res = reservation_to_res(new_res);
+        assert(to_sel4_res != NULL);
+        to_sel4_res->type = from_sel4_res->type;
 
         num_pages = (from_sel4_res->end - from_sel4_res->start) / PAGE_SIZE_4K;
         if (from_sel4_res->start == (uintptr_t)omit_vaddr)
@@ -375,18 +469,41 @@ int ads_clone(vspace_t *loader, ads_t *ads, vka_t *vka, void* omit_vaddr, ads_t 
             continue;
         }
         // map
-        error = sel4utils_share_mem_at_vaddr(from, to,
-                                     (void *)from_sel4_res->start,
-                                     num_pages,
-                                     PAGE_BITS_4K,
-                                     (void *)from_sel4_res->start,
-                                     new_res);
-        if (error)
+        if (shallow_copy || from_sel4_res->type == SEL4UTILS_RES_TYPE_STACK)
         {
-            ZF_LOGE("Failed to map memory while making copy: %d\n", error);
-            goto error_exit;
+            error = sel4utils_share_mem_at_vaddr(from, to,
+                                                 (void *)from_sel4_res->start,
+                                                 num_pages,
+                                                 PAGE_BITS_4K,
+                                                 (void *)from_sel4_res->start,
+                                                 new_res);
+            if (error)
+            {
+                ZF_LOGE("Failed to map memory while sharing copy: %d\n", error);
+                goto error_exit;
+            }
         }
+        else
+        {
+            OSDB_PRINTF("======================Deep copying [%s] %p to %p [%s]\n",
+                        human_readable_va_res_type(from_sel4_res->type),
+                        (void *)from_sel4_res->start, (void *)from_sel4_res->end,
+                        human_readable_size(from_sel4_res->end - from_sel4_res->start));
 
+            error = sel4utils_copy_mem_at_vaddr(
+                loader,
+                from, to,
+                (void *)from_sel4_res->start,
+                num_pages,
+                PAGE_BITS_4K,
+                (void *)from_sel4_res->start,
+                new_res);
+            if (error)
+            {
+                ZF_LOGE("Failed to map memory while making copy: %d\n", error);
+                goto error_exit;
+            }
+        }
 
         /*
 

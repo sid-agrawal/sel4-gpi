@@ -47,7 +47,8 @@ int pd_component_client_disconnect(pd_client_context_t *conn);
  * @param image elf image to load in the PD
  * @return int 0 on success, -1 on failure.
  */
-int pd_client_load(pd_client_context_t *conn,
+int pd_client_load(pd_client_context_t *pd_os_cap,
+                   ads_client_context_t *ads_os_cap,
                    const char *image);
 
 
@@ -61,6 +62,15 @@ int pd_client_load(pd_client_context_t *conn,
  */
 int pd_client_send_cap(pd_client_context_t *conn, seL4_CPtr cap_to_send,
                        seL4_Word *slot);
+
+/**
+ * @brief Get the next free slot
+ *
+ * @param conn client connection object
+ * @param slot next free slot in the PD
+ * @return int 0 on success, -1 on failure.
+ */
+int pd_client_next_slot(pd_client_context_t *conn, seL4_Word *slot);
 
 /**
  * @brief Dump the PD.

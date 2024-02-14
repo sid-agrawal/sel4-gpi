@@ -114,9 +114,9 @@ mo_component_registry_entry_t *mo_component_registry_get_entry_by_badge(seL4_Wor
 // (XXX): Somwehere here we should call mo_new
 void mo_handle_allocation_request(seL4_MessageInfo_t *reply_tag)
 {
-    OSDB_PRINTF(MOSERVS "main: Got connect request\n");
+    seL4_Word num_pages = seL4_GetMR(MOMSGREG_CONNECT_REQ_NUM_PAGES);
+    OSDB_PRINTF(MOSERVS "Got connect request for %lx pages\n", num_pages);
 
-    uint32_t num_pages = seL4_GetMR(MOMSGREG_CONNECT_REQ_NUM_PAGES);
     /* Allocator numm_pages frame */
     seL4_CPtr *frame_caps = malloc(sizeof(seL4_CPtr) * num_pages);
     assert(frame_caps != NULL);
@@ -182,6 +182,7 @@ void mo_handle_allocation_request(seL4_MessageInfo_t *reply_tag)
         OSDB_PRINTF(MOSERVS "main: Failed to mint client badge %lx.\n", badge);
         return;
     }
+    OSDB_PRINTF(MOSERVS "Minted MO with new badge: %lx\n", badge);
     /* Return this badged end point in the return message. */
     seL4_SetCap(0, dest.capPtr);
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(error, 0, 1, 1);
@@ -194,20 +195,27 @@ int forge_mo_caps_from_vspace(vspace_t *child_vspace,
                               seL4_CPtr *cap_ret)
 {
     /* Walk every reservation */
+    printf("%s: %d\n", __FUNCTION__, __LINE__);
 
     sel4utils_alloc_data_t *child_data = get_alloc_data(child_vspace);
+    printf("%s: %d\n", __FUNCTION__, __LINE__);
     sel4utils_res_t *res = child_data->reservation_head;
+    printf("%s: %d\n", __FUNCTION__, __LINE__);
 
+    printf("forge_mo_caps_from_vspace: %d\n", __LINE__);
     while (res != NULL) {
         *num_ret_caps = *num_ret_caps + 1 ;
+    printf("forge_mo_caps_from_vspace: %d\n", __LINE__);
         res = res->next;
     }
 
     /* For each reservation, forge an MO */
     int j = 0;
     res = child_data->reservation_head;
+    printf("forge_mo_caps_from_vspace: %d\n", __LINE__);
     while (res != NULL) {
 
+    printf("forge_mo_caps_from_vspace: %d\n", __LINE__);
         /* Get the caps in a reservation */
         uint32_t num_frames = (res->end - res->start)/PAGE_SIZE_4K;
         seL4_CPtr *frame_caps = malloc(sizeof(seL4_CPtr) * num_frames);
@@ -222,11 +230,16 @@ int forge_mo_caps_from_vspace(vspace_t *child_vspace,
             i++;
         }
 
-        int error = forge_mo_cap_from_frames(frame_caps,
-                                        num_frames,
-                                         vka,
-                                         &cap_ret[j]);
-        assert(error == 0);
+        /* This way, we can call forge_mo_caps_from vspace again and again */
+        if (res->mo_ref == NULL)
+        {
+            int error = forge_mo_cap_from_frames(frame_caps,
+                                                 num_frames,
+                                                 vka,
+                                                 &cap_ret[j],
+                                                 (mo_t **)&res->mo_ref);
+            assert(error == 0);
+        }
 
         res = res->next;
         j++;
@@ -244,7 +257,8 @@ int forge_mo_caps_from_vspace(vspace_t *child_vspace,
 int forge_mo_cap_from_frames(seL4_CPtr *frame_caps,
                               uint32_t num_pages,
                            vka_t *vka,
-                           seL4_CPtr *cap_ret)
+                           seL4_CPtr *cap_ret,
+                           mo_t **mo_ret)
 {
 
     assert(frame_caps != NULL);
@@ -296,6 +310,7 @@ int forge_mo_cap_from_frames(seL4_CPtr *frame_caps,
                 dest.capPtr, badge, client_reg_ptr->mo.num_pages);
 
     *cap_ret = dest_cptr;
+    *mo_ret = &client_reg_ptr->mo;
     return 0;
 }
 

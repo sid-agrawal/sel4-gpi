@@ -66,6 +66,7 @@ enum mo_component_msgregs
 /* Per-client context maintained by the server. */
 typedef struct _mo_component_registry_entry {
     mo_t mo;
+    uint32_t count; /*There can be more than one cap to this object.*/
     struct _mo_component_registry_entry *next;
 
 } mo_component_registry_entry_t;
@@ -101,7 +102,8 @@ void mo_handle_allocation_request(seL4_MessageInfo_t *reply_tag);
 int forge_mo_cap_from_frames(seL4_CPtr *frame_caps,
                               uint32_t num_pages,
                            vka_t *vka,
-                           seL4_CPtr *cap_ret);
+                           seL4_CPtr *cap_ret,
+                           mo_t ** mo_ref);
 
 int forge_mo_caps_from_vspace(vspace_t *child_vspace,
                               vka_t *vka,

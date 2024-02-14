@@ -22,6 +22,7 @@
 
 /* This file is shared with seltest-tests. */
 #include <test_init_data.h>
+#include <sel4gpi/pd_obj.h>
 
 #define TESTS_APP "sel4test-tests"
 #define HELLO_APP "hello"

@@ -15,10 +15,22 @@
 
 typedef struct _ads {
     vspace_t *vspace;
+    vka_object_t *root_page_dir;
     sel4utils_process_t *process_for_cookies;
     uint32_t ads_obj_id;
 }ads_t;
 
+/**
+ * @brief Create a new ads object.
+ *
+ * @param loader vspace of the function running this
+ * @param vka vka object to allocate cspace slots and PT from
+ * @param ret_ads return ads object
+ * @return int 0 on success, -1 on failure.
+ */
+int ads_new(vspace_t *loader,
+            vka_t *vka,
+            ads_t *ret_ads);
 /**
  * @brief Attach a frame at a given address to the ads.
  *
@@ -66,10 +78,12 @@ int ads_bind(ads_t *ads, vka_t *vka, seL4_CPtr* cpu_cap);
  * @param ads ads object to clone
  * @param vka vka object to allocate cspace slots and PT from
  * @param omit_vaddr start vaddr of the segment to omit
+ * @param shallow_copy if true, only copy the page table entries, do not copy the frames
  * @param ret_ads return ads of the cloned ads
  * @return int
  */
-int ads_clone(vspace_t *loader, ads_t *ads, vka_t *vka, void* omit_vaddr, ads_t *ret_ads);
+int ads_shallow_copy(vspace_t *loader, ads_t *ads, vka_t *vka, void *omit_vaddr,
+                     bool shallow_copy, ads_t *ret_ads);
 
 /**
  * @brief
@@ -77,9 +91,11 @@ int ads_clone(vspace_t *loader, ads_t *ads, vka_t *vka, void* omit_vaddr, ads_t 
  * @param ads ads object to dump the RR for
  * @param buf address in the client's address space where we need to dump the RR info.
  * @param size size of the buffer above.
+ * @param buf_server Was the buffer allocated from the RT
  * @return void
  */
-void ads_dump_rr(ads_t *ads, void *buf, size_t size);
+void ads_dump_rr(ads_t *ads, void *buf, size_t size, bool buf_in_server);
+void ads_dump_rr_no_buf(seL4_Word ads_id);
 
 
 static seL4_CPtr get_asid_pool(seL4_CPtr asid_pool)

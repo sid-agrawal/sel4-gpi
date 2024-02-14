@@ -18,6 +18,16 @@
 #include <sel4gpi/gpi_server.h>
 
 
+void print_osm_cap_info (osmosis_cap_t *o) {
+    printf("Slot_RT:%lx\t T: %s \t %s \t Paddr: 0x%lx \t %s \t Minted from: %lx\n",
+            o->slot_in_rt,
+           cap_type_to_str(o->type),
+           o->isUntyped ? "Untyped" : "Not Untyped",
+           o->paddr,
+           o->isMinted ? "Minted" : "Not Minted",
+           o->minted_from);
+}
+
 /*
     Add cap to the cap tracking object.
 */
@@ -27,12 +37,12 @@ int gpi_add_cap_data(osmosis_cap_t *new_cap_data)
     for (int i = 0; i < MAX_SYS_OSM_CAPS; i++) {
 
         /* Check that slot is free */
-        if (env->osm_caps[i].slot == 0) {
+        if (env->osm_caps[i].slot_in_rt == 0) {
             /* If the slot is free then the type should be cleared too*/
             assert (env->osm_caps[i].type == GPICAP_TYPE_NONE);
 
             /* Initilize the slot field*/
-            env->osm_caps[i].slot = new_cap_data->slot;
+            env->osm_caps[i].slot_in_rt = new_cap_data->slot_in_rt;
             env->osm_caps[i].type = new_cap_data->type;
             env->osm_caps[i].isUntyped = new_cap_data->isUntyped;
             env->osm_caps[i].paddr = new_cap_data->paddr;
@@ -56,13 +66,13 @@ int gpi_remove_cap_data(seL4_CPtr cap_to_remove)
 
     for (int i = 0; i < MAX_SYS_OSM_CAPS; i++)
     {
-        if (env->osm_caps[i].slot == cap_to_remove)
+        if (env->osm_caps[i].slot_in_rt == cap_to_remove)
         {
             /* Check that a type is set */
             assert(env->osm_caps[i].type != GPICAP_TYPE_MAX);
 
             /* Initilize the slot field*/
-            env->osm_caps[i].slot = 0;
+            env->osm_caps[i].slot_in_rt = 0;
 
             /* Clear the actual data */
             env->osm_caps[i].type = GPICAP_TYPE_MAX;
@@ -82,7 +92,7 @@ int gpi_remove_cap_data(seL4_CPtr cap_to_remove)
                     assert(env->osm_caps[i].type != GPICAP_TYPE_MAX);
 
                     /* Initilize the slot field*/
-                    env->osm_caps[i].slot = 0;
+                    env->osm_caps[i].slot_in_rt = 0;
 
                     /* Clear the actual data */
                     env->osm_caps[i].type = GPICAP_TYPE_MAX;
@@ -107,12 +117,12 @@ int gpi_retrieve_cap_data(seL4_CPtr cap_to_find,
 
     for (int i = 0; i < MAX_SYS_OSM_CAPS; i++)
     {
-        if (env->osm_caps[i].slot == cap_to_find) {
+        if (env->osm_caps[i].slot_in_rt == cap_to_find) {
             /* Check that a type is set */
             assert(env->osm_caps[i].type != GPICAP_TYPE_MAX);
 
             /* Initilize the slot field*/
-            return_data->slot = env->osm_caps[i].slot;
+            return_data->slot_in_rt = env->osm_caps[i].slot_in_rt;
 
             /* Retrive the actual data */
             return_data->type = env->osm_caps[i].type;

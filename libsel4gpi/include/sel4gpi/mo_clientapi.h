@@ -27,8 +27,8 @@ typedef struct _mo_client_context {
  * @return int 0 on success, -1 on failure.
  */
 int mo_component_client_connect(seL4_CPtr server_ep_cap,
-                              vka_t *client_vka,
-                              uint32_t num_pages,
+                              seL4_CPtr free_slot,
+                              seL4_Word num_pages,
                               mo_client_context_t *ret_conn);
 
 

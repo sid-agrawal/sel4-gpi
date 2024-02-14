@@ -26,7 +26,7 @@
 
 #include <sel4gpi/pd_clientapi.h>
 #include <sel4gpi/pd_component.h>
-#include <sel4gpi/pd_component.h>
+#include <sel4gpi/pd_obj.h>
 #include <sel4gpi/test_init_data.h>
 
 #include <sel4gpi/ads_clientapi.h>
@@ -39,7 +39,7 @@ uint64_t pd_assign_new_badge_and_objectID(pd_component_registry_entry_t *reg) {
     // Add the latest ID to the obj and to the badlge.
     seL4_Word badge_val = gpi_new_badge(GPICAP_TYPE_PD,
                                         0x00,
-                                        0x00,
+                                        0x00, /* (XXX) This needs to be changed  to the PD*/
                                         get_pd_component()->registry_n_entries);
 
     assert(badge_val != 0);
@@ -136,7 +136,8 @@ int forge_pd_cap_from_init_data(
      * Use the address of the client_registry_entry as the badge.
      */
     cspacepath_t src, dest;
-    vka_cspace_make_path(get_pd_component()->server_vka,
+    vka_cspace_make_path(
+        get_pd_component()->server_vka,
                          get_pd_component()->server_ep_obj.cptr, &src);
     seL4_CPtr dest_cptr;
     vka_cspace_alloc(get_pd_component()->server_vka, &dest_cptr);
@@ -201,6 +202,7 @@ int forge_pd_cap_from_init_data(
                 dest.capPtr, badge);
 
     *cap_ret = dest_cptr;
+    client_reg_ptr->raw_cap_in_root = dest_cptr;
     return 0;
 }
 
@@ -264,6 +266,7 @@ void pd_handle_allocation_request(seL4_MessageInfo_t *reply_tag)
         OSDB_PRINTF(PDSERVS "main: Failed to mint client badge %lx.\n", badge);
         return;
     }
+    client_reg_ptr->raw_cap_in_root = dest_cptr;
     /* Return this badged end point in the return message. */
     seL4_SetCap(0, dest.capPtr);
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(error, 0, 1, 1);
@@ -278,8 +281,9 @@ static void handle_load_req(seL4_Word sender_badge,
     // Find the client - like start
     OSDB_PRINTF(PDSERVS "-----main: Got pd-load request\n");
     badge_print(sender_badge);
+    assert(GPICAP_TYPE_PD == get_cap_type_from_badge(sender_badge));
 
-    OSDB_PRINTF(PDSERVS " received_cap: ");
+    //OSDB_PRINTF(PDSERVS " received_cap: ");
     // debug_cap_identify("", received_cap);
 
     assert(seL4_MessageInfo_get_label(old_tag) == 0);
@@ -298,10 +302,19 @@ static void handle_load_req(seL4_Word sender_badge,
         return;
     }
 
+    seL4_Word badge = seL4_GetBadge(0);
+
+    ads_component_registry_entry_t *ads_data = ads_component_registry_get_entry_by_badge(seL4_GetBadge(0));
+    assert(ads_data != NULL);
 
     seL4_CNode cspace_root = received_cap;
     error = pd_load_image(&client_data->pd,
-                          "hello");
+                       get_pd_component()->server_vka,
+                       get_pd_component()->server_simple,
+                       "hello",
+                       get_pd_component()->server_vspace,
+                       ads_data->ads.vspace,
+                       ads_data->ads.root_page_dir);
     if (error)
     {
         OSDB_PRINTF(PDSERVS "main: Failed to config from client badge:");
@@ -311,22 +324,67 @@ static void handle_load_req(seL4_Word sender_badge,
     }
     OSDB_PRINTF(PDSERVS "main: config done.\n");
 
+    // Insert into has access to.
+    client_data->pd.has_access_to[0].type = GPICAP_TYPE_ADS;
+    client_data->pd.has_access_to[0].res_id = ads_data->ads.ads_obj_id;
+
+
+
     seL4_SetMR(PDMSGREG_FUNC, PD_FUNC_LOAD_ACK);
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(error, 0, 0, PDMSGREG_LOAD_ACK_END);
     return reply(tag);
 }
 
-static void handle_send_cap_req(seL4_Word sender_badge, seL4_MessageInfo_t old_tag, seL4_CPtr received_cap)
+static void handle_next_slot_req(seL4_Word sender_badge,
+                                seL4_MessageInfo_t old_tag,
+                                seL4_CPtr received_cap) {
+
+    OSDB_PRINTF(PDSERVS "Got next slot request from client badge %lx.\n",
+           sender_badge);
+
+    pd_component_registry_entry_t *client_data = pd_component_registry_get_entry_by_badge(sender_badge);
+    if (client_data == NULL)
+    {
+        OSDB_PRINTF(PDSERVS "Failed to find client badge %lx.\n",
+               sender_badge);
+        return;
+    }
+    seL4_Word slot;
+    int error = pd_next_slot(&client_data->pd,
+                             get_pd_component()->server_vka,
+                             &slot);
+
+    seL4_SetMR(PDMSGREG_FUNC, PD_FUNC_NEXT_SLOT_ACK);
+    seL4_SetMR(PDMSGREG_NEXT_SLOT_PD_SLOT, slot);
+
+    seL4_MessageInfo_t tag = seL4_MessageInfo_new(error, 0, 0,
+                                                  PDMSGREG_NEXT_SLOT_ACK_END);
+    return reply(tag);
+}
+
+static void handle_send_cap_req(seL4_Word sender_badge,
+                                seL4_MessageInfo_t old_tag,
+                                seL4_CPtr received_cap)
 {
     OSDB_PRINTF(PDSERVS "main: Got send-cap request from client badge %lx.\n",
            sender_badge);
 
 
-    OSDB_PRINTF(PDSERVS " received_cap: ");
+    /*
+    Unwerapped works only if the badgted extra cap is the badged verion of the EPcap via which the
+    client is sending the cap.
+
+    */
+    OSDB_PRINTF(PDSERVS " received_cap: %lu (badge: %lx)\n",
+    received_cap, seL4_GetBadge(0));
+    OSDB_PRINTF(PDSERVS " Unwrapped: %s\n",
+                seL4_MessageInfo_get_capsUnwrapped(old_tag) ? "true" : "false");
     // debug_cap_identify("", received_cap);
 
-    assert(seL4_MessageInfo_get_extraCaps(old_tag) == 1);
+    // assert(seL4_MessageInfo_get_extraCaps(old_tag) == 1);
     assert(seL4_MessageInfo_get_label(old_tag) == 0);
+
+    // assert(seL4_MessageInfo_get_capsUnwrapped(old_tag) == 0);
 
     /* Find the client */
     pd_component_registry_entry_t *client_data = pd_component_registry_get_entry_by_badge(sender_badge);
@@ -337,9 +395,16 @@ static void handle_send_cap_req(seL4_Word sender_badge, seL4_MessageInfo_t old_t
         return;
     }
 
+    seL4_Word received_caps_badge = 0;
+    // if (seL4_MessageInfo_get_capsUnwrapped(old_tag) == 1) {
+        received_caps_badge = seL4_GetBadge(0);
+    // }
+
     seL4_Word slot;
     int error = pd_send_cap(&client_data->pd,
-                            received_cap, &slot);
+                            received_cap,
+                            received_caps_badge,
+                            &slot);
 
     seL4_SetMR(PDMSGREG_FUNC, PD_FUNC_SENDCAP_ACK);
     seL4_SetMR(PDMSGREG_SEND_CAP_PD_SLOT, slot);
@@ -402,7 +467,11 @@ static void handle_start_req(seL4_Word sender_badge, seL4_MessageInfo_t old_tag,
         OSDB_PRINTF(PDSERVS "MR[%d] = %lx\n", i, seL4_GetMR(i));
     }
 
-    error = pd_start(&client_data->pd, get_pd_component()->server_vspace, arg0);
+    error = pd_start(&client_data->pd,
+        get_pd_component()->server_vka,
+                     client_data->raw_cap_in_root,
+                     get_pd_component()->server_vspace,
+                         arg0);
     if (error) {
         OSDB_PRINTF(PDSERVS "main: Failed to start PD.\n");
         return;
@@ -431,6 +500,9 @@ void pd_component_handle(seL4_MessageInfo_t tag,
     {
     case PD_FUNC_LOAD_REQ:
         handle_load_req(sender_badge, tag, received_cap->capPtr);
+        break;
+    case PD_FUNC_NEXT_SLOT_REQ:
+        handle_next_slot_req(sender_badge, tag, received_cap->capPtr);
         break;
     case PD_FUNC_SENDCAP_REQ:
         handle_send_cap_req(sender_badge, tag, received_cap->capPtr);

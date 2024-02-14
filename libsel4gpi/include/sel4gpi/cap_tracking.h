@@ -15,20 +15,25 @@ typedef struct osmosis_pd_id {
 
 
 
+
 typedef struct osmosis_cap {
     // The type of the cap as per seL4
-    seL4_Word slot;
+    // Sid is unsure if we need both.
+    seL4_Word slot_in_rt;
+
+    seL4_Word slot_in_pd;
+
     gpi_cap_t type;
     bool isUntyped;
     seL4_Word paddr;
-
-    /*OSmosis generated PD ID*/
-    osmosis_pd_id_t pd_obj_id;
 
     /* If this cap is a minted cap */
     bool isMinted;
     seL4_Word minted_from;
 } osmosis_cap_t;
+
+
+void print_osm_cap_info (osmosis_cap_t *o);
 
 /*
     Add cap to the cap tracking object.
