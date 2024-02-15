@@ -31,6 +31,11 @@
 #include "init.h"
 #include <rpc.pb.h>
 
+#define TP_MALLOC_SIZE 2 * 1024 * 1024
+char __attribute__((aligned(PAGE_SIZE_4K))) morecore_area[TP_MALLOC_SIZE];
+size_t morecore_size = 2 * 1024 * 1024;
+/* Pointer to free space in the morecore area. */
+uintptr_t morecore_top = (uintptr_t) &morecore_area[TP_MALLOC_SIZE];
 //int *shared_addr_between_threads;
 
 /* dummy global for libsel4muslcsys */

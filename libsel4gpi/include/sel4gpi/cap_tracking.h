@@ -9,7 +9,7 @@
 typedef struct osmosis_pd_id {
     seL4_Word l0_pd_id;
     seL4_Word l1_pd_id;
-    seL4_Word l3_pd_id;
+    seL4_Word l2_pd_id;
 } osmosis_pd_id_t;
 
 

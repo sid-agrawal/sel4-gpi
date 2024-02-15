@@ -32,8 +32,13 @@ typedef struct pd_name {
 
 
 typedef union rde_type {
-    seL4_Word cap;
-    char res_type[8];
+    // We have talked about tracking RDE for speicific resdources,
+    // For instance, say one FILE cap came from one PD, and another from another.
+    // Or if a resources was handed down from another PD, should that PD be the RDE,
+    // or the PD that that created it should be RDE.
+    // or the PD that that created it should be RDE.
+    // seL4_Word slot_in_PD;
+    gpi_cap_t type;
 } rde_type_t;
 
 typedef struct osmosis_rde {
@@ -47,7 +52,8 @@ typedef struct osmosis_rde {
 
 
     /*OSmosis generated PD ID of the server for RDE */
-    osmosis_pd_id_t pd_obj_id;
+    //osmosis_pd_id_t pd_obj_id;
+    uint32_t pd_obj_id;
 } osmosis_rde_t;
 
 typedef struct osmosis_pd_cap {
@@ -220,3 +226,4 @@ int pd_next_slot(pd_t *pd,
                   seL4_CPtr *next_free_slot);
 
 void print_pd_osm_cap_info (osmosis_pd_cap_t *o);
+void print_pd_osm_rde_info (osmosis_rde_t *o);

@@ -116,6 +116,26 @@ static pd_component_registry_entry_t *pd_component_registry_get_entry_by_badge(s
     return current_ctx;
 }
 
+/**
+ * @brief Lookup the client registry entry for the give PD ID.
+ *
+ * @param pd_id
+ * @return pd_component_registry_entry_t*
+ */
+pd_component_registry_entry_t *pd_component_registry_get_entry_by_id(seL4_Word pd_id){
+
+    /* Get the head of the list */
+    pd_component_registry_entry_t *current_ctx = get_pd_component()->client_registry;
+
+    while (current_ctx != NULL) {
+        if ((seL4_Word)current_ctx->pd.pd_obj_id == pd_id) {
+            break;
+        }
+        current_ctx = current_ctx->next;
+    }
+    return current_ctx;
+}
+
 int forge_pd_cap_from_init_data(
     test_init_data_t *init_data, // Change this to something else
     vka_t *vka,

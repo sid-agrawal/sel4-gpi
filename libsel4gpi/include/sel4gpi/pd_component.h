@@ -160,3 +160,5 @@ int forge_pd_cap_from_init_data(
     seL4_CPtr *cap_ret);
 
 void update_forged_pd_cap_from_init_data(test_init_data_t * init_data, seL4_CPtr cap);
+
+pd_component_registry_entry_t *pd_component_registry_get_entry_by_id(seL4_Word pd_id);

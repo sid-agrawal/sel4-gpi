@@ -49,14 +49,22 @@
 #include <sel4platsupport/io.h>
 #include <sel4gpi/gpi_server.h>
 
+
+#define RT_MALLOC_SIZE 16 * 1024 * 1024
+char __attribute__((aligned(PAGE_SIZE_4K))) morecore_area[RT_MALLOC_SIZE];
+size_t morecore_size = RT_MALLOC_SIZE;
+/* Pointer to free space in the morecore area. */
+static uintptr_t morecore_base = (uintptr_t) &morecore_area;
+uintptr_t morecore_top = (uintptr_t) &morecore_area[RT_MALLOC_SIZE];
+
 /* ammount of untyped memory to reserve for the driver (32mb) */
-#define DRIVER_UNTYPED_MEMORY (1 << 25)
+#define DRIVER_UNTYPED_MEMORY (1 << 28)
 /* Number of untypeds to try and use to allocate the driver memory.
  * if we cannot get 32mb with 16 untypeds then something is probably wrong */
-#define DRIVER_NUM_UNTYPEDS 16
+#define DRIVER_NUM_UNTYPEDS 20
 
 /* dimensions of virtual memory for the allocator to use */
-#define ALLOCATOR_VIRTUAL_POOL_SIZE ((1 << seL4_PageBits) * 100)
+#define ALLOCATOR_VIRTUAL_POOL_SIZE ((1 << seL4_PageBits) * 1000)
 
 /* static memory for the allocator to bootstrap with */
 #define ALLOCATOR_STATIC_POOL_SIZE ((1 << seL4_PageBits) * 20)
@@ -211,7 +219,7 @@ void sel4test_start_test(const char *name, int n)
     sel4test_reset();
     sel4test_start_printf_buffer();
 }
-    
+
 void sel4test_end_test(test_result_t result)
 {
     sel4test_end_printf_buffer();
@@ -311,8 +319,8 @@ void sel4test_run_tests(struct driver_env *e)
     qsort(test_types, num_test_types, sizeof(struct test_type *), test_type_comparator);
 
     /* Count how many tests actually exist and allocate space for them */
-    // siagraw: This done just to make sure we know how many tests are 
-    // there. To run the test we still call the binary directly. 
+    // siagraw: This done just to make sure we know how many tests are
+    // there. To run the test we still call the binary directly.
     int driver_tests = (int)(__stop__test_case - __start__test_case);
     uint64_t tc_size = 0;
     testcase_t *sel4test_tests = (testcase_t *) sel4utils_elf_get_section(&tests_elf, "_test_case", &tc_size);

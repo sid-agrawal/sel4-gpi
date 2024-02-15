@@ -21,6 +21,12 @@ char _cpio_archive_end[1];
 #include<sel4gpi/ads_clientapi.h>
 #include<sel4gpi/pd_clientapi.h>
 
+#define APP_MALLOC_SIZE 1 * 1024
+char __attribute__((aligned(PAGE_SIZE_4K))) morecore_area[APP_MALLOC_SIZE];
+size_t morecore_size = APP_MALLOC_SIZE;
+/* Pointer to free space in the morecore area. */
+uintptr_t morecore_top = (uintptr_t) &morecore_area[APP_MALLOC_SIZE];
+
 void calculateSD(float data[], float *mean, float *sd,
                  int start, int end);
 int main(int argc, char **argv)

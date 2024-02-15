@@ -16,6 +16,7 @@
 
 #include <sel4gpi/pd_component.h>
 #include <sel4gpi/gpi_server.h>
+#include <sel4gpi/badge_usage.h>
 #include <sel4gpi/mo_component.h>
 #include <sel4gpi/ads_component.h>
 #include <sel4gpi/cap_tracking.h>
@@ -70,11 +71,15 @@ int pd_load_image(pd_t *pd,
                   vka_object_t *target_vspace_root_page_dir)
 {
 
-    OSDB_PRINTF(PDSERVS"load_image: loading image for pd %p\n", pd);
+    int error = 0;
+    OSDB_PRINTF(PDSERVS "load_image: loading image for pd %p\n", pd);
+
     sel4utils_process_config_t config = pd->config;
     /* This is doing actual works of setting up the PD's address space */
-    int error = sel4utils_osm_configure_process_custom(&(pd->proc),
-                                                       pd->vka,
+     error = sel4utils_osm_configure_process_custom(&(pd->proc),
+            // get_pd_component()->server_vka,
+
+                                                     pd->vka,
                                                        server_vspace,
                                                        target_vspace,
                                                        target_vspace_root_page_dir,
@@ -82,7 +87,6 @@ int pd_load_image(pd_t *pd,
     assert(error == 0);
 
     /* Add the forged MOs*/
-
 
     /* set up caps about the process */
     pd->stack_pages = CONFIG_SEL4UTILS_STACK_SIZE / PAGE_SIZE_4K;
@@ -98,25 +102,23 @@ int pd_load_image(pd_t *pd,
        The return from sel4utils_copy_cap_to_process is the slot in the cnode where the cap was placed
        in the child process' cspace
     */
-    pd->domain_in_pd = sel4utils_copy_cap_to_process(&(pd->proc), pd->vka, simple_get_init_cap(simple,
-                                                                                                           seL4_CapDomain));
-    pd->asid_pool_in_pd = sel4utils_copy_cap_to_process(&(pd->proc), pd->vka, simple_get_init_cap(simple,
-                                                                                                              seL4_CapInitThreadASIDPool));
-    pd->asid_ctrl_in_pd = sel4utils_copy_cap_to_process(&(pd->proc), pd->vka, simple_get_init_cap(simple,
-                                                                                                              seL4_CapASIDControl));
+    pd->domain_in_pd = sel4utils_copy_cap_to_process(&(pd->proc), pd->vka, simple_get_init_cap(simple, seL4_CapDomain));
+    pd->asid_pool_in_pd = sel4utils_copy_cap_to_process(&(pd->proc), pd->vka, simple_get_init_cap(simple, seL4_CapInitThreadASIDPool));
+    pd->asid_ctrl_in_pd = sel4utils_copy_cap_to_process(&(pd->proc), pd->vka, simple_get_init_cap(simple, seL4_CapASIDControl));
 #ifdef CONFIG_IOMMU
-    pd->io_space = sel4utils_copy_cap_to_process(&(pd->proc), pd->vka, simple_get_init_cap(simple,
-                                                                                                             seL4_CapIOSpace));
+    pd->io_space = sel4utils_copy_cap_to_process(&(pd->proc), pd->vka, simple_get_init_cap(simple, seL4_CapIOSpace));
 #endif /* CONFIG_IOMMU */
 #ifdef CONFIG_TK1_SMMU
     env->init->io_space_caps = arch_copy_iospace_caps_to_process(&(pd->proc), &env);
 #endif
     pd->cores = simple_get_core_count(simple);
     /* copy the sched ctrl caps to the remote process */
-    if (config_set(CONFIG_KERNEL_MCS)) {
+    if (config_set(CONFIG_KERNEL_MCS))
+    {
         seL4_CPtr sched_ctrl = simple_get_sched_ctrl(simple, 0);
         pd->sched_ctrl_in_pd = sel4utils_copy_cap_to_process(&(pd->proc), pd->vka, sched_ctrl);
-        for (int i = 1; i < pd->cores; i++) {
+        for (int i = 1; i < pd->cores; i++)
+        {
             sched_ctrl = simple_get_sched_ctrl(simple, i);
             sel4utils_copy_cap_to_process(&(pd->proc), pd->vka, sched_ctrl);
         }
@@ -138,20 +140,25 @@ int pd_load_image(pd_t *pd,
     */
     seL4_CPtr child_ads_cap_in_parent;
     error = forge_ads_cap_from_vspace(&pd->proc.vspace, pd->vka, &child_ads_cap_in_parent);
-    if (error){
+    if (error)
+    {
         ZF_LOGF("Failed to forge child's as cap");
     }
     pd->child_ads_cptr_in_child = sel4utils_copy_cap_to_process(&(pd->proc),
                                                                 pd->vka, child_ads_cap_in_parent);
     assert(pd->child_ads_cptr_in_child != 0);
 
+    // SID : Finishd this RDE addting
+    pd->rde[0].type.type = GPICAP_TYPE_ADS;
+    pd->rde[0].slot_in_RT = child_ads_cap_in_parent;
+    pd->rde[0].slot_in_PD = pd->child_ads_cptr_in_child;
+    pd->rde[0].pd_obj_id = 0x00;
 
     // For the GPI server, no need to forge
     pd->gpi_endpoint_in_child = sel4utils_copy_cap_to_process(&(pd->proc),
-                                                                 pd->vka,
-                                                                get_gpi_server()->server_ep_obj.cptr);
+                                                              pd->vka,
+                                                              get_gpi_server()->server_ep_obj.cptr);
     assert(pd->gpi_endpoint_in_child != 0);
-
 
     /* copy the device frame, if any */
     // if (pd->device_frame_cap) {
@@ -168,11 +175,14 @@ int pd_load_image(pd_t *pd,
     /* WARNING: DO NOT COPY MORE CAPS TO THE PROCESS BEYOND THIS POINT,
      * AS THE SLOTS WILL BE CONSIDERED FREE AND OVERRIDDEN BY THE TEST PROCESS. */
     /* set up free slot range */
-    pd->cspace_size_bits = 17;//TEST_PROCESS_CSPACE_SIZE_BITS;
-    if (pd->device_frame_cap) {
+    pd->cspace_size_bits = 17; // TEST_PROCESS_CSPACE_SIZE_BITS;
+    if (pd->device_frame_cap)
+    {
         pd->free_slots.start = pd->device_frame_cap + 1;
-    } else {
-        //pd->free_slots.start = pd->gpi_endpoint_in_child + 1;
+    }
+    else
+    {
+        // pd->free_slots.start = pd->gpi_endpoint_in_child + 1;
         pd->free_slots.start = pd->fault_endpoint_in_pd + 1;
         OSDB_PRINTF("%s:%d: free_slot.start %ld\n", __FUNCTION__, __LINE__, pd->free_slots.start);
     }
@@ -184,9 +194,9 @@ int pd_load_image(pd_t *pd,
     seL4_CPtr mo_caps[MAX_MO_CHILD];
     printf("%s: %d\n", __FUNCTION__, __LINE__);
     error = forge_mo_caps_from_vspace(target_vspace,
-                                    pd->vka,
-                                    &num_mo_caps,
-                                    mo_caps);
+                                      pd->vka,
+                                      &num_mo_caps,
+                                      mo_caps);
     assert(error == 0);
 
     memcpy(&pd->proc.vspace, target_vspace, sizeof(vspace_t));
@@ -372,15 +382,13 @@ int pd_dump(pd_t *pd){
    }
 
     /* Print RDE Info*/
-#if 0
    for (int idx = 0 ; idx < MAX_PD_OSM_RDE; idx++  ) {
-        print_osm_rde_info(&pd->rde[idx]);
+        print_pd_osm_rde_info(&pd->rde[idx]);
 
         // Find pd from the pd_id
         // if pd found
             // pd_dump(&pd->rde[idx].pd_obj_id);
    }
-#endif
 
 
 return 0;
@@ -392,4 +400,11 @@ void print_pd_osm_cap_info (osmosis_pd_cap_t *o) {
            o->slot_in_PD,
            o->slot_in_ServerPD,
            cap_type_to_str(o->type));
+}
+
+void print_pd_osm_rde_info (osmosis_rde_t *o) {
+    printf("RDE:Slot_RT:%lx\t Slot_PD: %lx\t T: %s\n",
+           o->slot_in_RT,
+           o->slot_in_PD,
+           cap_type_to_str(o->type.type));
 }
