@@ -22,6 +22,7 @@
 #include <sel4utils/sel4_zf_logif.h>
 #include <vspace/vspace.h>
 #include <sel4utils/vspace.h>
+#include <sel4utils/vspace_internal.h>
 #include <sel4utils/api.h>
 
 
@@ -101,7 +102,7 @@ static void serial_ack(size_t vcpu_id, int irq, void *cookie) {
     ZF_LOGE_IFERR(error, "Failed to ACK serial interrupt");
 }
 
-vmm_env_t *vm_setup(seL4_IRQHandler irq_handler, vka_t *vka, vspace_t *vspace, seL4_CPtr vspace_root, seL4_CPtr asid_pool) {
+vmm_env_t *vm_setup(seL4_IRQHandler irq_handler, vka_t *vka, vspace_t *vspace, seL4_CPtr vspace_root, seL4_CPtr asid_pool, simple_t *simple) {
     int error;
     seL4_Error serr;
     vmm_env_t *vmm_e = malloc(sizeof(vmm_env_t));
@@ -167,6 +168,8 @@ vmm_env_t *vm_setup(seL4_IRQHandler irq_handler, vka_t *vka, vspace_t *vspace, s
     serr = seL4_ARM_VCPU_SetTCB(vmm_e->vcpu.cptr, vmm_e->vm_tcb.cptr);
     ZF_LOGF_IFERR(serr, "Failed to bind TCB to VCPU");
 
+    serr = api_tcb_set_sched_params(vmm_e->vm_tcb.cptr, simple_get_tcb(simple), seL4_MaxPrio, seL4_MaxPrio, seL4_CapNull, seL4_CapNull);
+
     char vcpu_name[32];
     snprintf(vcpu_name, sizeof(vcpu_name), "%s", "vcpu");
     seL4_DebugNameThread(vmm_e->vm_tcb.cptr, vcpu_name);
@@ -193,8 +196,7 @@ vmm_env_t *vm_setup(seL4_IRQHandler irq_handler, vka_t *vka, vspace_t *vspace, s
     error = vka_alloc_frame_at(vka, seL4_PageBits, (uintptr_t) SERIAL_PADDR, &vmm_e->serial_dev_frame);
     ZF_LOGF_IF(error, "Failed to allocate serial device frame");
 
-    reservation_t res = vspace_reserve_range_at(&vmm_e->vm_vspace, (void *) SERIAL_PADDR, BIT(seL4_PageBits), seL4_AllRights, 1);
-    // error = vspace_new_pages_at_vaddr(&vmm_e->vm_vspace, (void *) SERIAL_PADDR, 1, seL4_PageBits, res);
+    reservation_t res = vspace_reserve_range_at(&vmm_e->vm_vspace, (void *) SERIAL_PADDR, BIT(seL4_PageBits), seL4_AllRights, 0);
     seL4_CPtr caps[1] = { vmm_e->serial_dev_frame.cptr };
     error = vspace_map_pages_at_vaddr(&vmm_e->vm_vspace, caps, NULL, (void *) SERIAL_PADDR, 1, seL4_PageBits, res);
     ZF_LOGF_IF(error, "Failed to map serial device to VM");
@@ -203,7 +205,7 @@ vmm_env_t *vm_setup(seL4_IRQHandler irq_handler, vka_t *vka, vspace_t *vspace, s
 }
 
 void vm_init(vmm_env_t *vmm_e) {
-    seL4_Error error;
+    int error;
     /* Initialise the VMM, the VCPU(s), and start the guest */
     /* Place all the binaries in the right locations before starting the guest */
     size_t kernel_size = _guest_kernel_image_end - _guest_kernel_image;
@@ -211,33 +213,32 @@ void vm_init(vmm_env_t *vmm_e) {
     size_t initrd_size = _guest_initrd_image_end - _guest_initrd_image;
 
     /* guest ram */
-    reservation_t vm_res = vspace_reserve_range_at(&vmm_e->vm_vspace, (void *) GUEST_RAM_VADDR, GUEST_RAM_SIZE, seL4_AllRights, 1);
-    error = vspace_new_pages_at_vaddr(&vmm_e->vm_vspace, (void *) GUEST_RAM_VADDR, DIV_ROUND_UP(GUEST_RAM_SIZE, BIT(seL4_LargePageBits)), seL4_LargePageBits, vm_res);
-    ZF_LOGF_IF(error, "Failed to allocate guest RAM in VM's vspace");
+    size_t num_pages = DIV_ROUND_UP(GUEST_RAM_SIZE, BIT(seL4_LargePageBits));
     
     reservation_t vmm_res = vspace_reserve_range_at(vmm_e->vspace, (void *) GUEST_RAM_VADDR, GUEST_RAM_SIZE, seL4_AllRights, 1);
     error = vspace_new_pages_at_vaddr(vmm_e->vspace, (void *) GUEST_RAM_VADDR, DIV_ROUND_UP(GUEST_RAM_SIZE, BIT(seL4_LargePageBits)), seL4_LargePageBits, vmm_res);
     ZF_LOGF_IF(error, "Failed to allocate guest RAM in VMM's vspace");
+
+    error = sel4utils_share_mem_at_vaddr(vmm_e->vspace, &vmm_e->vm_vspace, (void *) GUEST_RAM_VADDR, num_pages, seL4_LargePageBits, (void *) GUEST_RAM_VADDR, vmm_res);
+    ZF_LOGF_IF(error, "Failed to copy guest RAM to VM's vspace");
     
     /* guest dtb */
-    vm_res = vspace_reserve_range_at(&vmm_e->vm_vspace, (void *) GUEST_DTB_VADDR, dtb_size, seL4_AllRights, 1);
-    error = vspace_new_pages_at_vaddr(&vmm_e->vm_vspace, (void *) GUEST_DTB_VADDR, DIV_ROUND_UP(dtb_size, BIT(seL4_PageBits)), seL4_PageBits, vm_res);
-    ZF_LOGF_IF(error, "Failed to map guest DTB in VM's vspace");
-    
+    num_pages = DIV_ROUND_UP(dtb_size, BIT(seL4_PageBits));
     vmm_res = vspace_reserve_range_at(vmm_e->vspace, (void *) GUEST_DTB_VADDR, dtb_size, seL4_AllRights, 1);
-    error = vspace_new_pages_at_vaddr(vmm_e->vspace, (void *) GUEST_DTB_VADDR, DIV_ROUND_UP(dtb_size, BIT(seL4_PageBits)), seL4_PageBits, vmm_res);
+    error = vspace_new_pages_at_vaddr(vmm_e->vspace, (void *) GUEST_DTB_VADDR, num_pages, seL4_PageBits, vmm_res);
     ZF_LOGF_IF(error, "Failed to map guest DTB in VMM's vspace");
 
+    error = sel4utils_share_mem_at_vaddr(vmm_e->vspace, &vmm_e->vm_vspace, (void *) GUEST_DTB_VADDR, num_pages, seL4_PageBits, (void *) GUEST_DTB_VADDR, vmm_res);
+    ZF_LOGF_IF(error, "Failed to copy guest DTB to VM's vspace");
+
     /* guest init ram disk */
-    vm_res = vspace_reserve_range_at(&vmm_e->vm_vspace, (void *) GUEST_INIT_RAM_DISK_VADDR, initrd_size, seL4_AllRights, 1);
-    error = vspace_new_pages_at_vaddr(&vmm_e->vm_vspace, (void *) GUEST_INIT_RAM_DISK_VADDR, DIV_ROUND_UP(initrd_size, BIT(seL4_PageBits)), seL4_PageBits, vm_res);
-    ZF_LOGF_IF(error, "Failed to map guest init ram disk in VM's vspace");
-    
+    num_pages = DIV_ROUND_UP(initrd_size, BIT(seL4_PageBits));
     vmm_res = vspace_reserve_range_at(vmm_e->vspace, (void *) GUEST_INIT_RAM_DISK_VADDR, initrd_size, seL4_AllRights, 1);
-    error = vspace_new_pages_at_vaddr(vmm_e->vspace, (void *) GUEST_INIT_RAM_DISK_VADDR, DIV_ROUND_UP(initrd_size, BIT(seL4_PageBits)), seL4_PageBits, vmm_res);
+    error = vspace_new_pages_at_vaddr(vmm_e->vspace, (void *) GUEST_INIT_RAM_DISK_VADDR, num_pages, seL4_PageBits, vmm_res);
     ZF_LOGF_IF(error, "Failed to map guest init ram disk in VMM's vspace");
-    
-    // void *guest_initrd_vaddr = vspace_new_pages(vmm_e->vspace, seL4_AllRights, DIV_ROUND_UP(initrd_size, BIT(seL4_PageBits)), seL4_PageBits);
+
+    error = sel4utils_share_mem_at_vaddr(vmm_e->vspace, &vmm_e->vm_vspace, (void *) GUEST_INIT_RAM_DISK_VADDR, num_pages, seL4_PageBits, (void *) GUEST_INIT_RAM_DISK_VADDR, vmm_res);
+    ZF_LOGF_IF(error, "Failed to copy guest DTB to VM's vspace");
 
     uintptr_t kernel_pc = linux_setup_images((uintptr_t) GUEST_RAM_VADDR,
                                       (uintptr_t) _guest_kernel_image,

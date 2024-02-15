@@ -5,6 +5,7 @@
 #include <vka/vka.h>
 #include <vspace/vspace.h>
 #include <sel4utils/vspace.h>
+#include <simple/simple.h>
 
 #define GUEST_VCPU_ID 0
 #define GUEST_NUM_VCPUS 1
@@ -45,4 +46,4 @@ typedef struct vm_data {
 void vm_init(vmm_env_t *vmm_e);
 vmm_env_t *vm_setup(seL4_IRQHandler irq_handler, 
                     vka_t *vka, vspace_t *vspace, 
-                    seL4_CPtr vspace_root, seL4_CPtr asid_pool);
+                    seL4_CPtr vspace_root, seL4_CPtr asid_pool, simple_t *simple);

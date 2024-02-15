@@ -639,6 +639,7 @@ int main(void)
      */
     init_env(&env);
 
+    printf("bbbb\n");
     /* Partially overwrite part of the VKA implementation to cache objects. We need to
      * create this wrapper as the actual vka implementation will only
      * allocate/return any given device frame once.
@@ -658,6 +659,8 @@ int main(void)
     serial_utspace_record = true;
     platsupport_serial_setup_simple(&env.vspace, &env.simple, &env.vka);
     serial_utspace_record = false;
+
+    printf("cccc\n");
 
     /* Partially overwrite the IRQ interface so that we can record the IRQ caps that were allocated.
      * We need this only for the timer as the ltimer interfaces allocates the caps for us and hides them away.
