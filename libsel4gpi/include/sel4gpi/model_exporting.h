@@ -41,6 +41,9 @@ void init_model_state(model_state_t *model_state);
 // Function to export the model state to a buffer with CSV formatting
 void export_model_state(model_state_t *model_state, char *buffer, size_t len);
 
+// Function to print the model state to a terminal with CSV formatting
+void print_model_state(model_state_t *model_state);
+
 
 // Function to add a resource to the model state
 void add_resource (model_state_t *model_state, char *resource_type, char *resource_id);

@@ -345,8 +345,9 @@ int pd_start(pd_t *pd,
     return 0;
 }
 
-int pd_dump(pd_t *pd){
-    OSDB_PRINTF(PDSERVS"pd_dump_cap: Dumping all details of PD:%u\n", pd->pd_obj_id);
+int pd_dump(pd_t *pd)
+{
+    OSDB_PRINTF(PDSERVS "pd_dump_cap: Dumping all details of PD:%u\n", pd->pd_obj_id);
 
     /*
         For all caps that belong to this PD
@@ -357,44 +358,68 @@ int pd_dump(pd_t *pd){
                     Get the RR for that cap
             }
     */
-   gpi_server_context_t * gpis = get_gpi_server();
-   for (int idx = 0 ; idx < MAX_PD_OSM_CAPS; idx++  ) {
-        //if type seL4 cap
-        // print_pd_osm_cap_info(&pd->has_access_to[idx]);
-        // else if type osmosis cap
-        // get the RR for that cap
-        switch (pd->has_access_to[idx].type) {
-            case GPICAP_TYPE_ADS:
-                //get_ads_model_state
-                ads_dump_rr_no_buf(
-                    pd->has_access_to[idx].res_id);
-                break;
-            case GPICAP_TYPE_MO:
-                break;
-            case GPICAP_TYPE_CPU:
-                break;
-            case GPICAP_TYPE_PD:
-                break;
-            default:
+    model_state_t *ms = (model_state_t *)malloc(sizeof(model_state_t));
+    assert(ms != NULL);
+    init_model_state(ms);
+
+    /* These two do not belong here*/
+    char pd_name[CSV_MAX_STRING_SIZE];
+    snprintf(pd_name, CSV_MAX_STRING_SIZE, "Proc_%u", pd->pd_obj_id);
+    char pd_id[CSV_MAX_STRING_SIZE];
+    snprintf(pd_id, CSV_MAX_STRING_SIZE, "PD_%u", pd->pd_obj_id);
+    add_pd(ms, pd_name, pd_id);
+
+    gpi_server_context_t *gpis = get_gpi_server();
+    for (int idx = 0; idx < MAX_PD_OSM_CAPS; idx++)
+    {
+
+        // if type seL4 cap
+        //  print_pd_osm_cap_info(&pd->has_access_to[idx]);
+        //  else if type osmosis cap
+        //  get the RR for that cap
+        switch (pd->has_access_to[idx].type)
+        {
+        case GPICAP_TYPE_ADS:
+            char res_id[20];
+            snprintf(res_id, 20, "ADS_%lu", pd->has_access_to[idx].res_id);
+            add_has_access_to(ms,
+                              pd_id,
+                              res_id,
+                              "true");
+            ads_component_registry_entry_t *client_data =
+                ads_component_registry_get_entry_by_id(pd->has_access_to[idx].res_id);
+            assert(client_data != NULL);
+            ads_dump_rr(&client_data->ads, ms);
+
             break;
-                ZF_LOGF("Calling anothe PD to get the info %s", __FUNCTION__);
+        case GPICAP_TYPE_MO:
+            break;
+        case GPICAP_TYPE_CPU:
+            break;
+        case GPICAP_TYPE_PD:
+            break;
+        default:
+            ZF_LOGF("Calling anothe PD to get the info %s", __FUNCTION__);
+            break;
         }
-   }
+    }
 
     /* Print RDE Info*/
-   for (int idx = 0 ; idx < MAX_PD_OSM_RDE; idx++  ) {
+    for (int idx = 0; idx < MAX_PD_OSM_RDE; idx++)
+    {
         print_pd_osm_rde_info(&pd->rde[idx]);
 
         // Find pd from the pd_id
         // if pd found
-            // pd_dump(&pd->rde[idx].pd_obj_id);
-   }
+        // pd_dump(&pd->rde[idx].pd_obj_id);
+    }
+    print_model_state(ms);
+    free(ms);
 
-
-return 0;
+    return 0;
 }
 
-void print_pd_osm_cap_info (osmosis_pd_cap_t *o) {
+inline void print_pd_osm_cap_info (osmosis_pd_cap_t *o) {
     printf("Slot_RT:%lx\t Slot_PD: %lx\t Slot_ServerPD: %lx\t T: %s\n",
            o->slot_in_RT,
            o->slot_in_PD,
@@ -402,8 +427,12 @@ void print_pd_osm_cap_info (osmosis_pd_cap_t *o) {
            cap_type_to_str(o->type));
 }
 
-void print_pd_osm_rde_info (osmosis_rde_t *o) {
-    printf("RDE:Slot_RT:%lx\t Slot_PD: %lx\t T: %s\n",
+inline void print_pd_osm_rde_info (osmosis_rde_t *o) {
+    if (o->slot_in_RT == 0) {
+        return;
+    }
+    printf("RDE: PD_ID: %u\t Slot_RT:%lu\t Slot_PD: %lu\t T: %s\n",
+           o->pd_obj_id,
            o->slot_in_RT,
            o->slot_in_PD,
            cap_type_to_str(o->type.type));

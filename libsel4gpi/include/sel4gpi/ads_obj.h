@@ -12,6 +12,7 @@
 #include <vspace/vspace.h>
 #include <sel4utils/vspace_internal.h>
 #include <sel4utils/process.h>
+#include <sel4gpi/model_exporting.h>
 
 typedef struct _ads {
     vspace_t *vspace;
@@ -89,13 +90,10 @@ int ads_shallow_copy(vspace_t *loader, ads_t *ads, vka_t *vka, void *omit_vaddr,
  * @brief
  *
  * @param ads ads object to dump the RR for
- * @param buf address in the client's address space where we need to dump the RR info.
- * @param size size of the buffer above.
- * @param buf_server Was the buffer allocated from the RT
+ * @param ms pointer to model state
  * @return void
  */
-void ads_dump_rr(ads_t *ads, void *buf, size_t size, bool buf_in_server);
-void ads_dump_rr_no_buf(seL4_Word ads_id);
+void ads_dump_rr(ads_t *ads, model_state_t *ms);
 
 
 static seL4_CPtr get_asid_pool(seL4_CPtr asid_pool)

@@ -283,7 +283,8 @@ static void handle_get_rr_req(seL4_Word sender_badge, seL4_MessageInfo_t old_tag
 
     void *buffer_addr = (void *) seL4_GetMR(ADSMSGREG_GET_RR_REQ_BUF_VA);
     size_t buffer_size = seL4_GetMR(ADSMSGREG_GET_RR_REQ_BUF_SZ);
-    ads_dump_rr(&client_data->ads, buffer_addr, buffer_size, false);
+    ZF_LOGF("Do not use implemented");
+    // ads_dump_rr(&client_data->ads, buffer_addr, buffer_size, false);
     seL4_SetMR(ADSMSGREG_FUNC, ADS_FUNC_GET_RR_ACK);
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0, ADSMSGREG_TESTING_ACK_END);
     return reply(tag);
