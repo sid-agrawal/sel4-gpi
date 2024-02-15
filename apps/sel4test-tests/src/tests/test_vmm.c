@@ -28,15 +28,16 @@ int test_new_vmm(env_t env)
     int error;
     printf("------------------STARTING: %s------------------\n", __func__);
     
-    vmm_env_t *vmm_e = vm_setup(env->irq_handler, &env->vka, &env->vspace, env->page_directory, env->asid_pool);
+    vmm_env_t *vmm_e = vm_setup(env->irq_handler, &env->vka, &env->vspace, env->page_directory, env->asid_pool, &env->simple);
     vm_init(vmm_e);
 
-    seL4_DebugDumpScheduler();
-
-    while (1) {
+    /* temporary indefinite yield */
+    while (1)
+    {
         seL4_Yield();
     }
     
+
     return sel4test_get_result();
 }
 DEFINE_TEST(GPIVM001, "Test running VM", test_new_vmm, true)

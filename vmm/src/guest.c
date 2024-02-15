@@ -34,16 +34,16 @@ bool guest_start(vmm_env_t *vmm_env, size_t boot_vcpu_id, uintptr_t kernel_pc, u
         regs.pc, regs.x0, initrd);
     /* Restart the boot vCPU to the program counter of the TCB associated with it */
 
-    err = seL4_TCB_Resume(vmm_env->vm_tcb.cptr);
-    // seL4_UserContext ctxt = {0};
-    // ctxt.pc = regs.pc;
-    // err = seL4_TCB_WriteRegisters(
-    //     vmm_env->vm_tcb.cptr, // XXX + boot_vcpu_id?
-    //     true,
-    //     0, /* No flags */
-    //     1, /* writing 1 register */
-    //     &ctxt
-    // );
+    // err = seL4_TCB_Resume(vmm_env->vm_tcb.cptr);
+    seL4_UserContext ctxt = {0};
+    ctxt.pc = regs.pc;
+    err = seL4_TCB_WriteRegisters(
+        vmm_env->vm_tcb.cptr, // XXX + boot_vcpu_id?
+        true,
+        0, /* No flags */
+        1, /* writing 1 register */
+        &ctxt
+    );
 
     ZF_LOGF_IFERR(err, "Failed to write TCB registers");
 
