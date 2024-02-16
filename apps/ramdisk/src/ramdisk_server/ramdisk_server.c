@@ -1,7 +1,3 @@
-/**
- *
- */
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <assert.h>
@@ -12,21 +8,20 @@
 #include <vka/capops.h>
 #include <vspace/vspace.h>
 
-#include <ramdisk/ramdisk.h>
+// ARYA-TODO why is this needed for the following include
 
-/* Memory regions for IPC to ramdisk server */
-#define RAMDISK_MR_OP 0
-#define RAMDISK_CAP_MO 0
+#ifdef RAMDISK_EXECUTABLE
+char _cpio_archive[] = {};
+char _cpio_archive_end[] = {};
+#endif
 
-/* Ramdisk opcodes */
-enum RAMDISK_OPCODE
-{
-    RAMDISK_READ,
-    RAMDISK_WRITE,
-    RAMDISK_GET_BLOCK
-};
+#include <sel4gpi/ads_clientapi.h>
+#include <sel4gpi/pd_clientapi.h>
 
-/* Other constants */
+#include <ramdisk_server.h>
+
+#define RAMDISK_S "RamDisk Server: "
+
 #define RAMDISK_PRINTF(...)       \
     do                            \
     {                             \
@@ -63,6 +58,8 @@ enum RAMDISK_OPCODE
         }                                 \
     } while (0);
 
+#define DSB() asm volatile("dsb sy" ::: "memory")
+
 /*--- RAMDISK SERVER ---*/
 static ramdisk_server_context_t ramdisk_server;
 
@@ -78,22 +75,27 @@ static inline seL4_MessageInfo_t recv(seL4_Word *sender_badge_ptr)
      * the reply param of api_recv(third param) is only used in the MCS kernel.
      **/
 
-    return api_recv(get_ramdisk_server()->server_ep_obj.cptr,
+    return api_recv(get_ramdisk_server()->server_ep,
                     sender_badge_ptr,
-                    get_ramdisk_server()->server_thread.reply.cptr);
+                    get_ramdisk_server()->mcs_reply);
 }
 
 static inline void reply(seL4_MessageInfo_t tag)
 {
-    api_reply(get_ramdisk_server()->server_thread.reply.cptr, tag);
+    api_reply(get_ramdisk_server()->mcs_reply, tag);
 }
 
 seL4_Error
-ramdisk_server_spawn_thread(simple_t *parent_simple, vka_t *parent_vka,
-                            vspace_t *parent_vspace, seL4_CPtr gpi_server,
-                            uint8_t priority,
-                            seL4_CPtr *server_ep_cap)
+ramdisk_server_spawn_thread(simple_t *parent_simple,
+                            vka_t *parent_vka,
+                            vspace_t *parent_vspace,
+                            seL4_CPtr gpi_ep,
+                            seL4_CPtr parent_ep,
+                            seL4_CPtr ads_ep,
+                            uint8_t priority)
 {
+    RAMDISK_PRINTF("Starting ramdisk thread\n");
+
     seL4_Error error;
     cspacepath_t parent_cspace_cspath;
     seL4_MessageInfo_t tag;
@@ -105,72 +107,69 @@ ramdisk_server_spawn_thread(simple_t *parent_simple, vka_t *parent_vka,
 
     ramdisk_server_context_t *server = get_ramdisk_server();
 
-    server->server_simple = parent_simple;
     server->server_vka = parent_vka;
-    server->server_cspace = parent_cspace_cspath.root;
-    server->server_vspace = parent_vspace;
-    server->gpi_server = gpi_server;
+    server->gpi_server = gpi_ep;
+    server->parent_ep = parent_ep;
+    server->ads_conn = malloc(sizeof(ads_client_context_t));
+    server->ads_conn->badged_server_ep_cspath.capPtr = ads_ep;
 
     /* Get a CPtr to the parent's root cnode. */
     vka_cspace_make_path(parent_vka, 0, &parent_cspace_cspath);
 
     /* Allocate the Endpoint that the server will be listening on. */
-    error = vka_alloc_endpoint(parent_vka, &server->server_ep_obj);
+    vka_object_t server_ep_obj;
+    error = vka_alloc_endpoint(parent_vka, &server_ep_obj);
     CHECK_ERROR(error, "failed in vka_alloc_endpoint");
-    *server_ep_cap = server->server_ep_obj.cptr;
+    server->server_ep = server_ep_obj.cptr;
 
-    /* Initialize ADS connection */
-    /*
-    error = ads_component_client_connect(server->gpi_server,
-                                         server->server_vka,
-                                         &server->ads_conn);
-    */
-    seL4_CPtr ads_cap;
-    error = forge_ads_cap_from_vspace(server->server_vspace, server->server_vka,
-                                      &ads_cap);
-    vka_cspace_make_path(server->server_vka, ads_cap, &server->ads_conn.badged_server_ep_cspath);
-    CHECK_ERROR(error, "failed to connect to ADS component");
-
-    /* Allocate the ramdisk's virtual disk */
-    int n_pages = RAMDISK_SIZE_BYTES / SIZE_BITS_TO_BYTES(seL4_LargePageBits);
-    server->ramdisk_buf = vspace_new_pages(parent_vspace, seL4_ReadWrite,
-                                           n_pages, seL4_LargePageBits);
-
-    CHECK_ERROR(server->ramdisk_buf == NULL, "failed to map virtual disk");
-
-    /* Setup disk block data structure */
-    server->free_blocks = malloc(sizeof(ramdisk_block_node_t));
-    server->free_blocks->blockno = 0;
-    server->free_blocks->n_blocks = RAMDISK_SIZE_BYTES / RAMDISK_BLOCK_SIZE;
-    server->free_blocks->next = NULL;
+    RAMDISK_PRINTF("Allocated endpoint\n");
 
     /* Configure thread */
     sel4utils_thread_config_t config = thread_config_default(parent_simple,
                                                              parent_cspace_cspath.root,
                                                              seL4_NilData,
-                                                             server->server_ep_obj.cptr,
+                                                             server->server_ep,
                                                              priority);
 
+    sel4utils_thread_t thread;
     error = sel4utils_configure_thread_config(parent_vka,
                                               parent_vspace,
                                               parent_vspace,
                                               config,
-                                              &server->server_thread);
-    CHECK_ERROR_GOTO(error, "sel4utils_configure_thread failed", out);
+                                              &thread);
+    CHECK_ERROR_GOTO(error, "sel4utils_configure_thread failed", out2);
 
-    NAME_THREAD(server->server_thread.tcb.cptr, "ramdisk server");
-    error = sel4utils_start_thread(&server->server_thread,
+    RAMDISK_PRINTF("Starting ramdisk thread\n");
+    NAME_THREAD(thread.tcb.cptr, "ramdisk server");
+    error = sel4utils_start_thread(&thread,
                                    (sel4utils_thread_entry_fn)&ramdisk_server_main,
                                    NULL, NULL, 1);
-    CHECK_ERROR_GOTO(error, "sel4utils_start_thread failed", out);
+    CHECK_ERROR_GOTO(error, "sel4utils_start_thread failed", out2);
 
     return 0;
 
-out:
+out2:
     RAMDISK_PRINTF("spawn_thread: Server ran into an error.\n");
-    vka_free_object(parent_vka, &server->server_ep_obj);
-    vka_free_object(parent_vka, &server->ramdisk_buf_obj); // ARYA-TODO does this unmap?
+    vka_free_object(parent_vka, &server_ep_obj);
     return error;
+}
+
+int ramdisk_server_start(vka_t *vka,
+                         pd_init_data_t *init_data,
+                         seL4_CPtr parent_ep)
+{
+    seL4_Error error;
+
+    ramdisk_server_context_t *server = get_ramdisk_server();
+
+    server->server_vka = vka;
+    server->gpi_server = init_data->gpi_ep;
+    server->server_ep = init_data->pd_ep;
+    server->ads_conn = &init_data->ads_conn;
+    server->parent_ep = parent_ep;
+
+    RAMDISK_PRINTF("Going to main function\n");
+    return ramdisk_server_main();
 }
 
 /**
@@ -196,10 +195,53 @@ uint64_t ramdisk_assign_new_badge(uint64_t blockno)
 }
 
 /**
+ * To be run once at the beginning of ramdisk main
+ */
+static int ramdisk_init()
+{
+    ramdisk_server_context_t *server = get_ramdisk_server();
+    int error;
+
+    /* Allocate the ramdisk's virtual disk */
+    int n_pages = RAMDISK_SIZE_BYTES / SIZE_BITS_TO_BYTES(seL4_PageBits);
+    printf("Allocating %d pages\n", n_pages);
+    server->ramdisk_mo = malloc(sizeof(mo_client_context_t));
+    error = mo_component_client_connect(server->gpi_server,
+                                        server->server_vka,
+                                        n_pages,
+                                        server->ramdisk_mo);
+    CHECK_ERROR(error, "failed to allocate virtual disk");
+    RAMDISK_PRINTF("Allocated ramdisk\n");
+
+    /* Map the virtual disk */
+    error = ads_client_attach(server->ads_conn,
+                              NULL,
+                              server->ramdisk_mo,
+                              &server->ramdisk_buf);
+    CHECK_ERROR(error, "failed to map virtual disk");
+    RAMDISK_PRINTF("Mapped ramdisk\n");
+
+    /* Setup disk block data structure */
+    server->free_blocks = malloc(sizeof(ramdisk_block_node_t));
+    server->free_blocks->blockno = 0;
+    server->free_blocks->n_blocks = RAMDISK_SIZE_BYTES / RAMDISK_BLOCK_SIZE;
+    server->free_blocks->next = NULL;
+
+    /* Send our ep to the parent process */
+    RAMDISK_PRINTF("Messaging parent process at slot %d\n", (int)server->parent_ep);
+
+    seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 1, 0);
+    seL4_SetCap(0, server->server_ep);
+    seL4_Send(server->parent_ep, tag);
+
+    return error;
+}
+
+/**
  * @brief The starting point for the ramdisk server's thread.
  *
  */
-void ramdisk_server_main()
+int ramdisk_server_main()
 {
     RAMDISK_PRINTF("main: started\n");
 
@@ -207,6 +249,9 @@ void ramdisk_server_main()
     seL4_Error error = 0;
     seL4_Word sender_badge;
     cspacepath_t received_cap_path;
+
+    error = ramdisk_init();
+    CHECK_ERROR_GOTO(error, "failed to initialize ramdisk", out);
 
     while (1)
     {
@@ -234,7 +279,7 @@ void ramdisk_server_main()
             CHECK_ERROR_GOTO(get_ramdisk_server()->free_blocks == NULL, "no more free blocks to assign", done);
             uint64_t blockno = get_ramdisk_server()->free_blocks->blockno;
 
-            RAMDISK_PRINTF("Allocating blockno %d\n", blockno);
+            RAMDISK_PRINTF("Allocating blockno %zx\n", blockno);
 
             // Update free block list
             get_ramdisk_server()->free_blocks->blockno++;
@@ -247,7 +292,7 @@ void ramdisk_server_main()
             // Create the badged endpoint
             cspacepath_t src, dest;
             vka_cspace_make_path(get_ramdisk_server()->server_vka,
-                                 get_ramdisk_server()->server_ep_obj.cptr, &src);
+                                 get_ramdisk_server()->server_ep, &src);
 
             seL4_CPtr dest_cptr;
             vka_cspace_alloc(get_ramdisk_server()->server_vka, &dest_cptr);
@@ -278,36 +323,45 @@ void ramdisk_server_main()
             CHECK_ERROR_GOTO(cap_type != GPICAP_TYPE_BLOCK, "ramdisk server got invalid captype in badged EP", done);
             uint64_t blockno = get_object_id_from_badge(sender_badge);
 
+            RAMDISK_PRINTF("Got op for blockno %ld\n", blockno);
+
             reply_tag = seL4_MessageInfo_new(error, 0, 0, 1);
             switch (op)
             {
             case RAMDISK_READ:
             case RAMDISK_WRITE:
                 /* Attach memory object to server ADS */
-                CHECK_ERROR_GOTO(seL4_MessageInfo_get_extraCaps(tag) != 1, "client did not attach MO for read/write op", done);
+                CHECK_ERROR_GOTO(seL4_MessageInfo_get_extraCaps(tag) != 1,
+                                 "client did not attach MO for read/write op", done);
                 mo_client_context_t mo_conn;
                 mo_conn.badged_server_ep_cspath = received_cap_path;
                 void *mo_vaddr;
-                error = ads_client_attach(&get_ramdisk_server()->ads_conn,
+                error = ads_client_attach(get_ramdisk_server()->ads_conn,
                                           NULL,
                                           &mo_conn,
                                           &mo_vaddr);
                 CHECK_ERROR_GOTO(error, "failed to attach client's MO to ADS", done);
 
+                RAMDISK_PRINTF("Can access vaddr %p, val %x\n", mo_vaddr, *((int *)mo_vaddr));
+
                 /* Read/write ramdisk */
                 void *ramdisk_vaddr = ramdisk_ptr(blockno);
                 if (op == RAMDISK_READ)
                 {
+                    RAMDISK_PRINTF("Reading from blockno %ld to %p\n", blockno, mo_vaddr);
                     memcpy(mo_vaddr, ramdisk_vaddr, RAMDISK_BLOCK_SIZE);
+                    // DSB();
                 }
                 else
                 { // op is write
+                    RAMDISK_PRINTF("Writing from %p to blockno %ld\n", mo_vaddr, blockno);
+                    // RAMDISK_PRINTF("MO contents: %s\n", (char *) mo_vaddr);
                     memcpy(ramdisk_vaddr, mo_vaddr, RAMDISK_BLOCK_SIZE);
                 }
 
                 /* Detach MO from server ADS */
                 // ARYA-TODO what if the MO is not of RAMDISK_BLOCK_SIZE?
-                error = ads_client_rm(&get_ramdisk_server()->ads_conn, mo_vaddr, RAMDISK_BLOCK_SIZE);
+                error = ads_client_rm(get_ramdisk_server()->ads_conn, mo_vaddr, RAMDISK_BLOCK_SIZE);
                 CHECK_ERROR_GOTO(error, "failed to detach client's MO from ADS", done);
 
                 break;
@@ -328,66 +382,5 @@ void ramdisk_server_main()
     /* After we break out of the loop, seL4_TCB_Suspend ourselves */
 out:
     ZF_LOGI(RAMDISK_S "main: Suspending.");
-    seL4_TCB_Suspend(get_ramdisk_server()->server_thread.tcb.cptr);
-}
-
-/*--- RAMDISK CLIENT ---*/
-
-static ramdisk_client_context_t ramdisk_client;
-
-int ramdisk_client_alloc_block(seL4_CPtr server_ep_cap,
-                               vka_t *client_vka,
-                               ramdisk_client_context_t *ret_conn)
-{
-    /* Send a request to the server on its public EP */
-
-    // Alloc a slot for the incoming cap.
-    seL4_CPtr dest_cptr;
-    vka_cspace_alloc(client_vka, &dest_cptr);
-    cspacepath_t path;
-    vka_cspace_make_path(client_vka, dest_cptr, &path);
-    seL4_SetCapReceivePath(
-        /* _service */ path.root,
-        /* index */ path.capPtr,
-        /* depth */ path.capDepth);
-
-    /* Request a new block from server */
-    seL4_SetMR(RAMDISK_MR_OP, RAMDISK_GET_BLOCK);
-    seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0, 1);
-
-    tag = seL4_Call(server_ep_cap, tag);
-    int error = seL4_MessageInfo_get_label(tag);
-    CHECK_ERROR(error, "failed to get block from ramdisk server\n");
-    assert(seL4_MessageInfo_get_extraCaps(tag) == 1);
-
-    ret_conn->badged_server_ep_cspath = path;
-    return 0;
-}
-
-int ramdisk_client_read(ramdisk_client_context_t *conn, mo_client_context_t *mo)
-{
-    seL4_Error error;
-
-    /* Send IPC to ramdisk server */
-    seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 1, 1);
-    seL4_SetMR(RAMDISK_MR_OP, RAMDISK_READ);
-    seL4_SetCap(RAMDISK_CAP_MO, mo->badged_server_ep_cspath.capPtr);
-    tag = seL4_Call(conn->badged_server_ep_cspath.capPtr, tag);
-    error = seL4_MessageInfo_get_label(tag);
-
-    return error;
-}
-
-int ramdisk_client_write(ramdisk_client_context_t *conn, mo_client_context_t *mo)
-{
-    seL4_Error error;
-
-    /* Send IPC to ramdisk server */
-    seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 1, 1);
-    seL4_SetMR(RAMDISK_MR_OP, RAMDISK_WRITE);
-    seL4_SetCap(RAMDISK_CAP_MO, mo->badged_server_ep_cspath.capPtr);
-    tag = seL4_Call(conn->badged_server_ep_cspath.capPtr, tag);
-    error = seL4_MessageInfo_get_label(tag);
-
-    return error;
+    return -1;
 }

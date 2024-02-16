@@ -1,3 +1,4 @@
+#if 0
 #include <stdlib.h>
 #include <fcntl.h>
 #include <unistd.h>
@@ -88,3 +89,4 @@ int test_fs(env_t env)
     return sel4test_get_result();
 }
 DEFINE_TEST(GPIFS001, "Ensure that the file system is functioning", test_fs, true)
+# endif

@@ -48,8 +48,8 @@
 
 #include <sel4platsupport/io.h>
 #include <sel4gpi/gpi_server.h>
-#include <ramdisk/ramdisk.h>
 #include <xv6fs/xv6fs.h>
+#include <ramdisk_server.h>
 
 
 #define RT_MALLOC_SIZE 16 * 1024 * 1024
@@ -563,17 +563,50 @@ void *main_continued(void *arg UNUSED)
     // printf(GPISERVP "Public EP is: %d\n", env.gpi_endpoint_in_parent);
     // debug_cap_identify(GPISERVP, env.gpi_endpoint_in_parent);
 
-#ifdef START_RAMDISK
-    printf(RAMDISK_S "Starting ramdisk server...\n");
-    error = ramdisk_server_spawn_thread(&env.simple,
-                                        &env.vka,
-                                        &env.vspace,
-                                        env.gpi_endpoint_in_parent,
-                                        RAMDISK_SERVER_DEFAULT_PRIORITY,
-                                        &env.ramdisk_endpoint_in_parent);
-#endif
+#ifdef RAMDISK_IN_RT
+    /* create an endpoint for the parent to listen on*/
+    vka_object_t ep_object = {0};
+    error = vka_alloc_endpoint(&env.vka, &ep_object);
+    assert(error == 0);
 
-#ifdef START_XV6FS
+    printf("Starting ramdisk thread\n");
+
+    seL4_CPtr ads_conn;
+    error = forge_ads_cap_from_vspace(&env.vspace, &env.vka, &ads_conn);
+    assert(error == 0);
+
+    /* start ramdisk thread */
+    error = ramdisk_server_spawn_thread(&env.simple,
+                            &env.vka,
+                            &env.vspace,
+                            env.gpi_endpoint_in_parent,
+                            ep_object.cptr,
+                            ads_conn,
+                            250);
+
+    assert(error == 0);
+
+    /* Wait for message from thread */
+    cspacepath_t received_cap_path;
+    error = vka_cspace_alloc_path(&env.vka, &received_cap_path);
+    assert(error == 0);
+
+    seL4_SetCapReceivePath(received_cap_path.root,
+                           received_cap_path.capPtr,
+                           received_cap_path.capDepth);
+
+    seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0, 0);
+    tag = seL4_Recv(ep_object.cptr, NULL);
+    assert(seL4_MessageInfo_get_extraCaps(tag) == 1);
+    assert(received_cap_path.capPtr != 1);
+    env.ramdisk_endpoint_in_parent = received_cap_path.capPtr;
+
+    printf("Got ramdisk ep in slot %d\n", (int) env.ramdisk_endpoint_in_parent);
+#else
+    env.ramdisk_endpoint_in_parent = env.gpi_endpoint_in_parent;
+#endif 
+
+#ifdef XV6FS_IN_RT
     printf(XV6FS_S "Starting xv6fs server...\n");
     error = xv6fs_server_spawn_thread(&env.simple,
                                       &env.vka,

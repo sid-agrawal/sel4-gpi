@@ -101,6 +101,7 @@ int ads_attach(ads_t *ads,
                void ** ret_vaddr,
                /*sel4utils_process_t*/ vspace_t *process_cookie)
 {
+    int cacheable = 1;
     vspace_t *target = ads->vspace;
 
 
@@ -113,7 +114,7 @@ int ads_attach(ads_t *ads,
                                               num_pages * PAGE_SIZE_4K,
                                               seL4_PageBits,
                                               rights,
-                                              1,
+                                              cacheable,
                                               &vaddr);
     }
     else
@@ -121,7 +122,7 @@ int ads_attach(ads_t *ads,
         res = sel4utils_reserve_range_at(target,
                                          vaddr,
                                          num_pages * PAGE_SIZE_4K,
-                                         rights, 1);
+                                         rights, cacheable);
     }
     if (res.res == NULL)
     {

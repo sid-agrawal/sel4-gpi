@@ -27,10 +27,7 @@ file(
         src/arch/${KernelArch}/tests/*.S
 )
 
-<<<<<<< HEAD
-=======
-add_subdirectory(../sqlite3 sqlite3)
->>>>>>> e565884 (Add sqlite)
+# add_subdirectory(../sqlite3 sqlite3)
 
 add_executable(sel4test-tests EXCLUDE_FROM_ALL ${deps})
 target_include_directories(
@@ -39,20 +36,20 @@ target_include_directories(
 )
 
 # Add custom linker script
-set(linkerScript "${CMAKE_CURRENT_LIST_DIR}/src/linker.lds")
+#set(linkerScript "${CMAKE_CURRENT_LIST_DIR}/src/linker.lds")
 
-set_target_properties(
-    sel4test-tests
-    PROPERTIES LINK_DEPENDS ${linkerScript}
-)
-add_dependencies(elfloader elfloader_linker)
-set_property(
-    TARGET sel4test-tests
-    APPEND_STRING
-    PROPERTY
-        LINK_FLAGS
-        " -Wl,-T ${linkerScript} -static -Wl,--build-id=none"
-)
+#set_target_properties(
+#    sel4test-tests
+#    PROPERTIES LINK_DEPENDS ${linkerScript}
+#)
+#add_dependencies(elfloader elfloader_linker)
+#set_property(
+#    TARGET sel4test-tests
+#    APPEND_STRING
+#    PROPERTY
+#        LINK_FLAGS
+#        " -Wl,-T ${linkerScript} -static -Wl,--build-id=none"
+#)
 
 target_link_libraries(
     sel4test-tests
@@ -73,8 +70,9 @@ target_link_libraries(
         sel4gpi
         sel4serialserver_tests
         sel4vmm
-        ramdisk
-        xv6fs
-        sqlite3
+        ramdisk_client
+        ramdisk_server_lib
+        #xv6fs
+        #sqlite3
     PRIVATE sel4test-driver_Config
 )

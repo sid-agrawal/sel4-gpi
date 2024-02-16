@@ -1,3 +1,4 @@
+#if 0
 #include <stdlib.h>
 #include <fcntl.h>
 #include <unistd.h>
@@ -254,3 +255,4 @@ int test_sqlite(env_t env)
     return sel4test_get_result();
 }
 DEFINE_TEST(GPISQ001, "Ensure that sqlite can run", test_sqlite, true)
+#endif

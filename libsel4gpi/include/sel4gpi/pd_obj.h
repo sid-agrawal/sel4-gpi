@@ -13,8 +13,9 @@
 #include <vka/object.h>
 #include <vspace/vspace.h>
 
-#include<sel4gpi/badge_usage.h>
-#include<sel4gpi/cap_tracking.h>
+#include <sel4gpi/badge_usage.h>
+#include <sel4gpi/cap_tracking.h>
+#include <sel4gpi/ads_clientapi.h>
 
 #define TEST_NAME_MAX (64 - 4 * sizeof(seL4_Word))
 #define MAX_SYS_OSM_CAPS 5000
@@ -24,11 +25,33 @@
 #define MAX_PD_OSM_CAPS 512
 #define MAX_PD_OSM_RDE 20
 
+#define MAX_PD_INIT_CAPS 8
+
 typedef struct pd_name {
     char top[MAX_PD_NAME];
     char mid[MAX_PD_NAME];
     char end[MAX_PD_NAME];
 } pd_name_t;
+
+/* Init data to be passed to a new pd */
+typedef struct _pd_init_data
+{
+    /* Caps sent to pd */
+    int n_init_caps;
+    seL4_CPtr init_caps[MAX_PD_INIT_CAPS];
+
+    /* Endpoint caps for pd */
+    seL4_CPtr pd_ep;
+    seL4_CPtr gpi_ep;
+    ads_client_context_t ads_conn;
+
+    /* root cnode of the test process */
+    seL4_CPtr root_cnode; 
+    /* size of the test processes cspace */
+    seL4_Word cspace_size_bits; 
+    /* range of free slots in the cspace */
+    seL4_SlotRegion free_slots; 
+} pd_init_data_t;
 
 
 typedef union rde_type {
@@ -81,7 +104,10 @@ typedef struct _pd {
 
 
     sel4utils_process_t proc;
-    // AS_CAP
+
+    /* AS endpoint for child */
+    seL4_CPtr ads_ep_in_child;
+
     // CPU_CAP
     simple_t *simple;
     vka_t *vka;
@@ -186,7 +212,6 @@ typedef struct _pd {
 
 }pd_t;
 
-
 /*
 What caps data
 Type:
@@ -197,7 +222,7 @@ EP if applicable
 
 int pd_new(pd_t *pd,
            vka_t *vka,
-           vspace_t *vspace,
+           vspace_t *server_vspace,
            simple_t *simple);
 
 int pd_load_image(pd_t *pd,
@@ -227,3 +252,9 @@ int pd_next_slot(pd_t *pd,
 
 void print_pd_osm_cap_info (osmosis_pd_cap_t *o);
 void print_pd_osm_rde_info (osmosis_rde_t *o);
+
+/**
+ * Populates a structure of init data to be mapped into pd AS
+ * Should be called after all pd_send_cap calls
+*/
+int pd_populate_init_data(pd_t *pd, seL4_CPtr server_ep);

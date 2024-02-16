@@ -55,7 +55,20 @@ int pd_client_load(pd_client_context_t *pd_os_cap,
     seL4_SetMR(PDMSGREG_FUNC, PD_FUNC_LOAD_REQ);
 
     /* Send the badged endpoint cap of the ads client as a cap */
-    int image_id = 1;
+    int image_id = -1;
+    for (int i = 0; i < PD_N_IMAGES; i++) {
+        if (strcmp(image, pd_images[i]) == 0) {
+            OSDB_PRINTF(PDSERVC "image id is %d\n", i);
+            image_id = i;
+            break;
+        }
+    }
+
+    if (image_id == -1) {
+        OSDB_PRINTF(PDSERVC "invalid image name received %s\n", image);
+        return -1;
+    }
+
     seL4_SetMR(PDMSGREG_LOAD_FUNC_IMAGE, image_id);
     seL4_SetCap(0, ads_os_cap->badged_server_ep_cspath.capPtr);
 

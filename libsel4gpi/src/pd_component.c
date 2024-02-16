@@ -260,10 +260,9 @@ void pd_handle_allocation_request(seL4_MessageInfo_t *reply_tag)
     // TODO
 
     int error = pd_new(&client_reg_ptr->pd,
-                       get_pd_component()->server_vka,
-                       get_pd_component()->server_vspace,
-                       get_pd_component()->server_simple
-                       );
+        get_pd_component()->server_vka,
+        get_pd_component()->server_vspace,
+        get_pd_component()->server_simple);
 
     /* Create a badged endpoint for the client to send messages to.
      * Use the address of the client_registry_entry as the badge.
@@ -310,8 +309,6 @@ static void handle_load_req(seL4_Word sender_badge,
 
     int error = 0;
 
-
-    assert(seL4_GetMR(PDMSGREG_LOAD_FUNC_IMAGE) == 1);
     /* Find the client */
     pd_component_registry_entry_t *client_data = pd_component_registry_get_entry_by_badge(sender_badge);
     if (client_data == NULL)
@@ -331,7 +328,7 @@ static void handle_load_req(seL4_Word sender_badge,
     error = pd_load_image(&client_data->pd,
                        get_pd_component()->server_vka,
                        get_pd_component()->server_simple,
-                       "hello",
+                       pd_images[seL4_GetMR(PDMSGREG_LOAD_FUNC_IMAGE)],
                        get_pd_component()->server_vspace,
                        ads_data->ads.vspace,
                        ads_data->ads.root_page_dir);
@@ -489,9 +486,10 @@ static void handle_start_req(seL4_Word sender_badge, seL4_MessageInfo_t old_tag,
 
     error = pd_start(&client_data->pd,
         get_pd_component()->server_vka,
-                     client_data->raw_cap_in_root,
-                     get_pd_component()->server_vspace,
-                         arg0);
+        client_data->raw_cap_in_root,
+        get_pd_component()->server_vspace,
+        arg0);
+
     if (error) {
         OSDB_PRINTF(PDSERVS "main: Failed to start PD.\n");
         return;

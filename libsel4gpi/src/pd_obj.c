@@ -24,6 +24,7 @@
 #include <sel4gpi/ads_obj.h>
 #include <sel4gpi/debug.h>
 
+#include <vka/capops.h>
 
 int pd_new(pd_t *pd,
            vka_t *vka,
@@ -33,7 +34,6 @@ int pd_new(pd_t *pd,
 
     OSDB_PRINTF(PDSERVS"new PD: \n");
 
-
     // for (int i = 0; i < MAX_SYS_OSM_CAPS; i++)
     // {
     //     pd->osm_caps[i].type = GPICAP_TYPE_MAX;
@@ -41,15 +41,6 @@ int pd_new(pd_t *pd,
     // }
 
     pd->vka = vka;
-    // Allocate a new cspace
-
-
-    /* There are just setting up the config */
-    pd->config   = process_config_default_simple(simple, "hello", 255);
-    pd->config = process_config_mcp(pd->config, seL4_MaxPrio);
-    pd->config = process_config_auth(pd->config, simple_get_tcb(simple));
-    pd->config = process_config_create_cnode(pd->config, 17);
-
 }
 
 int pd_next_slot(pd_t *pd,
@@ -72,13 +63,19 @@ int pd_load_image(pd_t *pd,
 {
 
     int error = 0;
-    OSDB_PRINTF(PDSERVS "load_image: loading image for pd %p\n", pd);
+    OSDB_PRINTF(PDSERVS"load_image: loading image %s for pd %p\n", image_path, pd);
+
+
+    /* There are just setting up the config */
+    pd->config   = process_config_default_simple(simple, "hello", 255);
+    pd->config = process_config_mcp(pd->config, seL4_MaxPrio);
+    pd->config = process_config_auth(pd->config, simple_get_tcb(simple));
+    pd->config = process_config_create_cnode(pd->config, 17);
 
     sel4utils_process_config_t config = pd->config;
     /* This is doing actual works of setting up the PD's address space */
      error = sel4utils_osm_configure_process_custom(&(pd->proc),
-            // get_pd_component()->server_vka,
-
+                                                    // get_pd_component()->server_vka,
                                                      pd->vka,
                                                        server_vspace,
                                                        target_vspace,
@@ -291,7 +288,6 @@ int pd_send_cap(pd_t *to_pd,
 
     /* Add to our caps data struct */
 
-
     return 0;
 }
 
@@ -316,13 +312,13 @@ int pd_start(pd_t *pd,
     // Phase2: start the CPU thread.
 
     /* set up args for the test process */
-    seL4_Word argc = 0;
+    seL4_Word argc = 1;
     char string_args[argc][WORD_STRING_SIZE];
     char *argv[argc];
-    sel4utils_create_word_args(string_args, argv, argc);
+    sel4utils_create_word_args(string_args, argv, argc, arg0);
 
-    argc = 1;
-    snprintf(argv[0], WORD_STRING_SIZE, "%ld", arg0);
+    //argc = 1;
+    //snprintf(argv[0], WORD_STRING_SIZE, "%ld", arg0);
 
 
 

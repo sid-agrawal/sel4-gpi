@@ -284,12 +284,12 @@ void gpi_server_main()
         error = vka_cspace_alloc_path(get_gpi_server()->server_vka, &received_cap_path);
         assert(error == 0);
 
+        // (XXX) Arya: these slots will be wasted when sent caps are unwrapped
         seL4_SetCapReceivePath(
             /* _service */ received_cap_path.root,
             /* index */ received_cap_path.capPtr,
             /* depth */ received_cap_path.capDepth);
         tag = recv(&sender_badge);
-
 
         seL4_MessageInfo_t reply_tag;
         if (sender_badge == 0) { /* Handle Typed Request */

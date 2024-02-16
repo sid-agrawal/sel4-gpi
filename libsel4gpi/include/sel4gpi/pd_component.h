@@ -29,6 +29,9 @@
 #define PD_SERVER_BADGE_VALUE_EMPTY (0)
 #define PD_SERVER_BADGE_PARENT_VALUE (0xDEADBEEF)
 
+/* Temp definition of supported images */
+#define PD_N_IMAGES 2
+static const char* pd_images[PD_N_IMAGES] = { "hello", "ramdisk_server" };
 
 /* IPC values returned in the "label" message header. */
 enum pd_component_errors {
