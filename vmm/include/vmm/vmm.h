@@ -36,6 +36,7 @@ typedef struct vmm_env {
     vka_object_t vm_fault_ep;
     vka_object_t vm_cspace;
     vka_object_t serial_dev_frame;
+    vka_object_t gic_vcpu_frame;
     
 } vmm_env_t;
 
