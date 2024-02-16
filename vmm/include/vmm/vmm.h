@@ -35,7 +35,7 @@ typedef struct vmm_env {
     vka_object_t vm_sched_ctxt;
     vka_object_t vm_fault_ep;
     vka_object_t vm_cspace;
-    vka_object_t serial_dev_frame;
+    vka_object_t serial_dev_frame[3]; // odroid requires three different regions for serial io
     vka_object_t gic_vcpu_frame;
     
 } vmm_env_t;
