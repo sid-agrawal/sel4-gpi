@@ -38,13 +38,15 @@
  * guest's "RAM" the same for all platforms. For just booting Linux with a
  * simple user-space, 0x10000000 bytes (256MB) is plenty.
  */
-#define GUEST_RAM_SIZE 0x2800000 // 40 MB
+#define GUEST_RAM_SIZE 0x10000000 // 128 MB
 #define GUEST_RAM_VADDR 0x40000000 // expected by linux's dts
 
 #if defined(BOARD_qemu_arm_virt)
 #define GUEST_DTB_VADDR 0x4f000000
 #define GUEST_INIT_RAM_DISK_VADDR 0x4d700000
 #define SERIAL_PADDR 0x9000000
+#define GIC_PADDR 0x8040000
+#define LINUX_GIC_PADDR 0x8010000
 #elif defined(BOARD_rpi4b_hyp)
 #define GUEST_DTB_VADDR 0x2e000000
 #define GUEST_INIT_RAM_DISK_VADDR 0x2d700000
@@ -170,9 +172,7 @@ vmm_env_t *vm_setup(seL4_IRQHandler irq_handler, vka_t *vka, vspace_t *vspace, s
 
     serr = api_tcb_set_sched_params(vmm_e->vm_tcb.cptr, simple_get_tcb(simple), seL4_MaxPrio, seL4_MaxPrio, seL4_CapNull, seL4_CapNull);
 
-    char vcpu_name[32];
-    snprintf(vcpu_name, sizeof(vcpu_name), "%s", "vcpu");
-    seL4_DebugNameThread(vmm_e->vm_tcb.cptr, vcpu_name);
+    seL4_DebugNameThread(vmm_e->vm_tcb.cptr, "vcpu");
 
     /* setup serial IRQ and notification */
     vka_object_t ntfn;
@@ -201,16 +201,14 @@ vmm_env_t *vm_setup(seL4_IRQHandler irq_handler, vka_t *vka, vspace_t *vspace, s
     error = vspace_map_pages_at_vaddr(&vmm_e->vm_vspace, caps, NULL, (void *) SERIAL_PADDR, 1, seL4_PageBits, res);
     ZF_LOGF_IF(error, "Failed to map serial device to VM");
 
-    return vmm_e;
-}
+    /* GIC vCPU interface region */
+    error = vka_alloc_frame_at(vka, seL4_PageBits, (uintptr_t) GIC_PADDR, &vmm_e->gic_vcpu_frame);
+    ZF_LOGF_IF(error, "Failed to allocate GIC vCPU frame");
 
-void vm_init(vmm_env_t *vmm_e) {
-    int error;
-    /* Initialise the VMM, the VCPU(s), and start the guest */
-    /* Place all the binaries in the right locations before starting the guest */
-    size_t kernel_size = _guest_kernel_image_end - _guest_kernel_image;
-    size_t dtb_size = _guest_dtb_image_end - _guest_dtb_image;
-    size_t initrd_size = _guest_initrd_image_end - _guest_initrd_image;
+    res = vspace_reserve_range_at(&vmm_e->vm_vspace, (void *) LINUX_GIC_PADDR, BIT(seL4_PageBits), seL4_AllRights, 0);
+    caps[0] = vmm_e->gic_vcpu_frame.cptr;
+    error = vspace_map_pages_at_vaddr(&vmm_e->vm_vspace, caps, NULL, (void *) LINUX_GIC_PADDR, 1, seL4_PageBits, res);
+    ZF_LOGF_IF(error, "Failed to map GIC vCPU region to VM");
 
     /* guest ram */
     size_t num_pages = DIV_ROUND_UP(GUEST_RAM_SIZE, BIT(seL4_LargePageBits));
@@ -221,25 +219,18 @@ void vm_init(vmm_env_t *vmm_e) {
 
     error = sel4utils_share_mem_at_vaddr(vmm_e->vspace, &vmm_e->vm_vspace, (void *) GUEST_RAM_VADDR, num_pages, seL4_LargePageBits, (void *) GUEST_RAM_VADDR, vmm_res);
     ZF_LOGF_IF(error, "Failed to copy guest RAM to VM's vspace");
+
+    return vmm_e;
+}
+
+void vm_init(vmm_env_t *vmm_e) {
+    int error;
+    /* Initialise the VMM, the VCPU(s), and start the guest */
+    /* Place all the binaries in the right locations before starting the guest */
+    size_t kernel_size = _guest_kernel_image_end - _guest_kernel_image;
+    size_t dtb_size = _guest_dtb_image_end - _guest_dtb_image;
+    size_t initrd_size = _guest_initrd_image_end - _guest_initrd_image;
     
-    /* guest dtb */
-    num_pages = DIV_ROUND_UP(dtb_size, BIT(seL4_PageBits));
-    vmm_res = vspace_reserve_range_at(vmm_e->vspace, (void *) GUEST_DTB_VADDR, dtb_size, seL4_AllRights, 1);
-    error = vspace_new_pages_at_vaddr(vmm_e->vspace, (void *) GUEST_DTB_VADDR, num_pages, seL4_PageBits, vmm_res);
-    ZF_LOGF_IF(error, "Failed to map guest DTB in VMM's vspace");
-
-    error = sel4utils_share_mem_at_vaddr(vmm_e->vspace, &vmm_e->vm_vspace, (void *) GUEST_DTB_VADDR, num_pages, seL4_PageBits, (void *) GUEST_DTB_VADDR, vmm_res);
-    ZF_LOGF_IF(error, "Failed to copy guest DTB to VM's vspace");
-
-    /* guest init ram disk */
-    num_pages = DIV_ROUND_UP(initrd_size, BIT(seL4_PageBits));
-    vmm_res = vspace_reserve_range_at(vmm_e->vspace, (void *) GUEST_INIT_RAM_DISK_VADDR, initrd_size, seL4_AllRights, 1);
-    error = vspace_new_pages_at_vaddr(vmm_e->vspace, (void *) GUEST_INIT_RAM_DISK_VADDR, num_pages, seL4_PageBits, vmm_res);
-    ZF_LOGF_IF(error, "Failed to map guest init ram disk in VMM's vspace");
-
-    error = sel4utils_share_mem_at_vaddr(vmm_e->vspace, &vmm_e->vm_vspace, (void *) GUEST_INIT_RAM_DISK_VADDR, num_pages, seL4_PageBits, (void *) GUEST_INIT_RAM_DISK_VADDR, vmm_res);
-    ZF_LOGF_IF(error, "Failed to copy guest DTB to VM's vspace");
-
     uintptr_t kernel_pc = linux_setup_images((uintptr_t) GUEST_RAM_VADDR,
                                       (uintptr_t) _guest_kernel_image,
                                       kernel_size,

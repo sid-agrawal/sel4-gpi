@@ -31,6 +31,8 @@ int test_new_vmm(env_t env)
     vmm_env_t *vmm_e = vm_setup(env->irq_handler, &env->vka, &env->vspace, env->page_directory, env->asid_pool, &env->simple);
     vm_init(vmm_e);
 
+    seL4_DebugDumpScheduler();
+
     /* temporary indefinite yield */
     while (1)
     {
