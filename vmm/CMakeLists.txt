@@ -7,6 +7,10 @@ if(KernelArchRiscV)
     set(arch arm)
 endif()
 
+if(KernelPlatform STREQUAL "qemu-arm-virt")
+    set(KernelPlatVMM "qemu_arm_virt")
+endif()
+
 find_program(DTC_TOOL dtc)
     if("${DTC_TOOL}" STREQUAL "DTC_TOOL-NOTFOUND")
         message(FATAL_ERROR "Cannot find 'dtc' program.")
@@ -18,7 +22,7 @@ find_program(LD_LINKER ld)
     endif()
 
 set(
-    VmDTSPath "${CMAKE_CURRENT_SOURCE_DIR}/board/qemu_arm_virt/linux.dts" # TODO: don't hardcode this
+    VmDTSPath "${CMAKE_CURRENT_SOURCE_DIR}/board/${KernelPlatVMM}/linux.dts" # TODO: don't hardcode this
     CACHE INTERNAL "Location of VM DTS file"
     )
 
@@ -40,14 +44,14 @@ file(
     GLOB
         deps
         src/*.c
-        src/arch/aarch64/*.c
-        src/arch/aarch64/vgic/*.c
+        src/arch/${KernelSel4Arch}/*.c
+        src/arch/${KernelSel4Arch}/vgic/*.c
 )
 
 string(CONCAT package_guest_image_defs
-    "GUEST_KERNEL_IMAGE_PATH=\"${CMAKE_CURRENT_SOURCE_DIR}/board/qemu_arm_virt/linux\"\;"
+    "GUEST_KERNEL_IMAGE_PATH=\"${CMAKE_CURRENT_SOURCE_DIR}/board/${KernelPlatVMM}/linux\"\;"
     "GUEST_DTB_IMAGE_PATH=\"${VmDTBPath}\"\;"
-    "GUEST_INITRD_IMAGE_PATH=\"${CMAKE_CURRENT_SOURCE_DIR}/board/qemu_arm_virt/rootfs.cpio.gz\"\;")
+    "GUEST_INITRD_IMAGE_PATH=\"${CMAKE_CURRENT_SOURCE_DIR}/board/${KernelPlatVMM}/rootfs.cpio.gz\"\;")
 
 set_source_files_properties(
     tools/package_guest_images.S
@@ -66,8 +70,8 @@ list(
 list(
     REMOVE_ITEM
     deps
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/arch/aarch64/vgic/vgic_v3.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/arch/aarch64/vcpu.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/arch/${KernelSel4Arch}/vgic/vgic_v3.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/arch/${KernelSel4Arch}/vcpu.c
 )
 
 # add_link_options("-fuse-ld=lld")
@@ -78,7 +82,7 @@ add_library(sel4vmm STATIC EXCLUDE_FROM_ALL ${deps})
 
 target_include_directories(
     sel4vmm
-    PUBLIC include arch/aarch64
+    PUBLIC include arch/${KernelSel4Arch}
 )
 
 target_link_libraries(
@@ -93,4 +97,4 @@ target_link_libraries(
         sel4muslcsys
 )
 
-target_compile_options(sel4vmm PUBLIC  "-DBOARD_qemu_arm_virt")
+target_compile_options(sel4vmm PUBLIC  "-DBOARD_${KernelPlatVMM}")
