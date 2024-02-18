@@ -72,7 +72,7 @@ static char allocator_mem_pool[ALLOCATOR_STATIC_POOL_SIZE];
 
 #define BOOTSTRAP_CNODE_SIZE 12
 
-#define TEST_UNTYPED_SIZE BIT(seL4_PageBits) * 76800 // 200 MB
+#define TEST_UNTYPED_SIZE BIT(seL4_PageBits) * 76800 // 300 MB
 
 /* static memory for virtual memory bootstrapping */
 static sel4utils_alloc_data_t data;
@@ -647,7 +647,6 @@ int main(void)
      */
     init_env(&env);
 
-    printf("bbbb\n");
     /* Partially overwrite part of the VKA implementation to cache objects. We need to
      * create this wrapper as the actual vka implementation will only
      * allocate/return any given device frame once.
@@ -667,9 +666,7 @@ int main(void)
     serial_utspace_record = true;
     platsupport_serial_setup_simple(&env.vspace, &env.simple, &env.vka);
     serial_utspace_record = false;
-
-    printf("cccc\n");
-
+    
     /* Partially overwrite the IRQ interface so that we can record the IRQ caps that were allocated.
      * We need this only for the timer as the ltimer interfaces allocates the caps for us and hides them away.
      * A few of the tests require actual interactions with the caps hence we record them.
