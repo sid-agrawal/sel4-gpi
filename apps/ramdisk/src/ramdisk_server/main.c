@@ -16,6 +16,13 @@
 
 #include <ramdisk_server.h>
 
+
+#define APP_MALLOC_SIZE 1 * 1024
+char __attribute__((aligned(PAGE_SIZE_4K))) morecore_area[APP_MALLOC_SIZE];
+size_t morecore_size = APP_MALLOC_SIZE;
+/* Pointer to free space in the morecore area. */
+uintptr_t morecore_top = (uintptr_t) &morecore_area[APP_MALLOC_SIZE];
+
 /* global static memory for init */
 static sel4utils_alloc_data_t alloc_data;
 

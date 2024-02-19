@@ -28,7 +28,7 @@
 #define HELLO_APP "hello"
 #define MAX_MO_CHILD 10
 #define RAMDISK_APP "ramdisk_server"
-#define RAMDISK_IN_RT 1
+//#define RAMDISK_IN_RT 1
 
 #define MAX_TIMER_IRQS 4
 
