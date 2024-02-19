@@ -222,7 +222,7 @@ static void handle_attach_req(seL4_Word sender_badge, seL4_MessageInfo_t old_tag
     seL4_CPtr *root_frame_caps = mo_reg->mo.frame_caps_in_root_task;
     void *ret_vaddr = NULL;
 
-    OSDB_PRINTF(ADSSERVS "attaching mo with id %d\n", mo_reg->mo.mo_obj_id);
+    OSDB_PRINTF(ADSSERVS "attaching mo with id %lu\n", mo_reg->mo.mo_obj_id);
 
     /* Make a copy of the frame caps for this new mapping */
     attach_node_t *attach_node = malloc(sizeof(attach_node_t));
@@ -251,7 +251,7 @@ static void handle_attach_req(seL4_Word sender_badge, seL4_MessageInfo_t old_tag
 
         attach_node->frame_caps[i] = to_path.capPtr;
 
-        void* frame_paddr = seL4_DebugCapPaddr(attach_node->frame_caps[i]);
+        void* frame_paddr =  (void *) seL4_DebugCapPaddr(attach_node->frame_caps[i]);
         OSDB_PRINTF(ADSSERVS "paddr of frame to map: %p\n", frame_paddr);
     }
 
