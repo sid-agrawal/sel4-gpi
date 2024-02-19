@@ -69,7 +69,7 @@ target_link_libraries(
         sel4testsupport
         sel4gpi
         sel4serialserver_tests
-        sel4vmm
+        # sel4vmm
         ramdisk_client
         ramdisk_server_lib
         #xv6fs
