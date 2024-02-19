@@ -228,7 +228,7 @@ int pd_send_cap(pd_t *to_pd,
             case GPICAP_TYPE_ADS:
                 ZF_LOGF("Sending ADS cap is not supported yet");
                 break;
-            case GPICAP_TYPE_MO:
+            case GPICAP_TYPE_MO: ;
                 seL4_Word new_badge = gpi_new_badge(cap_type,
                                                     get_perms_from_badge(badge),
                                                     to_pd->pd_obj_id, /* Client ID*/
@@ -379,7 +379,7 @@ int pd_dump(pd_t *pd)
         //  get the RR for that cap
         switch (pd->has_access_to[idx].type)
         {
-        case GPICAP_TYPE_ADS:
+        case GPICAP_TYPE_ADS: ;
             char res_id[20];
             snprintf(res_id, 20, "ADS_%lu", pd->has_access_to[idx].res_id);
             add_has_access_to(ms,
