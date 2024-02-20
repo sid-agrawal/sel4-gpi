@@ -344,8 +344,9 @@ static void handle_load_req(seL4_Word sender_badge,
     OSDB_PRINTF(PDSERVS "main: config done.\n");
 
     // Insert into has access to.
-    client_data->pd.has_access_to[0].type = GPICAP_TYPE_ADS;
-    client_data->pd.has_access_to[0].res_id = ads_data->ads.ads_obj_id;
+    uint32_t idx = client_data->pd.has_access_to_count++;
+    client_data->pd.has_access_to[idx].type = GPICAP_TYPE_ADS;
+    client_data->pd.has_access_to[idx].res_id = ads_data->ads.ads_obj_id;
 
 
 
@@ -400,7 +401,7 @@ static void handle_alloc_ep_req(seL4_Word sender_badge,
     int error = pd_alloc_ep(&client_data->pd,
                             get_pd_component()->server_vka,
                             &slot);
-    
+
 
     seL4_SetMR(PDMSGREG_FUNC, PD_FUNC_ALLOC_EP_ACK);
     seL4_SetMR(PDMSGREG_ALLOC_EP_PD_SLOT, slot);

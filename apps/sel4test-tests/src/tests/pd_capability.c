@@ -43,6 +43,7 @@ int test_new_process_osmosis(env_t env)
     assert(error == 0);
 
     /*
+        (XXX)
         Give the PD some RDEs
         {
             "VA": "slot",
@@ -60,7 +61,9 @@ int test_new_process_osmosis(env_t env)
     // error = pd_client_send_cap(&pd_os_cap, ep_object.cptr, &slot);
     // assert(error == 0);
 
-    // Create a new CPU cap, and make that the PD's primary cap.
+    /*
+        (XXX) Create a new CPU cap, and make that the PD's primary CPU cap.
+    */
 
     // Start the CPU.
     error = pd_client_start(&pd_os_cap,

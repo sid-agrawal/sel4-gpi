@@ -173,6 +173,10 @@ void ads_dump_rr(ads_t *ads, model_state_t *ms)
     assert(vka != NULL);
     OSDB_PRINTF(ADSSERVS "vka address: %p\n", vka);
 
+    char ads_res_id[CSV_MAX_STRING_SIZE];
+    snprintf(ads_res_id, CSV_MAX_STRING_SIZE, "ADS_%u", ads->ads_obj_id);
+    add_resource(ms, "ADS", ads_res_id);
+
     while (from_sel4_res != NULL)
     {
         char res_type[CSV_MAX_STRING_SIZE];
@@ -182,6 +186,7 @@ void ads_dump_rr(ads_t *ads, model_state_t *ms)
                  ads->ads_obj_id, from_sel4_res->start,
                  from_sel4_res->end);
         add_resource(ms, res_type, res_id);
+        add_resource_depends_on(ms, ads_res_id, res_id);
 
         /* Print all the caps of this reservation */
         void *va = (void *)from_sel4_res->start;

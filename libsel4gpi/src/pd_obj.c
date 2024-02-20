@@ -36,11 +36,23 @@ int pd_new(pd_t *pd,
 
     OSDB_PRINTF(PDSERVS"new PD: \n");
 
-    // for (int i = 0; i < MAX_SYS_OSM_CAPS; i++)
-    // {
-    //     pd->osm_caps[i].type = GPICAP_TYPE_MAX;
-    //     pd->osm_caps[i].slot = 0;
-    // }
+    pd->has_access_to_count = 0;
+    for (int i = 0; i < MAX_PD_OSM_CAPS; i++)
+    {
+        pd->has_access_to[i].type = GPICAP_TYPE_NONE;
+        pd->has_access_to[i].slot_in_RT = 0;
+        pd->has_access_to[i].slot_in_PD = 0;
+        pd->has_access_to[i].slot_in_ServerPD = 0;
+    }
+
+    pd->rde_count = 0;
+    for (int i = 0; i < MAX_PD_OSM_RDE; i++)
+    {
+        pd->rde[i].type.type = GPICAP_TYPE_NONE;
+        pd->rde[i].slot_in_RT = 0;
+        pd->rde[i].slot_in_PD = 0;
+        pd->rde[i].pd_obj_id = 0;
+    }
 
     pd->vka = vka;
 }
@@ -269,59 +281,90 @@ int pd_send_cap(pd_t *to_pd,
     assert(cap != 0);
     ZF_LOGE("pd_send_cap: Sending cap %ld(badge:%lx) to pd %p\n", cap, badge, to_pd);
 
-
-
+    seL4_Word new_badge;
+    int error = 0;
+    cspacepath_t src, dest;
+    seL4_CPtr dest_cptr;
     /*
         Find out if the cap is an OSmosis cap or not.
     */
-    if (badge) {
-        // Find the pd from where ths cap came (do we need it)
+    if (badge)
+    {
+        // Find the pd from where ths cap came (do we need this info??)
+
         gpi_cap_t cap_type = get_cap_type_from_badge(badge);
-        switch (cap_type){
-            case GPICAP_TYPE_ADS:
-                ZF_LOGF("Sending ADS cap is not supported yet");
-                break;
-            case GPICAP_TYPE_MO: ;
-                seL4_Word new_badge = gpi_new_badge(cap_type,
-                                                    get_perms_from_badge(badge),
-                                                    to_pd->pd_obj_id, /* Client ID*/
-                                                    get_object_id_from_badge(badge));
-                // Increment the counter in the mo_t object.
-                mo_component_registry_entry_t *mo_reg = mo_component_registry_get_entry_by_badge(badge);
-                assert(mo_reg != NULL);
-                mo_reg->count++;
+        switch (cap_type)
+        {
+        case GPICAP_TYPE_ADS:
+            // ZF_LOGF("Sending ADS cap is not supported yet");
+            new_badge = gpi_new_badge(cap_type,
+                                      get_perms_from_badge(badge),
+                                      to_pd->pd_obj_id, /* Client ID*/
+                                      get_object_id_from_badge(badge));
+            // Increment the counter in the mo_t object.
+            ads_component_registry_entry_t *ads_reg = ads_component_registry_get_entry_by_badge(badge);
+            assert(ads_reg != NULL);
 
-                // Mint a new cap for the child.
-                cspacepath_t src, dest;
-                vka_cspace_make_path(get_mo_component()->server_vka,
-                                     get_mo_component()->server_ep_obj.cptr, &src);
-                seL4_CPtr dest_cptr;
-                vka_cspace_alloc(get_mo_component()->server_vka, &dest_cptr);
-                vka_cspace_make_path(get_mo_component()->server_vka, dest_cptr, &dest);
+            // Mint a new cap for the child.
+            vka_cspace_make_path(get_ads_component()->server_vka,
+                                 get_ads_component()->server_ep_obj.cptr, &src);
+            vka_cspace_alloc(get_ads_component()->server_vka, &dest_cptr);
+            vka_cspace_make_path(get_ads_component()->server_vka, dest_cptr, &dest);
 
-                int error = vka_cnode_mint(&dest,
-                                           &src,
-                                           seL4_AllRights,
-                                           new_badge);
-                if (error)
-                {
-                    OSDB_PRINTF(PDSERVS "%s: Failed to mint new_badge %lx.\n",
-                                __FUNCTION__, new_badge);
-                    return 1;
-                }
-                cap = dest_cptr;
-                break;
-            case GPICAP_TYPE_CPU:
-                ZF_LOGF("Sending CPU cap is not supported yet");
-                break;
-            case GPICAP_TYPE_PD:
-                ZF_LOGF("Sending PD cap is not supported yet");
-                break;
-            default:
-                //ZF_LOGF("Unknown cap type in %s", __FUNCTION__);
-                // (XXX) Arya: allowing unknown cap type for now to send parent ep
-                ZF_LOGI("Unknown cap type in %s", __FUNCTION__);
+            error = vka_cnode_mint(&dest,
+                                   &src,
+                                   seL4_AllRights,
+                                   new_badge);
+            if (error)
+            {
+                OSDB_PRINTF(PDSERVS "%s: Failed to mint new_badge %lx.\n",
+                            __FUNCTION__, new_badge);
+                return 1;
             }
+            cap = dest_cptr;
+            uint32_t idx = to_pd->has_access_to_count++;
+            to_pd->has_access_to[idx].type = GPICAP_TYPE_ADS;
+            to_pd->has_access_to[idx].res_id = ads_reg->ads.ads_obj_id;
+            break;
+        case GPICAP_TYPE_MO:
+            new_badge = gpi_new_badge(cap_type,
+                                      get_perms_from_badge(badge),
+                                      to_pd->pd_obj_id, /* Client ID*/
+                                      get_object_id_from_badge(badge));
+            // Increment the counter in the mo_t object.
+            mo_component_registry_entry_t *mo_reg = mo_component_registry_get_entry_by_badge(badge);
+            assert(mo_reg != NULL);
+            mo_reg->count++;
+
+            // Mint a new cap for the child.
+            vka_cspace_make_path(get_mo_component()->server_vka,
+                                 get_mo_component()->server_ep_obj.cptr, &src);
+            vka_cspace_alloc(get_mo_component()->server_vka, &dest_cptr);
+            vka_cspace_make_path(get_mo_component()->server_vka, dest_cptr, &dest);
+
+            error = vka_cnode_mint(&dest,
+                                   &src,
+                                   seL4_AllRights,
+                                   new_badge);
+            if (error)
+            {
+                OSDB_PRINTF(PDSERVS "%s: Failed to mint new_badge %lx.\n",
+                            __FUNCTION__, new_badge);
+                return 1;
+            }
+            cap = dest_cptr;
+            break;
+        case GPICAP_TYPE_CPU:
+            ZF_LOGF("Sending CPU cap is not supported yet");
+            break;
+        case GPICAP_TYPE_PD:
+            ZF_LOGF("Sending PD cap is not supported yet");
+            break;
+        default:
+            // ZF_LOGF("Unknown cap type in %s", __FUNCTION__);
+            //  (XXX) Arya: allowing unknown cap type for now to send parent ep
+            ZF_LOGI("Unknown cap type in %s", __FUNCTION__);
+        }
 
         // Find the pd where the cap is going, and basd
         // Create a new badge and then badge the unbadged gpi-server cap with the new badge
@@ -331,7 +374,9 @@ int pd_send_cap(pd_t *to_pd,
         // Insert it in the appropirate list
 
         // do the same copy as above
-    } else {
+    }
+    else
+    {
         // This is a cap from the kernel.
         // Just copy it to the child.
     }
@@ -434,24 +479,34 @@ int pd_dump(pd_t *pd)
         //  get the RR for that cap
         switch (pd->has_access_to[idx].type)
         {
-        case GPICAP_TYPE_ADS: ;
-            char res_id[20];
+        case GPICAP_TYPE_NONE:
+            break;
+        case GPICAP_TYPE_ADS:
+            char res_id[CSV_MAX_STRING_SIZE];
             snprintf(res_id, 20, "ADS_%lu", pd->has_access_to[idx].res_id);
             add_has_access_to(ms,
                               pd_id,
                               res_id,
                               "true");
-            ads_component_registry_entry_t *client_data =
+            ads_component_registry_entry_t *ads_data =
                 ads_component_registry_get_entry_by_id(pd->has_access_to[idx].res_id);
-            assert(client_data != NULL);
-            ads_dump_rr(&client_data->ads, ms);
-
+            assert(ads_data != NULL);
+            ads_dump_rr(&ads_data->ads, ms);
+            add_has_access_to(ms,
+                              pd_id,
+                              res_id,
+                              // (XXX): We need to find out which ads is active and print true only those ADSs
+                              // When TRUE it shows that this ads is in use by some TCB.
+                              // We specifically add this to handle the scenario where a PD can have mutliple ads, but only one of them is in use.
+                              // Think LWC.
+                              "true");
             break;
         case GPICAP_TYPE_MO:
             break;
         case GPICAP_TYPE_CPU:
             break;
-        case GPICAP_TYPE_PD:
+        case GPICAP_TYPE_seL4:
+            // Use some other method to get the cap details
             break;
         default:
             ZF_LOGF("Calling anothe PD to get the info %s", __FUNCTION__);
@@ -459,17 +514,13 @@ int pd_dump(pd_t *pd)
         }
     }
 
+    print_model_state(ms);
+    free(ms);
     /* Print RDE Info*/
     for (int idx = 0; idx < MAX_PD_OSM_RDE; idx++)
     {
         print_pd_osm_rde_info(&pd->rde[idx]);
-
-        // Find pd from the pd_id
-        // if pd found
-        // pd_dump(&pd->rde[idx].pd_obj_id);
     }
-    print_model_state(ms);
-    free(ms);
 
     return 0;
 }

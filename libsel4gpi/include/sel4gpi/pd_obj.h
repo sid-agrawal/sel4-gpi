@@ -29,6 +29,7 @@
 
 #define PD_ALLOCATOR_STATIC_POOL_SIZE ((1 << seL4_PageBits) * 20)
 
+// (XXX) This is not yet used anywher.
 typedef struct pd_name {
     char top[MAX_PD_NAME];
     char mid[MAX_PD_NAME];
@@ -169,16 +170,19 @@ typedef struct _pd {
 
 
     /*
-        All caps and their types
-        -----------------------
+        There are the resources and RDE which we are explicitly tracking for a PD.
+        They should be updated when the PD get's a new cap via pd_send_cap
+        or a new RDE is added at PD creation time.
 
-        We do not want to keep two copies of this data.
-        So if we keep track of the caps in the gpi_server,
-        then we do not need to keep this information in the pd.
+        (XXX): This is not yet fully the case yet.
+
+        (XXX) Convert both of there to linked lists
     */
-    osmosis_pd_cap_t has_access_to[MAX_PD_OSM_CAPS];
 
+    osmosis_pd_cap_t has_access_to[MAX_PD_OSM_CAPS];
+    uint64_t has_access_to_count;
     osmosis_rde_t rde[MAX_PD_OSM_RDE];
+    uint64_t rde_count;
 
     /*
         Convert this to a hash map
@@ -236,7 +240,7 @@ int pd_next_slot(pd_t *pd,
 
 /**
  * Allocates an endpoint using the gpi server's vka, and copies to the pd cspace
- * 
+ *
  * @param pd The pd to allocate an endpoint for
  * @param server_vka VKA of the gpi server
  * @param ret_ep slot of the allocated ep in the PD's cspace
@@ -247,7 +251,7 @@ int pd_alloc_ep(pd_t *pd,
 
 /**
  * Mints an endpoint in the PD's cspace and attaches the badge
- * 
+ *
  * @param pd The pd to allocate an endpoint for
  * @param src_ep raw endpoint to badge
  * @param badge badge to apply
