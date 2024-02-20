@@ -83,13 +83,13 @@ int pd_badge_ep(pd_t *pd,
     cspacepath_t src, dest;
     vka_cspace_make_path(&pd->pd_vka, src_ep, &src);
 
-    printf("make src path %d %d %d\n", src.root, src.capPtr, src.capDepth);
+    printf("make src path %lu %lu %lu\n", src.root, src.capPtr, src.capDepth);
 
     seL4_CPtr dest_cptr;
     vka_cspace_alloc(&pd->pd_vka, &dest_cptr);
     vka_cspace_make_path(&pd->pd_vka, dest_cptr, &dest);
 
-    printf("make dest path %d %d %d \n", dest.root, dest.capPtr, dest.capDepth);
+    printf("make dest path %lu %lu %lu \n", dest.root, dest.capPtr, dest.capDepth);
 
     int error = vka_cnode_mint(&dest,
                                &src,
@@ -336,7 +336,7 @@ int pd_send_cap(pd_t *to_pd,
         // Just copy it to the child.
     }
 
-    OSDB_PRINTF(PDSERVS "pd_send_cap: copying cap to child\n", *slot);
+    OSDB_PRINTF(PDSERVS "pd_send_cap: copying cap to child: %lu\n", *slot);
     *slot = sel4utils_copy_cap_to_process(&(to_pd->proc), to_pd->vka, cap);
     if (*slot == 0)
     {
