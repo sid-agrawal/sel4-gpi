@@ -200,7 +200,7 @@ int test_ramdisk(env_t env)
 
     /* Start ramdisk server process */
     seL4_CPtr ramdisk_ep;
-    error = start_ramdisk_thread(env, &ramdisk_ep);
+    error = start_ramdisk_pd(env, &ramdisk_ep);
     test_assert(error == 0);
 
     printf("------------------STARTING TESTS: %s------------------\n", __func__);

@@ -9,6 +9,8 @@
  *
  */
 
+#include <vka/capops.h>
+
 #include<sel4gpi/pd_clientapi.h>
 #include<sel4gpi/badge_usage.h>
 #include<sel4gpi/debug.h>
@@ -122,6 +124,82 @@ int pd_client_next_slot(pd_client_context_t *conn,
     assert(seL4_MessageInfo_ptr_get_label(&tag) == 0);
     assert(*slot != 0);
     return 0;
+}
+
+/**
+ * @brief Create a badged copy of an endpoint capability
+ *
+ * @param conn client connection object
+ * @param ret_ep location of result endpoint
+ * @return int 0 on success, -1 on failure.
+ */
+int pd_client_alloc_ep(pd_client_context_t *conn,
+                        seL4_CPtr *ret_ep)
+{
+    seL4_SetMR(PDMSGREG_FUNC, PD_FUNC_ALLOC_EP_REQ);
+    seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0,
+                                                  PDMSGREG_ALLOC_EP_REQ_END);
+    tag = seL4_Call(conn->badged_server_ep_cspath.capPtr, tag);
+    *ret_ep = seL4_GetMR(PDMSGREG_ALLOC_EP_PD_SLOT);
+    assert(seL4_MessageInfo_ptr_get_label(&tag) == 0);
+    assert(*ret_ep != 0);
+    return 0;
+}
+
+/**
+ * @brief Create a badged copy of an endpoint capability
+ *
+ * @param conn client connection object
+ * @param src_ep raw endpoint in pd's cspace
+ * @param badge badge to apply to the endpoint
+ * @param ret_ep location of result endpoint
+ * @return int 0 on success, -1 on failure.
+ */
+int pd_client_badge_ep(pd_client_context_t *conn,
+                        seL4_CPtr src_ep,
+                        seL4_Word badge,
+                        seL4_CPtr *ret_ep)
+{
+    // (XXX) Arya: we have to perform the cnode mint in the PD,
+    // and it fails if performed in the root task
+    
+    int error;
+
+    error = pd_client_next_slot(conn, ret_ep);
+    if (error) {
+        return error;
+    }
+
+    cspacepath_t src;
+    src.capDepth = PD_CAP_DEPTH;
+    src.root = PD_CAP_ROOT;
+    src.capPtr = src_ep;
+
+    cspacepath_t dest;
+    dest.capDepth = PD_CAP_DEPTH;
+    dest.root = PD_CAP_ROOT;
+    dest.capPtr = *ret_ep;
+
+    error = vka_cnode_mint(&dest,
+                           &src,
+                           seL4_AllRights,
+                           badge);
+    
+    return error;
+
+    /*
+    seL4_SetMR(PDMSGREG_FUNC, PD_FUNC_BADGE_EP_REQ);
+    seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 1,
+                                                  PDMSGREG_BADGE_EP_REQ_END);
+    seL4_SetMR(PDMSGREG_BADGE_EP_REQ_BADGE, badge);
+    seL4_SetMR(PDMSGREG_BADGE_EP_REQ_SRC, src_ep);
+    //seL4_SetCap(0, src_ep);
+    tag = seL4_Call(conn->badged_server_ep_cspath.capPtr, tag);
+    *ret_ep = seL4_GetMR(PDMSGREG_BADGE_EP_PD_SLOT);
+    assert(seL4_MessageInfo_ptr_get_label(&tag) == 0);
+    assert(*ret_ep != 0);
+    return 0;
+    */
 }
 
 int pd_client_start(pd_client_context_t *conn, seL4_Word arg0)

@@ -14,4 +14,4 @@ list(SORT deps)
 
 add_library(sel4gpi STATIC EXCLUDE_FROM_ALL ${deps})
 target_include_directories(sel4gpi PUBLIC include)
-target_link_libraries(sel4gpi muslc sel4 utils sel4test sel4serialserver)
+target_link_libraries(sel4gpi muslc sel4 utils sel4test sel4serialserver sel4allocman)

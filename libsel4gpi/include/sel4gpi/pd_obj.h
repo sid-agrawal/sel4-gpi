@@ -27,31 +27,13 @@
 
 #define MAX_PD_INIT_CAPS 8
 
+#define PD_ALLOCATOR_STATIC_POOL_SIZE ((1 << seL4_PageBits) * 20)
+
 typedef struct pd_name {
     char top[MAX_PD_NAME];
     char mid[MAX_PD_NAME];
     char end[MAX_PD_NAME];
 } pd_name_t;
-
-/* Init data to be passed to a new pd */
-typedef struct _pd_init_data
-{
-    /* Caps sent to pd */
-    int n_init_caps;
-    seL4_CPtr init_caps[MAX_PD_INIT_CAPS];
-
-    /* Endpoint caps for pd */
-    seL4_CPtr pd_ep;
-    seL4_CPtr gpi_ep;
-    ads_client_context_t ads_conn;
-
-    /* root cnode of the test process */
-    seL4_CPtr root_cnode; 
-    /* size of the test processes cspace */
-    seL4_Word cspace_size_bits; 
-    /* range of free slots in the cspace */
-    seL4_SlotRegion free_slots; 
-} pd_init_data_t;
 
 
 typedef union rde_type {
@@ -181,7 +163,9 @@ typedef struct _pd {
     /* number of available cores */
     seL4_Word cores;
 
-
+    /* allocator for the pd's cspace */
+    char allocator_mem_pool[PD_ALLOCATOR_STATIC_POOL_SIZE];
+    vka_t pd_vka;
 
 
     /*
@@ -249,6 +233,30 @@ int pd_start(pd_t *pd,
 int pd_next_slot(pd_t *pd,
                   vka_t *vka,
                   seL4_CPtr *next_free_slot);
+
+/**
+ * Allocates an endpoint using the gpi server's vka, and copies to the pd cspace
+ * 
+ * @param pd The pd to allocate an endpoint for
+ * @param server_vka VKA of the gpi server
+ * @param ret_ep slot of the allocated ep in the PD's cspace
+*/
+int pd_alloc_ep(pd_t *pd,
+                vka_t *server_vka,
+                seL4_CPtr *ret_ep);
+
+/**
+ * Mints an endpoint in the PD's cspace and attaches the badge
+ * 
+ * @param pd The pd to allocate an endpoint for
+ * @param src_ep raw endpoint to badge
+ * @param badge badge to apply
+ * @param ret_ep slot of the badged ep in the PD's cspace
+*/
+int pd_badge_ep(pd_t *pd,
+                seL4_CPtr src_ep,
+                seL4_Word badge,
+                seL4_CPtr *ret_ep);
 
 void print_pd_osm_cap_info (osmosis_pd_cap_t *o);
 void print_pd_osm_rde_info (osmosis_rde_t *o);

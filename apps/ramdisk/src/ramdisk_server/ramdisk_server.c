@@ -5,15 +5,7 @@
 #include <sel4/sel4.h>
 #include <sel4utils/process.h>
 #include <vka/vka.h>
-#include <vka/capops.h>
 #include <vspace/vspace.h>
-
-// ARYA-TODO why is this needed for the following include
-
-#ifdef RAMDISK_EXECUTABLE
-char _cpio_archive[] = {};
-char _cpio_archive_end[] = {};
-#endif
 
 #include <sel4gpi/ads_clientapi.h>
 #include <sel4gpi/pd_clientapi.h>
@@ -85,6 +77,16 @@ static inline void reply(seL4_MessageInfo_t tag)
     api_reply(get_ramdisk_server()->mcs_reply, tag);
 }
 
+static int vka_next_slot_fn(seL4_CPtr *slot)
+{
+    return vka_cspace_alloc(get_ramdisk_server()->server_vka, slot);
+}
+
+static int pd_next_slot_fn(seL4_CPtr *slot)
+{
+    return pd_client_next_slot(get_ramdisk_server()->pd_conn, slot);
+}
+
 seL4_Error
 ramdisk_server_spawn_thread(simple_t *parent_simple,
                             vka_t *parent_vka,
@@ -112,6 +114,7 @@ ramdisk_server_spawn_thread(simple_t *parent_simple,
     server->parent_ep = parent_ep;
     server->ads_conn = malloc(sizeof(ads_client_context_t));
     server->ads_conn->badged_server_ep_cspath.capPtr = ads_ep;
+    server->next_slot = vka_next_slot_fn;
 
     /* Get a CPtr to the parent's root cnode. */
     vka_cspace_make_path(parent_vka, 0, &parent_cspace_cspath);
@@ -154,19 +157,25 @@ out2:
     return error;
 }
 
-int ramdisk_server_start(vka_t *vka,
-                         pd_init_data_t *init_data,
+int ramdisk_server_start(ads_client_context_t *ads_conn,
+                         pd_client_context_t *pd_conn,
+                         seL4_CPtr gpi_ep,
                          seL4_CPtr parent_ep)
 {
     seL4_Error error;
 
     ramdisk_server_context_t *server = get_ramdisk_server();
 
-    server->server_vka = vka;
-    server->gpi_server = init_data->gpi_ep;
-    server->server_ep = init_data->pd_ep;
-    server->ads_conn = &init_data->ads_conn;
+    server->gpi_server = gpi_ep;
+    server->ads_conn = ads_conn;
+    server->pd_conn = pd_conn;
     server->parent_ep = parent_ep;
+    server->next_slot = pd_next_slot_fn;
+
+    /* Allocate the Endpoint that the server will be listening on. */
+    error = pd_client_alloc_ep(server->pd_conn, &server->server_ep);
+    CHECK_ERROR(error, "Failed to allocate endpoint for ramdisk server");
+    RAMDISK_PRINTF("Allocated server ep at %d\n", (int) server->server_ep);
 
     RAMDISK_PRINTF("Going to main function\n");
     return ramdisk_server_main();
@@ -206,8 +215,12 @@ static int ramdisk_init()
     int n_pages = RAMDISK_SIZE_BYTES / SIZE_BITS_TO_BYTES(seL4_PageBits);
     printf("Allocating %d pages\n", n_pages);
     server->ramdisk_mo = malloc(sizeof(mo_client_context_t));
+    seL4_CPtr free_slot;
+    error = get_ramdisk_server()->next_slot(&free_slot);
+    CHECK_ERROR(error, "failed to get next cspace slot");
+
     error = mo_component_client_connect(server->gpi_server,
-                                        server->server_vka,
+                                        free_slot,
                                         n_pages,
                                         server->ramdisk_mo);
     CHECK_ERROR(error, "failed to allocate virtual disk");
@@ -228,7 +241,7 @@ static int ramdisk_init()
     server->free_blocks->next = NULL;
 
     /* Send our ep to the parent process */
-    RAMDISK_PRINTF("Messaging parent process at slot %d\n", (int)server->parent_ep);
+    RAMDISK_PRINTF("Messaging parent process at slot %d, sending ep %d\n", (int)server->parent_ep, (int)server->server_ep);
 
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 1, 0);
     seL4_SetCap(0, server->server_ep);
@@ -249,20 +262,22 @@ int ramdisk_server_main()
     seL4_Error error = 0;
     seL4_Word sender_badge;
     cspacepath_t received_cap_path;
+    received_cap_path.root = PD_CAP_ROOT;
+    received_cap_path.capDepth = PD_CAP_DEPTH;
 
     error = ramdisk_init();
     CHECK_ERROR_GOTO(error, "failed to initialize ramdisk", out);
 
     while (1)
     {
-        /* Alloc cap receive path*/
-        error = vka_cspace_alloc_path(get_ramdisk_server()->server_vka, &received_cap_path);
-        CHECK_ERROR_GOTO(error, "failed to alloc cap receive path", out);
+        /* Alloc cap receive slot*/
+        error = get_ramdisk_server()->next_slot(&received_cap_path.capPtr);
+        CHECK_ERROR_GOTO(error, "failed to alloc cap receive slot", out);
 
         seL4_SetCapReceivePath(
-            /* _service */ received_cap_path.root,
-            /* index */ received_cap_path.capPtr,
-            /* depth */ received_cap_path.capDepth);
+            received_cap_path.root,
+            received_cap_path.capPtr,
+            received_cap_path.capDepth);
 
         /* Receive a message */
         tag = recv(&sender_badge);
@@ -290,23 +305,19 @@ int ramdisk_server_main()
             }
 
             // Create the badged endpoint
-            cspacepath_t src, dest;
-            vka_cspace_make_path(get_ramdisk_server()->server_vka,
-                                 get_ramdisk_server()->server_ep, &src);
-
-            seL4_CPtr dest_cptr;
-            vka_cspace_alloc(get_ramdisk_server()->server_vka, &dest_cptr);
-            vka_cspace_make_path(get_ramdisk_server()->server_vka, dest_cptr, &dest);
-
             seL4_Word badge = ramdisk_assign_new_badge(blockno);
-            error = vka_cnode_mint(&dest,
-                                   &src,
-                                   seL4_AllRights,
-                                   badge);
+            seL4_CPtr badged_ep;
+
+            debug_cap_identify("test slot 56", 56);
+
+            error = pd_client_badge_ep(get_ramdisk_server()->pd_conn,
+                                       get_ramdisk_server()->server_ep,
+                                       badge,
+                                       &badged_ep);
             CHECK_ERROR_GOTO(error, "failed to mint client badge", done);
 
             /* Return this badged end point in the return message. */
-            seL4_SetCap(0, dest.capPtr);
+            seL4_SetCap(0, badged_ep);
             reply_tag = seL4_MessageInfo_new(error, 0, 1, 1);
 
             RAMDISK_PRINTF("Replying with badged EP: ");

@@ -25,6 +25,8 @@
 #include <sel4gpi/debug.h>
 
 #include <vka/capops.h>
+#include <allocman/bootstrap.h>
+#include <allocman/vka.h>
 
 int pd_new(pd_t *pd,
            vka_t *vka,
@@ -53,6 +55,51 @@ int pd_next_slot(pd_t *pd,
     return error;
 }
 
+int pd_alloc_ep(pd_t *pd,
+                vka_t *server_vka,
+                seL4_CPtr *ret_ep)
+{
+    // alloc slot in pd
+    cspacepath_t dest;
+
+    int error = vka_cspace_alloc_path(&pd->pd_vka, &dest);
+    if (error) {
+        return error;
+    }
+
+    // alloc ep from gpi server's untyped
+    seL4_Word res;
+    error = vka_utspace_alloc(server_vka, &dest, seL4_EndpointObject, seL4_EndpointBits, &res);
+
+    *ret_ep = error == seL4_NoError ? dest.capPtr : seL4_CapNull;
+    return error;
+}
+
+int pd_badge_ep(pd_t *pd,
+                seL4_CPtr src_ep,
+                seL4_Word badge,
+                seL4_CPtr *ret_ep)
+{
+    cspacepath_t src, dest;
+    vka_cspace_make_path(&pd->pd_vka, src_ep, &src);
+
+    printf("make src path %d %d %d\n", src.root, src.capPtr, src.capDepth);
+
+    seL4_CPtr dest_cptr;
+    vka_cspace_alloc(&pd->pd_vka, &dest_cptr);
+    vka_cspace_make_path(&pd->pd_vka, dest_cptr, &dest);
+
+    printf("make dest path %d %d %d \n", dest.root, dest.capPtr, dest.capDepth);
+
+    int error = vka_cnode_mint(&dest,
+                               &src,
+                               seL4_AllRights,
+                               badge);
+
+    *ret_ep = error == seL4_NoError ? dest.capPtr : seL4_CapNull;
+    return error;
+}
+
 int pd_load_image(pd_t *pd,
                   vka_t *vka,
                   simple_t *simple,
@@ -67,7 +114,7 @@ int pd_load_image(pd_t *pd,
 
 
     /* There are just setting up the config */
-    pd->config   = process_config_default_simple(simple, "hello", 255);
+    pd->config   = process_config_default_simple(simple, image_path, 255);
     pd->config = process_config_mcp(pd->config, seL4_MaxPrio);
     pd->config = process_config_auth(pd->config, simple_get_tcb(simple));
     pd->config = process_config_create_cnode(pd->config, 17);
@@ -129,8 +176,6 @@ int pd_load_image(pd_t *pd,
      * or a fault to see when the test finishes */
     pd->fault_endpoint_in_pd = sel4utils_copy_cap_to_process(&(pd->proc), pd->vka, pd->proc.fault_endpoint.cptr);
 
-    // For the child's as cap in the child
-
     /*
         These are RDE Entries.
 
@@ -145,6 +190,8 @@ int pd_load_image(pd_t *pd,
                                                                 pd->vka, child_ads_cap_in_parent);
     assert(pd->child_ads_cptr_in_child != 0);
 
+    OSDB_PRINTF("copied ads ep at %d\n", (int) pd->child_ads_cptr_in_child);
+
     // SID : Finishd this RDE addting
     pd->rde[0].type.type = GPICAP_TYPE_ADS;
     pd->rde[0].slot_in_RT = child_ads_cap_in_parent;
@@ -156,6 +203,8 @@ int pd_load_image(pd_t *pd,
                                                               pd->vka,
                                                               get_gpi_server()->server_ep_obj.cptr);
     assert(pd->gpi_endpoint_in_child != 0);
+
+    OSDB_PRINTF("copied gpi ep at %d\n", (int) pd->gpi_endpoint_in_child);
 
     /* copy the device frame, if any */
     // if (pd->device_frame_cap) {
@@ -172,19 +221,7 @@ int pd_load_image(pd_t *pd,
     /* WARNING: DO NOT COPY MORE CAPS TO THE PROCESS BEYOND THIS POINT,
      * AS THE SLOTS WILL BE CONSIDERED FREE AND OVERRIDDEN BY THE TEST PROCESS. */
     /* set up free slot range */
-    pd->cspace_size_bits = 17; // TEST_PROCESS_CSPACE_SIZE_BITS;
-    if (pd->device_frame_cap)
-    {
-        pd->free_slots.start = pd->device_frame_cap + 1;
-    }
-    else
-    {
-        // pd->free_slots.start = pd->gpi_endpoint_in_child + 1;
-        pd->free_slots.start = pd->fault_endpoint_in_pd + 1;
-        OSDB_PRINTF("%s:%d: free_slot.start %ld\n", __FUNCTION__, __LINE__, pd->free_slots.start);
-    }
-    pd->free_slots.end = (1u << 17);
-    assert(pd->free_slots.start < pd->free_slots.end);
+    pd->cspace_size_bits = pd->proc.cspace_size;
 
     printf("%s: %d\n", __FUNCTION__, __LINE__);
     uint32_t num_mo_caps = 0;
@@ -197,6 +234,25 @@ int pd_load_image(pd_t *pd,
     assert(error == 0);
 
     memcpy(&pd->proc.vspace, target_vspace, sizeof(vspace_t));
+
+    pd->free_slots.start = pd->proc.cspace_next_free;
+    OSDB_PRINTF("%s:%d: free_slot.start %ld\n", __FUNCTION__, __LINE__, pd->free_slots.start);
+
+    pd->free_slots.end = (1u << pd->cspace_size_bits);
+    assert(pd->free_slots.start < pd->free_slots.end);
+
+    /* Initialize a vka for the PD's cspace */
+    allocman_t *allocator = bootstrap_use_current_1level(pd->proc.cspace.cptr,
+                                                         pd->cspace_size_bits,
+                                                         pd->free_slots.start,
+                                                         pd->free_slots.end,
+                                                         PD_ALLOCATOR_STATIC_POOL_SIZE,
+                                                         pd->allocator_mem_pool);
+    if (allocator == NULL)
+    {
+        ZF_LOGF("Failed to bootstrap allocator for pd");
+    }
+    allocman_make_vka(&pd->pd_vka, allocator);
 
     return 0;
 }
@@ -262,7 +318,9 @@ int pd_send_cap(pd_t *to_pd,
                 ZF_LOGF("Sending PD cap is not supported yet");
                 break;
             default:
-                ZF_LOGF("Unknown cap type in %s", __FUNCTION__);
+                //ZF_LOGF("Unknown cap type in %s", __FUNCTION__);
+                // (XXX) Arya: allowing unknown cap type for now to send parent ep
+                ZF_LOGI("Unknown cap type in %s", __FUNCTION__);
             }
 
         // Find the pd where the cap is going, and basd
@@ -278,6 +336,7 @@ int pd_send_cap(pd_t *to_pd,
         // Just copy it to the child.
     }
 
+    OSDB_PRINTF(PDSERVS "pd_send_cap: copying cap to child\n", *slot);
     *slot = sel4utils_copy_cap_to_process(&(to_pd->proc), to_pd->vka, cap);
     if (*slot == 0)
     {

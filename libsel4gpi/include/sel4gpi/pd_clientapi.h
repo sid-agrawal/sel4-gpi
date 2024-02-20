@@ -14,6 +14,10 @@
 #include <sel4gpi/pd_component.h>
 #include <sel4gpi/ads_clientapi.h>
 
+// Default cap root and depth for pd cspace
+#define PD_CAP_ROOT SEL4UTILS_CNODE_SLOT
+#define PD_CAP_DEPTH seL4_WordBits
+
 typedef struct _pd_client_context {
    cspacepath_t badged_server_ep_cspath;
    //cspacepath_t public_server_ep_cspath;
@@ -71,6 +75,30 @@ int pd_client_send_cap(pd_client_context_t *conn, seL4_CPtr cap_to_send,
  * @return int 0 on success, -1 on failure.
  */
 int pd_client_next_slot(pd_client_context_t *conn, seL4_Word *slot);
+
+/**
+ * @brief Create a badged copy of an endpoint capability
+ *
+ * @param conn client connection object
+ * @param ret_ep location of result endpoint
+ * @return int 0 on success, -1 on failure.
+ */
+int pd_client_alloc_ep(pd_client_context_t *conn,
+                        seL4_CPtr *ret_ep);
+
+/**
+ * @brief Create a badged copy of an endpoint capability
+ *
+ * @param conn client connection object
+ * @param src_ep raw endpoint in pd's cspace
+ * @param badge badge to apply to the endpoint
+ * @param ret_ep location of result endpoint
+ * @return int 0 on success, -1 on failure.
+ */
+int pd_client_badge_ep(pd_client_context_t *conn,
+                        seL4_CPtr src_ep,
+                        seL4_Word badge,
+                        seL4_CPtr *ret_ep);
 
 /**
  * @brief Dump the PD.

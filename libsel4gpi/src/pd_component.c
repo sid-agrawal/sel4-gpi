@@ -324,11 +324,13 @@ static void handle_load_req(seL4_Word sender_badge,
     ads_component_registry_entry_t *ads_data = ads_component_registry_get_entry_by_badge(seL4_GetBadge(0));
     assert(ads_data != NULL);
 
+    const char* image_path = pd_images[seL4_GetMR(PDMSGREG_LOAD_FUNC_IMAGE)];
+
     seL4_CNode cspace_root = received_cap;
     error = pd_load_image(&client_data->pd,
                        get_pd_component()->server_vka,
                        get_pd_component()->server_simple,
-                       pd_images[seL4_GetMR(PDMSGREG_LOAD_FUNC_IMAGE)],
+                       image_path,
                        get_pd_component()->server_vspace,
                        ads_data->ads.vspace,
                        ads_data->ads.root_page_dir);
@@ -368,7 +370,8 @@ static void handle_next_slot_req(seL4_Word sender_badge,
     }
     seL4_Word slot;
     int error = pd_next_slot(&client_data->pd,
-                             get_pd_component()->server_vka,
+                             //get_pd_component()->server_vka,
+                             &client_data->pd.pd_vka,
                              &slot);
 
     seL4_SetMR(PDMSGREG_FUNC, PD_FUNC_NEXT_SLOT_ACK);
@@ -376,6 +379,67 @@ static void handle_next_slot_req(seL4_Word sender_badge,
 
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(error, 0, 0,
                                                   PDMSGREG_NEXT_SLOT_ACK_END);
+    return reply(tag);
+}
+
+static void handle_alloc_ep_req(seL4_Word sender_badge,
+                                seL4_MessageInfo_t old_tag,
+                                seL4_CPtr received_cap) {
+
+    OSDB_PRINTF(PDSERVS "Got alloc ep request from client badge %lx.\n",
+           sender_badge);
+
+    pd_component_registry_entry_t *client_data = pd_component_registry_get_entry_by_badge(sender_badge);
+    if (client_data == NULL)
+    {
+        OSDB_PRINTF(PDSERVS "Failed to find client badge %lx.\n",
+               sender_badge);
+        return;
+    }
+    seL4_CPtr slot;
+    int error = pd_alloc_ep(&client_data->pd,
+                            get_pd_component()->server_vka,
+                            &slot);
+    
+
+    seL4_SetMR(PDMSGREG_FUNC, PD_FUNC_ALLOC_EP_ACK);
+    seL4_SetMR(PDMSGREG_ALLOC_EP_PD_SLOT, slot);
+    OSDB_PRINTF(PDSERVS "Allocated ep in slot %d\n", (int) slot);
+
+    seL4_MessageInfo_t tag = seL4_MessageInfo_new(error, 0, 0,
+                                                  PDMSGREG_ALLOC_EP_ACK_END);
+    return reply(tag);
+}
+
+static void handle_badge_ep_req(seL4_Word sender_badge,
+                                seL4_MessageInfo_t old_tag,
+                                seL4_CPtr received_cap) {
+
+    OSDB_PRINTF(PDSERVS "Got badge ep request from client badge %lx.\n",
+           sender_badge);
+
+    pd_component_registry_entry_t *client_data = pd_component_registry_get_entry_by_badge(sender_badge);
+    if (client_data == NULL)
+    {
+        OSDB_PRINTF(PDSERVS "Failed to find client badge %lx.\n",
+               sender_badge);
+        return;
+    }
+
+    seL4_Word badge = seL4_GetMR(PDMSGREG_BADGE_EP_REQ_BADGE);
+    seL4_CPtr src_ep_slot = seL4_GetMR(PDMSGREG_BADGE_EP_REQ_SRC);
+    seL4_Word slot;
+
+    int error = pd_badge_ep(&client_data->pd,
+                            src_ep_slot,
+                            badge,
+                            &slot);
+
+    seL4_SetMR(PDMSGREG_FUNC, PD_FUNC_BADGE_EP_ACK);
+    seL4_SetMR(PDMSGREG_BADGE_EP_PD_SLOT, slot);
+
+    seL4_MessageInfo_t tag = seL4_MessageInfo_new(error, 0, 0,
+                                                  PDMSGREG_BADGE_EP_ACK_END);
     return reply(tag);
 }
 
@@ -521,6 +585,12 @@ void pd_component_handle(seL4_MessageInfo_t tag,
         break;
     case PD_FUNC_NEXT_SLOT_REQ:
         handle_next_slot_req(sender_badge, tag, received_cap->capPtr);
+        break;
+    case PD_FUNC_ALLOC_EP_REQ:
+        handle_alloc_ep_req(sender_badge, tag, received_cap->capPtr);
+        break;
+    case PD_FUNC_BADGE_EP_REQ:
+        handle_badge_ep_req(sender_badge, tag, received_cap->capPtr);
         break;
     case PD_FUNC_SENDCAP_REQ:
         handle_send_cap_req(sender_badge, tag, received_cap->capPtr);
