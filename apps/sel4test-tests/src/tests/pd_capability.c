@@ -68,12 +68,8 @@ int test_new_process_osmosis(env_t env)
                             slot); // with this arg.
     assert(error == 0);
 
-    error = pd_client_dump(&pd_os_cap, NULL, 0);
-    assert(error == 0);
 
     /*********************************************/
-#define START_TWO_PROCESSES 1
-#if START_TWO_PROCESSES
 
     /* Create a new PD */
     pd_client_context_t pd_os_cap2;
@@ -100,13 +96,6 @@ int test_new_process_osmosis(env_t env)
     error = pd_client_load(&pd_os_cap2, &ads_os_cap2, "hello");
     assert(error == 0);
 
-    // Copy the ep_object to the new PD
-    // seL4_Word slot;
-    // error = pd_client_send_cap(&pd_os_cap, ep_object.cptr, &slot);
-    // assert(error == 0);
-
-    // Create a new CPU cap, and make that the PD's primary cap.
-
     // Start the CPU.
     error = pd_client_start(&pd_os_cap2,
                             /* The (ADS, CPU) tuple to use */
@@ -116,7 +105,8 @@ int test_new_process_osmosis(env_t env)
     error = pd_client_dump(&pd_os_cap2, NULL, 0);
     assert(error == 0);
 
-#endif
+    error = pd_client_dump(&pd_os_cap, NULL, 0);
+    assert(error == 0);
 
     /*********************************************/
     printf("------------------ENDING: %s------------------\n", __func__);
