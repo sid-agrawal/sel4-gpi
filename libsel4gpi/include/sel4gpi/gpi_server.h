@@ -89,7 +89,8 @@ typedef struct _gpi_server_context {
     cpu_component_context_t cpu_component;
     pd_component_context_t  pd_component;
 
-    osmosis_cap_t osm_caps[MAX_SYS_OSM_CAPS];
+    osmosis_cap_t *osm_caps;
+    osmosis_cap_t *osm_caps_tail;
 } gpi_server_context_t;
 
 /**

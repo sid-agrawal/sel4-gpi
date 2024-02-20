@@ -16,6 +16,7 @@
 #include <sel4gpi/pd_obj.h>
 #include <sel4gpi/debug.h>
 #include <sel4gpi/gpi_server.h>
+#include <sel4gpi/cap_tracking.h>
 
 
 void print_osm_cap_info (osmosis_cap_t *o) {
@@ -29,31 +30,52 @@ void print_osm_cap_info (osmosis_cap_t *o) {
 }
 
 /*
+    returns an unintialized osmosis cap tracking object
+*/
+static osmosis_cap_t *new_osm_cap(void) {
+    gpi_server_context_t *env = get_gpi_server();
+    osmosis_cap_t *new = calloc(1, sizeof(osmosis_cap_t));
+    if (env->osm_caps == NULL) {
+        env->osm_caps = new;
+    }
+
+    if (env->osm_caps_tail) {
+        new->prev = env->osm_caps_tail;
+        env->osm_caps_tail->next = new;
+    }
+    
+    env->osm_caps_tail = new;
+    return new;
+} 
+
+/*
     Add cap to the cap tracking object.
 */
 int gpi_add_cap_data(osmosis_cap_t *new_cap_data)
 {
-    gpi_server_context_t *env = get_gpi_server();
-    for (int i = 0; i < MAX_SYS_OSM_CAPS; i++) {
+    osmosis_cap_t *new = new_osm_cap();
 
-        /* Check that slot is free */
-        if (env->osm_caps[i].slot_in_rt == 0) {
-            /* If the slot is free then the type should be cleared too*/
-            assert (env->osm_caps[i].type == GPICAP_TYPE_NONE);
+    new->slot_in_rt = new_cap_data->slot_in_rt;
+    new->type = new_cap_data->type;
+    new->isUntyped = new_cap_data->isUntyped;
+    new->paddr = new_cap_data->paddr;
+    new->isMinted = new_cap_data->isMinted;
+    new->minted_from = new_cap_data->minted_from;
 
-            /* Initilize the slot field*/
-            env->osm_caps[i].slot_in_rt = new_cap_data->slot_in_rt;
-            env->osm_caps[i].type = new_cap_data->type;
-            env->osm_caps[i].isUntyped = new_cap_data->isUntyped;
-            env->osm_caps[i].paddr = new_cap_data->paddr;
-            env->osm_caps[i].isMinted = new_cap_data->isMinted;
-            env->osm_caps[i].minted_from = new_cap_data->minted_from;
-            return 0;
-        }
+    return 0;
+}
 
+/* Removes a cap from the cap tracking list, and frees it */
+static void remove_osm_cap(osmosis_cap_t *to_remove) {
+    if (to_remove->prev != NULL) {
+        to_remove->prev->next = to_remove->next;
     }
-    ZF_LOGF("Could not an empty entry in the cap tracking object");
-    return 1;
+
+    if (to_remove->next != NULL) {
+        to_remove->next->prev = to_remove->prev;
+    }
+
+    free(to_remove);
 }
 
 /*
@@ -63,48 +85,28 @@ int gpi_remove_cap_data(seL4_CPtr cap_to_remove)
 {
 
     gpi_server_context_t *env = get_gpi_server();
+    osmosis_cap_t *curr = env->osm_caps;
+    osmosis_cap_t *next;
+    bool found_cap = false;
 
-    for (int i = 0; i < MAX_SYS_OSM_CAPS; i++)
-    {
-        if (env->osm_caps[i].slot_in_rt == cap_to_remove)
-        {
-            /* Check that a type is set */
-            assert(env->osm_caps[i].type != GPICAP_TYPE_MAX);
-
-            /* Initilize the slot field*/
-            env->osm_caps[i].slot_in_rt = 0;
-
-            /* Clear the actual data */
-            env->osm_caps[i].type = GPICAP_TYPE_MAX;
-            env->osm_caps[i].isUntyped = false;
-            env->osm_caps[i].paddr = 0;
-
-            /* (TODO) Find all caps, where this cap is a
-                parent and delete those too.
-            */
-            for (int j = 0; j < MAX_SYS_OSM_CAPS; j++) {
-
-                if (env->osm_caps[i].minted_from ==
-                    cap_to_remove)
-                {
-
-                    /* Check that a type is set */
-                    assert(env->osm_caps[i].type != GPICAP_TYPE_MAX);
-
-                    /* Initilize the slot field*/
-                    env->osm_caps[i].slot_in_rt = 0;
-
-                    /* Clear the actual data */
-                    env->osm_caps[i].type = GPICAP_TYPE_MAX;
-                    env->osm_caps[i].isUntyped = false;
-                    env->osm_caps[i].paddr = 0;
-                }
-            }
-            return 0;
+    while (curr != NULL) {
+        /* remove the cap and any of its children */
+        if (curr->slot_in_rt == cap_to_remove || curr->minted_from == cap_to_remove) {
+            next = curr->next; /* retain a pointer to the next node, as the current one is about to be freed */
+            remove_osm_cap(curr);
+            curr = next;
+            found_cap = true; // could we run into a case where we somehow track a child cap without tracking its parent?
+        } else {
+            curr = curr->next;
         }
     }
-    // ZF_LOGE("Could not find cap in cap tracking object");
-    return 1;
+
+    if (!found_cap) {
+        ZF_LOGE("Could not find cap in cap tracking object");
+        return 1;
+    }
+
+    return 0;
 }
 
 /*
@@ -114,26 +116,28 @@ int gpi_retrieve_cap_data(seL4_CPtr cap_to_find,
                      osmosis_cap_t *return_data)
 {
     gpi_server_context_t *env = get_gpi_server();
+    osmosis_cap_t *curr = env->osm_caps;
 
-    for (int i = 0; i < MAX_SYS_OSM_CAPS; i++)
-    {
-        if (env->osm_caps[i].slot_in_rt == cap_to_find) {
+    while (curr != NULL) {
+        if (curr->slot_in_rt == cap_to_find) {
             /* Check that a type is set */
-            assert(env->osm_caps[i].type != GPICAP_TYPE_MAX);
+            assert(curr->type != GPICAP_TYPE_MAX);
 
             /* Initilize the slot field*/
-            return_data->slot_in_rt = env->osm_caps[i].slot_in_rt;
+            return_data->slot_in_rt = curr->slot_in_rt;
 
             /* Retrive the actual data */
-            return_data->type = env->osm_caps[i].type;
-            return_data->isUntyped = env->osm_caps[i].isUntyped;
-            return_data->paddr = env->osm_caps[i].paddr;
-            return_data->isMinted = env->osm_caps[i].isMinted;
-            return_data->minted_from = env->osm_caps[i].minted_from;
+            return_data->type = curr->type;
+            return_data->isUntyped = curr->isUntyped;
+            return_data->paddr = curr->paddr;
+            return_data->isMinted = curr->isMinted;
+            return_data->minted_from = curr->minted_from;
             // ZF_LOGE("Found cap in cap tracking object for cap %lu, type: %u\n", cap_to_find, seL4_DebugCapIdentify(cap_to_find));
             return 0;
         }
+        curr = curr->next;
     }
+
     ZF_LOGE("Could not find cap in cap tracking object for cap %lu, type: %u\n", cap_to_find, seL4_DebugCapIdentify(cap_to_find));
     return 1;
 }

@@ -289,15 +289,15 @@ void xv6fs_server_main()
           /* depth */ received_cap_path.capDepth);
 
       break;
-    case XV6FS_OPEN:
+    case XV6FS_OPEN: ;
       const char *pathname = get_xv6fs_server()->shared_mem;
       ret = xv6fs_open(pathname, seL4_GetMR(XV6FS_FLAGS), seL4_GetMR(XV6FS_MODE));
       break;
-    case XV6FS_READ:
+    case XV6FS_READ: ;
       void *readbuf = get_xv6fs_server()->shared_mem;
       ret = xv6fs_read(seL4_GetMR(XV6FS_FD), readbuf, seL4_GetMR(XV6FS_COUNT));
       break;
-    case XV6FS_WRITE:
+    case XV6FS_WRITE: ;
       const void *writebuf = get_xv6fs_server()->shared_mem;
       ret = xv6fs_write(seL4_GetMR(XV6FS_FD), writebuf, seL4_GetMR(XV6FS_COUNT));
       break;
@@ -320,12 +320,12 @@ void xv6fs_server_main()
       pathname = get_xv6fs_server()->shared_mem;
       ret = xv6fs_unlink(pathname);
       break;
-    case XV6FS_GETCWD:
+    case XV6FS_GETCWD: ;
       char *buf = get_xv6fs_server()->shared_mem;
       char *getcwd_ret = xv6fs_getcwd(buf, seL4_GetMR(XV6FS_SIZE));
       ret = (getcwd_ret != NULL);
       break;
-    case XV6FS_FCNTL:
+    case XV6FS_FCNTL: ;
       int cmd = seL4_GetMR(XV6FS_CMD);
       unsigned long arg = seL4_GetMR(XV6FS_ARG);
       switch (cmd)

@@ -30,6 +30,8 @@ typedef struct osmosis_cap {
     /* If this cap is a minted cap */
     bool isMinted;
     seL4_Word minted_from;
+    struct osmosis_cap *prev;
+    struct osmosis_cap *next;
 } osmosis_cap_t;
 
 
