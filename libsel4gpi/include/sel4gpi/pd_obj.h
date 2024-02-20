@@ -48,26 +48,35 @@ typedef union rde_type {
 } rde_type_t;
 
 typedef struct osmosis_rde {
-
-    /* Info about what the RDE is for ?*/
-    rde_type_t type;
-
-    // The type of the RDE cap as per seL4
+    // The slot of the RDE cap as per seL4
     seL4_Word slot_in_RT;
     seL4_Word slot_in_PD;
 
+    /*
+        I think that type+pd_obj_id should be all we need
+        to find out when OSM resources are shared.
+        But let's keep track of slot_in* (above) for now.
+    */
 
     /*OSmosis generated PD ID of the server for RDE */
     //osmosis_pd_id_t pd_obj_id;
     uint32_t pd_obj_id;
+
+    /* Info about what the RDE is for ?*/
+    rde_type_t type;
 } osmosis_rde_t;
 
 typedef struct osmosis_pd_cap {
-    // The type of the cap as per seL4
+    // The slot of the cap as per seL4
     seL4_Word slot_in_PD;
     seL4_Word slot_in_RT;
-    seL4_Word slot_in_ServerPD;
+    seL4_Word slot_in_ServerPD; // For instance in case of file.
 
+    /*
+        I think that type+res_id should be all we need
+        to find out when OSM resources are shared.
+        But let's keep track of slot_in* (above) for now.
+    */
     seL4_Word res_id;
 
     /*
