@@ -218,7 +218,6 @@ int forge_mo_caps_from_vspace(vspace_t *child_vspace,
     printf("forge_mo_caps_from_vspace: %d\n", __LINE__);
         /* Get the caps in a reservation */
         uint32_t num_frames = (res->end - res->start)/PAGE_SIZE_4K;
-        printf("num frames: %d\n", num_frames);
         seL4_CPtr *frame_caps = malloc(sizeof(seL4_CPtr) * num_frames);
         assert(frame_caps != NULL);
 

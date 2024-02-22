@@ -490,7 +490,7 @@ int pd_dump(pd_t *pd)
         {
         case GPICAP_TYPE_NONE:
             break;
-        case GPICAP_TYPE_ADS: ;
+        case GPICAP_TYPE_ADS:
             char res_id[CSV_MAX_STRING_SIZE];
             snprintf(res_id, 20, "ADS_%lu", pd->has_access_to[idx].res_id);
             add_has_access_to(ms,

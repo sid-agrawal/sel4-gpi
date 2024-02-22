@@ -20,7 +20,7 @@
 #include <sel4bench/arch/sel4bench.h>
 #include <sel4/sel4.h>
 #include <vka/capops.h>
-// #include <vmm/vmm.h>
+#include <vmm/vmm.h>
 
 
 int test_new_vmm(env_t env)
@@ -28,16 +28,16 @@ int test_new_vmm(env_t env)
     int error;
     printf("------------------STARTING: %s------------------\n", __func__);
     
-    // vmm_env_t *vmm_e = vm_setup(env->irq_handler, &env->vka, &env->vspace, env->page_directory, env->asid_pool, &env->simple);
-    // vm_init(vmm_e);
+    vmm_env_t *vmm_e = vm_setup(env->irq_handler, &env->vka, &env->vspace, env->page_directory, env->asid_pool, &env->simple);
+    vm_init(vmm_e);
 
-    // seL4_DebugDumpScheduler();
+    seL4_DebugDumpScheduler();
 
-    // /* temporary indefinite yield */
-    // while (1)
-    // {
-    //     seL4_Yield();
-    // }
+    /* temporary indefinite yield */
+    while (1)
+    {
+        seL4_Yield();
+    }
     
 
     return sel4test_get_result();

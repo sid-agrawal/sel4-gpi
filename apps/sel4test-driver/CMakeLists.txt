@@ -46,7 +46,7 @@ set(LibNanopb ON CACHE BOOL "" FORCE)
 sel4_projects_libs_import_libraries()
 add_subdirectory(../../libsel4testsupport libsel4testsupport)
 add_subdirectory(../../libsel4gpi libsel4gpi)
-# add_subdirectory(../../vmm libsel4vmm)
+add_subdirectory(../../vmm libsel4vmm)
 add_subdirectory(../libxv6fs libxv6fs)
 
 file(
