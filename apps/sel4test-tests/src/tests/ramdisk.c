@@ -20,13 +20,6 @@
 #define TEST_STR_2 "Fuzzy Wuzzy had no hair"
 #define RAMDISK_APP "ramdisk_server"
 
-#define DSB() asm volatile("dsb sy" ::: "memory")
-
-static void flush_caches() {
-    DSB();
-    //seL4_BenchmarkFlushCaches();
-}
-
 /**
  * Starts the ramdisk as a process
  */
@@ -54,15 +47,6 @@ int start_ramdisk_pd(env_t env, seL4_CPtr *ramdisk_ep)
     ads_client_context_t ads_os_cap;
     error = ads_component_client_connect(env->gpi_endpoint, &env->vka, &ads_os_cap);
     assert(error == 0);
-
-    /*
-        Give the PD some RDEs
-        {
-            "VA": "slot",
-            "vCPU": "slot",
-            ...
-        }
-    */
 
    // Make a new AS, loads an image
     error = pd_client_load(&pd_os_cap, &ads_os_cap, RAMDISK_APP);
@@ -178,25 +162,11 @@ int test_ramdisk(env_t env)
     test_assert(error == 0);
     printf("Finished mo_component_client_connect\n");
 
-    error = ads_client_attach(&ads_conn,
-                              NULL,
-                              &mo_conn,
-                              (void **)&buf);
-    test_assert(error == 0);
-
-    /* Temp test: mapping actually works */
-    /*
-    char *buf2;
-    error = ads_client_attach(&ads_conn,
-                              NULL,
-                              &mo_conn,
-                              (void **)&buf2);
-    test_assert(error == 0);
-
-    strcpy(buf, TEST_STR_1);
-    test_assert(strcmp(buf, buf2) == 0);
+    /* 
+    (XXX) - Arya 
+    We can't attach the MO here, or the ramdisk won't be able to
+    see values written to it. Why is that the case?
     */
-    //strcpy(buf, TEST_STR_1);
 
     /* Start ramdisk server process */
     seL4_CPtr ramdisk_ep;
@@ -205,6 +175,22 @@ int test_ramdisk(env_t env)
 
     printf("------------------STARTING TESTS: %s------------------\n", __func__);
 
+    /* Attach MO to test's ADS */
+    error = ads_client_attach(&ads_conn,
+                              NULL,
+                              &mo_conn,
+                              (void **)&buf);
+    test_assert(error == 0);
+
+    /* Sanity test shared memory */
+    seL4_Word test_value = 0x1234;
+    *((int *)buf) = test_value;
+    printf("buf addr: %p, contents: 0x%x\n", buf, *((int *)buf));
+    seL4_Word res;
+    error = ramdisk_client_sanity_test(ramdisk_ep, &mo_conn, &res);
+    test_assert(error == seL4_NoError);
+    test_assert(res == test_value);
+
     // Get a block
     ramdisk_client_context_t block;
     error = ramdisk_client_alloc_block(ramdisk_ep, &env->vka, &block);
@@ -212,16 +198,14 @@ int test_ramdisk(env_t env)
 
     // Write and read from beginning of disk
     strcpy(buf, TEST_STR_1);
-    flush_caches();
     printf("buf addr: %p, contents: %s\n", buf, buf);
     error = ramdisk_client_write(&block, &mo_conn);
     test_assert(error == seL4_NoError);
 
     memset(buf, 0, RAMDISK_BLOCK_SIZE); // clear the test string from the buffer
-    flush_caches();
     error = ramdisk_client_read(&block, &mo_conn);
     test_assert(error == seL4_NoError);
-    printf("Result from read: %s\n", buf);
+    printf("Result from read: 0x%x\n", *((int *) buf));
     test_assert(strcmp(buf, TEST_STR_1) == 0);
 
     // Write and read from another block
@@ -251,8 +235,9 @@ int test_ramdisk(env_t env)
     test_assert(buf[RAMDISK_BLOCK_SIZE - 1] == 0x42);
 
     // Allocate a number of blocks
-    for (int i = 0; i < 20; i++)
+    for (int i = 3; i <= 20; i++)
     {
+        printf("----- Allocating block %d ---- \n", i);
         error = ramdisk_client_alloc_block(ramdisk_ep, &env->vka, &block);
         test_assert(error == seL4_NoError);
 

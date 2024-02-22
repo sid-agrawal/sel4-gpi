@@ -50,8 +50,6 @@
         }                                 \
     } while (0);
 
-#define DSB() asm volatile("dsb sy" ::: "memory")
-
 /*--- RAMDISK SERVER ---*/
 static ramdisk_server_context_t ramdisk_server;
 
@@ -175,7 +173,7 @@ int ramdisk_server_start(ads_client_context_t *ads_conn,
     /* Allocate the Endpoint that the server will be listening on. */
     error = pd_client_alloc_ep(server->pd_conn, &server->server_ep);
     CHECK_ERROR(error, "Failed to allocate endpoint for ramdisk server");
-    RAMDISK_PRINTF("Allocated server ep at %d\n", (int) server->server_ep);
+    RAMDISK_PRINTF("Allocated server ep at %d\n", (int)server->server_ep);
 
     RAMDISK_PRINTF("Going to main function\n");
     return ramdisk_server_main();
@@ -273,6 +271,7 @@ int ramdisk_server_main()
         /* Alloc cap receive slot*/
         error = get_ramdisk_server()->next_slot(&received_cap_path.capPtr);
         CHECK_ERROR_GOTO(error, "failed to alloc cap receive slot", out);
+        RAMDISK_PRINTF("Next slot is %d\n", received_cap_path.capPtr);
 
         seL4_SetCapReceivePath(
             received_cap_path.root,
@@ -283,46 +282,66 @@ int ramdisk_server_main()
         tag = recv(&sender_badge);
         unsigned int op = seL4_GetMR(RAMDISK_MR_OP);
 
-        seL4_MessageInfo_t reply_tag;
+        seL4_MessageInfo_t reply_tag = seL4_MessageInfo_new(0, 0, 0, 0);
 
         if (sender_badge == 0)
         { /* Handle Untyped Request */
             RAMDISK_PRINTF("Got message on EP with no badge value\n");
-            CHECK_ERROR_GOTO(op != RAMDISK_GET_BLOCK, "got invalid op on unbadged ep", done);
 
-            // Assign a new block to this ep
-            CHECK_ERROR_GOTO(get_ramdisk_server()->free_blocks == NULL, "no more free blocks to assign", done);
-            uint64_t blockno = get_ramdisk_server()->free_blocks->blockno;
-
-            RAMDISK_PRINTF("Allocating blockno %zx\n", blockno);
-
-            // Update free block list
-            get_ramdisk_server()->free_blocks->blockno++;
-            get_ramdisk_server()->free_blocks->n_blocks--;
-            if (get_ramdisk_server()->free_blocks->n_blocks <= 0)
+            switch (op)
             {
-                get_ramdisk_server()->free_blocks = get_ramdisk_server()->free_blocks->next;
+            case RAMDISK_SANITY_TEST:
+                mo_client_context_t mo_conn;
+                mo_conn.badged_server_ep_cspath = received_cap_path;
+                void *mo_vaddr;
+                error = ads_client_attach(get_ramdisk_server()->ads_conn,
+                                          NULL,
+                                          &mo_conn,
+                                          &mo_vaddr);
+                CHECK_ERROR_GOTO(error, "failed to attach client's MO to ADS", done);
+
+                RAMDISK_PRINTF("Can access vaddr %p, val 0x%x\n", mo_vaddr, *((int *)mo_vaddr));
+
+                reply_tag = seL4_MessageInfo_set_length(reply_tag, 1);
+                seL4_SetMR(0, *(int *)mo_vaddr);
+                break;
+
+            case RAMDISK_GET_BLOCK:
+                // Assign a new block to this ep
+                CHECK_ERROR_GOTO(get_ramdisk_server()->free_blocks == NULL, "no more free blocks to assign", done);
+                uint64_t blockno = get_ramdisk_server()->free_blocks->blockno;
+
+                RAMDISK_PRINTF("Allocating blockno %zx\n", blockno);
+
+                // Update free block list
+                get_ramdisk_server()->free_blocks->blockno++;
+                get_ramdisk_server()->free_blocks->n_blocks--;
+                if (get_ramdisk_server()->free_blocks->n_blocks <= 0)
+                {
+                    get_ramdisk_server()->free_blocks = get_ramdisk_server()->free_blocks->next;
+                }
+
+                // Create the badged endpoint
+                seL4_Word badge = ramdisk_assign_new_badge(blockno);
+                seL4_CPtr badged_ep;
+
+                error = pd_client_badge_ep(get_ramdisk_server()->pd_conn,
+                                           get_ramdisk_server()->server_ep,
+                                           badge,
+                                           &badged_ep);
+                CHECK_ERROR_GOTO(error, "failed to mint client badge", done);
+
+                /* Return this badged end point in the return message. */
+                seL4_SetCap(0, badged_ep);
+                reply_tag = seL4_MessageInfo_set_extraCaps(reply_tag, 1);
+
+                RAMDISK_PRINTF("Replying with badged EP: ");
+                badge_print(badge);
+                printf("\n");
+                break;
+            default:
+                CHECK_ERROR_GOTO(1, "got invalid op on unbadged ep", done);
             }
-
-            // Create the badged endpoint
-            seL4_Word badge = ramdisk_assign_new_badge(blockno);
-            seL4_CPtr badged_ep;
-
-            debug_cap_identify("test slot 56", 56);
-
-            error = pd_client_badge_ep(get_ramdisk_server()->pd_conn,
-                                       get_ramdisk_server()->server_ep,
-                                       badge,
-                                       &badged_ep);
-            CHECK_ERROR_GOTO(error, "failed to mint client badge", done);
-
-            /* Return this badged end point in the return message. */
-            seL4_SetCap(0, badged_ep);
-            reply_tag = seL4_MessageInfo_new(error, 0, 1, 1);
-
-            RAMDISK_PRINTF("Replying with badged EP: ");
-            badge_print(badge);
-            printf("\n");
         }
         else
         { /* Handle Typed Request */
@@ -336,7 +355,6 @@ int ramdisk_server_main()
 
             RAMDISK_PRINTF("Got op for blockno %ld\n", blockno);
 
-            reply_tag = seL4_MessageInfo_new(error, 0, 0, 1);
             switch (op)
             {
             case RAMDISK_READ:
@@ -353,20 +371,16 @@ int ramdisk_server_main()
                                           &mo_vaddr);
                 CHECK_ERROR_GOTO(error, "failed to attach client's MO to ADS", done);
 
-                RAMDISK_PRINTF("Can access vaddr %p, val %x\n", mo_vaddr, *((int *)mo_vaddr));
-
                 /* Read/write ramdisk */
                 void *ramdisk_vaddr = ramdisk_ptr(blockno);
                 if (op == RAMDISK_READ)
                 {
                     RAMDISK_PRINTF("Reading from blockno %ld to %p\n", blockno, mo_vaddr);
                     memcpy(mo_vaddr, ramdisk_vaddr, RAMDISK_BLOCK_SIZE);
-                    // DSB();
                 }
                 else
                 { // op is write
                     RAMDISK_PRINTF("Writing from %p to blockno %ld\n", mo_vaddr, blockno);
-                    // RAMDISK_PRINTF("MO contents: %s\n", (char *) mo_vaddr);
                     memcpy(ramdisk_vaddr, mo_vaddr, RAMDISK_BLOCK_SIZE);
                 }
 
@@ -386,6 +400,7 @@ int ramdisk_server_main()
         }
 
     done:
+        reply_tag = seL4_MessageInfo_set_label(reply_tag, error);
         reply(reply_tag);
     }
 

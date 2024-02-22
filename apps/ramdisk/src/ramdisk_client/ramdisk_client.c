@@ -29,6 +29,22 @@
 
 static ramdisk_client_context_t ramdisk_client;
 
+int ramdisk_client_sanity_test(seL4_CPtr server_ep_cap,
+                               mo_client_context_t *mo,
+                               seL4_Word *res)
+{
+    seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 1, 1);
+    seL4_SetMR(RAMDISK_MR_OP, RAMDISK_SANITY_TEST);
+    seL4_SetCap(0, mo->badged_server_ep_cspath.capPtr);
+    tag = seL4_Call(server_ep_cap, tag);
+
+    int error = seL4_MessageInfo_get_label(tag);
+    CHECK_ERROR(error, "failed ramdisk sanity test\n");
+
+    *res = seL4_GetMR(0);
+    return 0;
+}
+
 int ramdisk_client_alloc_block(seL4_CPtr server_ep_cap,
                                vka_t *client_vka,
                                ramdisk_client_context_t *ret_conn)
@@ -86,6 +102,7 @@ int ramdisk_client_write(ramdisk_client_context_t *conn, mo_client_context_t *mo
     return error;
 }
 
-uint64_t get_ramdisk_block_size() {
+uint64_t get_ramdisk_block_size()
+{
     return RAMDISK_BLOCK_SIZE;
 }

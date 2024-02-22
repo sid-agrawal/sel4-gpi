@@ -95,13 +95,13 @@ int pd_badge_ep(pd_t *pd,
     cspacepath_t src, dest;
     vka_cspace_make_path(&pd->pd_vka, src_ep, &src);
 
-    printf("make src path %lu %lu %lu\n", src.root, src.capPtr, src.capDepth);
+    //printf("src path %d %d %d\n", src.root, src.capPtr, src.capDepth);
 
     seL4_CPtr dest_cptr;
     vka_cspace_alloc(&pd->pd_vka, &dest_cptr);
     vka_cspace_make_path(&pd->pd_vka, dest_cptr, &dest);
 
-    printf("make dest path %lu %lu %lu \n", dest.root, dest.capPtr, dest.capDepth);
+    //printf("dest path %d %d %d \n", dest.root, dest.capPtr, dest.capDepth);
 
     int error = vka_cnode_mint(&dest,
                                &src,
@@ -252,20 +252,7 @@ int pd_load_image(pd_t *pd,
 
     pd->free_slots.end = (1u << pd->cspace_size_bits);
     assert(pd->free_slots.start < pd->free_slots.end);
-
-    /* Initialize a vka for the PD's cspace */
-    allocman_t *allocator = bootstrap_use_current_1level(pd->proc.cspace.cptr,
-                                                         pd->cspace_size_bits,
-                                                         pd->free_slots.start,
-                                                         pd->free_slots.end,
-                                                         PD_ALLOCATOR_STATIC_POOL_SIZE,
-                                                         pd->allocator_mem_pool);
-    if (allocator == NULL)
-    {
-        ZF_LOGF("Failed to bootstrap allocator for pd");
-    }
-    allocman_make_vka(&pd->pd_vka, allocator);
-
+    
     return 0;
 }
 
@@ -401,6 +388,7 @@ int pd_start(pd_t *pd,
              vspace_t *server_vspace,
              seL4_Word arg0)
 {
+    int error;
 
     OSDB_PRINTF(PDSERVS "pd_start: ARGS: pd_endpoint_in_root: %ld, arg0: %ld\n",
                 pd_endpoint_in_root, arg0);
@@ -424,17 +412,38 @@ int pd_start(pd_t *pd,
     //argc = 1;
     //snprintf(argv[0], WORD_STRING_SIZE, "%ld", arg0);
 
+    /* Initialize a vka for the PD's cspace */
+    allocman_t *allocator = bootstrap_create_allocman(PD_ALLOCATOR_STATIC_POOL_SIZE,
+                                                      pd->allocator_mem_pool);
 
+    cspace_single_level_t *cspace = malloc(sizeof(cspace_single_level_t));
 
-    int num_res;
+    error = cspace_single_level_create(allocator, cspace, (struct cspace_single_level_config) {
+        .cnode = pd->proc.cspace.cptr,
+        .cnode_size_bits = pd->cspace_size_bits,
+        //.cnode_guard_bits = seL4_WordBits - pd->cspace_size_bits,
+        .cnode_guard_bits = 0,
+        .first_slot = pd->proc.cspace_next_free,
+        .end_slot = BIT(pd->cspace_size_bits)
+    });
+    assert(error == 0);
+
+    error = allocman_attach_cspace(allocator, cspace_single_level_make_interface(cspace));
+    assert(error == 0);
+
+    if (allocator == NULL)
+    {
+        ZF_LOGF("Failed to bootstrap allocator for pd");
+    }
+    allocman_make_vka(&pd->pd_vka, allocator);
+
     /* spawn the process */
     seL4_CPtr osm_caps[] = {pd->child_ads_cptr_in_child,
                             pd->gpi_endpoint_in_child,
                             pd_cptr_in_child
                             };
-    int error = sel4utils_osm_spawn_process_v(&(pd->proc),
+    error = sel4utils_osm_spawn_process_v(&(pd->proc),
                                               osm_caps,
-
                                               pd->vka,
                                               server_vspace,
                                               argc,

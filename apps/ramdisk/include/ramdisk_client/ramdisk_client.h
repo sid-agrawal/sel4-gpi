@@ -23,6 +23,20 @@ typedef struct _ramdisk_client_context
 } ramdisk_client_context_t;
 
 /**
+ * @brief Sanity test for shared memory with ramdisk
+ * Maps the mo to the ramdisk's address space and returns
+ * the first word read
+ *
+ * @param server_ep_cap raw ramdisk ep
+ * @param mo memory to read block into, should be size >= RAMDISK_BLOCK_SIZE
+ * @param res where resulting word will be written
+ * @return int 0 on success, -1 on failure.
+ */
+int ramdisk_client_sanity_test(seL4_CPtr server_ep_cap,
+                               mo_client_context_t *mo,
+                               seL4_Word *res);
+
+/**
  * @brief Allocate a new block from ramdisk
  *
  * Requests a new block from the ramdisk server, returning
