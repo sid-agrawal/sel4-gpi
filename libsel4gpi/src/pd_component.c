@@ -371,8 +371,6 @@ static void handle_next_slot_req(seL4_Word sender_badge,
     }
     seL4_Word slot;
     int error = pd_next_slot(&client_data->pd,
-                             //get_pd_component()->server_vka,
-                             &client_data->pd.pd_vka,
                              &slot);
 
     seL4_SetMR(PDMSGREG_FUNC, PD_FUNC_NEXT_SLOT_ACK);
@@ -380,6 +378,33 @@ static void handle_next_slot_req(seL4_Word sender_badge,
 
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(error, 0, 0,
                                                   PDMSGREG_NEXT_SLOT_ACK_END);
+    return reply(tag);
+}
+
+static void handle_free_slot_req(seL4_Word sender_badge,
+                                seL4_MessageInfo_t old_tag,
+                                seL4_CPtr received_cap) {
+
+    OSDB_PRINTF(PDSERVS "Got free slot request from client badge %lx.\n",
+           sender_badge);
+
+    pd_component_registry_entry_t *client_data = pd_component_registry_get_entry_by_badge(sender_badge);
+    if (client_data == NULL)
+    {
+        OSDB_PRINTF(PDSERVS "Failed to find client badge %lx.\n",
+               sender_badge);
+        return;
+    }
+    seL4_Word slot = seL4_GetMR(PDMSGREG_FREE_SLOT_REQ_SLOT);
+    OSDB_PRINTF(PDSERVS "Freeing PD's slot %d.\n", (int) slot);
+
+    int error = pd_free_slot(&client_data->pd,
+                             slot);
+
+    seL4_SetMR(PDMSGREG_FUNC, PD_FUNC_FREE_SLOT_ACK);
+
+    seL4_MessageInfo_t tag = seL4_MessageInfo_new(error, 0, 0,
+                                                  PDMSGREG_FREE_SLOT_ACK_END);
     return reply(tag);
 }
 
@@ -586,6 +611,9 @@ void pd_component_handle(seL4_MessageInfo_t tag,
         break;
     case PD_FUNC_NEXT_SLOT_REQ:
         handle_next_slot_req(sender_badge, tag, received_cap->capPtr);
+        break;
+    case PD_FUNC_FREE_SLOT_REQ:
+        handle_free_slot_req(sender_badge, tag, received_cap->capPtr);
         break;
     case PD_FUNC_ALLOC_EP_REQ:
         handle_alloc_ep_req(sender_badge, tag, received_cap->capPtr);

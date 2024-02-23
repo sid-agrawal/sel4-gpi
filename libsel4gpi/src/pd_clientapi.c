@@ -126,6 +126,30 @@ int pd_client_next_slot(pd_client_context_t *conn,
     return 0;
 }
 
+int pd_client_free_slot(pd_client_context_t *conn,
+                        seL4_CPtr slot)
+{
+    #if 0
+    /* (XXX) Arya: Deleting the slot's contents only works in child PD */
+    int error = 0;
+    cspacepath_t path;
+    path.capDepth = PD_CAP_DEPTH;
+    path.root = PD_CAP_ROOT;
+    path.capPtr = slot;
+
+    error = vka_cnode_delete(&path); // ignore delete error if slot was empty
+    #endif
+    
+    // Now get the server to free the slot
+    seL4_SetMR(PDMSGREG_FUNC, PD_FUNC_FREE_SLOT_REQ);
+    seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0,
+                                                  PDMSGREG_FREE_SLOT_REQ_END);
+    seL4_SetMR(PDMSGREG_FREE_SLOT_REQ_SLOT, slot);
+    tag = seL4_Call(conn->badged_server_ep_cspath.capPtr, tag);
+    assert(seL4_MessageInfo_ptr_get_label(&tag) == 0);
+    return 0;
+}
+
 /**
  * @brief Create a badged copy of an endpoint capability
  *
@@ -160,46 +184,17 @@ int pd_client_badge_ep(pd_client_context_t *conn,
                         seL4_Word badge,
                         seL4_CPtr *ret_ep)
 {
-    // (XXX) Arya: we have to perform the cnode mint in the PD,
-    // and it fails if performed in the root task
-    
     int error;
-
-    error = pd_client_next_slot(conn, ret_ep);
-    if (error) {
-        return error;
-    }
-
-    cspacepath_t src;
-    src.capDepth = PD_CAP_DEPTH;
-    src.root = PD_CAP_ROOT;
-    src.capPtr = src_ep;
-
-    cspacepath_t dest;
-    dest.capDepth = PD_CAP_DEPTH;
-    dest.root = PD_CAP_ROOT;
-    dest.capPtr = *ret_ep;
-
-    error = vka_cnode_mint(&dest,
-                           &src,
-                           seL4_AllRights,
-                           badge);
-    
-    return error;
-
-    /*
     seL4_SetMR(PDMSGREG_FUNC, PD_FUNC_BADGE_EP_REQ);
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 1,
                                                   PDMSGREG_BADGE_EP_REQ_END);
     seL4_SetMR(PDMSGREG_BADGE_EP_REQ_BADGE, badge);
     seL4_SetMR(PDMSGREG_BADGE_EP_REQ_SRC, src_ep);
-    //seL4_SetCap(0, src_ep);
     tag = seL4_Call(conn->badged_server_ep_cspath.capPtr, tag);
     *ret_ep = seL4_GetMR(PDMSGREG_BADGE_EP_PD_SLOT);
     assert(seL4_MessageInfo_ptr_get_label(&tag) == 0);
     assert(*ret_ep != 0);
     return 0;
-    */
 }
 
 int pd_client_start(pd_client_context_t *conn, seL4_Word arg0)

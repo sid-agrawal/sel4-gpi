@@ -402,6 +402,7 @@ int ramdisk_server_main()
     done:
         reply_tag = seL4_MessageInfo_set_label(reply_tag, error);
         reply(reply_tag);
+        pd_client_free_slot(get_ramdisk_server()->pd_conn, received_cap_path.capPtr);
     }
 
     // serial_server_func_kill();

@@ -27,6 +27,39 @@
 #include <vka/capops.h>
 #include <allocman/bootstrap.h>
 #include <allocman/vka.h>
+#include <simple/simple_helpers.h>
+
+#define CSPACE_SIZE_BITS 17
+
+static int copy_cap_to_pd(pd_t *to_pd,
+                          seL4_CPtr cap,
+                          seL4_Word *slot)
+{
+    int error;
+    seL4_CPtr free_slot;
+
+    error = pd_next_slot(to_pd, &free_slot);
+    if (error != 0) {
+        ZF_LOGE("copy_cap_to_pd: Failed to get a free slot in PD\n");
+        return error;
+    }
+
+    cspacepath_t src, dest;
+    vka_cspace_make_path(to_pd->vka, cap, &src);
+    vka_cspace_make_path(&to_pd->pd_vka, free_slot, &dest);
+
+    error = vka_cnode_copy(&dest, &src, seL4_AllRights);
+    if (error != 0) {
+        ZF_LOGE("copy_cap_to_pd: Failed to copy cap\n");
+        return error;
+    }
+
+    if (slot != NULL) {
+        *slot = free_slot;
+    }
+
+    return 0;
+}
 
 int pd_new(pd_t *pd,
            vka_t *vka,
@@ -58,13 +91,30 @@ int pd_new(pd_t *pd,
 }
 
 int pd_next_slot(pd_t *pd,
-                  vka_t *vka,
-                  seL4_CPtr *next_free_slot) {
+                 seL4_CPtr *next_free_slot) {
 
     cspacepath_t path;
-    int error = vka_cspace_alloc_path(vka, &path);
+    int error = vka_cspace_alloc_path(&pd->pd_vka, &path);
     *next_free_slot = error == seL4_NoError ? path.capPtr : seL4_CapNull;
     return error;
+}
+
+int pd_free_slot(pd_t *pd,
+                 seL4_CPtr slot) 
+{
+    // First try to delete slot contents, 
+    // ignore error if slot is already empty
+    cspacepath_t path;
+    vka_cspace_make_path(&pd->pd_vka, slot, &path);
+    vka_cnode_delete(&path);
+
+    /*
+    (XXX) Arya: Can't use vka_cspace_free because it tries to identify
+    the cap based on the current cspace
+    // vka_cspace_free(&pd->pd_vka, slot);
+    */
+    pd->pd_vka.cspace_free(pd->pd_vka.data, slot);
+    return 0;
 }
 
 int pd_alloc_ep(pd_t *pd,
@@ -94,16 +144,12 @@ int pd_badge_ep(pd_t *pd,
 {
     cspacepath_t src, dest;
     vka_cspace_make_path(&pd->pd_vka, src_ep, &src);
+    int error = vka_cspace_alloc_path(&pd->pd_vka, &dest);
+    if (error) {
+        return error;
+    }
 
-    //printf("src path %d %d %d\n", src.root, src.capPtr, src.capDepth);
-
-    seL4_CPtr dest_cptr;
-    vka_cspace_alloc(&pd->pd_vka, &dest_cptr);
-    vka_cspace_make_path(&pd->pd_vka, dest_cptr, &dest);
-
-    //printf("dest path %d %d %d \n", dest.root, dest.capPtr, dest.capDepth);
-
-    int error = vka_cnode_mint(&dest,
+    error = vka_cnode_mint(&dest,
                                &src,
                                seL4_AllRights,
                                badge);
@@ -129,7 +175,7 @@ int pd_load_image(pd_t *pd,
     pd->config   = process_config_default_simple(simple, image_path, 255);
     pd->config = process_config_mcp(pd->config, seL4_MaxPrio);
     pd->config = process_config_auth(pd->config, simple_get_tcb(simple));
-    pd->config = process_config_create_cnode(pd->config, 17);
+    pd->config = process_config_create_cnode(pd->config, CSPACE_SIZE_BITS);
 
     sel4utils_process_config_t config = pd->config;
     /* This is doing actual works of setting up the PD's address space */
@@ -142,14 +188,39 @@ int pd_load_image(pd_t *pd,
                                                        config);
     assert(error == 0);
 
+    /* Initialize a vka for the PD's cspace */
+    allocman_t *allocator = bootstrap_create_allocman(PD_ALLOCATOR_STATIC_POOL_SIZE,
+                                                      pd->allocator_mem_pool);
+
+    cspace_single_level_t *cspace = malloc(sizeof(cspace_single_level_t));
+
+    error = cspace_single_level_create(allocator, cspace, (struct cspace_single_level_config) {
+        .cnode = pd->proc.cspace.cptr,
+        .cnode_size_bits = CSPACE_SIZE_BITS,
+        //.cnode_guard_bits = seL4_WordBits - pd->cspace_size_bits,
+        .cnode_guard_bits = 0,
+        .first_slot = pd->proc.cspace_next_free,
+        .end_slot = BIT(CSPACE_SIZE_BITS)
+    });
+    assert(error == 0);
+
+    error = allocman_attach_cspace(allocator, cspace_single_level_make_interface(cspace));
+    assert(error == 0);
+
+    if (allocator == NULL)
+    {
+        ZF_LOGF("Failed to bootstrap allocator for pd");
+    }
+    allocman_make_vka(&pd->pd_vka, allocator);
+    
     /* Add the forged MOs*/
 
     /* set up caps about the process */
     pd->stack_pages = CONFIG_SEL4UTILS_STACK_SIZE / PAGE_SIZE_4K;
     pd->stack = pd->proc.thread.stack_top - CONFIG_SEL4UTILS_STACK_SIZE;
-    pd->page_directory_in_pd = sel4utils_copy_cap_to_process(&(pd->proc), pd->vka, pd->proc.pd.cptr);
+    copy_cap_to_pd(pd, pd->proc.pd.cptr, &pd->page_directory_in_pd);
     pd->root_cnode_in_pd = SEL4UTILS_CNODE_SLOT;
-    pd->tcb_in_pd = sel4utils_copy_cap_to_process(&(pd->proc), pd->vka, pd->proc.thread.tcb.cptr);
+    copy_cap_to_pd(pd, pd->proc.thread.tcb.cptr, &pd->tcb_in_pd);
     // if (config_set(CONFIG_HAVE_TIMER)) {
     //     pd->timer_ntfn = sel4utils_copy_cap_to_process(&(pd->proc), pd->vka, env->timer_notify_test.cptr);
     // }
@@ -158,9 +229,9 @@ int pd_load_image(pd_t *pd,
        The return from sel4utils_copy_cap_to_process is the slot in the cnode where the cap was placed
        in the child process' cspace
     */
-    pd->domain_in_pd = sel4utils_copy_cap_to_process(&(pd->proc), pd->vka, simple_get_init_cap(simple, seL4_CapDomain));
-    pd->asid_pool_in_pd = sel4utils_copy_cap_to_process(&(pd->proc), pd->vka, simple_get_init_cap(simple, seL4_CapInitThreadASIDPool));
-    pd->asid_ctrl_in_pd = sel4utils_copy_cap_to_process(&(pd->proc), pd->vka, simple_get_init_cap(simple, seL4_CapASIDControl));
+    copy_cap_to_pd(pd, simple_get_init_cap(simple, seL4_CapDomain), &pd->domain_in_pd);
+    copy_cap_to_pd(pd, simple_get_init_cap(simple, seL4_CapInitThreadASIDPool), &pd->asid_pool_in_pd);
+    copy_cap_to_pd(pd, simple_get_init_cap(simple, seL4_CapASIDControl), &pd->asid_ctrl_in_pd);
 #ifdef CONFIG_IOMMU
     pd->io_space = sel4utils_copy_cap_to_process(&(pd->proc), pd->vka, simple_get_init_cap(simple, seL4_CapIOSpace));
 #endif /* CONFIG_IOMMU */
@@ -172,11 +243,12 @@ int pd_load_image(pd_t *pd,
     if (config_set(CONFIG_KERNEL_MCS))
     {
         seL4_CPtr sched_ctrl = simple_get_sched_ctrl(simple, 0);
-        pd->sched_ctrl_in_pd = sel4utils_copy_cap_to_process(&(pd->proc), pd->vka, sched_ctrl);
+        copy_cap_to_pd(pd, sched_ctrl, &pd->sched_ctrl_in_pd);
+
         for (int i = 1; i < pd->cores; i++)
         {
             sched_ctrl = simple_get_sched_ctrl(simple, i);
-            sel4utils_copy_cap_to_process(&(pd->proc), pd->vka, sched_ctrl);
+            copy_cap_to_pd(pd, sched_ctrl, NULL);
         }
     }
     /* setup data about untypeds */
@@ -186,7 +258,7 @@ int pd_load_image(pd_t *pd,
     //                                                env);
     /* copy the fault endpoint - we wait on the endpoint for a message
      * or a fault to see when the test finishes */
-    pd->fault_endpoint_in_pd = sel4utils_copy_cap_to_process(&(pd->proc), pd->vka, pd->proc.fault_endpoint.cptr);
+    copy_cap_to_pd(pd, pd->proc.fault_endpoint.cptr, &pd->fault_endpoint_in_pd);
 
     /*
         These are RDE Entries.
@@ -198,8 +270,7 @@ int pd_load_image(pd_t *pd,
     {
         ZF_LOGF("Failed to forge child's as cap");
     }
-    pd->child_ads_cptr_in_child = sel4utils_copy_cap_to_process(&(pd->proc),
-                                                                pd->vka, child_ads_cap_in_parent);
+    copy_cap_to_pd(pd, child_ads_cap_in_parent, &pd->child_ads_cptr_in_child);
     assert(pd->child_ads_cptr_in_child != 0);
 
     OSDB_PRINTF("copied ads ep at %d\n", (int) pd->child_ads_cptr_in_child);
@@ -211,9 +282,7 @@ int pd_load_image(pd_t *pd,
     pd->rde[0].pd_obj_id = 0x00;
 
     // For the GPI server, no need to forge
-    pd->gpi_endpoint_in_child = sel4utils_copy_cap_to_process(&(pd->proc),
-                                                              pd->vka,
-                                                              get_gpi_server()->server_ep_obj.cptr);
+    copy_cap_to_pd(pd, get_gpi_server()->server_ep_obj.cptr, &pd->gpi_endpoint_in_child);
     assert(pd->gpi_endpoint_in_child != 0);
 
     OSDB_PRINTF("copied gpi ep at %d\n", (int) pd->gpi_endpoint_in_child);
@@ -369,8 +438,8 @@ int pd_send_cap(pd_t *to_pd,
     }
 
     OSDB_PRINTF(PDSERVS "pd_send_cap: copying cap to child: %lu\n", *slot);
-    *slot = sel4utils_copy_cap_to_process(&(to_pd->proc), to_pd->vka, cap);
-    if (*slot == 0)
+    error = copy_cap_to_pd(to_pd, cap, slot);
+    if (error != 0)
     {
         ZF_LOGF("Failed to copy cap to process");
         return -1;
@@ -397,9 +466,14 @@ int pd_start(pd_t *pd,
     assert(&pd->proc != NULL);
     assert(&pd->proc.vspace != NULL);
 
-    seL4_CPtr pd_cptr_in_child = sel4utils_copy_cap_to_process(&(pd->proc),
-                                                                vka, pd_endpoint_in_root);
-    assert(pd_cptr_in_child!= 0);
+    seL4_CPtr pd_cptr_in_child;
+    error = copy_cap_to_pd(pd, pd_endpoint_in_root, &pd_cptr_in_child);
+    if (error != 0)
+    {
+        ZF_LOGF("Failed to copy PD cap to process");
+        return -1;
+    }
+
     // Phase1: Start it.
     // Phase2: start the CPU thread.
 
@@ -411,31 +485,6 @@ int pd_start(pd_t *pd,
 
     //argc = 1;
     //snprintf(argv[0], WORD_STRING_SIZE, "%ld", arg0);
-
-    /* Initialize a vka for the PD's cspace */
-    allocman_t *allocator = bootstrap_create_allocman(PD_ALLOCATOR_STATIC_POOL_SIZE,
-                                                      pd->allocator_mem_pool);
-
-    cspace_single_level_t *cspace = malloc(sizeof(cspace_single_level_t));
-
-    error = cspace_single_level_create(allocator, cspace, (struct cspace_single_level_config) {
-        .cnode = pd->proc.cspace.cptr,
-        .cnode_size_bits = pd->cspace_size_bits,
-        //.cnode_guard_bits = seL4_WordBits - pd->cspace_size_bits,
-        .cnode_guard_bits = 0,
-        .first_slot = pd->proc.cspace_next_free,
-        .end_slot = BIT(pd->cspace_size_bits)
-    });
-    assert(error == 0);
-
-    error = allocman_attach_cspace(allocator, cspace_single_level_make_interface(cspace));
-    assert(error == 0);
-
-    if (allocator == NULL)
-    {
-        ZF_LOGF("Failed to bootstrap allocator for pd");
-    }
-    allocman_make_vka(&pd->pd_vka, allocator);
 
     /* spawn the process */
     seL4_CPtr osm_caps[] = {pd->child_ads_cptr_in_child,

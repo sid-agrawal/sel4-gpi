@@ -244,8 +244,10 @@ int pd_start(pd_t *pd,
              seL4_Word arg0);
 
 int pd_next_slot(pd_t *pd,
-                  vka_t *vka,
-                  seL4_CPtr *next_free_slot);
+                 seL4_CPtr *next_free_slot);
+
+int pd_free_slot(pd_t *pd,
+                 seL4_CPtr slot);
 
 /**
  * Allocates an endpoint using the gpi server's vka, and copies to the pd cspace

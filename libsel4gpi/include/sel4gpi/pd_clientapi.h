@@ -77,6 +77,15 @@ int pd_client_send_cap(pd_client_context_t *conn, seL4_CPtr cap_to_send,
 int pd_client_next_slot(pd_client_context_t *conn, seL4_Word *slot);
 
 /**
+ * @brief Free an unused slot in the PD
+ *
+ * @param conn client connection object
+ * @param slot slot to free in the PD
+ * @return int 0 on success, -1 on failure.
+ */
+int pd_client_free_slot(pd_client_context_t *conn,
+                        seL4_CPtr slot);
+/**
  * @brief Create a badged copy of an endpoint capability
  *
  * @param conn client connection object
