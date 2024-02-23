@@ -13,8 +13,7 @@
 
 #define NO_OFFSET -1
 
-__attribute__((noreturn))
-void xv6fs_panic(char *s)
+__attribute__((noreturn)) void xv6fs_panic(char *s)
 {
     printf("panic: %s\n", s);
     for (;;)
@@ -24,8 +23,9 @@ void xv6fs_panic(char *s)
 // ARYA-TODO track the actual process by client
 static struct proc curproc;
 
-struct proc *myproc(void) {
-  return &curproc;
+struct proc *myproc(void)
+{
+    return &curproc;
 }
 
 // ARYA-TODO set up a better fd table
@@ -47,7 +47,7 @@ long fd_bind(void *file)
         if (fd_table[i] == NULL)
         {
             fd_table[i] = file;
-            //printf("%s: new fd %d\n", __func__, i);
+            // printf("%s: new fd %d\n", __func__, i);
             return i;
         }
     return -1;
@@ -67,27 +67,27 @@ void fd_close(long fd)
     if (fd >= 0 && fd < FD_TABLE_SIZE)
     {
         fd_table[fd] = NULL;
-        //printf("%s: closed fd %d\n", __func__, fd);
+        // printf("%s: closed fd %d\n", __func__, fd);
     }
 }
 
 int xv6fs_open(const char *pathname, int flags, int modes)
 {
-    //printf("xv6fs_open: Opening file %s\n", pathname);
+    // printf("xv6fs_open: Opening file %s\n", pathname);
     void *file = (void *)xv6fs_sys_open((char *)pathname, flags); // ARYA-TODO, what about modes?
     if (!file)
     {
-        //printf("%s: failed,pathname(%s), flags(%d), modes(%d)\n", __func__, pathname, flags, modes);
+        // printf("%s: failed,pathname(%s), flags(%d), modes(%d)\n", __func__, pathname, flags, modes);
         return -1;
     }
     long fd = fd_bind(file);
-    //printf("xv6fs_open: Opened file %s with fd %d\n", pathname, fd);
+    // printf("xv6fs_open: Opened file %s with fd %d\n", pathname, fd);
     return fd;
 }
 
 int xv6fs_read(int fd, void *buf, int count)
 {
-    //printf("Reading fd %d for %d bytes\n", fd, count);
+    // printf("Reading fd %d for %d bytes\n", fd, count);
     void *file = fd_get(fd);
     if (!file)
     {
@@ -99,7 +99,7 @@ int xv6fs_read(int fd, void *buf, int count)
 
 int xv6fs_pread(int fd, void *buf, int count, int offset)
 {
-    //printf("Reading fd %d at %d for %d bytes\n", fd, offset, count);
+    // printf("Reading fd %d at %d for %d bytes\n", fd, offset, count);
     void *file = fd_get(fd);
     if (!file)
     {
@@ -112,10 +112,9 @@ int xv6fs_pread(int fd, void *buf, int count, int offset)
     return ret;
 }
 
-
 int xv6fs_write(int fd, const void *buf, int count)
 {
-    //printf("Writing fd %d for %d bytes\n", count);
+    // printf("Writing fd %d for %d bytes\n", count);
     void *file = fd_get(fd);
     if (!file)
     {
@@ -128,7 +127,7 @@ int xv6fs_write(int fd, const void *buf, int count)
 
 int xv6fs_fstat(int fd, struct stat *buf)
 {
-    //printf("%s: fd %d\n", __func__, fd);
+    // printf("%s: fd %d\n", __func__, fd);
     void *file = fd_get(fd);
     if (!file)
     {
@@ -136,19 +135,19 @@ int xv6fs_fstat(int fd, struct stat *buf)
         return -1;
     }
 
-    return xv6fs_sys_stat(file , (void *)buf);
+    return xv6fs_sys_stat(file, (void *)buf);
 }
 
 int xv6fs_stat(const char *pathname, struct stat *buf)
 {
-    //printf("%s: %s\n", __func__, pathname);
+    // printf("%s: %s\n", __func__, pathname);
     void *file = (void *)xv6fs_sys_open((char *)pathname, O_CREAT | O_RDWR);
     if (!file)
     {
         printf("%s failed, pathname(%s)\n", __func__, pathname);
         return -1;
     }
-    int ret = xv6fs_sys_stat(file , (void *)buf);
+    int ret = xv6fs_sys_stat(file, (void *)buf);
     xv6fs_sys_fileclose(file);
     return ret;
 }
@@ -166,7 +165,7 @@ int xv6fs_lseek(int fd, off_t offset, int whence)
 
 int xv6fs_close(int fd)
 {
-    //printf("Closing fd %d\n", fd);
+    // printf("Closing fd %d\n", fd);
     void *file = fd_get(fd);
     if (!file)
     {
@@ -183,12 +182,14 @@ int xv6fs_unlink(const char *pathname)
     return r;
 }
 
-char *xv6fs_getcwd(char *buf, size_t size) {
-    char* r = xv6fs_sys_getcwd(buf, size);
+char *xv6fs_getcwd(char *buf, size_t size)
+{
+    char *r = xv6fs_sys_getcwd(buf, size);
     return r;
 }
 
-int xv6fs_fcntl(int fd, int cmd, unsigned long arg) {
+int xv6fs_fcntl(int fd, int cmd, unsigned long arg)
+{
     void *file = fd_get(fd);
     if (!file)
     {

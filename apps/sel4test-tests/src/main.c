@@ -35,8 +35,8 @@
 char __attribute__((aligned(PAGE_SIZE_4K))) morecore_area[TP_MALLOC_SIZE];
 size_t morecore_size = 2 * 1024 * 1024;
 /* Pointer to free space in the morecore area. */
-uintptr_t morecore_top = (uintptr_t) &morecore_area[TP_MALLOC_SIZE];
-//int *shared_addr_between_threads;
+uintptr_t morecore_top = (uintptr_t)&morecore_area[TP_MALLOC_SIZE];
+// int *shared_addr_between_threads;
 
 /* dummy global for libsel4muslcsys */
 char _cpio_archive[1];
@@ -59,21 +59,22 @@ static sel4utils_alloc_data_t alloc_data;
 #define ALLOCATOR_STATIC_POOL_SIZE ((1 << seL4_PageBits) * 20)
 static char allocator_mem_pool[ALLOCATOR_STATIC_POOL_SIZE];
 
-
-void thread_testing(void) {
+void thread_testing(void)
+{
     printf("Thread testing entering\n");
 
     int i = 0;
-    while (i < 10){
+    while (i < 10)
+    {
         printf("Sleepign for a second\n");
-        //sleep(1);
+        // sleep(1);
         i++;
     }
-   // *shared_addr_between_threads = 77;
+    // *shared_addr_between_threads = 77;
     printf("Thread testing leaving\n");
-    while (1);
+    while (1)
+        ;
 }
-
 
 /* override abort, called by exit (and assert fail) */
 void abort(void)
@@ -85,14 +86,16 @@ void abort(void)
 
     /* we should not get here */
     assert(0);
-    while (1);
+    while (1)
+        ;
 }
 
 void __plat_putchar(int c);
 static size_t write_buf(void *data, size_t count)
 {
     char *buf = data;
-    for (int i = 0; i < count; i++) {
+    for (int i = 0; i < count; i++)
+    {
         __plat_putchar(buf[i]);
     }
     return count;
@@ -101,7 +104,8 @@ static size_t write_buf(void *data, size_t count)
 static testcase_t *find_test(const char *name)
 {
     testcase_t *test = sel4test_get_test(name);
-    if (test == NULL) {
+    if (test == NULL)
+    {
         ZF_LOGF("Failed to find test %s", name);
     }
 
@@ -121,7 +125,8 @@ static void init_allocator(env_t env, test_init_data_t *init_data)
                                                          init_data->cspace_size_bits, init_data->free_slots.start,
                                                          init_data->free_slots.end, ALLOCATOR_STATIC_POOL_SIZE,
                                                          allocator_mem_pool);
-    if (allocator == NULL) {
+    if (allocator == NULL)
+    {
         ZF_LOGF("Failed to bootstrap allocator");
     }
     allocman_make_vka(&env->vka, allocator);
@@ -133,7 +138,8 @@ static void init_allocator(env_t env, test_init_data_t *init_data)
     cspacepath_t path;
     for (slot = init_data->untypeds.start, size_bits_index = 0;
          slot <= init_data->untypeds.end;
-         slot++, size_bits_index++) {
+         slot++, size_bits_index++)
+    {
 
         vka_cspace_make_path(&env->vka, slot, &path);
         /* allocman doesn't require the paddr unless we need to ask for phys addresses,
@@ -141,7 +147,8 @@ static void init_allocator(env_t env, test_init_data_t *init_data)
         size_bits = init_data->untyped_size_bits_list[size_bits_index];
         error = allocman_utspace_add_uts(allocator, 1, &path, &size_bits, NULL,
                                          ALLOCMAN_UT_KERNEL);
-        if (error) {
+        if (error)
+        {
             ZF_LOGF("Failed to add untyped objects to allocator");
         }
     }
@@ -151,10 +158,11 @@ static void init_allocator(env_t env, test_init_data_t *init_data)
 
     /* create a vspace */
     void *existing_frames[init_data->stack_pages + 2];
-    existing_frames[0] = (void *) init_data;
+    existing_frames[0] = (void *)init_data;
     existing_frames[1] = seL4_GetIPCBuffer();
     assert(init_data->stack_pages > 0);
-    for (int i = 0; i < init_data->stack_pages; i++) {
+    for (int i = 0; i < init_data->stack_pages; i++)
+    {
         existing_frames[i + 2] = init_data->stack + (i * PAGE_SIZE_4K);
     }
 
@@ -165,36 +173,36 @@ static void init_allocator(env_t env, test_init_data_t *init_data)
     void *vaddr;
     virtual_reservation = vspace_reserve_range(&env->vspace, ALLOCATOR_VIRTUAL_POOL_SIZE,
                                                seL4_AllRights, 1, &vaddr);
-    if (virtual_reservation.res == 0) {
+    if (virtual_reservation.res == 0)
+    {
         ZF_LOGF("Failed to switch allocator to virtual memory pool");
     }
 
     bootstrap_configure_virtual_pool(allocator, vaddr, ALLOCATOR_VIRTUAL_POOL_SIZE,
                                      env->page_directory);
-
 }
 
 static uint8_t cnode_size_bits(void *data)
 {
-    test_init_data_t *init = (test_init_data_t *) data;
+    test_init_data_t *init = (test_init_data_t *)data;
     return init->cspace_size_bits;
 }
 
 static seL4_CPtr sched_ctrl(void *data, int core)
 {
-    return ((test_init_data_t *) data)->sched_ctrl + core;
+    return ((test_init_data_t *)data)->sched_ctrl + core;
 }
 
 static int core_count(UNUSED void *data)
 {
-    return ((test_init_data_t *) data)->cores;
+    return ((test_init_data_t *)data)->cores;
 }
 
 void init_simple(env_t env, test_init_data_t *init_data)
 {
     /* minimal simple implementation */
-    env->simple.data = (void *) init_data;
-    env->simple.arch_simple.data = (void *) init_data;
+    env->simple.data = (void *)init_data;
+    env->simple.arch_simple.data = (void *)init_data;
     env->simple.init_cap = sel4utils_process_init_cap;
     env->simple.cnode_size = cnode_size_bits;
     env->simple.sched_ctrl = sched_ctrl;
@@ -211,26 +219,25 @@ int main(int argc, char **argv)
 {
     sel4muslcsys_register_stdio_write_fn(write_buf);
 
-
-   //int x = 0x55;
-   // shared_addr_between_threads = &x;
-   // printf("address of x is %p\n", shared_addr_between_threads);
+    // int x = 0x55;
+    //  shared_addr_between_threads = &x;
+    //  printf("address of x is %p\n", shared_addr_between_threads);
 
     test_init_data_t *init_data;
     struct env env;
 
     /* parse args */
     assert(argc == 7);
-    endpoint = (seL4_CPtr) atoi(argv[0]);
+    endpoint = (seL4_CPtr)atoi(argv[0]);
 
     /* read in init data */
-    init_data = (void *) atol(argv[1]);
+    init_data = (void *)atol(argv[1]);
 
-    self_as_cap = (seL4_CPtr) atoi(argv[2]);
-    self_cpu_cap = (seL4_CPtr) atoi(argv[3]);
-    self_pd_cap = (seL4_CPtr) atoi(argv[4]);
-    gpi_endpoint = (seL4_CPtr) atoi(argv[5]);
-    seL4_CPtr ramdisk_endpoint = (seL4_CPtr) atoi(argv[6]);
+    self_as_cap = (seL4_CPtr)atoi(argv[2]);
+    self_cpu_cap = (seL4_CPtr)atoi(argv[3]);
+    self_pd_cap = (seL4_CPtr)atoi(argv[4]);
+    gpi_endpoint = (seL4_CPtr)atoi(argv[5]);
+    seL4_CPtr ramdisk_endpoint = (seL4_CPtr)atoi(argv[6]);
 
     /* configure env */
     env.cspace_root = init_data->root_cnode;
@@ -282,14 +289,16 @@ int main(int argc, char **argv)
     /* run the test */
     sel4test_reset();
     test_result_t result = SUCCESS;
-    if (test) {
+    if (test)
+    {
         printf("Running test %s (%s)\n", test->name, test->description);
         result = test->function((uintptr_t)&env);
-    } else {
+    }
+    else
+    {
         result = FAILURE;
         ZF_LOGF("Cannot find test %s\n", init_data->name);
     }
-
 
     printf("Test %s %s\n", init_data->name, result == SUCCESS ? "passed" : "failed");
     /* send our result back */
@@ -301,7 +310,6 @@ int main(int argc, char **argv)
      * scheduled to run again after signalling them with the above send.
      */
     assert(!"unreachable");
-
 
     return 0;
 }

@@ -55,11 +55,13 @@ bool fault_handle_vgic_maintenance(size_t vcpu_id)
 #error "Unknown GIC version"
 #endif
 
-    if (virq) {
+    if (virq)
+    {
         success = vgic_vcpu_load_list_reg(&vgic, vcpu_id, idx, group, virq);
     }
 
-    if (!success) {
+    if (!success)
+    {
         printf("VGIC|ERROR: maintenance handler failed\n");
         assert(0);
     }
@@ -68,7 +70,8 @@ bool fault_handle_vgic_maintenance(size_t vcpu_id)
 }
 
 // @ivanv: maybe this shouldn't be here?
-bool vgic_register_irq(size_t vcpu_id, int virq_num, virq_ack_fn_t ack_fn, void *ack_data) {
+bool vgic_register_irq(size_t vcpu_id, int virq_num, virq_ack_fn_t ack_fn, void *ack_data)
+{
     assert(virq_num >= 0 && virq_num != VIRQ_INVALID);
     struct virq_handle virq = {
         .virq = virq_num,
@@ -103,11 +106,14 @@ bool handle_vgic_dist_fault(size_t vcpu_id, uint64_t fault_addr, uint64_t fsr, s
 
     uint64_t offset = fault_addr - GIC_DIST_PADDR;
     bool success = false;
-    if (fault_is_read(fsr)) {
+    if (fault_is_read(fsr))
+    {
         // printf("VGIC|INFO: Read dist\n");
         success = vgic_dist_reg_read(vcpu_id, &vgic, offset, fsr, regs);
         assert(success);
-    } else {
+    }
+    else
+    {
         // printf("VGIC|INFO: Write dist\n");
         success = vgic_dist_reg_write(vcpu_id, &vgic, offset, fsr, regs);
         assert(success);

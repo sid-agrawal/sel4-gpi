@@ -28,7 +28,8 @@ NO_INLINE static void stop_point(void)
 
 NO_INLINE static void single_step_guinea_pig(void)
 {
-    for (; counter < SINGLESTEP_TEST_MAX_LOOP_ITERATIONS; counter++) {
+    for (; counter < SINGLESTEP_TEST_MAX_LOOP_ITERATIONS; counter++)
+    {
         /* This syscall is inserted here to ensure that syscalls are being
          * stepped over successfully on x86. On ARM, we can just disable single-
          * stepping in PL1 and PL2 altogether, so the problem doesn't arise.
@@ -51,7 +52,8 @@ int debugger_main(seL4_Word a0, seL4_Word reply, seL4_Word a2, seL4_Word a3)
      */
     tag = api_wait(fault_ep_cspath.capPtr, &badge);
 
-    if (seL4_MessageInfo_get_label(tag) != seL4_Fault_DebugException) {
+    if (seL4_MessageInfo_get_label(tag) != seL4_Fault_DebugException)
+    {
         ZF_LOGE("debugger: Got unexpected fault %zd.\n",
                 seL4_MessageInfo_get_label(tag));
         return -1;
@@ -60,8 +62,8 @@ int debugger_main(seL4_Word a0, seL4_Word reply, seL4_Word a2, seL4_Word a3)
     fault_data.vaddr = seL4_GetMR(seL4_DebugException_FaultIP);
     fault_data.reason = seL4_GetMR(seL4_DebugException_ExceptionReason);
     fault_data.bp_num = seL4_GetMR(seL4_DebugException_BreakpointNumber);
-    if (fault_data.reason != seL4_InstructionBreakpoint
-        || fault_data.vaddr != (seL4_Word)&single_step_guinea_pig) {
+    if (fault_data.reason != seL4_InstructionBreakpoint || fault_data.vaddr != (seL4_Word)&single_step_guinea_pig)
+    {
         ZF_LOGE("debugger: debug exception not triggered by expected conditions.\n");
         return -1;
     }
@@ -84,10 +86,12 @@ int debugger_main(seL4_Word a0, seL4_Word reply, seL4_Word a2, seL4_Word a3)
     counter = 0;
     seL4_TCB_Resume(debuggee_tcb_cap);
 
-    for (;;) {
+    for (;;)
+    {
         tag = api_recv(fault_ep_cspath.capPtr, &badge, reply);
 
-        if (seL4_MessageInfo_get_label(tag) != seL4_Fault_DebugException) {
+        if (seL4_MessageInfo_get_label(tag) != seL4_Fault_DebugException)
+        {
             ZF_LOGE("Debugger: while single stepping, got unexpected fault.\n");
             return -1;
         }
@@ -95,14 +99,16 @@ int debugger_main(seL4_Word a0, seL4_Word reply, seL4_Word a2, seL4_Word a3)
         fault_data.vaddr = seL4_GetMR(seL4_DebugException_FaultIP);
         fault_data.reason = seL4_GetMR(seL4_DebugException_ExceptionReason);
         fault_data.bp_num = seL4_GetMR(seL4_DebugException_TriggerAddress);
-        if (fault_data.reason != seL4_SingleStep) {
+        if (fault_data.reason != seL4_SingleStep)
+        {
             ZF_LOGE("Debugger: while single stepping, got debug exception, but "
                     "for the wrong reason (reason %zd).\n",
                     fault_data.reason);
             return -1;
         }
 
-        if (fault_data.vaddr == (seL4_Word)&stop_point) {
+        if (fault_data.vaddr == (seL4_Word)&stop_point)
+        {
             /* We're done: disable single-stepping */
             ZF_LOGV("About to disable stepping and resume debuggee.\n");
             tag = seL4_MessageInfo_set_label(tag, 0);
@@ -116,14 +122,16 @@ int debugger_main(seL4_Word a0, seL4_Word reply, seL4_Word a2, seL4_Word a3)
         api_reply(reply, tag);
     }
 
-    if (fault_data.vaddr != (seL4_Word)&stop_point) {
+    if (fault_data.vaddr != (seL4_Word)&stop_point)
+    {
         ZF_LOGE("Exited loop, but the debuggee thread did not get where we "
                 "expected it to.\n");
         return -1;
     }
 
     /* Test the value of "counter", which the debuggee thread was incrementing. */
-    if (counter <= 0 || counter != SINGLESTEP_TEST_MAX_LOOP_ITERATIONS) {
+    if (counter <= 0 || counter != SINGLESTEP_TEST_MAX_LOOP_ITERATIONS)
+    {
         return -1;
     }
 

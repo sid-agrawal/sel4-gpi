@@ -23,18 +23,19 @@
  * server thread.
  */
 
-#define PDSERVS     "PDServ Component: "
-#define PDSERVC     "PDServ Client   : "
+#define PDSERVS "PDServ Component: "
+#define PDSERVC "PDServ Client   : "
 
 #define PD_SERVER_BADGE_VALUE_EMPTY (0)
 #define PD_SERVER_BADGE_PARENT_VALUE (0xDEADBEEF)
 
 /* Temp definition of supported images */
 #define PD_N_IMAGES 2
-static const char* pd_images[PD_N_IMAGES] = { "hello", "ramdisk_server" };
+static const char *pd_images[PD_N_IMAGES] = {"hello", "ramdisk_server"};
 
 /* IPC values returned in the "label" message header. */
-enum pd_component_errors {
+enum pd_component_errors
+{
     PD_SERVER_NOERROR = 0,
     /* No future collisions with seL4_Error.*/
     PD_SERVER_ERROR_BIND_FAILED = seL4_NumErrors,
@@ -42,7 +43,8 @@ enum pd_component_errors {
 };
 
 /* IPC Message register values for SSMSGREG_FUNC */
-enum pd_component_funcs {
+enum pd_component_funcs
+{
     PD_FUNC_LOAD_REQ = 0,
     PD_FUNC_LOAD_ACK,
 
@@ -134,7 +136,6 @@ enum pd_component_msgregs
 
     PDMSGREG_DUMP_ACK_END = PDMSGREG_LABEL0,
 
-
     /* Start */
     /* (XXX) For now,  we only pass 1 arg, which clearly needs fixing */
     PDMSGREG_START_ARG0 = PDMSGREG_LABEL0,
@@ -149,7 +150,8 @@ enum pd_component_msgregs
 };
 
 /* Per-client context maintained by the server. */
-typedef struct _pd_component_registry_entry {
+typedef struct _pd_component_registry_entry
+{
     pd_t pd;
     /* In our model each PD can have its own cspace. */
     seL4_CNode cspace_root;
@@ -159,7 +161,8 @@ typedef struct _pd_component_registry_entry {
 } pd_component_registry_entry_t;
 
 /* State maintained by the server. */
-typedef struct _pd_component_context {
+typedef struct _pd_component_context
+{
     simple_t *server_simple;
     vka_t *server_vka;
     seL4_CPtr server_cspace;
@@ -177,9 +180,9 @@ typedef struct _pd_component_context {
  * Internal library function: acts as the main() for the server thread.
  **/
 void pd_component_handle(seL4_MessageInfo_t tag,
-                          seL4_Word badge,
-                          cspacepath_t *received_cap,
-                          seL4_MessageInfo_t *reply_tag);
+                         seL4_Word badge,
+                         cspacepath_t *received_cap,
+                         seL4_MessageInfo_t *reply_tag);
 
 /* Global server instance accessor functions. */
 pd_component_context_t *get_pd_component(void);
@@ -191,6 +194,6 @@ int forge_pd_cap_from_init_data(
     vka_t *vka,
     seL4_CPtr *cap_ret);
 
-void update_forged_pd_cap_from_init_data(test_init_data_t * init_data, seL4_CPtr cap);
+void update_forged_pd_cap_from_init_data(test_init_data_t *init_data, seL4_CPtr cap);
 
 pd_component_registry_entry_t *pd_component_registry_get_entry_by_id(seL4_Word pd_id);

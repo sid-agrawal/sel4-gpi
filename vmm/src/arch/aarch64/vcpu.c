@@ -7,24 +7,24 @@
 #include "util.h"
 #include "vcpu.h"
 
-#define SCTLR_EL1_UCI       (1 << 26)     /* Enable EL0 access to DC CVAU, DC CIVAC, DC CVAC,
-                                           and IC IVAU in AArch64 state   */
-#define SCTLR_EL1_C         (1 << 2)      /* Enable data and unified caches */
-#define SCTLR_EL1_I         (1 << 12)     /* Enable instruction cache       */
-#define SCTLR_EL1_CP15BEN   (1 << 5)      /* AArch32 CP15 barrier enable    */
-#define SCTLR_EL1_UTC       (1 << 15)     /* Enable EL0 access to CTR_EL0   */
-#define SCTLR_EL1_NTWI      (1 << 16)     /* WFI executed as normal         */
-#define SCTLR_EL1_NTWE      (1 << 18)     /* WFE executed as normal         */
+#define SCTLR_EL1_UCI (1 << 26)    /* Enable EL0 access to DC CVAU, DC CIVAC, DC CVAC, \
+                                    and IC IVAU in AArch64 state   */
+#define SCTLR_EL1_C (1 << 2)       /* Enable data and unified caches */
+#define SCTLR_EL1_I (1 << 12)      /* Enable instruction cache       */
+#define SCTLR_EL1_CP15BEN (1 << 5) /* AArch32 CP15 barrier enable    */
+#define SCTLR_EL1_UTC (1 << 15)    /* Enable EL0 access to CTR_EL0   */
+#define SCTLR_EL1_NTWI (1 << 16)   /* WFI executed as normal         */
+#define SCTLR_EL1_NTWE (1 << 18)   /* WFE executed as normal         */
 
 /* Disable MMU, SP alignment check, and alignment check */
 /* A57 default value */
-#define SCTLR_EL1_RES      0x30d00800   /* Reserved value */
-#define SCTLR_EL1          ( SCTLR_EL1_RES | SCTLR_EL1_CP15BEN | SCTLR_EL1_UTC \
-                           | SCTLR_EL1_NTWI | SCTLR_EL1_NTWE )
-#define SCTLR_EL1_NATIVE   (SCTLR_EL1 | SCTLR_EL1_C | SCTLR_EL1_I | SCTLR_EL1_UCI)
-#define SCTLR_DEFAULT      SCTLR_EL1_NATIVE
+#define SCTLR_EL1_RES 0x30d00800 /* Reserved value */
+#define SCTLR_EL1 (SCTLR_EL1_RES | SCTLR_EL1_CP15BEN | SCTLR_EL1_UTC | SCTLR_EL1_NTWI | SCTLR_EL1_NTWE)
+#define SCTLR_EL1_NATIVE (SCTLR_EL1 | SCTLR_EL1_C | SCTLR_EL1_I | SCTLR_EL1_UCI)
+#define SCTLR_DEFAULT SCTLR_EL1_NATIVE
 
-void vcpu_reset(size_t vcpu_id) {
+void vcpu_reset(size_t vcpu_id)
+{
     // @ivanv this is an incredible amount of system calls
     // Reset registers
     // @ivanv: double check, shouldn't we be setting sctlr?
@@ -62,7 +62,8 @@ void vcpu_reset(size_t vcpu_id) {
     microkit_arm_vcpu_write_reg(vcpu_id, seL4_VCPUReg_CNTKCTL_EL1, 0);
 }
 
-void vcpu_print_regs(size_t vcpu_id) {
+void vcpu_print_regs(size_t vcpu_id)
+{
     // @ivanv this is an incredible amount of system calls
     LOG_VMM("dumping VCPU (ID 0x%lx) registers:\n", vcpu_id);
     /* VM control registers EL1 */

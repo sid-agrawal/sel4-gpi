@@ -23,8 +23,8 @@
 /* Other (receiver) end of the Endpoint object on which the kernel will queue
  * the Fault events triggered by the fault thread.
  */
-cspacepath_t fault_ep_cspath = { 0 };
-static cspacepath_t badged_fault_ep_cspath = { 0 };
+cspacepath_t fault_ep_cspath = {0};
+static cspacepath_t badged_fault_ep_cspath = {0};
 
 int setup_caps_for_test(struct env *env)
 {
@@ -32,20 +32,23 @@ int setup_caps_for_test(struct env *env)
     int error;
 
     fault_ep_cap = vka_alloc_endpoint_leaky(&env->vka);
-    if (fault_ep_cap == 0) {
+    if (fault_ep_cap == 0)
+    {
         ZF_LOGE("Failed to alloc endpoint object for faults.");
         return -1;
     }
     vka_cspace_make_path(&env->vka, fault_ep_cap, &fault_ep_cspath);
     /* Mint a badged copy of the fault ep. */
     error = vka_cspace_alloc_path(&env->vka, &badged_fault_ep_cspath);
-    if (error != seL4_NoError) {
+    if (error != seL4_NoError)
+    {
         ZF_LOGE("Failed to alloc cap slot for minted EP cap copy.");
         return -1;
     }
     error = vka_cnode_mint(&badged_fault_ep_cspath, &fault_ep_cspath, seL4_AllRights,
                            FAULT_EP_KERNEL_BADGE_VALUE);
-    if (error != seL4_NoError) {
+    if (error != seL4_NoError)
+    {
         ZF_LOGE("Failed to mint fault EP cap.");
         return -1;
     }
@@ -62,12 +65,13 @@ int setup_faulter_thread_for_test(struct env *env, helper_thread_t *faulter_thre
      * will be told to listen on.
      */
     error = api_tcb_set_space(
-                get_helper_tcb(faulter_thread),
-                badged_fault_ep_cspath.capPtr,
-                env->cspace_root,
-                api_make_guard_skip_word(seL4_WordBits - env->cspace_size_bits),
-                env->page_directory, seL4_NilData);
-    if (error != 0) {
+        get_helper_tcb(faulter_thread),
+        badged_fault_ep_cspath.capPtr,
+        env->cspace_root,
+        api_make_guard_skip_word(seL4_WordBits - env->cspace_size_bits),
+        env->page_directory, seL4_NilData);
+    if (error != 0)
+    {
         ZF_LOGE("Failed to set fault EP for helper thread.");
         return -1;
     }
@@ -109,13 +113,19 @@ static volatile uint32_t bpd;
 static int breakpoint_triggerer_main(seL4_Word type, seL4_Word size, seL4_Word rw, seL4_Word arg3)
 {
 
-    if (type == seL4_InstructionBreakpoint) {
+    if (type == seL4_InstructionBreakpoint)
+    {
         breakpoint_code();
-    } else if (type == seL4_DataBreakpoint) {
-        if (rw == seL4_BreakOnRead) {
+    }
+    else if (type == seL4_DataBreakpoint)
+    {
+        if (rw == seL4_BreakOnRead)
+        {
             UNUSED uint32_t tmp;
             tmp = bpd;
-        } else {
+        }
+        else
+        {
             bpd = 0;
         }
 
@@ -125,9 +135,13 @@ static int breakpoint_triggerer_main(seL4_Word type, seL4_Word size, seL4_Word r
          */
         volatile int *pi = (volatile int *)BREAKPOINT_TEST_BAD_FAULT_MAGIC_ADDR;
         *pi = 1;
-    } else if (type == seL4_SoftwareBreakRequest) {
+    }
+    else if (type == seL4_SoftwareBreakRequest)
+    {
         TEST_SOFTWARE_BREAK_ASM();
-    } else {
+    }
+    else
+    {
         ZF_LOGE("Unknown breakpoint type %zd requested.\n", type);
     }
 
@@ -156,7 +170,8 @@ static int breakpoint_handler_main(seL4_Word _fault_ep_cspath, seL4_Word a1, seL
     fault_data.vaddr2 = seL4_GetMR(seL4_DebugException_TriggerAddress);
     fault_data.bp_num = seL4_GetMR(seL4_DebugException_BreakpointNumber);
 
-    switch (label) {
+    switch (label)
+    {
     case seL4_Fault_DebugException:
         return 0;
     default:
@@ -178,11 +193,13 @@ static void setup_handler_thread_for_test(struct env *env, helper_thread_t *hand
 
 static void cleanup_breakpoints_from_test(struct env *env)
 {
-    for (int i = TEST_FIRST_INSTR_BP; i < TEST_FIRST_INSTR_BP + TEST_NUM_INSTR_BPS; i++) {
+    for (int i = TEST_FIRST_INSTR_BP; i < TEST_FIRST_INSTR_BP + TEST_NUM_INSTR_BPS; i++)
+    {
         seL4_TCB_UnsetBreakpoint(env->tcb, i);
     }
 
-    for (int i = TEST_FIRST_DATA_WP; i < TEST_FIRST_DATA_WP + TEST_NUM_DATA_WPS; i++) {
+    for (int i = TEST_FIRST_DATA_WP; i < TEST_FIRST_DATA_WP + TEST_NUM_DATA_WPS; i++)
+    {
         seL4_TCB_UnsetBreakpoint(env->tcb, i);
     }
 }
@@ -193,8 +210,9 @@ static int test_debug_set_instruction_breakpoint(struct env *env)
     helper_thread_t faulter_thread, handler_thread;
 
     for (seL4_Word i = TEST_FIRST_INSTR_BP; i < TEST_FIRST_INSTR_BP + TEST_NUM_INSTR_BPS;
-         i++) {
-        test_eq(setup_caps_for_test(env),  0);
+         i++)
+    {
+        test_eq(setup_caps_for_test(env), 0);
 
         setup_handler_thread_for_test(env, &handler_thread);
 
@@ -235,7 +253,8 @@ test_debug_set_data_breakpoint(struct env *env)
     helper_thread_t faulter_thread, handler_thread;
 
     for (seL4_Word i = TEST_FIRST_DATA_WP; i < TEST_FIRST_DATA_WP + TEST_NUM_DATA_WPS;
-         i++) {
+         i++)
+    {
         test_eq(setup_caps_for_test(env), 0);
 
         setup_handler_thread_for_test(env, &handler_thread);
@@ -276,7 +295,8 @@ test_debug_get_instruction_breakpoint(struct env *env)
     seL4_TCB_GetBreakpoint_t result;
 
     for (int i = TEST_FIRST_INSTR_BP; i < TEST_FIRST_INSTR_BP + TEST_NUM_INSTR_BPS;
-         i++) {
+         i++)
+    {
         error = seL4_TCB_SetBreakpoint(env->tcb, i,
                                        (seL4_Word)&breakpoint_code,
                                        type, size, access);
@@ -296,8 +316,8 @@ test_debug_get_instruction_breakpoint(struct env *env)
     return sel4test_get_result();
 }
 DEFINE_TEST(BREAKPOINT_003, "Attempt to set, then get, an instruction breakpoint "
-            "expecting that the values returned by GetBreakpoint will match those "
-            "set in SetBreakpoint.",
+                            "expecting that the values returned by GetBreakpoint will match those "
+                            "set in SetBreakpoint.",
             test_debug_get_instruction_breakpoint, config_set(CONFIG_HARDWARE_DEBUG_API))
 
 static int
@@ -310,7 +330,8 @@ test_debug_get_data_breakpoint(struct env *env)
     seL4_TCB_GetBreakpoint_t result;
 
     for (int i = TEST_FIRST_DATA_WP; i < TEST_FIRST_DATA_WP + TEST_NUM_DATA_WPS;
-         i++) {
+         i++)
+    {
         error = seL4_TCB_SetBreakpoint(env->tcb, i,
                                        (seL4_Word)&bpd,
                                        type, size, access);
@@ -330,8 +351,8 @@ test_debug_get_data_breakpoint(struct env *env)
     return sel4test_get_result();
 }
 DEFINE_TEST(BREAKPOINT_004, "Attempt to set, then get, a data breakpoint "
-            "expecting that the values returned by GetBreakpoint will match those "
-            "set in SetBreakpoint.",
+                            "expecting that the values returned by GetBreakpoint will match those "
+                            "set in SetBreakpoint.",
             test_debug_get_data_breakpoint, config_set(CONFIG_HARDWARE_DEBUG_API))
 
 static int
@@ -344,7 +365,8 @@ test_debug_unset_instruction_breakpoint(struct env *env)
     seL4_TCB_GetBreakpoint_t result;
 
     for (int i = TEST_FIRST_INSTR_BP; i < TEST_FIRST_INSTR_BP + TEST_NUM_INSTR_BPS;
-         i++) {
+         i++)
+    {
         error = seL4_TCB_SetBreakpoint(env->tcb, i,
                                        (seL4_Word)&breakpoint_code,
                                        type, size, access);
@@ -362,7 +384,8 @@ test_debug_unset_instruction_breakpoint(struct env *env)
     return sel4test_get_result();
 }
 DEFINE_TEST(BREAKPOINT_005, "Attempt to set, then unset, then query the status of, an "
-            "instruction breakpoint", test_debug_unset_instruction_breakpoint, config_set(CONFIG_HARDWARE_DEBUG_API))
+                            "instruction breakpoint",
+            test_debug_unset_instruction_breakpoint, config_set(CONFIG_HARDWARE_DEBUG_API))
 
 static int
 test_debug_unset_data_breakpoint(struct env *env)
@@ -374,7 +397,8 @@ test_debug_unset_data_breakpoint(struct env *env)
     seL4_TCB_GetBreakpoint_t result;
 
     for (int i = TEST_FIRST_DATA_WP; i < TEST_FIRST_DATA_WP + TEST_NUM_DATA_WPS;
-         i++) {
+         i++)
+    {
         error = seL4_TCB_SetBreakpoint(env->tcb, i,
                                        (seL4_Word)&bpd,
                                        type, size, access);
@@ -392,7 +416,8 @@ test_debug_unset_data_breakpoint(struct env *env)
     return sel4test_get_result();
 }
 DEFINE_TEST(BREAKPOINT_006, "Attempt to set, then unset, then query the status of, a "
-            "data breakpoint", test_debug_unset_data_breakpoint, config_set(CONFIG_HARDWARE_DEBUG_API))
+                            "data breakpoint",
+            test_debug_unset_data_breakpoint, config_set(CONFIG_HARDWARE_DEBUG_API))
 
 static int
 test_debug_api_setbp_invalid_values(struct env *env)
@@ -442,7 +467,7 @@ test_debug_api_setbp_invalid_values(struct env *env)
     return sel4test_get_result();
 }
 DEFINE_TEST(BREAKPOINT_007, "Attempt to pass various invalid values to the "
-            "invocations, and expect error return values.",
+                            "invocations, and expect error return values.",
             test_debug_api_setbp_invalid_values, config_set(CONFIG_HARDWARE_DEBUG_API))
 
 static int
@@ -474,8 +499,8 @@ test_debug_api_software_break_request(struct env *env)
     return sel4test_get_result();
 }
 DEFINE_TEST(BREAK_REQUEST_001, "Use an INT3/BKPT instruction to trigger a "
-            "breakpoint, and ensure the correct message is delivered to the "
-            "listening handler.",
+                               "breakpoint, and ensure the correct message is delivered to the "
+                               "listening handler.",
             test_debug_api_software_break_request, config_set(CONFIG_HARDWARE_DEBUG_API))
 
 #endif /* CONFIG_HARDWARE_DEBUG_API */

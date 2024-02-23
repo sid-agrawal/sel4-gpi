@@ -10,27 +10,29 @@
 #include <xv6fs/proc.h>
 
 struct devsw devsw[NDEV];
-struct {
+struct
+{
   struct spinlock lock;
   struct file file[NFILE];
 } ftable;
 
-void
-fileinit(void)
+void fileinit(void)
 {
   initlock(&ftable.lock, "ftable");
 }
 
 // Allocate a file structure.
-struct file*
+struct file *
 filealloc(void)
 {
   struct file *f;
 
   acquire(&ftable.lock);
-  for(f = ftable.file; f < ftable.file + NFILE; f++){
-    if(f->ref == 0){
-      //printf("filealloc %d\n", f - ftable.file);
+  for (f = ftable.file; f < ftable.file + NFILE; f++)
+  {
+    if (f->ref == 0)
+    {
+      // printf("filealloc %d\n", f - ftable.file);
       f->ref = 1;
       release(&ftable.lock);
       return f;
@@ -41,11 +43,11 @@ filealloc(void)
 }
 
 // Increment ref count for file f.
-struct file*
+struct file *
 filedup(struct file *f)
 {
   acquire(&ftable.lock);
-  if(f->ref < 1)
+  if (f->ref < 1)
     xv6fs_panic("filedup");
   f->ref++;
   release(&ftable.lock);
@@ -53,15 +55,15 @@ filedup(struct file *f)
 }
 
 // Close file f.  (Decrement ref count, close when reaches 0.)
-void
-fileclose(struct file *f)
+void fileclose(struct file *f)
 {
   struct file ff;
 
   acquire(&ftable.lock);
-  if(f->ref < 1)
+  if (f->ref < 1)
     xv6fs_panic("fileclose");
-  if(--f->ref > 0){
+  if (--f->ref > 0)
+  {
     release(&ftable.lock);
     return;
   }
@@ -70,7 +72,8 @@ fileclose(struct file *f)
   f->type = FD_NONE;
   release(&ftable.lock);
 
-  if(ff.type == FD_INODE || ff.type == FD_DEVICE){
+  if (ff.type == FD_INODE || ff.type == FD_DEVICE)
+  {
     begin_op();
     iput(ff.ip);
     end_op();
@@ -79,18 +82,18 @@ fileclose(struct file *f)
 
 // Get metadata about file f.
 // addr is a user virtual address, pointing to a struct stat.
-int
-filestat(struct file *f, uint64 addr)
+int filestat(struct file *f, uint64 addr)
 {
   struct proc *p = myproc();
   struct stat st;
-  
-  if(f->type == FD_INODE || f->type == FD_DEVICE){
+
+  if (f->type == FD_INODE || f->type == FD_DEVICE)
+  {
     ilock(f->ip);
     stati(f->ip, &st);
     iunlock(f->ip);
     // ARYA-TODO is this necessary?
-    //if(copyout(p->pagetable, addr, (char *)&st, sizeof(st)) < 0)
+    // if(copyout(p->pagetable, addr, (char *)&st, sizeof(st)) < 0)
     //  return -1;
     return 0;
   }
@@ -99,24 +102,28 @@ filestat(struct file *f, uint64 addr)
 
 // Read from file f.
 // addr is a user virtual address.
-int
-fileread(struct file *f, uint64 addr, int n)
+int fileread(struct file *f, uint64 addr, int n)
 {
   int r = 0;
 
-  if(f->readable == 0)
+  if (f->readable == 0)
     return -1;
 
-  if(f->type == FD_DEVICE){
-    if(f->major < 0 || f->major >= NDEV || !devsw[f->major].read)
+  if (f->type == FD_DEVICE)
+  {
+    if (f->major < 0 || f->major >= NDEV || !devsw[f->major].read)
       return -1;
     r = devsw[f->major].read(1, addr, n);
-  } else if(f->type == FD_INODE){
+  }
+  else if (f->type == FD_INODE)
+  {
     ilock(f->ip);
-    if((r = readi(f->ip, 1, addr, f->off, n)) > 0)
+    if ((r = readi(f->ip, 1, addr, f->off, n)) > 0)
       f->off += r;
     iunlock(f->ip);
-  } else {
+  }
+  else
+  {
     xv6fs_panic("fileread");
   }
 
@@ -125,30 +132,33 @@ fileread(struct file *f, uint64 addr, int n)
 
 // Write to file f.
 // addr is a user virtual address.
-int
-filewrite(struct file *f, uint64 addr, int n)
+int filewrite(struct file *f, uint64 addr, int n)
 {
   int r, ret = 0;
 
-  if(f->writable == 0)
+  if (f->writable == 0)
     return -1;
 
-  if(f->type == FD_DEVICE){
-    if(f->major < 0 || f->major >= NDEV || !devsw[f->major].write)
+  if (f->type == FD_DEVICE)
+  {
+    if (f->major < 0 || f->major >= NDEV || !devsw[f->major].write)
       return -1;
     ret = devsw[f->major].write(1, addr, n);
-  } else if(f->type == FD_INODE){
+  }
+  else if (f->type == FD_INODE)
+  {
     // write a few blocks at a time to avoid exceeding
     // the maximum log transaction size, including
     // i-node, indirect block, allocation blocks,
     // and 2 blocks of slop for non-aligned writes.
     // this really belongs lower down, since writei()
     // might be writing a device like the console.
-    int max = ((MAXOPBLOCKS-1-1-2) / 2) * BSIZE;
+    int max = ((MAXOPBLOCKS - 1 - 1 - 2) / 2) * BSIZE;
     int i = 0;
-    while(i < n){
+    while (i < n)
+    {
       int n1 = n - i;
-      if(n1 > max)
+      if (n1 > max)
         n1 = max;
 
       begin_op();
@@ -158,17 +168,19 @@ filewrite(struct file *f, uint64 addr, int n)
       iunlock(f->ip);
       end_op();
 
-      if(r != n1){
+      if (r != n1)
+      {
         // error from writei
         break;
       }
       i += r;
     }
     ret = (i == n ? n : -1);
-  } else {
+  }
+  else
+  {
     xv6fs_panic("filewrite");
   }
 
   return ret;
 }
-

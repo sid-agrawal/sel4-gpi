@@ -20,9 +20,20 @@
 /* This list must be ordered by size - highest first */
 static const frame_type_t frame_types[] = {
 #ifdef CONFIG_HUGE_PAGE
-    { seL4_X64_HugePageObject, 0, seL4_HugePageBits, },
+    {
+        seL4_X64_HugePageObject,
+        0,
+        seL4_HugePageBits,
+    },
 #endif
-    { seL4_X86_LargePageObject, HUGE_OFFSET, seL4_LargePageBits, },
-    { seL4_X86_4K, HUGE_OFFSET + BIT(seL4_LargePageBits), seL4_PageBits, },
+    {
+        seL4_X86_LargePageObject,
+        HUGE_OFFSET,
+        seL4_LargePageBits,
+    },
+    {
+        seL4_X86_4K,
+        HUGE_OFFSET + BIT(seL4_LargePageBits),
+        seL4_PageBits,
+    },
 };
-

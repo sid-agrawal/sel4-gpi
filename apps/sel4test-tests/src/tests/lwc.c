@@ -9,8 +9,8 @@
 #include "../helpers.h"
 #include <stdio.h>
 
-#include<sel4gpi/pd_clientapi.h>
-#include<sel4gpi/cpu_clientapi.h>
+#include <sel4gpi/pd_clientapi.h>
+#include <sel4gpi/cpu_clientapi.h>
 #include <sel4bench/arch/sel4bench.h>
 
 bool lwc_server_in_local = true;
@@ -39,30 +39,27 @@ From the paper:
   * Algo 4: SYScall Intercept:
 */
 
-
-
 /*
     Below are functions that we used to create and then switch to an LWC.
     If this logic is implemented in the GPI server then it is atomic from the point of
     view of the client (i.e., this test).
 */
 
+/*
+   Let's build a concrete example of how we would use the LWC API.
+   In this case, the parent LWC is trusted but the child is not.
 
+   The parent LWC will create a child LWC and then switch to it.
+   The parent LWC will have access to the Child's CSpace and VSpace.
 
- /*
-    Let's build a concrete example of how we would use the LWC API.
-    In this case, the parent LWC is trusted but the child is not.
+*/
 
-    The parent LWC will create a child LWC and then switch to it.
-    The parent LWC will have access to the Child's CSpace and VSpace.
-
- */
-
-struct lwc_info {
+struct lwc_info
+{
     /* replace these with OSMosis caps */
     seL4_CPtr cspace_root;
     seL4_CPtr vspace_root;
-    void * func_to_run;
+    void *func_to_run;
 };
 
 /* Either in lwccreate or swtich we need to update the env_t which has a bunch of info about the env*/
@@ -86,11 +83,9 @@ int lwcCreate(env_t env, char key[])
         // Using a known EP, get a new ads CAP.
         ads_client_context_t lwc_ads_conn;
         error = ads_client_shallow_copy(&conn, &env->vka, (void *)0,
-                                 /* We cannot use this, as in this case when the parent clears the key, it will clear in the child too */
-                                 &lwc_ads_conn);
+                                        /* We cannot use this, as in this case when the parent clears the key, it will clear in the child too */
+                                        &lwc_ads_conn);
         test_error_eq(error, 0);
-
-
     }
     else
     {
@@ -102,58 +97,48 @@ int lwcCreate(env_t env, char key[])
     }
 }
 
-int lwcSwitch () {
-    if (lwc_server_in_local) {
-    /* Change AS */
-
-    } else {
+int lwcSwitch()
+{
+    if (lwc_server_in_local)
+    {
+        /* Change AS */
+    }
+    else
+    {
 
         /*
             Create an IPC message to make an LWC
             Get a badges cap in return using which you can communicate with the LWC Server (not the LWC)
         */
     }
-
-
-
 }
 
 char key[256];
-int sign(char *data) {
+int sign(char *data)
+{
 
-    if (lwc_server_in_local) {
+    if (lwc_server_in_local)
+    {
 
-    /* Make sure that the key is readable */
-    // osm_cap_t ds = get_ds(data);
-    // For now, let's just call it the PFrame
+        /* Make sure that the key is readable */
+        // osm_cap_t ds = get_ds(data);
+        // For now, let's just call it the PFrame
 
+        printf("Signing data: %s \t   with key: %s\n", data, key);
+        /* attach new DS to the LWC's AS*/
 
-    printf ("Signing data: %s \t   with key: %s\n", data, key);
-    /* attach new DS to the LWC's AS*/
+        /* Change AS */
+        // 1. Get the AS cap
+        // 2. Get the TCB Cap
+        // int error = cpu_client_connect bind AS
 
-    /* Change AS */
-    // 1. Get the AS cap
-    // 2. Get the TCB Cap
-    // int error = cpu_client_connect bind AS
+        /* Call Function */
 
+        /* Unmap DS */
 
-    /* Call Function */
-
-
-
-    /* Unmap DS */
-
-
-    /* Change AS Back */
-
-
+        /* Change AS Back */
     }
-
 }
-
-
-
-
 
 int test_lwc(env_t env)
 {
@@ -163,7 +148,6 @@ int test_lwc(env_t env)
     /* Load Key from file*/
     snprintf(key, 256, "%s", "Hello World");
 
-
     /* create LWC the LWC has access to the key*/
     // int lwc_id = lwcCreate(env, key); /* copy the entire AS, say which func to run*/
 
@@ -171,7 +155,6 @@ int test_lwc(env_t env)
     vka_cspace_make_path(&env->vka, env->self_ads_cptr, &path);
     ads_client_context_t conn;
     conn.badged_server_ep_cspath = path;
-
 
     vka_cspace_make_path(&env->vka, env->self_cpu_cptr, &path);
     cpu_client_context_t cpu_conn;
@@ -182,8 +165,8 @@ int test_lwc(env_t env)
     ads_client_context_t lwc_ads_conn;
 
     error = ads_client_shallow_copy(&conn, &env->vka, (void *)0,
-                             /* We cannot use this, as in this case when the parent clears the key, it will clear in the child too */
-                             &lwc_ads_conn);
+                                    /* We cannot use this, as in this case when the parent clears the key, it will clear in the child too */
+                                    &lwc_ads_conn);
     test_error_eq(error, 0);
 
     printf("%d: KEY: %s\n", __LINE__, key);
@@ -198,7 +181,6 @@ int test_lwc(env_t env)
     printf("Start of signing with key: %s\n", key);
     printf("%d: KEY: %s\n", __LINE__, key);
 
-
     /* call sign */
     char *data = malloc(256);
     assert(data != NULL);
@@ -208,15 +190,12 @@ int test_lwc(env_t env)
     printf("%d: KEY: %s\n", __LINE__, key);
     // while (1);
     printf("Change to old VSpace \n");
-     error = cpu_client_change_vspace(&cpu_conn, &conn);
-     test_error_eq(error, 0);
+    error = cpu_client_change_vspace(&cpu_conn, &conn);
+    test_error_eq(error, 0);
 
     printf("%d: KEY: %s\n", __LINE__, key);
 
     return 0;
 }
-
-
-
 
 DEFINE_TEST(GPILWC001, "OSMO: Create and swtich to LWC", test_lwc, true)

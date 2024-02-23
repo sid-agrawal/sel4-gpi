@@ -76,11 +76,13 @@ static int map_ept_set_large_from_pdpt(env_t env, seL4_CPtr pml4, seL4_CPtr pdpt
     test_assert(*frame);
 
     error = seL4_X86_EPTPD_Map(*pd, pml4, EPT_MAP_BASE, seL4_X86_Default_VMAttributes);
-    if (error != seL4_NoError) {
+    if (error != seL4_NoError)
+    {
         return error;
     }
     error = seL4_X86_Page_MapEPT(*frame, pml4, EPT_MAP_BASE, seL4_AllRights, seL4_X86_Default_VMAttributes);
-    if (error != seL4_NoError) {
+    if (error != seL4_NoError)
+    {
         return error;
     }
 #endif /* CONFIG_VTX */
@@ -100,7 +102,8 @@ static int map_ept_set_large(env_t env, seL4_CPtr *pml4, seL4_CPtr *pdpt, seL4_C
     test_error_eq(error, seL4_NoError);
 
     error = seL4_X86_EPTPDPT_Map(*pdpt, *pml4, EPT_MAP_BASE, seL4_X86_Default_VMAttributes);
-    if (error != seL4_NoError) {
+    if (error != seL4_NoError)
+    {
         return error;
     }
 
@@ -297,7 +300,7 @@ test_ept_aligned_4m(env_t env)
     return sel4test_get_result();
 }
 DEFINE_TEST(EPT0006, "Test EPT 4M mappings must be 4M aligned and cannot overlap", test_ept_aligned_4m,
-            config_set(CONFIG_VTX) &&config_set(CONFIG_ARCH_IA32))
+            config_set(CONFIG_VTX) && config_set(CONFIG_ARCH_IA32))
 
 static int
 test_ept_no_overlapping_pt_4m(env_t env)
@@ -342,7 +345,7 @@ test_ept_no_overlapping_pt_4m(env_t env)
     return sel4test_get_result();
 }
 DEFINE_TEST(EPT0007, "Test EPT 4m frame and PT cannot overlap", test_ept_no_overlapping_pt_4m,
-            config_set(CONFIG_VTX) &&config_set(CONFIG_ARCH_IA32))
+            config_set(CONFIG_VTX) && config_set(CONFIG_ARCH_IA32))
 
 static int
 test_ept_map_remap_pd(env_t env)
@@ -387,7 +390,6 @@ test_ept_no_overlapping_pt(env_t env)
 #endif
     test_assert(error != seL4_NoError);
     return sel4test_get_result();
-
 }
 DEFINE_TEST(EPT0009, "Test EPT no overlapping PT", test_ept_no_overlapping_pt, config_set(CONFIG_VTX))
 
@@ -407,7 +409,6 @@ test_ept_no_overlapping_pd(env_t env)
 #endif
     test_assert(error != seL4_NoError);
     return sel4test_get_result();
-
 }
 DEFINE_TEST(EPT0010, "Test EPT no overlapping PD", test_ept_no_overlapping_pd, config_set(CONFIG_VTX))
 

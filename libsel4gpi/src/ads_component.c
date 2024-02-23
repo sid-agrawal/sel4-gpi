@@ -30,8 +30,8 @@
 #include <sel4gpi/badge_usage.h>
 #include <sel4gpi/debug.h>
 
-
-uint64_t ads_assign_new_badge_and_objectID(ads_component_registry_entry_t *reg) {
+uint64_t ads_assign_new_badge_and_objectID(ads_component_registry_entry_t *reg)
+{
     get_ads_component()->registry_n_entries++;
     // Add the latest ID to the obj and to the badlge.
     seL4_Word badge_val = gpi_new_badge(GPICAP_TYPE_ADS,
@@ -41,7 +41,7 @@ uint64_t ads_assign_new_badge_and_objectID(ads_component_registry_entry_t *reg) 
 
     assert(badge_val != 0);
     reg->ads.ads_obj_id = get_ads_component()->registry_n_entries;
-    OSDB_PRINTF(ADSSERVS"ads_assign_new_badge_and_objectID: new badge: %lx\n", badge_val);
+    OSDB_PRINTF(ADSSERVS "ads_assign_new_badge_and_objectID: new badge: %lx\n", badge_val);
     return badge_val;
 }
 
@@ -67,25 +67,26 @@ static inline void reply(seL4_MessageInfo_t tag)
     api_reply(get_ads_component()->server_thread.reply.cptr, tag);
 }
 
-
 /**
  * @brief Insert a new client into the client registry Linked List.
  *
  * @param new_node
  */
-static void ads_component_registry_insert(ads_component_registry_entry_t *new_node) {
-        // TODO:Use a mutex
-
+static void ads_component_registry_insert(ads_component_registry_entry_t *new_node)
+{
+    // TODO:Use a mutex
 
     ads_component_registry_entry_t *head = get_ads_component()->client_registry;
 
-    if (head == NULL) {
+    if (head == NULL)
+    {
         get_ads_component()->client_registry = new_node;
         new_node->next = NULL;
         return;
     }
 
-    while (head->next != NULL) {
+    while (head->next != NULL)
+    {
         head = head->next;
     }
     head->next = new_node;
@@ -98,13 +99,16 @@ static void ads_component_registry_insert(ads_component_registry_entry_t *new_no
  * @param badge
  * @return ads_component_registry_entry_t*
  */
-ads_component_registry_entry_t *ads_component_registry_get_entry_by_badge(seL4_Word badge){
+ads_component_registry_entry_t *ads_component_registry_get_entry_by_badge(seL4_Word badge)
+{
 
     uint64_t objectID = get_object_id_from_badge(badge);
     ads_component_registry_entry_t *current_ctx = get_ads_component()->client_registry;
 
-    while (current_ctx != NULL) {
-        if (current_ctx->ads.ads_obj_id == objectID) {
+    while (current_ctx != NULL)
+    {
+        if (current_ctx->ads.ads_obj_id == objectID)
+        {
             break;
         }
         current_ctx = current_ctx->next;
@@ -118,12 +122,15 @@ ads_component_registry_entry_t *ads_component_registry_get_entry_by_badge(seL4_W
  * @param res_id
  * @return ads_component_registry_entry_t*
  */
-ads_component_registry_entry_t *ads_component_registry_get_entry_by_id(seL4_Word objectID){
+ads_component_registry_entry_t *ads_component_registry_get_entry_by_id(seL4_Word objectID)
+{
 
     ads_component_registry_entry_t *current_ctx = get_ads_component()->client_registry;
 
-    while (current_ctx != NULL) {
-        if (current_ctx->ads.ads_obj_id == objectID) {
+    while (current_ctx != NULL)
+    {
+        if (current_ctx->ads.ads_obj_id == objectID)
+        {
             break;
         }
         current_ctx = current_ctx->next;
@@ -140,14 +147,14 @@ void ads_handle_allocation_request(seL4_MessageInfo_t *reply_tag)
     {
         OSDB_PRINTF(ADSSERVS "main: Failed to allocate new badge for client.\n");
         return;
-   }
+    }
     memset((void *)client_reg_ptr, 0, sizeof(ads_component_registry_entry_t));
     ads_component_registry_insert(client_reg_ptr);
 
     // We never created a new vpsace...
     int error = ads_new(get_ads_component()->server_vspace,
-                          get_ads_component()->server_vka,
-                          &client_reg_ptr->ads);
+                        get_ads_component()->server_vka,
+                        &client_reg_ptr->ads);
     if (error)
     {
         OSDB_PRINTF(ADSSERVS "main: Failed to create new ads object\n");
@@ -166,9 +173,9 @@ void ads_handle_allocation_request(seL4_MessageInfo_t *reply_tag)
 
     seL4_Word badge = ads_assign_new_badge_and_objectID(client_reg_ptr);
     error = vka_cnode_mint(&dest,
-                               &src,
-                               seL4_AllRights,
-                               badge);
+                           &src,
+                           seL4_AllRights,
+                           badge);
     if (error)
     {
         OSDB_PRINTF(ADSSERVS "main: Failed to mint client badge %lx.\n", badge);
@@ -184,7 +191,7 @@ void ads_handle_allocation_request(seL4_MessageInfo_t *reply_tag)
 static void handle_attach_req(seL4_Word sender_badge, seL4_MessageInfo_t old_tag, seL4_CPtr mo_cap)
 {
     OSDB_PRINTF(ADSSERVS "main: Got attach request from client badge %lx.\n",
-           sender_badge);
+                sender_badge);
 
     // No longer needed as we are now sending slots.
     // assert(seL4_MessageInfo_get_extraCaps(old_tag) == 1);
@@ -194,15 +201,14 @@ static void handle_attach_req(seL4_Word sender_badge, seL4_MessageInfo_t old_tag
     if (client_data == NULL)
     {
         OSDB_PRINTF(ADSSERVS "main: Failed to find client badge %lx.\n",
-               sender_badge);
+                    sender_badge);
         return;
     }
     OSDB_PRINTF(ADSSERVS "main: found client_data badge details:");
     badge_print(sender_badge);
 
-    void *vaddr = (void *) seL4_GetMR(ADSMSGREG_ATTACH_REQ_VA);
-    OSDB_PRINTF(ADSSERVS"main: vaddr %p \n", vaddr);
-
+    void *vaddr = (void *)seL4_GetMR(ADSMSGREG_ATTACH_REQ_VA);
+    OSDB_PRINTF(ADSSERVS "main: vaddr %p \n", vaddr);
 
     /*
         The MO will be one of the caps Unwrapped.
@@ -211,12 +217,11 @@ static void handle_attach_req(seL4_Word sender_badge, seL4_MessageInfo_t old_tag
         Get frame cap from the MO cap.
     */
 
-   seL4_Word mo_badge = seL4_GetBadge(0);
-   OSDB_PRINTF(ADSSERVS "Extra Caps: %s Badge: %lx\n",
-   seL4_MessageInfo_get_extraCaps(old_tag) ? "true" : "false", mo_badge);
-   mo_component_registry_entry_t *mo_reg = mo_component_registry_get_entry_by_badge(mo_badge);
-   assert (mo_reg != NULL);
-
+    seL4_Word mo_badge = seL4_GetBadge(0);
+    OSDB_PRINTF(ADSSERVS "Extra Caps: %s Badge: %lx\n",
+                seL4_MessageInfo_get_extraCaps(old_tag) ? "true" : "false", mo_badge);
+    mo_component_registry_entry_t *mo_reg = mo_component_registry_get_entry_by_badge(mo_badge);
+    assert(mo_reg != NULL);
 
     uint32_t num_pages = mo_reg->mo.num_pages;
     seL4_CPtr *root_frame_caps = mo_reg->mo.frame_caps_in_root_task;
@@ -231,27 +236,30 @@ static void handle_attach_req(seL4_Word sender_badge, seL4_MessageInfo_t old_tag
     attach_node->next = mo_reg->mo.attach_nodes;
     mo_reg->mo.attach_nodes = attach_node;
 
-    for (int i = 0; i < num_pages; i++) {
+    for (int i = 0; i < num_pages; i++)
+    {
         cspacepath_t from_path, to_path;
         vka_cspace_make_path(get_ads_component()->server_vka, mo_reg->mo.frame_caps_in_root_task[i], &from_path);
 
         /* allocate a path for the copy*/
         int error = vka_cspace_alloc_path(get_ads_component()->server_vka, &to_path);
-        if (error) {
+        if (error)
+        {
             OSDB_PRINTF(ADSSERVS "main: Failed to allocate slot in root cspace, error: %d", error);
             return;
         }
 
         /* copy the frame cap */
         error = vka_cnode_copy(&to_path, &from_path, seL4_AllRights);
-        if (error) {
+        if (error)
+        {
             OSDB_PRINTF(ADSSERVS "main: Failed to copy cap, error: %d", error);
             return;
         }
 
         attach_node->frame_caps[i] = to_path.capPtr;
 
-        void* frame_paddr =  (void *) seL4_DebugCapPaddr(attach_node->frame_caps[i]);
+        void *frame_paddr = (void *)seL4_DebugCapPaddr(attach_node->frame_caps[i]);
         OSDB_PRINTF(ADSSERVS "paddr of frame to map: %p\n", frame_paddr);
     }
 
@@ -262,9 +270,10 @@ static void handle_attach_req(seL4_Word sender_badge, seL4_MessageInfo_t old_tag
                        attach_node->frame_caps,
                        &ret_vaddr,
                        client_data->ads.vspace);
-    if (error) {
+    if (error)
+    {
         OSDB_PRINTF(ADSSERVS "main: Failed to attach at vaddr:%p num_pages: %u to client badge %lx.\n",
-                vaddr, num_pages, sender_badge);
+                    vaddr, num_pages, sender_badge);
         return;
     }
     attach_node->vaddr = ret_vaddr;
@@ -283,7 +292,8 @@ static void handle_testing_req(seL4_Word sender_badge, seL4_MessageInfo_t old_ta
                 sender_badge, seL4_MessageInfo_get_extraCaps(old_tag),
                 seL4_MessageInfo_get_capsUnwrapped(old_tag));
 
-    for (int i = 0; i < 5; i++) {
+    for (int i = 0; i < 5; i++)
+    {
         OSDB_PRINTF(ADSSERVS "MR[%d] = %lx\n", i, seL4_GetBadge(i));
     }
 
@@ -307,13 +317,12 @@ static void handle_get_rr_req(seL4_Word sender_badge, seL4_MessageInfo_t old_tag
     if (client_data == NULL)
     {
         OSDB_PRINTF(ADSSERVS "main: Failed to find client badge %lx.\n",
-               sender_badge);
+                    sender_badge);
         return;
     }
     OSDB_PRINTF(ADSSERVS "main: found client_data with objID %u.\n", client_data->ads.ads_obj_id);
 
-
-    void *buffer_addr = (void *) seL4_GetMR(ADSMSGREG_GET_RR_REQ_BUF_VA);
+    void *buffer_addr = (void *)seL4_GetMR(ADSMSGREG_GET_RR_REQ_BUF_VA);
     size_t buffer_size = seL4_GetMR(ADSMSGREG_GET_RR_REQ_BUF_SZ);
     ZF_LOGF("Do not use implemented");
     // ads_dump_rr(&client_data->ads, buffer_addr, buffer_size, false);
@@ -326,19 +335,17 @@ static void handle_shallow_copy_req(seL4_Word sender_badge)
 {
     // Find the client - like attach
     OSDB_PRINTF(ADSSERVS "main: Got Shallow COpy  request from client badge %lx.\n",
-           sender_badge);
+                sender_badge);
 
     /* Find the client */
     ads_component_registry_entry_t *client_data = ads_component_registry_get_entry_by_badge(sender_badge);
     if (client_data == NULL)
     {
         OSDB_PRINTF(ADSSERVS "main: Failed to find client badge %lx.\n",
-               sender_badge);
+                    sender_badge);
         return;
     }
     OSDB_PRINTF(ADSSERVS "main: found client_data with objID %u.\n", client_data->ads.ads_obj_id);
-
-
 
     // Make a new endpoint for the client to send messages to. like connect.
     OSDB_PRINTF(ADSSERVS "main: Making a new cap for the shallow copy.\n");
@@ -348,23 +355,23 @@ static void handle_shallow_copy_req(seL4_Word sender_badge)
     {
         OSDB_PRINTF(ADSSERVS "main: Failed to allocate new badge for client.\n");
         return;
-   }
+    }
     memset((void *)client_reg_ptr, 0, sizeof(ads_component_registry_entry_t));
 
-
     // Do the actual shallow copy
-    void *omit_vaddr = (void *) seL4_GetMR(ADSMSGREG_SHALLOW_COPY_REQ_OMIT_VA);
+    void *omit_vaddr = (void *)seL4_GetMR(ADSMSGREG_SHALLOW_COPY_REQ_OMIT_VA);
     ads_t *src_ads = &client_data->ads;
     ads_t *dst_ads = &client_reg_ptr->ads;
     int error = ads_shallow_copy(get_ads_component()->server_vspace,
-                          src_ads,
-                          get_ads_component()->server_vka,
-                          omit_vaddr,
-                          false,//true,
-                          dst_ads);
-    if (error) {
+                                 src_ads,
+                                 get_ads_component()->server_vka,
+                                 omit_vaddr,
+                                 false, // true,
+                                 dst_ads);
+    if (error)
+    {
         OSDB_PRINTF(ADSSERVS "main: Failed to clone from client badge %lx.\n",
-               sender_badge);
+                    sender_badge);
         return;
     }
     assert(client_reg_ptr->ads.vspace != NULL);
@@ -383,9 +390,9 @@ static void handle_shallow_copy_req(seL4_Word sender_badge)
 
     seL4_Word badge = ads_assign_new_badge_and_objectID(client_reg_ptr);
     error = vka_cnode_mint(&dest_path,
-                               &src_path,
-                               seL4_AllRights,
-                               badge);
+                           &src_path,
+                           seL4_AllRights,
+                           badge);
     if (error)
     {
         OSDB_PRINTF(ADSSERVS "Failed to mint client badge %lx.\n", badge);
@@ -398,7 +405,6 @@ static void handle_shallow_copy_req(seL4_Word sender_badge)
     seL4_SetMR(ADSMSGREG_FUNC, ADS_FUNC_SHALLOW_COPY_ACK);
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(error, 0, 1, ADSMSGREG_SHALLOW_COPY_ACK_END);
     return reply(tag);
-
 }
 
 /**
@@ -430,12 +436,13 @@ void ads_component_handle(seL4_MessageInfo_t tag,
         handle_get_rr_req(sender_badge, tag);
         break;
     default:
-        gpi_panic(ADSSERVS"Unknown func type.", (seL4_Word) func);
+        gpi_panic(ADSSERVS "Unknown func type.", (seL4_Word)func);
         break;
     }
 }
 
-int forge_ads_cap_from_vspace(vspace_t *vspace, vka_t *vka, seL4_CPtr *cap_ret){
+int forge_ads_cap_from_vspace(vspace_t *vspace, vka_t *vka, seL4_CPtr *cap_ret)
+{
 
     assert(vspace != NULL);
     /* Allocate a new registry entry for the client. */
@@ -475,10 +482,12 @@ int forge_ads_cap_from_vspace(vspace_t *vspace, vka_t *vka, seL4_CPtr *cap_ret){
 
     /* Iterate and print reservation_list*/
     sel4utils_res_t *res = get_alloc_data(vspace)->reservation_head;
-    while (res != NULL) {
+    while (res != NULL)
+    {
         OSDB_PRINTF(ADSSERVS "\tmain: Reservation: 0x%lx --> 0x%lx\n", res->start, res->end);
         /* print cap for each page in the reservation*/
-        for (void *va = (void *)res->start; va <(void *) res->end; va += PAGE_SIZE_4K) {
+        for (void *va = (void *)res->start; va < (void *)res->end; va += PAGE_SIZE_4K)
+        {
             seL4_CPtr cap;
             cap = vspace_get_cap(vspace, va);
             // OSDB_PRINTF(ADSSERVS "\tmain: Cap for va: %p is %d TYPE: %d\n", va, cap, seL4_DebugCapIdentify(cap));

@@ -7,8 +7,7 @@
 
 // ARYA-TODO implement real locks?
 
-void
-initsleeplock(struct sleeplock *lk, char *name)
+void initsleeplock(struct sleeplock *lk, char *name)
 {
   initlock(&lk->lk, "sleep lock");
   lk->name = name;
@@ -16,21 +15,15 @@ initsleeplock(struct sleeplock *lk, char *name)
   lk->pid = 0;
 }
 
-void
-acquiresleep(struct sleeplock *lk)
+void acquiresleep(struct sleeplock *lk)
 {
 }
 
-void
-releasesleep(struct sleeplock *lk)
+void releasesleep(struct sleeplock *lk)
 {
 }
 
-int
-holdingsleep(struct sleeplock *lk)
+int holdingsleep(struct sleeplock *lk)
 {
   return 1;
 }
-
-
-

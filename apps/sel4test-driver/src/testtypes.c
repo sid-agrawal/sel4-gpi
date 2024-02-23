@@ -244,12 +244,9 @@ void basic_set_up(uintptr_t e)
        The return from sel4utils_copy_cap_to_process is the slot in the cnode where the cap was placed
        in the child process' cspace
     */
-    env->init->domain = sel4utils_copy_cap_to_process(&(env->test_process), &env->vka, simple_get_init_cap(&env->simple,
-                                                                                                           seL4_CapDomain));
-    env->init->asid_pool = sel4utils_copy_cap_to_process(&(env->test_process), &env->vka, simple_get_init_cap(&env->simple,
-                                                                                                              seL4_CapInitThreadASIDPool));
-    env->init->asid_ctrl = sel4utils_copy_cap_to_process(&(env->test_process), &env->vka, simple_get_init_cap(&env->simple,
-                                                                                                              seL4_CapASIDControl));
+    env->init->domain = sel4utils_copy_cap_to_process(&(env->test_process), &env->vka, simple_get_init_cap(&env->simple, seL4_CapDomain));
+    env->init->asid_pool = sel4utils_copy_cap_to_process(&(env->test_process), &env->vka, simple_get_init_cap(&env->simple, seL4_CapInitThreadASIDPool));
+    env->init->asid_ctrl = sel4utils_copy_cap_to_process(&(env->test_process), &env->vka, simple_get_init_cap(&env->simple, seL4_CapASIDControl));
     env->init->irq_handler = sel4utils_copy_cap_to_process(&(env->test_process), &env->vka, path.capPtr);
 #ifdef CONFIG_IOMMU
     env->init->io_space = sel4utils_copy_cap_to_process(&(env->test_process), &env->vka, simple_get_init_cap(&env->simple, seL4_CapIOSpace));
@@ -293,7 +290,6 @@ void basic_set_up(uintptr_t e)
 
     assert(env->child_ads_cptr_in_child != 0);
 
-
     /* Forge MO caps for the ADS */
     seL4_CPtr mo_caps[MAX_MO_CHILD];
     uint32_t ret_num_mo;
@@ -305,7 +301,8 @@ void basic_set_up(uintptr_t e)
         mo_caps);
     assert(error == 0);
 
-    for (int i = 0; i < ret_num_mo; i++){
+    for (int i = 0; i < ret_num_mo; i++)
+    {
         ZF_LOGE("MO CAP[%d]: %lu", i, mo_caps[i]);
         env->child_mo_cptr_in_child[i] = sel4utils_copy_cap_to_process(
             &(env->test_process),
@@ -351,7 +348,7 @@ void basic_set_up(uintptr_t e)
 
     // For the ads-server
     env->ramdisk_endpoint_in_child = sel4utils_copy_cap_to_process(&(env->test_process),
-                                                               &env->vka, env->ramdisk_endpoint_in_parent);
+                                                                   &env->vka, env->ramdisk_endpoint_in_parent);
 
     // Keep this one as the last COPY, so that  init->free_slot.start a few lines below stays valid.
     // See at label "Warning"

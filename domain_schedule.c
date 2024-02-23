@@ -17,51 +17,51 @@
 
 /* Default schedule. */
 const dschedule_t ksDomSchedule[] = {
-    { .domain = 0, .length = 1 },
+    {.domain = 0, .length = 1},
 #if CONFIG_NUM_DOMAINS > 1
-    { .domain = 1, .length = 1 },
+    {.domain = 1, .length = 1},
 #endif
 #if CONFIG_NUM_DOMAINS > 2
-    { .domain = 2, .length = 1 },
+    {.domain = 2, .length = 1},
 #endif
 #if CONFIG_NUM_DOMAINS > 3
-    { .domain = 3, .length = 1 },
+    {.domain = 3, .length = 1},
 #endif
 #if CONFIG_NUM_DOMAINS > 4
-    { .domain = 4, .length = 1 },
+    {.domain = 4, .length = 1},
 #endif
 #if CONFIG_NUM_DOMAINS > 5
-    { .domain = 5, .length = 1 },
+    {.domain = 5, .length = 1},
 #endif
 #if CONFIG_NUM_DOMAINS > 6
-    { .domain = 6, .length = 1 },
+    {.domain = 6, .length = 1},
 #endif
 #if CONFIG_NUM_DOMAINS > 7
-    { .domain = 7, .length = 1 },
+    {.domain = 7, .length = 1},
 #endif
 #if CONFIG_NUM_DOMAINS > 8
-    { .domain = 8, .length = 1 },
+    {.domain = 8, .length = 1},
 #endif
 #if CONFIG_NUM_DOMAINS > 9
-    { .domain = 9, .length = 1 },
+    {.domain = 9, .length = 1},
 #endif
 #if CONFIG_NUM_DOMAINS > 10
-    { .domain = 10, .length = 1 },
+    {.domain = 10, .length = 1},
 #endif
 #if CONFIG_NUM_DOMAINS > 11
-    { .domain = 11, .length = 1 },
+    {.domain = 11, .length = 1},
 #endif
 #if CONFIG_NUM_DOMAINS > 12
-    { .domain = 12, .length = 1 },
+    {.domain = 12, .length = 1},
 #endif
 #if CONFIG_NUM_DOMAINS > 13
-    { .domain = 13, .length = 1 },
+    {.domain = 13, .length = 1},
 #endif
 #if CONFIG_NUM_DOMAINS > 14
-    { .domain = 14, .length = 1 },
+    {.domain = 14, .length = 1},
 #endif
 #if CONFIG_NUM_DOMAINS > 15
-    { .domain = 15, .length = 1 },
+    {.domain = 15, .length = 1},
 #endif
 #if CONFIG_NUM_DOMAINS > 16
 #error Unsupportd number of domains set

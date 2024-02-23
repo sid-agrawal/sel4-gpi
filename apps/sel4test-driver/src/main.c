@@ -51,13 +51,12 @@
 #include <xv6fs/xv6fs.h>
 #include <ramdisk_server.h>
 
-
 #define RT_MALLOC_SIZE 16 * 1024 * 1024
 char __attribute__((aligned(PAGE_SIZE_4K))) morecore_area[RT_MALLOC_SIZE];
 size_t morecore_size = RT_MALLOC_SIZE;
 /* Pointer to free space in the morecore area. */
-static uintptr_t morecore_base = (uintptr_t) &morecore_area;
-uintptr_t morecore_top = (uintptr_t) &morecore_area[RT_MALLOC_SIZE];
+static uintptr_t morecore_base = (uintptr_t)&morecore_area;
+uintptr_t morecore_top = (uintptr_t)&morecore_area[RT_MALLOC_SIZE];
 
 /* ammount of untyped memory to reserve for the driver (32mb) */
 #define DRIVER_UNTYPED_MEMORY (1 << 28)
@@ -100,7 +99,8 @@ static void init_env(driver_env_t env)
 
     /* create an allocator, we need a larger CSpace due to the sel4test's huge image size */
     allocman = bootstrap_new_2level_simple(&env->simple, BOOTSTRAP_CNODE_SIZE, BOOTSTRAP_CNODE_SIZE, ALLOCATOR_STATIC_POOL_SIZE, allocator_mem_pool);
-    if (allocman == NULL) {
+    if (allocman == NULL)
+    {
         ZF_LOGF("Failed to create allocman");
     }
 
@@ -577,12 +577,12 @@ void *main_continued(void *arg UNUSED)
 
     /* start ramdisk thread */
     error = ramdisk_server_spawn_thread(&env.simple,
-                            &env.vka,
-                            &env.vspace,
-                            env.gpi_endpoint_in_parent,
-                            ep_object.cptr,
-                            ads_conn,
-                            250);
+                                        &env.vka,
+                                        &env.vspace,
+                                        env.gpi_endpoint_in_parent,
+                                        ep_object.cptr,
+                                        ads_conn,
+                                        250);
 
     assert(error == 0);
 
@@ -601,10 +601,10 @@ void *main_continued(void *arg UNUSED)
     assert(received_cap_path.capPtr != 1);
     env.ramdisk_endpoint_in_parent = received_cap_path.capPtr;
 
-    printf("Got ramdisk ep in slot %d\n", (int) env.ramdisk_endpoint_in_parent);
+    printf("Got ramdisk ep in slot %d\n", (int)env.ramdisk_endpoint_in_parent);
 #else
     env.ramdisk_endpoint_in_parent = env.gpi_endpoint_in_parent;
-#endif 
+#endif
 
 #ifdef XV6FS_IN_RT
     printf(XV6FS_S "Starting xv6fs server...\n");
@@ -781,7 +781,7 @@ int main(void)
     serial_utspace_record = true;
     platsupport_serial_setup_simple(&env.vspace, &env.simple, &env.vka);
     serial_utspace_record = false;
-    
+
     /* Partially overwrite the IRQ interface so that we can record the IRQ caps that were allocated.
      * We need this only for the timer as the ltimer interfaces allocates the caps for us and hides them away.
      * A few of the tests require actual interactions with the caps hence we record them.

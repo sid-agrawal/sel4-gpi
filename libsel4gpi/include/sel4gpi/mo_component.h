@@ -23,15 +23,15 @@
  * server thread.
  */
 
-#define MOSERVS     "MOServ Component: "
-#define MOSERVC     "MOServ Client   : "
+#define MOSERVS "MOServ Component: "
+#define MOSERVC "MOServ Client   : "
 
 #define MO_SERVER_BADGE_VALUE_EMPTY (0)
 #define MO_SERVER_BADGE_PARENT_VALUE (0xDEADBEEF)
 
-
 /* IPC values returned in the "label" message header. */
-enum mo_component_errors {
+enum mo_component_errors
+{
     MO_SERVER_NOERROR = 0,
     /* No future collisions with seL4_Error.*/
     MO_SERVER_ERROR_BIND_FAILED = seL4_NumErrors,
@@ -39,7 +39,8 @@ enum mo_component_errors {
 };
 
 /* IPC Message register values for SSMSGREG_FUNC */
-enum mo_component_funcs {
+enum mo_component_funcs
+{
     MO_FUNC_DISCONNECT_REQ,
     MO_FUNC_DISCONNECT_ACK,
 };
@@ -56,7 +57,7 @@ enum mo_component_msgregs
     MOMSGREG_CONNECT_REQ_NUM_PAGES = MOMSGREG_LABEL0,
     MOMSGREG_CONNECT_REQ_END,
 
-   MOMSGREG_CONNECT_ACK_END = MOMSGREG_LABEL0,
+    MOMSGREG_CONNECT_ACK_END = MOMSGREG_LABEL0,
 
     /* Disconnect / Delete*/
     MOMSGREG_DISCONNECT_REQ_END = MOMSGREG_LABEL0,
@@ -64,7 +65,8 @@ enum mo_component_msgregs
 };
 
 /* Per-client context maintained by the server. */
-typedef struct _mo_component_registry_entry {
+typedef struct _mo_component_registry_entry
+{
     mo_t mo;
     uint32_t count; /*There can be more than one cap to this object.*/
     struct _mo_component_registry_entry *next;
@@ -72,7 +74,8 @@ typedef struct _mo_component_registry_entry {
 } mo_component_registry_entry_t;
 
 /* State maintained by the server. */
-typedef struct _mo_component_context {
+typedef struct _mo_component_context
+{
     simple_t *server_simple;
     vka_t *server_vka;
     seL4_CPtr server_cspace;
@@ -90,9 +93,9 @@ typedef struct _mo_component_context {
  * Internal library function: acts as the main() for the server thread.
  **/
 void mo_component_handle(seL4_MessageInfo_t tag,
-                          seL4_Word badge,
-                          cspacepath_t *received_cap,
-                          seL4_MessageInfo_t *reply_tag);
+                         seL4_Word badge,
+                         cspacepath_t *received_cap,
+                         seL4_MessageInfo_t *reply_tag);
 
 /* Global server instance accessor functions. */
 mo_component_context_t *get_mo_component(void);
@@ -100,10 +103,10 @@ mo_component_context_t *get_mo_component(void);
 void mo_handle_allocation_request(seL4_MessageInfo_t *reply_tag);
 
 int forge_mo_cap_from_frames(seL4_CPtr *frame_caps,
-                              uint32_t num_pages,
-                           vka_t *vka,
-                           seL4_CPtr *cap_ret,
-                           mo_t ** mo_ref);
+                             uint32_t num_pages,
+                             vka_t *vka,
+                             seL4_CPtr *cap_ret,
+                             mo_t **mo_ref);
 
 int forge_mo_caps_from_vspace(vspace_t *child_vspace,
                               vka_t *vka,

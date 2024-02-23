@@ -55,7 +55,8 @@ static bool handle_vgic_redist_read_fault(size_t vcpu_id, vgic_t *vgic, uint64_t
     uint32_t reg = 0;
     uintptr_t base_reg;
     uint32_t *reg_ptr;
-    switch (offset) {
+    switch (offset)
+    {
     case RANGE32(GICR_CTLR, GICR_CTLR):
         reg = gic_redist->ctlr;
         break;
@@ -98,7 +99,6 @@ fault_return:
     return success;
 }
 
-
 static bool handle_vgic_redist_write_fault(size_t vcpu_id, vgic_t *vgic, uint64_t offset, uint64_t fsr, seL4_UserContext *regs)
 {
     // @ivanv: why is this not reading from the redist?
@@ -106,7 +106,8 @@ static bool handle_vgic_redist_write_fault(size_t vcpu_id, vgic_t *vgic, uint64_
     struct gic_dist_map *gic_dist = vgic_get_dist(vgic->registers);
     uint32_t mask = fault_get_data_mask(GIC_REDIST_PADDR + offset, fsr);
     uint32_t data;
-    switch (offset) {
+    switch (offset)
+    {
     case RANGE32(GICR_WAKER, GICR_WAKER):
         /* Writes are ignored */
         break;
@@ -117,7 +118,8 @@ static bool handle_vgic_redist_write_fault(size_t vcpu_id, vgic_t *vgic, uint64_
         data = fault_get_data(regs, fsr);
         /* Mask the data to write */
         data &= mask;
-        while (data) {
+        while (data)
+        {
             int irq;
             irq = CTZ(data);
             data &= ~(1U << irq);
@@ -128,7 +130,8 @@ static bool handle_vgic_redist_write_fault(size_t vcpu_id, vgic_t *vgic, uint64_
         data = fault_get_data(regs, fsr);
         /* Mask the data to write */
         data &= mask;
-        while (data) {
+        while (data)
+        {
             int irq;
             irq = CTZ(data);
             data &= ~(1U << irq);
@@ -136,8 +139,8 @@ static bool handle_vgic_redist_write_fault(size_t vcpu_id, vgic_t *vgic, uint64_
         }
         break;
     case RANGE32(GICR_ICACTIVER0, GICR_ICACTIVER0):
-    // @ivanv: understand, this is a comment left over from kent
-    // TODO fix this
+        // @ivanv: understand, this is a comment left over from kent
+        // TODO fix this
         emulate_reg_write_access(regs, fault_addr, fsr, &gic_dist->active0[vcpu_id]);
         break;
     case RANGE32(GICR_IPRIORITYR0, GICR_IPRIORITYRN):
@@ -148,21 +151,26 @@ static bool handle_vgic_redist_write_fault(size_t vcpu_id, vgic_t *vgic, uint64_
 
     int err = fault_advance_vcpu(regs);
     assert(!err);
-    if (err) {
+    if (err)
+    {
         return false;
     }
 
     return true;
 }
 
-bool handle_vgic_redist_fault(size_t vcpu_id, uint64_t fault_addr, uint64_t fsr, seL4_UserContext *regs) {
+bool handle_vgic_redist_fault(size_t vcpu_id, uint64_t fault_addr, uint64_t fsr, seL4_UserContext *regs)
+{
     assert(fault_addr >= GIC_REDIST_PADDR);
     uint64_t offset = fault_addr - GIC_REDIST_PADDR;
     assert(offset < GIC_REDIST_SIZE);
 
-    if (fault_is_read(fsr)) {
+    if (fault_is_read(fsr))
+    {
         return handle_vgic_redist_read_fault(vcpu_id, &vgic, offset, fsr, regs);
-    } else {
+    }
+    else
+    {
         return handle_vgic_redist_write_fault(vcpu_id, &vgic, offset, fsr, regs);
     }
 }
@@ -172,40 +180,41 @@ static void vgic_dist_reset(struct gic_dist_map *dist)
     // @ivanv: come back to, right now it's a global so we don't need to init the memory to zero
     // memset(gic_dist, 0, sizeof(*gic_dist));
 
-    dist->typer            = 0x7B04B0; /* RO */
-    dist->iidr             = 0x1043B ; /* RO */
+    dist->typer = 0x7B04B0; /* RO */
+    dist->iidr = 0x1043B;   /* RO */
 
-    dist->enable_set[0]    = 0x0000ffff; /* 16bit RO */
-    dist->enable_clr[0]    = 0x0000ffff; /* 16bit RO */
+    dist->enable_set[0] = 0x0000ffff; /* 16bit RO */
+    dist->enable_clr[0] = 0x0000ffff; /* 16bit RO */
 
-    dist->config[0]        = 0xaaaaaaaa; /* RO */
+    dist->config[0] = 0xaaaaaaaa; /* RO */
 
-    dist->pidrn[0]         = 0x44;     /* RO */
-    dist->pidrn[4]         = 0x92;     /* RO */
-    dist->pidrn[5]         = 0xB4;     /* RO */
-    dist->pidrn[6]         = 0x3B;     /* RO */
+    dist->pidrn[0] = 0x44; /* RO */
+    dist->pidrn[4] = 0x92; /* RO */
+    dist->pidrn[5] = 0xB4; /* RO */
+    dist->pidrn[6] = 0x3B; /* RO */
 
-    dist->cidrn[0]         = 0x0D;     /* RO */
-    dist->cidrn[1]         = 0xF0;     /* RO */
-    dist->cidrn[2]         = 0x05;     /* RO */
-    dist->cidrn[3]         = 0xB1;     /* RO */
+    dist->cidrn[0] = 0x0D; /* RO */
+    dist->cidrn[1] = 0xF0; /* RO */
+    dist->cidrn[2] = 0x05; /* RO */
+    dist->cidrn[3] = 0xB1; /* RO */
 }
 
-static void vgic_redist_reset(struct gic_redist_map *redist) {
+static void vgic_redist_reset(struct gic_redist_map *redist)
+{
     // @ivanv: come back to, right now it's a global so we don't need to init the memory to zero
     // memset(redist, 0, sizeof(*redist));
-    redist->typer           = 0x11;      /* RO */
-    redist->iidr            = 0x1143B;  /* RO */
+    redist->typer = 0x11;   /* RO */
+    redist->iidr = 0x1143B; /* RO */
 
-    redist->pidr0           = 0x93;     /* RO */
-    redist->pidr1           = 0xB4;     /* RO */
-    redist->pidr2           = 0x3B;     /* RO */
-    redist->pidr4           = 0x44;     /* RO */
+    redist->pidr0 = 0x93; /* RO */
+    redist->pidr1 = 0xB4; /* RO */
+    redist->pidr2 = 0x3B; /* RO */
+    redist->pidr4 = 0x44; /* RO */
 
-    redist->cidr0           = 0x0D;     /* RO */
-    redist->cidr1           = 0xF0;     /* RO */
-    redist->cidr2           = 0x05;     /* RO */
-    redist->cidr3           = 0xB1;     /* RO */
+    redist->cidr0 = 0x0D; /* RO */
+    redist->cidr1 = 0xF0; /* RO */
+    redist->cidr2 = 0x05; /* RO */
+    redist->cidr3 = 0xB1; /* RO */
 }
 
 // @ivanv: come back to
@@ -215,13 +224,16 @@ vgic_reg_t vgic_regs;
 
 void vgic_init()
 {
-    for (int i = 0; i < NUM_SLOTS_SPI_VIRQ; i++) {
+    for (int i = 0; i < NUM_SLOTS_SPI_VIRQ; i++)
+    {
         vgic.vspis[i].virq = VIRQ_INVALID;
     }
-    for (int i = 0; i < NUM_VCPU_LOCAL_VIRQS; i++) {
+    for (int i = 0; i < NUM_VCPU_LOCAL_VIRQS; i++)
+    {
         vgic.vgic_vcpu[VCPU_ID].local_virqs[i].virq = VIRQ_INVALID;
     }
-    for (int i = 0; i < NUM_LIST_REGS; i++) {
+    for (int i = 0; i < NUM_LIST_REGS; i++)
+    {
         vgic.vgic_vcpu[VCPU_ID].lr_shadow[i].virq = VIRQ_INVALID;
     }
     vgic.registers = &vgic_regs;

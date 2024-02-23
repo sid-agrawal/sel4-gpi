@@ -6,17 +6,15 @@
 #include <sel4/sel4.h>
 #include <sel4gpi/badge_usage.h>
 
-typedef struct osmosis_pd_id {
+typedef struct osmosis_pd_id
+{
     seL4_Word l0_pd_id;
     seL4_Word l1_pd_id;
     seL4_Word l2_pd_id;
 } osmosis_pd_id_t;
 
-
-
-
-
-typedef struct osmosis_cap {
+typedef struct osmosis_cap
+{
     // The type of the cap as per seL4
     // Sid is unsure if we need both.
     seL4_Word slot_in_rt;
@@ -34,8 +32,7 @@ typedef struct osmosis_cap {
     struct osmosis_cap *next;
 } osmosis_cap_t;
 
-
-void print_osm_cap_info (osmosis_cap_t *o);
+void print_osm_cap_info(osmosis_cap_t *o);
 
 /*
     Add cap to the cap tracking object.
@@ -51,4 +48,4 @@ int gpi_remove_cap_data(seL4_CPtr cap_to_remove);
     Retrieve cap's data from the cap tracking object.
 */
 int gpi_retrieve_cap_data(seL4_CPtr cap_to_find,
-                     osmosis_cap_t *return_data);
+                          osmosis_cap_t *return_data);

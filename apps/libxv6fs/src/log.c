@@ -30,12 +30,14 @@
 
 // Contents of the header block, used for both the on-disk header block
 // and to keep track in memory of logged block# before commit.
-struct logheader {
+struct logheader
+{
   int n;
   int block[LOGSIZE];
 };
 
-struct xv6fs_log {
+struct xv6fs_log
+{
   struct spinlock lock;
   int start;
   int size;
@@ -49,8 +51,7 @@ struct xv6fs_log xv6fs_log;
 static void recover_from_log(void);
 static void commit();
 
-void
-initlog(int dev, struct superblock *sb)
+void initlog(int dev, struct superblock *sb)
 {
   if (sizeof(struct logheader) >= BSIZE)
     xv6fs_panic("initlog: too big logheader");
@@ -60,7 +61,7 @@ initlog(int dev, struct superblock *sb)
   xv6fs_log.size = sb->nlog;
   xv6fs_log.dev = dev;
   // ARYA-TODO do we need log recovery?
-  //recover_from_log();
+  // recover_from_log();
 }
 
 // Copy committed blocks from log to their home location
@@ -69,12 +70,13 @@ install_trans(int recovering)
 {
   int tail;
 
-  for (tail = 0; tail < xv6fs_log.lh.n; tail++) {
-    struct buf *lbuf = bread(xv6fs_log.dev, xv6fs_log.start+tail+1); // read log block
-    struct buf *dbuf = bread(xv6fs_log.dev, xv6fs_log.lh.block[tail]); // read dst
-    memmove(dbuf->data, lbuf->data, BSIZE);  // copy block to dst
-    bwrite(dbuf);  // write dst to disk
-    if(recovering == 0)
+  for (tail = 0; tail < xv6fs_log.lh.n; tail++)
+  {
+    struct buf *lbuf = bread(xv6fs_log.dev, xv6fs_log.start + tail + 1); // read log block
+    struct buf *dbuf = bread(xv6fs_log.dev, xv6fs_log.lh.block[tail]);   // read dst
+    memmove(dbuf->data, lbuf->data, BSIZE);                              // copy block to dst
+    bwrite(dbuf);                                                        // write dst to disk
+    if (recovering == 0)
       bunpin(dbuf);
     brelse(lbuf);
     brelse(dbuf);
@@ -86,10 +88,11 @@ static void
 read_head(void)
 {
   struct buf *buf = bread(xv6fs_log.dev, xv6fs_log.start);
-  struct logheader *lh = (struct logheader *) (buf->data);
+  struct logheader *lh = (struct logheader *)(buf->data);
   int i;
   xv6fs_log.lh.n = lh->n;
-  for (i = 0; i < xv6fs_log.lh.n; i++) {
+  for (i = 0; i < xv6fs_log.lh.n; i++)
+  {
     xv6fs_log.lh.block[i] = lh->block[i];
   }
   brelse(buf);
@@ -102,10 +105,11 @@ static void
 write_head(void)
 {
   struct buf *buf = bread(xv6fs_log.dev, xv6fs_log.start);
-  struct logheader *hb = (struct logheader *) (buf->data);
+  struct logheader *hb = (struct logheader *)(buf->data);
   int i;
   hb->n = xv6fs_log.lh.n;
-  for (i = 0; i < xv6fs_log.lh.n; i++) {
+  for (i = 0; i < xv6fs_log.lh.n; i++)
+  {
     hb->block[i] = xv6fs_log.lh.block[i];
   }
   bwrite(buf);
@@ -122,17 +126,22 @@ recover_from_log(void)
 }
 
 // called at the start of each FS system call.
-void
-begin_op(void)
+void begin_op(void)
 {
   acquire(&xv6fs_log.lock);
-  while(1){
-    if(xv6fs_log.committing){
+  while (1)
+  {
+    if (xv6fs_log.committing)
+    {
       xv6fs_sleep(&xv6fs_log, &xv6fs_log.lock);
-    } else if(xv6fs_log.lh.n + (xv6fs_log.outstanding+1)*MAXOPBLOCKS > LOGSIZE){
+    }
+    else if (xv6fs_log.lh.n + (xv6fs_log.outstanding + 1) * MAXOPBLOCKS > LOGSIZE)
+    {
       // this op might exhaust log space; wait for commit.
       xv6fs_sleep(&xv6fs_log, &xv6fs_log.lock);
-    } else {
+    }
+    else
+    {
       xv6fs_log.outstanding += 1;
       release(&xv6fs_log.lock);
       break;
@@ -142,19 +151,21 @@ begin_op(void)
 
 // called at the end of each FS system call.
 // commits if this was the last outstanding operation.
-void
-end_op(void)
+void end_op(void)
 {
   int do_commit = 0;
 
   acquire(&xv6fs_log.lock);
   xv6fs_log.outstanding -= 1;
-  if(xv6fs_log.committing)
+  if (xv6fs_log.committing)
     xv6fs_panic("log.committing");
-  if(xv6fs_log.outstanding == 0){
+  if (xv6fs_log.outstanding == 0)
+  {
     do_commit = 1;
     xv6fs_log.committing = 1;
-  } else {
+  }
+  else
+  {
     // begin_op() may be waiting for log space,
     // and decrementing log.outstanding has decreased
     // the amount of reserved space.
@@ -162,7 +173,8 @@ end_op(void)
   }
   release(&xv6fs_log.lock);
 
-  if(do_commit){
+  if (do_commit)
+  {
     // call commit w/o holding locks, since not allowed
     // to sleep with locks.
     commit();
@@ -179,11 +191,12 @@ write_log(void)
 {
   int tail;
 
-  for (tail = 0; tail < xv6fs_log.lh.n; tail++) {
-    struct buf *to = bread(xv6fs_log.dev, xv6fs_log.start+tail+1); // log block
+  for (tail = 0; tail < xv6fs_log.lh.n; tail++)
+  {
+    struct buf *to = bread(xv6fs_log.dev, xv6fs_log.start + tail + 1); // log block
     struct buf *from = bread(xv6fs_log.dev, xv6fs_log.lh.block[tail]); // cache block
     memmove(to->data, from->data, BSIZE);
-    bwrite(to);  // write the log
+    bwrite(to); // write the log
     brelse(from);
     brelse(to);
   }
@@ -192,12 +205,13 @@ write_log(void)
 static void
 commit()
 {
-  if (xv6fs_log.lh.n > 0) {
-    write_log();     // Write modified blocks from cache to log
-    write_head();    // Write header to disk -- the real commit
+  if (xv6fs_log.lh.n > 0)
+  {
+    write_log();      // Write modified blocks from cache to log
+    write_head();     // Write header to disk -- the real commit
     install_trans(0); // Now install writes to home locations
     xv6fs_log.lh.n = 0;
-    write_head();    // Erase the transaction from the log
+    write_head(); // Erase the transaction from the log
   }
 }
 
@@ -210,8 +224,7 @@ commit()
 //   modify bp->data[]
 //   log_write(bp)
 //   brelse(bp)
-void
-log_write(struct buf *b)
+void log_write(struct buf *b)
 {
   int i;
 
@@ -221,15 +234,16 @@ log_write(struct buf *b)
   if (xv6fs_log.outstanding < 1)
     xv6fs_panic("log_write outside of trans");
 
-  for (i = 0; i < xv6fs_log.lh.n; i++) {
-    if (xv6fs_log.lh.block[i] == b->blockno)   // log absorption
+  for (i = 0; i < xv6fs_log.lh.n; i++)
+  {
+    if (xv6fs_log.lh.block[i] == b->blockno) // log absorption
       break;
   }
   xv6fs_log.lh.block[i] = b->blockno;
-  if (i == xv6fs_log.lh.n) {  // Add new block to log?
+  if (i == xv6fs_log.lh.n)
+  { // Add new block to log?
     bpin(b);
     xv6fs_log.lh.n++;
   }
   release(&xv6fs_log.lock);
 }
-

@@ -11,13 +11,14 @@
 
 #include <vka/capops.h>
 
-#include<sel4gpi/pd_clientapi.h>
-#include<sel4gpi/badge_usage.h>
-#include<sel4gpi/debug.h>
+#include <sel4gpi/pd_clientapi.h>
+#include <sel4gpi/badge_usage.h>
+#include <sel4gpi/debug.h>
 
 int pd_component_client_connect(seL4_CPtr server_ep_cap,
-                              vka_t *client_vka,
-                              pd_client_context_t *ret_conn){
+                                vka_t *client_vka,
+                                pd_client_context_t *ret_conn)
+{
 
     /* Send a REQ message to the server on its publicS EP */
 
@@ -27,25 +28,25 @@ int pd_component_client_connect(seL4_CPtr server_ep_cap,
     cspacepath_t path;
     vka_cspace_make_path(client_vka, dest_cptr, &path);
     seL4_SetCapReceivePath(
-        /* _service */      path.root,
-        /* index */         path.capPtr,
-        /* depth */         path.capDepth
-    );
+        /* _service */ path.root,
+        /* index */ path.capPtr,
+        /* depth */ path.capDepth);
 
     OSDB_PRINTF(PDSERVC "%s %d pd_endpoint is %lu:__ \n", __FUNCTION__, __LINE__, server_ep_cap);
-   // debug_cap_identify(PDSERVC, server_ep_cap);
+    // debug_cap_identify(PDSERVC, server_ep_cap);
 
-    OSDB_PRINTF(PDSERVC"Set a receive path for the badged ep: %lu\n", path.capPtr);
+    OSDB_PRINTF(PDSERVC "Set a receive path for the badged ep: %lu\n", path.capPtr);
     /* Set request type */
     seL4_SetMR(0, GPICAP_TYPE_PD);
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0, 1);
 
-    tag = seL4_Call(server_ep_cap,tag);
+    tag = seL4_Call(server_ep_cap, tag);
     assert(seL4_MessageInfo_get_extraCaps(tag) == 1);
 
-    ret_conn->badged_server_ep_cspath = path;;
+    ret_conn->badged_server_ep_cspath = path;
+    ;
 
-    OSDB_PRINTF(PDSERVC"received badged endpoint and it was kept in %lu:__\n", path.capPtr);
+    OSDB_PRINTF(PDSERVC "received badged endpoint and it was kept in %lu:__\n", path.capPtr);
     // debug_cap_identify(PDSERVC, path.capPtr);
     return 0;
 }
@@ -58,15 +59,18 @@ int pd_client_load(pd_client_context_t *pd_os_cap,
 
     /* Send the badged endpoint cap of the ads client as a cap */
     int image_id = -1;
-    for (int i = 0; i < PD_N_IMAGES; i++) {
-        if (strcmp(image, pd_images[i]) == 0) {
+    for (int i = 0; i < PD_N_IMAGES; i++)
+    {
+        if (strcmp(image, pd_images[i]) == 0)
+        {
             OSDB_PRINTF(PDSERVC "image id is %d\n", i);
             image_id = i;
             break;
         }
     }
 
-    if (image_id == -1) {
+    if (image_id == -1)
+    {
         OSDB_PRINTF(PDSERVC "invalid image name received %s\n", image);
         return -1;
     }
@@ -83,18 +87,18 @@ int pd_client_load(pd_client_context_t *pd_os_cap,
 }
 
 int pd_client_dump(pd_client_context_t *conn,
-                    char *buf,
-                    size_t buf_sz)
+                   char *buf,
+                   size_t buf_sz)
 {
     seL4_SetMR(PDMSGREG_FUNC, PD_FUNC_DUMP_REQ);
 
-    seL4_SetMR(PDMSGREG_DUMP_REQ_BUF_VA, (seL4_Word) buf);
-    seL4_SetMR(PDMSGREG_DUMP_REQ_BUF_SZ, (seL4_Word) buf_sz);
+    seL4_SetMR(PDMSGREG_DUMP_REQ_BUF_VA, (seL4_Word)buf);
+    seL4_SetMR(PDMSGREG_DUMP_REQ_BUF_SZ, (seL4_Word)buf_sz);
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0,
-                                                    PDMSGREG_DUMP_REQ_END);
+                                                  PDMSGREG_DUMP_REQ_END);
 
     OSDB_PRINTF(ADSSERVC "Sending dump RR request to PD via EP: %lu.\n",
-           conn->badged_server_ep_cspath.capPtr);
+                conn->badged_server_ep_cspath.capPtr);
     tag = seL4_Call(conn->badged_server_ep_cspath.capPtr, tag);
     return 0;
 }
@@ -117,7 +121,7 @@ int pd_client_next_slot(pd_client_context_t *conn,
                         seL4_Word *slot)
 {
     seL4_SetMR(PDMSGREG_FUNC, PD_FUNC_NEXT_SLOT_REQ);
-   seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0,
+    seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0,
                                                   PDMSGREG_NEXT_SLOT_REQ_END);
     tag = seL4_Call(conn->badged_server_ep_cspath.capPtr, tag);
     *slot = seL4_GetMR(PDMSGREG_NEXT_SLOT_PD_SLOT);
@@ -129,7 +133,7 @@ int pd_client_next_slot(pd_client_context_t *conn,
 int pd_client_free_slot(pd_client_context_t *conn,
                         seL4_CPtr slot)
 {
-    #if 0
+#if 0
     /* (XXX) Arya: Deleting the slot's contents only works in child PD */
     int error = 0;
     cspacepath_t path;
@@ -138,8 +142,8 @@ int pd_client_free_slot(pd_client_context_t *conn,
     path.capPtr = slot;
 
     error = vka_cnode_delete(&path); // ignore delete error if slot was empty
-    #endif
-    
+#endif
+
     // Now get the server to free the slot
     seL4_SetMR(PDMSGREG_FUNC, PD_FUNC_FREE_SLOT_REQ);
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0,
@@ -158,7 +162,7 @@ int pd_client_free_slot(pd_client_context_t *conn,
  * @return int 0 on success, -1 on failure.
  */
 int pd_client_alloc_ep(pd_client_context_t *conn,
-                        seL4_CPtr *ret_ep)
+                       seL4_CPtr *ret_ep)
 {
     seL4_SetMR(PDMSGREG_FUNC, PD_FUNC_ALLOC_EP_REQ);
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0,
@@ -180,9 +184,9 @@ int pd_client_alloc_ep(pd_client_context_t *conn,
  * @return int 0 on success, -1 on failure.
  */
 int pd_client_badge_ep(pd_client_context_t *conn,
-                        seL4_CPtr src_ep,
-                        seL4_Word badge,
-                        seL4_CPtr *ret_ep)
+                       seL4_CPtr src_ep,
+                       seL4_Word badge,
+                       seL4_CPtr *ret_ep)
 {
     int error;
     seL4_SetMR(PDMSGREG_FUNC, PD_FUNC_BADGE_EP_REQ);

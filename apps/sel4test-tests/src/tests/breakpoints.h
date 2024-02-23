@@ -11,19 +11,20 @@
 
 #ifdef CONFIG_HARDWARE_DEBUG_API
 
-#define FAULT_EP_KERNEL_BADGE_VALUE           (1)
+#define FAULT_EP_KERNEL_BADGE_VALUE (1)
 
 #define SINGLESTEP_TEST_MAX_LOOP_ITERATIONS 10
 
-#define BREAKPOINT_TEST_FAULTER_PRIO  (seL4_MinPrio + 10)
-#define BREAKPOINT_TEST_HANDLER_PRIO  (seL4_MinPrio + 20)
+#define BREAKPOINT_TEST_FAULTER_PRIO (seL4_MinPrio + 10)
+#define BREAKPOINT_TEST_HANDLER_PRIO (seL4_MinPrio + 20)
 
 /* Other (receiver) end of the Endpoint object on which the kernel will queue
  * the Fault events triggered by the fault thread.
  */
 extern cspacepath_t fault_ep_cspath;
 
-struct {
+struct
+{
     seL4_Word vaddr, vaddr2, reason, bp_num;
 } static fault_data;
 

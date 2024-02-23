@@ -12,7 +12,14 @@
 
 /* This list must be ordered by size - highest first */
 static const frame_type_t frame_types[] = {
-    { seL4_X86_LargePageObject, 0, seL4_LargePageBits, },
-    { seL4_X86_4K, BIT(seL4_LargePageBits), seL4_PageBits, },
+    {
+        seL4_X86_LargePageObject,
+        0,
+        seL4_LargePageBits,
+    },
+    {
+        seL4_X86_4K,
+        BIT(seL4_LargePageBits),
+        seL4_PageBits,
+    },
 };
-

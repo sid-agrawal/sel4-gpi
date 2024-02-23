@@ -23,10 +23,10 @@ int mo_new(mo_t *mo,
            uint32_t num_caps,
            vka_t *vka)
 {
-    assert (caps != NULL);
+    assert(caps != NULL);
 
-    mo->frame_caps_in_root_task = malloc(num_caps * sizeof(seL4_CPtr)) ;
-    assert (mo->frame_caps_in_root_task != NULL);
+    mo->frame_caps_in_root_task = malloc(num_caps * sizeof(seL4_CPtr));
+    assert(mo->frame_caps_in_root_task != NULL);
 
     for (int i = 0; i < num_caps; i++)
     {

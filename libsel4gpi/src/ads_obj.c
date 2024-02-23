@@ -26,12 +26,14 @@ int ads_new(vspace_t *loader,
 {
 
     ret_ads->vspace = malloc(sizeof(vspace_t));
-    if (ret_ads->vspace == NULL) {
+    if (ret_ads->vspace == NULL)
+    {
         ZF_LOGE("Failed to allocate vspace\n");
         goto error_exit;
     }
     ret_ads->process_for_cookies = malloc(sizeof(sel4utils_process_t));
-    if (ret_ads->process_for_cookies == NULL) {
+    if (ret_ads->process_for_cookies == NULL)
+    {
         ZF_LOGE("Failed to allocate process struct for coolies in ads_new\n");
         goto error_exit;
     }
@@ -43,9 +45,9 @@ int ads_new(vspace_t *loader,
     vka_object_t *vspace_root_object = malloc(sizeof(vka_object_t));
     assert(vspace_root_object != NULL);
 
-
     sel4utils_alloc_data_t *alloc_data = malloc(sizeof(sel4utils_alloc_data_t));
-    if (alloc_data == NULL) {
+    if (alloc_data == NULL)
+    {
         ZF_LOGE("Failed to allocate memory for alloc data\n");
         goto error_exit;
     }
@@ -65,20 +67,19 @@ int ads_new(vspace_t *loader,
     }
     // Create empty vspace
     error = sel4utils_get_vspace(
-         loader,
-         new_vspace,
-         alloc_data,
-         vka,
-         vspace_root_object->cptr,
-         sel4utils_allocated_object,
+        loader,
+        new_vspace,
+        alloc_data,
+        vka,
+        vspace_root_object->cptr,
+        sel4utils_allocated_object,
 
         /*
             sel4utils_allocated_object expects a process struct as a cookie
             Instead use a different function which suited are needs better.
         */
 
-         &(ret_ads->process_for_cookies)
-     );
+        &(ret_ads->process_for_cookies));
     if (error)
     {
         ZF_LOGE("Failed to get new vspace while making copy: %d\n in %s", error, __FUNCTION__);
@@ -98,18 +99,18 @@ int ads_attach(ads_t *ads,
                void *vaddr,
                uint32_t num_pages,
                seL4_CPtr *frame_caps,
-               void ** ret_vaddr,
+               void **ret_vaddr,
                /*sel4utils_process_t*/ vspace_t *process_cookie)
 {
     int cacheable = 1;
     vspace_t *target = ads->vspace;
 
-
     /* Reserver the range in the vspace */
     seL4_CapRights_t rights = seL4_AllRights;
     reservation_t res;
 
-    if (vaddr == NULL) {
+    if (vaddr == NULL)
+    {
         res = sel4utils_reserve_range_aligned(target,
                                               num_pages * PAGE_SIZE_4K,
                                               seL4_PageBits,
@@ -151,14 +152,15 @@ int ads_attach(ads_t *ads,
     return 0;
 }
 
-int ads_rm(ads_t *ads, vka_t *vka, void* vaddr, size_t size) {
+int ads_rm(ads_t *ads, vka_t *vka, void *vaddr, size_t size)
+{
     return 0;
 }
 
-int ads_bind(ads_t *ads, vka_t *vka, seL4_CPtr* cpu_cap) {
+int ads_bind(ads_t *ads, vka_t *vka, seL4_CPtr *cpu_cap)
+{
     return 0;
 }
-
 
 void ads_dump_rr(ads_t *ads, model_state_t *ms)
 {

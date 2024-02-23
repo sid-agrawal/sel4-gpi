@@ -333,7 +333,7 @@ void xv6fs_server_main()
       case F_SETLK:
       case F_SETLKW:
       case F_GETLK:
-        arg = (unsigned long) get_xv6fs_server()->shared_mem;
+        arg = (unsigned long)get_xv6fs_server()->shared_mem;
         break;
       }
 
@@ -635,7 +635,7 @@ int xv6fs_remote_fcntl(int fd, int cmd, ...)
   case F_SETLK:
   case F_SETLKW:
   case F_GETLK:
-    memcpy(get_xv6fs_client()->shared_mem, (void *) arg, sizeof(struct flock));
+    memcpy(get_xv6fs_client()->shared_mem, (void *)arg, sizeof(struct flock));
     break;
   }
 
@@ -656,7 +656,7 @@ int xv6fs_remote_fcntl(int fd, int cmd, ...)
   switch (cmd)
   {
   case F_GETLK:
-    memcpy((void *) arg, get_xv6fs_client()->shared_mem, sizeof(struct flock));
+    memcpy((void *)arg, get_xv6fs_client()->shared_mem, sizeof(struct flock));
     break;
   }
 

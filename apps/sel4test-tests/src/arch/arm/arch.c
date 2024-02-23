@@ -26,7 +26,8 @@ static int serial_utspace_alloc_at_fn(void *data, const cspacepath_t *dest, seL4
 {
     /* first try the local VKA */
     int ret = old_vka.utspace_alloc_at(data, dest, type, size_bits, paddr, cookie);
-    if (!ret) {
+    if (!ret)
+    {
         return ret;
     }
 

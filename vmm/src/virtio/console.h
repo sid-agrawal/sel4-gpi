@@ -47,9 +47,9 @@
 #define VIRTIO_CONSOLE_NUM_VIRTQ 2
 
 /* Feature bits */
-#define VIRTIO_CONSOLE_F_SIZE           0   /* Does host provide console size? */
-#define VIRTIO_CONSOLE_F_MULTIPORT      1   /* Does host provide multiple ports? */
-#define VIRTIO_CONSOLE_F_EMERG_WRITE    2   /* Does host support emergency write? */
+#define VIRTIO_CONSOLE_F_SIZE 0        /* Does host provide console size? */
+#define VIRTIO_CONSOLE_F_MULTIPORT 1   /* Does host provide multiple ports? */
+#define VIRTIO_CONSOLE_F_EMERG_WRITE 2 /* Does host support emergency write? */
 
 #define VIRTIO_CONSOLE_BAD_ID (~(uint32_t)0)
 
@@ -57,7 +57,8 @@
 
 #define VIRTIO_CONSOLE_CFG_MAX_PORTS (VIRTIO_PCI_CONFIG_OFF(false) + offsetof(struct virtio_con_cfg, max_nr_ports))
 
-struct virtio_console_config {
+struct virtio_console_config
+{
     /* colums of the screens */
     uint16_t cols;
     /* rows of the screens */
@@ -72,7 +73,8 @@ struct virtio_console_config {
  * A message that's passed between the Host and the Guest for a
  * particular port.
  */
-struct virtio_console_control {
+struct virtio_console_control
+{
     uint32_t id;    /* Port number */
     uint16_t event; /* The kind of control event (see below) */
     uint16_t value; /* Extra information for the key */
@@ -80,13 +82,13 @@ struct virtio_console_control {
 
 /* Some events for control messages */
 #define VIRTIO_CONSOLE_DEVICE_READY 0
-#define VIRTIO_CONSOLE_PORT_ADD     1
-#define VIRTIO_CONSOLE_PORT_REMOVE  2
-#define VIRTIO_CONSOLE_PORT_READY   3
-#define VIRTIO_CONSOLE_CON_PORT     4
-#define VIRTIO_CONSOLE_RESIZE       5
-#define VIRTIO_CONSOLE_PORT_OPEN    6
-#define VIRTIO_CONSOLE_PORT_NAME    7
+#define VIRTIO_CONSOLE_PORT_ADD 1
+#define VIRTIO_CONSOLE_PORT_REMOVE 2
+#define VIRTIO_CONSOLE_PORT_READY 3
+#define VIRTIO_CONSOLE_CON_PORT 4
+#define VIRTIO_CONSOLE_RESIZE 5
+#define VIRTIO_CONSOLE_PORT_OPEN 6
+#define VIRTIO_CONSOLE_PORT_NAME 7
 
 void virtio_console_init(struct virtio_device *dev,
                          struct virtio_queue_handler *vqs, size_t num_vqs,

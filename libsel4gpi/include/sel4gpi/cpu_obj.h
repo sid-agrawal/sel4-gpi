@@ -13,7 +13,8 @@
 #include <sel4utils/vspace_internal.h>
 #include <sel4utils/process.h>
 
-typedef struct _cpu {
+typedef struct _cpu
+{
     // sel4utils_thread_config_t thread_config;
     // sel4utils_thread_t thread_obj;
     uint64_t cpu_obj_id;
@@ -23,7 +24,7 @@ typedef struct _cpu {
     void *ipc_buffer_addr;
     seL4_CPtr ipc_buffer_frame;
     seL4_CPtr cspace;
-}cpu_t;
+} cpu_t;
 
 /**
  * @brief Start the given CPU
@@ -65,4 +66,4 @@ int cpu_change_vspace(cpu_t *cpu,
  * @return int 0 on success, -1 on failure.
  */
 int cpu_new(cpu_t *cpu,
-                      vka_t *vka);
+            vka_t *vka);

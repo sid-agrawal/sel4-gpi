@@ -24,12 +24,14 @@ seL4_SlotRegion arch_copy_iospace_caps_to_process(sel4utils_process_t *process, 
     int num_iospace_caps = 0;
     seL4_Error UNUSED error = simple_get_iospace_cap_count(&env->simple, &num_iospace_caps);
     assert(error == seL4_NoError);
-    for (int i = 0; i < num_iospace_caps; i++) {
+    for (int i = 0; i < num_iospace_caps; i++)
+    {
         seL4_CPtr iospace = simple_get_nth_iospace_cap(&env->simple, i);
         assert(iospace != seL4_CapNull);
         seL4_CPtr slot = sel4utils_copy_cap_to_process(process, &env->vka, iospace);
         assert(slot != seL4_CapNull);
-        if (i == 0) {
+        if (i == 0)
+        {
             ret.start = slot;
         }
         ret.end = slot;

@@ -25,15 +25,12 @@
 #include <sel4gpi/cpu_component.h>
 #include <sel4gpi/cap_tracking.h>
 
+#define GPI_SERVER_DEFAULT_PRIORITY (seL4_MaxPrio - 1)
 
-#define GPI_SERVER_DEFAULT_PRIORITY    (seL4_MaxPrio - 1)
+#define GPISERVP "GPIServ Parent: "
+#define GPISERVS "GPIServ Server: "
 
-#define GPISERVP     "GPIServ Parent: "
-#define GPISERVS     "GPIServ Server: "
-
-
-
-#define  GPI_SERVER_BADGE_PARENT_VALUE 0xdeadbeef// Change this to something which will not violate the badge range
+#define GPI_SERVER_BADGE_PARENT_VALUE 0xdeadbeef // Change this to something which will not violate the badge range
 
 /** @file API for allowing a thread to act as the parent to a GPI server
  * thread.
@@ -64,11 +61,11 @@ seL4_Error gpi_server_parent_spawn_thread(simple_t *parent_simple,
                                           uint8_t priority,
                                           seL4_CPtr *server_endpoint);
 
-
 /*
 Context of the server
 */
-typedef struct _gpi_server_context {
+typedef struct _gpi_server_context
+{
     simple_t *server_simple;
     vka_t *server_vka;
     seL4_CPtr server_cspace;
@@ -85,9 +82,9 @@ typedef struct _gpi_server_context {
 
     /* Per-client context maintained by the server. */
     ads_component_context_t ads_component;
-    mo_component_context_t  mo_component;
+    mo_component_context_t mo_component;
     cpu_component_context_t cpu_component;
-    pd_component_context_t  pd_component;
+    pd_component_context_t pd_component;
 
     osmosis_cap_t *osm_caps;
     osmosis_cap_t *osm_caps_tail;

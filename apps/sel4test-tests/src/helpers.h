@@ -24,7 +24,7 @@
 /* args provided by the user */
 #define HELPER_THREAD_MAX_ARGS 4
 /* metadata helpers adds */
-#define HELPER_THREAD_META     4
+#define HELPER_THREAD_META 4
 /* total args (user + meta) */
 #define HELPER_THREAD_TOTAL_ARGS (HELPER_THREAD_MAX_ARGS + HELPER_THREAD_META)
 
@@ -32,7 +32,8 @@
 
 typedef int (*helper_fn_t)(seL4_Word, seL4_Word, seL4_Word, seL4_Word);
 
-typedef struct helper_thread {
+typedef struct helper_thread
+{
     sel4utils_elf_region_t regions[MAX_REGIONS];
     int num_regions;
     sel4utils_process_t process;

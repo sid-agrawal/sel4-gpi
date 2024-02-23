@@ -6,7 +6,8 @@
 #include <utils/zf_log.h>
 #include <vka/object.h>
 
-bool guest_start(vmm_env_t *vmm_env, size_t boot_vcpu_id, uintptr_t kernel_pc, uintptr_t dtb, uintptr_t initrd) {
+bool guest_start(vmm_env_t *vmm_env, size_t boot_vcpu_id, uintptr_t kernel_pc, uintptr_t dtb, uintptr_t initrd)
+{
     /*
      * Set the TCB registers to what the virtual machine expects to be started with.
      * You will note that this is currently Linux specific as we currently do not support
@@ -19,19 +20,19 @@ bool guest_start(vmm_env_t *vmm_env, size_t boot_vcpu_id, uintptr_t kernel_pc, u
     regs.pc = kernel_pc;
     /* Write out all the TCB registers */
     seL4_Error err = seL4_TCB_WriteRegisters(
-        vmm_env->vm_tcb.cptr, // XXX + boot_vcpu_id?
-        false, // We'll explcitly start the guest below rather than in this call
-        0, // No flags
+        vmm_env->vm_tcb.cptr,   // XXX + boot_vcpu_id?
+        false,                  // We'll explcitly start the guest below rather than in this call
+        0,                      // No flags
         SEL4_USER_CONTEXT_SIZE, // Writing to x0, pc, and spsr // @ivanv: for some reason having the number of registers here does not work... (in this case 2)
-        &regs
-    );
+        &regs);
     assert(err == seL4_NoError);
-    if (err != seL4_NoError) {
+    if (err != seL4_NoError)
+    {
         ZF_LOGE("Failed to write registers to boot vCPU's TCB (id is 0x%lx), error is: 0x%d\n", boot_vcpu_id, err);
         return false;
     }
     ZF_LOGI("starting guest at 0x%lx, DTB at 0x%lx, initial RAM disk at 0x%lx\n",
-        regs.pc, regs.x0, initrd);
+            regs.pc, regs.x0, initrd);
     /* Restart the boot vCPU to the program counter of the TCB associated with it */
 
     // err = seL4_TCB_Resume(vmm_env->vm_tcb.cptr);
@@ -42,21 +43,22 @@ bool guest_start(vmm_env_t *vmm_env, size_t boot_vcpu_id, uintptr_t kernel_pc, u
         true,
         0, /* No flags */
         1, /* writing 1 register */
-        &ctxt
-    );
+        &ctxt);
 
     ZF_LOGF_IFERR(err, "Failed to write TCB registers");
 
     return true;
 }
 
-void guest_stop(size_t boot_vcpu_id) {
+void guest_stop(size_t boot_vcpu_id)
+{
     ZF_LOGI("Stopping guest\n");
     // microkit_vm_stop(boot_vcpu_id); // XXX
     ZF_LOGI("Stopped guest\n");
 }
 
-bool guest_restart(size_t boot_vcpu_id, uintptr_t guest_ram_vaddr, size_t guest_ram_size) {
+bool guest_restart(size_t boot_vcpu_id, uintptr_t guest_ram_vaddr, size_t guest_ram_size)
+{
     ZF_LOGI("Attempting to restart guest\n");
     // First, stop the guest
     // microkit_vm_stop(boot_vcpu_id); // XXX

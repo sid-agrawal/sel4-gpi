@@ -12,7 +12,8 @@
 #include <sel4/sel4.h>
 
 /* PSCI function IDs */
-typedef enum psci {
+typedef enum psci
+{
     PSCI_VERSION = 0x0,
     PSCI_CPU_SUSPEND = 0x1,
     PSCI_CPU_OFF = 0x2,
@@ -44,4 +45,4 @@ typedef enum psci {
  * Issue E (PSCI version 1.2)
  */
 
-bool handle_psci(size_t vcpu_id, seL4_UserContext *regs,  uint64_t fn_number, uint32_t hsr);
+bool handle_psci(size_t vcpu_id, seL4_UserContext *regs, uint64_t fn_number, uint32_t hsr);

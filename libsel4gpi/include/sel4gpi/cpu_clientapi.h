@@ -14,9 +14,10 @@
 #include <sel4gpi/cpu_component.h>
 #include <sel4gpi/ads_clientapi.h>
 
-typedef struct _cpu_client_context {
+typedef struct _cpu_client_context
+{
    cspacepath_t badged_server_ep_cspath;
-   //cspacepath_t public_server_ep_cspath;
+   // cspacepath_t public_server_ep_cspath;
 } cpu_client_context_t;
 
 /**
@@ -28,9 +29,8 @@ typedef struct _cpu_client_context {
  * @return int 0 on success, -1 on failure.
  */
 int cpu_component_client_connect(seL4_CPtr server_ep_cap,
-                              vka_t *client_vka,
-                              cpu_client_context_t *ret_conn);
-
+                                 vka_t *client_vka,
+                                 cpu_client_context_t *ret_conn);
 
 /**
  * @brief   Disconnect the cpu client.
@@ -72,4 +72,4 @@ int cpu_client_config(cpu_client_context_t *conn,
  * @return int 0 on success, -1 on failure.
  */
 int cpu_client_change_vspace(cpu_client_context_t *conn,
-                      ads_client_context_t *ads_conn);
+                             ads_client_context_t *ads_conn);

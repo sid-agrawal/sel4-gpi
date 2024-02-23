@@ -18,10 +18,10 @@
 #include <sel4gpi/gpi_server.h>
 #include <sel4gpi/cap_tracking.h>
 
-
-void print_osm_cap_info (osmosis_cap_t *o) {
+void print_osm_cap_info(osmosis_cap_t *o)
+{
     printf("Slot_RT:%lx\t T: %s \t %s \t Paddr: 0x%lx \t %s \t Minted from: %lx\n",
-            o->slot_in_rt,
+           o->slot_in_rt,
            cap_type_to_str(o->type),
            o->isUntyped ? "Untyped" : "Not Untyped",
            o->paddr,
@@ -32,21 +32,24 @@ void print_osm_cap_info (osmosis_cap_t *o) {
 /*
     returns an unintialized osmosis cap tracking object
 */
-static osmosis_cap_t *new_osm_cap(void) {
+static osmosis_cap_t *new_osm_cap(void)
+{
     gpi_server_context_t *env = get_gpi_server();
     osmosis_cap_t *new = calloc(1, sizeof(osmosis_cap_t));
-    if (env->osm_caps == NULL) {
+    if (env->osm_caps == NULL)
+    {
         env->osm_caps = new;
     }
 
-    if (env->osm_caps_tail) {
+    if (env->osm_caps_tail)
+    {
         new->prev = env->osm_caps_tail;
         env->osm_caps_tail->next = new;
     }
-    
+
     env->osm_caps_tail = new;
     return new;
-} 
+}
 
 /*
     Add cap to the cap tracking object.
@@ -66,12 +69,15 @@ int gpi_add_cap_data(osmosis_cap_t *new_cap_data)
 }
 
 /* Removes a cap from the cap tracking list, and frees it */
-static void remove_osm_cap(osmosis_cap_t *to_remove) {
-    if (to_remove->prev != NULL) {
+static void remove_osm_cap(osmosis_cap_t *to_remove)
+{
+    if (to_remove->prev != NULL)
+    {
         to_remove->prev->next = to_remove->next;
     }
 
-    if (to_remove->next != NULL) {
+    if (to_remove->next != NULL)
+    {
         to_remove->next->prev = to_remove->prev;
     }
 
@@ -89,19 +95,24 @@ int gpi_remove_cap_data(seL4_CPtr cap_to_remove)
     osmosis_cap_t *next;
     bool found_cap = false;
 
-    while (curr != NULL) {
+    while (curr != NULL)
+    {
         /* remove the cap and any of its children */
-        if (curr->slot_in_rt == cap_to_remove || curr->minted_from == cap_to_remove) {
+        if (curr->slot_in_rt == cap_to_remove || curr->minted_from == cap_to_remove)
+        {
             next = curr->next; /* retain a pointer to the next node, as the current one is about to be freed */
             remove_osm_cap(curr);
             curr = next;
             found_cap = true; // could we run into a case where we somehow track a child cap without tracking its parent?
-        } else {
+        }
+        else
+        {
             curr = curr->next;
         }
     }
 
-    if (!found_cap) {
+    if (!found_cap)
+    {
         ZF_LOGE("Could not find cap in cap tracking object");
         return 1;
     }
@@ -113,13 +124,15 @@ int gpi_remove_cap_data(seL4_CPtr cap_to_remove)
     Retrive cap's data from the cap tracking object.
 */
 int gpi_retrieve_cap_data(seL4_CPtr cap_to_find,
-                     osmosis_cap_t *return_data)
+                          osmosis_cap_t *return_data)
 {
     gpi_server_context_t *env = get_gpi_server();
     osmosis_cap_t *curr = env->osm_caps;
 
-    while (curr != NULL) {
-        if (curr->slot_in_rt == cap_to_find) {
+    while (curr != NULL)
+    {
+        if (curr->slot_in_rt == cap_to_find)
+        {
             /* Check that a type is set */
             assert(curr->type != GPICAP_TYPE_MAX);
 

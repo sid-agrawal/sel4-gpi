@@ -50,18 +50,18 @@ static inline void reply(seL4_MessageInfo_t tag)
     api_reply(get_gpi_server()->server_thread.reply.cptr, tag);
 }
 
-
 seL4_Error
 gpi_server_parent_spawn_thread(simple_t *parent_simple, vka_t *parent_vka,
-                                  vspace_t *parent_vspace,
-                                  uint8_t priority,
-                                  seL4_CPtr *server_ep_cap)
+                               vspace_t *parent_vspace,
+                               uint8_t priority,
+                               seL4_CPtr *server_ep_cap)
 {
     seL4_Error error;
     cspacepath_t parent_cspace_cspath;
     seL4_MessageInfo_t tag;
 
-    if (parent_simple == NULL || parent_vka == NULL || parent_vspace == NULL) {
+    if (parent_simple == NULL || parent_vka == NULL || parent_vspace == NULL)
+    {
         return seL4_InvalidArgument;
     }
 
@@ -76,11 +76,11 @@ gpi_server_parent_spawn_thread(simple_t *parent_simple, vka_t *parent_vka,
     get_gpi_server()->server_cspace = parent_cspace_cspath.root;
     get_gpi_server()->server_vspace = parent_vspace;
 
-
     /* Allocate the Endpoint that the server will be listening on. */
     error = vka_alloc_endpoint(parent_vka, &get_gpi_server()->server_ep_obj);
-    if (error != 0) {
-        ZF_LOGE(GPISERVP"spawn_thread: failed to alloc endpoint, err=%d.",
+    if (error != 0)
+    {
+        ZF_LOGE(GPISERVP "spawn_thread: failed to alloc endpoint, err=%d.",
                 error);
         return error;
     }
@@ -95,7 +95,6 @@ gpi_server_parent_spawn_thread(simple_t *parent_simple, vka_t *parent_vka,
     adsc->server_vspace = parent_vspace;
     adsc->server_thread = get_gpi_server()->server_thread;
     adsc->server_ep_obj = get_gpi_server()->server_ep_obj;
-
 
     /* Setup MO Component */
     mo_component_context_t *moc = &get_gpi_server()->mo_component;
@@ -115,7 +114,6 @@ gpi_server_parent_spawn_thread(simple_t *parent_simple, vka_t *parent_vka,
     cpuc->server_thread = get_gpi_server()->server_thread;
     cpuc->server_ep_obj = get_gpi_server()->server_ep_obj;
 
-
     /* Setup the PD Component */
     pd_component_context_t *pdc = &get_gpi_server()->pd_component;
     pdc->server_simple = parent_simple;
@@ -124,7 +122,6 @@ gpi_server_parent_spawn_thread(simple_t *parent_simple, vka_t *parent_vka,
     pdc->server_vspace = parent_vspace;
     pdc->server_thread = get_gpi_server()->server_thread;
     pdc->server_ep_obj = get_gpi_server()->server_ep_obj;
-
 
     /* And also allocate a badged copy of the Server's endpoint that the Parent
      * can use to send to the Server. This is used to allow the Server to report
@@ -142,10 +139,11 @@ gpi_server_parent_spawn_thread(simple_t *parent_simple, vka_t *parent_vka,
                             &get_gpi_server()->_badged_server_ep_cspath,
                             seL4_AllRights,
                             get_gpi_server()->parent_badge_value);
-    if (error != 0) {
-        ZF_LOGE(GPISERVP"spawn_thread: Failed to mint badged Endpoint cap to "
-                "server.\n"
-                "\tParent cannot confirm Server thread successfully spawned.");
+    if (error != 0)
+    {
+        ZF_LOGE(GPISERVP "spawn_thread: Failed to mint badged Endpoint cap to "
+                         "server.\n"
+                         "\tParent cannot confirm Server thread successfully spawned.");
         goto out;
     }
 
@@ -159,9 +157,11 @@ gpi_server_parent_spawn_thread(simple_t *parent_simple, vka_t *parent_vka,
                                               parent_vspace,
                                               config,
                                               &get_gpi_server()->server_thread);
-    if (error != 0) {
-        ZF_LOGE(GPISERVP"spawn_thread: sel4utils_configure_thread failed "
-                "with %d.", error);
+    if (error != 0)
+    {
+        ZF_LOGE(GPISERVP "spawn_thread: sel4utils_configure_thread failed "
+                         "with %d.",
+                error);
         goto out;
     }
 
@@ -169,9 +169,11 @@ gpi_server_parent_spawn_thread(simple_t *parent_simple, vka_t *parent_vka,
     error = sel4utils_start_thread(&get_gpi_server()->server_thread,
                                    (sel4utils_thread_entry_fn)&gpi_server_main,
                                    NULL, NULL, 1);
-    if (error != 0) {
-        ZF_LOGE(GPISERVP"spawn_thread: sel4utils_start_thread failed with "
-                "%d.", error);
+    if (error != 0)
+    {
+        ZF_LOGE(GPISERVP "spawn_thread: sel4utils_start_thread failed with "
+                         "%d.",
+                error);
         goto out;
     }
 
@@ -184,19 +186,21 @@ gpi_server_parent_spawn_thread(simple_t *parent_simple, vka_t *parent_vka,
 
     /* Did all go well with the server? */
     error = seL4_MessageInfo_get_label(tag);
-    if (error != 0) {
-        ZF_LOGE(GPISERVP"spawn_thread: Server thread failed to bind to the "
-                "platform serial device.");
+    if (error != 0)
+    {
+        ZF_LOGE(GPISERVP "spawn_thread: Server thread failed to bind to the "
+                         "platform serial device.");
         goto out;
     }
 
     OSDB_PRINTF(GPISERVP "spawn_thread: Server thread binded well. at public EP %lu\n",
-           get_gpi_server()->server_ep_obj.cptr);
+                get_gpi_server()->server_ep_obj.cptr);
     return 0;
 
 out:
     OSDB_PRINTF("spawn_thread: Server ran into an error.\n");
-    if (get_gpi_server()->_badged_server_ep_cspath.capPtr != 0) {
+    if (get_gpi_server()->_badged_server_ep_cspath.capPtr != 0)
+    {
         vka_cspace_free_path(parent_vka, get_gpi_server()->_badged_server_ep_cspath);
     }
 
@@ -204,10 +208,9 @@ out:
     return error;
 }
 
-
 void handle_untyped_request(seL4_MessageInfo_t tag,
-                           cspacepath_t *received_cap_path,
-                           seL4_MessageInfo_t *reply_tag)
+                            cspacepath_t *received_cap_path,
+                            seL4_MessageInfo_t *reply_tag)
 {
 
     gpi_cap_t req_cap_type = seL4_GetMR(0);
@@ -266,21 +269,20 @@ void gpi_server_main()
      * that is possible).
      */
 
-    OSDB_PRINTF(GPISERVS"gpi_server_main: Got a call from the parent.\n");
+    OSDB_PRINTF(GPISERVS "gpi_server_main: Got a call from the parent.\n");
     if (error != 0)
     {
         seL4_TCB_Suspend(get_gpi_server()->server_thread.tcb.cptr);
     }
 
-
-    OSDB_PRINTF(GPISERVS"main: Entering main loop and accepting requests.\n");
+    OSDB_PRINTF(GPISERVS "main: Entering main loop and accepting requests.\n");
 
     while (1)
     {
         /* Pre */
         cspacepath_t received_cap_path;
         int error = 0;
-       /* Get the frame cap from the message */
+        /* Get the frame cap from the message */
         error = vka_cspace_alloc_path(get_gpi_server()->server_vka, &received_cap_path);
         assert(error == 0);
 
@@ -292,12 +294,15 @@ void gpi_server_main()
         tag = recv(&sender_badge);
 
         seL4_MessageInfo_t reply_tag;
-        if (sender_badge == 0) { /* Handle Typed Request */
+        if (sender_badge == 0)
+        { /* Handle Typed Request */
             OSDB_PRINTF(GPISERVS "Got message on EP with no-BADGE_VALUE\n");
             handle_untyped_request(tag,
                                    &received_cap_path,
                                    &reply_tag); /*unused*/
-        } else { /* Handle Typed Request */
+        }
+        else
+        { /* Handle Typed Request */
             gpi_cap_t cap_type = get_cap_type_from_badge(sender_badge);
             OSDB_PRINTF(GPISERVS "Got message on EP with ");
             badge_print(sender_badge);
@@ -313,9 +318,9 @@ void gpi_server_main()
                 break;
             case GPICAP_TYPE_MO:
                 mo_component_handle(tag,
-                                     sender_badge,
-                                     &received_cap_path,
-                                     &reply_tag); /*unused*/
+                                    sender_badge,
+                                    &received_cap_path,
+                                    &reply_tag); /*unused*/
                 break;
             case GPICAP_TYPE_CPU:
                 cpu_component_handle(tag,
@@ -325,9 +330,9 @@ void gpi_server_main()
                 break;
             case GPICAP_TYPE_PD:
                 pd_component_handle(tag,
-                                     sender_badge,
-                                     &received_cap_path,
-                                     &reply_tag); /*unused*/
+                                    sender_badge,
+                                    &received_cap_path,
+                                    &reply_tag); /*unused*/
                 break;
             default:
                 gpi_panic("gpi_server_main: Unknown cap type.", cap_type);
@@ -335,12 +340,11 @@ void gpi_server_main()
             }
         }
         // Send a reply, but for now let the handlers handle it.
-        //reply(reply_tag);
-
+        // reply(reply_tag);
     }
 
-    //serial_server_func_kill();
+    // serial_server_func_kill();
     /* After we break out of the loop, seL4_TCB_Suspend ourselves */
-    ZF_LOGI(GPISERVS"main: Suspending.");
+    ZF_LOGI(GPISERVS "main: Suspending.");
     seL4_TCB_Suspend(get_gpi_server()->server_thread.tcb.cptr);
 }

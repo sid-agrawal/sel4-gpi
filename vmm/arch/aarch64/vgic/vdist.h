@@ -8,18 +8,21 @@
 #include "fault.h"
 
 /* GIC Distributor register access utilities */
-#define GIC_DIST_REGN(offset, reg) ((offset-reg)/sizeof(uint32_t))
-#define RANGE32(a, b) a ... b + (sizeof(uint32_t)-1)
+#define GIC_DIST_REGN(offset, reg) ((offset - reg) / sizeof(uint32_t))
+#define RANGE32(a, b) a... b + (sizeof(uint32_t) - 1)
 
 #define IRQ_IDX(irq) ((irq) / 32)
 #define IRQ_BIT(irq) (1U << ((irq) % 32))
 
 static inline void set_sgi_ppi_pending(struct gic_dist_map *gic_dist, int irq, bool set_pending, int vcpu_id)
 {
-    if (set_pending) {
+    if (set_pending)
+    {
         gic_dist->pending_set0[vcpu_id] |= IRQ_BIT(irq);
         gic_dist->pending_clr0[vcpu_id] |= IRQ_BIT(irq);
-    } else {
+    }
+    else
+    {
         gic_dist->pending_set0[vcpu_id] &= ~IRQ_BIT(irq);
         gic_dist->pending_clr0[vcpu_id] &= ~IRQ_BIT(irq);
     }
@@ -27,10 +30,13 @@ static inline void set_sgi_ppi_pending(struct gic_dist_map *gic_dist, int irq, b
 
 static inline void set_spi_pending(struct gic_dist_map *gic_dist, int irq, bool set_pending)
 {
-    if (set_pending) {
+    if (set_pending)
+    {
         gic_dist->pending_set[IRQ_IDX(irq)] |= IRQ_BIT(irq);
         gic_dist->pending_clr[IRQ_IDX(irq)] |= IRQ_BIT(irq);
-    } else {
+    }
+    else
+    {
         gic_dist->pending_set[IRQ_IDX(irq)] &= ~IRQ_BIT(irq);
         gic_dist->pending_clr[IRQ_IDX(irq)] &= ~IRQ_BIT(irq);
     }
@@ -38,9 +44,12 @@ static inline void set_spi_pending(struct gic_dist_map *gic_dist, int irq, bool 
 
 static inline void set_pending(struct gic_dist_map *gic_dist, int irq, bool set_pending, int vcpu_id)
 {
-    if (irq < NUM_VCPU_LOCAL_VIRQS) {
+    if (irq < NUM_VCPU_LOCAL_VIRQS)
+    {
         set_sgi_ppi_pending(gic_dist, irq, set_pending, vcpu_id);
-    } else {
+    }
+    else
+    {
         set_spi_pending(gic_dist, irq, set_pending);
     }
 }
@@ -57,19 +66,25 @@ static inline bool is_spi_pending(struct gic_dist_map *gic_dist, int irq)
 
 static inline bool is_pending(struct gic_dist_map *gic_dist, int irq, int vcpu_id)
 {
-    if (irq < NUM_VCPU_LOCAL_VIRQS) {
+    if (irq < NUM_VCPU_LOCAL_VIRQS)
+    {
         return is_sgi_ppi_pending(gic_dist, irq, vcpu_id);
-    } else {
+    }
+    else
+    {
         return is_spi_pending(gic_dist, irq);
     }
 }
 
 static inline void set_sgi_ppi_enable(struct gic_dist_map *gic_dist, int irq, bool set_enable, int vcpu_id)
 {
-    if (set_enable) {
+    if (set_enable)
+    {
         gic_dist->enable_set0[vcpu_id] |= IRQ_BIT(irq);
         gic_dist->enable_clr0[vcpu_id] |= IRQ_BIT(irq);
-    } else {
+    }
+    else
+    {
         gic_dist->enable_set0[vcpu_id] &= ~IRQ_BIT(irq);
         gic_dist->enable_clr0[vcpu_id] &= ~IRQ_BIT(irq);
     }
@@ -77,10 +92,13 @@ static inline void set_sgi_ppi_enable(struct gic_dist_map *gic_dist, int irq, bo
 
 static inline void set_spi_enable(struct gic_dist_map *gic_dist, int irq, bool set_enable)
 {
-    if (set_enable) {
+    if (set_enable)
+    {
         gic_dist->enable_set[IRQ_IDX(irq)] |= IRQ_BIT(irq);
         gic_dist->enable_clr[IRQ_IDX(irq)] |= IRQ_BIT(irq);
-    } else {
+    }
+    else
+    {
         gic_dist->enable_set[IRQ_IDX(irq)] &= ~IRQ_BIT(irq);
         gic_dist->enable_clr[IRQ_IDX(irq)] &= ~IRQ_BIT(irq);
     }
@@ -88,9 +106,12 @@ static inline void set_spi_enable(struct gic_dist_map *gic_dist, int irq, bool s
 
 static inline void set_enable(struct gic_dist_map *gic_dist, int irq, bool set_enable, int vcpu_id)
 {
-    if (irq < NUM_VCPU_LOCAL_VIRQS) {
+    if (irq < NUM_VCPU_LOCAL_VIRQS)
+    {
         set_sgi_ppi_enable(gic_dist, irq, set_enable, vcpu_id);
-    } else {
+    }
+    else
+    {
         set_spi_enable(gic_dist, irq, set_enable);
     }
 }
@@ -107,9 +128,12 @@ static inline bool is_spi_enabled(struct gic_dist_map *gic_dist, int irq)
 
 static inline bool is_enabled(struct gic_dist_map *gic_dist, int irq, int vcpu_id)
 {
-    if (irq < NUM_VCPU_LOCAL_VIRQS) {
+    if (irq < NUM_VCPU_LOCAL_VIRQS)
+    {
         return is_sgi_ppi_enabled(gic_dist, irq, vcpu_id);
-    } else {
+    }
+    else
+    {
         return is_spi_enabled(gic_dist, irq);
     }
 }
@@ -126,9 +150,12 @@ static inline bool is_spi_active(struct gic_dist_map *gic_dist, int irq)
 
 static inline bool is_active(struct gic_dist_map *gic_dist, int irq, int vcpu_id)
 {
-    if (irq < NUM_VCPU_LOCAL_VIRQS) {
+    if (irq < NUM_VCPU_LOCAL_VIRQS)
+    {
         return is_sgi_ppi_active(gic_dist, irq, vcpu_id);
-    } else {
+    }
+    else
+    {
         return is_spi_active(gic_dist, irq);
     }
 }
@@ -140,15 +167,20 @@ static void vgic_dist_enable_irq(vgic_t *vgic, size_t vcpu_id, int irq)
     struct virq_handle *virq_data = virq_find_irq_data(vgic, vcpu_id, irq);
     // assert(virq_data != NULL);
     // @ivanv: explain
-    if (!virq_data) {
+    if (!virq_data)
+    {
         return;
     }
-    if (virq_data->virq != VIRQ_INVALID) {
+    if (virq_data->virq != VIRQ_INVALID)
+    {
         /* STATE b) */
-        if (!is_pending(vgic_get_dist(vgic->registers), virq_data->virq, vcpu_id)) {
+        if (!is_pending(vgic_get_dist(vgic->registers), virq_data->virq, vcpu_id))
+        {
             virq_ack(vcpu_id, virq_data);
         }
-    } else {
+    }
+    else
+    {
         LOG_DIST("Enabled IRQ %d has no handle\n", irq);
     }
 }
@@ -163,7 +195,8 @@ static void vgic_dist_disable_irq(vgic_t *vgic, size_t vcpu_id, int irq)
      * part of the platform initialization, no dedicated messages are logged
      * here to avoid bloating the logs.
      */
-    if (irq >= NUM_SGI_VIRQS) {
+    if (irq >= NUM_SGI_VIRQS)
+    {
         LOG_DIST("Disabling IRQ %d\n", irq);
         set_enable(vgic_get_dist(vgic->registers), irq, false, vcpu_id);
     }
@@ -178,20 +211,25 @@ static bool vgic_dist_set_pending_irq(vgic_t *vgic, size_t vcpu_id, int irq)
     struct virq_handle *virq_data = virq_find_irq_data(vgic, vcpu_id, irq);
     struct gic_dist_map *dist = vgic_get_dist(vgic->registers);
 
-    if (virq_data->virq == VIRQ_INVALID || !vgic_dist_is_enabled(dist) || !is_enabled(dist, irq, vcpu_id)) {
-        if (virq_data->virq == VIRQ_INVALID) {
+    if (virq_data->virq == VIRQ_INVALID || !vgic_dist_is_enabled(dist) || !is_enabled(dist, irq, vcpu_id))
+    {
+        if (virq_data->virq == VIRQ_INVALID)
+        {
             ZF_LOGE("vIRQ data could not be found for IRQ 0x%x\n", irq);
         }
-        if (!vgic_dist_is_enabled(dist)) {
+        if (!vgic_dist_is_enabled(dist))
+        {
             ZF_LOGE("vGIC distributor is not enabled for IRQ 0x%x\n", irq);
         }
-        if (!is_enabled(dist, irq, vcpu_id)) {
+        if (!is_enabled(dist, irq, vcpu_id))
+        {
             ZF_LOGE("vIRQ 0x%x is not enabled\n", irq);
         }
         return false;
     }
 
-    if (is_pending(dist, virq_data->virq, vcpu_id)) {
+    if (is_pending(dist, virq_data->virq, vcpu_id))
+    {
         // Do nothing if it's already pending
         return true;
     }
@@ -203,14 +241,16 @@ static bool vgic_dist_set_pending_irq(vgic_t *vgic, size_t vcpu_id, int irq)
      * now, but in the future this is needed to support IRQ priorities.
      */
     bool success = vgic_irq_enqueue(vgic, vcpu_id, virq_data);
-    if (!success) {
+    if (!success)
+    {
         ZF_LOGE("Failure enqueueing IRQ, increase MAX_IRQ_QUEUE_LEN");
         assert(0);
         return false;
     }
 
     int idx = vgic_find_empty_list_reg(vgic, vcpu_id);
-    if (idx < 0) {
+    if (idx < 0)
+    {
         /* There were no empty list registers available, but that's not a big
          * deal -- we have already enqueued this IRQ and eventually the vGIC
          * maintenance code will load it to a list register from the queue.
@@ -249,7 +289,8 @@ static bool vgic_dist_reg_read(size_t vcpu_id, vgic_t *vgic, uint64_t offset, ui
     int reg_offset = 0;
     uintptr_t base_reg;
     uint32_t *reg_ptr;
-    switch (offset) {
+    switch (offset)
+    {
     case RANGE32(GIC_DIST_CTLR, GIC_DIST_CTLR):
         reg = gic_dist->ctlr;
         break;
@@ -354,7 +395,8 @@ static bool vgic_dist_reg_read(size_t vcpu_id, vgic_t *vgic, uint64_t offset, ui
     case RANGE32(0xDE8, 0xEFC):
         /* Reserved [0xDE8 - 0xE00) */
         /* GIC_DIST_NSACR [0xE00 - 0xF00) - Not supported */
-        break; case RANGE32(GIC_DIST_SGIR, GIC_DIST_SGIR):
+        break;
+    case RANGE32(GIC_DIST_SGIR, GIC_DIST_SGIR):
         reg = gic_dist->sgir;
         break;
     case RANGE32(0xF04, 0xF0C):
@@ -407,7 +449,8 @@ static bool vgic_dist_reg_read(size_t vcpu_id, vgic_t *vgic, uint64_t offset, ui
     assert(success);
 
 fault_return:
-    if (!success) {
+    if (!success)
+    {
         printf("reg read success is false\n");
     }
     // @ivanv: revisit, also make fault_return consistint. it's called something else in vgic_dist_reg_write
@@ -427,14 +470,20 @@ static bool vgic_dist_reg_write(size_t vcpu_id, vgic_t *vgic, uint64_t offset, u
     uint32_t mask = fault_get_data_mask(addr, fsr);
     uint32_t reg_offset = 0;
     uint32_t data;
-    switch (offset) {
+    switch (offset)
+    {
     case RANGE32(GIC_DIST_CTLR, GIC_DIST_CTLR):
         data = fault_get_data(regs, fsr);
-        if (data == GIC_ENABLED) {
+        if (data == GIC_ENABLED)
+        {
             vgic_dist_enable(gic_dist);
-        } else if (data == 0) {
+        }
+        else if (data == 0)
+        {
             vgic_dist_disable(gic_dist);
-        } else {
+        }
+        else
+        {
             ZF_LOGE("Unknown enable register encoding");
             // @ivanv: goto ignore fault?
         }
@@ -471,7 +520,8 @@ static bool vgic_dist_reg_write(size_t vcpu_id, vgic_t *vgic, uint64_t offset, u
         data = fault_get_data(regs, fsr);
         /* Mask the data to write */
         data &= mask;
-        while (data) {
+        while (data)
+        {
             int irq;
             irq = CTZ(data);
             data &= ~(1U << irq);
@@ -483,7 +533,8 @@ static bool vgic_dist_reg_write(size_t vcpu_id, vgic_t *vgic, uint64_t offset, u
         data = fault_get_data(regs, fsr);
         /* Mask the data to write */
         data &= mask;
-        while (data) {
+        while (data)
+        {
             int irq;
             irq = CTZ(data);
             data &= ~(1U << irq);
@@ -495,7 +546,8 @@ static bool vgic_dist_reg_write(size_t vcpu_id, vgic_t *vgic, uint64_t offset, u
         data = fault_get_data(regs, fsr);
         /* Mask the data to write */
         data &= mask;
-        while (data) {
+        while (data)
+        {
             int irq;
             irq = CTZ(data);
             data &= ~(1U << irq);
@@ -508,7 +560,8 @@ static bool vgic_dist_reg_write(size_t vcpu_id, vgic_t *vgic, uint64_t offset, u
         data = fault_get_data(regs, fsr);
         /* Mask the data to write */
         data &= mask;
-        while (data) {
+        while (data)
+        {
             int irq;
             irq = CTZ(data);
             data &= ~(1U << irq);
@@ -559,7 +612,8 @@ static bool vgic_dist_reg_write(size_t vcpu_id, vgic_t *vgic, uint64_t offset, u
         int mode = (data & GIC_DIST_SGI_TARGET_LIST_FILTER_MASK) >> GIC_DIST_SGI_TARGET_LIST_FILTER_SHIFT;
         int virq = (data & GIC_DIST_SGI_INTID_MASK);
         uint16_t target_list = 0;
-        switch (mode) {
+        switch (mode)
+        {
         case GIC_DIST_SGI_TARGET_LIST_SPEC:
             /* Forward VIRQ to VCPUs specified in CPUTargetList */
             target_list = (data & GIC_DIST_SGI_CPU_TARGET_LIST_MASK) >> GIC_DIST_SGI_CPU_TARGET_LIST_SHIFT;
@@ -600,7 +654,7 @@ static bool vgic_dist_reg_write(size_t vcpu_id, vgic_t *vgic, uint64_t offset, u
 #if defined(GIC_V3)
     // @ivanv: explain GICv3 specific stuff, and also don't use the hardcoded valuees
     case RANGE32(0x6100, 0x7F00):
-    // @ivanv revisit
+        // @ivanv revisit
         // data = fault_get_data(fault);
         // ZF_LOGF_IF(data, "bad dist: 0x%x 0x%x", offset, data);
         break;
@@ -611,7 +665,8 @@ static bool vgic_dist_reg_write(size_t vcpu_id, vgic_t *vgic, uint64_t offset, u
     }
 ignore_fault:
     assert(success);
-    if (!success) {
+    if (!success)
+    {
         return false;
     }
 
@@ -620,4 +675,3 @@ ignore_fault:
 
     return success;
 }
-

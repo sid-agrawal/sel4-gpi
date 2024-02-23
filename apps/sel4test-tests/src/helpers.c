@@ -31,8 +31,10 @@ int check_zeroes(seL4_Word addr, seL4_Word size_bytes)
     test_assert_fatal(IS_ALIGNED(size_bytes, sizeof(seL4_Word)));
     seL4_Word *p = (void *)addr;
     seL4_Word size_words = size_bytes / sizeof(seL4_Word);
-    while (size_words--) {
-        if (*p++ != 0) {
+    while (size_words--)
+    {
+        if (*p++ != 0)
+        {
             ZF_LOGE("Found non-zero at position %ld: %lu\n", ((long)p) - (addr), (unsigned long)p[-1]);
             return 0;
         }
@@ -158,28 +160,33 @@ int are_tcbs_distinct(seL4_CPtr tcb1, seL4_CPtr tcb2)
 
     /* Initialise regs to prevent compiler warning. */
     int error = seL4_TCB_ReadRegisters(tcb1, 0, 0, 1, &regs);
-    if (error) {
+    if (error)
+    {
         return -1;
     }
 
-    for (int i = 0; i < 2; ++i) {
+    for (int i = 0; i < 2; ++i)
+    {
         sel4utils_set_instruction_pointer(&regs, i);
         error = seL4_TCB_WriteRegisters(tcb1, 0, 0, 1, &regs);
 
         /* Check that we had permission to do that and the cap was a TCB. */
-        if (error) {
+        if (error)
+        {
             return -1;
         }
 
         error = seL4_TCB_ReadRegisters(tcb2, 0, 0, 1, &regs);
 
         /* Check that we had permission to do that and the cap was a TCB. */
-        if (error) {
+        if (error)
+        {
             return -1;
-        } else if (sel4utils_get_instruction_pointer(regs) != i) {
+        }
+        else if (sel4utils_get_instruction_pointer(regs) != i)
+        {
             return 1;
         }
-
     }
 
     return 0;
@@ -199,7 +206,7 @@ void create_helper_process_custom_asid(env_t env, helper_thread_t *thread, seL4_
     config = process_config_noelf(config, NULL, 0);
     config = process_config_create_cnode(config, TEST_PROCESS_CSPACE_SIZE_BITS);
     config = process_config_create_vspace(config, env->regions, env->num_regions);
-    vka_object_t fault_endpoint = { .cptr = env->endpoint };
+    vka_object_t fault_endpoint = {.cptr = env->endpoint};
     config = process_config_fault_endpoint(config, fault_endpoint);
     error = sel4utils_configure_process_custom(&thread->process, &env->vka, &env->vspace,
                                                config);
@@ -210,7 +217,8 @@ void create_helper_process_custom_asid(env_t env, helper_thread_t *thread, seL4_
     thread->num_regions = env->num_regions;
 
     /* clone data/code into vspace */
-    for (int i = 0; i < env->num_regions; i++) {
+    for (int i = 0; i < env->num_regions; i++)
+    {
         error = sel4utils_bootstrap_clone_into_vspace(&env->vspace, &thread->process.vspace, thread->regions[i].reservation);
         assert(error == 0);
     }
@@ -228,7 +236,8 @@ NORETURN static void signal_helper_finished(seL4_CPtr local_endpoint, int val)
 {
     seL4_MessageInfo_t info = seL4_MessageInfo_new(0, 0, 0, 1);
     seL4_SetMR(0, val);
-    while (true) {
+    while (true)
+    {
         seL4_Call(local_endpoint, info);
     }
 }
@@ -236,11 +245,12 @@ NORETURN static void signal_helper_finished(seL4_CPtr local_endpoint, int val)
 NORETURN static void helper_thread(int argc, char **argv)
 {
 
-    helper_fn_t entry_point = (void *) atol(argv[0]);
-    seL4_CPtr local_endpoint = (seL4_CPtr) atol(argv[1]);
+    helper_fn_t entry_point = (void *)atol(argv[0]);
+    seL4_CPtr local_endpoint = (seL4_CPtr)atol(argv[1]);
 
     seL4_Word args[HELPER_THREAD_MAX_ARGS] = {0};
-    for (int i = 2; i < argc && i - 2 < HELPER_THREAD_MAX_ARGS; i++) {
+    for (int i = 2; i < argc && i - 2 < HELPER_THREAD_MAX_ARGS; i++)
+    {
         assert(argv[i] != NULL);
         args[i - 2] = atol(argv[i]);
     }
@@ -269,20 +279,24 @@ void start_helper(env_t env, helper_thread_t *thread, helper_fn_t entry_point,
 
     seL4_CPtr local_endpoint;
 
-    if (thread->is_process) {
+    if (thread->is_process)
+    {
         /* copy the local endpoint */
         cspacepath_t path;
         vka_cspace_make_path(&env->vka, thread->local_endpoint.cptr, &path);
         local_endpoint = sel4utils_copy_path_to_process(&thread->process, path);
-    } else {
+    }
+    else
+    {
         local_endpoint = thread->local_endpoint.cptr;
     }
 
     sel4utils_create_word_args(thread->args_strings, thread->args, HELPER_THREAD_TOTAL_ARGS,
-                               (seL4_Word) entry_point, local_endpoint,
+                               (seL4_Word)entry_point, local_endpoint,
                                arg0, arg1, arg2, arg3);
 
-    if (thread->is_process) {
+    if (thread->is_process)
+    {
         thread->process.entry_point = (void *)helper_thread;
         error = sel4utils_spawn_process_v(&thread->process, &env->vka, &env->vspace,
                                           HELPER_THREAD_TOTAL_ARGS, thread->args, 0);
@@ -305,9 +319,11 @@ void start_helper(env_t env, helper_thread_t *thread, helper_fn_t entry_point,
         error = seL4_TCB_WriteRegisters(thread->process.thread.tcb.cptr, 1, 0, sizeof(seL4_UserContext) / sizeof(seL4_Word),
                                         &context);
         assert(error == 0);
-    } else {
+    }
+    else
+    {
         error = sel4utils_start_thread(&thread->thread, (sel4utils_thread_entry_fn)helper_thread,
-                                       (void *) HELPER_THREAD_TOTAL_ARGS, (void *) thread->args, 1);
+                                       (void *)HELPER_THREAD_TOTAL_ARGS, (void *)thread->args, 1);
         assert(error == 0);
     }
 }
@@ -317,16 +333,20 @@ void cleanup_helper(env_t env, helper_thread_t *thread)
     seL4_TCB_Suspend(thread->thread.tcb.cptr);
     vka_free_object(&env->vka, &thread->local_endpoint);
 
-    if (thread->is_process) {
+    if (thread->is_process)
+    {
         /* free the regions (no need to unmap, as the
-        * entry address space / cspace is being destroyed */
-        for (int i = 0; i < thread->num_regions; i++) {
+         * entry address space / cspace is being destroyed */
+        for (int i = 0; i < thread->num_regions; i++)
+        {
             vspace_free_reservation(&thread->process.vspace, thread->regions[i].reservation);
         }
 
         thread->process.fault_endpoint.cptr = 0;
         sel4utils_destroy_process(&thread->process, &env->vka);
-    } else {
+    }
+    else
+    {
         sel4utils_clean_up_thread(&env->vka, &env->vspace, &thread->thread);
     }
 }
@@ -421,11 +441,12 @@ static void sel4test_send_time_request(seL4_CPtr ep, uint64_t ns, sel4test_outpu
     seL4_MessageInfo_t tag;
     seL4_SetMR(0, request_type);
 
-    switch (request_type) {
+    switch (request_type)
+    {
     case SEL4TEST_TIME_TIMEOUT:
         seL4_SetMR(1, timeout_type);
         sel4utils_64_set_mr(2, ns);
-        tag = seL4_MessageInfo_new(0, 0, 0, (seL4_Uint32) SEL4UTILS_64_WORDS + 2);
+        tag = seL4_MessageInfo_new(0, 0, 0, (seL4_Uint32)SEL4UTILS_64_WORDS + 2);
         break;
     case SEL4TEST_TIME_TIMESTAMP:
     case SEL4TEST_TIME_RESET:
@@ -444,13 +465,18 @@ void sleep_busy(env_t env, uint64_t ns)
     uint64_t start = sel4test_timestamp(env);
     uint64_t now = sel4test_timestamp(env);
     int same = 0;
-    while (now < start + ns) {
-        if (now == start) {
+    while (now < start + ns)
+    {
+        if (now == start)
+        {
             same++;
-            if (same == 10000) {
+            if (same == 10000)
+            {
                 ZF_LOGE("Timer hasn't moved in 10000 iterations, are you handling interrupts?");
             }
-        } else {
+        }
+        else
+        {
             same = 0;
         }
         now = sel4test_timestamp(env);
@@ -510,7 +536,8 @@ int set_helper_sched_params(UNUSED env_t env, UNUSED helper_thread_t *thread, UN
                             UNUSED uint64_t period, UNUSED seL4_Word badge)
 {
     seL4_Word refills = 0;
-    if (budget < period) {
+    if (budget < period)
+    {
 #ifdef CONFIG_KERNEL_MCS
         refills = seL4_MaxExtraRefills(seL4_MinSchedContextBits);
 #endif
@@ -552,7 +579,6 @@ int restart_after_syscall(env_t env, helper_thread_t *helper)
     /* skip the call */
     sel4utils_set_instruction_pointer(&regs, sel4utils_get_instruction_pointer(regs) + ARCH_SYSCALL_INSTRUCTION_SIZE);
 
-
     error = seL4_TCB_WriteRegisters(helper->thread.tcb.cptr, true, 0,
                                     sizeof(seL4_UserContext) / sizeof(seL4_Word), &regs);
     test_eq(error, seL4_NoError);
@@ -565,7 +591,8 @@ void set_helper_tfep(env_t env, helper_thread_t *thread, seL4_CPtr tfep)
     ZF_LOGF_IF(!config_set(CONFIG_KERNEL_MCS), "Unsupported on non MCS kernel");
 #ifdef CONFIG_KERNEL_MCS
     int error = seL4_TCB_SetTimeoutEndpoint(thread->thread.tcb.cptr, tfep);
-    if (error != seL4_NoError) {
+    if (error != seL4_NoError)
+    {
         ZF_LOGF("Failed to set tfep\n");
     }
 #endif
@@ -575,13 +602,15 @@ void calculateSD(float data[], float *mean, float *sd,
 {
     int i;
 
-    int n = end - start +1;
+    int n = end - start + 1;
     float sum = 0.0;
-    for (i = 1; i < n; ++i) {
+    for (i = 1; i < n; ++i)
+    {
         sum += data[i];
     }
     *mean = sum / n;
-    for (i = start; i < end; ++i) {
+    for (i = start; i < end; ++i)
+    {
         *sd += pow(data[i] - *mean, 2);
     }
     *sd = *sd / n;

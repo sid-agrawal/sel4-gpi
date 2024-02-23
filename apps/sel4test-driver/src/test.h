@@ -28,17 +28,19 @@
 #define HELLO_APP "hello"
 #define MAX_MO_CHILD 10
 #define RAMDISK_APP "ramdisk_server"
-//#define RAMDISK_IN_RT
+// #define RAMDISK_IN_RT
 
 #define MAX_TIMER_IRQS 4
 
-struct timer_callback_info {
+struct timer_callback_info
+{
     irq_callback_fn_t callback;
     void *callback_data;
 };
 typedef struct timer_callback_info timer_callback_info_t;
 
-struct driver_env {
+struct driver_env
+{
     /* An initialised vka that may be used by the test. */
     vka_t vka;
     /* virtual memory management interface */
@@ -83,14 +85,13 @@ struct driver_env {
     sel4utils_process_t test_process;
     seL4_CPtr endpoint;
 
-
     /* Add for libsel4gpi */
     seL4_CPtr gpi_endpoint_in_parent;
 
-    seL4_CPtr child_ads_cptr_in_child; //Child address-space cptr in child
-    seL4_CPtr child_cpu_cptr_in_child; //Child cpu cptr in child
-    seL4_CPtr child_pd_cptr_in_child; //Child PD cptr in child
-    seL4_CPtr child_mo_cptr_in_child[10]; //Child PD cptr in child
+    seL4_CPtr child_ads_cptr_in_child;    // Child address-space cptr in child
+    seL4_CPtr child_cpu_cptr_in_child;    // Child cpu cptr in child
+    seL4_CPtr child_pd_cptr_in_child;     // Child PD cptr in child
+    seL4_CPtr child_mo_cptr_in_child[10]; // Child PD cptr in child
     seL4_CPtr gpi_endpoint_in_child;
 
     /* Add for libramdisk */
@@ -117,4 +118,3 @@ void plat_init(driver_env_t env) WEAK;
 #ifdef CONFIG_TK1_SMMU
 seL4_SlotRegion arch_copy_iospace_caps_to_process(sel4utils_process_t *process, driver_env_t env);
 #endif
-

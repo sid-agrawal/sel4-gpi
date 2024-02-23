@@ -5,11 +5,11 @@
  */
 #pragma once
 
-#define TEST_SOFTWARE_BREAK_ASM() \
-    asm volatile( \
+#define TEST_SOFTWARE_BREAK_ASM()         \
+    asm volatile(                         \
         ".global sbreak, post_sbreak\n\t" \
         ".type post_sbreak, function\n\t" \
-        "sbreak:\n\t" \
+        "sbreak:\n\t"                     \
         "bkpt\n\t")
 
 /* Tell C about the symbols exported by the ASM above. */

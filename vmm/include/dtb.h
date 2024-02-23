@@ -18,7 +18,8 @@
  * mentions only the big-endian representation. */
 #define DTB_MAGIC 0xEDFE0DD0
 
-struct dtb_header {
+struct dtb_header
+{
     uint32_t magic;
     uint32_t totalsize;
     uint32_t off_dt_struct;
@@ -31,6 +32,7 @@ struct dtb_header {
     uint32_t size_dt_struct;
 };
 
-bool dtb_check_magic(struct dtb_header *h) {
+bool dtb_check_magic(struct dtb_header *h)
+{
     return h->magic == DTB_MAGIC;
 }

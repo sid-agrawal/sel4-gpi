@@ -9,7 +9,8 @@
 // #include <utils/zf_log.h>
 #include <vmm/vmm.h>
 
-void tcb_print_regs(size_t vcpu_id) {
+void tcb_print_regs(size_t vcpu_id)
+{
     /*
      * While we are potentially doing an extra system call in order to read the
      * TCB registers (as the VMM may have already read the TCB registers before
@@ -20,7 +21,8 @@ void tcb_print_regs(size_t vcpu_id) {
     seL4_UserContext regs;
     seL4_Error err = seL4_TCB_ReadRegisters(BASE_VM_TCB_CAP + vcpu_id, false, 0, SEL4_USER_CONTEXT_SIZE, &regs);
     assert(err == seL4_NoError);
-    if (err != seL4_NoError) {
+    if (err != seL4_NoError)
+    {
         ZF_LOGE("Could not read TCB registers when trying to print TCB registers\n");
         return;
     }

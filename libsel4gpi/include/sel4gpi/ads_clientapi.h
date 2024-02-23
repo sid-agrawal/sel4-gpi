@@ -14,9 +14,10 @@
 #include <sel4gpi/ads_component.h>
 #include <sel4gpi/mo_clientapi.h>
 
-typedef struct _ads_client_context {
+typedef struct _ads_client_context
+{
    cspacepath_t badged_server_ep_cspath;
-   //cspacepath_t public_server_ep_cspath;
+   // cspacepath_t public_server_ep_cspath;
 } ads_client_context_t;
 
 /**
@@ -28,9 +29,8 @@ typedef struct _ads_client_context {
  * @return int 0 on success, -1 on failure.
  */
 int ads_component_client_connect(seL4_CPtr server_ep_cap,
-                                  vka_t *client_vka,
-                                  ads_client_context_t *ret_conn);
-
+                                 vka_t *client_vka,
+                                 ads_client_context_t *ret_conn);
 
 /**
  * @brief   Disconnect the ads client.
@@ -47,7 +47,7 @@ int ads_component_client_disconnect(ads_client_context_t *conn);
  * @param vaddr virtual address to attach at, can be NULL
  * @param mo_cap MO cap of the memory to attach
  * @param ret_vaddr virtual address where the MO was attached.
-* @return int 0 on success, -1 on failure.
+ * @return int 0 on success, -1 on failure.
  */
 int ads_client_attach(ads_client_context_t *conn,
                       void *vaddr,
@@ -62,7 +62,7 @@ int ads_client_attach(ads_client_context_t *conn,
  * @param size size of the attached region
  * @return int 0 on success, -1 on failure.
  */
-int ads_client_rm(ads_client_context_t *conn, void* vaddr, size_t size);
+int ads_client_rm(ads_client_context_t *conn, void *vaddr, size_t size);
 
 /**
  * @brief Attach a given ads to to a given CPU cap.
@@ -73,7 +73,6 @@ int ads_client_rm(ads_client_context_t *conn, void* vaddr, size_t size);
  */
 int ads_client_bind_cpu(ads_client_context_t *conn, seL4_CPtr cpu_cap);
 
-
 /**
  * @brief Shallow Copy the ads cap, that is make a new ADS cap that is a copy of the original.
  * @param conn original ads connection object
@@ -81,8 +80,8 @@ int ads_client_bind_cpu(ads_client_context_t *conn, seL4_CPtr cpu_cap);
  * @param ads_cap_ret return cap
  * @return int 0 on success, -1 on failure.
  */
-int ads_client_shallow_copy(ads_client_context_t *conn, vka_t *vka, void* omit_vaddr,
-                     ads_client_context_t *conn_ret);
+int ads_client_shallow_copy(ads_client_context_t *conn, vka_t *vka, void *omit_vaddr,
+                            ads_client_context_t *conn_ret);
 
 /**
  * @brief Dump the resource relations of the ads.

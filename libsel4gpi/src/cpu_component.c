@@ -32,7 +32,8 @@
 #include <sel4gpi/badge_usage.h>
 #include <sel4gpi/debug.h>
 
-uint64_t cpu_assign_new_badge_and_objectID(cpu_component_registry_entry_t *reg) {
+uint64_t cpu_assign_new_badge_and_objectID(cpu_component_registry_entry_t *reg)
+{
     get_cpu_component()->registry_n_entries++;
     // Add the latest ID to the obj and to the badlge.
     seL4_Word badge_val = gpi_new_badge(GPICAP_TYPE_CPU,
@@ -67,25 +68,26 @@ static inline void reply(seL4_MessageInfo_t tag)
     api_reply(get_cpu_component()->server_thread.reply.cptr, tag);
 }
 
-
 /**
  * @brief Insert a new client into the client registry Linked List.
  *
  * @param new_node
  */
-static void cpu_component_registry_insert(cpu_component_registry_entry_t *new_node) {
-        // TODO:Use a mutex
-
+static void cpu_component_registry_insert(cpu_component_registry_entry_t *new_node)
+{
+    // TODO:Use a mutex
 
     cpu_component_registry_entry_t *head = get_cpu_component()->client_registry;
 
-    if (head == NULL) {
+    if (head == NULL)
+    {
         get_cpu_component()->client_registry = new_node;
         new_node->next = NULL;
         return;
     }
 
-    while (head->next != NULL) {
+    while (head->next != NULL)
+    {
         head = head->next;
     }
     head->next = new_node;
@@ -98,13 +100,16 @@ static void cpu_component_registry_insert(cpu_component_registry_entry_t *new_no
  * @param badge
  * @return cpu_component_registry_entry_t*
  */
-static cpu_component_registry_entry_t *cpu_component_registry_get_entry_by_badge(seL4_Word badge){
+static cpu_component_registry_entry_t *cpu_component_registry_get_entry_by_badge(seL4_Word badge)
+{
 
     uint64_t objectID = get_object_id_from_badge(badge);
     cpu_component_registry_entry_t *current_ctx = get_cpu_component()->client_registry;
 
-    while (current_ctx != NULL) {
-        if ((seL4_Word)current_ctx->cpu.cpu_obj_id == objectID) {
+    while (current_ctx != NULL)
+    {
+        if ((seL4_Word)current_ctx->cpu.cpu_obj_id == objectID)
+        {
             break;
         }
         current_ctx = current_ctx->next;
@@ -137,7 +142,6 @@ void cpu_handle_allocation_request(seL4_MessageInfo_t *reply_tag)
         return;
     }
 
-
     /* Create a badged endpoint for the client to send messages to.
      * Use the address of the client_registry_entry as the badge.
      */
@@ -151,9 +155,9 @@ void cpu_handle_allocation_request(seL4_MessageInfo_t *reply_tag)
     // Add the latest ID to the obj and to the badlge.
     seL4_Word badge = cpu_assign_new_badge_and_objectID(client_reg_ptr);
     error = vka_cnode_mint(&dest,
-                               &src,
-                               seL4_AllRights,
-                               badge);
+                           &src,
+                           seL4_AllRights,
+                           badge);
     if (error)
     {
         OSDB_PRINTF(CPUSERVS "main: Failed to mint client badge %lx.\n", badge);
@@ -168,7 +172,7 @@ void cpu_handle_allocation_request(seL4_MessageInfo_t *reply_tag)
 static void handle_start_req(seL4_Word sender_badge, seL4_MessageInfo_t old_tag, seL4_CPtr received_cap)
 {
     OSDB_PRINTF(CPUSERVS "main: Got start request from client badge %lx.\n",
-           sender_badge);
+                sender_badge);
 
     int error;
     /* Find the client */
@@ -187,17 +191,16 @@ static void handle_start_req(seL4_Word sender_badge, seL4_MessageInfo_t old_tag,
     error = cpu_start(&client_data->cpu,
                       (sel4utils_thread_entry_fn)seL4_GetMR(1), // entry poin:2ut
                       0);
-    if (error) {
+    if (error)
+    {
         OSDB_PRINTF(CPUSERVS "main: Failed to start CPU.\n");
         return;
     }
-
 
     seL4_SetMR(CPUMSGREG_FUNC, CPU_FUNC_START_ACK);
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0, CPUMSGREG_START_ACK_END);
     return reply(tag);
 }
-
 
 static void handle_config_req(seL4_Word sender_badge,
                               seL4_MessageInfo_t old_tag,
@@ -228,7 +231,7 @@ static void handle_config_req(seL4_Word sender_badge,
     if (client_data == NULL)
     {
         OSDB_PRINTF(CPUSERVS "main: Failed to find client badge %lx.\n",
-               sender_badge);
+                    sender_badge);
         assert(0);
         return;
     }
@@ -268,13 +271,13 @@ static void handle_config_req(seL4_Word sender_badge,
 
     seL4_SetMR(CPUMSGREG_FUNC, CPU_FUNC_CONFIG_ACK);
     seL4_SetMR(1, 0xdead);
-    seL4_MessageInfo_t tag = seL4_MessageInfo_new(error, 0, 0, 1+ CPUMSGREG_CONFIG_ACK_END);
+    seL4_MessageInfo_t tag = seL4_MessageInfo_new(error, 0, 0, 1 + CPUMSGREG_CONFIG_ACK_END);
     return reply(tag);
 }
 
 static void handle_change_vspace_req(seL4_Word sender_badge,
-                              seL4_MessageInfo_t old_tag,
-                              seL4_CPtr received_cap)
+                                     seL4_MessageInfo_t old_tag,
+                                     seL4_CPtr received_cap)
 {
     // Find the client - like start
     OSDB_PRINTF(CPUSERVS "-----main: Got change vsspace  request from:");
@@ -301,7 +304,7 @@ static void handle_change_vspace_req(seL4_Word sender_badge,
     if (client_data == NULL)
     {
         OSDB_PRINTF(CPUSERVS "main: Failed to find client badge %lx.\n",
-               sender_badge);
+                    sender_badge);
         assert(0);
         return;
     }
@@ -335,7 +338,7 @@ static void handle_change_vspace_req(seL4_Word sender_badge,
 
     seL4_SetMR(CPUMSGREG_FUNC, CPU_FUNC_CONFIG_ACK);
     seL4_SetMR(1, 0xdead);
-    seL4_MessageInfo_t tag = seL4_MessageInfo_new(error, 0, 0, 1+ CPUMSGREG_CONFIG_ACK_END);
+    seL4_MessageInfo_t tag = seL4_MessageInfo_new(error, 0, 0, 1 + CPUMSGREG_CONFIG_ACK_END);
     return reply(tag);
 }
 
@@ -367,15 +370,13 @@ int forge_cpu_cap_from_tcb(sel4utils_process_t *process, // Change this to the s
     seL4_Word badge = cpu_assign_new_badge_and_objectID(client_reg_ptr);
     cpu_component_registry_insert(client_reg_ptr);
 
-
     // (XXX) A lot more will go here.
     client_reg_ptr->cpu.tcb = &(process->thread.tcb);
-    client_reg_ptr->cpu.ipc_buffer_addr = (void *)  process->thread.ipc_buffer_addr;
+    client_reg_ptr->cpu.ipc_buffer_addr = (void *)process->thread.ipc_buffer_addr;
     client_reg_ptr->cpu.ipc_buffer_frame = process->thread.ipc_buffer;
     client_reg_ptr->cpu.stack_top = process->thread.stack_top;
     // client_reg_ptr->cpu.tls_base = &process->thread.tls_base;
     client_reg_ptr->cpu.cspace = process->cspace.cptr;
-
 
     int error = vka_cnode_mint(&dest,
                                &src,
@@ -419,7 +420,7 @@ void cpu_component_handle(seL4_MessageInfo_t tag,
         handle_change_vspace_req(sender_badge, tag, received_cap->capPtr);
         break;
     default:
-        gpi_panic(CPUSERVS "Unknown func type.", (seL4_Word) func);
+        gpi_panic(CPUSERVS "Unknown func type.", (seL4_Word)func);
         break;
     }
 }

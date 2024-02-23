@@ -14,20 +14,20 @@
 // as in initialising the vgic should depend on the runtime values
 #if defined(BOARD_qemu_arm_virt)
 #define GIC_V2
-#define GIC_DIST_PADDR      0x8000000
+#define GIC_DIST_PADDR 0x8000000
 #elif defined(BOARD_odroidc2_hyp)
 #define GIC_V2
-#define GIC_DIST_PADDR      0xc4301000
+#define GIC_DIST_PADDR 0xc4301000
 #elif defined(BOARD_odroidc4)
 #define GIC_V2
-#define GIC_DIST_PADDR      0xffc01000
+#define GIC_DIST_PADDR 0xffc01000
 #elif defined(BOARD_rpi4b_hyp)
 #define GIC_V2
-#define GIC_DIST_PADDR      0xff841000
+#define GIC_DIST_PADDR 0xff841000
 #elif defined(BOARD_imx8mm_evk_hyp)
 #define GIC_V3
-#define GIC_DIST_PADDR      0x38800000
-#define GIC_REDIST_PADDR    0x38880000
+#define GIC_DIST_PADDR 0x38800000
+#define GIC_REDIST_PADDR 0x38880000
 #else
 #error Need to define GIC addresses
 #endif
@@ -35,8 +35,8 @@
 #if defined(GIC_V2)
 #define GIC_DIST_SIZE 0x1000
 #elif defined(GIC_V3)
-#define GIC_DIST_SIZE       0x10000
-#define GIC_REDIST_SIZE     0xc0000
+#define GIC_DIST_SIZE 0x10000
+#define GIC_REDIST_SIZE 0xc0000
 #else
 #error Unknown GIC version
 #endif
@@ -46,15 +46,31 @@
 // #define DEBUG_DIST
 
 #if defined(DEBUG_IRQ)
-#define LOG_IRQ(...) do{ printf("VGIC|IRQ: "); printf(__VA_ARGS__); }while(0)
+#define LOG_IRQ(...)          \
+    do                        \
+    {                         \
+        printf("VGIC|IRQ: "); \
+        printf(__VA_ARGS__);  \
+    } while (0)
 #else
-#define LOG_IRQ(...) do{}while(0)
+#define LOG_IRQ(...) \
+    do               \
+    {                \
+    } while (0)
 #endif
 
 #if defined(DEBUG_DIST)
-#define LOG_DIST(...) do{ printf("VGIC|DIST: "); printf(__VA_ARGS__); }while(0)
+#define LOG_DIST(...)          \
+    do                         \
+    {                          \
+        printf("VGIC|DIST: "); \
+        printf(__VA_ARGS__);   \
+    } while (0)
 #else
-#define LOG_DIST(...) do{}while(0)
+#define LOG_DIST(...) \
+    do                \
+    {                 \
+    } while (0)
 #endif
 
 void vgic_init();

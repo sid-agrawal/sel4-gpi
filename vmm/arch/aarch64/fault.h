@@ -11,8 +11,8 @@
 #include <stddef.h>
 
 /* Fault-handling functions */
-bool fault_handle(size_t vcpu_id 
-// microkit_msginfo msginfo // XXX
+bool fault_handle(size_t vcpu_id
+                  // microkit_msginfo msginfo // XXX
 );
 
 bool fault_handle_vcpu_exception(size_t vcpu_id);

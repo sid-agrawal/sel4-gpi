@@ -11,25 +11,24 @@
 #include "../helpers.h"
 #include <stdio.h>
 
-#include<sel4gpi/debug.h>
-#include<sel4gpi/model_exporting.h>
+#include <sel4gpi/debug.h>
+#include <sel4gpi/model_exporting.h>
 
 #include <sel4bench/arch/sel4bench.h>
 
 char *csv_buffer =
-"RESOURCE_FROM,RESOURCE_TO,RES_TYPE,RES_ID,PD_NAME,PD_FROM,PD_TO,PD_ID,IS_MAPPED\n"
-",V.2,,,,PD.2.0,,,FALSE\n"
-",V.1,,,,PD.1.0,,,TRUE\n"
-",,,,,PD.1.0,PD.0.0,,\n"
-",,,,,PD.2.0,PD.0.0,,\n"
-"V.1,P.1,,,,,,,\n"
-"V.2,P.2,,,,,,,\n"
-",,,,Proc2,,,PD.2.0,\n"
-",,,,Proc1,,,PD.1.0,\n"
-",,,,OS_0,,,PD.0.0,\n"
-",,Virtual,V.2,,,,,\n"
-",,Virtual,V.1,,,,,\n";
-
+    "RESOURCE_FROM,RESOURCE_TO,RES_TYPE,RES_ID,PD_NAME,PD_FROM,PD_TO,PD_ID,IS_MAPPED\n"
+    ",V.2,,,,PD.2.0,,,FALSE\n"
+    ",V.1,,,,PD.1.0,,,TRUE\n"
+    ",,,,,PD.1.0,PD.0.0,,\n"
+    ",,,,,PD.2.0,PD.0.0,,\n"
+    "V.1,P.1,,,,,,,\n"
+    "V.2,P.2,,,,,,,\n"
+    ",,,,Proc2,,,PD.2.0,\n"
+    ",,,,Proc1,,,PD.1.0,\n"
+    ",,,,OS_0,,,PD.0.0,\n"
+    ",,Virtual,V.2,,,,,\n"
+    ",,Virtual,V.1,,,,,\n";
 
 int test_model_state_export(env_t env)
 {
@@ -57,7 +56,8 @@ int test_model_state_export(env_t env)
     add_has_access_to(&model_state, "PD.2.0", "V.2", false);
 
     export_model_state(&model_state, output_buffer, sizeof(output_buffer));
-    if (strncmp(output_buffer, csv_buffer, sizeof(output_buffer)) != 0) {
+    if (strncmp(output_buffer, csv_buffer, sizeof(output_buffer)) != 0)
+    {
 
         printf("Expected:\n%s\n", csv_buffer);
         printf("Got:\n%s\n", output_buffer);

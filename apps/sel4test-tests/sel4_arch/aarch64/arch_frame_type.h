@@ -14,7 +14,14 @@
  * We do not include the huge page as none of our supported platforms have enough
  * memory to allocate a 1gb frame after kernel and user space is loaded */
 static const frame_type_t frame_types[] = {
-    { seL4_ARM_LargePageObject, 0, seL4_LargePageBits, },
-    { seL4_ARM_SmallPageObject, BIT(seL4_LargePageBits), seL4_PageBits, },
+    {
+        seL4_ARM_LargePageObject,
+        0,
+        seL4_LargePageBits,
+    },
+    {
+        seL4_ARM_SmallPageObject,
+        BIT(seL4_LargePageBits),
+        seL4_PageBits,
+    },
 };
-

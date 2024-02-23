@@ -106,7 +106,7 @@ uint xv6fs_file_ino(void *file)
 struct file *
 xv6fs_sys_open(char *path, int omode)
 {
-  //printf("%s: for path %s\n", __func__, path);
+  // printf("%s: for path %s\n", __func__, path);
 
   struct file *f;
   struct inode *ip;
@@ -191,7 +191,7 @@ int xv6fs_sys_write(void *fh, char *buf, size_t sz, uint off)
 
 int xv6fs_sys_fstat(char *path, void *buf)
 {
-  //printf("xv6fs_sys_fstat opening %s\n", path);
+  // printf("xv6fs_sys_fstat opening %s\n", path);
   struct file *f = xv6fs_sys_open(path, O_RDONLY);
   if (f == 0)
     return -1;
@@ -214,7 +214,7 @@ int xv6fs_sys_readdirent(void *fh, struct dirent *e, uint off)
 
 int xv6fs_sys_truncate(char *path)
 {
-  //printf("xv6fs_sys_truncate opening %s\n", path);
+  // printf("xv6fs_sys_truncate opening %s\n", path);
   struct file *f = xv6fs_sys_open(path, O_RDWR);
   if (f == 0)
     return -1;
@@ -389,7 +389,7 @@ int xv6fs_sys_rename(char *path1, char *path2)
 
 int xv6fs_sys_utime(char *path, int time)
 {
-  //printf("xv6fs_sys_utime opening %s\n", path);
+  // printf("xv6fs_sys_utime opening %s\n", path);
   struct file *f = xv6fs_sys_open(path, O_WRONLY);
   if (f == 0)
     return -1;
@@ -460,11 +460,11 @@ int xv6fs_sys_fcntl(void *fh, int cmd, unsigned long arg)
   case F_SETFL:
     uint64 flags_mask = O_APPEND | O_ASYNC | O_NONBLOCK;
     f->flags = (f->flags & ~flags_mask) | (arg & flags_mask);
-    //printf("xv6fs_sys_fcntl: F_SETFL\n");
+    // printf("xv6fs_sys_fcntl: F_SETFL\n");
     break;
   case F_GETFL:
     res = f->flags;
-    //printf("xv6fs_sys_fcntl: F_GETFL\n");
+    // printf("xv6fs_sys_fcntl: F_GETFL\n");
     break;
   case F_GETOWN:
     printf("xv6fs_sys_fcntl: Unsupported cmd F_GETOWN\n");
@@ -473,15 +473,15 @@ int xv6fs_sys_fcntl(void *fh, int cmd, unsigned long arg)
     printf("xv6fs_sys_fcntl: Unsupported cmd F_DUPFD_CLOEXEC\n");
     break;
   case F_SETLK:
-    //printf("xv6fs_sys_fcntl: F_SETLK\n");
+    // printf("xv6fs_sys_fcntl: F_SETLK\n");
     break;
   case F_SETLKW:
-    //printf("xv6fs_sys_fcntl: F_SETLKW\n");
+    // printf("xv6fs_sys_fcntl: F_SETLKW\n");
     break;
   case F_GETLK:
-    struct flock* lk = (struct flock*) arg;
+    struct flock *lk = (struct flock *)arg;
     lk->l_type = F_UNLCK;
-    //printf("xv6fs_sys_fcntl: F_GETLK\n");
+    // printf("xv6fs_sys_fcntl: F_GETLK\n");
     break;
   case F_GETOWN_EX:
     printf("xv6fs_sys_fcntl: Unsupported cmd F_GETOWN_EX\n");

@@ -1,4 +1,4 @@
-        /*
+/*
  * Copyright 2017, Data61, CSIRO (ABN 41 687 119 230)
  *
  * SPDX-License-Identifier: BSD-2-Clause
@@ -16,18 +16,17 @@
 #include <stdio.h>
 #include <unistd.h>
 
-#include<sel4gpi/pd_clientapi.h>
+#include <sel4gpi/pd_clientapi.h>
 #include <sel4bench/arch/sel4bench.h>
 #include <sel4/sel4.h>
 #include <vka/capops.h>
 #include <vmm/vmm.h>
 
-
 int test_new_vmm(env_t env)
 {
     int error;
     printf("------------------STARTING: %s------------------\n", __func__);
-    
+
     vmm_env_t *vmm_e = vm_setup(env->irq_handler, &env->vka, &env->vspace, env->page_directory, env->asid_pool, &env->simple);
     vm_init(vmm_e);
 
@@ -38,7 +37,6 @@ int test_new_vmm(env_t env)
     {
         seL4_Yield();
     }
-    
 
     return sel4test_get_result();
 }

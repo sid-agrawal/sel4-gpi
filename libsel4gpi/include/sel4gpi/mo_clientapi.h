@@ -13,9 +13,10 @@
 
 #include <sel4gpi/mo_component.h>
 
-typedef struct _mo_client_context {
+typedef struct _mo_client_context
+{
    cspacepath_t badged_server_ep_cspath;
-   //cspacepath_t public_server_ep_cspath;
+   // cspacepath_t public_server_ep_cspath;
 } mo_client_context_t;
 
 /**
@@ -27,10 +28,9 @@ typedef struct _mo_client_context {
  * @return int 0 on success, -1 on failure.
  */
 int mo_component_client_connect(seL4_CPtr server_ep_cap,
-                              seL4_CPtr free_slot,
-                              seL4_Word num_pages,
-                              mo_client_context_t *ret_conn);
-
+                                seL4_CPtr free_slot,
+                                seL4_Word num_pages,
+                                mo_client_context_t *ret_conn);
 
 /**
  * @brief   Disconnect the MO client.

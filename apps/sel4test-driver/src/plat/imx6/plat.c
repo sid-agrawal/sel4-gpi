@@ -16,12 +16,14 @@ void plat_init(driver_env_t env)
     clk_t *clk;
 
     error = clock_sys_init(&env->ops, &clock);
-    if (error != 0) {
+    if (error != 0)
+    {
         ZF_LOGF("Failed to initalise clock");
     }
 
     clk = clk_get_clock(&clock, CLK_ARM);
-    if (clk == NULL) {
+    if (clk == NULL)
+    {
         ZF_LOGF("Failed to get clock");
     }
 

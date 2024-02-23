@@ -1,5 +1,5 @@
 
-/** 
+/**
  * @file API for a client process to communicate with the ramdisk server
  */
 
@@ -71,5 +71,5 @@ int ramdisk_client_write(ramdisk_client_context_t *conn, mo_client_context_t *mo
 
 /**
  * Get the block size of the ramdisk
-*/
+ */
 uint64_t get_ramdisk_block_size();

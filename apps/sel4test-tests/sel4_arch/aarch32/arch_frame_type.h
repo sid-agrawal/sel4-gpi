@@ -12,9 +12,24 @@
 
 /* This list must be ordered by size - highest first */
 static const frame_type_t frame_types[] = {
-    { seL4_ARM_SuperSectionObject, 0, 24, },
-    { seL4_ARM_SectionObject, BIT(24), 20, },
-    { seL4_ARM_LargePageObject, BIT(24) + BIT(20), 16, },
-    { seL4_ARM_SmallPageObject, BIT(24) + BIT(20) + BIT(16), seL4_PageBits, },
+    {
+        seL4_ARM_SuperSectionObject,
+        0,
+        24,
+    },
+    {
+        seL4_ARM_SectionObject,
+        BIT(24),
+        20,
+    },
+    {
+        seL4_ARM_LargePageObject,
+        BIT(24) + BIT(20),
+        16,
+    },
+    {
+        seL4_ARM_SmallPageObject,
+        BIT(24) + BIT(20) + BIT(16),
+        seL4_PageBits,
+    },
 };
-

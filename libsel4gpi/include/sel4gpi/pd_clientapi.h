@@ -18,9 +18,10 @@
 #define PD_CAP_ROOT SEL4UTILS_CNODE_SLOT
 #define PD_CAP_DEPTH seL4_WordBits
 
-typedef struct _pd_client_context {
+typedef struct _pd_client_context
+{
    cspacepath_t badged_server_ep_cspath;
-   //cspacepath_t public_server_ep_cspath;
+   // cspacepath_t public_server_ep_cspath;
 } pd_client_context_t;
 
 /**
@@ -32,9 +33,8 @@ typedef struct _pd_client_context {
  * @return int 0 on success, -1 on failure.
  */
 int pd_component_client_connect(seL4_CPtr server_ep_cap,
-                              vka_t *client_vka,
-                              pd_client_context_t *ret_conn);
-
+                                vka_t *client_vka,
+                                pd_client_context_t *ret_conn);
 
 /**
  * @brief   Disconnect the pd client.
@@ -54,7 +54,6 @@ int pd_component_client_disconnect(pd_client_context_t *conn);
 int pd_client_load(pd_client_context_t *pd_os_cap,
                    ads_client_context_t *ads_os_cap,
                    const char *image);
-
 
 /**
  * @brief Send a cap to PD and gets the slot number in the PD.
@@ -93,7 +92,7 @@ int pd_client_free_slot(pd_client_context_t *conn,
  * @return int 0 on success, -1 on failure.
  */
 int pd_client_alloc_ep(pd_client_context_t *conn,
-                        seL4_CPtr *ret_ep);
+                       seL4_CPtr *ret_ep);
 
 /**
  * @brief Create a badged copy of an endpoint capability
@@ -105,9 +104,9 @@ int pd_client_alloc_ep(pd_client_context_t *conn,
  * @return int 0 on success, -1 on failure.
  */
 int pd_client_badge_ep(pd_client_context_t *conn,
-                        seL4_CPtr src_ep,
-                        seL4_Word badge,
-                        seL4_CPtr *ret_ep);
+                       seL4_CPtr src_ep,
+                       seL4_Word badge,
+                       seL4_CPtr *ret_ep);
 
 /**
  * @brief Dump the PD.
@@ -115,9 +114,9 @@ int pd_client_badge_ep(pd_client_context_t *conn,
  * @param buf buffer to dump the PD into
  * @param size size of the buffer
  * @return int 0 on success, -1 on failure.
-*/
+ */
 int pd_client_dump(pd_client_context_t *conn,
-                   char *buf , size_t size);
+                   char *buf, size_t size);
 
 /**
  * @brief Start the pd oject.

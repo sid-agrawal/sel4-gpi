@@ -85,7 +85,7 @@ void export_model_state(model_state_t *model_state, char *buffer, size_t buf_len
     csv_row_t *current_row = model_state->csv_rows;
     uint8_t width = 0;
 
-   while (current_row != NULL)
+    while (current_row != NULL)
     {
         size_t buf_written = snprintf(buffer, buf_len - buf_written_total,
                                       "%-*s,%-*s,%-*s,%-*s,%-*s,%-*s,%-*s,%-*s,%-*s\n",
@@ -111,7 +111,7 @@ void export_model_state(model_state_t *model_state, char *buffer, size_t buf_len
         buffer += buf_written;
         buf_written_total += buf_written;
 
-        current_row =current_row->next;
+        current_row = current_row->next;
 
         if (buf_written_total >= buf_len)
         {
@@ -132,30 +132,30 @@ void print_model_state(model_state_t *model_state)
     csv_row_t *current_row = model_state->csv_rows;
     uint8_t width = 0;
 
-   while (current_row != NULL)
-   {
-       printf("%-*s,%-*s,%-*s,%-*s,%-*s,%-*s,%-*s,%-*s,%-*s\n",
-              width,
-              current_row->resource_from,
-              width,
-              current_row->resource_to,
-              width,
-              current_row->resource_type,
-              width,
-              current_row->resource_id,
-              width,
-              current_row->pd_name,
-              width,
-              current_row->pd_from,
-              width,
-              current_row->pd_to,
-              width,
-              current_row->pd_id,
-              width,
-              current_row->is_mapped);
+    while (current_row != NULL)
+    {
+        printf("%-*s,%-*s,%-*s,%-*s,%-*s,%-*s,%-*s,%-*s,%-*s\n",
+               width,
+               current_row->resource_from,
+               width,
+               current_row->resource_to,
+               width,
+               current_row->resource_type,
+               width,
+               current_row->resource_id,
+               width,
+               current_row->pd_name,
+               width,
+               current_row->pd_from,
+               width,
+               current_row->pd_to,
+               width,
+               current_row->pd_id,
+               width,
+               current_row->is_mapped);
 
-       current_row = current_row->next;
-   }
+        current_row = current_row->next;
+    }
 }
 
 // Function to add a resource to the model state

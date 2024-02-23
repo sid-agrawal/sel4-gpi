@@ -43,12 +43,12 @@ int start_ramdisk_pd(env_t env, seL4_CPtr *ramdisk_ep)
     error = pd_component_client_connect(env->gpi_endpoint, &env->vka, &pd_os_cap);
     test_assert(error == 0);
 
-     /* Create a new ADS Cap, which will be in the context of a PD and image */
+    /* Create a new ADS Cap, which will be in the context of a PD and image */
     ads_client_context_t ads_os_cap;
     error = ads_component_client_connect(env->gpi_endpoint, &env->vka, &ads_os_cap);
     assert(error == 0);
 
-   // Make a new AS, loads an image
+    // Make a new AS, loads an image
     error = pd_client_load(&pd_os_cap, &ads_os_cap, RAMDISK_APP);
     assert(error == 0);
 
@@ -101,12 +101,12 @@ int start_ramdisk_thread(env_t env, seL4_CPtr *ramdisk_ep)
 
     /* start ramdisk thread */
     error = ramdisk_server_spawn_thread(&env->simple,
-                            &env->vka,
-                            &env->vspace,
-                            env->gpi_endpoint,
-                            ep_object.cptr,
-                            env->self_ads_cptr,
-                            250);
+                                        &env->vka,
+                                        &env->vspace,
+                                        env->gpi_endpoint,
+                                        ep_object.cptr,
+                                        env->self_ads_cptr,
+                                        250);
 
     test_assert(error == 0);
 
@@ -131,7 +131,7 @@ int start_ramdisk_thread(env_t env, seL4_CPtr *ramdisk_ep)
 
 /**
  * Uses the ramdisk already started by the root task
-*/
+ */
 int use_rt_ramdisk_thread(env_t env, seL4_CPtr *ramdisk_ep)
 {
     *ramdisk_ep = env->ramdisk_endpoint;
@@ -162,8 +162,8 @@ int test_ramdisk(env_t env)
     test_assert(error == 0);
     printf("Finished mo_component_client_connect\n");
 
-    /* 
-    (XXX) - Arya 
+    /*
+    (XXX) - Arya
     We can't attach the MO here, or the ramdisk won't be able to
     see values written to it. Why is that the case?
     */
@@ -205,7 +205,7 @@ int test_ramdisk(env_t env)
     memset(buf, 0, RAMDISK_BLOCK_SIZE); // clear the test string from the buffer
     error = ramdisk_client_read(&block, &mo_conn);
     test_assert(error == seL4_NoError);
-    printf("Result from read: 0x%x\n", *((int *) buf));
+    printf("Result from read: 0x%x\n", *((int *)buf));
     test_assert(strcmp(buf, TEST_STR_1) == 0);
 
     // Write and read from another block

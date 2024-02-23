@@ -12,21 +12,21 @@
 #include <math.h>
 
 #include <sel4bench/arch/sel4bench.h>
- #include <sel4runtime.h>
+#include <sel4runtime.h>
 /* dummy global for libsel4muslcsys */
 char _cpio_archive[1];
 char _cpio_archive_end[1];
 
-#include<sel4gpi/mo_clientapi.h>
-#include<sel4gpi/ads_clientapi.h>
-#include<sel4gpi/pd_clientapi.h>
+#include <sel4gpi/mo_clientapi.h>
+#include <sel4gpi/ads_clientapi.h>
+#include <sel4gpi/pd_clientapi.h>
 
 #define APP_MALLOC_SIZE PAGE_SIZE_4K
 
 char __attribute__((aligned(PAGE_SIZE_4K))) morecore_area[APP_MALLOC_SIZE];
 size_t morecore_size = APP_MALLOC_SIZE;
 /* Pointer to free space in the morecore area. */
-uintptr_t morecore_top = (uintptr_t) &morecore_area[APP_MALLOC_SIZE];
+uintptr_t morecore_top = (uintptr_t)&morecore_area[APP_MALLOC_SIZE];
 
 void calculateSD(float data[], float *mean, float *sd,
                  int start, int end);
@@ -41,25 +41,23 @@ int main(int argc, char **argv)
     // Do we need to initialize a vka?
     // No we can add a function called, next PD slot.
 
+    seL4_CPtr ads_cap = sel4runtime_get_initial_ads_cap();
+    seL4_CPtr gpi_cap = sel4runtime_get_gpi_cap();
+    seL4_CPtr pd_cap = sel4runtime_get_pd_cap();
 
-    seL4_CPtr ads_cap  = sel4runtime_get_initial_ads_cap();
-    seL4_CPtr gpi_cap  = sel4runtime_get_gpi_cap();
-    seL4_CPtr pd_cap  = sel4runtime_get_pd_cap();
-
-    printf("Hello: ADS_CAP: %ld\n", (seL4_Word) ads_cap);
-    printf("Hello: GPI_CAP: %ld\n", (seL4_Word) gpi_cap);
-    printf("Hello: PD_CAP: %ld\n", (seL4_Word) pd_cap);
+    printf("Hello: ADS_CAP: %ld\n", (seL4_Word)ads_cap);
+    printf("Hello: GPI_CAP: %ld\n", (seL4_Word)gpi_cap);
+    printf("Hello: PD_CAP: %ld\n", (seL4_Word)pd_cap);
 
     ads_client_context_t ads_conn;
     ads_conn.badged_server_ep_cspath.capPtr = ads_cap;
-
 
     seL4_CPtr slot;
     pd_client_context_t pd_conn;
     pd_conn.badged_server_ep_cspath.capPtr = pd_cap;
     int error = pd_client_next_slot(&pd_conn, &slot);
     assert(error == 0);
-    printf("Next free slot is %ld\n", (seL4_Word) slot);
+    printf("Next free slot is %ld\n", (seL4_Word)slot);
 
     mo_client_context_t mo_conn;
     error = mo_component_client_connect(gpi_cap,
@@ -122,13 +120,15 @@ void calculateSD(float data[], float *mean, float *sd,
 {
     int i;
 
-    int n = end - start +1;
+    int n = end - start + 1;
     float sum = 0.0;
-    for (i = 1; i < n; ++i) {
+    for (i = 1; i < n; ++i)
+    {
         sum += data[i];
     }
     *mean = sum / n;
-    for (i = start; i < end; ++i) {
+    for (i = start; i < end; ++i)
+    {
         *sd += pow(data[i] - *mean, 2);
     }
     *sd = *sd / n;

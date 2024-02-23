@@ -30,14 +30,15 @@
 #define PD_ALLOCATOR_STATIC_POOL_SIZE ((1 << seL4_PageBits) * 20)
 
 // (XXX) This is not yet used anywher.
-typedef struct pd_name {
+typedef struct pd_name
+{
     char top[MAX_PD_NAME];
     char mid[MAX_PD_NAME];
     char end[MAX_PD_NAME];
 } pd_name_t;
 
-
-typedef union rde_type {
+typedef union rde_type
+{
     // We have talked about tracking RDE for speicific resdources,
     // For instance, say one FILE cap came from one PD, and another from another.
     // Or if a resources was handed down from another PD, should that PD be the RDE,
@@ -47,7 +48,8 @@ typedef union rde_type {
     gpi_cap_t type;
 } rde_type_t;
 
-typedef struct osmosis_rde {
+typedef struct osmosis_rde
+{
     // The slot of the RDE cap as per seL4
     seL4_Word slot_in_RT;
     seL4_Word slot_in_PD;
@@ -59,14 +61,15 @@ typedef struct osmosis_rde {
     */
 
     /*OSmosis generated PD ID of the server for RDE */
-    //osmosis_pd_id_t pd_obj_id;
+    // osmosis_pd_id_t pd_obj_id;
     uint32_t pd_obj_id;
 
     /* Info about what the RDE is for ?*/
     rde_type_t type;
 } osmosis_rde_t;
 
-typedef struct osmosis_pd_cap {
+typedef struct osmosis_pd_cap
+{
     // The slot of the cap as per seL4
     seL4_Word slot_in_PD;
     seL4_Word slot_in_RT;
@@ -86,14 +89,13 @@ typedef struct osmosis_pd_cap {
     gpi_cap_t type;
 } osmosis_pd_cap_t;
 
-typedef struct _pd {
+typedef struct _pd
+{
     // seL4_CPtr cspace_root;
     seL4_CPtr fault_endpoint_in_pd;
 
     /* One of these we will keep */
     uint32_t pd_obj_id;
-
-
 
     sel4utils_process_t proc;
 
@@ -177,7 +179,6 @@ typedef struct _pd {
     char allocator_mem_pool[PD_ALLOCATOR_STATIC_POOL_SIZE];
     vka_t pd_vka;
 
-
     /*
         There are the resources and RDE which we are explicitly tracking for a PD.
         They should be updated when the PD get's a new cap via pd_send_cap
@@ -196,9 +197,9 @@ typedef struct _pd {
     /*
         Convert this to a hash map
     */
-   seL4_CPtr child_ads_cptr_in_child;
-   seL4_CPtr gpi_endpoint_in_child;
-   seL4_CPtr pd_endpoint_in_child;
+    seL4_CPtr child_ads_cptr_in_child;
+    seL4_CPtr gpi_endpoint_in_child;
+    seL4_CPtr pd_endpoint_in_child;
 
     /**
      * =========================================================================
@@ -207,7 +208,7 @@ typedef struct _pd {
      */
     sel4utils_process_config_t config;
 
-}pd_t;
+} pd_t;
 
 /*
 What caps data
@@ -255,7 +256,7 @@ int pd_free_slot(pd_t *pd,
  * @param pd The pd to allocate an endpoint for
  * @param server_vka VKA of the gpi server
  * @param ret_ep slot of the allocated ep in the PD's cspace
-*/
+ */
 int pd_alloc_ep(pd_t *pd,
                 vka_t *server_vka,
                 seL4_CPtr *ret_ep);
@@ -267,17 +268,17 @@ int pd_alloc_ep(pd_t *pd,
  * @param src_ep raw endpoint to badge
  * @param badge badge to apply
  * @param ret_ep slot of the badged ep in the PD's cspace
-*/
+ */
 int pd_badge_ep(pd_t *pd,
                 seL4_CPtr src_ep,
                 seL4_Word badge,
                 seL4_CPtr *ret_ep);
 
-void print_pd_osm_cap_info (osmosis_pd_cap_t *o);
-void print_pd_osm_rde_info (osmosis_rde_t *o);
+void print_pd_osm_cap_info(osmosis_pd_cap_t *o);
+void print_pd_osm_rde_info(osmosis_rde_t *o);
 
 /**
  * Populates a structure of init data to be mapped into pd AS
  * Should be called after all pd_send_cap calls
-*/
+ */
 int pd_populate_init_data(pd_t *pd, seL4_CPtr server_ep);

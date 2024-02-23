@@ -9,7 +9,7 @@
 #include "../helpers.h"
 #include <stdio.h>
 
-#include<sel4gpi/pd_clientapi.h>
+#include <sel4gpi/pd_clientapi.h>
 #include <sel4bench/arch/sel4bench.h>
 
 int test_trace_rr(env_t env)
@@ -18,7 +18,6 @@ int test_trace_rr(env_t env)
     printf("------------------STARTING: %s------------------\n", __func__);
 
     sel4bench_init();
-
 }
 
 DEFINE_TEST(GPIPD201, "OSMO: Trave Resource Relations", test_trace_rr, true)

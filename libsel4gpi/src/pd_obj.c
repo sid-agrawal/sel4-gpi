@@ -39,7 +39,8 @@ static int copy_cap_to_pd(pd_t *to_pd,
     seL4_CPtr free_slot;
 
     error = pd_next_slot(to_pd, &free_slot);
-    if (error != 0) {
+    if (error != 0)
+    {
         ZF_LOGE("copy_cap_to_pd: Failed to get a free slot in PD\n");
         return error;
     }
@@ -49,12 +50,14 @@ static int copy_cap_to_pd(pd_t *to_pd,
     vka_cspace_make_path(&to_pd->pd_vka, free_slot, &dest);
 
     error = vka_cnode_copy(&dest, &src, seL4_AllRights);
-    if (error != 0) {
+    if (error != 0)
+    {
         ZF_LOGE("copy_cap_to_pd: Failed to copy cap\n");
         return error;
     }
 
-    if (slot != NULL) {
+    if (slot != NULL)
+    {
         *slot = free_slot;
     }
 
@@ -67,7 +70,7 @@ int pd_new(pd_t *pd,
            simple_t *simple)
 {
 
-    OSDB_PRINTF(PDSERVS"new PD: \n");
+    OSDB_PRINTF(PDSERVS "new PD: \n");
 
     pd->has_access_to_count = 0;
     for (int i = 0; i < MAX_PD_OSM_CAPS; i++)
@@ -91,7 +94,8 @@ int pd_new(pd_t *pd,
 }
 
 int pd_next_slot(pd_t *pd,
-                 seL4_CPtr *next_free_slot) {
+                 seL4_CPtr *next_free_slot)
+{
 
     cspacepath_t path;
     int error = vka_cspace_alloc_path(&pd->pd_vka, &path);
@@ -100,9 +104,9 @@ int pd_next_slot(pd_t *pd,
 }
 
 int pd_free_slot(pd_t *pd,
-                 seL4_CPtr slot) 
+                 seL4_CPtr slot)
 {
-    // First try to delete slot contents, 
+    // First try to delete slot contents,
     // ignore error if slot is already empty
     cspacepath_t path;
     vka_cspace_make_path(&pd->pd_vka, slot, &path);
@@ -125,7 +129,8 @@ int pd_alloc_ep(pd_t *pd,
     cspacepath_t dest;
 
     int error = vka_cspace_alloc_path(&pd->pd_vka, &dest);
-    if (error) {
+    if (error)
+    {
         return error;
     }
 
@@ -145,14 +150,15 @@ int pd_badge_ep(pd_t *pd,
     cspacepath_t src, dest;
     vka_cspace_make_path(&pd->pd_vka, src_ep, &src);
     int error = vka_cspace_alloc_path(&pd->pd_vka, &dest);
-    if (error) {
+    if (error)
+    {
         return error;
     }
 
     error = vka_cnode_mint(&dest,
-                               &src,
-                               seL4_AllRights,
-                               badge);
+                           &src,
+                           seL4_AllRights,
+                           badge);
 
     *ret_ep = error == seL4_NoError ? dest.capPtr : seL4_CapNull;
     return error;
@@ -168,24 +174,23 @@ int pd_load_image(pd_t *pd,
 {
 
     int error = 0;
-    OSDB_PRINTF(PDSERVS"load_image: loading image %s for pd %p\n", image_path, pd);
-
+    OSDB_PRINTF(PDSERVS "load_image: loading image %s for pd %p\n", image_path, pd);
 
     /* There are just setting up the config */
-    pd->config   = process_config_default_simple(simple, image_path, 255);
+    pd->config = process_config_default_simple(simple, image_path, 255);
     pd->config = process_config_mcp(pd->config, seL4_MaxPrio);
     pd->config = process_config_auth(pd->config, simple_get_tcb(simple));
     pd->config = process_config_create_cnode(pd->config, CSPACE_SIZE_BITS);
 
     sel4utils_process_config_t config = pd->config;
     /* This is doing actual works of setting up the PD's address space */
-     error = sel4utils_osm_configure_process_custom(&(pd->proc),
-                                                    // get_pd_component()->server_vka,
-                                                     pd->vka,
-                                                       server_vspace,
-                                                       target_vspace,
-                                                       target_vspace_root_page_dir,
-                                                       config);
+    error = sel4utils_osm_configure_process_custom(&(pd->proc),
+                                                   // get_pd_component()->server_vka,
+                                                   pd->vka,
+                                                   server_vspace,
+                                                   target_vspace,
+                                                   target_vspace_root_page_dir,
+                                                   config);
     assert(error == 0);
 
     /* Initialize a vka for the PD's cspace */
@@ -194,14 +199,11 @@ int pd_load_image(pd_t *pd,
 
     cspace_single_level_t *cspace = malloc(sizeof(cspace_single_level_t));
 
-    error = cspace_single_level_create(allocator, cspace, (struct cspace_single_level_config) {
-        .cnode = pd->proc.cspace.cptr,
-        .cnode_size_bits = CSPACE_SIZE_BITS,
-        //.cnode_guard_bits = seL4_WordBits - pd->cspace_size_bits,
-        .cnode_guard_bits = 0,
-        .first_slot = pd->proc.cspace_next_free,
-        .end_slot = BIT(CSPACE_SIZE_BITS)
-    });
+    error = cspace_single_level_create(allocator, cspace, (struct cspace_single_level_config){.cnode = pd->proc.cspace.cptr, .cnode_size_bits = CSPACE_SIZE_BITS,
+                                                                                              //.cnode_guard_bits = seL4_WordBits - pd->cspace_size_bits,
+                                                                                              .cnode_guard_bits = 0,
+                                                                                              .first_slot = pd->proc.cspace_next_free,
+                                                                                              .end_slot = BIT(CSPACE_SIZE_BITS)});
     assert(error == 0);
 
     error = allocman_attach_cspace(allocator, cspace_single_level_make_interface(cspace));
@@ -212,7 +214,7 @@ int pd_load_image(pd_t *pd,
         ZF_LOGF("Failed to bootstrap allocator for pd");
     }
     allocman_make_vka(&pd->pd_vka, allocator);
-    
+
     /* Add the forged MOs*/
 
     /* set up caps about the process */
@@ -273,7 +275,7 @@ int pd_load_image(pd_t *pd,
     copy_cap_to_pd(pd, child_ads_cap_in_parent, &pd->child_ads_cptr_in_child);
     assert(pd->child_ads_cptr_in_child != 0);
 
-    OSDB_PRINTF("copied ads ep at %d\n", (int) pd->child_ads_cptr_in_child);
+    OSDB_PRINTF("copied ads ep at %d\n", (int)pd->child_ads_cptr_in_child);
 
     // SID : Finishd this RDE addting
     pd->rde[0].type.type = GPICAP_TYPE_ADS;
@@ -285,7 +287,7 @@ int pd_load_image(pd_t *pd,
     copy_cap_to_pd(pd, get_gpi_server()->server_ep_obj.cptr, &pd->gpi_endpoint_in_child);
     assert(pd->gpi_endpoint_in_child != 0);
 
-    OSDB_PRINTF("copied gpi ep at %d\n", (int) pd->gpi_endpoint_in_child);
+    OSDB_PRINTF("copied gpi ep at %d\n", (int)pd->gpi_endpoint_in_child);
 
     /* copy the device frame, if any */
     // if (pd->device_frame_cap) {
@@ -321,7 +323,7 @@ int pd_load_image(pd_t *pd,
 
     pd->free_slots.end = (1u << pd->cspace_size_bits);
     assert(pd->free_slots.start < pd->free_slots.end);
-    
+
     return 0;
 }
 
@@ -483,23 +485,22 @@ int pd_start(pd_t *pd,
     char *argv[argc];
     sel4utils_create_word_args(string_args, argv, argc, arg0);
 
-    //argc = 1;
-    //snprintf(argv[0], WORD_STRING_SIZE, "%ld", arg0);
+    // argc = 1;
+    // snprintf(argv[0], WORD_STRING_SIZE, "%ld", arg0);
 
     /* spawn the process */
     seL4_CPtr osm_caps[] = {pd->child_ads_cptr_in_child,
                             pd->gpi_endpoint_in_child,
-                            pd_cptr_in_child
-                            };
+                            pd_cptr_in_child};
     error = sel4utils_osm_spawn_process_v(&(pd->proc),
-                                              osm_caps,
-                                              pd->vka,
-                                              server_vspace,
-                                              argc,
-                                              argv,
-                                              1);
+                                          osm_caps,
+                                          pd->vka,
+                                          server_vspace,
+                                          argc,
+                                          argv,
+                                          1);
     ZF_LOGF_IF(error != 0, "Failed to start test process!");
-    OSDB_PRINTF(PDSERVS"pd_start: starting PD\n");
+    OSDB_PRINTF(PDSERVS "pd_start: starting PD\n");
     return 0;
 }
 
@@ -583,7 +584,8 @@ int pd_dump(pd_t *pd)
     return 0;
 }
 
-inline void print_pd_osm_cap_info (osmosis_pd_cap_t *o) {
+inline void print_pd_osm_cap_info(osmosis_pd_cap_t *o)
+{
     printf("Slot_RT:%lx\t Slot_PD: %lx\t Slot_ServerPD: %lx\t T: %s\n",
            o->slot_in_RT,
            o->slot_in_PD,
@@ -591,8 +593,10 @@ inline void print_pd_osm_cap_info (osmosis_pd_cap_t *o) {
            cap_type_to_str(o->type));
 }
 
-inline void print_pd_osm_rde_info (osmosis_rde_t *o) {
-    if (o->slot_in_RT == 0) {
+inline void print_pd_osm_rde_info(osmosis_rde_t *o)
+{
+    if (o->slot_in_RT == 0)
+    {
         return;
     }
     printf("RDE: PD_ID: %u\t Slot_RT:%lu\t Slot_PD: %lu\t T: %s\n",

@@ -6,8 +6,7 @@
 
 // ARYA-TODO implement real locks?
 
-void
-initlock(struct spinlock *lk, char *name)
+void initlock(struct spinlock *lk, char *name)
 {
   lk->name = name;
   lk->locked = 0;
@@ -16,21 +15,19 @@ initlock(struct spinlock *lk, char *name)
 
 // Acquire the lock.
 // Loops (spins) until the lock is acquired.
-void
-acquire(struct spinlock *lk)
+void acquire(struct spinlock *lk)
 {
 }
 
 // Release the lock.
-void
-release(struct spinlock *lk)
+void release(struct spinlock *lk)
 {
 }
 
-void
-wakeup(void* addr) {
+void wakeup(void *addr)
+{
 }
 
-void
-xv6fs_sleep(void* addr, struct spinlock* lk) {
+void xv6fs_sleep(void *addr, struct spinlock *lk)
+{
 }

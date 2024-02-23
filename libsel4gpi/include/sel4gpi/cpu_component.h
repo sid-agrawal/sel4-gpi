@@ -23,15 +23,15 @@
  * server thread.
  */
 
-#define CPUSERVS     "CPUServ Component: "
-#define CPUSERVC     "CPUServ Client   : "
+#define CPUSERVS "CPUServ Component: "
+#define CPUSERVC "CPUServ Client   : "
 
 #define CPU_SERVER_BADGE_VALUE_EMPTY (0)
 #define CPU_SERVER_BADGE_PARENT_VALUE (0xDEADBEEF)
 
-
 /* IPC values returned in the "label" message header. */
-enum cpu_component_errors {
+enum cpu_component_errors
+{
     CPU_SERVER_NOERROR = 0,
     /* No future collisions with seL4_Error.*/
     CPU_SERVER_ERROR_BIND_FAILED = seL4_NumErrors,
@@ -39,7 +39,8 @@ enum cpu_component_errors {
 };
 
 /* IPC Message register values for SSMSGREG_FUNC */
-enum cpu_component_funcs {
+enum cpu_component_funcs
+{
     CPU_FUNC_START_REQ = 0,
     CPU_FUNC_START_ACK,
 
@@ -96,7 +97,8 @@ enum cpu_component_msgregs
 };
 
 /* Per-client context maintained by the server. */
-typedef struct _cpu_component_registry_entry {
+typedef struct _cpu_component_registry_entry
+{
     cpu_t cpu;
     /* In our model each CPU can have its own cspace. */
     seL4_CNode cspace_root;
@@ -105,7 +107,8 @@ typedef struct _cpu_component_registry_entry {
 } cpu_component_registry_entry_t;
 
 /* State maintained by the server. */
-typedef struct _cpu_component_context {
+typedef struct _cpu_component_context
+{
     simple_t *server_simple;
     vka_t *server_vka;
     seL4_CPtr server_cspace;

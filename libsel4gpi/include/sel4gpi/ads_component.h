@@ -22,16 +22,16 @@
  * server thread.
  */
 
-#define ADSSERVS     "ADSServ Component: "
-#define ADSSERVC     "ADSServ Client   : "
+#define ADSSERVS "ADSServ Component: "
+#define ADSSERVC "ADSServ Client   : "
 
 // This needs to be removed.
 #define ADS_SERVER_BADGE_VALUE_EMPTY (0)
 #define ADS_SERVER_BADGE_PARENT_VALUE (0xDEADBEEF)
 
-
 /* IPC values returned in the "label" message header. */
-enum ads_component_errors {
+enum ads_component_errors
+{
     ADS_SERVER_NOERROR = 0,
     /* No future collisions with seL4_Error.*/
     ADS_SERVER_ERROR_BIND_FAILED = seL4_NumErrors,
@@ -39,7 +39,8 @@ enum ads_component_errors {
 };
 
 /* IPC Message register values for SSMSGREG_FUNC */
-enum ads_component_funcs {
+enum ads_component_funcs
+{
     ADS_FUNC_ATTACH_REQ = 0,
     ADS_FUNC_ATTACH_ACK,
 
@@ -129,13 +130,15 @@ enum ads_component_msgregs
 };
 
 /* Per-client context maintained by the server. */
-typedef struct _ads_component_registry_entry {
+typedef struct _ads_component_registry_entry
+{
     ads_t ads;
     struct _ads_component_registry_entry *next;
 } ads_component_registry_entry_t;
 
 /* State maintained by the server. */
-typedef struct _ads_component_context {
+typedef struct _ads_component_context
+{
     simple_t *server_simple;
     vka_t *server_vka;
     seL4_CPtr server_cspace;
@@ -156,7 +159,6 @@ void ads_component_handle(seL4_MessageInfo_t tag,
                           seL4_Word badge,
                           cspacepath_t *received_cap,
                           seL4_MessageInfo_t *reply_tag);
-
 
 void ads_handle_allocation_request(seL4_MessageInfo_t *reply_tag);
 

@@ -18,7 +18,8 @@
 
 #define LINUX_IMAGE_MAGIC 0x644d5241
 
-struct linux_image_header {
+struct linux_image_header
+{
     uint32_t code0;       // Executable code
     uint32_t code1;       // Executable code
     uint64_t text_offset; // Image load offset, little endian

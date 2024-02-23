@@ -21,4 +21,3 @@
 #include <test_init_data.h>
 
 void arch_init_simple(env_t env, simple_t *simple);
-

@@ -14,12 +14,13 @@
 #include <sel4utils/process.h>
 #include <sel4gpi/model_exporting.h>
 
-typedef struct _ads {
+typedef struct _ads
+{
     vspace_t *vspace;
     vka_object_t *root_page_dir;
     sel4utils_process_t *process_for_cookies;
     uint32_t ads_obj_id;
-}ads_t;
+} ads_t;
 
 /**
  * @brief Create a new ads object.
@@ -47,7 +48,7 @@ int ads_attach(ads_t *ads,
                void *vaddr,
                uint32_t num_pages,
                seL4_CPtr *frame_cap,
-               void ** ret_vaddr,
+               void **ret_vaddr,
                /*sel4utils_process_t*/ vspace_t *process_cookie);
 
 /**
@@ -59,8 +60,7 @@ int ads_attach(ads_t *ads,
  * @param size size of the frame
  * @return int 0 on success, -1 on failure.
  */
-int ads_rm(ads_t *ads, vka_t *vka, void* vaddr, size_t size);
-
+int ads_rm(ads_t *ads, vka_t *vka, void *vaddr, size_t size);
 
 /**
  * @brief
@@ -70,7 +70,7 @@ int ads_rm(ads_t *ads, vka_t *vka, void* vaddr, size_t size);
  * @param cpu_cap use this as the ads for the give TCB
  * @return int
  */
-int ads_bind(ads_t *ads, vka_t *vka, seL4_CPtr* cpu_cap);
+int ads_bind(ads_t *ads, vka_t *vka, seL4_CPtr *cpu_cap);
 
 /**
  * @brief
@@ -95,10 +95,10 @@ int ads_shallow_copy(vspace_t *loader, ads_t *ads, vka_t *vka, void *omit_vaddr,
  */
 void ads_dump_rr(ads_t *ads, model_state_t *ms);
 
-
 static seL4_CPtr get_asid_pool(seL4_CPtr asid_pool)
 {
-    if (asid_pool == 0) {
+    if (asid_pool == 0)
+    {
         ZF_LOGW("This method will fail if run in a thread that is not in the root server cspace\n");
         asid_pool = seL4_CapInitThreadASIDPool;
     }
@@ -109,7 +109,8 @@ static seL4_CPtr get_asid_pool(seL4_CPtr asid_pool)
 static seL4_CPtr assign_asid_pool(seL4_CPtr asid_pool, seL4_CPtr pd)
 {
     int error = seL4_ARCH_ASIDPool_Assign(get_asid_pool(asid_pool), pd);
-    if (error) {
+    if (error)
+    {
         ZF_LOGE("Failed to assign asid pool\n");
     }
 

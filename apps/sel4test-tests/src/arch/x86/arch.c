@@ -18,10 +18,11 @@ static sel4rpc_client_t *rpc_client;
 static seL4_Error get_IOPort_cap(void *data, uint16_t start_port, uint16_t end_port, seL4_Word root, seL4_Word dest,
                                  seL4_Word depth)
 {
-    test_init_data_t *init = (test_init_data_t *) data;
+    test_init_data_t *init = (test_init_data_t *)data;
 
     if (start_port < SERIAL_CONSOLE_COM1_PORT ||
-        start_port > SERIAL_CONSOLE_COM1_PORT_END) {
+        start_port > SERIAL_CONSOLE_COM1_PORT_END)
+    {
         return seL4_RangeError;
     }
 
@@ -34,7 +35,8 @@ static seL4_Error get_IOPort_cap(void *data, uint16_t start_port, uint16_t end_p
     };
 
     int ret = sel4rpc_call(rpc_client, &rpcMsg, root, dest, depth);
-    if (ret < 0) {
+    if (ret < 0)
+    {
         return seL4_InvalidArgument;
     }
 

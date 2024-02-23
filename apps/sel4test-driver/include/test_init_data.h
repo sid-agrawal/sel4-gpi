@@ -21,7 +21,8 @@
  * process.
  *
  * all caps are in the sel4test-tests process' cspace */
-typedef struct {
+typedef struct
+{
     /* page directory of the test process */
     seL4_CPtr page_directory;
     /* root cnode of the test process */

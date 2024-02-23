@@ -31,7 +31,6 @@ int test_new_process_osmosis(env_t env)
     seL4_Word slot;
     SEL4BENCH_READ_CCNT(start);
 
-
     /* Create a new PD */
     pd_client_context_t pd_os_cap;
     error = pd_component_client_connect(env->gpi_endpoint, &env->vka, &pd_os_cap);
@@ -52,7 +51,6 @@ int test_new_process_osmosis(env_t env)
         }
     */
 
-
     // Make a new AS, loads an image
     error = pd_client_load(&pd_os_cap, &ads_os_cap, "hello");
     assert(error == 0);
@@ -70,7 +68,6 @@ int test_new_process_osmosis(env_t env)
                             /* The (ADS, CPU) tuple to use */
                             slot); // with this arg.
     assert(error == 0);
-
 
     /*********************************************/
 
@@ -93,9 +90,7 @@ int test_new_process_osmosis(env_t env)
         }
     */
 
-
-
-   // Make a new AS, loads an image
+    // Make a new AS, loads an image
     error = pd_client_load(&pd_os_cap2, &ads_os_cap2, "hello");
     assert(error == 0);
 
@@ -128,7 +123,6 @@ int test_new_process_osmosis_shmem(env_t env)
     ccnt_t start;
     SEL4BENCH_READ_CCNT(start);
 
-
     /* Create a new PD */
     pd_client_context_t pd_os_cap;
     error = pd_component_client_connect(env->gpi_endpoint, &env->vka, &pd_os_cap);
@@ -148,8 +142,7 @@ int test_new_process_osmosis_shmem(env_t env)
     seL4_CPtr slot;
     error = pd_client_next_slot(&pd_os_cap, &slot);
     assert(error == 0);
-    printf("Next free slot is %ld\n", (seL4_Word) slot);
-
+    printf("Next free slot is %ld\n", (seL4_Word)slot);
 
     mo_client_context_t mo_conn;
     error = mo_component_client_connect(env->gpi_endpoint,
@@ -180,14 +173,11 @@ int test_new_process_osmosis_shmem(env_t env)
     assert(error == 0);
 #endif
 
-
     // Make a new MO cap
-
 
     // Attach it to current AS
 
     // Send it to "hello" PD
-
 
     // Hello PD should also attach it.
 #if 0
