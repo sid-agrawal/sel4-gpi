@@ -23,6 +23,18 @@ typedef struct _ramdisk_client_context
 } ramdisk_client_context_t;
 
 /**
+ * Starts the ramdisk server in a new process
+ *
+ * @param vka vka to use while creating the process
+ * @param gpi_ep endpoint of the gpi server
+ * @param ramdisk_ep otputs the ep of the new ramdisk server
+ * @return 0 on success, or -1 otherwise
+ */
+int start_ramdisk_pd(vka_t *vka,
+                     seL4_CPtr gpi_ep,
+                     seL4_CPtr *ramdisk_ep);
+
+/**
  * @brief Sanity test for shared memory with ramdisk
  * Maps the mo to the ramdisk's address space and returns
  * the first word read

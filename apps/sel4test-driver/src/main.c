@@ -613,7 +613,7 @@ void *main_continued(void *arg UNUSED)
 
     printf("Starting fs thread\n");
 
-    /* start ramdisk thread */
+    /* start fs thread */
     error = xv6fs_server_spawn_thread(&env.simple,
                             &env.vka,
                             &env.vspace,

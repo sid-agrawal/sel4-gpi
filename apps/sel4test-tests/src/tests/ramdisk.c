@@ -21,69 +21,6 @@
 #define RAMDISK_APP "ramdisk_server"
 
 /**
- * Starts the ramdisk as a process
- */
-int start_ramdisk_pd(env_t env, seL4_CPtr *ramdisk_ep)
-{
-    int error;
-
-    sel4bench_init();
-
-    // Make new PD i.e. CSspace
-    ccnt_t start;
-    SEL4BENCH_READ_CCNT(start);
-
-    /* create an endpoint for the parent to listen on*/
-    vka_object_t ep_object = {0};
-    error = vka_alloc_endpoint(&env->vka, &ep_object);
-    test_assert(error == 0);
-
-    /* Create a new PD */
-    pd_client_context_t pd_os_cap;
-    error = pd_component_client_connect(env->gpi_endpoint, &env->vka, &pd_os_cap);
-    test_assert(error == 0);
-
-    /* Create a new ADS Cap, which will be in the context of a PD and image */
-    ads_client_context_t ads_os_cap;
-    error = ads_component_client_connect(env->gpi_endpoint, &env->vka, &ads_os_cap);
-    assert(error == 0);
-
-    // Make a new AS, loads an image
-    error = pd_client_load(&pd_os_cap, &ads_os_cap, RAMDISK_APP);
-    assert(error == 0);
-
-    // Copy the parent ep to the new PD
-    seL4_Word parent_ep_slot;
-    printf("Sending parent ep\n");
-    error = pd_client_send_cap(&pd_os_cap, ep_object.cptr, &parent_ep_slot);
-    test_assert(error == 0);
-
-    // Start it
-    error = pd_client_start(&pd_os_cap, parent_ep_slot); // with this arg.
-    test_assert(error == 0);
-
-    // Wait for it to finish starting
-    seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0, 0);
-
-    /* Alloc cap receive path*/
-    cspacepath_t received_cap_path;
-    error = vka_cspace_alloc_path(&env->vka, &received_cap_path);
-    test_assert(error == 0);
-
-    seL4_SetCapReceivePath(received_cap_path.root,
-                           received_cap_path.capPtr,
-                           received_cap_path.capDepth);
-
-    tag = seL4_Recv(ep_object.cptr, NULL);
-    test_assert(seL4_MessageInfo_get_extraCaps(tag) == 1);
-    test_assert(received_cap_path.capPtr != 1);
-    *ramdisk_ep = received_cap_path.capPtr;
-
-    printf("Received ep from ramdisk\n");
-    return sel4test_get_result();
-}
-
-/**
  * Starts the ramdisk as a thread
  */
 
@@ -170,7 +107,7 @@ int test_ramdisk(env_t env)
 
     /* Start ramdisk server process */
     seL4_CPtr ramdisk_ep;
-    error = start_ramdisk_pd(env, &ramdisk_ep);
+    error = start_ramdisk_pd(&env->vka, env->gpi_endpoint, &ramdisk_ep);
     test_assert(error == 0);
 
     printf("------------------STARTING TESTS: %s------------------\n", __func__);
