@@ -13,12 +13,12 @@
 // * Only one process at a time can use a buffer,
 //     so do not keep them longer than necessary.
 
-#include <xv6fs/defs.h>
-#include <xv6fs/spinlock.h>
-#include <xv6fs/sleeplock.h>
-#include <xv6fs/defs.h>
-#include <xv6fs/fs.h>
-#include <xv6fs/buf.h>
+#include <defs.h>
+#include <spinlock.h>
+#include <sleeplock.h>
+#include <defs.h>
+#include <fs.h>
+#include <buf.h>
 
 struct
 {

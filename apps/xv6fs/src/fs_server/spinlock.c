@@ -1,8 +1,8 @@
 // Mutual exclusion spin locks.
 
-#include <xv6fs/defs.h>
-#include <xv6fs/spinlock.h>
-#include <xv6fs/proc.h>
+#include <defs.h>
+#include <spinlock.h>
+#include <proc.h>
 
 // ARYA-TODO implement real locks?
 

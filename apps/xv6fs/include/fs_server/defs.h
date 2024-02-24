@@ -7,8 +7,8 @@
 #include <fcntl.h>
 #include <sys/stat.h>
 
-#include <xv6fs/types.h>
-#include <xv6fs/param.h>
+#include <types.h>
+#include <param.h>
 
 struct buf;
 struct dirent;

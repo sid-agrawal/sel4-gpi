@@ -47,7 +47,7 @@ sel4_projects_libs_import_libraries()
 add_subdirectory(../../libsel4testsupport libsel4testsupport)
 add_subdirectory(../../libsel4gpi libsel4gpi)
 add_subdirectory(../../vmm libsel4vmm)
-add_subdirectory(../libxv6fs libxv6fs)
+add_subdirectory(../xv6fs xv6fs)
 
 file(
     GLOB
@@ -90,8 +90,8 @@ target_link_libraries(
         sel4platsupport
         sel4muslcsys
         sel4testsupport
-        xv6fs
         ramdisk_server_lib
+        fs_server_lib
     PRIVATE sel4test-driver_Config
 )
 target_compile_options(sel4test-driver PRIVATE -Werror -g)

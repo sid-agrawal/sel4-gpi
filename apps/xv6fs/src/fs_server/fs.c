@@ -12,13 +12,13 @@
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <xv6fs/defs.h>
-#include <xv6fs/spinlock.h>
-#include <xv6fs/sleeplock.h>
-#include <xv6fs/proc.h>
-#include <xv6fs/fs.h>
-#include <xv6fs/buf.h>
-#include <xv6fs/file.h>
+#include <defs.h>
+#include <spinlock.h>
+#include <sleeplock.h>
+#include <proc.h>
+#include <fs.h>
+#include <buf.h>
+#include <file.h>
 
 #define min(a, b) ((a) < (b) ? (a) : (b))
 // there should be one superblock per disk device, but we run with

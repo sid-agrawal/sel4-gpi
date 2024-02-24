@@ -5,8 +5,8 @@
 #include <assert.h>
 
 #define stat xv6_stat // avoid clash with host struct stat
-#include <xv6fs/defs.h>
-#include <xv6fs/fs.h>
+#include <defs.h>
+#include <fs.h>
 
 #ifndef static_assert
 #define static_assert(a, b) \

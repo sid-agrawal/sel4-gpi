@@ -33,8 +33,8 @@
  *                   the server thread.
  * @param parent_vspace Initialized vspace_t for the parent process that is
  *                      spawning the server thread.
- * @param block_read Block read function for a generic disk implementation
- * @param block_write Block write function for a generic disk implementation
+ * @param gpi_ep Endpoint to the gpi server
+ * @param rd_ep Endpoint to the ramdisk server
  * @param priority Server thread's priority.
  * @param server_endpoint Server thread's endpoint cap.
  * @return seL4_Error value.
@@ -42,8 +42,8 @@
 seL4_Error
 xv6fs_server_spawn_thread(simple_t *parent_simple, vka_t *parent_vka,
                           vspace_t *parent_vspace,
-                          int (*block_read)(uint, void *),
-                          int (*block_write)(uint, void *),
+                          seL4_CPtr gpi_ep,
+                          seL4_CPtr rd_ep,
                           uint8_t priority,
                           seL4_CPtr *server_ep_cap);
 
@@ -57,6 +57,10 @@ typedef struct _xv6fs_server_context
     seL4_CPtr server_cspace;
     vspace_t *server_vspace;
     sel4utils_thread_t server_thread;
+
+    // RDEs
+    seL4_CPtr gpi_ep;
+    seL4_CPtr rd_ep;
 
     // Generic block read/write functions
     int (*block_read)(uint, void *);
@@ -76,31 +80,3 @@ typedef struct _xv6fs_server_context
 void xv6fs_server_main(void);
 
 xv6fs_server_context_t *get_xv6fs_server(void);
-
-/**
- * Initializes a process as a xv6fs client
- *
- * CAUTION:
- * All vka_t and vspace_t instances passed to this library by
- * reference must remain functional for future xv6fs requests.
- *
- * @param client_vka Initialized vka_t for the client process
- * @param client_vspace Initialized vspace_t for client process
- * @param server_ep_cap Server thread's endpoint cap.
- * @return seL4_Error value.
- */
-seL4_Error
-xv6fs_client_init(vka_t *client_vka,
-                  vspace_t *client_vspace,
-                  seL4_CPtr server_ep_cap);
-
-/*
-Context of the client
-*/
-typedef struct _xv6fs_client_context
-{
-    vka_t *client_vka;
-    vspace_t *client_vspace;
-    seL4_CPtr server_ep_cap;
-    void *shared_mem;
-} xv6fs_client_context_t;

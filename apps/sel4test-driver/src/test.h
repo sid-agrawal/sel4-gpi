@@ -28,7 +28,9 @@
 #define HELLO_APP "hello"
 #define MAX_MO_CHILD 10
 #define RAMDISK_APP "ramdisk_server"
-// #define RAMDISK_IN_RT
+#define FS_APP "fs_server"
+//#define RAMDISK_IN_RT
+//#define FS_IN_RT
 
 #define MAX_TIMER_IRQS 4
 
@@ -99,8 +101,8 @@ struct driver_env
     seL4_CPtr ramdisk_endpoint_in_child;
 
     /* Add for xv6fs */
-    seL4_CPtr xv6fs_endpoint_in_parent;
-    seL4_CPtr xv6fs_endpoint_in_child;
+    seL4_CPtr fs_endpoint_in_parent;
+    seL4_CPtr fs_endpoint_in_child;
 
     int num_untypeds;
     vka_object_t *untypeds;

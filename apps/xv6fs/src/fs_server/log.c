@@ -1,9 +1,9 @@
 #include <string.h>
-#include <xv6fs/defs.h>
-#include <xv6fs/spinlock.h>
-#include <xv6fs/sleeplock.h>
-#include <xv6fs/fs.h>
-#include <xv6fs/buf.h>
+#include <defs.h>
+#include <spinlock.h>
+#include <sleeplock.h>
+#include <fs.h>
+#include <buf.h>
 
 // Simple logging that allows concurrent FS system calls.
 //

@@ -48,7 +48,7 @@
 
 #include <sel4platsupport/io.h>
 #include <sel4gpi/gpi_server.h>
-#include <xv6fs/xv6fs.h>
+#include <fs_server.h>
 #include <ramdisk_server.h>
 
 #define RT_MALLOC_SIZE 16 * 1024 * 1024
@@ -606,16 +606,45 @@ void *main_continued(void *arg UNUSED)
     env.ramdisk_endpoint_in_parent = env.gpi_endpoint_in_parent;
 #endif
 
-#ifdef XV6FS_IN_RT
-    printf(XV6FS_S "Starting xv6fs server...\n");
+#ifdef FS_IN_RT
+    /* create an endpoint for the parent to listen on*/
+    error = vka_alloc_endpoint(&env.vka, &ep_object);
+    assert(error == 0);
+
+    printf("Starting fs thread\n");
+
+    /* start ramdisk thread */
     error = xv6fs_server_spawn_thread(&env.simple,
-                                      &env.vka,
-                                      &env.vspace,
-                                      NULL,
-                                      NULL,
-                                      XV6FSK_SERVER_DEFAULT_PRIORITY,
-                                      &env.xv6fs_endpoint_in_parent);
+                            &env.vka,
+                            &env.vspace,
+                            env.gpi_endpoint_in_parent,
+                            env.ramdisk_endpoint_in_parent,
+                            250,
+                            &env.fs_endpoint_in_parent);
+
+    assert(error == 0);
+
+#if 0
+    /* Wait for message from thread */
+    cspacepath_t received_cap_path;
+    error = vka_cspace_alloc_path(&env.vka, &received_cap_path);
+    assert(error == 0);
+
+    seL4_SetCapReceivePath(received_cap_path.root,
+                           received_cap_path.capPtr,
+                           received_cap_path.capDepth);
+
+    tag = seL4_MessageInfo_new(0, 0, 0, 0);
+    tag = seL4_Recv(ep_object.cptr, NULL);
+    assert(seL4_MessageInfo_get_extraCaps(tag) == 1);
+    assert(received_cap_path.capPtr != 1);
+    env.fs_endpoint_in_parent = received_cap_path.capPtr;
+
+    printf("Got fs ep in slot %d\n", (int) env.fs_endpoint_in_parent);
 #endif
+#else
+    env.fs_endpoint_in_parent = env.gpi_endpoint_in_parent;
+#endif 
 
     /* now run the tests */
     sel4test_run_tests(&env);

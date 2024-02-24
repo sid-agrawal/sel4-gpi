@@ -2,12 +2,12 @@
 // Support functions for system calls that involve file descriptors.
 //
 
-#include <xv6fs/defs.h>
-#include <xv6fs/fs.h>
-#include <xv6fs/spinlock.h>
-#include <xv6fs/sleeplock.h>
-#include <xv6fs/file.h>
-#include <xv6fs/proc.h>
+#include <defs.h>
+#include <fs.h>
+#include <spinlock.h>
+#include <sleeplock.h>
+#include <file.h>
+#include <proc.h>
 
 struct devsw devsw[NDEV];
 struct

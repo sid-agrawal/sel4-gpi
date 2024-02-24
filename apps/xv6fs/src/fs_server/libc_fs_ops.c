@@ -4,12 +4,12 @@
 
 #include <stdio.h>
 #include <string.h>
-#include <xv6fs/defs.h>
-#include <xv6fs/fs.h>
-#include <xv6fs/spinlock.h>
-#include <xv6fs/sleeplock.h>
-#include <xv6fs/file.h>
-#include <xv6fs/proc.h>
+#include <defs.h>
+#include <fs.h>
+#include <spinlock.h>
+#include <sleeplock.h>
+#include <file.h>
+#include <proc.h>
 
 #define NO_OFFSET -1
 

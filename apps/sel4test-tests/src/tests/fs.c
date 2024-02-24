@@ -1,4 +1,3 @@
-#if 0
 #include <stdlib.h>
 #include <fcntl.h>
 #include <unistd.h>
@@ -8,7 +7,7 @@
 #include "../test.h"
 #include "../helpers.h"
 
-#include <xv6fs/xv6fs.h>
+#include <fs_client.h>
 
 #define TEST_STR_1 "Fuzzy Wuzzy was a bear"
 #define TEST_STR_2 "Fuzzy Wuzzy had no hair"
@@ -89,4 +88,3 @@ int test_fs(env_t env)
     return sel4test_get_result();
 }
 DEFINE_TEST(GPIFS001, "Ensure that the file system is functioning", test_fs, true)
-#endif

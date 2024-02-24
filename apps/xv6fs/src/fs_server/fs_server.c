@@ -14,58 +14,16 @@
 #include <vspace/vspace.h>
 #include <libc_fs_helpers.h>
 
-#include <xv6fs/xv6fs.h>
-#include <xv6fs/defs.h>
-#include <xv6fs/spinlock.h>
-#include <xv6fs/sleeplock.h>
-#include <xv6fs/proc.h>
-#include <xv6fs/fs.h>
-#include <xv6fs/buf.h>
-#include <xv6fs/file.h>
+#include <fs_server.h>
+#include <defs.h>
+#include <spinlock.h>
+#include <sleeplock.h>
+#include <proc.h>
+#include <fs.h>
+#include <buf.h>
+#include <file.h>
 
-/* Memory regions for IPC to xv6fs server */
-#define XV6FS_OP 0
-
-// open
-#define XV6FS_FLAGS 1
-#define XV6FS_MODE 2
-
-// read / write
-#define XV6FS_FD 1
-#define XV6FS_COUNT 2
-#define XV6FS_POFFSET 3
-
-// seek
-#define XV6FS_OFFSET 2
-#define XV6FS_WHENCE 3
-
-// getcwd
-#define XV6FS_SIZE 1
-
-// fcntl
-#define XV6FS_CMD 2
-#define XV6FS_ARG 3
-
-// return values
-#define XV6FS_RET 0
-
-/* xv6fs opcodes */
-#define XV6FS_REGISTER_CLIENT 0
-#define XV6FS_OPEN 1
-#define XV6FS_READ 2
-#define XV6FS_WRITE 3
-#define XV6FS_STAT 4
-#define XV6FS_FSTAT 5
-#define XV6FS_LSEEK 6
-#define XV6FS_CLOSE 7
-#define XV6FS_UNLINK 8
-#define XV6FS_GETCWD 9
-#define XV6FS_FCNTL 10
-#define XV6FS_PREAD 11
-#define XV6FS_PWRITE 12
-
-/* Other constants */
-#define IPC_FRAME_PAGE_BITS seL4_PageBits
+#include <fs_shared.h>
 
 #define XV6FS_PRINTF(...)   \
   do                        \
@@ -102,8 +60,6 @@
     }                                \
   } while (0);
 
-void init_global_libc_fs_ops(void);
-
 /*--- XV6FS SERVER ---*/
 static xv6fs_server_context_t xv6fs_server;
 
@@ -129,11 +85,21 @@ static inline void reply(seL4_MessageInfo_t tag)
   api_reply(get_xv6fs_server()->server_thread.reply.cptr, tag);
 }
 
+static int block_read(uint blockno, void *buf) {
+  // (XXX) Arya: implement to call ramdisk server
+  return 0;
+}
+
+static int block_write(uint blockno, void *buf) {
+  // (XXX) Arya: implement to call ramdisk server
+  return 0;
+}
+
 seL4_Error
 xv6fs_server_spawn_thread(simple_t *parent_simple, vka_t *parent_vka,
                           vspace_t *parent_vspace,
-                          int (*block_read)(uint, void *),
-                          int (*block_write)(uint, void *),
+                          seL4_CPtr gpi_ep,
+                          seL4_CPtr rd_ep,
                           uint8_t priority,
                           seL4_CPtr *server_ep_cap)
 {
@@ -150,6 +116,8 @@ xv6fs_server_spawn_thread(simple_t *parent_simple, vka_t *parent_vka,
   get_xv6fs_server()->server_vka = parent_vka;
   get_xv6fs_server()->server_cspace = parent_cspace_cspath.root;
   get_xv6fs_server()->server_vspace = parent_vspace;
+  get_xv6fs_server()->gpi_ep = gpi_ep;
+  get_xv6fs_server()->rd_ep = rd_ep;
   get_xv6fs_server()->block_read = block_read;
   get_xv6fs_server()->block_write = block_write;
   get_xv6fs_server()->shared_mem = NULL;
@@ -169,7 +137,6 @@ xv6fs_server_spawn_thread(simple_t *parent_simple, vka_t *parent_vka,
   *server_ep_cap = get_xv6fs_server()->server_ep_obj.cptr;
 
   /* Initialize the fs */
-  init_global_libc_fs_ops();
   error = init_disk_file();
   CHECK_ERROR(error, "failed to initialize disk file");
   binit();
@@ -362,320 +329,6 @@ exit:
   ZF_LOGI(XV6FS_S "main: Suspending.");
   unmap_shared_frame(get_xv6fs_server()->server_vspace, get_xv6fs_server()->shared_mem);
   seL4_TCB_Suspend(get_xv6fs_server()->server_thread.tcb.cptr);
-}
-
-/*--- XV6FS CLIENT ---*/
-
-static xv6fs_client_context_t xv6fs_client;
-
-xv6fs_client_context_t *get_xv6fs_client(void)
-{
-  return &xv6fs_client;
-}
-
-seL4_Error
-xv6fs_client_init(vka_t *client_vka,
-                  vspace_t *client_vspace,
-                  seL4_CPtr server_ep_cap)
-{
-  get_xv6fs_client()->client_vka = client_vka;
-  get_xv6fs_client()->client_vspace = client_vspace;
-  get_xv6fs_client()->server_ep_cap = server_ep_cap;
-
-  /* Alloc shared memory for IPC */
-  seL4_Error error;
-  vka_object_t frame_obj;
-  error = vka_alloc_frame(get_xv6fs_client()->client_vka, seL4_PageBits, &frame_obj);
-  CHECK_ERROR(error, "failed to allocate shared memory\n");
-
-  error = map_shared_frame(get_xv6fs_client()->client_vspace, &frame_obj.cptr, &get_xv6fs_client()->shared_mem);
-  CHECK_ERROR(error, "failed to map shared memory\n");
-  // ARYA-TODO: support deregistering client and unmapping these frames
-
-  /* Register shared mem with the server */
-  seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 1, 1);
-  seL4_SetMR(XV6FS_OP, XV6FS_REGISTER_CLIENT);
-  seL4_SetCap(0, frame_obj.cptr);
-  tag = seL4_Call(get_xv6fs_client()->server_ep_cap, tag);
-  error = seL4_MessageInfo_get_label(tag);
-  CHECK_ERROR(error, "failed to register client with xv6fs server\n");
-
-  /* Override libc fs ops */
-  init_global_libc_fs_ops();
-
-  return error;
-}
-
-/* Remote fs access functions to override libc fs ops */
-int xv6fs_remote_open(const char *pathname, int flags, int modes)
-{
-  // Copy pathname to ipc frame
-  memcpy(get_xv6fs_client()->shared_mem, pathname, strlen(pathname) + 1);
-
-  // Send IPC to fs server
-  seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0, 3);
-  seL4_SetMR(XV6FS_OP, XV6FS_OPEN);
-  seL4_SetMR(XV6FS_FLAGS, flags);
-  seL4_SetMR(XV6FS_MODE, modes);
-  tag = seL4_Call(get_xv6fs_client()->server_ep_cap, tag);
-
-  if (seL4_MessageInfo_get_label(tag) != seL4_NoError)
-  {
-    return -1;
-  }
-
-  return seL4_GetMR(XV6FS_RET);
-}
-
-int xv6fs_remote_read(int fd, void *buf, int count)
-{
-  // Send IPC to fs server
-  seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0, 3);
-  seL4_SetMR(XV6FS_OP, XV6FS_READ);
-  seL4_SetMR(XV6FS_FD, fd);
-  seL4_SetMR(XV6FS_COUNT, count);
-  tag = seL4_Call(get_xv6fs_client()->server_ep_cap, tag);
-
-  if (seL4_MessageInfo_get_label(tag) != seL4_NoError)
-  {
-    return -1;
-  }
-
-  // Copy ipc frame to buf
-  int res = seL4_GetMR(XV6FS_RET);
-  if (res > 0)
-  {
-    memcpy(buf, get_xv6fs_client()->shared_mem, res);
-  }
-
-  return res;
-}
-
-int xv6fs_remote_pread(int fd, void *buf, int count, int offset)
-{
-  // Send IPC to fs server
-  seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0, 4);
-  seL4_SetMR(XV6FS_OP, XV6FS_PREAD);
-  seL4_SetMR(XV6FS_FD, fd);
-  seL4_SetMR(XV6FS_COUNT, count);
-  seL4_SetMR(XV6FS_POFFSET, offset);
-  tag = seL4_Call(get_xv6fs_client()->server_ep_cap, tag);
-
-  if (seL4_MessageInfo_get_label(tag) != seL4_NoError)
-  {
-    return -1;
-  }
-
-  // Copy ipc frame to buf
-  int res = seL4_GetMR(XV6FS_RET);
-  if (res > 0)
-  {
-    memcpy(buf, get_xv6fs_client()->shared_mem, res);
-  }
-
-  return res;
-}
-
-int xv6fs_remote_write(int fd, const void *buf, int count)
-{
-  // Copy buf to ipc frame
-  memcpy(get_xv6fs_client()->shared_mem, buf, count);
-
-  // Send IPC to fs server
-  seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0, 3);
-  seL4_SetMR(XV6FS_OP, XV6FS_WRITE);
-  seL4_SetMR(XV6FS_FD, fd);
-  seL4_SetMR(XV6FS_COUNT, count);
-  tag = seL4_Call(get_xv6fs_client()->server_ep_cap, tag);
-
-  if (seL4_MessageInfo_get_label(tag) != seL4_NoError)
-  {
-    return -1;
-  }
-
-  return seL4_GetMR(XV6FS_RET);
-}
-
-int xv6fs_remote_fstat(int fd, struct stat *buf)
-{
-  // Send IPC to fs server
-  seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0, 2);
-  seL4_SetMR(XV6FS_OP, XV6FS_FSTAT);
-  seL4_SetMR(XV6FS_FD, fd);
-  tag = seL4_Call(get_xv6fs_client()->server_ep_cap, tag);
-
-  if (seL4_MessageInfo_get_label(tag) != seL4_NoError)
-  {
-    return -1;
-  }
-
-  // Copy ipc frame to buf
-  int res = seL4_GetMR(XV6FS_RET);
-  if (res != -1)
-  {
-    memcpy(buf, get_xv6fs_client()->shared_mem, sizeof(struct stat));
-  }
-
-  return res;
-}
-
-int xv6fs_remote_stat(const char *pathname, struct stat *buf)
-{
-  // Copy pathname to ipc frame
-  memcpy(get_xv6fs_client()->shared_mem, pathname, strlen(pathname) + 1);
-
-  // Send IPC to fs server
-  seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0, 1);
-  seL4_SetMR(XV6FS_OP, XV6FS_STAT);
-  tag = seL4_Call(get_xv6fs_client()->server_ep_cap, tag);
-
-  if (seL4_MessageInfo_get_label(tag) != seL4_NoError)
-  {
-    return -1;
-  }
-
-  // Copy ipc frame to buf
-  int res = seL4_GetMR(XV6FS_RET);
-  if (res != -1)
-  {
-    memcpy(buf, get_xv6fs_client()->shared_mem, sizeof(struct stat));
-  }
-
-  return res;
-}
-
-int xv6fs_remote_lseek(int fd, off_t offset, int whence)
-{
-  // Send IPC to fs server
-  seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0, 4);
-  seL4_SetMR(XV6FS_OP, XV6FS_LSEEK);
-  seL4_SetMR(XV6FS_FD, fd);
-  seL4_SetMR(XV6FS_OFFSET, offset);
-  seL4_SetMR(XV6FS_WHENCE, whence);
-  tag = seL4_Call(get_xv6fs_client()->server_ep_cap, tag);
-
-  if (seL4_MessageInfo_get_label(tag) != seL4_NoError)
-  {
-    return -1;
-  }
-
-  return seL4_GetMR(XV6FS_RET);
-}
-
-int xv6fs_remote_close(int fd)
-{
-  // Send IPC to fs server
-  seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0, 2);
-  seL4_SetMR(XV6FS_OP, XV6FS_CLOSE);
-  seL4_SetMR(XV6FS_FD, fd);
-  tag = seL4_Call(get_xv6fs_client()->server_ep_cap, tag);
-
-  if (seL4_MessageInfo_get_label(tag) != seL4_NoError)
-  {
-    return -1;
-  }
-
-  return seL4_GetMR(XV6FS_RET);
-}
-
-int xv6fs_remote_unlink(const char *pathname)
-{
-  // Copy pathname to ipc frame
-  memcpy(get_xv6fs_client()->shared_mem, pathname, strlen(pathname) + 1);
-
-  // Send IPC to fs server
-  seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0, 1);
-  seL4_SetMR(XV6FS_OP, XV6FS_UNLINK);
-  tag = seL4_Call(get_xv6fs_client()->server_ep_cap, tag);
-
-  if (seL4_MessageInfo_get_label(tag) != seL4_NoError)
-  {
-    return -1;
-  }
-
-  return seL4_GetMR(XV6FS_RET);
-}
-
-char *xv6fs_remote_getcwd(char *buf, size_t size)
-{
-  // Send IPC to fs server
-  seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0, 2);
-  seL4_SetMR(XV6FS_OP, XV6FS_GETCWD);
-  seL4_SetMR(XV6FS_SIZE, size);
-  tag = seL4_Call(get_xv6fs_client()->server_ep_cap, tag);
-
-  if (seL4_MessageInfo_get_label(tag) != seL4_NoError)
-  {
-    return NULL;
-  }
-
-  // Copy pathname to ipc frame
-  int ret = seL4_GetMR(XV6FS_RET);
-  if (ret == 0)
-  {
-    return NULL;
-  }
-
-  memcpy(buf, get_xv6fs_client()->shared_mem, strlen(get_xv6fs_client()->shared_mem) + 1);
-
-  return buf;
-}
-
-int xv6fs_remote_fcntl(int fd, int cmd, ...)
-{
-  unsigned long arg;
-  va_list ap;
-  va_start(ap, cmd);
-  arg = va_arg(ap, unsigned long);
-  va_end(ap);
-
-  // Copy arg if necessary
-  switch (cmd)
-  {
-  case F_SETLK:
-  case F_SETLKW:
-  case F_GETLK:
-    memcpy(get_xv6fs_client()->shared_mem, (void *)arg, sizeof(struct flock));
-    break;
-  }
-
-  // Send IPC to fs server
-  seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0, 4);
-  seL4_SetMR(XV6FS_OP, XV6FS_FCNTL);
-  seL4_SetMR(XV6FS_FD, fd);
-  seL4_SetMR(XV6FS_CMD, cmd);
-  seL4_SetMR(XV6FS_ARG, arg);
-  tag = seL4_Call(get_xv6fs_client()->server_ep_cap, tag);
-
-  if (seL4_MessageInfo_get_label(tag) != seL4_NoError)
-  {
-    return -1;
-  }
-
-  // Copy arg if necessary
-  switch (cmd)
-  {
-  case F_GETLK:
-    memcpy((void *)arg, get_xv6fs_client()->shared_mem, sizeof(struct flock));
-    break;
-  }
-
-  return seL4_GetMR(XV6FS_RET);
-}
-
-void init_global_libc_fs_ops(void)
-{
-  libc_fs_ops.open = xv6fs_remote_open;
-  libc_fs_ops.read = xv6fs_remote_read;
-  libc_fs_ops.write = xv6fs_remote_write;
-  libc_fs_ops.stat = xv6fs_remote_stat;
-  libc_fs_ops.fstat = xv6fs_remote_fstat;
-  libc_fs_ops.lseek = xv6fs_remote_lseek;
-  libc_fs_ops.close = xv6fs_remote_close;
-  libc_fs_ops.unlink = xv6fs_remote_unlink;
-  libc_fs_ops.getcwd = xv6fs_remote_getcwd;
-  libc_fs_ops.fcntl = xv6fs_remote_fcntl;
-  libc_fs_ops.pread = xv6fs_remote_pread;
 }
 
 /* Override xv6 block read/write functions */
