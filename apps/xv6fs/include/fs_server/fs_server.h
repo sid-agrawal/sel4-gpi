@@ -22,11 +22,22 @@ typedef struct _ads_client_context ads_client_context_t;
 struct _pd_client_context;
 typedef struct _pd_client_context pd_client_context_t;
 
-/** @file API for allowing a thread to act as the parent to a xv6fs server
- * thread.
+/**
+ * Starts the fs in the current thread
+ * Assumes the fs is started in a new PD
  *
- * Provides the APIs for spawning the server thread.
+ * @param ads_conn ADS RDE
+ * @param pd_conn PD RDE
+ * @param gpi_ep General gpi ep
+ * @param rd_ep Ramdisk server's ep
+ * @param parent_ep Endpoint of the parent process
+ * @return 0 on successful exit, nonzero otherwise
  */
+int xv6fs_server_start(ads_client_context_t *ads_conn,
+                       pd_client_context_t *pd_conn,
+                       seL4_CPtr gpi_ep,
+                       seL4_CPtr rd_ep,
+                       seL4_CPtr parent_ep);
 
 /** Spawns the xv6fs server thread. Server thread is spawned within the VSpace and
  *  CSpace of the thread that spawned it.
@@ -74,11 +85,10 @@ Context of the server
 */
 typedef struct _xv6fs_server_context
 {
-    simple_t *server_simple;
+    // Used only when server started as thread
     vka_t *server_vka;
-    seL4_CPtr server_cspace;
-    vspace_t *server_vspace;
-    sel4utils_thread_t server_thread;
+
+    // Generic functions used when started as thread or PD
     int (*next_slot)(seL4_CPtr *);
     int (*badge_ep)(seL4_Word, seL4_CPtr *);
 
@@ -100,11 +110,13 @@ typedef struct _xv6fs_server_context
     mo_client_context_t *shared_mem;
     void *shared_mem_vaddr;
     ramdisk_client_context_t naive_blocks[FS_SIZE];
+
+    seL4_CPtr mcs_reply;
 } xv6fs_server_context_t;
 
 /**
  * Internal library function: acts as the main() for the server thread.
  **/
-void xv6fs_server_main(void);
+int xv6fs_server_main(void);
 
 xv6fs_server_context_t *get_xv6fs_server(void);

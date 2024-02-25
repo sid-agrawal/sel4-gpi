@@ -51,5 +51,13 @@ int main(int argc, char **argv)
     assert(argc == 1);
     seL4_CPtr parent_ep = (seL4_CPtr)atol(argv[0]);
 
-    printf("ERROR: FS server does not currently support starting as an executable\n");
+    // (XXX) Arya: Temporary hack to get ramdisk ep
+    // replace with RDE mechanism
+    seL4_CPtr rd_ep = parent_ep - 1;
+
+    return xv6fs_server_start(&ads_conn,
+                              &pd_conn,
+                              gpi_cap,
+                              rd_ep,
+                              parent_ep);
 }

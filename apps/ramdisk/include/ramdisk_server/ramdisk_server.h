@@ -64,13 +64,15 @@ typedef struct _ramdisk_block_node
     struct _ramdisk_block_node *next;
 } ramdisk_block_node_t;
 
-typedef int (*next_slot_fn)(seL4_CPtr *);
-
 typedef struct _ramdisk_server_context
 {
+    // Used only when server started as thread
     vka_t *server_vka;
 
-    // Endpoints of other pds
+    // Generic functions used when started as thread or PD
+    int (*next_slot)(seL4_CPtr *);
+
+    // RDEs and other EPs
     seL4_CPtr gpi_server;
     ads_client_context_t *ads_conn;
     pd_client_context_t *pd_conn;
@@ -86,10 +88,7 @@ typedef struct _ramdisk_server_context
     // Data structure of ramdisk blocks
     ramdisk_block_node_t *free_blocks;
 
-    // Generic cspace slot allocation function
-    next_slot_fn next_slot;
-
-    seL4_CPtr mcs_reply; // How to use this?
+    seL4_CPtr mcs_reply;
 } ramdisk_server_context_t;
 
 /**

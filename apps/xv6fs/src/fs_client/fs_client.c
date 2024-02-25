@@ -19,6 +19,7 @@
 #include <fs_client.h>
 
 #define FD_TABLE_SIZE 32
+#define FS_APP "fs_server"
 
 #define XV6FS_PRINTF(...)   \
   do                        \
@@ -113,6 +114,69 @@ static int vka_next_slot_fn(seL4_CPtr *slot)
   return vka_cspace_alloc(get_xv6fs_client()->client_vka, slot);
 }
 
+int start_xv6fs_pd(vka_t *vka,
+                   seL4_CPtr gpi_ep,
+                   seL4_CPtr rd_ep,
+                   seL4_CPtr *fs_ep)
+{
+  int error;
+
+  // Create an endpoint for the parent to listen on
+  vka_object_t ep_object = {0};
+  error = vka_alloc_endpoint(vka, &ep_object);
+  CHECK_ERROR(error, "failed to allocate endpoint");
+
+  // Create a new PD
+  pd_client_context_t pd_os_cap;
+  error = pd_component_client_connect(gpi_ep, vka, &pd_os_cap);
+  CHECK_ERROR(error, "failed to create new pd");
+
+  // Create a new ADS Cap, which will be in the context of a PD and image
+  ads_client_context_t ads_os_cap;
+  error = ads_component_client_connect(gpi_ep, vka, &ads_os_cap);
+  CHECK_ERROR(error, "failed to create new ads");
+
+  // Make a new AS, loads an image
+  error = pd_client_load(&pd_os_cap, &ads_os_cap, FS_APP);
+  CHECK_ERROR(error, "failed to load pd image");
+
+  // Copy the parent ep to the new PD
+  seL4_Word parent_ep_slot;
+  error = pd_client_send_cap(&pd_os_cap, ep_object.cptr, &parent_ep_slot);
+  CHECK_ERROR(error, "failed to send parent's ep cap to pd");
+
+  // Copy the ramdisk ep to the new PD
+  // (XXX) Arya: replace with RDE mechanism once implemented
+  seL4_Word ramdisk_ep_slot;
+  error = pd_client_send_cap(&pd_os_cap, rd_ep, &ramdisk_ep_slot);
+  CHECK_ERROR(error, "failed to send ramdisk's ep cap to pd");
+  assert(ramdisk_ep_slot == parent_ep_slot - 1);
+
+  // Start it
+  error = pd_client_start(&pd_os_cap, parent_ep_slot); // with this arg.
+  CHECK_ERROR(error, "failed to start pd");
+
+  // Wait for it to finish starting
+  seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0, 0);
+
+  /* Alloc cap receive path*/
+  cspacepath_t received_cap_path;
+  error = vka_cspace_alloc_path(vka, &received_cap_path);
+  CHECK_ERROR(error, "failed to alloc receive endpoint");
+
+  seL4_SetCapReceivePath(received_cap_path.root,
+                         received_cap_path.capPtr,
+                         received_cap_path.capDepth);
+
+  tag = seL4_Recv(ep_object.cptr, NULL);
+  int n_caps = seL4_MessageInfo_get_extraCaps(tag);
+  CHECK_ERROR(n_caps != 1, "message from ramdisk does not contain ep");
+  *fs_ep = received_cap_path.capPtr;
+
+  XV6FS_PRINTF("Successfully started ramdisk server\n");
+  return 0;
+}
+
 seL4_Error
 xv6fs_client_init(vka_t *client_vka,
                   seL4_CPtr fs_ep,
@@ -205,7 +269,7 @@ static int xv6fs_libc_open(const char *pathname, int flags, int modes)
     return -1;
   }
 
-  printf("File %p offset is %d\n", file, file->offset);
+  printf("File %p offset is %ld\n", file, file->offset);
 
   return fd;
 }
@@ -222,10 +286,10 @@ static int xv6fs_libc_read(int fd, void *buf, int count)
     return -1;
   }
 
-  printf("File %p offset is %d\n", file, file->offset);
+  printf("File %p offset is %ld\n", file, file->offset);
 
   // Send IPC to fs server
-  seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 1, FSMSGREGF_READ_REQ_END);
+  seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 1, FSMSGREG_READ_REQ_END);
   seL4_SetMR(FSMSGREG_FUNC, FS_FUNC_READ_REQ);
   seL4_SetMR(FSMSGREG_READ_REQ_N, count);
   seL4_SetMR(FSMSGREG_READ_REQ_OFFSET, file->offset);
@@ -303,7 +367,7 @@ static int xv6fs_libc_close(int fd)
 
 static int xv6fs_libc_lseek(int fd, off_t offset, int whence)
 {
-  XV6FS_PRINTF("xv6fs_libc_lseek fd %d offset %d whence %d\n", fd, offset, whence);
+  XV6FS_PRINTF("xv6fs_libc_lseek fd %d offset %ld whence %d\n", fd, offset, whence);
 
   // Handle file offset locally
 

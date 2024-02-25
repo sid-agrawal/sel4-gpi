@@ -17,6 +17,20 @@
 #define XV6FS_C "xv6fs Client: "
 
 /**
+ * Starts the fs server in a new process
+ *
+ * @param vka vka to use while creating the process
+ * @param gpi_ep endpoint of the gpi server
+ * @param rd_ep endpoint of the ramdisk server
+ * @param fs_ep outputs the ep of the new fs server
+ * @return 0 on success, or -1 otherwise
+ */
+int start_xv6fs_pd(vka_t *vka,
+                   seL4_CPtr gpi_ep,
+                   seL4_CPtr rd_ep,
+                   seL4_CPtr *fs_ep);
+
+/**
  * Initializes a process as a xv6fs client
  * Relevant libc functions will be overridden in the current process
  *

@@ -18,7 +18,6 @@
 
 #define TEST_STR_1 "Fuzzy Wuzzy was a bear"
 #define TEST_STR_2 "Fuzzy Wuzzy had no hair"
-#define RAMDISK_APP "ramdisk_server"
 
 /**
  * Starts the ramdisk as a thread

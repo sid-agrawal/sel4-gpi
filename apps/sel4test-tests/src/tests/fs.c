@@ -99,9 +99,11 @@ int test_fs(env_t env)
     error = start_ramdisk_pd(&env->vka, env->gpi_endpoint, &ramdisk_ep);
     test_assert(error == 0);
 
-    /* TODO Start fs server process */
+    /* Start fs server process */
     seL4_CPtr fs_ep;
-    start_fs_thread(env, ramdisk_ep, &fs_ep);
+    // error = start_fs_thread(env, ramdisk_ep, &fs_ep);
+    error = start_xv6fs_pd(&env->vka, env->gpi_endpoint, ramdisk_ep, &fs_ep);
+    test_assert(error == 0);
 
     printf("------------------STARTING TESTS: %s------------------\n", __func__);
 
@@ -170,13 +172,13 @@ int test_fs(env_t env)
 
     // (XXX) Arya: Don't support unlink right now
 
-    #if 0
+#if 0
     error = unlink(TEST_FNAME);
     test_assert(error == 0);
 
     f = open(TEST_FNAME, O_RDONLY);
     test_assert(f == -1); // File should no longer exist
-    #endif
+#endif
 
     printf("------------------ENDING: %s------------------\n", __func__);
     return sel4test_get_result();

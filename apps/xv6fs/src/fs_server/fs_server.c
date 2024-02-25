@@ -134,12 +134,12 @@ static inline seL4_MessageInfo_t recv(seL4_Word *sender_badge_ptr)
 
   return api_recv(get_xv6fs_server()->server_ep,
                   sender_badge_ptr,
-                  get_xv6fs_server()->server_thread.reply.cptr);
+                  get_xv6fs_server()->mcs_reply);
 }
 
 static inline void reply(seL4_MessageInfo_t tag)
 {
-  api_reply(get_xv6fs_server()->server_thread.reply.cptr, tag);
+  api_reply(get_xv6fs_server()->mcs_reply, tag);
 }
 
 static int vka_next_slot_fn(seL4_CPtr *slot)
@@ -201,6 +201,33 @@ static int init_naive_blocks()
   return 0;
 }
 
+int xv6fs_server_start(ads_client_context_t *ads_conn,
+                       pd_client_context_t *pd_conn,
+                       seL4_CPtr gpi_ep,
+                       seL4_CPtr rd_ep,
+                       seL4_CPtr parent_ep)
+{
+  seL4_Error error;
+
+  xv6fs_server_context_t *server = get_xv6fs_server();
+
+  server->gpi_ep = gpi_ep;
+  server->rd_ep = rd_ep;
+  server->ads_conn = ads_conn;
+  server->pd_conn = pd_conn;
+  server->parent_ep = parent_ep;
+  server->next_slot = pd_next_slot_fn;
+  server->badge_ep = pd_badge_ep_fn;
+
+  /* Allocate the Endpoint that the server will be listening on. */
+  error = pd_client_alloc_ep(server->pd_conn, &server->server_ep);
+  CHECK_ERROR(error, "Failed to allocate endpoint for fs server");
+  XV6FS_PRINTF("Allocated server ep at %d\n", (int)server->server_ep);
+
+  XV6FS_PRINTF("Going to main function\n");
+  return xv6fs_server_main();
+}
+
 seL4_Error
 xv6fs_server_spawn_thread(simple_t *parent_simple,
                           vka_t *parent_vka,
@@ -223,10 +250,7 @@ xv6fs_server_spawn_thread(simple_t *parent_simple,
 
   xv6fs_server_context_t *server = get_xv6fs_server();
 
-  server->server_simple = parent_simple;
   server->server_vka = parent_vka;
-  server->server_cspace = parent_cspace_cspath.root;
-  server->server_vspace = parent_vspace;
   server->gpi_ep = gpi_ep;
   server->parent_ep = parent_ep;
   server->rd_ep = rd_ep;
@@ -249,18 +273,19 @@ xv6fs_server_spawn_thread(simple_t *parent_simple,
   sel4utils_thread_config_t config = thread_config_default(parent_simple,
                                                            parent_cspace_cspath.root,
                                                            seL4_NilData,
-                                                           server_ep_obj.cptr,
+                                                           server->server_ep,
                                                            priority);
 
+  sel4utils_thread_t server_thread;
   error = sel4utils_configure_thread_config(parent_vka,
                                             parent_vspace,
                                             parent_vspace,
                                             config,
-                                            &server->server_thread);
+                                            &server_thread);
   CHECK_ERROR_GOTO(error, "sel4utils_configure_thread failed", out);
 
-  NAME_THREAD(server->server_thread.tcb.cptr, "xv6fs server");
-  error = sel4utils_start_thread(&server->server_thread,
+  NAME_THREAD(server_thread.tcb.cptr, "xv6fs server");
+  error = sel4utils_start_thread(&server_thread,
                                  (sel4utils_thread_entry_fn)&xv6fs_server_main,
                                  NULL, NULL, 1);
   CHECK_ERROR_GOTO(error, "sel4utils_start_thread failed", out);
@@ -339,7 +364,7 @@ static int fs_init()
  * @brief The starting point for the xv6fs server's thread.
  *
  */
-void xv6fs_server_main()
+int xv6fs_server_main()
 {
   XV6FS_PRINTF("started\n");
 
@@ -347,26 +372,29 @@ void xv6fs_server_main()
   seL4_Error error = 0;
   seL4_Word sender_badge;
   cspacepath_t received_cap_path;
+  received_cap_path.root = PD_CAP_ROOT;
+  received_cap_path.capDepth = PD_CAP_DEPTH;
 
   error = fs_init();
   CHECK_ERROR_GOTO(error, "failed to initialize fs", exit_main);
 
   while (1)
   {
-    // Allocate cap receive path
-    error = vka_cspace_alloc_path(get_xv6fs_server()->server_vka, &received_cap_path);
+    /* Alloc cap receive slot*/
+    error = get_xv6fs_server()->next_slot(&received_cap_path.capPtr);
     CHECK_ERROR_GOTO(error, "failed to alloc cap receive slot", exit_main);
 
     seL4_SetCapReceivePath(
-        /* _service */ received_cap_path.root,
-        /* index */ received_cap_path.capPtr,
-        /* depth */ received_cap_path.capDepth);
+        received_cap_path.root,
+        received_cap_path.capPtr,
+        received_cap_path.capDepth);
 
     /* Receive a message */
     tag = recv(&sender_badge);
     unsigned int op = seL4_GetMR(FSMSGREG_FUNC);
 
     seL4_MessageInfo_t reply_tag = seL4_MessageInfo_new(0, 0, 0, 0);
+
     if (sender_badge == 0)
     { /* Handle Untyped Request */
       switch (op)
@@ -427,7 +455,7 @@ void xv6fs_server_main()
         goto done;
       }
 
-      XV6FS_PRINTF("Got request for file with id %d\n", reg_entry->file->id);
+      XV6FS_PRINTF("Got request for file with id %ld\n", reg_entry->file->id);
 
       switch (op)
       {
@@ -522,8 +550,8 @@ void xv6fs_server_main()
   }
 
 exit_main:
-  ZF_LOGI(XV6FS_S "main: Suspending.");
-  seL4_TCB_Suspend(get_xv6fs_server()->server_thread.tcb.cptr);
+  XV6FS_PRINTF("main: Suspending.");
+  return -1;
 }
 
 static int block_read(uint blockno, void *buf)

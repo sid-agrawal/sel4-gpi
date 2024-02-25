@@ -70,6 +70,7 @@ set(cpio_files "")
 list(APPEND cpio_files "$<TARGET_FILE:sel4test-tests>")
 list(APPEND cpio_files "$<TARGET_FILE:hello>")
 list(APPEND cpio_files "$<TARGET_FILE:ramdisk_server>")
+list(APPEND cpio_files "$<TARGET_FILE:fs_server>")
 MakeCPIO(archive.o "${cpio_files}")
 
 add_executable(sel4test-driver EXCLUDE_FROM_ALL ${static} archive.o)
