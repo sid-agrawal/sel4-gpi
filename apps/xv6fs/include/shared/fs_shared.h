@@ -8,7 +8,7 @@
 #define FS_SIZE (RAMDISK_SIZE_BYTES / RAMDISK_BLOCK_SIZE) // Size of file system in blocks
 #define BSIZE RAMDISK_BLOCK_SIZE                          // Block size in bytes
 #define N_INODES FS_SIZE / 4                              // Max number of inodes in the filesystem
-#define ROOT_DIR "root"                                   // Name of the initial directory
+#define ROOT_DIR "./"                                     // Name of the initial directory
 #define NFILE 100                                         // Number of files in open file table
 #define NDEV 10                                           // maximum major device number
 #define ROOTDEV 1                                         // device number of file system root disk
@@ -39,6 +39,9 @@ enum fs_server_funcs
 
     FS_FUNC_WRITE_REQ,
     FS_FUNC_WRITE_ACK,
+
+    FS_FUNC_STAT_REQ,
+    FS_FUNC_STAT_ACK,
 };
 
 /* Designated purposes of each message register in the mini-protocol. */
@@ -66,7 +69,12 @@ enum fs_msgregs
     FSMSGREG_WRITE_REQ_OFFSET,
     FSMSGREG_WRITE_REQ_END,
     FSMSGREG_WRITE_ACK_N = FSMSGREG_LABEL0,
-    FSMSGREG_WRITE_ACK_END
+    FSMSGREG_WRITE_ACK_END,
+
+    /* Stat */
+    FSMSGREG_STAT_REQ_END = FSMSGREG_LABEL0,
+    FSMSGREG_STAT_ACK_END = FSMSGREG_LABEL0,
+
 };
 
 // (XXX) ARYA: to remove once swapped to new api

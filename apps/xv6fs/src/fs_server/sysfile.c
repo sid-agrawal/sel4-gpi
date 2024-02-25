@@ -402,11 +402,8 @@ int xv6fs_sys_utime(char *path, int time)
   return 0;
 }
 
-int xv6fs_sys_stat(void *fh, void *sth)
+int xv6fs_sys_stat(struct file *f, struct stat *st)
 {
-  struct file *f = (struct file *)fh;
-  struct stat *st = (struct stat *)sth;
-
   ilock(f->ip);
   stati(f->ip, st);
   iunlock(f->ip);

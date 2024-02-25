@@ -492,6 +492,20 @@ int xv6fs_server_main()
         seL4_MessageInfo_ptr_set_length(&reply_tag, FSMSGREG_READ_ACK_END);
         seL4_SetMR(FSMSGREG_READ_ACK_N, n_bytes_ret);
         break;
+      case FS_FUNC_STAT_REQ:
+        /* Attach memory object to server ADS */
+        CHECK_ERROR_GOTO(seL4_MessageInfo_get_extraCaps(tag) != 1,
+                         "client did not attach MO for read/write op", done);
+        mo_conn.badged_server_ep_cspath = received_cap_path;
+        error = ads_client_attach(get_xv6fs_server()->ads_conn,
+                                  NULL,
+                                  &mo_conn,
+                                  &mo_vaddr);
+        CHECK_ERROR_GOTO(error, "failed to attach client's MO to ADS", done);
+
+        /* Call function stat */
+        error = xv6fs_sys_stat(reg_entry->file, (struct stat *) mo_vaddr);
+        break;
 #if 0 // (XXX) Arya: to remove
     case XV6FS_STAT:
       pathname = get_xv6fs_server()->shared_mem;

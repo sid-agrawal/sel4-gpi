@@ -116,17 +116,6 @@ int init_disk_file(void)
   strcpy(de.name, "..");
   iappend(rootino, &de, sizeof(de));
 
-  /* Use special test dir */
-  /*
-  bzero(&de, sizeof(de));
-  inum = mkfs_ialloc(T_DIR);
-  de.inum = xshort(inum);
-  strcpy(de.name, ROOT_DIR);
-  iappend(rootino, &de, sizeof(de));
-  printf("%s:create dir :%s\n", __func__, de.name);
-  */
-  /* Use special test dir end */
-
   // fix size of root inode dir
   rinode(rootino, &din);
   off = xint(din.size);

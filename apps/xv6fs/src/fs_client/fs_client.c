@@ -274,7 +274,7 @@ static int xv6fs_libc_open(const char *pathname, int flags, int modes)
   return fd;
 }
 
-static int xv6fs_libc_read(int fd, void *buf, int count)
+static int xv6fs_libc_pread(int fd, void *buf, int count, int offset)
 {
   XV6FS_PRINTF("xv6fs_libc_read fd %d len %d\n", fd, count);
 
@@ -286,13 +286,11 @@ static int xv6fs_libc_read(int fd, void *buf, int count)
     return -1;
   }
 
-  printf("File %p offset is %ld\n", file, file->offset);
-
   // Send IPC to fs server
   seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 1, FSMSGREG_READ_REQ_END);
   seL4_SetMR(FSMSGREG_FUNC, FS_FUNC_READ_REQ);
   seL4_SetMR(FSMSGREG_READ_REQ_N, count);
-  seL4_SetMR(FSMSGREG_READ_REQ_OFFSET, file->offset);
+  seL4_SetMR(FSMSGREG_READ_REQ_OFFSET, offset);
   seL4_SetCap(0, get_xv6fs_client()->shared_mem->badged_server_ep_cspath.capPtr);
   tag = seL4_Call(file->badged_server_ep_cspath.capPtr, tag);
 
@@ -306,6 +304,29 @@ static int xv6fs_libc_read(int fd, void *buf, int count)
   if (bytes_read > 0)
   {
     memcpy(buf, get_xv6fs_client()->shared_mem_vaddr, bytes_read);
+  }
+
+  return bytes_read;
+}
+
+static int xv6fs_libc_read(int fd, void *buf, int count)
+{
+  XV6FS_PRINTF("xv6fs_libc_read fd %d len %d\n", fd, count);
+
+  // Find the file by fd
+  xv6fs_client_context_t *file = fd_get(fd);
+  if (file == NULL)
+  {
+    XV6FS_PRINTF("Invalid FD provided");
+    return -1;
+  }
+
+  // Read at current offset
+  int bytes_read = xv6fs_libc_pread(fd, buf, count, file->offset);
+
+  // Update file offset
+  if (bytes_read > 0)
+  {
     file->offset += bytes_read;
   }
 
@@ -343,7 +364,7 @@ static int xv6fs_libc_write(int fd, const void *buf, int count)
     return -1;
   }
 
-  // Copy from shared buf to shared mem
+  // Update file offset
   int bytes_written = seL4_GetMR(FSMSGREG_WRITE_ACK_N);
   if (bytes_written > 0)
   {
@@ -356,8 +377,6 @@ static int xv6fs_libc_write(int fd, const void *buf, int count)
 static int xv6fs_libc_close(int fd)
 {
   XV6FS_PRINTF("xv6fs_libc_close fd %d\n", fd);
-
-  // (XXX) Arya: Do we need the server to do anything when we close fd?
 
   // Close the FD
   fd_close(fd);
@@ -398,214 +417,142 @@ static int xv6fs_libc_lseek(int fd, off_t offset, int whence)
   return file->offset;
 }
 
-#if 0
-static int xv6fs_remote_pread(int fd, void *buf, int count, int offset)
+char *xv6fs_libc_getcwd(char *buf, size_t size)
 {
-  // Send IPC to fs server
-  seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0, 4);
-  seL4_SetMR(XV6FS_OP, XV6FS_PREAD);
-  seL4_SetMR(XV6FS_FD, fd);
-  seL4_SetMR(XV6FS_COUNT, count);
-  seL4_SetMR(XV6FS_POFFSET, offset);
-  tag = seL4_Call(get_xv6fs_client()->server_ep_cap, tag);
-
-  if (seL4_MessageInfo_get_label(tag) != seL4_NoError)
-  {
-    return -1;
-  }
-
-  // Copy ipc frame to buf
-  int res = seL4_GetMR(XV6FS_RET);
-  if (res > 0)
-  {
-    memcpy(buf, get_xv6fs_client()->shared_mem, res);
-  }
-
-  return res;
-}
-
-static int xv6fs_libc_fstat(int fd, struct stat *buf)
-{
-  // Send IPC to fs server
-  seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0, 2);
-  seL4_SetMR(XV6FS_OP, XV6FS_FSTAT);
-  seL4_SetMR(XV6FS_FD, fd);
-  tag = seL4_Call(get_xv6fs_client()->server_ep_cap, tag);
-
-  if (seL4_MessageInfo_get_label(tag) != seL4_NoError)
-  {
-    return -1;
-  }
-
-  // Copy ipc frame to buf
-  int res = seL4_GetMR(XV6FS_RET);
-  if (res != -1)
-  {
-    memcpy(buf, get_xv6fs_client()->shared_mem, sizeof(struct stat));
-  }
-
-  return res;
-}
-
-static int xv6fs_libc_stat(const char *pathname, struct stat *buf)
-{
-  // Copy pathname to ipc frame
-  memcpy(get_xv6fs_client()->shared_mem, pathname, strlen(pathname) + 1);
-
-  // Send IPC to fs server
-  seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0, 1);
-  seL4_SetMR(XV6FS_OP, XV6FS_STAT);
-  tag = seL4_Call(get_xv6fs_client()->server_ep_cap, tag);
-
-  if (seL4_MessageInfo_get_label(tag) != seL4_NoError)
-  {
-    return -1;
-  }
-
-  // Copy ipc frame to buf
-  int res = seL4_GetMR(XV6FS_RET);
-  if (res != -1)
-  {
-    memcpy(buf, get_xv6fs_client()->shared_mem, sizeof(struct stat));
-  }
-
-  return res;
-}
-
-static int xv6fs_libc_lseek(int fd, off_t offset, int whence)
-{
-  // Send IPC to fs server
-  seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0, 4);
-  seL4_SetMR(XV6FS_OP, XV6FS_LSEEK);
-  seL4_SetMR(XV6FS_FD, fd);
-  seL4_SetMR(XV6FS_OFFSET, offset);
-  seL4_SetMR(XV6FS_WHENCE, whence);
-  tag = seL4_Call(get_xv6fs_client()->server_ep_cap, tag);
-
-  if (seL4_MessageInfo_get_label(tag) != seL4_NoError)
-  {
-    return -1;
-  }
-
-  return seL4_GetMR(XV6FS_RET);
-}
-
-static int xv6fs_libc_close(int fd)
-{
-  // Send IPC to fs server
-  seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0, 2);
-  seL4_SetMR(XV6FS_OP, XV6FS_CLOSE);
-  seL4_SetMR(XV6FS_FD, fd);
-  tag = seL4_Call(get_xv6fs_client()->server_ep_cap, tag);
-
-  if (seL4_MessageInfo_get_label(tag) != seL4_NoError)
-  {
-    return -1;
-  }
-
-  return seL4_GetMR(XV6FS_RET);
-}
-
-static int xv6fs_libc_unlink(const char *pathname)
-{
-  // Copy pathname to ipc frame
-  memcpy(get_xv6fs_client()->shared_mem, pathname, strlen(pathname) + 1);
-
-  // Send IPC to fs server
-  seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0, 1);
-  seL4_SetMR(XV6FS_OP, XV6FS_UNLINK);
-  tag = seL4_Call(get_xv6fs_client()->server_ep_cap, tag);
-
-  if (seL4_MessageInfo_get_label(tag) != seL4_NoError)
-  {
-    return -1;
-  }
-
-  return seL4_GetMR(XV6FS_RET);
-}
-
-static char *xv6fs_libc_getcwd(char *buf, size_t size)
-{
-  // Send IPC to fs server
-  seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0, 2);
-  seL4_SetMR(XV6FS_OP, XV6FS_GETCWD);
-  seL4_SetMR(XV6FS_SIZE, size);
-  tag = seL4_Call(get_xv6fs_client()->server_ep_cap, tag);
-
-  if (seL4_MessageInfo_get_label(tag) != seL4_NoError)
-  {
-    return NULL;
-  }
-
-  // Copy pathname to ipc frame
-  int ret = seL4_GetMR(XV6FS_RET);
-  if (ret == 0)
-  {
-    return NULL;
-  }
-
-  memcpy(buf, get_xv6fs_client()->shared_mem, strlen(get_xv6fs_client()->shared_mem) + 1);
-
+  // (XXX) File system does not currently support directories
+  strncpy(buf, ROOT_DIR, size);
   return buf;
+}
+
+int xv6fs_libc_fstat(int fd, struct stat *buf)
+{
+  XV6FS_PRINTF("xv6fs_libc_fstat fd %d\n", fd);
+
+  // Find the file by fd
+  xv6fs_client_context_t *file = fd_get(fd);
+  if (file == NULL)
+  {
+    XV6FS_PRINTF("Invalid FD provided");
+    return -1;
+  }
+
+  // Send IPC to fs server
+  seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 1, FSMSGREG_STAT_REQ_END);
+  seL4_SetMR(FSMSGREG_FUNC, FS_FUNC_STAT_REQ);
+  seL4_SetCap(0, get_xv6fs_client()->shared_mem->badged_server_ep_cspath.capPtr);
+  tag = seL4_Call(file->badged_server_ep_cspath.capPtr, tag);
+
+  if (seL4_MessageInfo_get_label(tag) != seL4_NoError)
+  {
+    return -1;
+  }
+
+  // Copy from shared mem to buf
+  memcpy(buf, get_xv6fs_client()->shared_mem_vaddr, sizeof(struct stat));
+
+  return 0;
+}
+
+int xv6fs_libc_stat(const char *pathname, struct stat *buf)
+{
+  XV6FS_PRINTF("xv6fs_libc_fstat pathname %s\n", pathname);
+
+  int fd = xv6fs_libc_open(pathname, 0, 0);
+  if (fd == -1)
+  {
+    return -1;
+  }
+
+  int error = xv6fs_libc_fstat(fd, buf);
+
+  xv6fs_libc_close(fd);
+
+  return error;
 }
 
 static int xv6fs_libc_fcntl(int fd, int cmd, ...)
 {
+  XV6FS_PRINTF("xv6fs_libc_fcntl fd %d cmd %d\n", fd, cmd);
+
+  // Get extra arg provided for some fcntl commands
   unsigned long arg;
   va_list ap;
   va_start(ap, cmd);
   arg = va_arg(ap, unsigned long);
   va_end(ap);
 
-  // Copy arg if necessary
-  switch (cmd)
+  // Find the file by fd
+  xv6fs_client_context_t *file = fd_get(fd);
+  if (file == NULL)
   {
-  case F_SETLK:
-  case F_SETLKW:
-  case F_GETLK:
-    memcpy(get_xv6fs_client()->shared_mem, (void *)arg, sizeof(struct flock));
-    break;
-  }
-
-  // Send IPC to fs server
-  seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0, 4);
-  seL4_SetMR(XV6FS_OP, XV6FS_FCNTL);
-  seL4_SetMR(XV6FS_FD, fd);
-  seL4_SetMR(XV6FS_CMD, cmd);
-  seL4_SetMR(XV6FS_ARG, arg);
-  tag = seL4_Call(get_xv6fs_client()->server_ep_cap, tag);
-
-  if (seL4_MessageInfo_get_label(tag) != seL4_NoError)
-  {
+    XV6FS_PRINTF("Invalid FD provided");
     return -1;
   }
 
-  // Copy arg if necessary
+  int ret = 0;
   switch (cmd)
   {
+  case F_SETFL:
+    uint64_t flags_mask = O_APPEND | O_ASYNC | O_NONBLOCK;
+    file->flags = (file->flags & ~flags_mask) | (arg & flags_mask);
+    break;
+  case F_GETFL:
+    ret = file->flags;
+    break;
+  case F_GETOWN:
+    XV6FS_PRINTF("xv6fs_sys_fcntl: Unsupported cmd F_GETOWN\n");
+    ret = -1;
+    break;
+  case F_DUPFD_CLOEXEC:
+    XV6FS_PRINTF("xv6fs_sys_fcntl: Unsupported cmd F_DUPFD_CLOEXEC\n");
+    ret = -1;
+    break;
+  case F_SETLK:
+    // (XXX) Ignoring file lock operations
+    break;
+  case F_SETLKW:
+    // (XXX) Ignoring file lock operations
+    break;
   case F_GETLK:
-    memcpy((void *)arg, get_xv6fs_client()->shared_mem, sizeof(struct flock));
+    // (XXX) Ignoring file lock operations
+    struct flock *lk = (struct flock *)arg;
+    lk->l_type = F_UNLCK;
+    break;
+  case F_GETOWN_EX:
+    XV6FS_PRINTF("xv6fs_sys_fcntl: Unsupported cmd F_GETOWN_EX\n");
+    ret = -1;
+    break;
+  case F_SETOWN_EX:
+    XV6FS_PRINTF("xv6fs_sys_fcntl: Unsupported cmd F_SETOWN_EX\n");
+    ret = -1;
+    break;
+  default:
+    XV6FS_PRINTF("xv6fs_sys_fcntl: Unknown cmd %d\n", cmd);
+    ret = -1;
     break;
   }
 
-  return seL4_GetMR(XV6FS_RET);
+  return 0;
 }
-#endif
+
+static int xv6fs_libc_unlink(const char *pathname)
+{
+  XV6FS_PRINTF("WARNING unlink is not implemented\n");
+  return 0;
+}
 
 static void init_global_libc_fs_ops(void)
 {
   libc_fs_ops.open = xv6fs_libc_open;
+  libc_fs_ops.pread = xv6fs_libc_pread;
   libc_fs_ops.read = xv6fs_libc_read;
   libc_fs_ops.write = xv6fs_libc_write;
   libc_fs_ops.close = xv6fs_libc_close;
   libc_fs_ops.lseek = xv6fs_libc_lseek;
-#if 0
   libc_fs_ops.stat = xv6fs_libc_stat;
   libc_fs_ops.fstat = xv6fs_libc_fstat;
-  libc_fs_ops.lseek = xv6fs_libc_lseek;
-  libc_fs_ops.unlink = xv6fs_libc_unlink;
   libc_fs_ops.getcwd = xv6fs_libc_getcwd;
   libc_fs_ops.fcntl = xv6fs_libc_fcntl;
-  libc_fs_ops.pread = xv6fs_libc_pread;
-#endif
+  libc_fs_ops.unlink = xv6fs_libc_unlink;
+  libc_fs_ops.fcntl = xv6fs_libc_fcntl;
 }

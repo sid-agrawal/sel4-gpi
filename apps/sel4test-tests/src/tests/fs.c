@@ -1,6 +1,7 @@
 #include <stdlib.h>
 #include <fcntl.h>
 #include <unistd.h>
+#include <sys/stat.h>
 
 #include <sel4test/test.h>
 #include <sel4test/macros.h>
@@ -165,8 +166,25 @@ int test_fs(env_t env)
     test_assert(nbytes == strlen(TEST_STR_1) + 1 - offset);
     test_assert(strcmp(buf, TEST_STR_1 + offset) == 0);
 
+    // Test pread
+    offset = 10;
+    nbytes = pread(f, buf, strlen(TEST_STR_1) + 1, offset);
+    test_assert(nbytes == strlen(TEST_STR_1) + 1 - offset);
+    test_assert(strcmp(buf, TEST_STR_1 + offset) == 0);
+
     error = close(f);
     test_assert(error == 0);
+
+    // Test stat
+    struct stat test_stat;
+    error = stat(TEST_FNAME, &test_stat);
+    test_assert(error == 0);
+    test_assert(test_stat.st_size == strlen(TEST_STR_1) + 1);
+
+    // Test getcwd
+    char cwd[14];
+    getcwd(cwd, 14);
+    test_assert(strcmp(cwd, ROOT_DIR) == 0);
 
     // Test unlink
 

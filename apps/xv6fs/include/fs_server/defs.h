@@ -117,7 +117,7 @@ int xv6fs_sys_unlink(char *path);
 int xv6fs_sys_dolink(char *old, char *new);
 int xv6fs_sys_rename(char *path1, char *path2);
 int xv6fs_sys_utime(char *path, int time);
-int xv6fs_sys_stat(void *fh, void *sth);
+int xv6fs_sys_stat(struct file *f, struct stat *st);
 int xv6fs_sys_seek(void *fh, uint64 off, int whence);
 char *xv6fs_sys_getcwd(char *buf, size_t size);
 int xv6fs_sys_fcntl(void *fh, int cmd, unsigned long arg);
