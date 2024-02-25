@@ -56,11 +56,14 @@ int ramdisk_client_sanity_test(seL4_CPtr server_ep_cap,
  *
  * @param server_ep_cap Well known server endpoint cap.
  * @param client_vka client's cka for allocating memory.
+ *                   if NULL, uses the free_slot instead
+ * @param free_slot if client_vka is NULL, provide a free slot
  * @param ret_conn client's connection object
  * @return int 0 on success, -1 on failure.
  */
 int ramdisk_client_alloc_block(seL4_CPtr server_ep_cap,
                                vka_t *client_vka,
+                               seL4_CPtr free_slot,
                                ramdisk_client_context_t *ret_conn);
 
 /**

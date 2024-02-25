@@ -7,8 +7,11 @@
 #include <fcntl.h>
 #include <sys/stat.h>
 
+#include <fs_shared.h>
 #include <types.h>
-#include <param.h>
+#include <fs.h>
+#include <spinlock.h>
+#include <sleeplock.h>
 
 struct buf;
 struct dirent;
@@ -102,8 +105,8 @@ void fd_init(void);
 // syscall functions
 struct file *xv6fs_sys_open(char *path, int omode);
 int xv6fs_sys_fileclose(void *fh);
-int xv6fs_sys_read(void *fh, char *buf, size_t sz, uint off);
-int xv6fs_sys_write(void *fh, char *buf, size_t sz, uint off);
+int xv6fs_sys_read(struct file *f, char *buf, size_t sz, uint off);
+int xv6fs_sys_write(struct file *f, char *buf, size_t sz, uint off);
 int xv6fs_sys_fstat(char *path, void *buf);
 int xv6fs_sys_readdirent(void *fh, struct dirent *e, uint off);
 int xv6fs_sys_truncate(char *path);

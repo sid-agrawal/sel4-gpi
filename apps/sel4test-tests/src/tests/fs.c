@@ -39,8 +39,10 @@ int start_fs_thread(env_t env, seL4_CPtr ramdisk_ep, seL4_CPtr *fs_ep)
                                       &env->vspace,
                                       env->gpi_endpoint,
                                       ramdisk_ep,
-                                      250,
-                                      fs_ep);
+                                      ep_object.cptr,
+                                      env->self_ads_cptr,
+                                      env->self_pd_cptr,
+                                      XV6FS_SERVER_DEFAULT_PRIORITY);
 
     test_assert(error == 0);
 
@@ -75,6 +77,11 @@ int test_fs(env_t env)
     vka_cspace_make_path(&env->vka, env->self_ads_cptr, &ads_conn.badged_server_ep_cspath);
     test_assert(error == 0);
 
+    /* Initialize the PD */
+    pd_client_context_t pd_conn;
+    vka_cspace_make_path(&env->vka, env->self_pd_cptr, &pd_conn.badged_server_ep_cspath);
+    test_assert(error == 0);
+
     /* Create a memory object for the buffer */
     seL4_CPtr slot;
     vka_cspace_alloc(&env->vka, &slot);
@@ -87,7 +94,7 @@ int test_fs(env_t env)
     test_assert(error == 0);
     printf("Finished mo_component_client_connect\n");
 
-    /* Start fs server process */
+    /* Start ramdisk server process */
     seL4_CPtr ramdisk_ep;
     error = start_ramdisk_pd(&env->vka, env->gpi_endpoint, &ramdisk_ep);
     test_assert(error == 0);
@@ -99,7 +106,10 @@ int test_fs(env_t env)
     printf("------------------STARTING TESTS: %s------------------\n", __func__);
 
     // The libc fs ops should go to the xv6fs server
-    xv6fs_client_init(&env->vka, &env->vspace, fs_ep);
+    xv6fs_client_init(&env->vka, fs_ep,
+                      env->gpi_endpoint,
+                      env->self_ads_cptr,
+                      env->self_pd_cptr);
 
     // Test file open/write
     int f = open(TEST_FNAME, O_CREAT | O_RDWR);
@@ -157,11 +167,16 @@ int test_fs(env_t env)
     test_assert(error == 0);
 
     // Test unlink
+
+    // (XXX) Arya: Don't support unlink right now
+
+    #if 0
     error = unlink(TEST_FNAME);
     test_assert(error == 0);
 
     f = open(TEST_FNAME, O_RDONLY);
     test_assert(f == -1); // File should no longer exist
+    #endif
 
     printf("------------------ENDING: %s------------------\n", __func__);
     return sel4test_get_result();

@@ -3,10 +3,11 @@
 #include <sel4/sel4.h>
 #include <sel4/types.h>
 
-/* ramdisk configuration */
-#define RAMDISK_BLOCK_SIZE SIZE_BITS_TO_BYTES(seL4_PageBits) // Block size for the ramdisk
-#define RAMDISK_SIZE_BITS 17                                 // Size of total ramdisk
-#define RAMDISK_SIZE_BYTES SIZE_BITS_TO_BYTES(RAMDISK_SIZE_BITS)
+/* Ramdisk configuration */
+#define RAMDISK_DEBUG 0
+#define RAMDISK_BLOCK_SIZE (1u << seL4_PageBits) // Block size for the ramdisk
+#define RAMDISK_SIZE_BITS 19                                // Size of total ramdisk
+#define RAMDISK_SIZE_BYTES (1u << RAMDISK_SIZE_BITS)
 
 /* Memory regions for IPC to ramdisk server */
 #define RAMDISK_MR_OP 0

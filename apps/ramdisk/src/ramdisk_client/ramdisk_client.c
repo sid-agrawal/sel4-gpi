@@ -16,12 +16,16 @@
 #define RAMDISK_C "RamDisk Client: "
 #define RAMDISK_APP "ramdisk_server"
 
+#if RAMDISK_DEBUG
 #define RAMDISK_PRINTF(...)       \
     do                            \
     {                             \
         printf("%s ", RAMDISK_C); \
         printf(__VA_ARGS__);      \
     } while (0);
+#else
+#define RAMDISK_PRINTF(...)
+#endif
 
 #define CHECK_ERROR(check, msg)        \
     do                                 \
@@ -113,15 +117,26 @@ int ramdisk_client_sanity_test(seL4_CPtr server_ep_cap,
 
 int ramdisk_client_alloc_block(seL4_CPtr server_ep_cap,
                                vka_t *client_vka,
+                               seL4_CPtr free_slot,
                                ramdisk_client_context_t *ret_conn)
 {
     /* Send a request to the server on its public EP */
 
-    // Alloc a slot for the incoming cap.
-    seL4_CPtr dest_cptr;
-    vka_cspace_alloc(client_vka, &dest_cptr);
     cspacepath_t path;
-    vka_cspace_make_path(client_vka, dest_cptr, &path);
+    if (client_vka != NULL)
+    {
+        // Alloc a slot for the incoming cap.
+        seL4_CPtr dest_cptr;
+        vka_cspace_alloc(client_vka, &dest_cptr);
+        vka_cspace_make_path(client_vka, dest_cptr, &path);
+    }
+    else
+    {
+        path.capDepth = PD_CAP_DEPTH;
+        path.root = PD_CAP_ROOT;
+        path.capPtr = free_slot;
+    }
+
     seL4_SetCapReceivePath(
         /* _service */ path.root,
         /* index */ path.capPtr,

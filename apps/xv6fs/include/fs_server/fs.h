@@ -4,7 +4,6 @@
 #pragma once
 
 #define ROOTINO 1  // root i-number
-#define BSIZE 4096 // block size
 
 // Disk layout:
 // [ boot block | super block | log | inode blocks |

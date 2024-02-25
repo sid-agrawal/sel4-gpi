@@ -18,7 +18,7 @@ file(GLOB client_deps src/fs_client/*.c)
 list(SORT client_deps)
 add_library(fs_client STATIC EXCLUDE_FROM_ALL ${client_deps})
 target_include_directories(fs_client PUBLIC include/fs_client include/shared)
-target_link_libraries(fs_client muslc sel4 utils sel4test sel4gpi)
+target_link_libraries(fs_client muslc sel4 utils sel4test sel4gpi ramdisk_client)
 
 file(GLOB server_lib_deps src/fs_server/*.c)
 list(SORT server_lib_deps)
@@ -43,6 +43,7 @@ target_link_libraries(
         sel4testsupport
         sel4gpi
         sel4serialserver_tests
+        ramdisk_client
     PRIVATE sel4test-driver_Config
 )
 
@@ -73,5 +74,6 @@ target_link_libraries(
         sel4testsupport
         sel4gpi
         sel4serialserver_tests
+        ramdisk_client
     PRIVATE sel4test-driver_Config
 )

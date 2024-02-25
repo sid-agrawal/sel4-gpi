@@ -14,12 +14,16 @@
 
 #define RAMDISK_S "RamDisk Server: "
 
+#if RAMDISK_DEBUG
 #define RAMDISK_PRINTF(...)       \
     do                            \
     {                             \
         printf("%s ", RAMDISK_S); \
         printf(__VA_ARGS__);      \
     } while (0);
+#else
+#define RAMDISK_PRINTF(...)
+#endif
 
 #define CHECK_ERROR(error, msg)        \
     do                                 \
@@ -311,7 +315,7 @@ int ramdisk_server_main()
                 CHECK_ERROR_GOTO(get_ramdisk_server()->free_blocks == NULL, "no more free blocks to assign", done);
                 uint64_t blockno = get_ramdisk_server()->free_blocks->blockno;
 
-                RAMDISK_PRINTF("Allocating blockno %zx\n", blockno);
+                RAMDISK_PRINTF("Allocating blockno %ld\n", blockno);
 
                 // Update free block list
                 get_ramdisk_server()->free_blocks->blockno++;

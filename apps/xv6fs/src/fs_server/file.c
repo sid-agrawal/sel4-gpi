@@ -3,9 +3,6 @@
 //
 
 #include <defs.h>
-#include <fs.h>
-#include <spinlock.h>
-#include <sleeplock.h>
 #include <file.h>
 #include <proc.h>
 

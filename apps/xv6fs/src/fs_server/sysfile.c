@@ -152,6 +152,7 @@ xv6fs_sys_open(char *path, int omode)
 
   f->type = FD_INODE;
   f->ip = ip;
+  f->id = ip->inum;
   f->off = 0;
   f->readable = !(omode & O_WRONLY);
   f->writable = (omode & O_WRONLY) || (omode & O_RDWR);
@@ -166,9 +167,8 @@ int xv6fs_sys_fileclose(void *fh)
   return 0;
 }
 
-int xv6fs_sys_read(void *fh, char *buf, size_t sz, uint off)
+int xv6fs_sys_read(struct file *f, char *buf, size_t sz, uint off)
 {
-  struct file *f = (struct file *)fh;
   if (f == 0)
     return -1;
   if (off != NO_OFFSET)
@@ -177,9 +177,8 @@ int xv6fs_sys_read(void *fh, char *buf, size_t sz, uint off)
   return fileread(f, (uint64)buf, sz);
 }
 
-int xv6fs_sys_write(void *fh, char *buf, size_t sz, uint off)
+int xv6fs_sys_write(struct file *f, char *buf, size_t sz, uint off)
 {
-  struct file *f = (struct file *)fh;
   if (f == 0)
     return -1;
   if (off != NO_OFFSET)

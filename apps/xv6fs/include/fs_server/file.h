@@ -9,7 +9,8 @@ struct file
     FD_INODE,
     FD_DEVICE
   } type;
-  int ref; // reference count
+  uint64 id; // unique ID of the file
+  int ref;   // reference count
   char readable;
   char writable;
   struct pipe *pipe; // FD_PIPE

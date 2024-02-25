@@ -120,7 +120,7 @@ mo_component_registry_entry_t *mo_component_registry_get_entry_by_badge(seL4_Wor
 void mo_handle_allocation_request(seL4_MessageInfo_t *reply_tag)
 {
     seL4_Word num_pages = seL4_GetMR(MOMSGREG_CONNECT_REQ_NUM_PAGES);
-    OSDB_PRINTF(MOSERVS "Got connect request for %lx pages\n", num_pages);
+    OSDB_PRINTF(MOSERVS "Got connect request for %ld pages\n", num_pages);
 
     /* Allocator numm_pages frame */
     seL4_CPtr *frame_caps = malloc(sizeof(seL4_CPtr) * num_pages);

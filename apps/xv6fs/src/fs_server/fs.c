@@ -180,7 +180,7 @@ bfree(int dev, uint b)
 struct
 {
   struct spinlock lock;
-  struct inode inode[NINODE];
+  struct inode inode[N_INODES];
 } itable;
 
 void iinit()
@@ -188,7 +188,7 @@ void iinit()
   int i = 0;
 
   initlock(&itable.lock, "itable");
-  for (i = 0; i < NINODE; i++)
+  for (i = 0; i < N_INODES; i++)
   {
     initsleeplock(&itable.inode[i].lock, "inode");
   }
@@ -258,7 +258,7 @@ iget(uint dev, uint inum)
 
   // Is the inode already in the table?
   empty = 0;
-  for (ip = &itable.inode[0]; ip < &itable.inode[NINODE]; ip++)
+  for (ip = &itable.inode[0]; ip < &itable.inode[N_INODES]; ip++)
   {
     if (ip->ref > 0 && ip->dev == dev && ip->inum == inum)
     {

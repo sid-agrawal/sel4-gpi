@@ -28,49 +28,9 @@ struct proc *myproc(void)
     return &curproc;
 }
 
-// ARYA-TODO set up a better fd table
-#define FD_TABLE_SIZE 5120
+// (XXX) Arya: remove this file once functionality is moved over
 
-void *fd_table[FD_TABLE_SIZE];
-
-void fd_init(void)
-{
-    for (int i = 0; i < FD_TABLE_SIZE; i++)
-    {
-        fd_table[i] = NULL;
-    }
-}
-
-long fd_bind(void *file)
-{
-    for (int i = 5; i < FD_TABLE_SIZE; i++)
-        if (fd_table[i] == NULL)
-        {
-            fd_table[i] = file;
-            // printf("%s: new fd %d\n", __func__, i);
-            return i;
-        }
-    return -1;
-}
-
-void *fd_get(long fd)
-{
-    if (fd >= 0 && fd < FD_TABLE_SIZE)
-    {
-        return fd_table[fd];
-    }
-    return NULL;
-}
-
-void fd_close(long fd)
-{
-    if (fd >= 0 && fd < FD_TABLE_SIZE)
-    {
-        fd_table[fd] = NULL;
-        // printf("%s: closed fd %d\n", __func__, fd);
-    }
-}
-
+#if 0
 int xv6fs_open(const char *pathname, int flags, int modes)
 {
     // printf("xv6fs_open: Opening file %s\n", pathname);
@@ -94,7 +54,7 @@ int xv6fs_read(int fd, void *buf, int count)
         printf("%s: fd_get failed\n", __func__);
         return -1;
     }
-    return xv6fs_sys_read((char *)file, buf, count, NO_OFFSET);
+    return xv6fs_sys_read((struct file *)file, buf, count, NO_OFFSET);
 }
 
 int xv6fs_pread(int fd, void *buf, int count, int offset)
@@ -107,7 +67,7 @@ int xv6fs_pread(int fd, void *buf, int count, int offset)
         return -1;
     }
     int offset_before = ((struct file *)file)->off;
-    int ret = xv6fs_sys_read((char *)file, buf, count, offset);
+    int ret = xv6fs_sys_read((struct file *)file, buf, count, offset);
     ((struct file *)file)->off = offset_before;
     return ret;
 }
@@ -121,7 +81,7 @@ int xv6fs_write(int fd, const void *buf, int count)
         printf("%s: fd_get failed\n", __func__);
         return -1;
     }
-    long ret = xv6fs_sys_write((char *)file, (char *)buf, count, NO_OFFSET);
+    long ret = xv6fs_sys_write((struct file *)file, (char *)buf, count, NO_OFFSET);
     return ret;
 }
 
@@ -198,3 +158,4 @@ int xv6fs_fcntl(int fd, int cmd, unsigned long arg)
     }
     return xv6fs_sys_fcntl((void *)file, cmd, arg);
 }
+#endif
