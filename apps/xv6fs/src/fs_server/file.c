@@ -7,47 +7,29 @@
 #include <proc.h>
 
 struct devsw devsw[NDEV];
-struct
-{
-  struct spinlock lock;
-  struct file file[NFILE];
-} ftable;
-
-void fileinit(void)
-{
-  initlock(&ftable.lock, "ftable");
-}
 
 // Allocate a file structure.
 struct file *
 filealloc(void)
 {
-  struct file *f;
+  struct file *f = malloc(sizeof(struct file));
 
-  acquire(&ftable.lock);
-  for (f = ftable.file; f < ftable.file + NFILE; f++)
+  if (f == NULL)
   {
-    if (f->ref == 0)
-    {
-      // printf("filealloc %d\n", f - ftable.file);
-      f->ref = 1;
-      release(&ftable.lock);
-      return f;
-    }
+    return NULL;
   }
-  release(&ftable.lock);
-  return 0;
+
+  f->ref = 1;
+  return f;
 }
 
 // Increment ref count for file f.
 struct file *
 filedup(struct file *f)
 {
-  acquire(&ftable.lock);
   if (f->ref < 1)
     xv6fs_panic("filedup");
   f->ref++;
-  release(&ftable.lock);
   return f;
 }
 
@@ -56,30 +38,24 @@ void fileclose(struct file *f)
 {
   struct file ff;
 
-  acquire(&ftable.lock);
   if (f->ref < 1)
     xv6fs_panic("fileclose");
   if (--f->ref > 0)
   {
-    release(&ftable.lock);
     return;
   }
-  ff = *f;
-  f->ref = 0;
-  f->type = FD_NONE;
-  release(&ftable.lock);
+
+  free(f);
 
   if (ff.type == FD_INODE || ff.type == FD_DEVICE)
   {
-    begin_op();
     iput(ff.ip);
-    end_op();
   }
 }
 
 // Get metadata about file f.
 // addr is a user virtual address, pointing to a struct stat.
-int filestat(struct file *f, uint64 addr)
+int filestat(struct file *f, uint64_t addr)
 {
   struct proc *p = myproc();
   struct stat st;
@@ -89,9 +65,6 @@ int filestat(struct file *f, uint64 addr)
     ilock(f->ip);
     stati(f->ip, &st);
     iunlock(f->ip);
-    // ARYA-TODO is this necessary?
-    // if(copyout(p->pagetable, addr, (char *)&st, sizeof(st)) < 0)
-    //  return -1;
     return 0;
   }
   return -1;
@@ -99,7 +72,7 @@ int filestat(struct file *f, uint64 addr)
 
 // Read from file f.
 // addr is a user virtual address.
-int fileread(struct file *f, uint64 addr, int n)
+int fileread(struct file *f, uint64_t addr, int n)
 {
   int r = 0;
 
@@ -129,7 +102,7 @@ int fileread(struct file *f, uint64 addr, int n)
 
 // Write to file f.
 // addr is a user virtual address.
-int filewrite(struct file *f, uint64 addr, int n)
+int filewrite(struct file *f, uint64_t addr, int n)
 {
   int r, ret = 0;
 
@@ -158,12 +131,10 @@ int filewrite(struct file *f, uint64 addr, int n)
       if (n1 > max)
         n1 = max;
 
-      begin_op();
       ilock(f->ip);
       if ((r = writei(f->ip, 1, addr + i, f->off, n1)) > 0)
         f->off += r;
       iunlock(f->ip);
-      end_op();
 
       if (r != n1)
       {

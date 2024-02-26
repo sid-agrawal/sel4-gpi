@@ -24,7 +24,7 @@ isdirempty(struct inode *dp)
 
   for (off = 2 * sizeof(de); off < dp->size; off += sizeof(de))
   {
-    if (readi(dp, 0, (uint64)&de, off, sizeof(de)) != sizeof(de))
+    if (readi(dp, 0, (uint64_t)&de, off, sizeof(de)) != sizeof(de))
       xv6fs_panic("isdirempty: readi");
     if (de.inum != 0)
       return 0;
@@ -97,7 +97,7 @@ fail:
 
 /* xv6 "system call" functions */
 
-uint xv6fs_file_ino(void *file)
+uint32_t xv6fs_file_ino(void *file)
 {
   struct file *f = (struct file *)file;
   return (f->ip)->inum;
@@ -111,14 +111,11 @@ xv6fs_sys_open(char *path, int omode)
   struct file *f;
   struct inode *ip;
 
-  begin_op();
-
   if (omode & O_CREAT)
   {
     ip = create(path, T_FILE, 0, 0);
     if (ip == 0)
     {
-      end_op();
       return 0;
     }
   }
@@ -126,14 +123,12 @@ xv6fs_sys_open(char *path, int omode)
   {
     if ((ip = namei(path)) == 0)
     {
-      end_op();
       return 0;
     }
     ilock(ip);
     if (ip->type == T_DIR && omode != O_RDONLY)
     {
       iunlockput(ip);
-      end_op();
       return 0;
     }
   }
@@ -144,11 +139,9 @@ xv6fs_sys_open(char *path, int omode)
     if (f)
       fileclose(f);
     iunlockput(ip);
-    end_op();
     return 0;
   }
   iunlock(ip);
-  end_op();
 
   f->type = FD_INODE;
   f->ip = ip;
@@ -167,24 +160,24 @@ int xv6fs_sys_fileclose(void *fh)
   return 0;
 }
 
-int xv6fs_sys_read(struct file *f, char *buf, size_t sz, uint off)
+int xv6fs_sys_read(struct file *f, char *buf, size_t sz, uint32_t off)
 {
   if (f == 0)
     return -1;
   if (off != NO_OFFSET)
     f->off = off;
 
-  return fileread(f, (uint64)buf, sz);
+  return fileread(f, (uint64_t)buf, sz);
 }
 
-int xv6fs_sys_write(struct file *f, char *buf, size_t sz, uint off)
+int xv6fs_sys_write(struct file *f, char *buf, size_t sz, uint32_t off)
 {
   if (f == 0)
     return -1;
   if (off != NO_OFFSET)
     f->off = off;
 
-  int r = filewrite(f, (uint64)buf, sz);
+  int r = filewrite(f, (uint64_t)buf, sz);
   return r;
 }
 
@@ -194,12 +187,12 @@ int xv6fs_sys_fstat(char *path, void *buf)
   struct file *f = xv6fs_sys_open(path, O_RDONLY);
   if (f == 0)
     return -1;
-  int r = filestat(f, (uint64)buf);
+  int r = filestat(f, (uint64_t)buf);
   fileclose(f);
   return r;
 }
 
-int xv6fs_sys_readdirent(void *fh, struct dirent *e, uint off)
+int xv6fs_sys_readdirent(void *fh, struct dirent *e, uint32_t off)
 {
   struct file *f = (struct file *)fh;
   if ((f == 0) || (f->ip->type != T_DIR))
@@ -207,7 +200,7 @@ int xv6fs_sys_readdirent(void *fh, struct dirent *e, uint off)
   if (off >= f->ip->size)
     return 0;
   f->off = off;
-  int r = fileread(f, (uint64)e, sizeof(*e));
+  int r = fileread(f, (uint64_t)e, sizeof(*e));
   return r;
 }
 
@@ -217,9 +210,7 @@ int xv6fs_sys_truncate(char *path)
   struct file *f = xv6fs_sys_open(path, O_RDWR);
   if (f == 0)
     return -1;
-  begin_op();
   itrunc(f->ip);
-  end_op();
   fileclose(f);
   return 0;
 }
@@ -228,14 +219,11 @@ int xv6fs_sys_mkdir(char *path)
 {
   struct inode *ip;
 
-  begin_op();
   if ((ip = create(path, T_DIR, 0, 0)) == 0)
   {
-    end_op();
     return -1;
   }
   iunlockput(ip);
-  end_op();
   return 0;
 }
 
@@ -243,25 +231,22 @@ int xv6fs_sys_mksock(char *path)
 {
   struct inode *ip;
 
-  begin_op();
   if ((ip = create(path, T_SOCK, 0, 0)) == 0)
   {
-    end_op();
     return -1;
   }
   iunlockput(ip);
-  end_op();
   return 0;
 }
 
 #define ENOENT (-2)
 
-int xv6fs_sys_dounlink(char *path)
+int xv6fs_sys_unlink(char *path)
 {
   struct inode *ip, *dp;
   struct dirent de;
   char name[DIRSIZ];
-  uint off;
+  uint32_t off;
   int r = -1;
 
   if ((dp = nameiparent(path, name)) == 0)
@@ -293,7 +278,7 @@ int xv6fs_sys_dounlink(char *path)
   }
 
   memset(&de, 0, sizeof(de));
-  if (writei(dp, 1, (uint64)&de, off, sizeof(de)) != sizeof(de))
+  if (writei(dp, 1, (uint64_t)&de, off, sizeof(de)) != sizeof(de))
     xv6fs_panic("unlink: writei");
   if (ip->type == T_DIR)
   {
@@ -314,15 +299,6 @@ bad:
   return r;
 }
 
-int xv6fs_sys_unlink(char *path)
-{
-  int r;
-  begin_op();
-  r = xv6fs_sys_dounlink(path);
-  end_op();
-  return r;
-}
-
 // Create the path new as a link to the same inode as old.
 int xv6fs_sys_dolink(char *old, char *new)
 {
@@ -331,7 +307,6 @@ int xv6fs_sys_dolink(char *old, char *new)
 
   if ((ip = namei(old)) == 0)
   {
-    end_op();
     return -1;
   }
 
@@ -339,7 +314,6 @@ int xv6fs_sys_dolink(char *old, char *new)
   if (ip->type == T_DIR)
   {
     iunlockput(ip);
-    end_op();
     return -1;
   }
 
@@ -372,17 +346,15 @@ int xv6fs_sys_rename(char *path1, char *path2)
 {
   int r = -1;
 
-  begin_op();
-  r = xv6fs_sys_dounlink(path2);
+  r = xv6fs_sys_unlink(path2);
   if ((r == 0) || (r == ENOENT))
   {
     r = xv6fs_sys_dolink(path1, path2);
     if (r == 0)
     {
-      r = xv6fs_sys_dounlink(path1);
+      r = xv6fs_sys_unlink(path1);
     }
   }
-  end_op();
   return r;
 }
 
@@ -392,12 +364,10 @@ int xv6fs_sys_utime(char *path, int time)
   struct file *f = xv6fs_sys_open(path, O_WRONLY);
   if (f == 0)
     return -1;
-  begin_op();
   ilock(f->ip);
   f->ip->mtime = time;
   iupdate(f->ip);
   iunlock(f->ip);
-  end_op();
   fileclose(f);
   return 0;
 }
@@ -410,7 +380,7 @@ int xv6fs_sys_stat(struct file *f, struct stat *st)
   return 0;
 }
 
-int xv6fs_sys_seek(void *fh, uint64 off, int whence)
+int xv6fs_sys_seek(void *fh, uint64_t off, int whence)
 {
   struct file *f = (struct file *)fh;
   if (f == 0)
@@ -431,19 +401,6 @@ int xv6fs_sys_seek(void *fh, uint64 off, int whence)
   return f->off;
 }
 
-// ARYA-TODO do we need to keep proper track of cwd?
-char *xv6fs_sys_getcwd(char *buf, size_t size)
-{
-  char *name = myproc()->cwd_path;
-  if (strlen(name) >= size)
-  {
-    return NULL;
-  }
-
-  strcpy(buf, name);
-  return buf;
-}
-
 // ARYA-TODO support real locks?
 int xv6fs_sys_fcntl(void *fh, int cmd, unsigned long arg)
 {
@@ -454,7 +411,7 @@ int xv6fs_sys_fcntl(void *fh, int cmd, unsigned long arg)
   switch (cmd)
   {
   case F_SETFL:
-    uint64 flags_mask = O_APPEND | O_ASYNC | O_NONBLOCK;
+    uint64_t flags_mask = O_APPEND | O_ASYNC | O_NONBLOCK;
     f->flags = (f->flags & ~flags_mask) | (arg & flags_mask);
     // printf("xv6fs_sys_fcntl: F_SETFL\n");
     break;

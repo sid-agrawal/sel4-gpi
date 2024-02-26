@@ -59,6 +59,14 @@
     }                                      \
   } while (0);
 
+/* Used by xv6fs internal functions when they panic */
+__attribute__((noreturn)) void xv6fs_panic(char *s)
+{
+  printf("panic: %s\n", s);
+  for (;;)
+    ;
+}
+
 /**
  * @brief Insert a new client into the client registry Linked List.
  *
@@ -345,7 +353,6 @@ static int fs_init()
   error = init_disk_file();
   CHECK_ERROR(error, "failed to initialize disk file");
   binit();
-  fileinit();
   fsinit(ROOTDEV);
 
   XV6FS_PRINTF("Initialized file system\n");
@@ -504,7 +511,7 @@ int xv6fs_server_main()
         CHECK_ERROR_GOTO(error, "failed to attach client's MO to ADS", done);
 
         /* Call function stat */
-        error = xv6fs_sys_stat(reg_entry->file, (struct stat *) mo_vaddr);
+        error = xv6fs_sys_stat(reg_entry->file, (struct stat *)mo_vaddr);
         break;
 #if 0 // (XXX) Arya: to remove
     case XV6FS_STAT:
@@ -568,7 +575,7 @@ exit_main:
   return -1;
 }
 
-static int block_read(uint blockno, void *buf)
+static int block_read(uint32_t blockno, void *buf)
 {
   XV6FS_PRINTF("Reading blockno %d\n", blockno);
   int error = ramdisk_client_read(&get_xv6fs_server()->naive_blocks[blockno],
@@ -582,7 +589,7 @@ static int block_read(uint blockno, void *buf)
   return error;
 }
 
-static int block_write(uint blockno, void *buf)
+static int block_write(uint32_t blockno, void *buf)
 {
   XV6FS_PRINTF("Writing blockno %d\n", blockno);
   memcpy(get_xv6fs_server()->shared_mem_vaddr, buf, RAMDISK_BLOCK_SIZE);
@@ -591,12 +598,12 @@ static int block_write(uint blockno, void *buf)
 }
 
 /* Override xv6 block read/write functions */
-void xv6fs_bread(uint blockno, void *buf)
+void xv6fs_bread(uint32_t blockno, void *buf)
 {
   block_read(blockno, buf);
 }
 
-void xv6fs_bwrite(uint blockno, void *buf)
+void xv6fs_bwrite(uint32_t blockno, void *buf)
 {
   block_write(blockno, buf);
 }

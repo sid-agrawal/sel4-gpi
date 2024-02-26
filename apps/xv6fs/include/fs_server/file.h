@@ -1,5 +1,7 @@
 #pragma once
 
+#include <stdint.h>
+
 struct file
 {
   enum
@@ -9,15 +11,15 @@ struct file
     FD_INODE,
     FD_DEVICE
   } type;
-  uint64 id; // unique ID of the file
-  int ref;   // reference count
+  uint64_t id; // unique ID of the file
+  int ref;     // reference count
   char readable;
   char writable;
   struct pipe *pipe; // FD_PIPE
   struct inode *ip;  // FD_INODE and FD_DEVICE
-  uint off;          // FD_INODE
+  uint32_t off;      // FD_INODE
   short major;       // FD_DEVICE
-  uint64 flags;
+  uint64_t flags;
 };
 
 // in-memory copy of an inode
@@ -25,8 +27,8 @@ struct inode
 {
   // ARYA-TODO we have no mode / permissions / ownership, does that matter?
 
-  uint dev;              // Device number
-  uint inum;             // Inode number
+  uint32_t dev;          // Device number
+  uint32_t inum;         // Inode number
   int ref;               // Reference count
   struct sleeplock lock; // protects everything below here
   int valid;             // inode has been read from disk?
@@ -34,18 +36,18 @@ struct inode
   short major;
   short minor;
   short nlink;
-  uint size;
+  uint32_t size;
   int ctime;
   int atime;
   int mtime;
-  uint addrs[NDIRECT + 1];
+  uint32_t addrs[NDIRECT + 1];
 };
 
 // map major device number to device functions.
 struct devsw
 {
-  int (*read)(int, uint64, int);
-  int (*write)(int, uint64, int);
+  int (*read)(int, uint64_t, int);
+  int (*write)(int, uint64_t, int);
 };
 
 extern struct devsw devsw[];

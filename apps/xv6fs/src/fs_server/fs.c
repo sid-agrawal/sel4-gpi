@@ -41,9 +41,7 @@ void fsinit(int dev)
   readsb(dev, &sb);
   if (sb.magic != FSMAGIC)
     xv6fs_panic("invalid file system");
-  initlog(dev, &sb);
 
-  strcpy(myproc()->cwd_path, "/");
   myproc()->cwd = namei("/");
 }
 
@@ -55,16 +53,23 @@ xv6fs_bzero(int dev, int bno)
 
   bp = bread(dev, bno);
   memset(bp->data, 0, BSIZE);
-  log_write(bp);
   brelse(bp);
+}
+
+// (XXX) There is only one "process" tracked since cwd is always the same
+static struct proc curproc;
+
+struct proc *myproc(void)
+{
+  return &curproc;
 }
 
 // Blocks.
 
 // Allocate a zeroed disk block.
 // returns 0 if out of disk space.
-static uint
-balloc(uint dev)
+static uint32_t
+balloc(uint32_t dev)
 {
   int b, bi, m;
   struct buf *bp;
@@ -79,7 +84,6 @@ balloc(uint dev)
       if ((bp->data[bi / 8] & m) == 0)
       {                        // Is block free?
         bp->data[bi / 8] |= m; // Mark block in use.
-        log_write(bp);
         brelse(bp);
         xv6fs_bzero(dev, b + bi);
         return b + bi;
@@ -93,7 +97,7 @@ balloc(uint dev)
 
 // Free a disk block.
 static void
-bfree(int dev, uint b)
+bfree(int dev, uint32_t b)
 {
   struct buf *bp;
   int bi, m;
@@ -104,7 +108,6 @@ bfree(int dev, uint b)
   if ((bp->data[bi / 8] & m) == 0)
     xv6fs_panic("freeing free block");
   bp->data[bi / 8] &= ~m;
-  log_write(bp);
   brelse(bp);
 }
 
@@ -194,14 +197,14 @@ void iinit()
   }
 }
 
-static struct inode *iget(uint dev, uint inum);
+static struct inode *iget(uint32_t dev, uint32_t inum);
 
 // Allocate an inode on device dev.
 // Mark it as allocated by  giving it type type.
 // Returns an unlocked but allocated and referenced inode,
 // or NULL if there is no free inode.
 struct inode *
-ialloc(uint dev, short type)
+ialloc(uint32_t dev, short type)
 {
   int inum;
   struct buf *bp;
@@ -215,7 +218,6 @@ ialloc(uint dev, short type)
     { // a free inode
       memset(dip, 0, sizeof(*dip));
       dip->type = type;
-      log_write(bp); // mark it allocated on the disk
       brelse(bp);
       return iget(dev, inum);
     }
@@ -242,7 +244,6 @@ void iupdate(struct inode *ip)
   dip->nlink = ip->nlink;
   dip->size = ip->size;
   memmove(dip->addrs, ip->addrs, sizeof(ip->addrs));
-  log_write(bp);
   brelse(bp);
 }
 
@@ -250,7 +251,7 @@ void iupdate(struct inode *ip)
 // and return the in-memory copy. Does not lock
 // the inode and does not read it from disk.
 static struct inode *
-iget(uint dev, uint inum)
+iget(uint32_t dev, uint32_t inum)
 {
   struct inode *ip, *empty;
 
@@ -385,10 +386,10 @@ void iunlockput(struct inode *ip)
 // Return the disk block address of the nth block in inode ip.
 // If there is no such block, bmap allocates one.
 // returns 0 if out of disk space.
-static uint
-bmap(struct inode *ip, uint bn)
+static uint32_t
+bmap(struct inode *ip, uint32_t bn)
 {
-  uint addr, *a;
+  uint32_t addr, *a;
   struct buf *bp;
 
   if (bn < NDIRECT)
@@ -415,14 +416,13 @@ bmap(struct inode *ip, uint bn)
       ip->addrs[NDIRECT] = addr;
     }
     bp = bread(ip->dev, addr);
-    a = (uint *)bp->data;
+    a = (uint32_t *)bp->data;
     if ((addr = a[bn]) == 0)
     {
       addr = balloc(ip->dev);
       if (addr)
       {
         a[bn] = addr;
-        log_write(bp);
       }
     }
     brelse(bp);
@@ -438,7 +438,7 @@ void itrunc(struct inode *ip)
 {
   int i, j;
   struct buf *bp;
-  uint *a;
+  uint32_t *a;
 
   for (i = 0; i < NDIRECT; i++)
   {
@@ -452,7 +452,7 @@ void itrunc(struct inode *ip)
   if (ip->addrs[NDIRECT])
   {
     bp = bread(ip->dev, ip->addrs[NDIRECT]);
-    a = (uint *)bp->data;
+    a = (uint32_t *)bp->data;
     for (j = 0; j < NINDIRECT; j++)
     {
       if (a[j])
@@ -509,9 +509,9 @@ void stati(struct inode *ip, struct stat *st)
 // Caller must hold ip->lock.
 // If user_dst==1, then dst is a user virtual address;
 // otherwise, dst is a kernel address.
-int readi(struct inode *ip, int user_dst, uint64 dst, uint off, uint n)
+int readi(struct inode *ip, int user_dst, uint64_t dst, uint32_t off, uint32_t n)
 {
-  uint tot, m;
+  uint32_t tot, m;
   struct buf *bp;
 
   if (off > ip->size || off + n < off)
@@ -521,7 +521,7 @@ int readi(struct inode *ip, int user_dst, uint64 dst, uint off, uint n)
 
   for (tot = 0; tot < n; tot += m, off += m, dst += m)
   {
-    uint addr = bmap(ip, off / BSIZE);
+    uint32_t addr = bmap(ip, off / BSIZE);
     if (addr == 0)
       break;
     bp = bread(ip->dev, addr);
@@ -539,9 +539,9 @@ int readi(struct inode *ip, int user_dst, uint64 dst, uint off, uint n)
 // Returns the number of bytes successfully written.
 // If the return value is less than the requested n,
 // there was an error of some kind.
-int writei(struct inode *ip, int user_src, uint64 src, uint off, uint n)
+int writei(struct inode *ip, int user_src, uint64_t src, uint32_t off, uint32_t n)
 {
-  uint tot, m;
+  uint32_t tot, m;
   struct buf *bp;
 
   if (off > ip->size || off + n < off)
@@ -551,13 +551,12 @@ int writei(struct inode *ip, int user_src, uint64 src, uint off, uint n)
 
   for (tot = 0; tot < n; tot += m, off += m, src += m)
   {
-    uint addr = bmap(ip, off / BSIZE);
+    uint32_t addr = bmap(ip, off / BSIZE);
     if (addr == 0)
       break;
     bp = bread(ip->dev, addr);
     m = min(n - tot, BSIZE - off % BSIZE);
     memmove(bp->data + (off % BSIZE), (void *)src, m);
-    log_write(bp);
     brelse(bp);
   }
 
@@ -582,9 +581,9 @@ int namecmp(const char *s, const char *t)
 // Look for a directory entry in a directory.
 // If found, set *poff to byte offset of entry.
 struct inode *
-dirlookup(struct inode *dp, char *name, uint *poff)
+dirlookup(struct inode *dp, char *name, uint32_t *poff)
 {
-  uint off, inum;
+  uint32_t off, inum;
   struct dirent de;
 
   if (dp->type != T_DIR)
@@ -592,7 +591,7 @@ dirlookup(struct inode *dp, char *name, uint *poff)
 
   for (off = 0; off < dp->size; off += sizeof(de))
   {
-    if (readi(dp, 0, (uint64)&de, off, sizeof(de)) != sizeof(de))
+    if (readi(dp, 0, (uint64_t)&de, off, sizeof(de)) != sizeof(de))
       xv6fs_panic("dirlookup read");
     if (de.inum == 0)
       continue;
@@ -611,7 +610,7 @@ dirlookup(struct inode *dp, char *name, uint *poff)
 
 // Write a new directory entry (name, inum) into the directory dp.
 // Returns 0 on success, -1 on failure (e.g. out of disk blocks).
-int dirlink(struct inode *dp, char *name, uint inum)
+int dirlink(struct inode *dp, char *name, uint32_t inum)
 {
   int off;
   struct dirent de;
@@ -627,7 +626,7 @@ int dirlink(struct inode *dp, char *name, uint inum)
   // Look for an empty dirent.
   for (off = 0; off < dp->size; off += sizeof(de))
   {
-    if (readi(dp, 0, (uint64)&de, off, sizeof(de)) != sizeof(de))
+    if (readi(dp, 0, (uint64_t)&de, off, sizeof(de)) != sizeof(de))
       xv6fs_panic("dirlink read");
     if (de.inum == 0)
       break;
@@ -635,7 +634,7 @@ int dirlink(struct inode *dp, char *name, uint inum)
 
   strncpy(de.name, name, DIRSIZ);
   de.inum = inum;
-  if (writei(dp, 0, (uint64)&de, off, sizeof(de)) != sizeof(de))
+  if (writei(dp, 0, (uint64_t)&de, off, sizeof(de)) != sizeof(de))
     return -1;
 
   return 0;

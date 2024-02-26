@@ -23,11 +23,3 @@ void acquire(struct spinlock *lk)
 void release(struct spinlock *lk)
 {
 }
-
-void wakeup(void *addr)
-{
-}
-
-void xv6fs_sleep(void *addr, struct spinlock *lk)
-{
-}
