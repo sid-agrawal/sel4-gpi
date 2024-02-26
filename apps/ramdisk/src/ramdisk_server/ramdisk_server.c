@@ -341,7 +341,7 @@ int ramdisk_server_main()
 
                 RAMDISK_PRINTF("Replying with badged EP: ");
                 badge_print(badge);
-                printf("\n");
+                RAMDISK_PRINTF("\n");
                 break;
             default:
                 CHECK_ERROR_GOTO(1, "got invalid op on unbadged ep", done);
@@ -351,7 +351,7 @@ int ramdisk_server_main()
         { /* Handle Typed Request */
             RAMDISK_PRINTF("Got message on EP with badge:");
             badge_print(sender_badge);
-            printf("\n");
+            RAMDISK_PRINTF("\n");
 
             gpi_cap_t cap_type = get_cap_type_from_badge(sender_badge);
             CHECK_ERROR_GOTO(cap_type != GPICAP_TYPE_BLOCK, "ramdisk server got invalid captype in badged EP", done);

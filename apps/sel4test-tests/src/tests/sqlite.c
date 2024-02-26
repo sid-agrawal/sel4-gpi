@@ -1,4 +1,3 @@
-#if 0
 #include <stdlib.h>
 #include <fcntl.h>
 #include <unistd.h>
@@ -8,7 +7,8 @@
 #include "../test.h"
 #include "../helpers.h"
 
-#include <xv6fs/xv6fs.h>
+#include <ramdisk_client.h>
+#include <fs_client.h>
 #include <sqlite3/sqlite3.h>
 
 #define PRINT_CALLBACK 0
@@ -171,13 +171,29 @@ int test_sqlite(env_t env)
     char *errmsg = 0;
     char sql_cmd[CMDLEN];
 
-    printf("------------------STARTING: %s------------------\n", __func__);
+    printf("------------------STARTING SETUP: %s------------------\n", __func__);
 
-    // The libc fs ops will go to the xv6fs server
-    xv6fs_client_init(&env->vka, &env->vspace, env->xv6fs_endpoint);
+    /* Start ramdisk server process */
+    seL4_CPtr ramdisk_ep;
+    error = start_ramdisk_pd(&env->vka, env->gpi_endpoint, &ramdisk_ep);
+    test_assert(error == 0);
+
+    /* Start fs server process */
+    seL4_CPtr fs_ep;
+    error = start_xv6fs_pd(&env->vka, env->gpi_endpoint, ramdisk_ep, &fs_ep);
+    test_assert(error == 0);
+
+    printf("------------------STARTING TESTS: %s------------------\n", __func__);
+
+    // The libc fs ops should go to the xv6fs server
+    xv6fs_client_init(&env->vka, fs_ep,
+                      env->gpi_endpoint,
+                      env->self_ads_cptr,
+                      env->self_pd_cptr);
 
     // Load an initial db
     sqlite3 *db;
+    //open(DB_NAME, O_CREAT | O_RDWR);
     error = sqlite3_open(DB_NAME, &db);
     test_assert(error == SQLITE_OK);
     test_assert(db != NULL);
@@ -255,4 +271,3 @@ int test_sqlite(env_t env)
     return sel4test_get_result();
 }
 DEFINE_TEST(GPISQ001, "Ensure that sqlite can run", test_sqlite, true)
-#endif

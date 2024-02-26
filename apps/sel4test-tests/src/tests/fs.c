@@ -186,17 +186,31 @@ int test_fs(env_t env)
     getcwd(cwd, 14);
     test_assert(strcmp(cwd, ROOT_DIR) == 0);
 
+    // Test multiple FD for same file
+    int f1 = open(TEST_FNAME, O_RDWR);
+    int f2 = open(TEST_FNAME, O_RDWR);
+
+    test_assert(f1 > 0);
+    test_assert(f2 > 0);
+
+    nbytes = write(f1, TEST_STR_2, strlen(TEST_STR_2) + 1);
+    test_assert(nbytes == strlen(TEST_STR_2) + 1);
+
+    nbytes = read(f2, buf, strlen(TEST_STR_2) + 1);
+    test_assert(nbytes == strlen(TEST_STR_2) + 1);
+    test_assert(strcmp(buf, TEST_STR_2) == 0);
+
+    error = close(f1);
+    test_assert(error == 0);
+    error = close(f2);
+    test_assert(error == 0);
+
     // Test unlink
-
-    // (XXX) Arya: Don't support unlink right now
-
-#if 0
     error = unlink(TEST_FNAME);
     test_assert(error == 0);
 
     f = open(TEST_FNAME, O_RDONLY);
     test_assert(f == -1); // File should no longer exist
-#endif
 
     printf("------------------ENDING: %s------------------\n", __func__);
     return sel4test_get_result();

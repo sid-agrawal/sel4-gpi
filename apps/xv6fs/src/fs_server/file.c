@@ -2,6 +2,7 @@
 // Support functions for system calls that involve file descriptors.
 //
 
+#include <stdlib.h>
 #include <defs.h>
 #include <file.h>
 #include <proc.h>

@@ -3,6 +3,7 @@
 #include <assert.h>
 #include <stdarg.h>
 #include <fcntl.h>
+#include <errno.h>
 
 #include <sel4/sel4.h>
 #include <sel4utils/process.h>
@@ -20,13 +21,19 @@
 
 #define FD_TABLE_SIZE 32
 #define FS_APP "fs_server"
+#define DEV_NULL_PATH "/dev/null"
+static int dev_null_fd;
 
+#if FS_DEBUG
 #define XV6FS_PRINTF(...)   \
   do                        \
   {                         \
     printf("%s ", XV6FS_C); \
     printf(__VA_ARGS__);    \
   } while (0);
+#else
+#define XV6FS_PRINTF(...)
+#endif
 
 #define CHECK_ERROR(error, msg) \
   do                            \
@@ -65,12 +72,13 @@ static void fd_init(void)
 {
   memset(&xv6fs_null_client_context, 0, sizeof(xv6fs_client_context_t));
   memset(fd_table, 0, sizeof(xv6fs_client_context_t) * FD_TABLE_SIZE);
+  dev_null_fd = 4;
 }
 
 // Add a file to the file descriptor table
 int fd_bind(seL4_CPtr file_cap)
 {
-  for (int i = 1; i < FD_TABLE_SIZE; i++)
+  for (int i = 5; i < FD_TABLE_SIZE; i++)
     if (fd_table[i].badged_server_ep_cspath.capPtr == 0)
     {
       fd_table[i].badged_server_ep_cspath.capPtr = file_cap;
@@ -86,6 +94,10 @@ xv6fs_client_context_t *fd_get(int fd)
 {
   if (fd >= 0 && fd < FD_TABLE_SIZE)
   {
+    if (fd_table[fd].badged_server_ep_cspath.capPtr == 0)
+    {
+      return NULL;
+    }
     return &fd_table[fd];
   }
   return NULL;
@@ -95,6 +107,7 @@ void fd_close(int fd)
 {
   if (fd >= 0 && fd < FD_TABLE_SIZE)
   {
+    // (XXX) Arya: free the badged_server_ep_cspath.capPtr
     fd_table[fd] = xv6fs_null_client_context;
   }
 }
@@ -227,16 +240,25 @@ xv6fs_client_init(vka_t *client_vka,
 /* Remote fs access functions to override libc fs ops */
 static int xv6fs_libc_open(const char *pathname, int flags, int modes)
 {
-  XV6FS_PRINTF("xv6fs_libc_open\n");
+  XV6FS_PRINTF("xv6fs_libc_open pathname %s, flags 0x%x\n", pathname, flags);
 
   int error;
-  // (XXX) Arya: How to send pathname?
-  // memcpy(get_xv6fs_client()->shared_mem, pathname, strlen(pathname) + 1);
+
+  // Check for /dev/null
+  if (strcmp(pathname, DEV_NULL_PATH) == 0)
+  {
+    return dev_null_fd;
+  }
+
+  // Copy pathname from buf to shared mem
+  strcpy(get_xv6fs_client()->shared_mem_vaddr, pathname);
 
   // Send IPC to fs server
-  seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0, FSMSGREG_CREATE_REQ_END);
+  seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 1, FSMSGREG_CREATE_REQ_END);
   seL4_SetMR(FSMSGREG_FUNC, FS_FUNC_CREATE_REQ);
-  // (XXX) Currently ignore flags and modes
+  seL4_SetMR(FSMSGREG_CREATE_REQ_FLAGS, flags);
+  seL4_SetCap(0, get_xv6fs_client()->shared_mem->badged_server_ep_cspath.capPtr);
+  // (XXX) Currently ignore modes
 
   // Alloc received cap ep
   cspacepath_t path;
@@ -261,28 +283,31 @@ static int xv6fs_libc_open(const char *pathname, int flags, int modes)
 
   XV6FS_PRINTF("Opened fd %d\n", fd);
 
-  // Find the file by fd
-  xv6fs_client_context_t *file = fd_get(fd);
-  if (file == NULL)
-  {
-    XV6FS_PRINTF("Invalid FD provided");
-    return -1;
-  }
-
-  printf("File %p offset is %ld\n", file, file->offset);
-
   return fd;
 }
 
 static int xv6fs_libc_pread(int fd, void *buf, int count, int offset)
 {
-  XV6FS_PRINTF("xv6fs_libc_read fd %d len %d\n", fd, count);
+  XV6FS_PRINTF("xv6fs_libc_read fd %d len %d offset %d\n", fd, count, offset);
+
+  if (count > RAMDISK_BLOCK_SIZE)
+  {
+    // (XXX) Arya: Support larger file read/writes
+    XV6FS_PRINTF("Count too large for read\n");
+    return -1;
+  }
+
+  // Check for /dev/null
+  if (fd == dev_null_fd)
+  {
+    return -1;
+  }
 
   // Find the file by fd
   xv6fs_client_context_t *file = fd_get(fd);
   if (file == NULL)
   {
-    XV6FS_PRINTF("Invalid FD provided");
+    XV6FS_PRINTF("Invalid FD provided\n");
     return -1;
   }
 
@@ -311,13 +336,11 @@ static int xv6fs_libc_pread(int fd, void *buf, int count, int offset)
 
 static int xv6fs_libc_read(int fd, void *buf, int count)
 {
-  XV6FS_PRINTF("xv6fs_libc_read fd %d len %d\n", fd, count);
-
   // Find the file by fd
   xv6fs_client_context_t *file = fd_get(fd);
   if (file == NULL)
   {
-    XV6FS_PRINTF("Invalid FD provided");
+    XV6FS_PRINTF("Invalid FD provided\n");
     return -1;
   }
 
@@ -337,15 +360,28 @@ static int xv6fs_libc_write(int fd, const void *buf, int count)
 {
   XV6FS_PRINTF("xv6fs_libc_write fd %d len %d\n", fd, count);
 
+  // Check for /dev/null
+  if (fd == dev_null_fd)
+  {
+    return 0;
+  }
+
+  if (count > RAMDISK_BLOCK_SIZE)
+  {
+    // (XXX) Arya: Support larger file read/writes
+    XV6FS_PRINTF("Count too large for read\n");
+    return -1;
+  }
+
   // Find the file by fd
   xv6fs_client_context_t *file = fd_get(fd);
   if (file == NULL)
   {
-    XV6FS_PRINTF("Invalid FD provided");
+    XV6FS_PRINTF("Invalid FD provided\n");
     return -1;
   }
 
-  // Copy from shared buf to shared mem
+  // Copy from buf to shared mem
   if (count > 0)
   {
     memcpy(get_xv6fs_client()->shared_mem_vaddr, buf, count);
@@ -378,10 +414,37 @@ static int xv6fs_libc_close(int fd)
 {
   XV6FS_PRINTF("xv6fs_libc_close fd %d\n", fd);
 
-  // Close the FD
+  int error = 0;
+
+  // Check for /dev/null
+  if (fd == dev_null_fd)
+  {
+    return 0;
+  }
+
+  // Find the file by fd
+  xv6fs_client_context_t *file = fd_get(fd);
+  if (file == NULL)
+  {
+    XV6FS_PRINTF("Invalid FD provided\n");
+    return -1;
+  }
+
+  // Send IPC to fs server
+  seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 1, FS_FUNC_CLOSE_REQ);
+  seL4_SetMR(FSMSGREG_FUNC, FS_FUNC_CLOSE_REQ);
+  tag = seL4_Call(file->badged_server_ep_cspath.capPtr, tag);
+
+  if (seL4_MessageInfo_get_label(tag) != seL4_NoError)
+  {
+    XV6FS_PRINTF("Server failed to close file\n");
+    error = -1;
+  }
+
+  // Close the FD locally
   fd_close(fd);
 
-  return 0;
+  return error;
 }
 
 static int xv6fs_libc_lseek(int fd, off_t offset, int whence)
@@ -394,7 +457,7 @@ static int xv6fs_libc_lseek(int fd, off_t offset, int whence)
   xv6fs_client_context_t *file = fd_get(fd);
   if (file == NULL)
   {
-    XV6FS_PRINTF("Invalid FD provided");
+    XV6FS_PRINTF("Invalid FD provided\n");
     return -1;
   }
 
@@ -432,7 +495,7 @@ int xv6fs_libc_fstat(int fd, struct stat *buf)
   xv6fs_client_context_t *file = fd_get(fd);
   if (file == NULL)
   {
-    XV6FS_PRINTF("Invalid FD provided");
+    XV6FS_PRINTF("Invalid FD provided\n");
     return -1;
   }
 
@@ -455,11 +518,13 @@ int xv6fs_libc_fstat(int fd, struct stat *buf)
 
 int xv6fs_libc_stat(const char *pathname, struct stat *buf)
 {
-  XV6FS_PRINTF("xv6fs_libc_fstat pathname %s\n", pathname);
+  XV6FS_PRINTF("xv6fs_libc_stat pathname %s\n", pathname);
 
-  int fd = xv6fs_libc_open(pathname, 0, 0);
+  int fd = xv6fs_libc_open(pathname, O_RDWR, 0);
   if (fd == -1)
   {
+    XV6FS_PRINTF("xv6fs_libc_stat returning -1, file does not exist\n");
+    errno = ENOENT;
     return -1;
   }
 
@@ -485,7 +550,7 @@ static int xv6fs_libc_fcntl(int fd, int cmd, ...)
   xv6fs_client_context_t *file = fd_get(fd);
   if (file == NULL)
   {
-    XV6FS_PRINTF("Invalid FD provided");
+    XV6FS_PRINTF("Invalid FD provided\n");
     return -1;
   }
 
@@ -537,8 +602,24 @@ static int xv6fs_libc_fcntl(int fd, int cmd, ...)
 
 static int xv6fs_libc_unlink(const char *pathname)
 {
-  XV6FS_PRINTF("WARNING unlink is not implemented\n");
-  return 0;
+  XV6FS_PRINTF("xv6fs_libc_unlink pathname %s\n", pathname);
+
+  int error = 0;
+
+  // Copy pathname from buf to shared mem
+  strcpy(get_xv6fs_client()->shared_mem_vaddr, pathname);
+
+  // Send IPC to fs server
+  seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 1, FSMSGREG_UNLINK_REQ_END);
+  seL4_SetMR(FSMSGREG_FUNC, FS_FUNC_UNLINK_REQ);
+  tag = seL4_Call(get_xv6fs_client()->fs_ep, tag);
+
+  if (seL4_MessageInfo_get_label(tag) != seL4_NoError)
+  {
+    error = -1;
+  }
+
+  return error;
 }
 
 static void init_global_libc_fs_ops(void)

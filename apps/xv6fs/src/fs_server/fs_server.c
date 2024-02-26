@@ -24,12 +24,16 @@
 #include <file.h>
 #include <buf.h>
 
+#if FS_DEBUG
 #define XV6FS_PRINTF(...)   \
   do                        \
   {                         \
     printf("%s ", XV6FS_S); \
     printf(__VA_ARGS__);    \
   } while (0);
+#else
+#define XV6FS_PRINTF(...)
+#endif
 
 #define CHECK_ERROR(error, msg) \
   do                            \
@@ -123,6 +127,39 @@ static fs_registry_entry_t *fs_registry_get_entry_by_badge(seL4_Word badge)
 
   uint64_t objectID = get_object_id_from_badge(badge);
   return fs_registry_get_entry_by_id(objectID);
+}
+
+/**
+ * @brief Lookup the client registry entry for the given badge.
+ *
+ * @param badge
+ * @return fs_registry_entry_t*
+ */
+static void fs_registry_remove(fs_registry_entry_t *entry)
+{
+  fs_registry_entry_t *current_ctx = get_xv6fs_server()->client_registry;
+
+  // Check if entry to remove is head of list
+  if (current_ctx == entry)
+  {
+    get_xv6fs_server()->client_registry = entry->next;
+    free(entry->file);
+    free(entry);
+    return;
+  }
+
+  // Otherwise remove from list
+  while (current_ctx != NULL)
+  {
+    if (current_ctx->next == entry)
+    {
+      current_ctx->next = entry->next;
+      free(entry->file);
+      free(entry);
+      return;
+    }
+    current_ctx = current_ctx->next;
+  }
 }
 
 /*--- XV6FS SERVER ---*/
@@ -381,6 +418,8 @@ int xv6fs_server_main()
   cspacepath_t received_cap_path;
   received_cap_path.root = PD_CAP_ROOT;
   received_cap_path.capDepth = PD_CAP_DEPTH;
+  mo_client_context_t mo_conn;
+  void *mo_vaddr;
 
   error = fs_init();
   CHECK_ERROR_GOTO(error, "failed to initialize fs", exit_main);
@@ -407,28 +446,47 @@ int xv6fs_server_main()
       switch (op)
       {
       case FS_FUNC_CREATE_REQ:
-        // Assign a new FD to this ep
-        // (XXX) Arya: use proper shared memory for name eventually
-        // const char *pathname = get_xv6fs_server()->shared_mem;
-        seL4_MessageInfo_ptr_set_length(&reply_tag, FSMSGREG_CREATE_ACK_END);
+        int open_flags = seL4_GetMR(FSMSGREG_CREATE_REQ_FLAGS);
+
+        /* Attach memory object to server ADS (contains pathname) */
+        CHECK_ERROR_GOTO(seL4_MessageInfo_get_extraCaps(tag) != 1,
+                         "client did not attach MO for read/write op", done);
+        mo_conn.badged_server_ep_cspath = received_cap_path;
+        error = ads_client_attach(get_xv6fs_server()->ads_conn,
+                                  NULL,
+                                  &mo_conn,
+                                  &mo_vaddr);
+        CHECK_ERROR_GOTO(error, "failed to attach client's MO to ADS", done);
 
         // Open (or create) the file
-        char *pathname = "test-file";
-        int open_mode = O_CREAT | O_RDWR;
-        struct file *file = xv6fs_sys_open(pathname, open_mode);
+        char *pathname = (char *)mo_vaddr;
+        XV6FS_PRINTF("Server opening file %s, flags 0x%x\n", pathname, open_flags);
+        struct file *file = xv6fs_sys_open(pathname, open_flags);
         error = file == NULL ? FS_SERVER_ERROR_UNKNOWN : FS_SERVER_NOERROR;
-        CHECK_ERROR_GOTO(error, "Failed to open file", done);
-        XV6FS_PRINTF("Server opened file %s\n", pathname);
+        if (error != 0) {
+          // Don't announce failed to open files as error, not usually an error
+          XV6FS_PRINTF("File did not exist\n");
+          error = -1;
+          goto done;
+        }
 
         // Add to registry if not already present
         fs_registry_entry_t *reg_entry = fs_registry_get_entry_by_id(file->id);
 
         if (reg_entry == NULL)
         {
+          XV6FS_PRINTF("File not previously open, make new registry entry\n");
           reg_entry = malloc(sizeof(fs_registry_entry_t));
-          reg_entry->count = 0;
+          reg_entry->count = 1;
           reg_entry->file = file;
           fs_registry_insert(reg_entry);
+        }
+        else
+        {
+          XV6FS_PRINTF("File was already open, use previous registry entry\n");
+          reg_entry->count++;
+          free(file); // We don't need another copy of the structure
+          file = reg_entry->file;
         }
 
         // Create the badged endpoint
@@ -440,11 +498,28 @@ int xv6fs_server_main()
 
         /* Return this badged end point in the return message. */
         seL4_SetCap(0, badged_ep);
-        reply_tag = seL4_MessageInfo_set_extraCaps(reply_tag, 1);
+        seL4_MessageInfo_ptr_set_extraCaps(&reply_tag, 1);
+        seL4_MessageInfo_ptr_set_length(&reply_tag, FSMSGREG_CREATE_ACK_END);
 
         XV6FS_PRINTF("Replying with badged EP: ");
         badge_print(badge);
-        printf("\n");
+        XV6FS_PRINTF("\n");
+        break;
+      case FS_FUNC_UNLINK_REQ:
+        /* Attach memory object to server ADS (contains pathname) */
+        CHECK_ERROR_GOTO(seL4_MessageInfo_get_extraCaps(tag) != 1,
+                         "client did not attach MO for read/write op", done);
+        mo_conn.badged_server_ep_cspath = received_cap_path;
+        error = ads_client_attach(get_xv6fs_server()->ads_conn,
+                                  NULL,
+                                  &mo_conn,
+                                  &mo_vaddr);
+        CHECK_ERROR_GOTO(error, "failed to attach client's MO to ADS", done);
+
+        pathname = (char *)mo_vaddr;
+        XV6FS_PRINTF("Unlink pathname %s\n", pathname);
+        error = xv6fs_sys_unlink(pathname);
+        seL4_MessageInfo_ptr_set_length(&reply_tag, FSMSGREG_UNLINK_ACK_END);
         break;
       default:
         CHECK_ERROR_GOTO(1, "got invalid op on unbadged ep", done);
@@ -474,9 +549,7 @@ int xv6fs_server_main()
         /* Attach memory object to server ADS */
         CHECK_ERROR_GOTO(seL4_MessageInfo_get_extraCaps(tag) != 1,
                          "client did not attach MO for read/write op", done);
-        mo_client_context_t mo_conn;
         mo_conn.badged_server_ep_cspath = received_cap_path;
-        void *mo_vaddr;
         error = ads_client_attach(get_xv6fs_server()->ads_conn,
                                   NULL,
                                   &mo_conn,
@@ -499,6 +572,15 @@ int xv6fs_server_main()
         seL4_MessageInfo_ptr_set_length(&reply_tag, FSMSGREG_READ_ACK_END);
         seL4_SetMR(FSMSGREG_READ_ACK_N, n_bytes_ret);
         break;
+      case FS_FUNC_CLOSE_REQ:
+          /* Cleanup resources associated with the file */;
+        reg_entry->count--;
+        if (reg_entry->count <= 0)
+        {
+          XV6FS_PRINTF("Removing registry entry for file with 0 refcount\n");
+          fs_registry_remove(reg_entry);
+        }
+        break;
       case FS_FUNC_STAT_REQ:
         /* Attach memory object to server ADS */
         CHECK_ERROR_GOTO(seL4_MessageInfo_get_extraCaps(tag) != 1,
@@ -512,51 +594,9 @@ int xv6fs_server_main()
 
         /* Call function stat */
         error = xv6fs_sys_stat(reg_entry->file, (struct stat *)mo_vaddr);
-        break;
-#if 0 // (XXX) Arya: to remove
-    case XV6FS_STAT:
-      pathname = get_xv6fs_server()->shared_mem;
-      struct stat *statbuf = get_xv6fs_server()->shared_mem;
-      ret = xv6fs_stat(pathname, statbuf);
-      break;
-    case XV6FS_FSTAT:
-      statbuf = get_xv6fs_server()->shared_mem;
-      ret = xv6fs_fstat(seL4_GetMR(XV6FS_FD), statbuf);
-      break;
-    case XV6FS_LSEEK:
-      ret = xv6fs_lseek(seL4_GetMR(XV6FS_FD), seL4_GetMR(XV6FS_OFFSET), seL4_GetMR(XV6FS_WHENCE));
-      break;
-    case XV6FS_CLOSE:
-      ret = xv6fs_close(seL4_GetMR(XV6FS_FD));
-      break;
-    case XV6FS_UNLINK:
-      pathname = get_xv6fs_server()->shared_mem;
-      ret = xv6fs_unlink(pathname);
-      break;
-    case XV6FS_GETCWD:
-      char *buf = get_xv6fs_server()->shared_mem;
-      char *getcwd_ret = xv6fs_getcwd(buf, seL4_GetMR(XV6FS_SIZE));
-      ret = (getcwd_ret != NULL);
-      break;
-    case XV6FS_FCNTL:
-      int cmd = seL4_GetMR(XV6FS_CMD);
-      unsigned long arg = seL4_GetMR(XV6FS_ARG);
-      switch (cmd)
-      {
-      case F_SETLK:
-      case F_SETLKW:
-      case F_GETLK:
-        arg = (unsigned long)get_xv6fs_server()->shared_mem;
-        break;
-      }
 
-      ret = xv6fs_fcntl(seL4_GetMR(XV6FS_FD), cmd, arg);
-      break;
-    case XV6FS_PREAD:
-      readbuf = get_xv6fs_server()->shared_mem;
-      ret = xv6fs_pread(seL4_GetMR(XV6FS_FD), readbuf, seL4_GetMR(XV6FS_COUNT), seL4_GetMR(XV6FS_POFFSET));
-      break;
-#endif
+        seL4_MessageInfo_ptr_set_length(&reply_tag, FSMSGREG_STAT_ACK_END);
+        break;
       default:
         ZF_LOGE(XV6FS_S "%s: got unexpected opcode %d\n",
                 __func__,
