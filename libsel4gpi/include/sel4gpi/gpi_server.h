@@ -88,6 +88,8 @@ typedef struct _gpi_server_context
 
     osmosis_cap_t *osm_caps;
     osmosis_cap_t *osm_caps_tail;
+    // TODO linh: put RD here
+    uint32_t pd_count;
 } gpi_server_context_t;
 
 /**
@@ -96,3 +98,10 @@ typedef struct _gpi_server_context
 void gpi_server_main(void);
 
 gpi_server_context_t *get_gpi_server(void);
+
+/**
+ * @brief generates a PD ID using simple incrementer
+ * 
+ * @return a free PD ID 
+ */
+uint32_t gpi_server_next_pd_id();

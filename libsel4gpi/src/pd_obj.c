@@ -28,6 +28,7 @@
 #include <allocman/bootstrap.h>
 #include <allocman/vka.h>
 #include <simple/simple_helpers.h>
+#include <utils/uthash.h>
 
 #define CSPACE_SIZE_BITS 17
 
@@ -64,6 +65,28 @@ static int copy_cap_to_pd(pd_t *to_pd,
     return 0;
 }
 
+osmosis_pd_cap_t *pd_add_resource(pd_t *pd, gpi_cap_t type, seL4_Word res_id)
+{
+    osmosis_pd_cap_t *new = calloc(1, sizeof(osmosis_pd_cap_t));
+    new->type = type;
+    new->res_id = res_id;
+    pd->has_access_to_count++;
+    HASH_ADD(hh, pd->has_access_to, res_id, sizeof(seL4_Word), new);
+    return new;
+}
+
+osmosis_rde_t *pd_add_rde(pd_t *pd, rde_type_t type, seL4_CPtr server_ep)
+{
+    osmosis_rde_t *new = calloc(1, sizeof(osmosis_rde_t));
+    new->pd_obj_id = gpi_server_next_pd_id();
+    new->type = type;
+    new->server_ep = server_ep;
+    pd->rde_count++;
+
+    HASH_ADD(hh, pd->rde, type, sizeof(rde_type_t), new);
+    return new;
+}
+
 int pd_new(pd_t *pd,
            vka_t *vka,
            vspace_t *server_vspace,
@@ -73,22 +96,10 @@ int pd_new(pd_t *pd,
     OSDB_PRINTF(PDSERVS "new PD: \n");
 
     pd->has_access_to_count = 0;
-    for (int i = 0; i < MAX_PD_OSM_CAPS; i++)
-    {
-        pd->has_access_to[i].type = GPICAP_TYPE_NONE;
-        pd->has_access_to[i].slot_in_RT = 0;
-        pd->has_access_to[i].slot_in_PD = 0;
-        pd->has_access_to[i].slot_in_ServerPD = 0;
-    }
+    pd->has_access_to = NULL; // required for uthash initialization
 
     pd->rde_count = 0;
-    for (int i = 0; i < MAX_PD_OSM_RDE; i++)
-    {
-        pd->rde[i].type.type = GPICAP_TYPE_NONE;
-        pd->rde[i].slot_in_RT = 0;
-        pd->rde[i].slot_in_PD = 0;
-        pd->rde[i].pd_obj_id = 0;
-    }
+    pd->rde = NULL; // required for uthash initialization
 
     pd->vka = vka;
 }
@@ -262,10 +273,8 @@ int pd_load_image(pd_t *pd,
      * or a fault to see when the test finishes */
     copy_cap_to_pd(pd, pd->proc.fault_endpoint.cptr, &pd->fault_endpoint_in_pd);
 
-    /*
-        These are RDE Entries.
 
-    */
+    /* These are RDE Entries. */
     seL4_CPtr child_ads_cap_in_parent;
     error = forge_ads_cap_from_vspace(&pd->proc.vspace, pd->vka, &child_ads_cap_in_parent);
     if (error)
@@ -276,17 +285,20 @@ int pd_load_image(pd_t *pd,
     assert(pd->child_ads_cptr_in_child != 0);
 
     OSDB_PRINTF("copied ads ep at %d\n", (int)pd->child_ads_cptr_in_child);
-
-    // SID : Finishd this RDE addting
-    pd->rde[0].type.type = GPICAP_TYPE_ADS;
-    pd->rde[0].slot_in_RT = child_ads_cap_in_parent;
-    pd->rde[0].slot_in_PD = pd->child_ads_cptr_in_child;
-    pd->rde[0].pd_obj_id = 0x00;
+    rde_type_t ads_rde_type = { .type = GPICAP_TYPE_ADS };
+    osmosis_rde_t *ads_rde = pd_add_rde(pd, ads_rde_type, pd->child_ads_cptr_in_child);
+    ads_rde->slot_in_PD_Debug = pd->child_ads_cptr_in_child;
+    ads_rde->slot_in_RT_Debug = child_ads_cap_in_parent;
 
     // For the GPI server, no need to forge
-    copy_cap_to_pd(pd, get_gpi_server()->server_ep_obj.cptr, &pd->gpi_endpoint_in_child);
+    seL4_CPtr gpi_endpoint_in_parent = get_gpi_server()->server_ep_obj.cptr;
+    copy_cap_to_pd(pd, gpi_endpoint_in_parent, &pd->gpi_endpoint_in_child);
     assert(pd->gpi_endpoint_in_child != 0);
-
+    // (XXX) linh: this shouldn't really be of type MO, but it is how PDs get their MOs
+    rde_type_t gpi_rde_type = { .type = GPICAP_TYPE_MO };
+    osmosis_rde_t *mo_rde = pd_add_rde(pd, gpi_rde_type, pd->gpi_endpoint_in_child); 
+    mo_rde->slot_in_PD_Debug = pd->gpi_endpoint_in_child;
+    mo_rde->slot_in_RT_Debug = gpi_endpoint_in_parent;
     OSDB_PRINTF("copied gpi ep at %d\n", (int)pd->gpi_endpoint_in_child);
 
     /* copy the device frame, if any */
@@ -381,8 +393,10 @@ int pd_send_cap(pd_t *to_pd,
             }
             cap = dest_cptr;
             uint32_t idx = to_pd->has_access_to_count++;
-            to_pd->has_access_to[idx].type = GPICAP_TYPE_ADS;
-            to_pd->has_access_to[idx].res_id = ads_reg->ads.ads_obj_id;
+            osmosis_pd_cap_t *res = pd_add_resource(to_pd, GPICAP_TYPE_ADS, ads_reg->ads.ads_obj_id);
+            res->slot_in_PD_Debug = cap;
+            res->slot_in_RT_Debug = src.capPtr;
+            res->slot_in_ServerPD_Debug = src.capPtr;
             break;
         case GPICAP_TYPE_MO:
             new_badge = gpi_new_badge(cap_type,
@@ -421,7 +435,7 @@ int pd_send_cap(pd_t *to_pd,
         default:
             // ZF_LOGF("Unknown cap type in %s", __FUNCTION__);
             //  (XXX) Arya: allowing unknown cap type for now to send parent ep
-            ZF_LOGI("Unknown cap type in %s", __FUNCTION__);
+            ZF_LOGI("Unknown cap type %d in %s", cap_type, __FUNCTION__);
         }
 
         // Find the pd where the cap is going, and basd
@@ -587,21 +601,17 @@ int pd_dump(pd_t *pd)
 inline void print_pd_osm_cap_info(osmosis_pd_cap_t *o)
 {
     printf("Slot_RT:%lx\t Slot_PD: %lx\t Slot_ServerPD: %lx\t T: %s\n",
-           o->slot_in_RT,
-           o->slot_in_PD,
-           o->slot_in_ServerPD,
+           o->slot_in_RT_Debug,
+           o->slot_in_PD_Debug,
+           o->slot_in_ServerPD_Debug,
            cap_type_to_str(o->type));
 }
 
 inline void print_pd_osm_rde_info(osmosis_rde_t *o)
 {
-    if (o->slot_in_RT == 0)
-    {
-        return;
-    }
     printf("RDE: PD_ID: %u\t Slot_RT:%lu\t Slot_PD: %lu\t T: %s\n",
            o->pd_obj_id,
-           o->slot_in_RT,
-           o->slot_in_PD,
+           o->slot_in_RT_Debug,
+           o->slot_in_PD_Debug,
            cap_type_to_str(o->type.type));
 }

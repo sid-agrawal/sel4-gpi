@@ -23,7 +23,8 @@ typedef struct _mo_client_context
  * @brief   Initialize the MO client.
  *
  * @param server_ep_cap Well known server endpoint cap.
- * @param client_vka client's cka for allocating memory.
+ * @param free_slot allocated cap slot for the MO
+ * @param num_pages number of pages in MO
  * @param ret_conn client's connection object
  * @return int 0 on success, -1 on failure.
  */

@@ -16,6 +16,7 @@
 #include <sel4gpi/badge_usage.h>
 #include <sel4gpi/cap_tracking.h>
 #include <sel4gpi/ads_clientapi.h>
+#include <utils/uthash.h>
 
 #define TEST_NAME_MAX (64 - 4 * sizeof(seL4_Word))
 #define MAX_SYS_OSM_CAPS 5000
@@ -43,7 +44,6 @@ typedef union rde_type
     // For instance, say one FILE cap came from one PD, and another from another.
     // Or if a resources was handed down from another PD, should that PD be the RDE,
     // or the PD that that created it should be RDE.
-    // or the PD that that created it should be RDE.
     // seL4_Word slot_in_PD;
     gpi_cap_t type;
 } rde_type_t;
@@ -51,8 +51,9 @@ typedef union rde_type
 typedef struct osmosis_rde
 {
     // The slot of the RDE cap as per seL4
-    seL4_Word slot_in_RT;
-    seL4_Word slot_in_PD;
+    // do not rely on these, as this info is sometimes difficult to find
+    seL4_Word slot_in_RT_Debug;
+    seL4_Word slot_in_PD_Debug;
 
     /*
         I think that type+pd_obj_id should be all we need
@@ -63,30 +64,34 @@ typedef struct osmosis_rde
     /*OSmosis generated PD ID of the server for RDE */
     // osmosis_pd_id_t pd_obj_id;
     uint32_t pd_obj_id;
+    seL4_CPtr server_ep;
 
     /* Info about what the RDE is for ?*/
-    rde_type_t type;
+    rde_type_t type; // key to uthash
+    UT_hash_handle hh;
 } osmosis_rde_t;
 
 typedef struct osmosis_pd_cap
 {
     // The slot of the cap as per seL4
-    seL4_Word slot_in_PD;
-    seL4_Word slot_in_RT;
-    seL4_Word slot_in_ServerPD; // For instance in case of file.
+    // do not rely on these, as this info is sometimes difficult to find
+    seL4_Word slot_in_PD_Debug;
+    seL4_Word slot_in_RT_Debug;
+    seL4_Word slot_in_ServerPD_Debug; // For instance in case of file.
 
     /*
         I think that type+res_id should be all we need
         to find out when OSM resources are shared.
         But let's keep track of slot_in* (above) for now.
     */
-    seL4_Word res_id;
+    seL4_Word res_id; // key to uthash
 
     /*
         Type is PD/MO/CPU/ADS then look locally, else
         Copy the cap from PD to RT and then calls RR on it.
     */
     gpi_cap_t type;
+    UT_hash_handle hh;
 } osmosis_pd_cap_t;
 
 typedef struct _pd
@@ -189,9 +194,9 @@ typedef struct _pd
         (XXX) Convert both of there to linked lists
     */
 
-    osmosis_pd_cap_t has_access_to[MAX_PD_OSM_CAPS];
+    osmosis_pd_cap_t *has_access_to;
     uint64_t has_access_to_count;
-    osmosis_rde_t rde[MAX_PD_OSM_RDE];
+    osmosis_rde_t *rde;
     uint64_t rde_count;
 
     /*
@@ -282,3 +287,7 @@ void print_pd_osm_rde_info(osmosis_rde_t *o);
  * Should be called after all pd_send_cap calls
  */
 int pd_populate_init_data(pd_t *pd, seL4_CPtr server_ep);
+
+osmosis_pd_cap_t *pd_add_resource(pd_t *pd, gpi_cap_t type, seL4_Word res_id);
+
+osmosis_rde_t *pd_add_rde(pd_t *pd, rde_type_t type, seL4_CPtr server_ep);

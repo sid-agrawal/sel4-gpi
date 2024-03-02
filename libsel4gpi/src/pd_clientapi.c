@@ -211,3 +211,15 @@ int pd_client_start(pd_client_context_t *conn, seL4_Word arg0)
     assert(seL4_MessageInfo_ptr_get_label(&tag) == 0);
     return 0;
 }
+
+int pd_client_add_rde(pd_client_context_t *conn, seL4_CPtr server_ep, gpi_cap_t server_type)
+{
+    seL4_SetMR(PDMSGREG_FUNC, PD_FUNC_ADD_RDE_REQ);
+    seL4_SetMR(PDMSGREG_ADD_RDE_TYPE, server_type);
+    seL4_SetCap(0, server_ep);
+    seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 1,
+                                                  PDMSGREG_ADD_RDE_REQ_END);
+    tag = seL4_Call(conn->badged_server_ep_cspath.capPtr, tag);
+    assert(seL4_MessageInfo_ptr_get_label(&tag) == 0);
+    return 0;
+}

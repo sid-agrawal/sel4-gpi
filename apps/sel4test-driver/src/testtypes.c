@@ -192,13 +192,13 @@ static int sel4test_driver_wait(driver_env_t env, struct testcase *test)
         }
 
         result = test_output;
-        if (seL4_MessageInfo_get_label(info) != seL4_Fault_NullFault)
-        {
-            sel4utils_print_fault_message(info, test->name);
-            printf("Register of root thread in test (may not be the thread that faulted)\n");
-            sel4debug_dump_registers(env->test_process.thread.tcb.cptr);
-            result = FAILURE;
-        }
+        // if (seL4_MessageInfo_get_label(info) != seL4_Fault_NullFault)
+        // {
+        sel4utils_print_fault_message(info, test->name);
+        printf("Register of root thread in test (may not be the thread that faulted)\n");
+        sel4debug_dump_registers(env->test_process.thread.tcb.cptr);
+        result = FAILURE;
+        // }
 
         if (config_set(CONFIG_HAVE_TIMER))
         {

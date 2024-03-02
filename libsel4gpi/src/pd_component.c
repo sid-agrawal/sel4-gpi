@@ -323,7 +323,7 @@ static void handle_load_req(seL4_Word sender_badge,
 
     seL4_Word badge = seL4_GetBadge(0);
 
-    ads_component_registry_entry_t *ads_data = ads_component_registry_get_entry_by_badge(seL4_GetBadge(0));
+    ads_component_registry_entry_t *ads_data = ads_component_registry_get_entry_by_badge(badge);
     assert(ads_data != NULL);
 
     const char *image_path = pd_images[seL4_GetMR(PDMSGREG_LOAD_FUNC_IMAGE)];
@@ -347,8 +347,7 @@ static void handle_load_req(seL4_Word sender_badge,
 
     // Insert into has access to.
     uint32_t idx = client_data->pd.has_access_to_count++;
-    client_data->pd.has_access_to[idx].type = GPICAP_TYPE_ADS;
-    client_data->pd.has_access_to[idx].res_id = ads_data->ads.ads_obj_id;
+    pd_add_resource(&client_data->pd, GPICAP_TYPE_ADS, ads_data->ads.ads_obj_id);
 
     seL4_SetMR(PDMSGREG_FUNC, PD_FUNC_LOAD_ACK);
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(error, 0, 0, PDMSGREG_LOAD_ACK_END);
@@ -590,6 +589,31 @@ static void handle_start_req(seL4_Word sender_badge, seL4_MessageInfo_t old_tag,
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0, PDMSGREG_START_ACK_END);
     return reply(tag);
 }
+
+static void handle_add_rde_req(seL4_Word sender_badge, seL4_MessageInfo_t old_tag, seL4_CPtr received_cap)
+{
+    OSDB_PRINTF(PDSERVS "main: Got add rde request from client badge %lx.\n",
+                sender_badge);
+
+    pd_component_registry_entry_t *client_data = pd_component_registry_get_entry_by_badge(sender_badge);
+    if (client_data == NULL)
+    {
+        OSDB_PRINTF(PDSERVS "main: Failed to find client badge %lx.\n",
+                    sender_badge);
+        return;
+    }
+
+    gpi_cap_t server_type = (gpi_cap_t) seL4_GetMR(PDMSGREG_ADD_RDE_TYPE);
+    rde_type_t rde_type = { .type = server_type };
+    osmosis_rde_t *new_rde = pd_add_rde(&client_data->pd, rde_type, received_cap);
+    int error = new_rde == NULL;
+
+    seL4_SetMR(PDMSGREG_FUNC, PD_FUNC_ADD_RDE_ACK);
+    seL4_MessageInfo_t tag = seL4_MessageInfo_new(error, 0, 0,
+                                                  PDMSGREG_ADD_RDE_ACK_END);
+    return reply(tag);
+}
+
 /**
  * @brief The starting point for the pd server's thread.
  *
@@ -629,6 +653,9 @@ void pd_component_handle(seL4_MessageInfo_t tag,
         break;
     case PD_FUNC_START_REQ:
         handle_start_req(sender_badge, tag, received_cap->capPtr);
+        break;
+    case PD_FUNC_ADD_RDE_REQ:
+        handle_add_rde_req(sender_badge, tag, received_cap->capPtr);
         break;
     default:
         gpi_panic(PDSERVS "Unknown func type.", (seL4_Word)func);

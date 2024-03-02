@@ -71,6 +71,9 @@ enum pd_component_funcs
 
     PD_FUNC_DISCONNECT_REQ,
     PD_FUNC_DISCONNECT_ACK,
+
+    PD_FUNC_ADD_RDE_REQ,
+    PD_FUNC_ADD_RDE_ACK
 };
 
 /* Designated purposes of each message register in the mini-protocol. */
@@ -147,6 +150,12 @@ enum pd_component_msgregs
     PDMSGREG_DISCONNECT_REQ_END = PDMSGREG_LABEL0,
 
     PDMSGREG_DISCONNECT_ACK_END = PDMSGREG_LABEL0,
+
+    /* Add RDE */
+    PDMSGREG_ADD_RDE_TYPE = PDMSGREG_LABEL0,
+    PDMSGREG_ADD_RDE_REQ_END,
+
+    PDMSGREG_ADD_RDE_ACK_END = PDMSGREG_LABEL0
 };
 
 /* Per-client context maintained by the server. */

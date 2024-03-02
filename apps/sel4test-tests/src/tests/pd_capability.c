@@ -19,7 +19,11 @@
 
 #include <sel4gpi/pd_clientapi.h>
 #include <sel4bench/arch/sel4bench.h>
+#include <utils/uthash.h>
 
+#define TEST_LOG(msg, ...) \
+    do { printf("%s(): " msg "\n", __func__, ##__VA_ARGS__); } while (0)
+   
 int test_new_process_osmosis(env_t env)
 {
     int error;
@@ -138,6 +142,7 @@ int test_new_process_osmosis_shmem(env_t env)
     assert(error == 0);
     printf("Loaded hello\n");
 
+#if 1
     // Copy the ep_object to the new PD
     seL4_CPtr slot;
     error = pd_client_next_slot(&pd_os_cap, &slot);
@@ -174,11 +179,36 @@ int test_new_process_osmosis_shmem(env_t env)
 #endif
 
     // Make a new MO cap
+    cspacepath_t mo_cap_path;
+    error = vka_cspace_alloc_path(&env->vka, &mo_cap_path);
+    test_error_eq(error, 0);
+
+    mo_client_context_t mo_conn_shared;
+    error = mo_component_client_connect(env->gpi_endpoint,
+                                        mo_cap_path.capPtr,
+                                        1,
+                                        &mo_conn_shared);
+    test_error_eq(error, 0);
 
     // Attach it to current AS
+    ads_client_context_t test_ads_cap;
+    vka_cspace_make_path(&env->vka, env->self_ads_cptr, &test_ads_cap.badged_server_ep_cspath);
+
+    void *vaddr;
+    error = ads_client_attach(&test_ads_cap,
+                              0, /*vaddr*/
+                              &mo_conn_shared,
+                              &vaddr);
+    test_error_eq(error, 0);
 
     // Send it to "hello" PD
+    error = pd_client_send_cap(&pd_os_cap,
+                               mo_conn_shared.badged_server_ep_cspath.capPtr,
+                               &slot);
+    test_error_eq(error, 0);
 
+    TEST_LOG("mo slot: %ld", slot);
+#endif
     // Hello PD should also attach it.
 #if 0
 
