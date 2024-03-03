@@ -43,11 +43,9 @@ int main(int argc, char **argv)
 
     seL4_CPtr ads_cap = sel4runtime_get_initial_ads_cap();
     seL4_CPtr rde_cap = sel4runtime_get_rde_cap();
-    seL4_CPtr pd_cap = sel4runtime_get_pd_cap();
 
     printf("Hello: ADS_CAP: %ld\n", (seL4_Word)ads_cap);
     printf("Hello: RDE_CAP: %ld\n", (seL4_Word)rde_cap);
-    printf("Hello: PD_CAP: %ld\n", (seL4_Word)pd_cap);
 
     ads_client_context_t ads_conn;
     ads_conn.badged_server_ep_cspath.capPtr = ads_cap;
@@ -67,7 +65,8 @@ int main(int argc, char **argv)
 
     seL4_CPtr slot;
     pd_client_context_t pd_conn;
-    pd_conn.badged_server_ep_cspath.capPtr = pd_cap;
+    printf("pd_rde[pd]: %lx\n", pd_rde[GPICAP_TYPE_PD].server_ep);
+    pd_conn.badged_server_ep_cspath.capPtr = pd_rde[GPICAP_TYPE_PD].server_ep;
     error = pd_client_next_slot(&pd_conn, &slot);
     assert(error == 0);
     printf("Next free slot is %ld\n", (seL4_Word)slot);

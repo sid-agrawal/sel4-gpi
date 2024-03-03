@@ -314,27 +314,6 @@ int pd_load_image(pd_t *pd,
     pd->rde[GPICAP_TYPE_MO].slot_in_RT_Debug = gpi_endpoint_in_parent;
     OSDB_PRINTF("copied gpi ep at %d\n", (int)pd->gpi_endpoint_in_child);
 
-    vka_object_t rde_frame_parent;
-    error = vka_alloc_frame(vka, seL4_PageBits, &rde_frame_parent);
-    if (error)
-    {
-        ZF_LOGE("Couldn't allocate frame to hold PD's resource directory");
-    }
-    // void *rd= vspace_new_pages(server_vspace, seL4_AllRights, 1, seL4_PageBits);
-    seL4_CPtr rde_parent_cap = rde_frame_parent.cptr;
-    void *rde_parent = vspace_map_pages(server_vspace, &rde_parent_cap, NULL, seL4_AllRights, 1, seL4_PageBits, 1);
-    memcpy(rde_parent, pd->rde, sizeof(osmosis_rde_t) * MAX_PD_OSM_RDE);
-
-    seL4_CPtr rde_mo_cap;
-    mo_t *rde_mo_obj;
-    error = forge_mo_cap_from_frames(&rde_parent_cap, 1, vka, &rde_mo_cap, &rde_mo_obj);
-    if (error)
-    {
-        ZF_LOGE("Couldn't forge an MO for PD's resource directory");
-    }
-    copy_cap_to_pd(pd, rde_mo_cap, &pd->pd_rde_in_child);
-    OSDB_PRINTF("copied PD's resource directory cap at %lx\n", pd->pd_rde_in_child);
-
     /* copy the device frame, if any */
     // if (pd->device_frame_cap) {
     //     pd->device_frame_cap = sel4utils_copy_cap_to_process(&(pd->proc), pd->vka, env->device_obj.cptr);
@@ -524,6 +503,30 @@ int pd_start(pd_t *pd,
         return -1;
     }
 
+    rde_type_t pd_rde_type = { .type = GPICAP_TYPE_PD };
+    pd_add_rde(pd, pd_rde_type, pd_cptr_in_child);
+
+    vka_object_t rde_frame_parent;
+    error = vka_alloc_frame(vka, seL4_PageBits, &rde_frame_parent);
+    if (error)
+    {
+        ZF_LOGE("Couldn't allocate frame to hold PD's resource directory");
+    }
+    
+    seL4_CPtr rde_parent_cap = rde_frame_parent.cptr;
+    void *rde_parent = vspace_map_pages(server_vspace, &rde_parent_cap, NULL, seL4_AllRights, 1, seL4_PageBits, 1);
+    memcpy(rde_parent, pd->rde, sizeof(osmosis_rde_t) * MAX_PD_OSM_RDE);
+
+    seL4_CPtr rde_mo_cap;
+    mo_t *rde_mo_obj;
+    error = forge_mo_cap_from_frames(&rde_parent_cap, 1, vka, &rde_mo_cap, &rde_mo_obj);
+    if (error)
+    {
+        ZF_LOGE("Couldn't forge an MO for PD's resource directory");
+    }
+    copy_cap_to_pd(pd, rde_mo_cap, &pd->pd_rde_in_child);
+    OSDB_PRINTF("copied PD's resource directory cap at %lx\n", pd->pd_rde_in_child);
+
     // Phase1: Start it.
     // Phase2: start the CPU thread.
 
@@ -538,8 +541,7 @@ int pd_start(pd_t *pd,
 
     /* spawn the process */
     seL4_CPtr osm_caps[] = {pd->child_ads_cptr_in_child,
-                            pd->pd_rde_in_child,
-                            pd_cptr_in_child};
+                            pd->pd_rde_in_child};
     error = sel4utils_osm_spawn_process_v(&(pd->proc),
                                           osm_caps,
                                           pd->vka,
