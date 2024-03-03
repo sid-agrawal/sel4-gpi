@@ -25,6 +25,7 @@ uintptr_t morecore_top = (uintptr_t)&morecore_area[RD_MALLOC_SIZE];
 #include <sel4gpi/mo_clientapi.h>
 #include <sel4gpi/ads_clientapi.h>
 #include <sel4gpi/pd_clientapi.h>
+#include <sel4gpi/resource_server_utils.h>
 
 #include <ramdisk_server.h>
 
@@ -51,8 +52,11 @@ int main(int argc, char **argv)
     assert(argc == 1);
     seL4_CPtr parent_ep = (seL4_CPtr)atol(argv[0]);
 
-    return ramdisk_server_start(&ads_conn,
-                                &pd_conn,
-                                gpi_cap,
-                                parent_ep);
+    return resource_server_start(
+        &get_ramdisk_server()->gen,
+        &ads_conn,
+        &pd_conn,
+        gpi_cap,
+        parent_ep,
+        ramdisk_server_main);
 }

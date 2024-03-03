@@ -14,6 +14,7 @@
 #include <sel4gpi/ads_clientapi.h>
 #include <sel4gpi/mo_clientapi.h>
 #include <sel4gpi/pd_clientapi.h>
+#include <sel4gpi/resource_server_utils.h>
 
 #include <libc_fs_helpers.h>
 #include <fs_shared.h>
@@ -132,61 +133,10 @@ int start_xv6fs_pd(vka_t *vka,
                    seL4_CPtr rd_ep,
                    seL4_CPtr *fs_ep)
 {
-  int error;
-
-  // Create an endpoint for the parent to listen on
-  vka_object_t ep_object = {0};
-  error = vka_alloc_endpoint(vka, &ep_object);
-  CHECK_ERROR(error, "failed to allocate endpoint");
-
-  // Create a new PD
-  pd_client_context_t pd_os_cap;
-  error = pd_component_client_connect(gpi_ep, vka, &pd_os_cap);
-  CHECK_ERROR(error, "failed to create new pd");
-
-  // Create a new ADS Cap, which will be in the context of a PD and image
-  ads_client_context_t ads_os_cap;
-  error = ads_component_client_connect(gpi_ep, vka, &ads_os_cap);
-  CHECK_ERROR(error, "failed to create new ads");
-
-  // Make a new AS, loads an image
-  error = pd_client_load(&pd_os_cap, &ads_os_cap, FS_APP);
-  CHECK_ERROR(error, "failed to load pd image");
-
-  // Copy the parent ep to the new PD
-  seL4_Word parent_ep_slot;
-  error = pd_client_send_cap(&pd_os_cap, ep_object.cptr, &parent_ep_slot);
-  CHECK_ERROR(error, "failed to send parent's ep cap to pd");
-
-  // Copy the ramdisk ep to the new PD
-  // (XXX) Arya: replace with RDE mechanism once implemented
-  seL4_Word ramdisk_ep_slot;
-  error = pd_client_send_cap(&pd_os_cap, rd_ep, &ramdisk_ep_slot);
-  CHECK_ERROR(error, "failed to send ramdisk's ep cap to pd");
-  assert(ramdisk_ep_slot == parent_ep_slot - 1);
-
-  // Start it
-  error = pd_client_start(&pd_os_cap, parent_ep_slot); // with this arg.
-  CHECK_ERROR(error, "failed to start pd");
-
-  // Wait for it to finish starting
-  seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0, 0);
-
-  /* Alloc cap receive path*/
-  cspacepath_t received_cap_path;
-  error = vka_cspace_alloc_path(vka, &received_cap_path);
-  CHECK_ERROR(error, "failed to alloc receive endpoint");
-
-  seL4_SetCapReceivePath(received_cap_path.root,
-                         received_cap_path.capPtr,
-                         received_cap_path.capDepth);
-
-  tag = seL4_Recv(ep_object.cptr, NULL);
-  int n_caps = seL4_MessageInfo_get_extraCaps(tag);
-  CHECK_ERROR(n_caps != 1, "message from ramdisk does not contain ep");
-  *fs_ep = received_cap_path.capPtr;
-
-  XV6FS_PRINTF("Successfully started ramdisk server\n");
+  int error = start_resource_server_pd(vka, gpi_ep,
+                                       rd_ep, FS_APP, fs_ep);
+  CHECK_ERROR(error, "failed to start file resource server\n");
+  XV6FS_PRINTF("Successfully started file system server\n");
   return 0;
 }
 

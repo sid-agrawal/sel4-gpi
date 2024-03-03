@@ -12,49 +12,45 @@
 #include <sel4/sel4.h>
 #include <sel4/types.h>
 
+#include <sel4gpi/resource_server_utils.h>
+
 #include <ramdisk_shared.h>
-
-struct _ads_client_context;
-typedef struct _ads_client_context ads_client_context_t;
-
-struct _mo_client_context;
-typedef struct _mo_client_context mo_client_context_t;
-
-struct _pd_client_context;
-typedef struct _pd_client_context pd_client_context_t;
 
 #define RAMDISK_SERVER_DEFAULT_PRIORITY (seL4_MaxPrio - 100)
 
 /**
- * Starts the ramdisk in the current thread
- * Assumes the ramdisk is started in a new PD
+ * Spawns the ramdisk server thread.
+ * Server thread is spawned within the VSpace and
+ * CSpace of the thread that spawned it.
  *
- * @param ads_conn ADS RDE
- * @param pd_conn PD RDE
- * @param gpi_ep General gpi ep
- * @param parent_ep Endpoint of the parent process
- * @return 0 on successful exit, nonzero otherwise
+ * Note: mainly for use from the root task, which does
+ * not have a PD cap. Within a regular PD, use resource_server_start
+ *
+ * CAUTION:
+ * All vka_t, vspace_t, and simple_t instances passed to this library by
+ * reference must remain functional throughout the lifetime of the server.
+ *
+ * @param parent_simple Initialized simple_t for the parent process that is
+ *                      spawning the server thread.
+ * @param parent_vka Initialized vka_t for the parent process that is spawning
+ *                   the server thread.
+ * @param parent_vspace Initialized vspace_t for the parent process that is
+ *                      spawning the server thread.
+ * @param gpi_ep Endpoint to the gpi server
+ * @param parent_ep Endpoint to communicate with parent
+ * @param ads_ep Initialized ADS connection
+ * @param priority Server thread's priority.
+ * @return int 0 on success, -1 otherwise
  */
-int ramdisk_server_start(ads_client_context_t *ads_conn,
-                         pd_client_context_t *pd_conn,
-                         seL4_CPtr gpi_ep,
-                         seL4_CPtr parent_ep);
+int ramdisk_server_spawn_thread(simple_t *parent_simple,
+                                vka_t *parent_vka,
+                                vspace_t *parent_vspace,
+                                seL4_CPtr gpi_ep,
+                                seL4_CPtr parent_ep,
+                                seL4_CPtr ads_ep,
+                                uint8_t priority);
 
-/**
- * Starts the ramdisk as a thread within the current PD
- */
-seL4_Error
-ramdisk_server_spawn_thread(simple_t *parent_simple,
-                            vka_t *parent_vka,
-                            vspace_t *parent_vspace,
-                            seL4_CPtr gpi_ep,
-                            seL4_CPtr parent_ep,
-                            seL4_CPtr ads_ep,
-                            uint8_t priority);
-
-/*
-Context of the server
-*/
+/* Context of the server */
 
 // Linked list node represents a block or block range
 typedef struct _ramdisk_block_node
@@ -66,20 +62,8 @@ typedef struct _ramdisk_block_node
 
 typedef struct _ramdisk_server_context
 {
-    // Used only when server started as thread
-    vka_t *server_vka;
-
-    // Generic functions used when started as thread or PD
-    int (*next_slot)(seL4_CPtr *);
-
-    // RDEs and other EPs
-    seL4_CPtr gpi_server;
-    ads_client_context_t *ads_conn;
-    pd_client_context_t *pd_conn;
-    seL4_CPtr parent_ep; // Used once to tell parent that we have started
-
-    // The server listens on this endpoint.
-    seL4_CPtr server_ep;
+    // Generic resource server context
+    resource_server_context_t gen;
 
     // Memory for ramdisk
     void *ramdisk_buf;
@@ -87,8 +71,6 @@ typedef struct _ramdisk_server_context
 
     // Data structure of ramdisk blocks
     ramdisk_block_node_t *free_blocks;
-
-    seL4_CPtr mcs_reply;
 } ramdisk_server_context_t;
 
 /**

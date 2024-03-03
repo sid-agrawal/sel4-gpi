@@ -15,6 +15,7 @@
 
 #include <sel4gpi/ads_clientapi.h>
 #include <sel4gpi/pd_clientapi.h>
+#include <sel4gpi/resource_server_utils.h>
 #include <ramdisk_client.h>
 
 #include <libc_fs_helpers.h>
@@ -49,18 +50,19 @@
     }                           \
   } while (0);
 
-#define CHECK_ERROR_GOTO(error, msg, dest) \
-  do                                       \
-  {                                        \
-    if (error != seL4_NoError)             \
-    {                                      \
-      ZF_LOGE(XV6FS_S "%s: %s"             \
-                      ", %d.",             \
-              __func__,                    \
-              msg,                         \
-              error);                      \
-      goto dest;                           \
-    }                                      \
+#define CHECK_ERROR_GOTO(check, msg, err, dest) \
+  do                                            \
+  {                                             \
+    if ((check) != seL4_NoError)                \
+    {                                           \
+      ZF_LOGE(XV6FS_S "%s: %s"                  \
+                      ", %d.",                  \
+              __func__,                         \
+              msg,                              \
+              error);                           \
+      error = err;                              \
+      goto dest;                                \
+    }                                           \
   } while (0);
 
 /* Used by xv6fs internal functions when they panic */
@@ -170,61 +172,6 @@ xv6fs_server_context_t *get_xv6fs_server(void)
   return &xv6fs_server;
 }
 
-static inline seL4_MessageInfo_t recv(seL4_Word *sender_badge_ptr)
-{
-  /** NOTE:
-
-   * the reply param of api_recv(third param) is only used in the MCS kernel.
-   **/
-
-  return api_recv(get_xv6fs_server()->server_ep,
-                  sender_badge_ptr,
-                  get_xv6fs_server()->mcs_reply);
-}
-
-static inline void reply(seL4_MessageInfo_t tag)
-{
-  api_reply(get_xv6fs_server()->mcs_reply, tag);
-}
-
-static int vka_next_slot_fn(seL4_CPtr *slot)
-{
-  return vka_cspace_alloc(get_xv6fs_server()->server_vka, slot);
-}
-
-static int pd_next_slot_fn(seL4_CPtr *slot)
-{
-  return pd_client_next_slot(get_xv6fs_server()->pd_conn, slot);
-}
-
-static int vka_badge_ep_fn(seL4_Word badge, seL4_CPtr *badged_ep)
-{
-  cspacepath_t src, dest;
-  vka_cspace_make_path(get_xv6fs_server()->server_vka,
-                       get_xv6fs_server()->server_ep, &src);
-  int error = vka_cspace_alloc_path(get_xv6fs_server()->server_vka,
-                                    &dest);
-  if (error)
-  {
-    return error;
-  }
-
-  error = vka_cnode_mint(&dest,
-                         &src,
-                         seL4_AllRights,
-                         badge);
-
-  *badged_ep = dest.capPtr;
-  return error;
-}
-
-static int pd_badge_ep_fn(seL4_Word badge, seL4_CPtr *badged_ep)
-{
-  return pd_client_badge_ep(get_xv6fs_server()->pd_conn,
-                            get_xv6fs_server()->server_ep,
-                            badge, badged_ep);
-}
-
 /**
  * Temporary function initializes the file system by requesting
  * every block ahead of time, and using them later for read/write requests
@@ -237,7 +184,8 @@ static int init_naive_blocks()
   for (int i = 0; i < FS_SIZE; i++)
   {
     seL4_CPtr free_slot;
-    error = get_xv6fs_server()->next_slot(&free_slot);
+    error = resource_server_next_slot(&get_xv6fs_server()->gen, &free_slot);
+
     CHECK_ERROR(error, "failed to get a free slot");
     error = ramdisk_client_alloc_block(ramdisk_ep, NULL, free_slot, &get_xv6fs_server()->naive_blocks[i]);
     CHECK_ERROR(error, "failed to alloc a block from ramdisk");
@@ -246,101 +194,29 @@ static int init_naive_blocks()
   return 0;
 }
 
-int xv6fs_server_start(ads_client_context_t *ads_conn,
-                       pd_client_context_t *pd_conn,
-                       seL4_CPtr gpi_ep,
-                       seL4_CPtr rd_ep,
-                       seL4_CPtr parent_ep)
+int xv6fs_server_spawn_thread(simple_t *parent_simple,
+                              vka_t *parent_vka,
+                              vspace_t *parent_vspace,
+                              seL4_CPtr gpi_ep,
+                              seL4_CPtr rd_ep,
+                              seL4_CPtr parent_ep,
+                              seL4_CPtr ads_ep,
+                              seL4_CPtr pd_ep,
+                              uint8_t priority)
 {
-  seL4_Error error;
+  get_xv6fs_server()->rd_ep = rd_ep;
 
-  xv6fs_server_context_t *server = get_xv6fs_server();
-
-  server->gpi_ep = gpi_ep;
-  server->rd_ep = rd_ep;
-  server->ads_conn = ads_conn;
-  server->pd_conn = pd_conn;
-  server->parent_ep = parent_ep;
-  server->next_slot = pd_next_slot_fn;
-  server->badge_ep = pd_badge_ep_fn;
-
-  /* Allocate the Endpoint that the server will be listening on. */
-  error = pd_client_alloc_ep(server->pd_conn, &server->server_ep);
-  CHECK_ERROR(error, "Failed to allocate endpoint for fs server");
-  XV6FS_PRINTF("Allocated server ep at %d\n", (int)server->server_ep);
-
-  XV6FS_PRINTF("Going to main function\n");
-  return xv6fs_server_main();
-}
-
-seL4_Error
-xv6fs_server_spawn_thread(simple_t *parent_simple,
-                          vka_t *parent_vka,
-                          vspace_t *parent_vspace,
-                          seL4_CPtr gpi_ep,
-                          seL4_CPtr rd_ep,
-                          seL4_CPtr parent_ep,
-                          seL4_CPtr ads_ep,
-                          seL4_CPtr pd_ep,
-                          uint8_t priority)
-{
-  seL4_Error error;
-  cspacepath_t parent_cspace_cspath;
-  seL4_MessageInfo_t tag;
-
-  if (parent_simple == NULL || parent_vka == NULL || parent_vspace == NULL)
-  {
-    return seL4_InvalidArgument;
-  }
-
-  xv6fs_server_context_t *server = get_xv6fs_server();
-
-  server->server_vka = parent_vka;
-  server->gpi_ep = gpi_ep;
-  server->parent_ep = parent_ep;
-  server->rd_ep = rd_ep;
-  server->ads_conn = malloc(sizeof(ads_client_context_t));
-  server->ads_conn->badged_server_ep_cspath.capPtr = ads_ep;
-  server->pd_conn = malloc(sizeof(pd_client_context_t));
-  server->pd_conn->badged_server_ep_cspath.capPtr = pd_ep;
-  server->next_slot = vka_next_slot_fn;
-  server->badge_ep = vka_badge_ep_fn;
-
-  /* Get a CPtr to the parent's root cnode. */
-  vka_cspace_make_path(parent_vka, 0, &parent_cspace_cspath);
-
-  /* Allocate the Endpoint that the server will be listening on. */
-  vka_object_t server_ep_obj;
-  error = vka_alloc_endpoint(parent_vka, &server_ep_obj);
-  server->server_ep = server_ep_obj.cptr;
-
-  /* Configure thread */
-  sel4utils_thread_config_t config = thread_config_default(parent_simple,
-                                                           parent_cspace_cspath.root,
-                                                           seL4_NilData,
-                                                           server->server_ep,
-                                                           priority);
-
-  sel4utils_thread_t server_thread;
-  error = sel4utils_configure_thread_config(parent_vka,
-                                            parent_vspace,
-                                            parent_vspace,
-                                            config,
-                                            &server_thread);
-  CHECK_ERROR_GOTO(error, "sel4utils_configure_thread failed", out);
-
-  NAME_THREAD(server_thread.tcb.cptr, "xv6fs server");
-  error = sel4utils_start_thread(&server_thread,
-                                 (sel4utils_thread_entry_fn)&xv6fs_server_main,
-                                 NULL, NULL, 1);
-  CHECK_ERROR_GOTO(error, "sel4utils_start_thread failed", out);
-
-  return 0;
-
-out:
-  XV6FS_PRINTF("spawn_thread: Server ran into an error.\n");
-  vka_free_object(parent_vka, &server_ep_obj); // ARYA-TODO does this unmap?
-  return error;
+  return resource_server_spawn_thread(
+      &get_xv6fs_server()->gen,
+      parent_simple,
+      parent_vka,
+      parent_vspace,
+      gpi_ep,
+      parent_ep,
+      ads_ep,
+      priority,
+      "fs server",
+      xv6fs_server_main);
 }
 
 uint64_t fs_assign_new_badge(uint64_t fd)
@@ -371,16 +247,17 @@ static int fs_init()
   /* Allocate the TEMP shared memory object */
   server->shared_mem = malloc(sizeof(mo_client_context_t));
   seL4_CPtr free_slot;
-  error = get_xv6fs_server()->next_slot(&free_slot);
+  error = resource_server_next_slot(&get_xv6fs_server()->gen, &free_slot);
+
   CHECK_ERROR(error, "failed to get next cspace slot");
 
-  error = mo_component_client_connect(server->gpi_ep,
+  error = mo_component_client_connect(server->gen.gpi_ep,
                                       free_slot,
                                       1,
                                       server->shared_mem);
   CHECK_ERROR(error, "failed to allocate shared mem page");
 
-  error = ads_client_attach(server->ads_conn,
+  error = ads_client_attach(server->gen.ads_conn,
                             NULL,
                             server->shared_mem,
                             &server->shared_mem_vaddr);
@@ -395,13 +272,180 @@ static int fs_init()
   XV6FS_PRINTF("Initialized file system\n");
 
   /* Send our ep to the parent process */
-  XV6FS_PRINTF("Messaging parent process at slot %d, sending ep %d\n", (int)server->parent_ep, (int)server->server_ep);
+  XV6FS_PRINTF("Messaging parent process at slot %d, sending ep %d\n", (int)server->gen.parent_ep, (int)server->gen.server_ep);
 
   seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 1, 0);
-  seL4_SetCap(0, server->server_ep);
-  seL4_Send(server->parent_ep, tag);
+  seL4_SetCap(0, server->gen.server_ep);
+  seL4_Send(server->gen.parent_ep, tag);
 
   return error;
+}
+
+static seL4_MessageInfo_t xv6fs_request_handler(seL4_MessageInfo_t tag, seL4_Word sender_badge, seL4_CPtr cap)
+{
+  int error;
+  void *mo_vaddr;
+
+  unsigned int op = seL4_GetMR(FSMSGREG_FUNC);
+
+  seL4_MessageInfo_t reply_tag = seL4_MessageInfo_new(0, 0, 0, 0);
+
+  if (sender_badge == 0)
+  { /* Handle Untyped Request */
+    switch (op)
+    {
+    case FS_FUNC_CREATE_REQ:
+      int open_flags = seL4_GetMR(FSMSGREG_CREATE_REQ_FLAGS);
+
+      /* Attach memory object to server ADS (contains pathname) */
+      error = resource_server_attach_mo(&get_xv6fs_server()->gen, cap, &mo_vaddr);
+      CHECK_ERROR_GOTO(error, "Failed to attach MO", error, done);
+
+      // Open (or create) the file
+      char *pathname = (char *)mo_vaddr;
+      XV6FS_PRINTF("Server opening file %s, flags 0x%x\n", pathname, open_flags);
+      struct file *file = xv6fs_sys_open(pathname, open_flags);
+      error = file == NULL ? FS_SERVER_ERROR_UNKNOWN : FS_SERVER_NOERROR;
+      if (error != 0)
+      {
+        // Don't announce failed to open files as error, not usually an error
+        XV6FS_PRINTF("File did not exist\n");
+        error = FS_SERVER_ERROR_NOFILE;
+        goto done;
+      }
+
+      // Add to registry if not already present
+      fs_registry_entry_t *reg_entry = fs_registry_get_entry_by_id(file->id);
+
+      if (reg_entry == NULL)
+      {
+        XV6FS_PRINTF("File not previously open, make new registry entry\n");
+        reg_entry = malloc(sizeof(fs_registry_entry_t));
+        reg_entry->count = 1;
+        reg_entry->file = file;
+        fs_registry_insert(reg_entry);
+      }
+      else
+      {
+        XV6FS_PRINTF("File was already open, use previous registry entry\n");
+        reg_entry->count++;
+        free(file); // We don't need another copy of the structure
+        file = reg_entry->file;
+      }
+
+      // Create the badged endpoint
+      seL4_Word badge = fs_assign_new_badge(file->id);
+      seL4_CPtr badged_ep;
+
+      error = resource_server_badge_ep(&get_xv6fs_server()->gen,
+                                       badge, &badged_ep);
+      CHECK_ERROR_GOTO(error, "failed to mint client badge", error, done);
+
+      /* Return this badged end point in the return message. */
+      seL4_SetCap(0, badged_ep);
+      seL4_MessageInfo_ptr_set_extraCaps(&reply_tag, 1);
+      seL4_MessageInfo_ptr_set_length(&reply_tag, FSMSGREG_CREATE_ACK_END);
+      seL4_SetMR(RDMSGREG_FUNC, FS_FUNC_CREATE_ACK);
+
+      XV6FS_PRINTF("Replying with badged EP: ");
+      badge_print(badge);
+      XV6FS_PRINTF("\n");
+      break;
+    case FS_FUNC_UNLINK_REQ:
+      /* Attach memory object to server ADS (contains pathname) */
+      error = resource_server_attach_mo(&get_xv6fs_server()->gen, cap, &mo_vaddr);
+      CHECK_ERROR_GOTO(error, "Failed to attach MO", error, done);
+
+      pathname = (char *)mo_vaddr;
+      XV6FS_PRINTF("Unlink pathname %s\n", pathname);
+      error = xv6fs_sys_unlink(pathname);
+
+      seL4_MessageInfo_ptr_set_length(&reply_tag, FSMSGREG_UNLINK_ACK_END);
+      seL4_SetMR(RDMSGREG_FUNC, FS_FUNC_UNLINK_ACK);
+      break;
+    default:
+      CHECK_ERROR_GOTO(1, "got invalid op on unbadged ep", error, done);
+    }
+  }
+  else
+  {
+    /* Handle Typed Request */
+    int ret;
+    fs_registry_entry_t *reg_entry = fs_registry_get_entry_by_badge(sender_badge);
+    if (reg_entry == NULL)
+    {
+      XV6FS_PRINTF("Received invalid badge");
+      error = FS_SERVER_ERROR_BADGE;
+      goto done;
+    }
+
+    XV6FS_PRINTF("Got request for file with id %ld\n", reg_entry->file->id);
+
+    switch (op)
+    {
+    case FS_FUNC_READ_REQ:
+      int n_bytes_to_read = seL4_GetMR(FSMSGREG_READ_REQ_N);
+      int offset = seL4_GetMR(FSMSGREG_READ_REQ_OFFSET);
+
+      /* Attach memory object to server ADS */
+      error = resource_server_attach_mo(&get_xv6fs_server()->gen, cap, &mo_vaddr);
+      CHECK_ERROR_GOTO(error, "Failed to attach MO", error, done);
+
+      // Perform file read
+      int n_bytes_ret = xv6fs_sys_read(reg_entry->file, mo_vaddr, n_bytes_to_read, offset);
+      XV6FS_PRINTF("Read %d bytes from file\n", n_bytes_ret);
+
+      seL4_MessageInfo_ptr_set_length(&reply_tag, FSMSGREG_READ_ACK_END);
+      seL4_SetMR(RDMSGREG_FUNC, FS_FUNC_READ_ACK);
+      seL4_SetMR(FSMSGREG_READ_ACK_N, n_bytes_ret);
+      break;
+    case FS_FUNC_WRITE_REQ:
+      n_bytes_to_read = seL4_GetMR(FSMSGREG_READ_REQ_N);
+      offset = seL4_GetMR(FSMSGREG_READ_REQ_OFFSET);
+
+      /* Attach memory object to server ADS */
+      error = resource_server_attach_mo(&get_xv6fs_server()->gen, cap, &mo_vaddr);
+      CHECK_ERROR_GOTO(error, "Failed to attach MO", error, done);
+
+      // Perform file write
+      n_bytes_ret = xv6fs_sys_write(reg_entry->file, mo_vaddr, n_bytes_to_read, offset);
+      XV6FS_PRINTF("Wrote %d bytes to file\n", n_bytes_ret);
+
+      seL4_MessageInfo_ptr_set_length(&reply_tag, FSMSGREG_WRITE_ACK_END);
+      seL4_SetMR(RDMSGREG_FUNC, FS_FUNC_WRITE_ACK);
+      seL4_SetMR(FSMSGREG_WRITE_ACK_N, n_bytes_ret);
+      break;
+    case FS_FUNC_CLOSE_REQ:
+        /* Cleanup resources associated with the file */;
+      reg_entry->count--;
+      if (reg_entry->count <= 0)
+      {
+        XV6FS_PRINTF("Removing registry entry for file with 0 refcount\n");
+        fs_registry_remove(reg_entry);
+      }
+
+      seL4_MessageInfo_ptr_set_length(&reply_tag, FSMSGREG_CLOSE_ACK_END);
+      seL4_SetMR(RDMSGREG_FUNC, FS_FUNC_CLOSE_ACK);
+      break;
+    case FS_FUNC_STAT_REQ:
+      /* Attach memory object to server ADS */
+      error = resource_server_attach_mo(&get_xv6fs_server()->gen, cap, &mo_vaddr);
+      CHECK_ERROR_GOTO(error, "Failed to attach MO", error, done);
+
+      /* Call function stat */
+      error = xv6fs_sys_stat(reg_entry->file, (struct stat *)mo_vaddr);
+
+      seL4_MessageInfo_ptr_set_length(&reply_tag, FSMSGREG_STAT_ACK_END);
+      seL4_SetMR(RDMSGREG_FUNC, FS_FUNC_STAT_ACK);
+      break;
+    default:
+      CHECK_ERROR_GOTO(1, "got invalid op on badged ep", FS_SERVER_ERROR_UNKNOWN, done);
+    }
+  }
+
+done:
+  seL4_MessageInfo_ptr_set_label(&reply_tag, error);
+  return reply_tag;
 }
 
 /**
@@ -410,209 +454,13 @@ static int fs_init()
  */
 int xv6fs_server_main()
 {
-  XV6FS_PRINTF("started\n");
+  XV6FS_PRINTF("Started\n");
 
-  seL4_MessageInfo_t tag;
-  seL4_Error error = 0;
-  seL4_Word sender_badge;
-  cspacepath_t received_cap_path;
-  received_cap_path.root = PD_CAP_ROOT;
-  received_cap_path.capDepth = PD_CAP_DEPTH;
-  mo_client_context_t mo_conn;
-  void *mo_vaddr;
+  int error = fs_init();
+  CHECK_ERROR(error, "failed to initialize fs");
 
-  error = fs_init();
-  CHECK_ERROR_GOTO(error, "failed to initialize fs", exit_main);
-
-  while (1)
-  {
-    /* Alloc cap receive slot*/
-    error = get_xv6fs_server()->next_slot(&received_cap_path.capPtr);
-    CHECK_ERROR_GOTO(error, "failed to alloc cap receive slot", exit_main);
-
-    seL4_SetCapReceivePath(
-        received_cap_path.root,
-        received_cap_path.capPtr,
-        received_cap_path.capDepth);
-
-    /* Receive a message */
-    tag = recv(&sender_badge);
-    unsigned int op = seL4_GetMR(FSMSGREG_FUNC);
-
-    seL4_MessageInfo_t reply_tag = seL4_MessageInfo_new(0, 0, 0, 0);
-
-    if (sender_badge == 0)
-    { /* Handle Untyped Request */
-      switch (op)
-      {
-      case FS_FUNC_CREATE_REQ:
-        int open_flags = seL4_GetMR(FSMSGREG_CREATE_REQ_FLAGS);
-
-        /* Attach memory object to server ADS (contains pathname) */
-        CHECK_ERROR_GOTO(seL4_MessageInfo_get_extraCaps(tag) != 1,
-                         "client did not attach MO for read/write op", done);
-        mo_conn.badged_server_ep_cspath = received_cap_path;
-        error = ads_client_attach(get_xv6fs_server()->ads_conn,
-                                  NULL,
-                                  &mo_conn,
-                                  &mo_vaddr);
-        CHECK_ERROR_GOTO(error, "failed to attach client's MO to ADS", done);
-
-        // Open (or create) the file
-        char *pathname = (char *)mo_vaddr;
-        XV6FS_PRINTF("Server opening file %s, flags 0x%x\n", pathname, open_flags);
-        struct file *file = xv6fs_sys_open(pathname, open_flags);
-        error = file == NULL ? FS_SERVER_ERROR_UNKNOWN : FS_SERVER_NOERROR;
-        if (error != 0) {
-          // Don't announce failed to open files as error, not usually an error
-          XV6FS_PRINTF("File did not exist\n");
-          error = -1;
-          goto done;
-        }
-
-        // Add to registry if not already present
-        fs_registry_entry_t *reg_entry = fs_registry_get_entry_by_id(file->id);
-
-        if (reg_entry == NULL)
-        {
-          XV6FS_PRINTF("File not previously open, make new registry entry\n");
-          reg_entry = malloc(sizeof(fs_registry_entry_t));
-          reg_entry->count = 1;
-          reg_entry->file = file;
-          fs_registry_insert(reg_entry);
-        }
-        else
-        {
-          XV6FS_PRINTF("File was already open, use previous registry entry\n");
-          reg_entry->count++;
-          free(file); // We don't need another copy of the structure
-          file = reg_entry->file;
-        }
-
-        // Create the badged endpoint
-        seL4_Word badge = fs_assign_new_badge(file->id);
-        seL4_CPtr badged_ep;
-
-        error = get_xv6fs_server()->badge_ep(badge, &badged_ep);
-        CHECK_ERROR_GOTO(error, "failed to mint client badge", done);
-
-        /* Return this badged end point in the return message. */
-        seL4_SetCap(0, badged_ep);
-        seL4_MessageInfo_ptr_set_extraCaps(&reply_tag, 1);
-        seL4_MessageInfo_ptr_set_length(&reply_tag, FSMSGREG_CREATE_ACK_END);
-
-        XV6FS_PRINTF("Replying with badged EP: ");
-        badge_print(badge);
-        XV6FS_PRINTF("\n");
-        break;
-      case FS_FUNC_UNLINK_REQ:
-        /* Attach memory object to server ADS (contains pathname) */
-        CHECK_ERROR_GOTO(seL4_MessageInfo_get_extraCaps(tag) != 1,
-                         "client did not attach MO for read/write op", done);
-        mo_conn.badged_server_ep_cspath = received_cap_path;
-        error = ads_client_attach(get_xv6fs_server()->ads_conn,
-                                  NULL,
-                                  &mo_conn,
-                                  &mo_vaddr);
-        CHECK_ERROR_GOTO(error, "failed to attach client's MO to ADS", done);
-
-        pathname = (char *)mo_vaddr;
-        XV6FS_PRINTF("Unlink pathname %s\n", pathname);
-        error = xv6fs_sys_unlink(pathname);
-        seL4_MessageInfo_ptr_set_length(&reply_tag, FSMSGREG_UNLINK_ACK_END);
-        break;
-      default:
-        CHECK_ERROR_GOTO(1, "got invalid op on unbadged ep", done);
-      }
-    }
-    else
-    {
-      /* Handle Typed Request */
-      int ret;
-      fs_registry_entry_t *reg_entry = fs_registry_get_entry_by_badge(sender_badge);
-      if (reg_entry == NULL)
-      {
-        XV6FS_PRINTF("Received invalid badge");
-        error = FS_SERVER_ERROR_BADGE;
-        goto done;
-      }
-
-      XV6FS_PRINTF("Got request for file with id %ld\n", reg_entry->file->id);
-
-      switch (op)
-      {
-      case FS_FUNC_READ_REQ:
-      case FS_FUNC_WRITE_REQ:
-        int n_bytes_to_read = seL4_GetMR(FSMSGREG_READ_REQ_N);
-        int offset = seL4_GetMR(FSMSGREG_READ_REQ_OFFSET);
-
-        /* Attach memory object to server ADS */
-        CHECK_ERROR_GOTO(seL4_MessageInfo_get_extraCaps(tag) != 1,
-                         "client did not attach MO for read/write op", done);
-        mo_conn.badged_server_ep_cspath = received_cap_path;
-        error = ads_client_attach(get_xv6fs_server()->ads_conn,
-                                  NULL,
-                                  &mo_conn,
-                                  &mo_vaddr);
-        CHECK_ERROR_GOTO(error, "failed to attach client's MO to ADS", done);
-
-        // Perform file read / write
-        int n_bytes_ret;
-        if (op == FS_FUNC_READ_REQ)
-        {
-          n_bytes_ret = xv6fs_sys_read(reg_entry->file, mo_vaddr, n_bytes_to_read, offset);
-          XV6FS_PRINTF("Read %d bytes from file\n", n_bytes_ret);
-        }
-        else
-        {
-          n_bytes_ret = xv6fs_sys_write(reg_entry->file, mo_vaddr, n_bytes_to_read, offset);
-          XV6FS_PRINTF("Wrote %d bytes to file\n", n_bytes_ret);
-        }
-
-        seL4_MessageInfo_ptr_set_length(&reply_tag, FSMSGREG_READ_ACK_END);
-        seL4_SetMR(FSMSGREG_READ_ACK_N, n_bytes_ret);
-        break;
-      case FS_FUNC_CLOSE_REQ:
-          /* Cleanup resources associated with the file */;
-        reg_entry->count--;
-        if (reg_entry->count <= 0)
-        {
-          XV6FS_PRINTF("Removing registry entry for file with 0 refcount\n");
-          fs_registry_remove(reg_entry);
-        }
-        break;
-      case FS_FUNC_STAT_REQ:
-        /* Attach memory object to server ADS */
-        CHECK_ERROR_GOTO(seL4_MessageInfo_get_extraCaps(tag) != 1,
-                         "client did not attach MO for read/write op", done);
-        mo_conn.badged_server_ep_cspath = received_cap_path;
-        error = ads_client_attach(get_xv6fs_server()->ads_conn,
-                                  NULL,
-                                  &mo_conn,
-                                  &mo_vaddr);
-        CHECK_ERROR_GOTO(error, "failed to attach client's MO to ADS", done);
-
-        /* Call function stat */
-        error = xv6fs_sys_stat(reg_entry->file, (struct stat *)mo_vaddr);
-
-        seL4_MessageInfo_ptr_set_length(&reply_tag, FSMSGREG_STAT_ACK_END);
-        break;
-      default:
-        ZF_LOGE(XV6FS_S "%s: got unexpected opcode %d\n",
-                __func__,
-                op);
-
-        error = FS_SERVER_ERROR_UNKNOWN;
-      }
-    }
-  done:
-    seL4_MessageInfo_ptr_set_label(&reply_tag, error);
-    reply(reply_tag);
-  }
-
-exit_main:
-  XV6FS_PRINTF("main: Suspending.");
-  return -1;
+  return resource_server_main(&get_xv6fs_server()->gen,
+                              xv6fs_request_handler);
 }
 
 static int block_read(uint32_t blockno, void *buf)

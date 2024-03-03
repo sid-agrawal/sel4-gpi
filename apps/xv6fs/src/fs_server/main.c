@@ -54,10 +54,13 @@ int main(int argc, char **argv)
     // (XXX) Arya: Temporary hack to get ramdisk ep
     // replace with RDE mechanism
     seL4_CPtr rd_ep = parent_ep - 1;
+    get_xv6fs_server()->rd_ep = rd_ep;
 
-    return xv6fs_server_start(&ads_conn,
-                              &pd_conn,
-                              gpi_cap,
-                              rd_ep,
-                              parent_ep);
+    return resource_server_start(
+        &get_xv6fs_server()->gen,
+        &ads_conn,
+        &pd_conn,
+        gpi_cap,
+        parent_ep,
+        xv6fs_server_main);
 }

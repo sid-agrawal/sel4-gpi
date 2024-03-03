@@ -10,7 +10,10 @@
 
 #include <sel4/sel4.h>
 #include <sel4/types.h>
+
+#include <sel4gpi/resource_server_utils.h>
 #include <ramdisk_client.h>
+
 #include <fs_shared.h>
 
 #define XV6FS_S "xv6fs Server: "
@@ -21,23 +24,6 @@ typedef struct _ads_client_context ads_client_context_t;
 
 struct _pd_client_context;
 typedef struct _pd_client_context pd_client_context_t;
-
-/**
- * Starts the fs in the current thread
- * Assumes the fs is started in a new PD
- *
- * @param ads_conn ADS RDE
- * @param pd_conn PD RDE
- * @param gpi_ep General gpi ep
- * @param rd_ep Ramdisk server's ep
- * @param parent_ep Endpoint of the parent process
- * @return 0 on successful exit, nonzero otherwise
- */
-int xv6fs_server_start(ads_client_context_t *ads_conn,
-                       pd_client_context_t *pd_conn,
-                       seL4_CPtr gpi_ep,
-                       seL4_CPtr rd_ep,
-                       seL4_CPtr parent_ep);
 
 /** Spawns the xv6fs server thread. Server thread is spawned within the VSpace and
  *  CSpace of the thread that spawned it.
@@ -58,18 +44,17 @@ int xv6fs_server_start(ads_client_context_t *ads_conn,
  * @param ads_ep Initialized ADS connection
  * @param pd_ep Initialized PD connection
  * @param priority Server thread's priority.
- * @return seL4_Error value.
+ * @return int 0 on success, -1 otherwise
  */
-seL4_Error
-xv6fs_server_spawn_thread(simple_t *parent_simple,
-                          vka_t *parent_vka,
-                          vspace_t *parent_vspace,
-                          seL4_CPtr gpi_ep,
-                          seL4_CPtr rd_ep,
-                          seL4_CPtr parent_ep,
-                          seL4_CPtr ads_ep,
-                          seL4_CPtr pd_ep,
-                          uint8_t priority);
+int xv6fs_server_spawn_thread(simple_t *parent_simple,
+                              vka_t *parent_vka,
+                              vspace_t *parent_vspace,
+                              seL4_CPtr gpi_ep,
+                              seL4_CPtr rd_ep,
+                              seL4_CPtr parent_ep,
+                              seL4_CPtr ads_ep,
+                              seL4_CPtr pd_ep,
+                              uint8_t priority);
 
 /* Per-client context maintained by the server. */
 typedef struct _fs_registry_entry
@@ -85,22 +70,11 @@ Context of the server
 */
 typedef struct _xv6fs_server_context
 {
-    // Used only when server started as thread
-    vka_t *server_vka;
+    // Generic resource server context
+    resource_server_context_t gen;
 
-    // Generic functions used when started as thread or PD
-    int (*next_slot)(seL4_CPtr *);
-    int (*badge_ep)(seL4_Word, seL4_CPtr *);
-
-    // RDEs and other EPs
-    seL4_CPtr parent_ep;
-    seL4_CPtr gpi_ep;
+    // Other EPs
     seL4_CPtr rd_ep;
-    ads_client_context_t *ads_conn;
-    pd_client_context_t *pd_conn;
-
-    // The server listens on this endpoint.
-    seL4_CPtr server_ep;
 
     // Internal data
     int registry_n_entries;
@@ -110,8 +84,6 @@ typedef struct _xv6fs_server_context
     mo_client_context_t *shared_mem;
     void *shared_mem_vaddr;
     ramdisk_client_context_t naive_blocks[FS_SIZE];
-
-    seL4_CPtr mcs_reply;
 } xv6fs_server_context_t;
 
 /**

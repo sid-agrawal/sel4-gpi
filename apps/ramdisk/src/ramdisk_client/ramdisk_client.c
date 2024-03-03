@@ -9,6 +9,7 @@
 #include <vspace/vspace.h>
 
 #include <sel4gpi/pd_clientapi.h>
+#include <sel4gpi/resource_server_utils.h>
 
 #include <ramdisk_client.h>
 #include <ramdisk_shared.h>
@@ -49,52 +50,9 @@ int start_ramdisk_pd(vka_t *vka,
                      seL4_CPtr *ramdisk_ep)
 {
     int error;
-
-    // Create an endpoint for the parent to listen on
-    vka_object_t ep_object = {0};
-    error = vka_alloc_endpoint(vka, &ep_object);
-    CHECK_ERROR(error, "failed to allocate endpoint");
-
-    // Create a new PD
-    pd_client_context_t pd_os_cap;
-    error = pd_component_client_connect(gpi_ep, vka, &pd_os_cap);
-    CHECK_ERROR(error, "failed to create new pd");
-
-    // Create a new ADS Cap, which will be in the context of a PD and image
-    ads_client_context_t ads_os_cap;
-    error = ads_component_client_connect(gpi_ep, vka, &ads_os_cap);
-    CHECK_ERROR(error, "failed to create new ads");
-
-    // Make a new AS, loads an image
-    error = pd_client_load(&pd_os_cap, &ads_os_cap, RAMDISK_APP);
-    CHECK_ERROR(error, "failed to load pd image");
-
-    // Copy the parent ep to the new PD
-    seL4_Word parent_ep_slot;
-    error = pd_client_send_cap(&pd_os_cap, ep_object.cptr, &parent_ep_slot);
-    CHECK_ERROR(error, "failed to send parent's ep cap to pd");
-
-    // Start it
-    error = pd_client_start(&pd_os_cap, parent_ep_slot); // with this arg.
-    CHECK_ERROR(error, "failed to start pd");
-
-    // Wait for it to finish starting
-    seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0, 0);
-
-    /* Alloc cap receive path*/
-    cspacepath_t received_cap_path;
-    error = vka_cspace_alloc_path(vka, &received_cap_path);
-    CHECK_ERROR(error, "failed to alloc receive endpoint");
-
-    seL4_SetCapReceivePath(received_cap_path.root,
-                           received_cap_path.capPtr,
-                           received_cap_path.capDepth);
-
-    tag = seL4_Recv(ep_object.cptr, NULL);
-    int n_caps = seL4_MessageInfo_get_extraCaps(tag);
-    CHECK_ERROR(n_caps != 1, "message from ramdisk does not contain ep");
-    *ramdisk_ep = received_cap_path.capPtr;
-
+    error = start_resource_server_pd(vka, gpi_ep,
+                                     0, RAMDISK_APP, ramdisk_ep);
+    CHECK_ERROR(error, "failed to start ramdisk server\n");
     RAMDISK_PRINTF("Successfully started ramdisk server\n");
     return 0;
 }
@@ -104,7 +62,7 @@ int ramdisk_client_sanity_test(seL4_CPtr server_ep_cap,
                                seL4_Word *res)
 {
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 1, 1);
-    seL4_SetMR(RAMDISK_MR_OP, RAMDISK_SANITY_TEST);
+    seL4_SetMR(RDMSGREG_FUNC, RD_FUNC_SANITY_REQ);
     seL4_SetCap(0, mo->badged_server_ep_cspath.capPtr);
     tag = seL4_Call(server_ep_cap, tag);
 
@@ -143,7 +101,7 @@ int ramdisk_client_alloc_block(seL4_CPtr server_ep_cap,
         /* depth */ path.capDepth);
 
     /* Request a new block from server */
-    seL4_SetMR(RAMDISK_MR_OP, RAMDISK_GET_BLOCK);
+    seL4_SetMR(RDMSGREG_FUNC, RD_FUNC_CREATE_REQ);
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0, 1);
 
     tag = seL4_Call(server_ep_cap, tag);
@@ -161,8 +119,8 @@ int ramdisk_client_read(ramdisk_client_context_t *conn, mo_client_context_t *mo)
 
     /* Send IPC to ramdisk server */
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 1, 1);
-    seL4_SetMR(RAMDISK_MR_OP, RAMDISK_READ);
-    seL4_SetCap(RAMDISK_CAP_MO, mo->badged_server_ep_cspath.capPtr);
+    seL4_SetMR(RDMSGREG_FUNC, RD_FUNC_READ_REQ);
+    seL4_SetCap(0, mo->badged_server_ep_cspath.capPtr);
     tag = seL4_Call(conn->badged_server_ep_cspath.capPtr, tag);
     error = seL4_MessageInfo_get_label(tag);
 
@@ -175,8 +133,8 @@ int ramdisk_client_write(ramdisk_client_context_t *conn, mo_client_context_t *mo
 
     /* Send IPC to ramdisk server */
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 1, 1);
-    seL4_SetMR(RAMDISK_MR_OP, RAMDISK_WRITE);
-    seL4_SetCap(RAMDISK_CAP_MO, mo->badged_server_ep_cspath.capPtr);
+    seL4_SetMR(RDMSGREG_FUNC, RD_FUNC_WRITE_REQ);
+    seL4_SetCap(0, mo->badged_server_ep_cspath.capPtr);
     tag = seL4_Call(conn->badged_server_ep_cspath.capPtr, tag);
     error = seL4_MessageInfo_get_label(tag);
 
