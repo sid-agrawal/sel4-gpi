@@ -49,6 +49,7 @@ struct file *filedup(struct file *);
 int fileread(struct file *, uint64_t, int n);
 int filestat(struct file *, uint64_t addr);
 int filewrite(struct file *, uint64_t, int n);
+int file_blocknos(struct file *f, int *buf, int buf_size, int *result_size);
 
 // fs.c
 void fsinit(int);
@@ -66,6 +67,7 @@ void iupdate(struct inode *);
 int namecmp(const char *, const char *);
 struct inode *namei(char *);
 struct inode *nameiparent(char *, char *);
+uint32_t bmap_noalloc(struct inode *ip, uint32_t bn);
 int readi(struct inode *, int, uint64_t, uint32_t, uint32_t);
 void stati(struct inode *, struct stat *);
 int writei(struct inode *, int, uint64_t, uint32_t, uint32_t);
@@ -114,3 +116,4 @@ int xv6fs_sys_utime(char *path, int time);
 int xv6fs_sys_stat(struct file *f, struct stat *st);
 int xv6fs_sys_seek(void *fh, uint64_t off, int whence);
 int xv6fs_sys_fcntl(void *fh, int cmd, unsigned long arg);
+int xv6fs_sys_blocknos(struct file *f, int *buf, int buf_size, int* result_size);

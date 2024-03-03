@@ -16,6 +16,7 @@
 #define LOGSIZE 0                                         // use no log, previous value was (MAXOPBLOCKS * 3)
 #define NBUF (MAXOPBLOCKS * 3)                            // size of disk block cache
 #define MAXPATH 128                                       // maximum file path name
+#define FILE_RESOURCE_NAME "FILE"                         // name of a file resource in the model state
 
 /* API of the fs server */
 
@@ -24,7 +25,7 @@ enum fs_errors
 {
     FS_SERVER_NOERROR = 0,
     /* No future collisions with seL4_Error.*/
-    FS_SERVER_ERROR_UNKNOWN = seL4_NumErrors,
+    FS_SERVER_ERROR_UNKNOWN = RS_NUM_ERRORS,
     FS_SERVER_ERROR_BADGE,
     FS_SERVER_ERROR_NOFILE
 };
@@ -32,7 +33,7 @@ enum fs_errors
 /* IPC Message register values for FSMSGREG_FUNC */
 enum fs_server_funcs
 {
-    FS_FUNC_CREATE_REQ = 0,
+    FS_FUNC_CREATE_REQ = RS_FUNC_END,
     FS_FUNC_CREATE_ACK,
 
     FS_FUNC_READ_REQ,
@@ -55,7 +56,7 @@ enum fs_server_funcs
 enum fs_msgregs
 {
     /* These are fixed headers in every fs message. */
-    FSMSGREG_FUNC = 0,
+    FSMSGREG_FUNC = RSMSGREG_FUNC,
 
     /* This is a convenience label for IPC MessageInfo length. */
     FSMSGREG_LABEL0,

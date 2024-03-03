@@ -63,7 +63,7 @@ int ramdisk_client_sanity_test(seL4_CPtr server_ep_cap,
                                mo_client_context_t *mo,
                                seL4_Word *res)
 {
-    seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 1, 1);
+    seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 1, RDMSGREG_SANITY_REQ_END);
     seL4_SetMR(RDMSGREG_FUNC, RD_FUNC_SANITY_REQ);
     seL4_SetCap(0, mo->badged_server_ep_cspath.capPtr);
     tag = seL4_Call(server_ep_cap, tag);
@@ -71,7 +71,7 @@ int ramdisk_client_sanity_test(seL4_CPtr server_ep_cap,
     int error = seL4_MessageInfo_get_label(tag);
     CHECK_ERROR(error, "failed ramdisk sanity test\n");
 
-    *res = seL4_GetMR(0);
+    *res = seL4_GetMR(RDMSGREG_SANITY_ACK_VAL);
     return 0;
 }
 

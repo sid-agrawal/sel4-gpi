@@ -383,6 +383,51 @@ static seL4_MessageInfo_t xv6fs_request_handler(seL4_MessageInfo_t tag, seL4_Wor
 
     switch (op)
     {
+    case RS_FUNC_GET_RR_REQ:
+      XV6FS_PRINTF("Get RR for fileno %ld\n", reg_entry->file->id);
+
+      size_t mo_size = seL4_GetMR(RSMSGREG_EXTRACT_RR_REQ_SIZE);
+
+      /* Attach memory object to server ADS */
+      error = resource_server_attach_mo(&get_xv6fs_server()->gen, cap, &mo_vaddr);
+      CHECK_ERROR_GOTO(error, "Failed to attach MO", error, done);
+
+      // Initialize the model state
+      model_state_t *model_state = (model_state_t *)mo_vaddr;
+      init_model_state(model_state);
+      csv_row_t *row_ptr = mo_vaddr + sizeof(model_state_t);
+
+      // Add the entry for the resource
+      // (XXX) Arya: fileno may not be globally unique, need combined ID
+      char file_res_id[CSV_MAX_STRING_SIZE];
+      snprintf(file_res_id, CSV_MAX_STRING_SIZE, "%s_%lu", FILE_RESOURCE_NAME, reg_entry->file->id);
+      add_resource_row(model_state, FILE_RESOURCE_NAME, file_res_id, row_ptr);
+      row_ptr++;
+
+      // Add relations for blocks
+      int n_blocknos = 100; // (XXX) Arya: what if there are more blocks?
+      int *blocknos = malloc(sizeof(int) * n_blocknos);
+      xv6fs_sys_blocknos(reg_entry->file, blocknos, n_blocknos, &n_blocknos);
+      XV6FS_PRINTF("File has %d blocks\n", n_blocknos);
+
+      char block_res_id[CSV_MAX_STRING_SIZE];
+
+      for (int i = 0; i < n_blocknos; i++)
+      {
+        if ((void *)(row_ptr + 1) >= mo_vaddr + mo_size)
+        {
+          XV6FS_PRINTF("Ran out of space in the MO to write RR, wrote %d rows\n", i);
+          error = RS_ERROR_RR_SIZE;
+          break;
+        }
+        snprintf(block_res_id, CSV_MAX_STRING_SIZE, "BLOCK_%u", blocknos[i]);
+        add_resource_depends_on_row(model_state, file_res_id, block_res_id, row_ptr);
+        row_ptr++;
+      }
+      free(blocknos);
+
+      seL4_SetMR(RDMSGREG_FUNC, RS_FUNC_GET_RR_ACK);
+      break;
     case FS_FUNC_READ_REQ:
       int n_bytes_to_read = seL4_GetMR(FSMSGREG_READ_REQ_N);
       int offset = seL4_GetMR(FSMSGREG_READ_REQ_OFFSET);

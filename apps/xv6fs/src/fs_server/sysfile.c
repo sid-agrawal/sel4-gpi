@@ -170,6 +170,16 @@ int xv6fs_sys_read(struct file *f, char *buf, size_t sz, uint32_t off)
   return fileread(f, (uint64_t)buf, sz);
 }
 
+// Writes all blocknos for file f in the buf
+// If the buf runs out of size, stops writing and returns -1
+int xv6fs_sys_blocknos(struct file *f, int *buf, int buf_size, int* result_size)
+{ 
+  if (f == 0)
+    return -1;
+
+  return file_blocknos(f, buf, buf_size, result_size);
+}
+
 int xv6fs_sys_write(struct file *f, char *buf, size_t sz, uint32_t off)
 {
   if (f == 0)
@@ -238,8 +248,6 @@ int xv6fs_sys_mksock(char *path)
   iunlockput(ip);
   return 0;
 }
-
-#define ENOENT (-2)
 
 int xv6fs_sys_unlink(char *path)
 {

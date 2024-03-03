@@ -22,7 +22,6 @@
 /**
  * Starts the ramdisk as a thread
  */
-
 int start_ramdisk_thread(env_t env, seL4_CPtr *ramdisk_ep)
 {
 
@@ -189,6 +188,19 @@ int test_ramdisk(env_t env)
     }
 
     // TODO: test freeing blocks, if implemented
+
+    // Dump RR for a block
+    model_state_t *block_model_state;
+
+    error = resource_server_get_rr(block.badged_server_ep_cspath.capPtr,
+                                   &mo_conn, buf,
+                                   SIZE_BITS_TO_BYTES(seL4_PageBits),
+                                   &block_model_state);
+    test_assert(error == seL4_NoError);
+    test_assert(block_model_state->csv_rows_len == 1);
+    test_assert(block_model_state->num_resources == 1);
+    printf("--- Model state for one ramdisk block --- \n");
+    print_model_state(block_model_state);
 
     printf("------------------ENDING: %s------------------\n", __func__);
     return sel4test_get_result();

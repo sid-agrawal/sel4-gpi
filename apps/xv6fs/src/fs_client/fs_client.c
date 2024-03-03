@@ -189,6 +189,20 @@ xv6fs_client_init(vka_t *client_vka,
   return error;
 }
 
+int xv6fs_client_get_file(int fd, seL4_CPtr *file_ep)
+{
+  // Find the file by fd
+  xv6fs_client_context_t *file = fd_get(fd);
+  if (file == NULL)
+  {
+    XV6FS_PRINTF("Invalid FD provided\n");
+    return -1;
+  }
+
+  *file_ep = file->badged_server_ep_cspath.capPtr;
+  return 0;
+}
+
 /* Remote fs access functions to override libc fs ops */
 static int xv6fs_libc_open(const char *pathname, int flags, int modes)
 {

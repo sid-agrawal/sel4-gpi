@@ -101,6 +101,38 @@ int fileread(struct file *f, uint64_t addr, int n)
   return r;
 }
 
+// Writes all blocknos for file f in the buf
+// If the buf runs out of size, stops writing
+int file_blocknos(struct file *f, int *buf, int buf_size, int *result_size)
+{
+  if (f->type == FD_INODE)
+  {
+    ilock(f->ip);
+    int i = 0;
+    for (uint32_t block_offset = 0; block_offset < f->ip->size / BSIZE; block_offset += 1) {
+      int blockno = bmap_noalloc(f->ip, block_offset);
+
+      if (blockno != 0) {
+        if (i < buf_size) {
+          buf[i] = blockno;
+          i++;
+        } else {
+          *result_size = i;
+          iunlock(f->ip);
+          return -1;
+        }
+      }
+    }
+    *result_size = i;
+    iunlock(f->ip);
+  }
+  else
+  {
+    xv6fs_panic("file_blocknos");
+  }
+
+}
+
 // Write to file f.
 // addr is a user virtual address.
 int filewrite(struct file *f, uint64_t addr, int n)

@@ -432,6 +432,38 @@ bmap(struct inode *ip, uint32_t bn)
   xv6fs_panic("bmap: out of range");
 }
 
+// Return the disk block address of the nth block in inode ip.
+// If there is no such block, returns 0
+uint32_t
+bmap_noalloc(struct inode *ip, uint32_t bn)
+{
+  uint32_t addr, *a;
+  struct buf *bp;
+
+  if (bn < NDIRECT)
+  {
+    return ip->addrs[bn];
+  }
+  bn -= NDIRECT;
+
+  if (bn < NINDIRECT)
+  {
+    // Load indirect block, allocating if necessary.
+    if ((addr = ip->addrs[NDIRECT]) == 0)
+    {
+      // No indirect block
+      return 0;
+    }
+    bp = bread(ip->dev, addr);
+    a = (uint32_t *)bp->data;
+    addr = a[bn];
+    brelse(bp);
+    return addr;
+  }
+
+  xv6fs_panic("bmap_noalloc: out of range");
+}
+
 // Truncate inode (discard contents).
 // Caller must hold ip->lock.
 void itrunc(struct inode *ip)

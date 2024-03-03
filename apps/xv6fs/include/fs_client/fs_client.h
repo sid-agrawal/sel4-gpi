@@ -48,6 +48,13 @@ xv6fs_client_init(vka_t *client_vka,
                   seL4_CPtr ads_ep,
                   seL4_CPtr pd_ep);
 
+/**
+ * Get the file resource for a given file descriptor
+ * @param fd fd returned by libc open in a xv6fs client process
+ * @param file_ep returns the badged endpoint to the file server
+*/
+int xv6fs_client_get_file(int fd, seL4_CPtr *file_ep);
+
 /*
 Context of the client for a single file
 */

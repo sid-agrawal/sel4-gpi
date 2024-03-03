@@ -10,6 +10,7 @@
 #include <sel4gpi/ads_clientapi.h>
 #include <sel4gpi/pd_clientapi.h>
 #include <sel4gpi/resource_server_utils.h>
+#include <sel4gpi/model_exporting.h>
 
 #include <ramdisk_server.h>
 
@@ -175,9 +176,9 @@ static seL4_MessageInfo_t ramdisk_request_handler(seL4_MessageInfo_t tag, seL4_W
 
             RAMDISK_PRINTF("Can access vaddr %p, val 0x%x\n", mo_vaddr, *((int *)mo_vaddr));
 
-            seL4_MessageInfo_ptr_set_length(&reply_tag, 1);
-            seL4_SetMR(0, *(int *)mo_vaddr);
+            seL4_MessageInfo_ptr_set_length(&reply_tag, RDMSGREG_SANITY_ACK_END);
             seL4_SetMR(RDMSGREG_FUNC, RD_FUNC_SANITY_ACK);
+            seL4_SetMR(RDMSGREG_SANITY_ACK_VAL, *(int *)mo_vaddr);
             break;
 
         case RD_FUNC_CREATE_REQ:
@@ -232,6 +233,28 @@ static seL4_MessageInfo_t ramdisk_request_handler(seL4_MessageInfo_t tag, seL4_W
 
         switch (op)
         {
+        case RS_FUNC_GET_RR_REQ:
+            RAMDISK_PRINTF("Get RR for blockno %d\n", blockno);
+
+            size_t mo_size = seL4_GetMR(RSMSGREG_EXTRACT_RR_REQ_SIZE);
+
+            /* Attach memory object to server ADS */
+            error = resource_server_attach_mo(&get_ramdisk_server()->gen, cap, &mo_vaddr);
+            CHECK_ERROR_GOTO(error, "Failed to attach MO", error, done);
+
+            // Initialize the model state
+            model_state_t *model_state = (model_state_t *)mo_vaddr;
+            init_model_state(model_state);
+            csv_row_t *row_ptr = mo_vaddr + sizeof(model_state_t);
+
+            // Add the entry for the resource
+            // (XXX) Arya: blockno may not be globally unique, need combined ID
+            char block_res_id[CSV_MAX_STRING_SIZE];
+            snprintf(block_res_id, CSV_MAX_STRING_SIZE, "%s_%lu", BLOCK_RESOURCE_NAME, blockno);
+            add_resource_row(model_state, BLOCK_RESOURCE_NAME, block_res_id, row_ptr);
+
+            seL4_SetMR(RDMSGREG_FUNC, RS_FUNC_GET_RR_ACK);
+            break;
         case RD_FUNC_READ_REQ:
             /* Attach memory object to server ADS */
             error = resource_server_attach_mo(&get_ramdisk_server()->gen, cap, &mo_vaddr);

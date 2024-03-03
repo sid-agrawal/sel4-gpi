@@ -23,6 +23,7 @@
 #include <sel4gpi/pd_obj.h>
 #include <sel4gpi/ads_obj.h>
 #include <sel4gpi/debug.h>
+#include <sel4gpi/resource_server_utils.h>
 
 #include <vka/capops.h>
 #include <allocman/bootstrap.h>
@@ -537,6 +538,8 @@ int pd_start(pd_t *pd,
 
 int pd_dump(pd_t *pd)
 {
+    int error;
+
     OSDB_PRINTF(PDSERVS "pd_dump_cap: Dumping all details of PD:%u\n", pd->pd_obj_id);
 
     /*
@@ -558,6 +561,31 @@ int pd_dump(pd_t *pd)
     char pd_id[CSV_MAX_STRING_SIZE];
     snprintf(pd_id, CSV_MAX_STRING_SIZE, "PD_%u", pd->pd_obj_id);
     add_pd(ms, pd_name, pd_id);
+
+    /* Create an MO for remote rr requests */
+    vka_object_t rr_frame_obj;
+    seL4_CPtr rr_frame;
+    error = vka_alloc_frame(pd->vka, seL4_PageBits, &rr_frame_obj);
+    if (error != seL4_NoError)
+    {
+        return error;
+    }
+
+    mo_client_context_t mo_conn;
+    mo_t *mo;
+    error = forge_mo_cap_from_frames(&rr_frame, 1, pd->vka,
+                                     &mo_conn.badged_server_ep_cspath.capPtr, &mo);
+    if (error != seL4_NoError)
+    {
+        return error;
+    }
+
+    void *mo_vaddr = vspace_map_pages(pd->vspace, &rr_frame, NULL,
+                                      seL4_AllRights, 1, seL4_PageBits, 1);
+    if (mo_vaddr == NULL)
+    {
+        return -1;
+    }
 
     gpi_server_context_t *gpis = get_gpi_server();
     for (int idx = 0; idx < MAX_PD_OSM_CAPS; idx++)
@@ -599,10 +627,24 @@ int pd_dump(pd_t *pd)
             // Use some other method to get the cap details
             break;
         default:
-            ZF_LOGF("Calling anothe PD to get the info %s", __FUNCTION__);
+            ZF_LOGF("Calling another PD to get the info %s", __FUNCTION__);
+            // How to get the resource's EP cap?
+            seL4_CPtr resource_cap = 0;
+            model_state_t *sub_ms;
+            error = resource_server_get_rr(resource_cap, &mo_conn, mo_vaddr,
+                                           SIZE_BITS_TO_BYTES(seL4_PageBits), &sub_ms);
+            if (error != seL4_NoError)
+            {
+                return error;
+            }
+
+            combine_model_states(ms, sub_ms);
+
             break;
         }
     }
+
+    /* (XXX) Arya: need to free the frame & MO used for rr requests */
 
     print_model_state(ms);
     free(ms);

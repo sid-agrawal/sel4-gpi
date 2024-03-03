@@ -17,6 +17,8 @@
 #define TEST_STR_1 "Fuzzy Wuzzy was a bear"
 #define TEST_STR_2 "Fuzzy Wuzzy had no hair"
 #define TEST_FNAME "somefile"
+#define TEST_FNAME_2 "longfile"
+#define RR_MO_N_PAGES 2
 
 /**
  * Starts the fs as a thread
@@ -83,14 +85,14 @@ int test_fs(env_t env)
     vka_cspace_make_path(&env->vka, env->self_pd_cptr, &pd_conn.badged_server_ep_cspath);
     test_assert(error == 0);
 
-    /* Create a memory object for the buffer */
+    /* Create a memory object for the RR dump */
     seL4_CPtr slot;
     vka_cspace_alloc(&env->vka, &slot);
 
     mo_client_context_t mo_conn;
     error = mo_component_client_connect(env->gpi_endpoint,
                                         slot,
-                                        1,
+                                        RR_MO_N_PAGES,
                                         &mo_conn);
     test_assert(error == 0);
     printf("Finished mo_component_client_connect\n");
@@ -108,6 +110,14 @@ int test_fs(env_t env)
     test_assert(error == 0);
 
     printf("------------------STARTING TESTS: %s------------------\n", __func__);
+
+    /* Attach MO to test's ADS */
+    void *mo_vaddr;
+    error = ads_client_attach(&ads_conn,
+                              NULL,
+                              &mo_conn,
+                              &mo_vaddr);
+    test_assert(error == 0);
 
     // The libc fs ops should go to the xv6fs server
     xv6fs_client_init(&env->vka, fs_ep,
@@ -212,6 +222,36 @@ int test_fs(env_t env)
 
     f = open(TEST_FNAME, O_RDONLY);
     test_assert(f == -1); // File should no longer exist
+
+    /* Dump RR for a file */
+    model_state_t *file_model_state;
+
+    // Write a large file
+    int file_n_blocks = 5;
+    void *write_buf = malloc(RAMDISK_BLOCK_SIZE);
+    f = open(TEST_FNAME_2, O_CREAT | O_RDWR);
+
+    for (int i = 0; i < file_n_blocks; i++)
+    {
+        write(f, write_buf, RAMDISK_BLOCK_SIZE);
+    }
+    free(write_buf);
+
+    // Get resource relations
+    seL4_CPtr file_ep;
+    error = xv6fs_client_get_file(f, &file_ep);
+    test_assert(error == seL4_NoError);
+    error = resource_server_get_rr(file_ep, &mo_conn, mo_vaddr,
+                                   SIZE_BITS_TO_BYTES(seL4_PageBits) * RR_MO_N_PAGES,
+                                   &file_model_state);
+    test_assert(error == seL4_NoError);
+    test_assert(file_model_state->csv_rows_len == file_n_blocks + 1);
+    test_assert(file_model_state->num_resources == 1);
+    test_assert(file_model_state->num_depends_on == file_n_blocks);
+    printf("--- Model state for file  with %d blocks --- \n", file_n_blocks);
+    print_model_state(file_model_state);
+
+    close(f);
 
     printf("------------------ENDING: %s------------------\n", __func__);
     return sel4test_get_result();

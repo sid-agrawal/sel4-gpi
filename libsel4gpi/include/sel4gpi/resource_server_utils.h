@@ -9,11 +9,44 @@
 #include <sel4gpi/mo_clientapi.h>
 #include <sel4gpi/pd_clientapi.h>
 
-#define RESOURCE_SERVER_DEBUG 0
-
 /** @file
  * Utility functions for PDs that serve GPI resources
  */
+
+#define RESOURCE_SERVER_DEBUG 0
+
+/* IPC values returned in the "label" message header. */
+enum rs_errors
+{
+    RS_NOERROR = 0,
+    /* No future collisions with seL4_Error.*/
+    RS_ERROR_RR_SIZE = seL4_NumErrors,
+    RS_NUM_ERRORS
+};
+
+/* IPC Message register values for RSMSGREG_FUNC */
+enum rs_funcs
+{
+    RS_FUNC_GET_RR_REQ = 0,
+    RS_FUNC_GET_RR_ACK,
+
+    RS_FUNC_END,
+};
+
+/* Message registers for all resource server requests */
+enum rs_msgregs
+{
+    /* These are fixed headers in every message. */
+    RSMSGREG_FUNC = 0,
+
+    /* This is a convenience label for IPC MessageInfo length. */
+    RSMSGREG_LABEL0,
+
+    /* Extract RR */
+    RSMSGREG_EXTRACT_RR_REQ_SIZE = RSMSGREG_LABEL0,
+    RSMSGREG_EXTRACT_RR_REQ_END,
+    RSMSGREG_EXTRACT_RR_ACK_END = RSMSGREG_LABEL0,
+};
 
 /**
  * Generic resource server context
@@ -163,5 +196,41 @@ int resource_server_main(resource_server_context_t *context,
  * @param vaddr Returns the vaddr where MO was attached
  */
 int resource_server_attach_mo(resource_server_context_t *context,
-                      seL4_CPtr mo_cap,
-                      void **vaddr);
+                              seL4_CPtr mo_cap,
+                              void **vaddr);
+
+/**
+ * Notifies the GPI server of a resource transfer to a client PD
+ * The GPI server places the resource's cap in the PD's cspace,
+ * and returns the destination slot
+ *
+ * @param client_id PD id of the client
+ * @param cap_type GPI cap type of the resource to send
+ * @param resource Slot for the resource to send
+ * @param dest Returns the destination slot of the resource in the client PD
+ */
+int resource_server_send_resource(resource_server_context_t *context,
+                                  int client_id,
+                                  gpi_cap_t cap_type,
+                                  seL4_CPtr resource,
+                                  seL4_CPtr *dest);
+
+/**
+ * Request a resource server to dump resource relations
+ *
+ * @param resource The badged ep to dump relations for
+ * @param mo_conn Memory to place rr in
+ * @param mo_vaddr Vaddr where the MO is mapped locally
+ * @param size Maximum size to write in mo_conn
+ * @param ret_model_state Location of the resulting model state
+ *                        (same as mo_vaddr)
+ * @return
+ *      RS_NOERROR if dump completed successfully
+ *      RS_ERROR_RR_SIZE if size was too small to write RR
+ *      + Error codes for the respective resource server
+ */
+int resource_server_get_rr(seL4_CPtr resource,
+                           mo_client_context_t *mo_conn,
+                           void *mo_vaddr,
+                           size_t size,
+                           model_state_t **ret_model_state);

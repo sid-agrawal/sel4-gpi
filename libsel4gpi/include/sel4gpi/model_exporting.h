@@ -46,6 +46,9 @@ void export_model_state(model_state_t *model_state, char *buffer, size_t len);
 // Function to print the model state to a terminal with CSV formatting
 void print_model_state(model_state_t *model_state);
 
+// Add any entries from the "from" model state to the "to" model state
+void combine_model_states(model_state_t *to, model_state_t *from);
+
 // Function to add a resource to the model state
 void add_resource(model_state_t *model_state, char *resource_type, char *resource_id);
 
@@ -57,6 +60,15 @@ void add_has_access_to(model_state_t *model_state, char *pd_from, char *resource
 
 // Function to add a resource relationship to the model state
 void add_resource_depends_on(model_state_t *model_state, char *resource_from, char *resource_to);
+
+// Function to add a resource to the model state, using the given row struct
+void add_resource_row(model_state_t *model_state, char *resource_type, char *resource_id, csv_row_t* row);
+
+// Function to add a mapping between a PD and a resource to the model state, using the given row struct
+void add_has_access_to_row(model_state_t *model_state, char *pd_from, char *resource_to, bool is_mapped, csv_row_t* row);
+
+// Function to add a resource relationship to the model state, using the given row struct
+void add_resource_depends_on_row(model_state_t *model_state, char *resource_from, char *resource_to, csv_row_t* row);
 
 // Function add a PD to PD relationship to the model state
 void add_pd_requestes(model_state_t *model_state, char *pd_from, char *pd_to);
