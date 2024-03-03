@@ -75,16 +75,18 @@ osmosis_pd_cap_t *pd_add_resource(pd_t *pd, gpi_cap_t type, seL4_Word res_id)
     return new;
 }
 
-osmosis_rde_t *pd_add_rde(pd_t *pd, rde_type_t type, seL4_CPtr server_ep)
+void pd_add_rde(pd_t *pd, rde_type_t type, seL4_CPtr server_ep)
 {
-    osmosis_rde_t *new = calloc(1, sizeof(osmosis_rde_t));
-    new->pd_obj_id = gpi_server_next_pd_id();
-    new->type = type;
-    new->server_ep = server_ep;
-    pd->rde_count++;
+    int idx = type.type;
+    assert(idx > 0 && idx < MAX_PD_OSM_RDE);
 
-    HASH_ADD(hh, pd->rde, type, sizeof(rde_type_t), new);
-    return new;
+    pd->rde[idx].pd_obj_id = gpi_server_next_pd_id();
+    /* we don't really need to keep this if we index by type, but let's just keep it around for now */
+    pd->rde[idx].type = type; 
+    pd->rde[idx].server_ep = server_ep;
+
+    OSDB_PRINTF("adding new RDE of type %d\n", type.type);
+    pd->rde_count++;
 }
 
 int pd_new(pd_t *pd,
@@ -99,8 +101,9 @@ int pd_new(pd_t *pd,
     pd->has_access_to = NULL; // required for uthash initialization
 
     pd->rde_count = 0;
-    pd->rde = NULL; // required for uthash initialization
+    memset(pd->rde, 0, sizeof(osmosis_rde_t) * MAX_PD_OSM_RDE);
 
+    pd->pd_loaded = false;
     pd->vka = vka;
 }
 
@@ -277,9 +280,11 @@ int pd_load_image(pd_t *pd,
        need to do this before adding of the core resource servers below 
        since we retain references to those slots */
     seL4_Word slot;
-    for (osmosis_rde_t *rde = pd->rde; rde != NULL; rde = rde->hh.next) {
-        OSDB_PRINTF("copied RDE server %d EP: %lx\n", rde->pd_obj_id, rde->server_ep);
-        copy_cap_to_pd(pd, rde->server_ep, &slot);
+    for (int i = 1; i < MAX_PD_OSM_RDE; i++) {
+        if (pd->rde[i].type.type != GPICAP_TYPE_NONE) {
+            OSDB_PRINTF("copying RDE server %d EP: %lx to target PD\n", pd->rde[i].pd_obj_id, pd->rde[i].server_ep);
+            copy_cap_to_pd(pd, pd->rde[i].server_ep, &slot);
+        }
     }
 
     /* These are RDE Entries. */
@@ -294,9 +299,9 @@ int pd_load_image(pd_t *pd,
 
     OSDB_PRINTF("copied ads ep at %d\n", (int)pd->child_ads_cptr_in_child);
     rde_type_t ads_rde_type = { .type = GPICAP_TYPE_ADS };
-    osmosis_rde_t *ads_rde = pd_add_rde(pd, ads_rde_type, pd->child_ads_cptr_in_child);
-    ads_rde->slot_in_PD_Debug = pd->child_ads_cptr_in_child;
-    ads_rde->slot_in_RT_Debug = child_ads_cap_in_parent;
+    pd_add_rde(pd, ads_rde_type, pd->child_ads_cptr_in_child);
+    pd->rde[GPICAP_TYPE_ADS].slot_in_PD_Debug = pd->child_ads_cptr_in_child;
+    pd->rde[GPICAP_TYPE_ADS].slot_in_RT_Debug = child_ads_cap_in_parent;
 
     // For the GPI server, no need to forge
     seL4_CPtr gpi_endpoint_in_parent = get_gpi_server()->server_ep_obj.cptr;
@@ -304,10 +309,31 @@ int pd_load_image(pd_t *pd,
     assert(pd->gpi_endpoint_in_child != 0);
     // (XXX) linh: this shouldn't really be of type MO, but it is how PDs get their MOs
     rde_type_t gpi_rde_type = { .type = GPICAP_TYPE_MO };
-    osmosis_rde_t *mo_rde = pd_add_rde(pd, gpi_rde_type, pd->gpi_endpoint_in_child); 
-    mo_rde->slot_in_PD_Debug = pd->gpi_endpoint_in_child;
-    mo_rde->slot_in_RT_Debug = gpi_endpoint_in_parent;
+    pd_add_rde(pd, gpi_rde_type, pd->gpi_endpoint_in_child); 
+    pd->rde[GPICAP_TYPE_MO].slot_in_PD_Debug = pd->gpi_endpoint_in_child;
+    pd->rde[GPICAP_TYPE_MO].slot_in_RT_Debug = gpi_endpoint_in_parent;
     OSDB_PRINTF("copied gpi ep at %d\n", (int)pd->gpi_endpoint_in_child);
+
+    vka_object_t rde_frame_parent;
+    error = vka_alloc_frame(vka, seL4_PageBits, &rde_frame_parent);
+    if (error)
+    {
+        ZF_LOGE("Couldn't allocate frame to hold PD's resource directory");
+    }
+    // void *rd= vspace_new_pages(server_vspace, seL4_AllRights, 1, seL4_PageBits);
+    seL4_CPtr rde_parent_cap = rde_frame_parent.cptr;
+    void *rde_parent = vspace_map_pages(server_vspace, &rde_parent_cap, NULL, seL4_AllRights, 1, seL4_PageBits, 1);
+    memcpy(rde_parent, pd->rde, sizeof(osmosis_rde_t) * MAX_PD_OSM_RDE);
+
+    seL4_CPtr rde_mo_cap;
+    mo_t *rde_mo_obj;
+    error = forge_mo_cap_from_frames(&rde_parent_cap, 1, vka, &rde_mo_cap, &rde_mo_obj);
+    if (error)
+    {
+        ZF_LOGE("Couldn't forge an MO for PD's resource directory");
+    }
+    copy_cap_to_pd(pd, rde_mo_cap, &pd->pd_rde_in_child);
+    OSDB_PRINTF("copied PD's resource directory cap at %lx\n", pd->pd_rde_in_child);
 
     /* copy the device frame, if any */
     // if (pd->device_frame_cap) {
@@ -343,7 +369,7 @@ int pd_load_image(pd_t *pd,
 
     pd->free_slots.end = (1u << pd->cspace_size_bits);
     assert(pd->free_slots.start < pd->free_slots.end);
-
+    pd->pd_loaded = true;
     return 0;
 }
 
@@ -512,7 +538,7 @@ int pd_start(pd_t *pd,
 
     /* spawn the process */
     seL4_CPtr osm_caps[] = {pd->child_ads_cptr_in_child,
-                            pd->gpi_endpoint_in_child,
+                            pd->pd_rde_in_child,
                             pd_cptr_in_child};
     error = sel4utils_osm_spawn_process_v(&(pd->proc),
                                           osm_caps,

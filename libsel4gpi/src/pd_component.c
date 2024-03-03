@@ -603,17 +603,15 @@ static void handle_add_rde_req(seL4_Word sender_badge, seL4_MessageInfo_t old_ta
         return;
     }
 
-    int error;
-    if (client_data->pd.rde != NULL)
+    int error = 0;
+    if (client_data->pd.pd_loaded)
     {
         OSDB_PRINTF(PDSERVS "main: cannot add new RDEs after PD has been loaded\n");
         error = 1;
     } else {
         gpi_cap_t server_type = (gpi_cap_t)seL4_GetMR(PDMSGREG_ADD_RDE_TYPE);
         rde_type_t rde_type = {.type = server_type};
-        // (XXX) linh: received_cap is always a NULL cap for some reason, even for other IPCs?
-        osmosis_rde_t *new_rde = pd_add_rde(&client_data->pd, rde_type, received_cap);
-        error = new_rde == NULL;
+        pd_add_rde(&client_data->pd, rde_type, received_cap);
     }
 
     seL4_SetMR(PDMSGREG_FUNC, PD_FUNC_ADD_RDE_ACK);

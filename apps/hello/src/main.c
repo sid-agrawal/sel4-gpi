@@ -42,20 +42,33 @@ int main(int argc, char **argv)
     // No we can add a function called, next PD slot.
 
     seL4_CPtr ads_cap = sel4runtime_get_initial_ads_cap();
-    seL4_CPtr gpi_cap = sel4runtime_get_gpi_cap();
+    seL4_CPtr rde_cap = sel4runtime_get_rde_cap();
     seL4_CPtr pd_cap = sel4runtime_get_pd_cap();
 
     printf("Hello: ADS_CAP: %ld\n", (seL4_Word)ads_cap);
-    printf("Hello: GPI_CAP: %ld\n", (seL4_Word)gpi_cap);
+    printf("Hello: RDE_CAP: %ld\n", (seL4_Word)rde_cap);
     printf("Hello: PD_CAP: %ld\n", (seL4_Word)pd_cap);
 
     ads_client_context_t ads_conn;
     ads_conn.badged_server_ep_cspath.capPtr = ads_cap;
 
+    void *rde_vaddr;
+    mo_client_context_t rde_mo;
+    rde_mo.badged_server_ep_cspath.capPtr = rde_cap;
+    int error = ads_client_attach(&ads_conn,
+                              0, /*vaddr*/
+                              &rde_mo,
+                              &rde_vaddr);
+    assert(error == 0);
+    printf("Attached to vaddr %p\n", rde_vaddr);
+
+    osmosis_rde_t *pd_rde = (osmosis_rde_t *) rde_vaddr;
+    seL4_CPtr gpi_cap = pd_rde[GPICAP_TYPE_MO].server_ep;
+
     seL4_CPtr slot;
     pd_client_context_t pd_conn;
     pd_conn.badged_server_ep_cspath.capPtr = pd_cap;
-    int error = pd_client_next_slot(&pd_conn, &slot);
+    error = pd_client_next_slot(&pd_conn, &slot);
     assert(error == 0);
     printf("Next free slot is %ld\n", (seL4_Word)slot);
 
@@ -74,9 +87,12 @@ int main(int argc, char **argv)
                               &ret_vaddr);
     assert(error == 0);
     printf("Attached to vaddr %p\n", ret_vaddr);
+
+    error = pd_client_next_slot(&pd_conn, &slot);
+    assert(error == 0);
+    printf("Next free slot is %ld\n", (seL4_Word)slot);
+
     printf(".... Goodbye Cruel World\n");
-#if 0
-#endif
     return 0;
 #if 0
     /*

@@ -68,7 +68,7 @@ typedef struct osmosis_rde
 
     /* Info about what the RDE is for ?*/
     rde_type_t type; // key to uthash
-    UT_hash_handle hh;
+    // UT_hash_handle hh;
 } osmosis_rde_t;
 
 typedef struct osmosis_pd_cap
@@ -196,8 +196,9 @@ typedef struct _pd
 
     osmosis_pd_cap_t *has_access_to;
     uint64_t has_access_to_count;
-    osmosis_rde_t *rde;
+    osmosis_rde_t rde[MAX_PD_OSM_RDE];
     uint64_t rde_count;
+    int pd_loaded; // whether or not the pd has been loaded
 
     /*
         Convert this to a hash map
@@ -205,6 +206,7 @@ typedef struct _pd
     seL4_CPtr child_ads_cptr_in_child;
     seL4_CPtr gpi_endpoint_in_child;
     seL4_CPtr pd_endpoint_in_child;
+    seL4_CPtr pd_rde_in_child;
 
     /**
      * =========================================================================
@@ -290,4 +292,4 @@ int pd_populate_init_data(pd_t *pd, seL4_CPtr server_ep);
 
 osmosis_pd_cap_t *pd_add_resource(pd_t *pd, gpi_cap_t type, seL4_Word res_id);
 
-osmosis_rde_t *pd_add_rde(pd_t *pd, rde_type_t type, seL4_CPtr server_ep);
+void pd_add_rde(pd_t *pd, rde_type_t type, seL4_CPtr server_ep);
