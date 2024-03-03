@@ -41,31 +41,35 @@ int main(int argc, char **argv)
     ads_client_context_t ads_conn;
     ads_conn.badged_server_ep_cspath.capPtr = ads_cap;
 
+    /* Attach the resource directory so we can access it */
     void *rde_vaddr;
     mo_client_context_t rde_mo;
     rde_mo.badged_server_ep_cspath.capPtr = rde_cap;
     int error = ads_client_attach(&ads_conn,
-                              0, /*vaddr*/
-                              &rde_mo,
-                              &rde_vaddr);
+                                  0, /*vaddr*/
+                                  &rde_mo,
+                                  &rde_vaddr);
     assert(error == 0);
     printf("Attached to vaddr %p\n", rde_vaddr);
 
-    osmosis_rde_t *pd_rde = (osmosis_rde_t *) rde_vaddr;
-    seL4_CPtr gpi_cap = pd_rde[GPICAP_TYPE_MO].server_ep;
+    osmosis_rde_t *pd_rde = (osmosis_rde_t *)rde_vaddr;
+    seL4_CPtr gpi_cap = pd_rde[GPICAP_TYPE_MO].slot_in_PD;
 
     seL4_CPtr slot;
     pd_client_context_t pd_conn;
-    pd_conn.badged_server_ep_cspath.capPtr = pd_rde[GPICAP_TYPE_PD].server_ep;
+    pd_conn.badged_server_ep_cspath.capPtr = pd_rde[GPICAP_TYPE_PD].slot_in_PD;
+
+    seL4_CPtr ramdisk_ep = pd_rde[GPICAP_TYPE_BLOCK].slot_in_PD;
+
+    printf("Ramdisk: GPI_CAP: %ld\n", (seL4_Word)gpi_cap);
+    printf("Ramdisk: PD_CAP: %ld\n", (seL4_Word)pd_conn.badged_server_ep_cspath.capPtr);
+    printf("Ramdisk: RAMDISK_CAP: %ld\n", (seL4_Word)ramdisk_ep);
 
     /* parse args */
     assert(argc == 1);
     seL4_CPtr parent_ep = (seL4_CPtr)atol(argv[0]);
 
-    // (XXX) Arya: Temporary hack to get ramdisk ep
-    // replace with RDE mechanism
-    seL4_CPtr rd_ep = parent_ep - 1;
-    get_xv6fs_server()->rd_ep = rd_ep;
+    get_xv6fs_server()->rd_ep = ramdisk_ep;
 
     return resource_server_start(
         &get_xv6fs_server()->gen,

@@ -80,10 +80,10 @@ void pd_add_rde(pd_t *pd, rde_type_t type, seL4_CPtr server_ep)
     int idx = type.type;
     assert(idx > 0 && idx < MAX_PD_OSM_RDE);
 
-    pd->rde[idx].pd_obj_id = gpi_server_next_pd_id();
+    pd->rde[idx].pd_obj_id = gpi_server_next_pd_id(); // (XXX) Arya: this seems wrong
     /* we don't really need to keep this if we index by type, but let's just keep it around for now */
     pd->rde[idx].type = type; 
-    pd->rde[idx].server_ep = server_ep;
+    pd->rde[idx].slot_in_RT = server_ep;
 
     OSDB_PRINTF("adding new RDE of type %d\n", type.type);
     pd->rde_count++;
@@ -103,7 +103,7 @@ int pd_new(pd_t *pd,
     pd->rde_count = 0;
     memset(pd->rde, 0, sizeof(osmosis_rde_t) * MAX_PD_OSM_RDE);
 
-    pd->pd_loaded = false;
+    pd->pd_started = false;
     pd->vka = vka;
 }
 
@@ -276,17 +276,6 @@ int pd_load_image(pd_t *pd,
      * or a fault to see when the test finishes */
     copy_cap_to_pd(pd, pd->proc.fault_endpoint.cptr, &pd->fault_endpoint_in_pd);
 
-    /* Copy any RDEs that were added before loading
-       need to do this before adding of the core resource servers below 
-       since we retain references to those slots */
-    seL4_Word slot;
-    for (int i = 1; i < MAX_PD_OSM_RDE; i++) {
-        if (pd->rde[i].type.type != GPICAP_TYPE_NONE) {
-            OSDB_PRINTF("copying RDE server %d EP: %lx to target PD\n", pd->rde[i].pd_obj_id, pd->rde[i].server_ep);
-            copy_cap_to_pd(pd, pd->rde[i].server_ep, &slot);
-        }
-    }
-
     /* These are RDE Entries. */
     seL4_CPtr child_ads_cap_in_parent;
     error = forge_ads_cap_from_vspace(&pd->proc.vspace, pd->vka, &child_ads_cap_in_parent);
@@ -294,25 +283,14 @@ int pd_load_image(pd_t *pd,
     {
         ZF_LOGF("Failed to forge child's as cap");
     }
-    copy_cap_to_pd(pd, child_ads_cap_in_parent, &pd->child_ads_cptr_in_child);
-    assert(pd->child_ads_cptr_in_child != 0);
-
-    OSDB_PRINTF("copied ads ep at %d\n", (int)pd->child_ads_cptr_in_child);
     rde_type_t ads_rde_type = { .type = GPICAP_TYPE_ADS };
-    pd_add_rde(pd, ads_rde_type, pd->child_ads_cptr_in_child);
-    pd->rde[GPICAP_TYPE_ADS].slot_in_PD_Debug = pd->child_ads_cptr_in_child;
-    pd->rde[GPICAP_TYPE_ADS].slot_in_RT_Debug = child_ads_cap_in_parent;
+    pd_add_rde(pd, ads_rde_type, child_ads_cap_in_parent);
 
     // For the GPI server, no need to forge
     seL4_CPtr gpi_endpoint_in_parent = get_gpi_server()->server_ep_obj.cptr;
-    copy_cap_to_pd(pd, gpi_endpoint_in_parent, &pd->gpi_endpoint_in_child);
-    assert(pd->gpi_endpoint_in_child != 0);
     // (XXX) linh: this shouldn't really be of type MO, but it is how PDs get their MOs
     rde_type_t gpi_rde_type = { .type = GPICAP_TYPE_MO };
-    pd_add_rde(pd, gpi_rde_type, pd->gpi_endpoint_in_child); 
-    pd->rde[GPICAP_TYPE_MO].slot_in_PD_Debug = pd->gpi_endpoint_in_child;
-    pd->rde[GPICAP_TYPE_MO].slot_in_RT_Debug = gpi_endpoint_in_parent;
-    OSDB_PRINTF("copied gpi ep at %d\n", (int)pd->gpi_endpoint_in_child);
+    pd_add_rde(pd, gpi_rde_type, gpi_endpoint_in_parent); 
 
     /* copy the device frame, if any */
     // if (pd->device_frame_cap) {
@@ -348,7 +326,6 @@ int pd_load_image(pd_t *pd,
 
     pd->free_slots.end = (1u << pd->cspace_size_bits);
     assert(pd->free_slots.start < pd->free_slots.end);
-    pd->pd_loaded = true;
     return 0;
 }
 
@@ -495,17 +472,20 @@ int pd_start(pd_t *pd,
     assert(&pd->proc != NULL);
     assert(&pd->proc.vspace != NULL);
 
-    seL4_CPtr pd_cptr_in_child;
-    error = copy_cap_to_pd(pd, pd_endpoint_in_root, &pd_cptr_in_child);
-    if (error != 0)
-    {
-        ZF_LOGF("Failed to copy PD cap to process");
-        return -1;
+    rde_type_t pd_rde_type = { .type = GPICAP_TYPE_PD };
+    pd_add_rde(pd, pd_rde_type, pd_endpoint_in_root);
+
+    /* Copy RDE caps to PD */
+    seL4_Word slot;
+    for (int i = 1; i < MAX_PD_OSM_RDE; i++) {
+        if (pd->rde[i].type.type != GPICAP_TYPE_NONE) {
+            OSDB_PRINTF("copying RDE server %d EP: %lx to target PD\n", pd->rde[i].pd_obj_id, pd->rde[i].slot_in_RT);
+            copy_cap_to_pd(pd, pd->rde[i].slot_in_RT, &slot);
+            pd->rde[i].slot_in_PD = slot;
+        }
     }
 
-    rde_type_t pd_rde_type = { .type = GPICAP_TYPE_PD };
-    pd_add_rde(pd, pd_rde_type, pd_cptr_in_child);
-
+    /* Copy the resource directory to a memory object */
     vka_object_t rde_frame_parent;
     error = vka_alloc_frame(vka, seL4_PageBits, &rde_frame_parent);
     if (error)
@@ -540,7 +520,7 @@ int pd_start(pd_t *pd,
     // snprintf(argv[0], WORD_STRING_SIZE, "%ld", arg0);
 
     /* spawn the process */
-    seL4_CPtr osm_caps[] = {pd->child_ads_cptr_in_child,
+    seL4_CPtr osm_caps[] = {pd->rde[GPICAP_TYPE_ADS].slot_in_PD,
                             pd->pd_rde_in_child};
     error = sel4utils_osm_spawn_process_v(&(pd->proc),
                                           osm_caps,
@@ -551,6 +531,7 @@ int pd_start(pd_t *pd,
                                           1);
     ZF_LOGF_IF(error != 0, "Failed to start test process!");
     OSDB_PRINTF(PDSERVS "pd_start: starting PD\n");
+    pd->pd_started = true;
     return 0;
 }
 
@@ -647,7 +628,7 @@ inline void print_pd_osm_rde_info(osmosis_rde_t *o)
 {
     printf("RDE: PD_ID: %u\t Slot_RT:%lu\t Slot_PD: %lu\t T: %s\n",
            o->pd_obj_id,
-           o->slot_in_RT_Debug,
-           o->slot_in_PD_Debug,
+           o->slot_in_RT,
+           o->slot_in_PD,
            cap_type_to_str(o->type.type));
 }

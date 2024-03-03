@@ -61,12 +61,12 @@ int main(int argc, char **argv)
     printf("Attached to vaddr %p\n", rde_vaddr);
 
     osmosis_rde_t *pd_rde = (osmosis_rde_t *) rde_vaddr;
-    seL4_CPtr gpi_cap = pd_rde[GPICAP_TYPE_MO].server_ep;
+    seL4_CPtr gpi_cap = pd_rde[GPICAP_TYPE_MO].slot_in_PD;
 
     seL4_CPtr slot;
     pd_client_context_t pd_conn;
-    printf("pd_rde[pd]: %lx\n", pd_rde[GPICAP_TYPE_PD].server_ep);
-    pd_conn.badged_server_ep_cspath.capPtr = pd_rde[GPICAP_TYPE_PD].server_ep;
+    printf("pd_rde[pd]: %lx\n", pd_rde[GPICAP_TYPE_PD].slot_in_PD);
+    pd_conn.badged_server_ep_cspath.capPtr = pd_rde[GPICAP_TYPE_PD].slot_in_PD;
     error = pd_client_next_slot(&pd_conn, &slot);
     assert(error == 0);
     printf("Next free slot is %ld\n", (seL4_Word)slot);

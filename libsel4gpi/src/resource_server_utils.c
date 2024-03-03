@@ -56,7 +56,8 @@
 
 int start_resource_server_pd(vka_t *vka,
                              seL4_CPtr gpi_ep,
-                             seL4_CPtr arg_ep,
+                             gpi_cap_t rde_type,
+                             seL4_CPtr rde_ep,
                              char *image_name,
                              seL4_CPtr *server_ep)
 {
@@ -77,6 +78,14 @@ int start_resource_server_pd(vka_t *vka,
     error = ads_component_client_connect(gpi_ep, vka, &ads_os_cap);
     CHECK_ERROR(error, "failed to create new ads");
 
+    // Copy the RDE to the new PD
+    // (XXX) Arya: Todo Badge the RDE with the pd ID
+    if (rde_ep > 0)
+    {
+        error = pd_client_add_rde(&pd_os_cap, rde_ep, rde_type);
+        CHECK_ERROR(error, "failed to send rde to pd");
+    }
+
     // Make a new AS, loads an image
     error = pd_client_load(&pd_os_cap, &ads_os_cap, image_name);
     CHECK_ERROR(error, "failed to load pd image");
@@ -85,16 +94,6 @@ int start_resource_server_pd(vka_t *vka,
     seL4_Word parent_ep_slot;
     error = pd_client_send_cap(&pd_os_cap, ep_object.cptr, &parent_ep_slot);
     CHECK_ERROR(error, "failed to send parent's ep cap to pd");
-
-    // Copy the arg ep to the new PD
-    // (XXX) Arya: replace with RDE mechanism once implemented
-    seL4_Word arg_ep_slot = 0;
-    if (arg_ep > 0)
-    {
-        error = pd_client_send_cap(&pd_os_cap, arg_ep, &arg_ep_slot);
-        CHECK_ERROR(error, "failed to send arg ep cap to pd");
-        assert(arg_ep_slot == parent_ep_slot - 1);
-    }
 
     // Start it
     error = pd_client_start(&pd_os_cap, parent_ep_slot); // with this arg.

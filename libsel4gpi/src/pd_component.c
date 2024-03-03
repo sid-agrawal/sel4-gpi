@@ -604,9 +604,9 @@ static void handle_add_rde_req(seL4_Word sender_badge, seL4_MessageInfo_t old_ta
     }
 
     int error = 0;
-    if (client_data->pd.pd_loaded)
+    if (client_data->pd.pd_started)
     {
-        OSDB_PRINTF(PDSERVS "main: cannot add new RDEs after PD has been loaded\n");
+        OSDB_PRINTF(PDSERVS "main: cannot add new RDEs after PD has been started\n");
         error = 1;
     } else {
         gpi_cap_t server_type = (gpi_cap_t)seL4_GetMR(PDMSGREG_ADD_RDE_TYPE);

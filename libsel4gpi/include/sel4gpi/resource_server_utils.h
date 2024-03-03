@@ -44,13 +44,15 @@ typedef struct _resource_server_context
  * Starts a resource server in a new PD
  * @param vka vka to use for temporary startup resources
  * @param gpi_ep endpoint of the gpi server
- * @param arg_ep an ep to send as an additional argument
+ * @param rde_type type of an RDE to add, optional
+ * @param rde_ep value of an RDE to add, optional
  * @param image_name name of the resource server's image
  * @param server_ep returns the endpoint of the started server
  */
 int start_resource_server_pd(vka_t *vka,
                              seL4_CPtr gpi_ep,
-                             seL4_CPtr arg_ep,
+                             gpi_cap_t rde_type,
+                             seL4_CPtr rde_ep,
                              char *image_name,
                              seL4_CPtr *server_ep);
 

@@ -51,9 +51,8 @@ typedef union rde_type
 typedef struct osmosis_rde
 {
     // The slot of the RDE cap as per seL4
-    // do not rely on these, as this info is sometimes difficult to find
-    seL4_Word slot_in_RT_Debug;
-    seL4_Word slot_in_PD_Debug;
+    seL4_Word slot_in_RT;
+    seL4_Word slot_in_PD;
 
     /*
         I think that type+pd_obj_id should be all we need
@@ -64,7 +63,6 @@ typedef struct osmosis_rde
     /*OSmosis generated PD ID of the server for RDE */
     // osmosis_pd_id_t pd_obj_id;
     uint32_t pd_obj_id;
-    seL4_CPtr server_ep;
 
     /* Info about what the RDE is for ?*/
     rde_type_t type; // key to uthash
@@ -198,14 +196,7 @@ typedef struct _pd
     uint64_t has_access_to_count;
     osmosis_rde_t rde[MAX_PD_OSM_RDE];
     uint64_t rde_count;
-    int pd_loaded; // whether or not the pd has been loaded
-
-    /*
-        Convert this to a hash map
-    */
-    seL4_CPtr child_ads_cptr_in_child;
-    seL4_CPtr gpi_endpoint_in_child;
-    seL4_CPtr pd_endpoint_in_child;
+    int pd_started; // whether or not the pd has been started
     seL4_CPtr pd_rde_in_child;
 
     /**

@@ -51,7 +51,8 @@ int start_ramdisk_pd(vka_t *vka,
 {
     int error;
     error = start_resource_server_pd(vka, gpi_ep,
-                                     0, RAMDISK_APP, ramdisk_ep);
+                                     0, 0,
+                                     RAMDISK_APP, ramdisk_ep);
     CHECK_ERROR(error, "failed to start ramdisk server\n");
     RAMDISK_PRINTF("Successfully started ramdisk server\n");
     return 0;
