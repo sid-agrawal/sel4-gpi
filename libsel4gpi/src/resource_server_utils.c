@@ -58,8 +58,10 @@ int start_resource_server_pd(vka_t *vka,
                              seL4_CPtr gpi_ep,
                              gpi_cap_t rde_type,
                              seL4_CPtr rde_ep,
+                             seL4_CPtr rde_pd_cap,
                              char *image_name,
-                             seL4_CPtr *server_ep)
+                             seL4_CPtr *server_ep,
+                             seL4_CPtr *server_pd_cap)
 {
     int error;
 
@@ -73,6 +75,11 @@ int start_resource_server_pd(vka_t *vka,
     error = pd_component_client_connect(gpi_ep, vka, &pd_os_cap);
     CHECK_ERROR(error, "failed to create new pd");
 
+    if (server_pd_cap)
+    {
+        *server_pd_cap = pd_os_cap.badged_server_ep_cspath.capPtr;
+    }
+
     // Create a new ADS Cap, which will be in the context of a PD and image
     ads_client_context_t ads_os_cap;
     error = ads_component_client_connect(gpi_ep, vka, &ads_os_cap);
@@ -82,7 +89,7 @@ int start_resource_server_pd(vka_t *vka,
     // (XXX) Arya: Todo Badge the RDE with the pd ID
     if (rde_ep > 0)
     {
-        error = pd_client_add_rde(&pd_os_cap, rde_ep, rde_type);
+        error = pd_client_add_rde(&pd_os_cap, rde_ep, rde_pd_cap, rde_type);
         CHECK_ERROR(error, "failed to send rde to pd");
     }
 

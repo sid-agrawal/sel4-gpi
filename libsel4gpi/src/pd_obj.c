@@ -75,12 +75,12 @@ osmosis_pd_cap_t *pd_add_resource(pd_t *pd, gpi_cap_t type, seL4_Word res_id)
     return new;
 }
 
-void pd_add_rde(pd_t *pd, rde_type_t type, seL4_CPtr server_ep)
+void pd_add_rde(pd_t *pd, rde_type_t type, uint32_t pd_obj_id, seL4_CPtr server_ep)
 {
     int idx = type.type;
     assert(idx > 0 && idx < MAX_PD_OSM_RDE);
 
-    pd->rde[idx].pd_obj_id = gpi_server_next_pd_id(); // (XXX) Arya: this seems wrong
+    pd->rde[idx].pd_obj_id = pd_obj_id;
     /* we don't really need to keep this if we index by type, but let's just keep it around for now */
     pd->rde[idx].type = type; 
     pd->rde[idx].slot_in_RT = server_ep;
@@ -284,13 +284,13 @@ int pd_load_image(pd_t *pd,
         ZF_LOGF("Failed to forge child's as cap");
     }
     rde_type_t ads_rde_type = { .type = GPICAP_TYPE_ADS };
-    pd_add_rde(pd, ads_rde_type, child_ads_cap_in_parent);
+    pd_add_rde(pd, ads_rde_type, 0, child_ads_cap_in_parent);
 
     // For the GPI server, no need to forge
     seL4_CPtr gpi_endpoint_in_parent = get_gpi_server()->server_ep_obj.cptr;
     // (XXX) linh: this shouldn't really be of type MO, but it is how PDs get their MOs
     rde_type_t gpi_rde_type = { .type = GPICAP_TYPE_MO };
-    pd_add_rde(pd, gpi_rde_type, gpi_endpoint_in_parent); 
+    pd_add_rde(pd, gpi_rde_type, 0, gpi_endpoint_in_parent); 
 
     /* copy the device frame, if any */
     // if (pd->device_frame_cap) {
@@ -473,7 +473,7 @@ int pd_start(pd_t *pd,
     assert(&pd->proc.vspace != NULL);
 
     rde_type_t pd_rde_type = { .type = GPICAP_TYPE_PD };
-    pd_add_rde(pd, pd_rde_type, pd_endpoint_in_root);
+    pd_add_rde(pd, pd_rde_type, 0, pd_endpoint_in_root);
 
     /* Copy RDE caps to PD */
     seL4_Word slot;

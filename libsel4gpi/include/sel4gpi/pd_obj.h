@@ -65,8 +65,7 @@ typedef struct osmosis_rde
     uint32_t pd_obj_id;
 
     /* Info about what the RDE is for ?*/
-    rde_type_t type; // key to uthash
-    // UT_hash_handle hh;
+    rde_type_t type; 
 } osmosis_rde_t;
 
 typedef struct osmosis_pd_cap
@@ -283,4 +282,4 @@ int pd_populate_init_data(pd_t *pd, seL4_CPtr server_ep);
 
 osmosis_pd_cap_t *pd_add_resource(pd_t *pd, gpi_cap_t type, seL4_Word res_id);
 
-void pd_add_rde(pd_t *pd, rde_type_t type, seL4_CPtr server_ep);
+void pd_add_rde(pd_t *pd, rde_type_t type, uint32_t pd_obj_id, seL4_CPtr server_ep);

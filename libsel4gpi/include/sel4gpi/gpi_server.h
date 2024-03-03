@@ -98,10 +98,3 @@ typedef struct _gpi_server_context
 void gpi_server_main(void);
 
 gpi_server_context_t *get_gpi_server(void);
-
-/**
- * @brief generates a PD ID using simple incrementer
- * 
- * @return a free PD ID 
- */
-uint32_t gpi_server_next_pd_id();

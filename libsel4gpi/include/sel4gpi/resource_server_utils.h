@@ -53,8 +53,10 @@ int start_resource_server_pd(vka_t *vka,
                              seL4_CPtr gpi_ep,
                              gpi_cap_t rde_type,
                              seL4_CPtr rde_ep,
+                             seL4_CPtr rde_pd_cap,
                              char *image_name,
-                             seL4_CPtr *server_ep);
+                             seL4_CPtr *server_ep,
+                             seL4_CPtr *server_pd_cap);
 
 /**
  * Spawns the resource server thread.

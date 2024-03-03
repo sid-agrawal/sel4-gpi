@@ -97,13 +97,14 @@ int test_fs(env_t env)
 
     /* Start ramdisk server process */
     seL4_CPtr ramdisk_ep;
-    error = start_ramdisk_pd(&env->vka, env->gpi_endpoint, &ramdisk_ep);
+    seL4_CPtr ramdisk_pd_cap;
+    error = start_ramdisk_pd(&env->vka, env->gpi_endpoint, &ramdisk_ep, &ramdisk_pd_cap);
     test_assert(error == 0);
 
     /* Start fs server process */
     seL4_CPtr fs_ep;
     // error = start_fs_thread(env, ramdisk_ep, &fs_ep);
-    error = start_xv6fs_pd(&env->vka, env->gpi_endpoint, ramdisk_ep, &fs_ep);
+    error = start_xv6fs_pd(&env->vka, env->gpi_endpoint, ramdisk_pd_cap, ramdisk_ep, &fs_ep);
     test_assert(error == 0);
 
     printf("------------------STARTING TESTS: %s------------------\n", __func__);

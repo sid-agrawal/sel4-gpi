@@ -609,9 +609,17 @@ static void handle_add_rde_req(seL4_Word sender_badge, seL4_MessageInfo_t old_ta
         OSDB_PRINTF(PDSERVS "main: cannot add new RDEs after PD has been started\n");
         error = 1;
     } else {
-        gpi_cap_t server_type = (gpi_cap_t)seL4_GetMR(PDMSGREG_ADD_RDE_TYPE);
-        rde_type_t rde_type = {.type = server_type};
-        pd_add_rde(&client_data->pd, rde_type, received_cap);
+        seL4_Word server_pd_badge = seL4_GetBadge(0);
+        OSDB_PRINTF(PDSERVS "main: RDE server's badge %lx\n", server_pd_badge);
+        pd_component_registry_entry_t *server_pd_data = pd_component_registry_get_entry_by_badge(server_pd_badge);
+        if (server_pd_data == NULL) {
+            OSDB_PRINTF(PDSERVS "error: cannot find server RDE's pd data\n");
+            error = 1;
+        } else {
+            gpi_cap_t server_type = (gpi_cap_t)seL4_GetMR(PDMSGREG_ADD_RDE_TYPE);
+            rde_type_t rde_type = {.type = server_type};
+            pd_add_rde(&client_data->pd, rde_type, server_pd_data->pd.pd_obj_id, received_cap);
+        }
     }
 
     seL4_SetMR(PDMSGREG_FUNC, PD_FUNC_ADD_RDE_ACK);

@@ -28,11 +28,6 @@
 
 static gpi_server_context_t gpi_server;
 
-uint32_t gpi_server_next_pd_id()
-{
-    return ++gpi_server.pd_count;
-}
-
 gpi_server_context_t *get_gpi_server(void)
 {
     return &gpi_server;

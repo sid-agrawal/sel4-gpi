@@ -32,7 +32,8 @@ typedef struct _ramdisk_client_context
  */
 int start_ramdisk_pd(vka_t *vka,
                      seL4_CPtr gpi_ep,
-                     seL4_CPtr *ramdisk_ep);
+                     seL4_CPtr *ramdisk_ep,
+                     seL4_CPtr *ramdisk_pd_cap);
 
 /**
  * @brief Sanity test for shared memory with ramdisk

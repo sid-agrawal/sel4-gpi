@@ -135,4 +135,4 @@ int pd_client_start(pd_client_context_t *conn, seL4_Word arg0);
  * @param server_type type of resource provided by server
  * @return int 0 on success, -1 on failure.
  */
-int pd_client_add_rde(pd_client_context_t *conn, seL4_CPtr server_ep, gpi_cap_t server_type);
+int pd_client_add_rde(pd_client_context_t *conn, seL4_CPtr server_ep, seL4_CPtr server_pd_cap, gpi_cap_t server_type);

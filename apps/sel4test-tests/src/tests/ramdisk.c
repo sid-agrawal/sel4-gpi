@@ -106,7 +106,8 @@ int test_ramdisk(env_t env)
 
     /* Start ramdisk server process */
     seL4_CPtr ramdisk_ep;
-    error = start_ramdisk_pd(&env->vka, env->gpi_endpoint, &ramdisk_ep);
+    seL4_CPtr ramdisk_pd_cap;
+    error = start_ramdisk_pd(&env->vka, env->gpi_endpoint, &ramdisk_ep, &ramdisk_pd_cap);
     test_assert(error == 0);
 
     printf("------------------STARTING TESTS: %s------------------\n", __func__);
