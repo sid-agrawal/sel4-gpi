@@ -273,6 +273,14 @@ int pd_load_image(pd_t *pd,
      * or a fault to see when the test finishes */
     copy_cap_to_pd(pd, pd->proc.fault_endpoint.cptr, &pd->fault_endpoint_in_pd);
 
+    /* Copy any RDEs that were added before loading
+       need to do this before adding of the core resource servers below 
+       since we retain references to those slots */
+    seL4_Word slot;
+    for (osmosis_rde_t *rde = pd->rde; rde != NULL; rde = rde->hh.next) {
+        OSDB_PRINTF("copied RDE server %d EP: %lx\n", rde->pd_obj_id, rde->server_ep);
+        copy_cap_to_pd(pd, rde->server_ep, &slot);
+    }
 
     /* These are RDE Entries. */
     seL4_CPtr child_ads_cap_in_parent;
