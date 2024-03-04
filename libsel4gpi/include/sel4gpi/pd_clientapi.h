@@ -129,10 +129,17 @@ int pd_client_start(pd_client_context_t *conn, seL4_Word arg0);
 
 /**
  * @brief add a new RDE to the PD
- * 
+ *
  * @param conn client connection object
- * @param server_ep   EP to the server
+ * @param server_ep EP to the server
+ * @param server_pd_cap PD cap of the server
  * @param server_type type of resource provided by server
+ * @param needs_badge True if this is a raw endpoint that needs
+ *                    to be badged with client PD's ID
  * @return int 0 on success, -1 on failure.
  */
-int pd_client_add_rde(pd_client_context_t *conn, seL4_CPtr server_ep, seL4_CPtr server_pd_cap, gpi_cap_t server_type);
+int pd_client_add_rde(pd_client_context_t *conn,
+                      seL4_CPtr server_ep,
+                      seL4_CPtr server_pd_cap,
+                      gpi_cap_t server_type,
+                      bool needs_badge);

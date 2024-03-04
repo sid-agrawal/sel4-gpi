@@ -213,10 +213,12 @@ int pd_client_start(pd_client_context_t *conn, seL4_Word arg0)
 }
 
 int pd_client_add_rde(pd_client_context_t *conn, seL4_CPtr server_ep,
-                      seL4_CPtr server_pd_cap, gpi_cap_t server_type)
+                      seL4_CPtr server_pd_cap, gpi_cap_t server_type, 
+                      bool needs_badge)
 {
     seL4_SetMR(PDMSGREG_FUNC, PD_FUNC_ADD_RDE_REQ);
-    seL4_SetMR(PDMSGREG_ADD_RDE_TYPE, server_type);
+    seL4_SetMR(PDMSGREG_ADD_RDE_REQ_TYPE, server_type);
+    seL4_SetMR(PDMSGREG_ADD_RDE_REQ_NEEDS_BADGE, needs_badge);
     seL4_SetCap(0, server_ep);
     seL4_SetCap(1, server_pd_cap);
     ZF_LOGE("server pd cap: %lx", server_pd_cap);

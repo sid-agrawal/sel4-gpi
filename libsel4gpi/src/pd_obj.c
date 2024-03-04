@@ -76,18 +76,52 @@ osmosis_pd_cap_t *pd_add_resource(pd_t *pd, gpi_cap_t type, seL4_Word res_id)
     return new;
 }
 
-void pd_add_rde(pd_t *pd, rde_type_t type, uint32_t pd_obj_id, seL4_CPtr server_ep)
+int pd_add_rde(pd_t *pd, rde_type_t type, uint32_t pd_obj_id, seL4_CPtr server_ep, bool needs_badge)
 {
     int idx = type.type;
     assert(idx > 0 && idx < MAX_PD_OSM_RDE);
 
     pd->rde[idx].pd_obj_id = pd_obj_id;
     /* we don't really need to keep this if we index by type, but let's just keep it around for now */
-    pd->rde[idx].type = type; 
+    pd->rde[idx].type = type;
     pd->rde[idx].slot_in_RT = server_ep;
+
+    // Copy cap to PD, badge if necessary
+    if (needs_badge)
+    {
+        cspacepath_t src, dest;
+        vka_cspace_make_path(pd->vka, server_ep, &src);
+
+        int error = vka_cspace_alloc_path(&pd->pd_vka, &dest);
+        if (error)
+        {
+            return error;
+        }
+
+        seL4_Word badge_val = gpi_new_badge(idx,
+                                            0x00,
+                                            pd->pd_obj_id,
+                                            0x00);
+
+        error = vka_cnode_mint(&dest,
+                               &src,
+                               seL4_AllRights,
+                               badge_val);
+        if (error)
+        {
+            return error;
+        }
+
+        pd->rde[idx].slot_in_PD = dest.capPtr;
+    }
+    else
+    {
+        copy_cap_to_pd(pd, pd->rde[idx].slot_in_RT, &pd->rde[idx].slot_in_PD);
+    }
 
     OSDB_PRINTF("adding new RDE of type %d\n", type.type);
     pd->rde_count++;
+    return 0;
 }
 
 int pd_new(pd_t *pd,
@@ -284,14 +318,22 @@ int pd_load_image(pd_t *pd,
     {
         ZF_LOGF("Failed to forge child's as cap");
     }
-    rde_type_t ads_rde_type = { .type = GPICAP_TYPE_ADS };
-    pd_add_rde(pd, ads_rde_type, 0, child_ads_cap_in_parent);
+    rde_type_t ads_rde_type = {.type = GPICAP_TYPE_ADS};
+    error = pd_add_rde(pd, ads_rde_type, 0, child_ads_cap_in_parent, 0);
+    if (error)
+    {
+        ZF_LOGF("Failed to add ADS cap to RDE");
+    }
 
     // For the GPI server, no need to forge
     seL4_CPtr gpi_endpoint_in_parent = get_gpi_server()->server_ep_obj.cptr;
     // (XXX) linh: this shouldn't really be of type MO, but it is how PDs get their MOs
-    rde_type_t gpi_rde_type = { .type = GPICAP_TYPE_MO };
-    pd_add_rde(pd, gpi_rde_type, 0, gpi_endpoint_in_parent); 
+    rde_type_t gpi_rde_type = {.type = GPICAP_TYPE_MO};
+    error = pd_add_rde(pd, gpi_rde_type, 0, gpi_endpoint_in_parent, 0);
+    if (error)
+    {
+        ZF_LOGF("Failed to add GPI cap to RDE");
+    }
 
     /* copy the device frame, if any */
     // if (pd->device_frame_cap) {
@@ -473,17 +515,11 @@ int pd_start(pd_t *pd,
     assert(&pd->proc != NULL);
     assert(&pd->proc.vspace != NULL);
 
-    rde_type_t pd_rde_type = { .type = GPICAP_TYPE_PD };
-    pd_add_rde(pd, pd_rde_type, 0, pd_endpoint_in_root);
-
-    /* Copy RDE caps to PD */
-    seL4_Word slot;
-    for (int i = 1; i < MAX_PD_OSM_RDE; i++) {
-        if (pd->rde[i].type.type != GPICAP_TYPE_NONE) {
-            OSDB_PRINTF("copying RDE server %d EP: %lx to target PD\n", pd->rde[i].pd_obj_id, pd->rde[i].slot_in_RT);
-            copy_cap_to_pd(pd, pd->rde[i].slot_in_RT, &slot);
-            pd->rde[i].slot_in_PD = slot;
-        }
+    rde_type_t pd_rde_type = {.type = GPICAP_TYPE_PD};
+    error = pd_add_rde(pd, pd_rde_type, 0, pd_endpoint_in_root, 0);
+    if (error)
+    {
+        ZF_LOGF("Failed to add PD cap to RDE");
     }
 
     /* Copy the resource directory to a memory object */
@@ -493,7 +529,7 @@ int pd_start(pd_t *pd,
     {
         ZF_LOGE("Couldn't allocate frame to hold PD's resource directory");
     }
-    
+
     seL4_CPtr rde_parent_cap = rde_frame_parent.cptr;
     void *rde_parent = vspace_map_pages(server_vspace, &rde_parent_cap, NULL, seL4_AllRights, 1, seL4_PageBits, 1);
     memcpy(rde_parent, pd->rde, sizeof(osmosis_rde_t) * MAX_PD_OSM_RDE);

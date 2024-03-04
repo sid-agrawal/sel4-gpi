@@ -160,10 +160,11 @@ static seL4_MessageInfo_t ramdisk_request_handler(seL4_MessageInfo_t tag, seL4_W
     void *mo_vaddr;
 
     unsigned int op = seL4_GetMR(RDMSGREG_FUNC);
+    uint64_t obj_id = get_object_id_from_badge(sender_badge);
 
     seL4_MessageInfo_t reply_tag = seL4_MessageInfo_new(0, 0, 0, 0);
 
-    if (sender_badge == 0)
+    if (obj_id == 0)
     { /* Handle Untyped Request */
         RAMDISK_PRINTF("Got message on EP with no badge value\n");
 

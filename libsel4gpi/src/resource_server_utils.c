@@ -85,14 +85,6 @@ int start_resource_server_pd(vka_t *vka,
     error = ads_component_client_connect(gpi_ep, vka, &ads_os_cap);
     CHECK_ERROR(error, "failed to create new ads");
 
-    // Copy the RDE to the new PD
-    // (XXX) Arya: Todo Badge the RDE with the pd ID
-    if (rde_ep > 0)
-    {
-        error = pd_client_add_rde(&pd_os_cap, rde_ep, rde_pd_cap, rde_type);
-        CHECK_ERROR(error, "failed to send rde to pd");
-    }
-
     // Make a new AS, loads an image
     error = pd_client_load(&pd_os_cap, &ads_os_cap, image_name);
     CHECK_ERROR(error, "failed to load pd image");
@@ -101,6 +93,15 @@ int start_resource_server_pd(vka_t *vka,
     seL4_Word parent_ep_slot;
     error = pd_client_send_cap(&pd_os_cap, ep_object.cptr, &parent_ep_slot);
     CHECK_ERROR(error, "failed to send parent's ep cap to pd");
+
+    // Copy the RDE to the new PD
+    // (XXX) Arya: Todo Badge the RDE with the pd ID
+    if (rde_ep > 0)
+    {
+        RESOURCE_SERVER_PRINTF("SENDING RDE\n");
+        error = pd_client_add_rde(&pd_os_cap, rde_ep, rde_pd_cap, rde_type, true);
+        CHECK_ERROR(error, "failed to send rde to pd");
+    }
 
     // Start it
     error = pd_client_start(&pd_os_cap, parent_ep_slot); // with this arg.

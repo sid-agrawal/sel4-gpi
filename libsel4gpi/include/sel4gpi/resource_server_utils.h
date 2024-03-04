@@ -56,10 +56,6 @@ typedef struct _resource_server_context
     // Used only when server started as thread
     vka_t *server_vka;
 
-    // Generic functions used when started as thread or PD
-    int (*next_slot)(seL4_CPtr *);
-    int (*badge_ep)(seL4_Word, seL4_CPtr *);
-
     // RDEs and other EPs
     seL4_CPtr parent_ep;
     seL4_CPtr gpi_ep;
