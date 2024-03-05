@@ -1,6 +1,8 @@
 
 #include <stdio.h>
 
+#include <vka/capops.h>
+
 #include <sel4test/test.h>
 #include <sel4test/macros.h>
 #include <sel4utils/thread.h>
@@ -18,6 +20,7 @@
 
 #define TEST_STR_1 "Fuzzy Wuzzy was a bear"
 #define TEST_STR_2 "Fuzzy Wuzzy had no hair"
+#define FAKE_CLIENT_ID 1
 
 /**
  * Starts the ramdisk as a thread
@@ -85,6 +88,11 @@ int test_ramdisk(env_t env)
     vka_cspace_make_path(&env->vka, env->self_ads_cptr, &ads_conn.badged_server_ep_cspath);
     test_assert(error == 0);
 
+    /* Initialize the PD */
+    pd_client_context_t pd_conn;
+    vka_cspace_make_path(&env->vka, env->self_pd_cptr, &pd_conn.badged_server_ep_cspath);
+    test_assert(error == 0);
+
     /* Create a memory object for the buffer */
     seL4_CPtr slot;
     vka_cspace_alloc(&env->vka, &slot);
@@ -109,6 +117,26 @@ int test_ramdisk(env_t env)
     error = start_ramdisk_pd(&env->vka, env->gpi_endpoint, &ramdisk_ep, &ramdisk_pd_cap);
     test_assert(error == 0);
 
+    /* Badge the ramdisk EP with a client ID to simulate being a client */
+    cspacepath_t src, dest;
+    seL4_CPtr ramdisk_client_ep;
+    vka_cspace_make_path(&env->vka, ramdisk_ep, &src);
+
+    error = vka_cspace_alloc_path(&env->vka, &dest);
+    test_assert(error == 0);
+
+    seL4_Word badge_val = gpi_new_badge(GPICAP_TYPE_BLOCK,
+                                        0x00,
+                                        FAKE_CLIENT_ID,
+                                        BADGE_OBJ_ID_NULL);
+
+    error = vka_cnode_mint(&dest,
+                           &src,
+                           seL4_AllRights,
+                           badge_val);
+    test_assert(error == 0);
+    ramdisk_client_ep = dest.capPtr;
+
     printf("------------------STARTING TESTS: %s------------------\n", __func__);
 
     /* Attach MO to test's ADS */
@@ -123,13 +151,13 @@ int test_ramdisk(env_t env)
     *((int *)buf) = test_value;
     printf("buf addr: %p, contents: 0x%x\n", buf, *((int *)buf));
     seL4_Word res;
-    error = ramdisk_client_sanity_test(ramdisk_ep, &mo_conn, &res);
+    error = ramdisk_client_sanity_test(ramdisk_client_ep, &mo_conn, &res);
     test_assert(error == seL4_NoError);
     test_assert(res == test_value);
 
     // Get a block
     ramdisk_client_context_t block;
-    error = ramdisk_client_alloc_block(ramdisk_ep, &env->vka, 0, &block);
+    error = ramdisk_client_alloc_block(ramdisk_client_ep, &env->vka, 0, &block);
     test_assert(error == seL4_NoError);
 
     // Write and read from beginning of disk
@@ -141,12 +169,11 @@ int test_ramdisk(env_t env)
     memset(buf, 0, RAMDISK_BLOCK_SIZE); // clear the test string from the buffer
     error = ramdisk_client_read(&block, &mo_conn);
     test_assert(error == seL4_NoError);
-    printf("Result from read: 0x%x\n", *((int *)buf));
     test_assert(strcmp(buf, TEST_STR_1) == 0);
 
     // Write and read from another block
     ramdisk_client_context_t block2;
-    error = ramdisk_client_alloc_block(ramdisk_ep, &env->vka, 0, &block2);
+    error = ramdisk_client_alloc_block(ramdisk_client_ep, &env->vka, 0, &block2);
     test_assert(error == seL4_NoError);
 
     strcpy(buf, TEST_STR_2);
@@ -174,7 +201,7 @@ int test_ramdisk(env_t env)
     for (int i = 3; i <= 20; i++)
     {
         printf("----- Allocating block %d ---- \n", i);
-        error = ramdisk_client_alloc_block(ramdisk_ep, &env->vka, 0, &block);
+        error = ramdisk_client_alloc_block(ramdisk_client_ep, &env->vka, 0, &block);
         test_assert(error == seL4_NoError);
 
         buf[0] = i;
@@ -190,17 +217,22 @@ int test_ramdisk(env_t env)
     // TODO: test freeing blocks, if implemented
 
     // Dump RR for a block
-    model_state_t *block_model_state;
+    model_state_t *model_state = malloc(sizeof(model_state_t));
+    init_model_state(model_state);
+    rr_state_t *block_rr_state;
 
-    error = resource_server_get_rr(block.badged_server_ep_cspath.capPtr,
+    error = resource_server_get_rr(ramdisk_ep, block.badged_server_ep_cspath.capPtr,
                                    &mo_conn, buf,
                                    SIZE_BITS_TO_BYTES(seL4_PageBits),
-                                   &block_model_state);
+                                   &block_rr_state);
     test_assert(error == seL4_NoError);
-    test_assert(block_model_state->csv_rows_len == 1);
-    test_assert(block_model_state->num_resources == 1);
+    test_assert(block_rr_state->csv_rows_len == 1);
+    test_assert(block_rr_state->num_resources == 1);
+    combine_model_states(model_state, block_rr_state);
+
     printf("--- Model state for one ramdisk block --- \n");
-    print_model_state(block_model_state);
+    print_model_state(model_state);
+    free(model_state);
 
     printf("------------------ENDING: %s------------------\n", __func__);
     return sel4test_get_result();

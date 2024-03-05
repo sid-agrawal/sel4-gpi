@@ -3,6 +3,7 @@
 #include <unistd.h>
 #include <sys/stat.h>
 
+#include <vka/capops.h>
 #include <sel4test/test.h>
 #include <sel4test/macros.h>
 #include "../test.h"
@@ -19,6 +20,7 @@
 #define TEST_FNAME "somefile"
 #define TEST_FNAME_2 "longfile"
 #define RR_MO_N_PAGES 2
+#define FAKE_CLIENT_ID 1
 
 /**
  * Starts the fs as a thread
@@ -109,6 +111,26 @@ int test_fs(env_t env)
     error = start_xv6fs_pd(&env->vka, env->gpi_endpoint, ramdisk_pd_cap, ramdisk_ep, &fs_ep);
     test_assert(error == 0);
 
+    /* Badge the FS EP with a client ID to simulate being a client */
+    cspacepath_t src, dest;
+    seL4_CPtr fs_client_ep;
+    vka_cspace_make_path(&env->vka, fs_ep, &src);
+
+    error = vka_cspace_alloc_path(&env->vka, &dest);
+    test_assert(error == 0);
+
+    seL4_Word badge_val = gpi_new_badge(GPICAP_TYPE_FILE,
+                                        0x00,
+                                        FAKE_CLIENT_ID,
+                                        BADGE_OBJ_ID_NULL);
+
+    error = vka_cnode_mint(&dest,
+                           &src,
+                           seL4_AllRights,
+                           badge_val);
+    test_assert(error == 0);
+    fs_client_ep = dest.capPtr;
+
     printf("------------------STARTING TESTS: %s------------------\n", __func__);
 
     /* Attach MO to test's ADS */
@@ -120,7 +142,7 @@ int test_fs(env_t env)
     test_assert(error == 0);
 
     // The libc fs ops should go to the xv6fs server
-    xv6fs_client_init(&env->vka, fs_ep,
+    xv6fs_client_init(&env->vka, fs_client_ep,
                       env->gpi_endpoint,
                       env->self_ads_cptr,
                       env->self_pd_cptr);
@@ -224,7 +246,9 @@ int test_fs(env_t env)
     test_assert(f == -1); // File should no longer exist
 
     /* Dump RR for a file */
-    model_state_t *file_model_state;
+    model_state_t *model_state = malloc(sizeof(model_state_t));
+    init_model_state(model_state);
+    rr_state_t *file_rr_state;
 
     // Write a large file
     int file_n_blocks = 5;
@@ -241,16 +265,19 @@ int test_fs(env_t env)
     seL4_CPtr file_ep;
     error = xv6fs_client_get_file(f, &file_ep);
     test_assert(error == seL4_NoError);
-    error = resource_server_get_rr(file_ep, &mo_conn, mo_vaddr,
+    error = resource_server_get_rr(fs_ep, file_ep,
+                                   &mo_conn, mo_vaddr,
                                    SIZE_BITS_TO_BYTES(seL4_PageBits) * RR_MO_N_PAGES,
-                                   &file_model_state);
+                                   &file_rr_state);
     test_assert(error == seL4_NoError);
-    test_assert(file_model_state->csv_rows_len == file_n_blocks + 1);
-    test_assert(file_model_state->num_resources == 1);
-    test_assert(file_model_state->num_depends_on == file_n_blocks);
-    printf("--- Model state for file  with %d blocks --- \n", file_n_blocks);
-    print_model_state(file_model_state);
+    test_assert(file_rr_state->csv_rows_len == file_n_blocks + 1);
+    test_assert(file_rr_state->num_resources == 1);
+    test_assert(file_rr_state->num_depends_on == file_n_blocks);
 
+    combine_model_states(model_state, file_rr_state);
+    printf("--- Model state for file  with %d blocks --- \n", file_n_blocks);
+    print_model_state(model_state);
+    free(model_state);
     close(f);
 
     printf("------------------ENDING: %s------------------\n", __func__);

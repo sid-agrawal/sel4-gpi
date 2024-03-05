@@ -6,6 +6,7 @@
 #include <sel4test/macros.h>
 #include "../test.h"
 #include "../helpers.h"
+#include <vka/capops.h>
 
 #include <ramdisk_client.h>
 #include <fs_client.h>
@@ -18,6 +19,7 @@
 #define T2_NAME "t2"
 #define N_INSERT 50
 #define CMDLEN 128
+#define FAKE_CLIENT_ID 1
 
 #define SQL_EXEC_SELECT(sql_db, format, ...)                                       \
     do                                                                             \
@@ -184,17 +186,37 @@ int test_sqlite(env_t env)
     error = start_xv6fs_pd(&env->vka, env->gpi_endpoint, ramdisk_ep, ramdisk_pd_cap, &fs_ep);
     test_assert(error == 0);
 
+    /* Badge the FS EP with a client ID to simulate being a client */
+    cspacepath_t src, dest;
+    seL4_CPtr fs_client_ep;
+    vka_cspace_make_path(&env->vka, fs_ep, &src);
+
+    error = vka_cspace_alloc_path(&env->vka, &dest);
+    test_assert(error == 0);
+
+    seL4_Word badge_val = gpi_new_badge(GPICAP_TYPE_FILE,
+                                        0x00,
+                                        FAKE_CLIENT_ID,
+                                        BADGE_OBJ_ID_NULL);
+
+    error = vka_cnode_mint(&dest,
+                           &src,
+                           seL4_AllRights,
+                           badge_val);
+    test_assert(error == 0);
+    fs_client_ep = dest.capPtr;
+
     printf("------------------STARTING TESTS: %s------------------\n", __func__);
 
     // The libc fs ops should go to the xv6fs server
-    xv6fs_client_init(&env->vka, fs_ep,
+    xv6fs_client_init(&env->vka, fs_client_ep,
                       env->gpi_endpoint,
                       env->self_ads_cptr,
                       env->self_pd_cptr);
 
     // Load an initial db
     sqlite3 *db;
-    //open(DB_NAME, O_CREAT | O_RDWR);
+    // open(DB_NAME, O_CREAT | O_RDWR);
     error = sqlite3_open(DB_NAME, &db);
     test_assert(error == SQLITE_OK);
     test_assert(db != NULL);

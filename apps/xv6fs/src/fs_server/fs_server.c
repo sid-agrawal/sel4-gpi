@@ -291,8 +291,85 @@ static seL4_MessageInfo_t xv6fs_request_handler(seL4_MessageInfo_t tag, seL4_Wor
 
   seL4_MessageInfo_t reply_tag = seL4_MessageInfo_new(0, 0, 0, 0);
 
-  if (obj_id == 0)
-  { /* Handle Untyped Request */
+  if (sender_badge == 0)
+  { /* Handle Unbadged Request */
+    XV6FS_PRINTF("Received unbadged request\n");
+
+    switch (op)
+    {
+    case RS_FUNC_GET_RR_REQ:
+      int caps_unwrapped = seL4_MessageInfo_get_capsUnwrapped(tag);
+      if (caps_unwrapped < 1)
+      {
+        XV6FS_PRINTF("Missing resource cap badge for RR request\n");
+        error = FS_SERVER_ERROR_BADGE;
+        goto done;
+      }
+
+      seL4_Word resource_badge = seL4_GetBadge(1);
+      fs_registry_entry_t *reg_entry = fs_registry_get_entry_by_badge(resource_badge);
+      if (reg_entry == NULL)
+      {
+        XV6FS_PRINTF("Received invalid resource for RR request\n");
+        error = FS_SERVER_ERROR_BADGE;
+        goto done;
+      }
+
+      XV6FS_PRINTF("Get RR for fileno %ld\n", reg_entry->file->id);
+
+      size_t mo_size = seL4_GetMR(RSMSGREG_EXTRACT_RR_REQ_SIZE);
+
+      /* Attach memory object to server ADS */
+      error = resource_server_attach_mo(&get_xv6fs_server()->gen, cap, &mo_vaddr);
+      CHECK_ERROR_GOTO(error, "Failed to attach MO", error, done);
+
+      // Initialize the model state
+      rr_state_t *rr_state = (rr_state_t *)mo_vaddr;
+      init_rr_state(rr_state);
+      csv_rr_row_t *row_ptr = mo_vaddr + sizeof(rr_state_t);
+
+      // Add the entry for the resource
+      // (XXX) Arya: fileno may not be globally unique, need combined ID
+      char file_res_id[CSV_MAX_STRING_SIZE];
+      snprintf(file_res_id, CSV_MAX_STRING_SIZE, "%s_%lu", FILE_RESOURCE_NAME, reg_entry->file->id);
+      add_resource_rr(rr_state, FILE_RESOURCE_NAME, file_res_id, row_ptr);
+      row_ptr++;
+
+      // Add relations for blocks
+      int n_blocknos = 100; // (XXX) Arya: what if there are more blocks?
+      int *blocknos = malloc(sizeof(int) * n_blocknos);
+      xv6fs_sys_blocknos(reg_entry->file, blocknos, n_blocknos, &n_blocknos);
+      XV6FS_PRINTF("File has %d blocks\n", n_blocknos);
+
+      char block_res_id[CSV_MAX_STRING_SIZE];
+
+      for (int i = 0; i < n_blocknos; i++)
+      {
+        if ((void *)(row_ptr + 1) >= mo_vaddr + mo_size)
+        {
+          XV6FS_PRINTF("Ran out of space in the MO to write RR, wrote %d rows\n", i);
+          error = RS_ERROR_RR_SIZE;
+          break;
+        }
+        snprintf(block_res_id, CSV_MAX_STRING_SIZE, "BLOCK_%u", blocknos[i]);
+        add_resource_depends_on_rr(rr_state, file_res_id, block_res_id, row_ptr);
+        row_ptr++;
+      }
+      free(blocknos);
+
+      XV6FS_PRINTF("TEMPA %d\n", rr_state->csv_rows_len);
+
+      seL4_SetMR(RDMSGREG_FUNC, RS_FUNC_GET_RR_ACK);
+      break;
+    default:
+      XV6FS_PRINTF("TEMPA op is %d\n", op);
+      CHECK_ERROR_GOTO(1, "got invalid op on unbadged ep", error, done);
+    }
+  }
+  else if (obj_id == BADGE_OBJ_ID_NULL)
+  { /* Handle Request Not Associated to Object */
+    XV6FS_PRINTF("Received badged request with no object id\n");
+
     switch (op)
     {
     case FS_FUNC_CREATE_REQ:
@@ -365,17 +442,19 @@ static seL4_MessageInfo_t xv6fs_request_handler(seL4_MessageInfo_t tag, seL4_Wor
       seL4_SetMR(RDMSGREG_FUNC, FS_FUNC_UNLINK_ACK);
       break;
     default:
-      CHECK_ERROR_GOTO(1, "got invalid op on unbadged ep", error, done);
+      CHECK_ERROR_GOTO(1, "got invalid op on badged ep without obj id", error, done);
     }
   }
   else
   {
-    /* Handle Typed Request */
+    /* Handle Request On Specific Resource */
+    XV6FS_PRINTF("Received badged request with object id\n");
+
     int ret;
     fs_registry_entry_t *reg_entry = fs_registry_get_entry_by_badge(sender_badge);
     if (reg_entry == NULL)
     {
-      XV6FS_PRINTF("Received invalid badge");
+      XV6FS_PRINTF("Received invalid badge\n");
       error = FS_SERVER_ERROR_BADGE;
       goto done;
     }
@@ -384,51 +463,6 @@ static seL4_MessageInfo_t xv6fs_request_handler(seL4_MessageInfo_t tag, seL4_Wor
 
     switch (op)
     {
-    case RS_FUNC_GET_RR_REQ:
-      XV6FS_PRINTF("Get RR for fileno %ld\n", reg_entry->file->id);
-
-      size_t mo_size = seL4_GetMR(RSMSGREG_EXTRACT_RR_REQ_SIZE);
-
-      /* Attach memory object to server ADS */
-      error = resource_server_attach_mo(&get_xv6fs_server()->gen, cap, &mo_vaddr);
-      CHECK_ERROR_GOTO(error, "Failed to attach MO", error, done);
-
-      // Initialize the model state
-      model_state_t *model_state = (model_state_t *)mo_vaddr;
-      init_model_state(model_state);
-      csv_row_t *row_ptr = mo_vaddr + sizeof(model_state_t);
-
-      // Add the entry for the resource
-      // (XXX) Arya: fileno may not be globally unique, need combined ID
-      char file_res_id[CSV_MAX_STRING_SIZE];
-      snprintf(file_res_id, CSV_MAX_STRING_SIZE, "%s_%lu", FILE_RESOURCE_NAME, reg_entry->file->id);
-      add_resource_row(model_state, FILE_RESOURCE_NAME, file_res_id, row_ptr);
-      row_ptr++;
-
-      // Add relations for blocks
-      int n_blocknos = 100; // (XXX) Arya: what if there are more blocks?
-      int *blocknos = malloc(sizeof(int) * n_blocknos);
-      xv6fs_sys_blocknos(reg_entry->file, blocknos, n_blocknos, &n_blocknos);
-      XV6FS_PRINTF("File has %d blocks\n", n_blocknos);
-
-      char block_res_id[CSV_MAX_STRING_SIZE];
-
-      for (int i = 0; i < n_blocknos; i++)
-      {
-        if ((void *)(row_ptr + 1) >= mo_vaddr + mo_size)
-        {
-          XV6FS_PRINTF("Ran out of space in the MO to write RR, wrote %d rows\n", i);
-          error = RS_ERROR_RR_SIZE;
-          break;
-        }
-        snprintf(block_res_id, CSV_MAX_STRING_SIZE, "BLOCK_%u", blocknos[i]);
-        add_resource_depends_on_row(model_state, file_res_id, block_res_id, row_ptr);
-        row_ptr++;
-      }
-      free(blocknos);
-
-      seL4_SetMR(RDMSGREG_FUNC, RS_FUNC_GET_RR_ACK);
-      break;
     case FS_FUNC_READ_REQ:
       int n_bytes_to_read = seL4_GetMR(FSMSGREG_READ_REQ_N);
       int offset = seL4_GetMR(FSMSGREG_READ_REQ_OFFSET);
@@ -485,7 +519,7 @@ static seL4_MessageInfo_t xv6fs_request_handler(seL4_MessageInfo_t tag, seL4_Wor
       seL4_SetMR(RDMSGREG_FUNC, FS_FUNC_STAT_ACK);
       break;
     default:
-      CHECK_ERROR_GOTO(1, "got invalid op on badged ep", FS_SERVER_ERROR_UNKNOWN, done);
+      CHECK_ERROR_GOTO(1, "got invalid op on badged ep with obj id", FS_SERVER_ERROR_UNKNOWN, done);
     }
   }
 

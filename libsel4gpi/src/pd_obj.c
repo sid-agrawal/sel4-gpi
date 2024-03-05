@@ -101,7 +101,7 @@ int pd_add_rde(pd_t *pd, rde_type_t type, uint32_t pd_obj_id, seL4_CPtr server_e
         seL4_Word badge_val = gpi_new_badge(idx,
                                             0x00,
                                             pd->pd_obj_id,
-                                            0x00);
+                                            BADGE_OBJ_ID_NULL);
 
         error = vka_cnode_mint(&dest,
                                &src,
@@ -664,17 +664,19 @@ int pd_dump(pd_t *pd)
             break;
         default:
             ZF_LOGF("Calling another PD to get the info %s", __FUNCTION__);
-            // How to get the resource's EP cap?
+            // How to get the server EP and resource's EP?
+            seL4_CPtr server_cap = 0;
             seL4_CPtr resource_cap = 0;
-            model_state_t *sub_ms;
-            error = resource_server_get_rr(resource_cap, &mo_conn, mo_vaddr,
-                                           SIZE_BITS_TO_BYTES(seL4_PageBits), &sub_ms);
+            rr_state_t *rs;
+            error = resource_server_get_rr(server_cap, resource_cap,
+                                           &mo_conn, mo_vaddr,
+                                           SIZE_BITS_TO_BYTES(seL4_PageBits), &rs);
             if (error != seL4_NoError)
             {
                 return error;
             }
 
-            combine_model_states(ms, sub_ms);
+            combine_model_states(ms, rs);
 
             break;
         }

@@ -366,38 +366,32 @@ int resource_server_attach_mo(resource_server_context_t *context,
     return error;
 }
 
-int resource_server_get_rr(seL4_CPtr resource,
+int resource_server_get_rr(seL4_CPtr server_ep,
+                           seL4_CPtr resource,
                            mo_client_context_t *mo_conn,
                            void *mo_vaddr,
                            size_t size,
-                           model_state_t **ret_model_state)
+                           rr_state_t **ret_rr_state)
 {
     RESOURCE_SERVER_PRINTF("requesting resource relations for cap %d\n", (int)resource);
 
     // Send IPC to resource server
-    seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 1, RSMSGREG_EXTRACT_RR_REQ_END);
+    seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 2, RSMSGREG_EXTRACT_RR_REQ_END);
     seL4_SetMR(RSMSGREG_FUNC, RS_FUNC_GET_RR_REQ);
     seL4_SetMR(RSMSGREG_EXTRACT_RR_REQ_SIZE, size);
     seL4_SetCap(0, mo_conn->badged_server_ep_cspath.capPtr);
-    tag = seL4_Call(resource, tag);
+    seL4_SetCap(1, resource);
+    tag = seL4_Call(server_ep, tag);
 
-    // Adjust model state's row pointers if successful
+    // Adjust rr state's row pointer if successful
     int result = seL4_MessageInfo_get_label(tag);
     if (result == seL4_NoError)
     {
-        model_state_t *model_state = (model_state_t *)mo_vaddr;
-        model_state->csv_rows = (csv_row_t *)(mo_vaddr + sizeof(model_state_t));
+        rr_state_t *rr_state = (rr_state_t *)mo_vaddr;
+        rr_state->csv_rows = (csv_rr_row_t *)(mo_vaddr + sizeof(rr_state_t));
+        *ret_rr_state = rr_state;
 
-        for (int i = 0; i < model_state->csv_rows_len; i++)
-        {
-            model_state->csv_rows[i].next = &model_state->csv_rows[i + 1];
-            if (i == model_state->csv_rows_len - 1)
-            {
-                model_state->csv_rows[i].next = NULL;
-            }
-        }
-
-        *ret_model_state = model_state;
+        RESOURCE_SERVER_PRINTF("TEMPA %d\n", rr_state->csv_rows_len);
     }
 
     return result;

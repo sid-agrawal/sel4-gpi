@@ -31,6 +31,9 @@ typedef enum GPICAP_TYPE
     GPICAP_TYPE_MAX,
 } gpi_cap_t;
 
+// (XXX) Arya: Should be able to make this 0 once we prefix badges with server ID
+#define BADGE_OBJ_ID_NULL 0xfffff
+
 /*
  How we are using the badge.
  There are a total of 64 bits.

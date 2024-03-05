@@ -46,8 +46,19 @@ static void init_row(csv_row_t *row)
     snprintf(row->is_mapped, CSV_MAX_STRING_SIZE, "%s", "");
 }
 
-static void copy_row(csv_row_t *to, csv_row_t *from) {
-    memcpy(to, from, sizeof(csv_row_t));
+static void init_rr_row(csv_rr_row_t *row)
+{
+    snprintf(row->resource_from, CSV_MAX_STRING_SIZE, "%s", "");
+    snprintf(row->resource_to, CSV_MAX_STRING_SIZE, "%s", "");
+    snprintf(row->resource_type, CSV_MAX_STRING_SIZE, "%s", "");
+    snprintf(row->resource_id, CSV_MAX_STRING_SIZE, "%s", "");
+}
+
+// Copy a resource relation row into a full model state row
+static void copy_row(csv_row_t *to, csv_rr_row_t *from)
+{
+    init_row(to);
+    memcpy(to, from, sizeof(csv_rr_row_t));
 }
 
 void init_model_state(model_state_t *model_state)
@@ -75,6 +86,14 @@ void init_model_state(model_state_t *model_state)
     model_state->num_depends_on = 0;
     model_state->num_has_access_to = 0;
     model_state->num_requests = 0;
+}
+
+void init_rr_state(rr_state_t *model_state)
+{
+    model_state->csv_rows = NULL;
+    model_state->csv_rows_len = 0;
+    model_state->num_resources = 0;
+    model_state->num_depends_on = 0;
 }
 
 // Function to export the model state to a buffer with CSV formatting
@@ -162,26 +181,39 @@ void print_model_state(model_state_t *model_state)
     }
 }
 
-// Add any entries from the "from" model state to the "to" model state
-void combine_model_states(model_state_t *to, model_state_t *from) {
-    for (csv_row_t *from_row = from->csv_rows; from_row != NULL; from_row = from_row->next) {
+// Add any resource relations from a rr_state_t to the model state
+void combine_model_states(model_state_t *ms, rr_state_t *rs)
+{
+    for (int i = 0; i < rs->csv_rows_len; i++)
+    {
+        csv_rr_row_t *from_row = &rs->csv_rows[i];
         csv_row_t *new_row = (csv_row_t *)malloc(sizeof(csv_row_t));
         copy_row(new_row, from_row);
+        insert_row(ms, new_row);
     }
 
-    to->csv_rows_len += from->csv_rows_len;
-    to->num_depends_on += from->num_depends_on;
-    to->num_has_access_to += from->num_has_access_to;
-    to->num_pds += from->num_pds;
-    to->num_requests += from->num_requests;
-    to->num_resources += from->num_resources;
+    ms->csv_rows_len += rs->csv_rows_len;
+    ms->num_depends_on += rs->num_depends_on;
+    ms->num_resources += rs->num_resources;
 }
 
 // Function to add a resource to the model state
 void add_resource(model_state_t *model_state, char *resource_type, char *resource_id)
 {
+    assert(strlen(resource_type) != 0 && strlen(resource_id) != 0);
+    assert(strlen(resource_type) < CSV_MAX_STRING_SIZE && strlen(resource_id) < CSV_MAX_STRING_SIZE);
+
     csv_row_t *new_row = (csv_row_t *)malloc(sizeof(csv_row_t));
-    add_resource_row(model_state, resource_type, resource_id, new_row);
+    assert(new_row != NULL);
+    init_row(new_row);
+
+    // Set the resource type and ID
+    snprintf(new_row->resource_type, CSV_MAX_STRING_SIZE, "%s", resource_type);
+    snprintf(new_row->resource_id, CSV_MAX_STRING_SIZE, "%s", resource_id);
+
+    // Add node to the front of the list after the heading row
+    insert_row(model_state, new_row);
+    model_state->num_resources++;
 }
 
 // Function to add a PD to the model state
@@ -210,42 +242,10 @@ void add_has_access_to(model_state_t *model_state,
                        char *resource_to,
                        bool is_mapped)
 {
-    csv_row_t *new_row = (csv_row_t *)malloc(sizeof(csv_row_t));
-    add_has_access_to_row(model_state, pd_from, resource_to, is_mapped, new_row);
-}
-
-// Function to add a resource relationship to the model state
-void add_resource_depends_on(model_state_t *model_state, char *resource_from, char *resource_to)
-{
-    csv_row_t *new_row = (csv_row_t *)malloc(sizeof(csv_row_t));
-    add_resource_depends_on_row(model_state, resource_from, resource_to, new_row);
-}
-
-// Function to add a resource to the model state
-void add_resource_row(model_state_t *model_state, char *resource_type, char *resource_id, csv_row_t *new_row)
-{
-    assert(strlen(resource_type) != 0 && strlen(resource_id) != 0);
-    assert(strlen(resource_type) < CSV_MAX_STRING_SIZE && strlen(resource_id) < CSV_MAX_STRING_SIZE);
-
-    assert(new_row != NULL);
-    init_row(new_row);
-
-    // Set the resource type and ID
-    snprintf(new_row->resource_type, CSV_MAX_STRING_SIZE, "%s", resource_type);
-    snprintf(new_row->resource_id, CSV_MAX_STRING_SIZE, "%s", resource_id);
-
-    // Add node to the front of the list after the heading row
-    insert_row(model_state, new_row);
-    model_state->num_resources++;
-}
-
-// Function to add a mapping between a PD and a resource to the model state
-void add_has_access_to_row(model_state_t *model_state, char *pd_from, char *resource_to,
-                           bool is_mapped, csv_row_t *new_row)
-{
     assert(strlen(pd_from) != 0 && strlen(resource_to) != 0);
     assert(strlen(pd_from) < CSV_MAX_STRING_SIZE && strlen(resource_to) < CSV_MAX_STRING_SIZE);
 
+    csv_row_t *new_row = (csv_row_t *)malloc(sizeof(csv_row_t));
     assert(new_row != NULL);
     init_row(new_row);
 
@@ -260,13 +260,12 @@ void add_has_access_to_row(model_state_t *model_state, char *pd_from, char *reso
 }
 
 // Function to add a resource relationship to the model state
-void add_resource_depends_on_row(model_state_t *model_state, char *resource_from,
-                                 char *resource_to, csv_row_t *new_row)
+void add_resource_depends_on(model_state_t *model_state, char *resource_from, char *resource_to)
 {
-
     assert(strlen(resource_from) != 0 && strlen(resource_to) != 0);
     assert(strlen(resource_from) < CSV_MAX_STRING_SIZE && strlen(resource_to) < CSV_MAX_STRING_SIZE);
 
+    csv_row_t *new_row = (csv_row_t *)malloc(sizeof(csv_row_t));
     assert(new_row != NULL);
     init_row(new_row);
 
@@ -277,6 +276,50 @@ void add_resource_depends_on_row(model_state_t *model_state, char *resource_from
     // Add node to the front of the list after the heading row
     insert_row(model_state, new_row);
     model_state->num_depends_on++;
+}
+
+// Function to add a resource to the rr state
+void add_resource_rr(rr_state_t *model_state, char *resource_type, char *resource_id, csv_rr_row_t *new_row)
+{
+    assert(strlen(resource_type) != 0 && strlen(resource_id) != 0);
+    assert(strlen(resource_type) < CSV_MAX_STRING_SIZE && strlen(resource_id) < CSV_MAX_STRING_SIZE);
+
+    assert(new_row != NULL);
+    init_rr_row(new_row);
+
+    // Set the resource type and ID
+    snprintf(new_row->resource_type, CSV_MAX_STRING_SIZE, "%s", resource_type);
+    snprintf(new_row->resource_id, CSV_MAX_STRING_SIZE, "%s", resource_id);
+    model_state->num_resources++;
+
+    // Set list pointer if this is the first row
+    if (model_state->csv_rows == NULL)
+    {
+        model_state->csv_rows = new_row;
+    }
+    model_state->csv_rows_len++;
+}
+
+// Function to add a resource relationship to the rr state
+void add_resource_depends_on_rr(rr_state_t *model_state, char *resource_from, char *resource_to, csv_rr_row_t *new_row)
+{
+    assert(strlen(resource_from) != 0 && strlen(resource_to) != 0);
+    assert(strlen(resource_from) < CSV_MAX_STRING_SIZE && strlen(resource_to) < CSV_MAX_STRING_SIZE);
+
+    assert(new_row != NULL);
+    init_rr_row(new_row);
+
+    // Set the resource type and ID
+    snprintf(new_row->resource_from, CSV_MAX_STRING_SIZE, "%s", resource_from);
+    snprintf(new_row->resource_to, CSV_MAX_STRING_SIZE, "%s", resource_to);
+    model_state->num_depends_on++;
+
+    // Set list pointer if this is the first row
+    if (model_state->csv_rows == NULL)
+    {
+        model_state->csv_rows = new_row;
+    }
+    model_state->csv_rows_len++;
 }
 
 // Function add a PD to PD relationship to the model state

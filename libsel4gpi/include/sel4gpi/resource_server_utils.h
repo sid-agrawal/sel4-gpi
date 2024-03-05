@@ -214,19 +214,21 @@ int resource_server_send_resource(resource_server_context_t *context,
 /**
  * Request a resource server to dump resource relations
  *
+ * @param server_ep Unbadged ep of the resource server
  * @param resource The badged ep to dump relations for
  * @param mo_conn Memory to place rr in
  * @param mo_vaddr Vaddr where the MO is mapped locally
  * @param size Maximum size to write in mo_conn
- * @param ret_model_state Location of the resulting model state
+ * @param ret_rr_state Location of the resulting rr state
  *                        (same as mo_vaddr)
  * @return
  *      RS_NOERROR if dump completed successfully
  *      RS_ERROR_RR_SIZE if size was too small to write RR
  *      + Error codes for the respective resource server
  */
-int resource_server_get_rr(seL4_CPtr resource,
+int resource_server_get_rr(seL4_CPtr server_ep,
+                           seL4_CPtr resource,
                            mo_client_context_t *mo_conn,
                            void *mo_vaddr,
                            size_t size,
-                           model_state_t **ret_model_state);
+                           rr_state_t **ret_rr_state);

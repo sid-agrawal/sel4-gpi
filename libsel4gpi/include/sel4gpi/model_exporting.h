@@ -37,8 +37,34 @@ typedef struct
     int num_requests;
 } model_state_t;
 
-// Function to export the model state to a buffer with CSV formatting
+// Struct to represent a row in the CSV
+// Shortened version for resource relations only
+typedef struct csv_rr_row
+{
+    char resource_from[CSV_MAX_STRING_SIZE];
+    char resource_to[CSV_MAX_STRING_SIZE];
+    char resource_type[CSV_MAX_STRING_SIZE];
+    char resource_id[CSV_MAX_STRING_SIZE];
+} csv_rr_row_t;
+
+// Resource Relation State
+// Used when a remote resource server sends
+// resource relations
+typedef struct
+{
+    csv_rr_row_t *csv_rows;
+    int csv_rows_len;
+    int num_resources;
+
+    // Types of edges
+    int num_depends_on;
+} rr_state_t;
+
+// Initialize a new model state
 void init_model_state(model_state_t *model_state);
+
+// Initialize a new resource relation state
+void init_rr_state(rr_state_t *model_state);
 
 // Function to export the model state to a buffer with CSV formatting
 void export_model_state(model_state_t *model_state, char *buffer, size_t len);
@@ -46,8 +72,8 @@ void export_model_state(model_state_t *model_state, char *buffer, size_t len);
 // Function to print the model state to a terminal with CSV formatting
 void print_model_state(model_state_t *model_state);
 
-// Add any entries from the "from" model state to the "to" model state
-void combine_model_states(model_state_t *to, model_state_t *from);
+// Add any resource relations from a rr_state_t to the model state
+void combine_model_states(model_state_t *ms, rr_state_t *rs);
 
 // Function to add a resource to the model state
 void add_resource(model_state_t *model_state, char *resource_type, char *resource_id);
@@ -61,14 +87,11 @@ void add_has_access_to(model_state_t *model_state, char *pd_from, char *resource
 // Function to add a resource relationship to the model state
 void add_resource_depends_on(model_state_t *model_state, char *resource_from, char *resource_to);
 
-// Function to add a resource to the model state, using the given row struct
-void add_resource_row(model_state_t *model_state, char *resource_type, char *resource_id, csv_row_t* row);
+// Function to add a resource to the rr state
+void add_resource_rr(rr_state_t *model_state, char *resource_type, char *resource_id, csv_rr_row_t *new_row);
 
-// Function to add a mapping between a PD and a resource to the model state, using the given row struct
-void add_has_access_to_row(model_state_t *model_state, char *pd_from, char *resource_to, bool is_mapped, csv_row_t* row);
-
-// Function to add a resource relationship to the model state, using the given row struct
-void add_resource_depends_on_row(model_state_t *model_state, char *resource_from, char *resource_to, csv_row_t* row);
+// Function to add a resource relationship to the rr state
+void add_resource_depends_on_rr(rr_state_t *model_state, char *resource_from, char *resource_to, csv_rr_row_t *new_row);
 
 // Function add a PD to PD relationship to the model state
 void add_pd_requestes(model_state_t *model_state, char *pd_from, char *pd_to);
