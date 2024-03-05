@@ -44,6 +44,8 @@ enum rs_msgregs
 
     /* Extract RR */
     RSMSGREG_EXTRACT_RR_REQ_SIZE = RSMSGREG_LABEL0,
+    RSMSGREG_EXTRACT_RR_REQ_VADDR,
+    RSMSGREG_EXTRACT_RR_REQ_ID,
     RSMSGREG_EXTRACT_RR_REQ_END,
     RSMSGREG_EXTRACT_RR_ACK_END = RSMSGREG_LABEL0,
 };
@@ -53,6 +55,15 @@ enum rs_msgregs
  */
 typedef struct _resource_server_context
 {
+    gpi_cap_t resource_type;
+    uint64_t server_id;
+
+    // Run to serve requests
+    seL4_MessageInfo_t (*request_handler)(seL4_MessageInfo_t, seL4_Word, seL4_CPtr);
+
+    // Run once when the server is started
+    int (*init_fn)();
+
     // Used only when server started as thread
     vka_t *server_vka;
 
@@ -99,6 +110,12 @@ int start_resource_server_pd(vka_t *vka,
  * All vka_t, vspace_t, and simple_t instances passed to this library by
  * reference must remain functional throughout the lifetime of the server.
  *
+ * @param server_type The type of resource this server will serve
+ * @param request_handler Function to handle client requests
+ *                  param: seL4_MessageInfo_t tag, the request tag
+ *                  param: seL4_Word badge, the request's badge
+ *                  param: seL4_CPtr cap, the received cap
+ *                  return: seL4_MessageInfo_t reply info
  * @param parent_simple Initialized simple_t for the parent process that is
  *                      spawning the server thread.
  * @param parent_vka Initialized vka_t for the parent process that is spawning
@@ -110,10 +127,12 @@ int start_resource_server_pd(vka_t *vka,
  * @param ads_ep Initialized ADS connection
  * @param priority Server thread's priority.
  * @param thread_name Name of the new thread
- * @param main_fn Main function to run in new thread
+ * @param init_fn To run at the beginning of thread execution
  * @return int 0 on success, -1 otherwise
  */
 int resource_server_spawn_thread(resource_server_context_t *context,
+                                 gpi_cap_t server_type,
+                                 seL4_MessageInfo_t (*request_handler)(seL4_MessageInfo_t, seL4_Word, seL4_CPtr),
                                  simple_t *parent_simple,
                                  vka_t *parent_vka,
                                  vspace_t *parent_vspace,
@@ -122,25 +141,33 @@ int resource_server_spawn_thread(resource_server_context_t *context,
                                  seL4_CPtr ads_ep,
                                  uint8_t priority,
                                  char *thread_name,
-                                 int (*main_fn)());
+                                 int (*init_fn)());
 
 /**
  * Starts the resource server in the current
  * thread of the current PD
  *
+ * @param server_type The type of resource this server will serve
+ * @param request_handler Function to handle client requests
+ *                  param: seL4_MessageInfo_t tag, the request tag
+ *                  param: seL4_Word badge, the request's badge
+ *                  param: seL4_CPtr cap, the received cap
+ *                  return: seL4_MessageInfo_t reply info
  * @param ads_conn ADS RDE
  * @param pd_conn PD RDE
  * @param gpi_ep General gpi ep
  * @param parent_ep Endpoint of the parent process
- * @param main_fn Main function to execute when ready
+ * @param init_fn To run at the beginning of main thread execution
  * @return 0 on successful exit, nonzero otherwise
  */
 int resource_server_start(resource_server_context_t *context,
+                          gpi_cap_t server_type,
+                          seL4_MessageInfo_t (*request_handler)(seL4_MessageInfo_t, seL4_Word, seL4_CPtr),
                           ads_client_context_t *ads_conn,
                           pd_client_context_t *pd_conn,
                           seL4_CPtr gpi_ep,
                           seL4_CPtr parent_ep,
-                          int (*main_fn)());
+                          int (*init_fn)());
 
 /**
  * Recv function for MCS or non-MCS kernel
@@ -177,14 +204,8 @@ int resource_server_badge_ep(resource_server_context_t *context,
 
 /**
  * Main function for a resource server, receives requests
- * @param request_handler Function to handle client requests
- *                  param: seL4_MessageInfo_t tag, the request tag
- *                  param: seL4_Word badge, the request's badge
- *                  param: seL4_CPtr cap, the received cap
- *                  return: seL4_MessageInfo_t reply info
  */
-int resource_server_main(resource_server_context_t *context,
-                         seL4_MessageInfo_t (*request_handler)(seL4_MessageInfo_t, seL4_Word, seL4_CPtr));
+int resource_server_main(void *context_v);
 
 /**
  * Attach a MO from a client request to the server's ADS
@@ -215,20 +236,29 @@ int resource_server_send_resource(resource_server_context_t *context,
  * Request a resource server to dump resource relations
  *
  * @param server_ep Unbadged ep of the resource server
- * @param resource The badged ep to dump relations for
- * @param mo_conn Memory to place rr in
- * @param mo_vaddr Vaddr where the MO is mapped locally
- * @param size Maximum size to write in mo_conn
+ * @param res_id The id of the resource to dump relations for
+ * @param remote_vaddr location of shared memory in the resource server
+ * @param local_vaddr location of shared memory in the caller
+ * @param size size of shared memory
  * @param ret_rr_state Location of the resulting rr state
- *                        (same as mo_vaddr)
+ *                     (same as local_vaddr on success)
  * @return
  *      RS_NOERROR if dump completed successfully
  *      RS_ERROR_RR_SIZE if size was too small to write RR
  *      + Error codes for the respective resource server
  */
 int resource_server_get_rr(seL4_CPtr server_ep,
-                           seL4_CPtr resource,
-                           mo_client_context_t *mo_conn,
-                           void *mo_vaddr,
+                           seL4_Word res_id,
+                           void *remote_vaddr,
+                           void *local_vaddr,
                            size_t size,
                            rr_state_t **ret_rr_state);
+
+/**
+ * Generate a badge value for a new resource to give to a client
+ *
+ * @param resource_id ID of the resource, needs to be unique within this server
+ * @param client_id ID of the client PD
+ */
+uint64_t resource_server_assign_new_badge(resource_server_context_t *context,
+                                          uint64_t resource_id, uint64_t client_id);

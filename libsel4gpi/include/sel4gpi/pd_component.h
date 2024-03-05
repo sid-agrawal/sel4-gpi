@@ -31,7 +31,7 @@
 
 /* Temp definition of supported images */
 #define PD_N_IMAGES 3
-static const char* pd_images[PD_N_IMAGES] = { "hello", "ramdisk_server", "fs_server" };
+static const char *pd_images[PD_N_IMAGES] = {"hello", "ramdisk_server", "fs_server"};
 
 /* IPC values returned in the "label" message header. */
 enum pd_component_errors
@@ -73,14 +73,21 @@ enum pd_component_funcs
     PD_FUNC_DISCONNECT_ACK,
 
     PD_FUNC_ADD_RDE_REQ,
-    PD_FUNC_ADD_RDE_ACK
+    PD_FUNC_ADD_RDE_ACK,
+
+    PD_FUNC_REGISTER_SERV_REQ,
+    PD_FUNC_REGISTER_SERV_ACK,
+
+    PD_FUNC_GIVE_RES_REQ,
+    PD_FUNC_GIVE_RES_ACK,
 };
 
 /* Designated purposes of each message register in the mini-protocol. */
 enum pd_component_msgregs
 {
-    /* These four are fixed headers in every serserv message. */
+    /* These are fixed headers in every pd message. */
     PDMSGREG_FUNC = 0,
+
     /* This is a convenience label for IPC MessageInfo length. */
     PDMSGREG_LABEL0,
 
@@ -156,7 +163,20 @@ enum pd_component_msgregs
     PDMSGREG_ADD_RDE_REQ_NEEDS_BADGE,
     PDMSGREG_ADD_RDE_REQ_END,
 
-    PDMSGREG_ADD_RDE_ACK_END = PDMSGREG_LABEL0
+    PDMSGREG_ADD_RDE_ACK_END = PDMSGREG_LABEL0,
+
+    /* Register Resource Server */
+    PDMSGREG_REGISTER_SERV_REQ_END = PDMSGREG_LABEL0,
+    PDMSGREG_REGISTER_SERV_ACK_ID = PDMSGREG_LABEL0,
+    PDMSGREG_REGISTER_SERV_ACK_END,
+
+    /* Give Resource */
+    PDMSGREG_GIVE_RES_REQ_TYPE = PDMSGREG_LABEL0,
+    PDMSGREG_GIVE_RES_REQ_CLIENT_ID,
+    PDMSGREG_GIVE_RES_REQ_RES_ID,
+    PDMSGREG_GIVE_RES_REQ_END,
+
+    PDMSGREG_GIVE_RES_ACK_END = PDMSGREG_LABEL0,
 };
 
 /* Per-client context maintained by the server. */
@@ -169,6 +189,16 @@ typedef struct _pd_component_registry_entry
     struct _pd_component_registry_entry *next;
 
 } pd_component_registry_entry_t;
+
+/* Tracks resource servers that have registered with the pd component */
+typedef struct _pd_component_resource_server_entry
+{
+    uint32_t pd_id;
+    seL4_CPtr server_ep;
+    pd_t *pd;
+
+    struct _pd_component_resource_server_entry *next;
+} pd_component_resource_server_entry_t;
 
 /* State maintained by the server. */
 typedef struct _pd_component_context
@@ -184,6 +214,7 @@ typedef struct _pd_component_context
 
     int registry_n_entries;
     pd_component_registry_entry_t *client_registry;
+    pd_component_resource_server_entry_t *server_registry;
 } pd_component_context_t;
 
 /**
@@ -206,4 +237,11 @@ int forge_pd_cap_from_init_data(
 
 void update_forged_pd_cap_from_init_data(test_init_data_t *init_data, seL4_CPtr cap);
 
-pd_component_registry_entry_t *pd_component_registry_get_entry_by_id(seL4_Word pd_id);
+/**
+ * @brief Lookup the resource server registry entry for the given object id.
+ * (XXX) Arya: This needs to be exposed for pd_obj to use it. Is there a better way?
+ *
+ * @param object_id
+ * @return pd_component_resource_server_entry_t*
+ */
+pd_component_resource_server_entry_t *pd_component_server_registry_get_entry_by_id(seL4_Word object_id);

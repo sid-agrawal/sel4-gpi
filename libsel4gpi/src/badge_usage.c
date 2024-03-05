@@ -62,17 +62,38 @@ uint64_t set_client_id_to_badge(seL4_Word badge, uint64_t client_id)
     return (badge & 0xFFFFFF00000FFFFF) | (client_id << 20);
 }
 
-// Bits: 19:0 are for the object id. Total of 32 bits, so 2^20 objects.
+// Bits: 19:0 are for the object id. Total of 20 bits, so 2^20 objects.
 uint64_t get_object_id_from_badge(seL4_Word badge)
 {
     return (badge & 0xFFFFF);
 }
 
-// Bits: 31:0 are for the object id. Total of 32 bits, so 2^32 objects.
+// Bits: 19:0 are for the object id. Total of 20 bits, so 2^20 objects.
 uint64_t set_object_id_to_badge(seL4_Word badge, uint64_t object_id)
 {
     assert(object_id <= 0xFFFFF);
     return (badge & 0xFFFFFFFFFFF00000) | object_id;
+}
+
+// Bits: 19:16 are for the server id. Total of 4 bits, so 16 resource servers.
+// 2^16 objects per server.
+uint64_t set_server_id_to_object_id(uint64_t object_id, uint64_t server_id)
+{
+    assert(server_id <= 0xF);
+    return (object_id & 0x0FFFF) | (server_id << 16);
+}
+
+// Bits: 19:16 are for the server id. Total of 4 bits, so 16 resource servers.
+// 2^16 objects per server.
+uint64_t get_server_id_from_object_id(uint64_t object_id)
+{
+    return (object_id & 0xF0000) >> 16;
+}
+
+// Gets local object ID, unique to a given server, but not unique globally
+uint64_t get_local_object_id(uint64_t object_id)
+{
+    return (object_id & 0xFFFF);
 }
 
 uint64_t gpi_new_badge(gpi_cap_t cap_type,

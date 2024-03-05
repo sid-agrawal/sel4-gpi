@@ -132,6 +132,8 @@ int start_resource_server_pd(vka_t *vka,
 }
 
 int resource_server_spawn_thread(resource_server_context_t *context,
+                                 gpi_cap_t server_type,
+                                 seL4_MessageInfo_t (*request_handler)(seL4_MessageInfo_t, seL4_Word, seL4_CPtr),
                                  simple_t *parent_simple,
                                  vka_t *parent_vka,
                                  vspace_t *parent_vspace,
@@ -140,7 +142,7 @@ int resource_server_spawn_thread(resource_server_context_t *context,
                                  seL4_CPtr ads_ep,
                                  uint8_t priority,
                                  char *thread_name,
-                                 int (*main_fn)())
+                                 int (*init_fn)())
 {
     RESOURCE_SERVER_PRINTF("Starting resource server thread\n");
 
@@ -153,11 +155,14 @@ int resource_server_spawn_thread(resource_server_context_t *context,
         return seL4_InvalidArgument;
     }
 
+    context->resource_type = server_type;
+    context->request_handler = request_handler;
     context->server_vka = parent_vka;
     context->gpi_ep = gpi_ep;
     context->parent_ep = parent_ep;
     context->ads_conn = malloc(sizeof(ads_client_context_t));
     context->ads_conn->badged_server_ep_cspath.capPtr = ads_ep;
+    context->init_fn = init_fn;
 
     /* Get a CPtr to the parent's root cnode. */
     vka_cspace_make_path(parent_vka, 0, &parent_cspace_cspath);
@@ -188,8 +193,8 @@ int resource_server_spawn_thread(resource_server_context_t *context,
     RESOURCE_SERVER_PRINTF("Starting resource server thread\n");
     NAME_THREAD(thread.tcb.cptr, thread_name);
     error = sel4utils_start_thread(&thread,
-                                   (sel4utils_thread_entry_fn)main_fn,
-                                   NULL, NULL, 1);
+                                   (sel4utils_thread_entry_fn)resource_server_main,
+                                   context, NULL, 1);
     CHECK_ERROR_GOTO(error, "sel4utils_start_thread failed", out);
 
     return 0;
@@ -201,19 +206,24 @@ out:
 }
 
 int resource_server_start(resource_server_context_t *context,
+                          gpi_cap_t server_type,
+                          seL4_MessageInfo_t (*request_handler)(seL4_MessageInfo_t, seL4_Word, seL4_CPtr),
                           ads_client_context_t *ads_conn,
                           pd_client_context_t *pd_conn,
                           seL4_CPtr gpi_ep,
                           seL4_CPtr parent_ep,
-                          int (*main_fn)())
+                          int (*init_fn)())
 {
     seL4_Error error;
 
+    context->resource_type = server_type;
+    context->request_handler = request_handler;
     context->server_vka = NULL;
     context->gpi_ep = gpi_ep;
     context->ads_conn = ads_conn;
     context->pd_conn = pd_conn;
     context->parent_ep = parent_ep;
+    context->init_fn = init_fn;
 
     /* Allocate the Endpoint that the server will be listening on. */
     error = pd_client_alloc_ep(context->pd_conn, &context->server_ep);
@@ -221,7 +231,7 @@ int resource_server_start(resource_server_context_t *context,
     RESOURCE_SERVER_PRINTF("Allocated server ep at %d\n", (int)context->server_ep);
 
     RESOURCE_SERVER_PRINTF("Going to main function\n");
-    return main_fn();
+    return resource_server_main((void *)context);
 }
 
 seL4_MessageInfo_t resource_server_recv(resource_server_context_t *context,
@@ -306,9 +316,9 @@ int resource_server_badge_ep(resource_server_context_t *context,
     }
 }
 
-int resource_server_main(resource_server_context_t *context,
-                         seL4_MessageInfo_t (*request_handler)(seL4_MessageInfo_t, seL4_Word, seL4_CPtr))
+int resource_server_main(void *context_v)
 {
+    resource_server_context_t *context = (resource_server_context_t *)context_v;
     seL4_MessageInfo_t tag;
     seL4_Error error = 0;
     seL4_Word sender_badge;
@@ -316,24 +326,81 @@ int resource_server_main(resource_server_context_t *context,
     received_cap_path.root = PD_CAP_ROOT;
     received_cap_path.capDepth = PD_CAP_DEPTH;
 
+    // Perform any server-specific initialization
+    if (context->init_fn != NULL)
+    {
+        RESOURCE_SERVER_PRINTF("Calling server's init function\n");
+
+        error = context->init_fn();
+        CHECK_ERROR_GOTO(error, "failed to initialize resource server", exit_main);
+    }
+
+    // Register the resource server with the PD component
+    RESOURCE_SERVER_PRINTF("Registering the resource server with the PD component\n");
+    error = pd_client_register_resource_server(context->pd_conn,
+                                               context->server_ep, &context->server_id);
+    CHECK_ERROR_GOTO(error, "failed to register resource server", exit_main);
+    RESOURCE_SERVER_PRINTF("Registered resource server, ID is 0x%lx\n", context->server_id);
+
+    // Allocate the first cap receive slot
+    error = resource_server_next_slot(context, &received_cap_path.capPtr);
+    CHECK_ERROR_GOTO(error, "failed to alloc cap receive slot", exit_main);
+
+    seL4_SetCapReceivePath(
+        received_cap_path.root,
+        received_cap_path.capPtr,
+        received_cap_path.capDepth);
+
+    // Send our ep to the parent process
+    RESOURCE_SERVER_PRINTF("Messaging parent process at slot %d, sending ep %d\n", (int)context->parent_ep, (int)context->server_ep);
+    tag = seL4_MessageInfo_new(0, 0, 1, 0);
+    seL4_SetCap(0, context->server_ep);
+    seL4_Send(context->parent_ep, tag);
+
     while (1)
     {
-        /* Alloc cap receive slot*/
-        error = resource_server_next_slot(context, &received_cap_path.capPtr);
-        CHECK_ERROR_GOTO(error, "failed to alloc cap receive slot", exit_main);
-
-        seL4_SetCapReceivePath(
-            received_cap_path.root,
-            received_cap_path.capPtr,
-            received_cap_path.capDepth);
-
         /* Receive a message */
+        RESOURCE_SERVER_PRINTF("Ready to receive a message\n");
         tag = resource_server_recv(context, &sender_badge);
-        seL4_MessageInfo_t reply_tag = request_handler(tag, sender_badge, received_cap_path.capPtr);
+        int op = seL4_GetMR(RSMSGREG_FUNC);
+        RESOURCE_SERVER_PRINTF("Received message, op is %d, passing to request handler\n", op);
+        seL4_MessageInfo_t reply_tag = context->request_handler(tag, sender_badge, received_cap_path.capPtr);
+
+         /**
+         * Free slot and reallocate unless if this is an RR request
+         * RR requests come from the root task, so we cannot message it
+         * */
+        if (op != RS_FUNC_GET_RR_REQ)
+        {
+            // We need to finish setting up for the next request before responding to this one
+            // This is because the next request could be GET_RR, in which case we cannot
+            // be requesting a new slot after it is sent
+
+            // Save state of message registers for reply
+            seL4_Word arg0 = seL4_GetMR(0);
+            seL4_Word arg1 = seL4_GetMR(1);
+            
+            RESOURCE_SERVER_PRINTF("Freeing cap receive slot\n");
+            error = resource_server_free_slot(context, received_cap_path.capPtr);
+            CHECK_ERROR_GOTO(error, "failed to free cap receive slot", exit_main);
+
+            // (XXX) Arya: Do we need to reallocate if we just delete the contents?
+            RESOURCE_SERVER_PRINTF("Allocating new cap receive slot\n");
+            error = resource_server_next_slot(context, &received_cap_path.capPtr);
+            CHECK_ERROR_GOTO(error, "failed to alloc cap receive slot", exit_main);
+
+            seL4_SetCapReceivePath(
+                received_cap_path.root,
+                received_cap_path.capPtr,
+                received_cap_path.capDepth);
+
+            // Restore state of message registers for reply
+            seL4_SetMR(0, arg0);
+            seL4_SetMR(1, arg1);
+        }
 
         /* Reply to message */
         resource_server_reply(context, reply_tag);
-        resource_server_free_slot(context, received_cap_path.capPtr);
     }
 
 exit_main:
@@ -367,32 +434,63 @@ int resource_server_attach_mo(resource_server_context_t *context,
 }
 
 int resource_server_get_rr(seL4_CPtr server_ep,
-                           seL4_CPtr resource,
-                           mo_client_context_t *mo_conn,
-                           void *mo_vaddr,
+                           seL4_Word res_id,
+                           void *remote_vaddr,
+                           void *local_vaddr,
                            size_t size,
                            rr_state_t **ret_rr_state)
 {
-    RESOURCE_SERVER_PRINTF("requesting resource relations for cap %d\n", (int)resource);
+    RESOURCE_SERVER_PRINTF("requesting resource relations for ID 0x%lx\n", res_id);
+    RESOURCE_SERVER_PRINTF("Shared mem local addr: %p, remote addr: %p\n", local_vaddr, remote_vaddr);
 
     // Send IPC to resource server
-    seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 2, RSMSGREG_EXTRACT_RR_REQ_END);
+    seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 1, RSMSGREG_EXTRACT_RR_REQ_END);
     seL4_SetMR(RSMSGREG_FUNC, RS_FUNC_GET_RR_REQ);
+    seL4_SetMR(RSMSGREG_EXTRACT_RR_REQ_VADDR, (seL4_Word) remote_vaddr);
     seL4_SetMR(RSMSGREG_EXTRACT_RR_REQ_SIZE, size);
-    seL4_SetCap(0, mo_conn->badged_server_ep_cspath.capPtr);
-    seL4_SetCap(1, resource);
+    seL4_SetMR(RSMSGREG_EXTRACT_RR_REQ_ID, res_id);
     tag = seL4_Call(server_ep, tag);
 
     // Adjust rr state's row pointer if successful
     int result = seL4_MessageInfo_get_label(tag);
     if (result == seL4_NoError)
     {
-        rr_state_t *rr_state = (rr_state_t *)mo_vaddr;
-        rr_state->csv_rows = (csv_rr_row_t *)(mo_vaddr + sizeof(rr_state_t));
+        rr_state_t *rr_state = (rr_state_t *)local_vaddr;
+        rr_state->csv_rows = (csv_rr_row_t *)(local_vaddr + sizeof(rr_state_t));
         *ret_rr_state = rr_state;
-
-        RESOURCE_SERVER_PRINTF("TEMPA %d\n", rr_state->csv_rows_len);
     }
 
     return result;
+}
+
+uint64_t resource_server_assign_new_badge(resource_server_context_t *context,
+                                          uint64_t resource_id, uint64_t client_id)
+{
+    int error;
+
+    // Add the server id to the resource id
+    resource_id = set_server_id_to_object_id(resource_id, context->server_id);
+
+    // Add the type, client id, and resource id to the badge
+    seL4_Word badge_val = gpi_new_badge(context->resource_type,
+                                        client_id,
+                                        0x00,
+                                        resource_id);
+
+    // Notify the PD component that we are giving out this new resource
+    // (XXX) Arya: some risk that the server does not follow through after
+    //             assigning the badge
+    RESOURCE_SERVER_PRINTF("Giving resource to client, resource ID 0x%lx, client ID 0x%lx\n", resource_id, client_id);
+
+    error = pd_client_give_resource(context->pd_conn, client_id,
+                                    context->resource_type, resource_id);
+    if (error != seL4_NoError)
+    {
+        RESOURCE_SERVER_PRINTF("resource_server_assign_new_badge: failed to notify pd component\n");
+        return 0;
+    }
+
+    assert(badge_val != 0);
+    RESOURCE_SERVER_PRINTF("resource_server_assign_new_badge: new badge: %lx\n", badge_val);
+    return badge_val;
 }

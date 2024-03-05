@@ -74,8 +74,13 @@ typedef struct _ramdisk_server_context
 } ramdisk_server_context_t;
 
 /**
- * Internal library function: acts as the main() for the server thread.
- **/
-int ramdisk_server_main(void);
+ * To be run once at the start of the ramdisk server
+ */
+int ramdisk_init();
+
+/**
+ * To handle client requests to the ramdisk server
+*/
+seL4_MessageInfo_t ramdisk_request_handler(seL4_MessageInfo_t tag, seL4_Word sender_badge, seL4_CPtr cap);
 
 ramdisk_server_context_t *get_ramdisk_server(void);

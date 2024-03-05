@@ -84,11 +84,17 @@ typedef struct _xv6fs_server_context
     mo_client_context_t *shared_mem;
     void *shared_mem_vaddr;
     ramdisk_client_context_t naive_blocks[FS_SIZE];
+    uint64_t naive_blocks_ids[FS_SIZE];
 } xv6fs_server_context_t;
 
 /**
- * Internal library function: acts as the main() for the server thread.
- **/
-int xv6fs_server_main(void);
+ * To be run once at the start of the fs server
+ */
+int xv6fs_init();
+
+/**
+ * To handle client requests to the fs server
+*/
+seL4_MessageInfo_t xv6fs_request_handler(seL4_MessageInfo_t tag, seL4_Word sender_badge, seL4_CPtr cap);
 
 xv6fs_server_context_t *get_xv6fs_server(void);

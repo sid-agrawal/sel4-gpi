@@ -261,24 +261,8 @@ int test_fs(env_t env)
     }
     free(write_buf);
 
-    // Get resource relations
-    seL4_CPtr file_ep;
-    error = xv6fs_client_get_file(f, &file_ep);
-    test_assert(error == seL4_NoError);
-    error = resource_server_get_rr(fs_ep, file_ep,
-                                   &mo_conn, mo_vaddr,
-                                   SIZE_BITS_TO_BYTES(seL4_PageBits) * RR_MO_N_PAGES,
-                                   &file_rr_state);
-    test_assert(error == seL4_NoError);
-    test_assert(file_rr_state->csv_rows_len == file_n_blocks + 1);
-    test_assert(file_rr_state->num_resources == 1);
-    test_assert(file_rr_state->num_depends_on == file_n_blocks);
-
-    combine_model_states(model_state, file_rr_state);
-    printf("--- Model state for file  with %d blocks --- \n", file_n_blocks);
-    print_model_state(model_state);
-    free(model_state);
-    close(f);
+    // Print whole-pd model state
+    error = pd_client_dump(&pd_conn, NULL, 0);
 
     printf("------------------ENDING: %s------------------\n", __func__);
     return sel4test_get_result();

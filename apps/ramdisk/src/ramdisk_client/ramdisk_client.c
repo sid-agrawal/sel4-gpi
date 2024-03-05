@@ -55,7 +55,7 @@ int start_ramdisk_pd(vka_t *vka,
                                      0, 0, 0,
                                      RAMDISK_APP, ramdisk_ep, ramdisk_pd_cap);
     CHECK_ERROR(error, "failed to start ramdisk server\n");
-    RAMDISK_PRINTF("Successfully started ramdisk server\n");
+    RAMDISK_PRINTF("Successfully started ramdisk server, ep is at %d\n", (int)*ramdisk_ep);
     return 0;
 }
 
@@ -78,7 +78,8 @@ int ramdisk_client_sanity_test(seL4_CPtr server_ep_cap,
 int ramdisk_client_alloc_block(seL4_CPtr server_ep_cap,
                                vka_t *client_vka,
                                seL4_CPtr free_slot,
-                               ramdisk_client_context_t *ret_conn)
+                               ramdisk_client_context_t *ret_conn,
+                               uint64_t *block_id)
 {
     /* Send a request to the server on its public EP */
 
@@ -109,7 +110,10 @@ int ramdisk_client_alloc_block(seL4_CPtr server_ep_cap,
     tag = seL4_Call(server_ep_cap, tag);
     int error = seL4_MessageInfo_get_label(tag);
     CHECK_ERROR(error, "failed to get block from ramdisk server\n");
-    assert(seL4_MessageInfo_get_extraCaps(tag) == 1);
+
+    if (block_id != NULL) {
+        *block_id = seL4_GetMR(RDMSGREG_CREATE_ACK_ID);
+    }
 
     ret_conn->badged_server_ep_cspath = path;
     return 0;

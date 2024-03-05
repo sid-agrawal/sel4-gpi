@@ -98,21 +98,19 @@ static void pd_component_registry_insert(pd_component_registry_entry_t *new_node
 }
 
 /**
- * @brief Lookup the client registry entry for the give badge.
+ * @brief Lookup the client registry entry for the given object id.
  *
- * @param badge
+ * @param object_id
  * @return pd_component_registry_entry_t*
  */
-static pd_component_registry_entry_t *pd_component_registry_get_entry_by_badge(seL4_Word badge)
+static pd_component_registry_entry_t *pd_component_registry_get_entry_by_id(seL4_Word object_id)
 {
-
-    uint64_t objectID = get_object_id_from_badge(badge);
     /* Get the head of the list */
     pd_component_registry_entry_t *current_ctx = get_pd_component()->client_registry;
 
     while (current_ctx != NULL)
     {
-        if ((seL4_Word)current_ctx->pd.pd_obj_id == objectID)
+        if ((seL4_Word)current_ctx->pd.pd_obj_id == object_id)
         {
             break;
         }
@@ -122,20 +120,58 @@ static pd_component_registry_entry_t *pd_component_registry_get_entry_by_badge(s
 }
 
 /**
- * @brief Lookup the client registry entry for the give PD ID.
+ * @brief Lookup the client registry entry for the given badge.
  *
- * @param pd_id
+ * @param badge
  * @return pd_component_registry_entry_t*
  */
-pd_component_registry_entry_t *pd_component_registry_get_entry_by_id(seL4_Word pd_id)
+static pd_component_registry_entry_t *pd_component_registry_get_entry_by_badge(seL4_Word badge)
 {
 
+    uint64_t objectID = get_object_id_from_badge(badge);
+    return pd_component_registry_get_entry_by_id(objectID);
+}
+
+/**
+ * @brief Insert a new resource server into the resourcer server registry Linked List.
+ *
+ * @param new_node
+ */
+static void pd_component_server_registry_insert(pd_component_resource_server_entry_t *new_node)
+{
+    // TODO:Use a mutex
+
+    pd_component_resource_server_entry_t *head = get_pd_component()->server_registry;
+
+    if (head == NULL)
+    {
+        get_pd_component()->server_registry = new_node;
+        new_node->next = NULL;
+        return;
+    }
+
+    while (head->next != NULL)
+    {
+        head = head->next;
+    }
+    head->next = new_node;
+    new_node->next = NULL;
+}
+
+/**
+ * @brief Lookup the resource server registry entry for the given object id.
+ *
+ * @param server_id
+ * @return pd_component_resource_server_entry_t*
+ */
+pd_component_resource_server_entry_t *pd_component_server_registry_get_entry_by_id(seL4_Word server_id)
+{
     /* Get the head of the list */
-    pd_component_registry_entry_t *current_ctx = get_pd_component()->client_registry;
+    pd_component_resource_server_entry_t *current_ctx = get_pd_component()->server_registry;
 
     while (current_ctx != NULL)
     {
-        if ((seL4_Word)current_ctx->pd.pd_obj_id == pd_id)
+        if ((seL4_Word)current_ctx->pd_id == server_id)
         {
             break;
         }
@@ -636,6 +672,86 @@ static void handle_add_rde_req(seL4_Word sender_badge, seL4_MessageInfo_t old_ta
     return reply(tag);
 }
 
+static void handle_register_server_req(seL4_Word sender_badge, seL4_MessageInfo_t old_tag, seL4_CPtr received_cap)
+{
+    int error = 0;
+
+    OSDB_PRINTF(PDSERVS "Got register server request from client badge %lx.\n",
+                sender_badge);
+
+    pd_component_registry_entry_t *client_data = pd_component_registry_get_entry_by_badge(sender_badge);
+    if (client_data == NULL)
+    {
+        OSDB_PRINTF(PDSERVS "handle_register_server_req: Failed to find client badge %lx.\n",
+                    sender_badge);
+        error = -1;
+    }
+    else if (seL4_MessageInfo_get_extraCaps(old_tag) < 1)
+    {
+        OSDB_PRINTF(PDSERVS "handle_register_server_req missing server cap\n");
+        error = -1;
+    }
+    else
+    {
+        // (XXX) Arya: This does not check if the server registers itself twice
+        pd_component_resource_server_entry_t *rs_entry = malloc(sizeof(pd_component_resource_server_entry_t));
+        rs_entry->pd_id = client_data->pd.pd_obj_id;
+        // (XXX) Arya: this is ok for now because the received cap is never freed
+        rs_entry->server_ep = received_cap;
+        rs_entry->pd = &client_data->pd;
+
+        pd_component_server_registry_insert(rs_entry);
+        OSDB_PRINTF(PDSERVS "Registered server, cap is at %ld.\n", rs_entry->server_ep);
+
+        // (XXX) Arya: Is there any danger in a PD being able to find its own ID this way?
+        seL4_SetMR(PDMSGREG_REGISTER_SERV_ACK_ID, client_data->pd.pd_obj_id);
+    }
+
+    seL4_SetMR(PDMSGREG_FUNC, PD_FUNC_REGISTER_SERV_ACK);
+    seL4_MessageInfo_t tag = seL4_MessageInfo_new(error, 0, 0,
+                                                  PDMSGREG_REGISTER_SERV_ACK_END);
+    return reply(tag);
+}
+
+static void handle_give_resource_req(seL4_Word sender_badge, seL4_MessageInfo_t old_tag, seL4_CPtr received_cap)
+{
+    int error = 0;
+
+    OSDB_PRINTF(PDSERVS "Got give resource request from client badge %lx.\n",
+                sender_badge);
+
+    seL4_Word recipient_id = seL4_GetMR(PDMSGREG_GIVE_RES_REQ_CLIENT_ID);
+    pd_component_registry_entry_t *client_data = pd_component_registry_get_entry_by_badge(sender_badge);
+    pd_component_registry_entry_t *recipient_data = pd_component_registry_get_entry_by_id(recipient_id);
+    if (client_data == NULL)
+    {
+        OSDB_PRINTF(PDSERVS "handle_give_resource_req: Failed to find client badge 0x%lx.\n",
+                    sender_badge);
+        error = -1;
+    }
+    else if (recipient_data == NULL)
+    {
+        OSDB_PRINTF(PDSERVS "handle_give_resource_req: Failed to find recipient id 0x%lx.\n",
+                    recipient_id);
+        error = -1;
+    }
+    else
+    {
+        gpi_cap_t resource_type = (gpi_cap_t)seL4_GetMR(PDMSGREG_GIVE_RES_REQ_TYPE);
+        seL4_Word resource_id = seL4_GetMR(PDMSGREG_GIVE_RES_REQ_RES_ID);
+
+        OSDB_PRINTF(PDSERVS "server 0x%lx gives resource ID 0x%lx to client 0x%lx\n",
+                    client_data->pd.pd_obj_id, resource_id, recipient_id);
+
+        pd_add_resource(&recipient_data->pd, resource_type, resource_id);
+    }
+
+    seL4_SetMR(PDMSGREG_FUNC, PD_FUNC_GIVE_RES_ACK);
+    seL4_MessageInfo_t tag = seL4_MessageInfo_new(error, 0, 0,
+                                                  PDMSGREG_GIVE_RES_ACK_END);
+    return reply(tag);
+}
+
 /**
  * @brief The starting point for the pd server's thread.
  *
@@ -678,6 +794,12 @@ void pd_component_handle(seL4_MessageInfo_t tag,
         break;
     case PD_FUNC_ADD_RDE_REQ:
         handle_add_rde_req(sender_badge, tag, received_cap->capPtr);
+        break;
+    case PD_FUNC_REGISTER_SERV_REQ:
+        handle_register_server_req(sender_badge, tag, received_cap->capPtr);
+        break;
+    case PD_FUNC_GIVE_RES_REQ:
+        handle_give_resource_req(sender_badge, tag, received_cap->capPtr);
         break;
     default:
         gpi_panic(PDSERVS "Unknown func type.", (seL4_Word)func);

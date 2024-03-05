@@ -133,17 +133,6 @@ int pd_client_next_slot(pd_client_context_t *conn,
 int pd_client_free_slot(pd_client_context_t *conn,
                         seL4_CPtr slot)
 {
-#if 0
-    /* (XXX) Arya: Deleting the slot's contents only works in child PD */
-    int error = 0;
-    cspacepath_t path;
-    path.capDepth = PD_CAP_DEPTH;
-    path.root = PD_CAP_ROOT;
-    path.capPtr = slot;
-
-    error = vka_cnode_delete(&path); // ignore delete error if slot was empty
-#endif
-
     // Now get the server to free the slot
     seL4_SetMR(PDMSGREG_FUNC, PD_FUNC_FREE_SLOT_REQ);
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0,
@@ -213,7 +202,7 @@ int pd_client_start(pd_client_context_t *conn, seL4_Word arg0)
 }
 
 int pd_client_add_rde(pd_client_context_t *conn, seL4_CPtr server_ep,
-                      seL4_CPtr server_pd_cap, gpi_cap_t server_type, 
+                      seL4_CPtr server_pd_cap, gpi_cap_t server_type,
                       bool needs_badge)
 {
     seL4_SetMR(PDMSGREG_FUNC, PD_FUNC_ADD_RDE_REQ);
@@ -224,6 +213,38 @@ int pd_client_add_rde(pd_client_context_t *conn, seL4_CPtr server_ep,
     ZF_LOGE("server pd cap: %lx", server_pd_cap);
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 2,
                                                   PDMSGREG_ADD_RDE_REQ_END);
+    tag = seL4_Call(conn->badged_server_ep_cspath.capPtr, tag);
+    assert(seL4_MessageInfo_ptr_get_label(&tag) == 0);
+    return 0;
+}
+
+int pd_client_register_resource_server(pd_client_context_t *conn,
+                                       seL4_CPtr server_ep,
+                                       seL4_Word *server_id)
+{
+    seL4_SetMR(PDMSGREG_FUNC, PD_FUNC_REGISTER_SERV_REQ);
+    seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 1,
+                                                  PDMSGREG_REGISTER_SERV_REQ_END);
+
+    printf("TEMPA pd_client_register_resource_server sending cap %d\n", (server_ep));
+    seL4_SetCap(0, server_ep);
+    tag = seL4_Call(conn->badged_server_ep_cspath.capPtr, tag);
+    assert(seL4_MessageInfo_ptr_get_label(&tag) == 0);
+    *server_id = seL4_GetMR(PDMSGREG_REGISTER_SERV_ACK_ID);
+    return 0;
+}
+
+int pd_client_give_resource(pd_client_context_t *conn,
+                                seL4_Word recipient_id,
+                                gpi_cap_t resource_type,
+                                seL4_Word resource_id)
+{
+    seL4_SetMR(PDMSGREG_FUNC, PD_FUNC_GIVE_RES_REQ);
+    seL4_SetMR(PDMSGREG_GIVE_RES_REQ_TYPE, resource_type);
+    seL4_SetMR(PDMSGREG_GIVE_RES_REQ_CLIENT_ID, recipient_id);
+    seL4_SetMR(PDMSGREG_GIVE_RES_REQ_RES_ID, resource_id);
+    seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 1,
+                                                  PDMSGREG_GIVE_RES_REQ_END);
     tag = seL4_Call(conn->badged_server_ep_cspath.capPtr, tag);
     assert(seL4_MessageInfo_ptr_get_label(&tag) == 0);
     return 0;

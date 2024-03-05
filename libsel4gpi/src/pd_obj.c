@@ -140,6 +140,7 @@ int pd_new(pd_t *pd,
 
     pd->pd_started = false;
     pd->vka = vka;
+    pd->vspace = server_vspace;
 }
 
 int pd_next_slot(pd_t *pd,
@@ -425,7 +426,6 @@ int pd_send_cap(pd_t *to_pd,
                 return 1;
             }
             cap = dest_cptr;
-            uint32_t idx = to_pd->has_access_to_count++;
             osmosis_pd_cap_t *res = pd_add_resource(to_pd, GPICAP_TYPE_ADS, ads_reg->ads.ads_obj_id);
             res->slot_in_PD_Debug = cap;
             res->slot_in_RT_Debug = src.capPtr;
@@ -598,52 +598,58 @@ int pd_dump(pd_t *pd)
     snprintf(pd_id, CSV_MAX_STRING_SIZE, "PD_%u", pd->pd_obj_id);
     add_pd(ms, pd_name, pd_id);
 
-    /* Create an MO for remote rr requests */
+    /* Allocate memory for remote rr requests */
     vka_object_t rr_frame_obj;
-    seL4_CPtr rr_frame;
     error = vka_alloc_frame(pd->vka, seL4_PageBits, &rr_frame_obj);
     if (error != seL4_NoError)
     {
         return error;
     }
 
+    cspacepath_t rr_frame_path;
+    vka_cspace_make_path(pd->vka, rr_frame_obj.cptr, &rr_frame_path);
+
+    void *rr_local_vaddr = vspace_map_pages(get_pd_component()->server_vspace, &rr_frame_obj.cptr, NULL,
+                                            seL4_AllRights, 1, seL4_PageBits, 1);
+    if (rr_local_vaddr == NULL)
+    {
+        return -1;
+    }
+
+    /*
+    (XXX) Arya: not able to use MO for remote rr request
     mo_client_context_t mo_conn;
     mo_t *mo;
-    error = forge_mo_cap_from_frames(&rr_frame, 1, pd->vka,
+    error = forge_mo_cap_from_frames(&rr_frame_obj.cptr, 1, pd->vka,
                                      &mo_conn.badged_server_ep_cspath.capPtr, &mo);
     if (error != seL4_NoError)
     {
         return error;
     }
-
-    void *mo_vaddr = vspace_map_pages(pd->vspace, &rr_frame, NULL,
-                                      seL4_AllRights, 1, seL4_PageBits, 1);
-    if (mo_vaddr == NULL)
-    {
-        return -1;
-    }
+    */
 
     gpi_server_context_t *gpis = get_gpi_server();
-    for (int idx = 0; idx < MAX_PD_OSM_CAPS; idx++)
+    
+    for (osmosis_pd_cap_t *current_cap = pd->has_access_to; current_cap != NULL; current_cap = current_cap->hh.next)
     {
-
+        print_pd_osm_cap_info(current_cap);
         // if type seL4 cap
-        //  print_pd_osm_cap_info(&pd->has_access_to[idx]);
+        //  print_pd_osm_cap_info(&current_cap);
         //  else if type osmosis cap
         //  get the RR for that cap
-        switch (pd->has_access_to[idx].type)
+        switch (current_cap->type)
         {
         case GPICAP_TYPE_NONE:
             break;
         case GPICAP_TYPE_ADS:
             char res_id[CSV_MAX_STRING_SIZE];
-            snprintf(res_id, 20, "ADS_%lu", pd->has_access_to[idx].res_id);
+            snprintf(res_id, 20, "ADS_%lu", current_cap->res_id);
             add_has_access_to(ms,
                               pd_id,
                               res_id,
                               "true");
             ads_component_registry_entry_t *ads_data =
-                ads_component_registry_get_entry_by_id(pd->has_access_to[idx].res_id);
+                ads_component_registry_get_entry_by_id(current_cap->res_id);
             assert(ads_data != NULL);
             ads_dump_rr(&ads_data->ads, ms);
             add_has_access_to(ms,
@@ -662,14 +668,51 @@ int pd_dump(pd_t *pd)
         case GPICAP_TYPE_seL4:
             // Use some other method to get the cap details
             break;
-        default:
-            ZF_LOGF("Calling another PD to get the info %s", __FUNCTION__);
-            // How to get the server EP and resource's EP?
-            seL4_CPtr server_cap = 0;
-            seL4_CPtr resource_cap = 0;
+        case GPICAP_TYPE_FILE:
+        case GPICAP_TYPE_BLOCK:
+            OSDB_PRINTF(PDSERVS "Calling another PD to get the info for resource with ID 0x%x\n", current_cap->res_id);
+
+            // Find the server that created this resource based on the resource id
+            uint64_t obj_id = current_cap->res_id;
+            uint64_t server_id = get_server_id_from_object_id(obj_id);
+            pd_component_resource_server_entry_t *server_entry = pd_component_server_registry_get_entry_by_id(server_id);
+
+            if (server_entry == NULL)
+            {
+                OSDB_PRINTF(PDSERVS "Failed to find resource server with ID 0x%lx\n", server_id);
+                return -1;
+            }
+            seL4_CPtr server_cap = server_entry->server_ep;
             rr_state_t *rs;
-            error = resource_server_get_rr(server_cap, resource_cap,
-                                           &mo_conn, mo_vaddr,
+
+            OSDB_PRINTF(PDSERVS "Resource ID 0x%lx, server ID 0x%lx, server EP at %d\n", obj_id, server_id, server_cap);
+
+            // Pre-map the memory so resource server does not need to call root task
+            cspacepath_t rr_frame_copy_path;
+            int error = vka_cspace_alloc_path(pd->vka, &rr_frame_copy_path);
+            if (error != seL4_NoError)
+            {
+                OSDB_PRINTF(PDSERVS "Failed to allocate path for RR frame copy %d", error);
+                return -1;
+            }
+
+            error = vka_cnode_copy(&rr_frame_copy_path, &rr_frame_path, seL4_AllRights);
+            if (error != seL4_NoError)
+            {
+                OSDB_PRINTF(ADSSERVS "Failed to copy RR frame cap cap, error: %d", error);
+                return -1;
+            }
+
+            void *rr_remote_vaddr = vspace_map_pages(&server_entry->pd->proc.vspace, &rr_frame_copy_path.capPtr, NULL,
+                                                     seL4_AllRights, 1, seL4_PageBits, 1);
+            if (rr_remote_vaddr == NULL)
+            {
+                OSDB_PRINTF(PDSERVS "Failed to map RR frame to resource server, %d", error);
+                return -1;
+            }
+
+            error = resource_server_get_rr(server_cap, obj_id,
+                                           rr_remote_vaddr, rr_local_vaddr,
                                            SIZE_BITS_TO_BYTES(seL4_PageBits), &rs);
             if (error != seL4_NoError)
             {
@@ -678,6 +721,13 @@ int pd_dump(pd_t *pd)
 
             combine_model_states(ms, rs);
 
+            // Remove remotely-mapped memory
+            vspace_unmap_pages(&server_entry->pd->proc.vspace, rr_remote_vaddr, 1, seL4_PageBits, NULL);
+            vka_cnode_delete(&rr_frame_copy_path);
+
+            break;
+        default:
+            ZF_LOGE("Invalid has_access_to cap type 0x%x", current_cap->type);
             break;
         }
     }

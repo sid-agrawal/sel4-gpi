@@ -153,7 +153,7 @@ void print_model_state(model_state_t *model_state)
 
     size_t buf_written_total = 0;
     csv_row_t *current_row = model_state->csv_rows;
-    uint8_t width = 0;
+    uint8_t width = 15;
 
     while (current_row != NULL)
     {
@@ -283,6 +283,10 @@ void add_resource_rr(rr_state_t *model_state, char *resource_type, char *resourc
 {
     assert(strlen(resource_type) != 0 && strlen(resource_id) != 0);
     assert(strlen(resource_type) < CSV_MAX_STRING_SIZE && strlen(resource_id) < CSV_MAX_STRING_SIZE);
+
+    // (XXX) Arya: something goes wrong with the new_row->resource_id snprintf below
+    // Without this local variable, the model_state arg gets overwritten
+    rr_state_t *model_state_ptr = model_state;
 
     assert(new_row != NULL);
     init_rr_row(new_row);

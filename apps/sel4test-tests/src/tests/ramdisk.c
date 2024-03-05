@@ -157,7 +157,7 @@ int test_ramdisk(env_t env)
 
     // Get a block
     ramdisk_client_context_t block;
-    error = ramdisk_client_alloc_block(ramdisk_client_ep, &env->vka, 0, &block);
+    error = ramdisk_client_alloc_block(ramdisk_client_ep, &env->vka, 0, &block, NULL);
     test_assert(error == seL4_NoError);
 
     // Write and read from beginning of disk
@@ -173,7 +173,7 @@ int test_ramdisk(env_t env)
 
     // Write and read from another block
     ramdisk_client_context_t block2;
-    error = ramdisk_client_alloc_block(ramdisk_client_ep, &env->vka, 0, &block2);
+    error = ramdisk_client_alloc_block(ramdisk_client_ep, &env->vka, 0, &block2, NULL);
     test_assert(error == seL4_NoError);
 
     strcpy(buf, TEST_STR_2);
@@ -201,7 +201,7 @@ int test_ramdisk(env_t env)
     for (int i = 3; i <= 20; i++)
     {
         printf("----- Allocating block %d ---- \n", i);
-        error = ramdisk_client_alloc_block(ramdisk_client_ep, &env->vka, 0, &block);
+        error = ramdisk_client_alloc_block(ramdisk_client_ep, &env->vka, 0, &block, NULL);
         test_assert(error == seL4_NoError);
 
         buf[0] = i;
@@ -216,23 +216,8 @@ int test_ramdisk(env_t env)
 
     // TODO: test freeing blocks, if implemented
 
-    // Dump RR for a block
-    model_state_t *model_state = malloc(sizeof(model_state_t));
-    init_model_state(model_state);
-    rr_state_t *block_rr_state;
-
-    error = resource_server_get_rr(ramdisk_ep, block.badged_server_ep_cspath.capPtr,
-                                   &mo_conn, buf,
-                                   SIZE_BITS_TO_BYTES(seL4_PageBits),
-                                   &block_rr_state);
-    test_assert(error == seL4_NoError);
-    test_assert(block_rr_state->csv_rows_len == 1);
-    test_assert(block_rr_state->num_resources == 1);
-    combine_model_states(model_state, block_rr_state);
-
-    printf("--- Model state for one ramdisk block --- \n");
-    print_model_state(model_state);
-    free(model_state);
+    // Print whole-pd model state
+    error = pd_client_dump(&pd_conn, NULL, 0);
 
     printf("------------------ENDING: %s------------------\n", __func__);
     return sel4test_get_result();
