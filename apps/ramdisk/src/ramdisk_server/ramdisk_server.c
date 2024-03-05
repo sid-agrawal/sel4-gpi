@@ -74,6 +74,8 @@ int ramdisk_server_spawn_thread(simple_t *parent_simple,
 {
     return resource_server_spawn_thread(
         &get_ramdisk_server()->gen,
+        GPICAP_TYPE_FILE,
+        ramdisk_request_handler,
         parent_simple,
         parent_vka,
         parent_vspace,
@@ -82,7 +84,7 @@ int ramdisk_server_spawn_thread(simple_t *parent_simple,
         ads_ep,
         priority,
         "ramdisk server",
-        ramdisk_server_main);
+        ramdisk_init);
 }
 
 /**
@@ -94,23 +96,10 @@ static void *ramdisk_ptr(unsigned int sector)
     return get_ramdisk_server()->ramdisk_buf + sector * RAMDISK_BLOCK_SIZE;
 }
 
-uint64_t ramdisk_assign_new_badge(uint64_t blockno)
-{
-    // Add the blockno to the badge
-    seL4_Word badge_val = gpi_new_badge(GPICAP_TYPE_BLOCK,
-                                        0x00,
-                                        0x00,
-                                        blockno);
-
-    assert(badge_val != 0);
-    RAMDISK_PRINTF(RAMDISK_S "ramdisk_assign_new_badge: new badge: %lx\n", badge_val);
-    return badge_val;
-}
-
 /**
  * To be run once at the beginning of ramdisk main
  */
-static int ramdisk_init()
+int ramdisk_init()
 {
     ramdisk_server_context_t *server = get_ramdisk_server();
     int error;
@@ -144,17 +133,10 @@ static int ramdisk_init()
     server->free_blocks->n_blocks = RAMDISK_SIZE_BYTES / RAMDISK_BLOCK_SIZE;
     server->free_blocks->next = NULL;
 
-    /* Send our ep to the parent process */
-    RAMDISK_PRINTF("Messaging parent process at slot %d, sending ep %d\n", (int)server->gen.parent_ep, (int)server->gen.server_ep);
-
-    seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 1, 0);
-    seL4_SetCap(0, server->gen.server_ep);
-    seL4_Send(server->gen.parent_ep, tag);
-
     return error;
 }
 
-static seL4_MessageInfo_t ramdisk_request_handler(seL4_MessageInfo_t tag, seL4_Word sender_badge, seL4_CPtr cap)
+seL4_MessageInfo_t ramdisk_request_handler(seL4_MessageInfo_t tag, seL4_Word sender_badge, seL4_CPtr cap)
 {
     int error;
     void *mo_vaddr;
@@ -171,8 +153,8 @@ static seL4_MessageInfo_t ramdisk_request_handler(seL4_MessageInfo_t tag, seL4_W
         {
         case RS_FUNC_GET_RR_REQ:
             int ret;
-            seL4_Word resource_badge = seL4_GetBadge(1);
-            uint64_t blockno = get_object_id_from_badge(resource_badge);
+            uint64_t resource_id = seL4_GetMR(RSMSGREG_EXTRACT_RR_REQ_ID);
+            uint64_t blockno = get_local_object_id(resource_id);
 
             RAMDISK_PRINTF("Get RR for blockno %d\n", blockno);
 
@@ -235,7 +217,11 @@ static seL4_MessageInfo_t ramdisk_request_handler(seL4_MessageInfo_t tag, seL4_W
             }
 
             // Create the badged endpoint
-            seL4_Word badge = ramdisk_assign_new_badge(blockno);
+            seL4_Word badge = resource_server_assign_new_badge(&get_ramdisk_server()->gen,
+                                                               blockno,
+                                                               get_client_id_from_badge(sender_badge));
+            CHECK_ERROR_GOTO(badge == 0, "failed to assign new badge", RD_SERVER_ERROR_UNKNOWN, done);
+
             seL4_CPtr badged_ep;
 
             error = resource_server_badge_ep(&get_ramdisk_server()->gen,
@@ -265,7 +251,7 @@ static seL4_MessageInfo_t ramdisk_request_handler(seL4_MessageInfo_t tag, seL4_W
         gpi_cap_t cap_type = get_cap_type_from_badge(sender_badge);
         CHECK_ERROR_GOTO(cap_type != GPICAP_TYPE_BLOCK, "ramdisk server got invalid captype in badged EP",
                          RD_SERVER_ERROR_UNKNOWN, done);
-        uint64_t blockno = get_object_id_from_badge(sender_badge);
+        uint64_t blockno = get_local_object_id(obj_id);
         RAMDISK_PRINTF("Got op for blockno %ld\n", blockno);
 
         switch (op)
@@ -315,19 +301,4 @@ static seL4_MessageInfo_t ramdisk_request_handler(seL4_MessageInfo_t tag, seL4_W
 done:
     seL4_MessageInfo_ptr_set_label(&reply_tag, error);
     return reply_tag;
-}
-
-/**
- * @brief The starting point for the ramdisk server's thread.
- *
- */
-int ramdisk_server_main()
-{
-    RAMDISK_PRINTF("Started\n");
-
-    int error = ramdisk_init();
-    CHECK_ERROR(error, "failed to initialize ramdisk");
-
-    return resource_server_main(&get_ramdisk_server()->gen,
-                                ramdisk_request_handler);
 }

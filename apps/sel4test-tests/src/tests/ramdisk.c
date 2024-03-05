@@ -146,6 +146,8 @@ int test_ramdisk(env_t env)
                               (void **)&buf);
     test_assert(error == 0);
 
+    printf("TEMPA A\n");
+
     /* Sanity test shared memory */
     seL4_Word test_value = 0x1234;
     *((int *)buf) = test_value;
@@ -214,9 +216,10 @@ int test_ramdisk(env_t env)
         test_assert(buf[0] == i);
     }
 
-    // TODO: test freeing blocks, if implemented
+// TODO: test freeing blocks, if implemented
 
-    // Dump RR for a block
+// Dump RR for a block
+#if 0
     model_state_t *model_state = malloc(sizeof(model_state_t));
     init_model_state(model_state);
     rr_state_t *block_rr_state;
@@ -233,6 +236,10 @@ int test_ramdisk(env_t env)
     printf("--- Model state for one ramdisk block --- \n");
     print_model_state(model_state);
     free(model_state);
+#endif
+
+    // Print whole-pd model state
+    error = pd_client_dump(&pd_conn, NULL, 0);
 
     printf("------------------ENDING: %s------------------\n", __func__);
     return sel4test_get_result();

@@ -140,6 +140,7 @@ int pd_new(pd_t *pd,
 
     pd->pd_started = false;
     pd->vka = vka;
+    pd->vspace = server_vspace;
 }
 
 int pd_next_slot(pd_t *pd,
@@ -600,7 +601,6 @@ int pd_dump(pd_t *pd)
 
     /* Create an MO for remote rr requests */
     vka_object_t rr_frame_obj;
-    seL4_CPtr rr_frame;
     error = vka_alloc_frame(pd->vka, seL4_PageBits, &rr_frame_obj);
     if (error != seL4_NoError)
     {
@@ -609,14 +609,14 @@ int pd_dump(pd_t *pd)
 
     mo_client_context_t mo_conn;
     mo_t *mo;
-    error = forge_mo_cap_from_frames(&rr_frame, 1, pd->vka,
+    error = forge_mo_cap_from_frames(&rr_frame_obj.cptr, 1, pd->vka,
                                      &mo_conn.badged_server_ep_cspath.capPtr, &mo);
     if (error != seL4_NoError)
     {
         return error;
     }
 
-    void *mo_vaddr = vspace_map_pages(pd->vspace, &rr_frame, NULL,
+    void *mo_vaddr = vspace_map_pages(get_pd_component()->server_vspace, &rr_frame_obj.cptr, NULL,
                                       seL4_AllRights, 1, seL4_PageBits, 1);
     if (mo_vaddr == NULL)
     {
@@ -663,12 +663,25 @@ int pd_dump(pd_t *pd)
             // Use some other method to get the cap details
             break;
         default:
-            ZF_LOGF("Calling another PD to get the info %s", __FUNCTION__);
+            OSDB_PRINTF(PDSERVS "Calling another PD to get the info\n");
+
             // How to get the server EP and resource's EP?
-            seL4_CPtr server_cap = 0;
-            seL4_CPtr resource_cap = 0;
+            // Find the server that created this resource based on the resource id
+            uint64_t obj_id = pd->has_access_to[idx].res_id;
+            uint64_t server_id = get_server_id_from_object_id(obj_id);
+            pd_component_resource_server_entry_t *server_entry = pd_component_server_registry_get_entry_by_id(server_id);
+
+            if (server_entry == NULL)
+            {
+                OSDB_PRINTF(PDSERVS "Failed to find resource server with ID 0x%lx\n", server_id);
+                return -1;
+            }
+            seL4_CPtr server_cap = server_entry->server_ep;
             rr_state_t *rs;
-            error = resource_server_get_rr(server_cap, resource_cap,
+
+            OSDB_PRINTF(PDSERVS "Resource ID 0x%lx, server ID 0x%lx, server EP at %d\n", obj_id, server_id, server_cap);
+
+            error = resource_server_get_rr(server_cap, obj_id,
                                            &mo_conn, mo_vaddr,
                                            SIZE_BITS_TO_BYTES(seL4_PageBits), &rs);
             if (error != seL4_NoError)

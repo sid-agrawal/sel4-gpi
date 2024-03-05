@@ -143,3 +143,31 @@ int pd_client_add_rde(pd_client_context_t *conn,
                       seL4_CPtr server_pd_cap,
                       gpi_cap_t server_type,
                       bool needs_badge);
+
+/**
+ * To be called by a resource server when it starts running
+ * This allows the GPI server to request resource relations
+ * The resource server needs to prefix all of its resource IDs
+ * with the given server_id, so resource IDs are globally unique
+ *
+ * @param conn the resource server's pd connection
+ * @param server_ep the unbadged endpoint that the resource server listens on
+ * @param server_id returns the resource server's unique ID
+ */
+int pd_client_register_resource_server(pd_client_context_t *conn,
+                                       seL4_CPtr server_ep,
+                                       seL4_Word *server_id);
+
+/**
+ * To be called by a resource server when it creates a new
+ * resource and sends it to another PD
+ *
+ * @param conn the resource server's pd connection
+ * @param recipient_id the recipient PD's ID
+ * @param resource_type the type of the resource
+ * @param resource_id unique ID of the resource
+ */
+int pd_client_give_resource(pd_client_context_t *conn,
+                            seL4_Word recipient_id,
+                            gpi_cap_t resource_type,
+                            seL4_Word resource_id);

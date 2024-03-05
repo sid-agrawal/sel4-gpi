@@ -67,6 +67,18 @@ uint64_t get_object_id_from_badge(seL4_Word badge);
 // Bits: 19:0 are for the object id. Total of 20 bits, so 2^20 objects.
 uint64_t set_object_id_to_badge(seL4_Word badge, uint64_t object_id);
 
+// Bits: 19:16 are for the server id. Total of 4 bits, so 16 resource servers.
+// 2^16 objects per server.
+uint64_t set_server_id_to_object_id(uint64_t object_id, uint64_t server_id);
+
+// Bits: 19:16 are for the server id. Total of 4 bits, so 16 resource servers.
+// 2^16 objects per server.
+uint64_t get_server_id_from_object_id(uint64_t object_id);
+
+// Gets local object ID, unique to a given server, but not unique globally
+// (XXX) Arya: This API could be better
+uint64_t get_local_object_id(uint64_t object_id);
+
 uint64_t gpi_new_badge(gpi_cap_t cap_type,
                        uint64_t perms,
                        uint64_t client_id,

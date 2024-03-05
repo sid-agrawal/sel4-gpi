@@ -82,7 +82,7 @@ typedef struct osmosis_pd_cap
         But let's keep track of slot_in* (above) for now.
     */
     seL4_Word res_id; // key to uthash
-
+    
     /*
         Type is PD/MO/CPU/ADS then look locally, else
         Copy the cap from PD to RT and then calls RR on it.

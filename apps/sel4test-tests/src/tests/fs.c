@@ -262,6 +262,7 @@ int test_fs(env_t env)
     free(write_buf);
 
     // Get resource relations
+    #if 0
     seL4_CPtr file_ep;
     error = xv6fs_client_get_file(f, &file_ep);
     test_assert(error == seL4_NoError);
@@ -277,8 +278,11 @@ int test_fs(env_t env)
     combine_model_states(model_state, file_rr_state);
     printf("--- Model state for file  with %d blocks --- \n", file_n_blocks);
     print_model_state(model_state);
-    free(model_state);
     close(f);
+    #endif
+
+    // Print whole-pd model state
+    error = pd_client_dump(&pd_conn, NULL, 0);
 
     printf("------------------ENDING: %s------------------\n", __func__);
     return sel4test_get_result();

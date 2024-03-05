@@ -73,9 +73,11 @@ int main(int argc, char **argv)
 
     return resource_server_start(
         &get_xv6fs_server()->gen,
+        GPICAP_TYPE_FILE,
+        xv6fs_request_handler,
         &ads_conn,
         &pd_conn,
         gpi_cap,
         parent_ep,
-        xv6fs_server_main);
+        xv6fs_init);
 }

@@ -100,16 +100,17 @@ static void fs_registry_insert(fs_registry_entry_t *new_node)
 /**
  * @brief Lookup the client registry entry for the given id.
  *
- * @param objectID
+ * @param object_id
  * @return fs_registry_entry_t*
  */
-static fs_registry_entry_t *fs_registry_get_entry_by_id(uint64_t objectID)
+static fs_registry_entry_t *fs_registry_get_entry_by_id(uint64_t object_id)
 {
   fs_registry_entry_t *current_ctx = get_xv6fs_server()->client_registry;
+  uint64_t file_id = get_local_object_id(object_id);
 
   while (current_ctx != NULL)
   {
-    if ((seL4_Word)current_ctx->file->id == objectID)
+    if ((seL4_Word)current_ctx->file->id == file_id)
     {
       break;
     }
@@ -127,8 +128,8 @@ static fs_registry_entry_t *fs_registry_get_entry_by_id(uint64_t objectID)
 static fs_registry_entry_t *fs_registry_get_entry_by_badge(seL4_Word badge)
 {
 
-  uint64_t objectID = get_object_id_from_badge(badge);
-  return fs_registry_get_entry_by_id(objectID);
+  uint64_t object_id = get_object_id_from_badge(badge);
+  return fs_registry_get_entry_by_id(object_id);
 }
 
 /**
@@ -208,6 +209,8 @@ int xv6fs_server_spawn_thread(simple_t *parent_simple,
 
   return resource_server_spawn_thread(
       &get_xv6fs_server()->gen,
+      GPICAP_TYPE_BLOCK,
+      xv6fs_request_handler,
       parent_simple,
       parent_vka,
       parent_vspace,
@@ -216,26 +219,13 @@ int xv6fs_server_spawn_thread(simple_t *parent_simple,
       ads_ep,
       priority,
       "fs server",
-      xv6fs_server_main);
-}
-
-uint64_t fs_assign_new_badge(uint64_t fd)
-{
-  // Add the blockno to the badge
-  seL4_Word badge_val = gpi_new_badge(GPICAP_TYPE_FILE,
-                                      0x00,
-                                      0x00,
-                                      fd);
-
-  assert(badge_val != 0);
-  XV6FS_PRINTF("fs_assign_new_badge: new badge: %lx\n", badge_val);
-  return badge_val;
+      xv6fs_init);
 }
 
 /**
  * To be run once at the beginning of fs main
  */
-static int fs_init()
+int xv6fs_init()
 {
   xv6fs_server_context_t *server = get_xv6fs_server();
   int error;
@@ -244,7 +234,7 @@ static int fs_init()
   error = init_naive_blocks();
   CHECK_ERROR(error, "failed to initialize the blocks");
 
-  /* Allocate the TEMP shared memory object */
+  /* Allocate the shared memory object used to communicate with the ramdisk*/
   server->shared_mem = malloc(sizeof(mo_client_context_t));
   seL4_CPtr free_slot;
   error = resource_server_next_slot(&get_xv6fs_server()->gen, &free_slot);
@@ -271,17 +261,10 @@ static int fs_init()
 
   XV6FS_PRINTF("Initialized file system\n");
 
-  /* Send our ep to the parent process */
-  XV6FS_PRINTF("Messaging parent process at slot %d, sending ep %d\n", (int)server->gen.parent_ep, (int)server->gen.server_ep);
-
-  seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 1, 0);
-  seL4_SetCap(0, server->gen.server_ep);
-  seL4_Send(server->gen.parent_ep, tag);
-
   return error;
 }
 
-static seL4_MessageInfo_t xv6fs_request_handler(seL4_MessageInfo_t tag, seL4_Word sender_badge, seL4_CPtr cap)
+seL4_MessageInfo_t xv6fs_request_handler(seL4_MessageInfo_t tag, seL4_Word sender_badge, seL4_CPtr cap)
 {
   int error;
   void *mo_vaddr;
@@ -306,8 +289,10 @@ static seL4_MessageInfo_t xv6fs_request_handler(seL4_MessageInfo_t tag, seL4_Wor
         goto done;
       }
 
-      seL4_Word resource_badge = seL4_GetBadge(1);
-      fs_registry_entry_t *reg_entry = fs_registry_get_entry_by_badge(resource_badge);
+      uint64_t resource_id = seL4_GetMR(RSMSGREG_EXTRACT_RR_REQ_ID);
+      size_t mo_size = seL4_GetMR(RSMSGREG_EXTRACT_RR_REQ_SIZE);
+
+      fs_registry_entry_t *reg_entry = fs_registry_get_entry_by_id(resource_id);
       if (reg_entry == NULL)
       {
         XV6FS_PRINTF("Received invalid resource for RR request\n");
@@ -316,8 +301,6 @@ static seL4_MessageInfo_t xv6fs_request_handler(seL4_MessageInfo_t tag, seL4_Wor
       }
 
       XV6FS_PRINTF("Get RR for fileno %ld\n", reg_entry->file->id);
-
-      size_t mo_size = seL4_GetMR(RSMSGREG_EXTRACT_RR_REQ_SIZE);
 
       /* Attach memory object to server ADS */
       error = resource_server_attach_mo(&get_xv6fs_server()->gen, cap, &mo_vaddr);
@@ -357,12 +340,10 @@ static seL4_MessageInfo_t xv6fs_request_handler(seL4_MessageInfo_t tag, seL4_Wor
       }
       free(blocknos);
 
-      XV6FS_PRINTF("TEMPA %d\n", rr_state->csv_rows_len);
-
       seL4_SetMR(RDMSGREG_FUNC, RS_FUNC_GET_RR_ACK);
       break;
     default:
-      XV6FS_PRINTF("TEMPA op is %d\n", op);
+      XV6FS_PRINTF("Op is %d\n", op);
       CHECK_ERROR_GOTO(1, "got invalid op on unbadged ep", error, done);
     }
   }
@@ -412,7 +393,11 @@ static seL4_MessageInfo_t xv6fs_request_handler(seL4_MessageInfo_t tag, seL4_Wor
       }
 
       // Create the badged endpoint
-      seL4_Word badge = fs_assign_new_badge(file->id);
+      seL4_Word badge = resource_server_assign_new_badge(&get_xv6fs_server()->gen,
+                                                         file->id,
+                                                         get_client_id_from_badge(sender_badge));
+      CHECK_ERROR_GOTO(badge == 0, "failed to assign new badge", FS_SERVER_ERROR_UNKNOWN, done);
+
       seL4_CPtr badged_ep;
 
       error = resource_server_badge_ep(&get_xv6fs_server()->gen,
@@ -526,21 +511,6 @@ static seL4_MessageInfo_t xv6fs_request_handler(seL4_MessageInfo_t tag, seL4_Wor
 done:
   seL4_MessageInfo_ptr_set_label(&reply_tag, error);
   return reply_tag;
-}
-
-/**
- * @brief The starting point for the xv6fs server's thread.
- *
- */
-int xv6fs_server_main()
-{
-  XV6FS_PRINTF("Started\n");
-
-  int error = fs_init();
-  CHECK_ERROR(error, "failed to initialize fs");
-
-  return resource_server_main(&get_xv6fs_server()->gen,
-                              xv6fs_request_handler);
 }
 
 static int block_read(uint32_t blockno, void *buf)

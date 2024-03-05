@@ -69,9 +69,11 @@ int main(int argc, char **argv)
 
     return resource_server_start(
         &get_ramdisk_server()->gen,
+        GPICAP_TYPE_BLOCK,
+        ramdisk_request_handler,
         &ads_conn,
         &pd_conn,
         gpi_cap,
         parent_ep,
-        ramdisk_server_main);
+        ramdisk_init);
 }
