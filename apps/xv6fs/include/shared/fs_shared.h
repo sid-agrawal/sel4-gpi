@@ -16,7 +16,6 @@
 #define LOGSIZE 0                                         // use no log, previous value was (MAXOPBLOCKS * 3)
 #define NBUF (MAXOPBLOCKS * 3)                            // size of disk block cache
 #define MAXPATH 128                                       // maximum file path name
-#define FILE_RESOURCE_NAME "FILE"                         // name of a file resource in the model state
 
 /* API of the fs server */
 

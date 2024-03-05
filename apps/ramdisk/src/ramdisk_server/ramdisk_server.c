@@ -172,8 +172,8 @@ seL4_MessageInfo_t ramdisk_request_handler(seL4_MessageInfo_t tag, seL4_Word sen
 
             // Add the entry for the resource
             char block_res_id[CSV_MAX_STRING_SIZE];
-            snprintf(block_res_id, CSV_MAX_STRING_SIZE, "%s_%lx", BLOCK_RESOURCE_NAME, resource_id);
-            add_resource_rr(rr_state, BLOCK_RESOURCE_NAME, block_res_id, row_ptr);
+            make_res_id(block_res_id, GPICAP_TYPE_BLOCK, resource_id);
+            add_resource_rr(rr_state, GPICAP_TYPE_BLOCK, block_res_id, row_ptr);
 
             seL4_SetMR(RDMSGREG_FUNC, RS_FUNC_GET_RR_ACK);
             RAMDISK_PRINTF("Returning RR\n");

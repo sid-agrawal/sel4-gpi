@@ -595,7 +595,7 @@ int pd_dump(pd_t *pd)
     char pd_name[CSV_MAX_STRING_SIZE];
     snprintf(pd_name, CSV_MAX_STRING_SIZE, "Proc_%u", pd->pd_obj_id);
     char pd_id[CSV_MAX_STRING_SIZE];
-    snprintf(pd_id, CSV_MAX_STRING_SIZE, "PD_%u", pd->pd_obj_id);
+    make_res_id(pd_id, GPICAP_TYPE_PD, pd->pd_obj_id);
     add_pd(ms, pd_name, pd_id);
 
     /* Allocate memory for remote rr requests */
@@ -629,7 +629,7 @@ int pd_dump(pd_t *pd)
     */
 
     gpi_server_context_t *gpis = get_gpi_server();
-    
+
     for (osmosis_pd_cap_t *current_cap = pd->has_access_to; current_cap != NULL; current_cap = current_cap->hh.next)
     {
         print_pd_osm_cap_info(current_cap);
@@ -643,7 +643,8 @@ int pd_dump(pd_t *pd)
             break;
         case GPICAP_TYPE_ADS:
             char res_id[CSV_MAX_STRING_SIZE];
-            snprintf(res_id, 20, "ADS_%lu", current_cap->res_id);
+            make_res_id(res_id, current_cap->type, current_cap->res_id);
+
             add_has_access_to(ms,
                               pd_id,
                               res_id,
@@ -711,15 +712,40 @@ int pd_dump(pd_t *pd)
                 return -1;
             }
 
+            // Get RR from remote resource server
             error = resource_server_get_rr(server_cap, obj_id,
                                            rr_remote_vaddr, rr_local_vaddr,
                                            SIZE_BITS_TO_BYTES(seL4_PageBits), &rs);
-            if (error != seL4_NoError)
+            if (error == RS_ERROR_DNE)
+            {
+                // The resource was deleted and the PD component didn't know
+                // (XXX) Arya: Eventually, the PD component should be told
+                // For now, just omit deleted resources from the model state
+
+                // Remove remotely-mapped memory
+                vspace_unmap_pages(&server_entry->pd->proc.vspace, rr_remote_vaddr, 1, seL4_PageBits, NULL);
+                vka_cnode_delete(&rr_frame_copy_path);
+
+                continue;
+            }
+            if (error == RS_ERROR_RR_SIZE)
+            {
+                // (XXX) Arya: Need to allocate a bigger shared memory if this fails
+                return error;
+            }
+            else if (error != seL4_NoError)
             {
                 return error;
             }
 
             combine_model_states(ms, rs);
+
+            // Add the has_access_to row
+            make_res_id(res_id, current_cap->type, current_cap->res_id);
+            add_has_access_to(ms,
+                              pd_id,
+                              res_id,
+                              false); // (XXX) Arya: how to determine is_mapped
 
             // Remove remotely-mapped memory
             vspace_unmap_pages(&server_entry->pd->proc.vspace, rr_remote_vaddr, 1, seL4_PageBits, NULL);
@@ -732,7 +758,9 @@ int pd_dump(pd_t *pd)
         }
     }
 
-    /* (XXX) Arya: need to free the frame & MO used for rr requests */
+    /* Free the frame used for rr requests */
+    // (XXX) Arya: Again, unmapping this will cause future failures
+    // vspace_unmap_pages(get_pd_component()->server_vspace, rr_local_vaddr, 1, seL4_PageBits, pd->vka);
 
     print_model_state(ms);
     free(ms);

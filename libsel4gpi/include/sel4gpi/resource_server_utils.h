@@ -20,7 +20,8 @@ enum rs_errors
 {
     RS_NOERROR = 0,
     /* No future collisions with seL4_Error.*/
-    RS_ERROR_RR_SIZE = seL4_NumErrors,
+    RS_ERROR_RR_SIZE = seL4_NumErrors, // RR request shared memory is too small
+    RS_ERROR_DNE, // RR request resource no longer exists
     RS_NUM_ERRORS
 };
 

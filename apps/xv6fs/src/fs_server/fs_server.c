@@ -298,10 +298,10 @@ seL4_MessageInfo_t xv6fs_request_handler(seL4_MessageInfo_t tag, seL4_Word sende
       {
         XV6FS_PRINTF("Received invalid resource for RR request, ID is 0x%lx, local ID is 0x%lx\n",
                      resource_id, get_local_object_id(resource_id));
-        // error = FS_SERVER_ERROR_BADGE;
+        error = RS_ERROR_DNE;
 
         // (XXX) Arya: Ideally, we should have let the PD component know tha this file was deleted
-        // For now, just return an empty resource relation
+        // For now, just return RS_ERROR_DNE
         goto done;
       }
 
@@ -310,8 +310,8 @@ seL4_MessageInfo_t xv6fs_request_handler(seL4_MessageInfo_t tag, seL4_Word sende
       // Add the entry for the resource
       // (XXX) Arya: fileno may not be globally unique, need combined ID
       char file_res_id[CSV_MAX_STRING_SIZE];
-      snprintf(file_res_id, CSV_MAX_STRING_SIZE, "%s_%lx", FILE_RESOURCE_NAME, resource_id);
-      add_resource_rr(rr_state, FILE_RESOURCE_NAME, file_res_id, row_ptr);
+      make_res_id(file_res_id, GPICAP_TYPE_FILE, resource_id);
+      add_resource_rr(rr_state, GPICAP_TYPE_FILE, file_res_id, row_ptr);
       row_ptr++;
 
       // Add relations for blocks
@@ -332,7 +332,7 @@ seL4_MessageInfo_t xv6fs_request_handler(seL4_MessageInfo_t tag, seL4_Word sende
         }
 
         uint64_t block_id = get_xv6fs_server()->naive_blocks_ids[blocknos[i]];
-        snprintf(block_res_id, CSV_MAX_STRING_SIZE, "BLOCK_%lx", block_id);
+        make_res_id(block_res_id, GPICAP_TYPE_BLOCK, block_id);
         add_resource_depends_on_rr(rr_state, file_res_id, block_res_id, row_ptr);
         row_ptr++;
       }

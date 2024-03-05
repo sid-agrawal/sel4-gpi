@@ -197,6 +197,15 @@ void combine_model_states(model_state_t *ms, rr_state_t *rs)
     ms->num_resources += rs->num_resources;
 }
 
+void make_res_id(char *res_id, gpi_cap_t cap_type, uint64_t res_id_int)
+{
+    char *resource_type_str = cap_type_to_str(cap_type);
+    assert(strlen(resource_type_str) != 0);
+    assert(strlen(resource_type_str) < CSV_MAX_STRING_SIZE);
+
+    snprintf(res_id, CSV_MAX_STRING_SIZE, "%s_%lx", resource_type_str, res_id_int);
+}
+
 // Function to add a resource to the model state
 void add_resource(model_state_t *model_state, char *resource_type, char *resource_id)
 {
@@ -279,10 +288,11 @@ void add_resource_depends_on(model_state_t *model_state, char *resource_from, ch
 }
 
 // Function to add a resource to the rr state
-void add_resource_rr(rr_state_t *model_state, char *resource_type, char *resource_id, csv_rr_row_t *new_row)
+void add_resource_rr(rr_state_t *model_state, gpi_cap_t resource_type, char *resource_id, csv_rr_row_t *new_row)
 {
-    assert(strlen(resource_type) != 0 && strlen(resource_id) != 0);
-    assert(strlen(resource_type) < CSV_MAX_STRING_SIZE && strlen(resource_id) < CSV_MAX_STRING_SIZE);
+    char *resource_type_str = cap_type_to_str(resource_type);
+    assert(strlen(resource_type_str) != 0 && strlen(resource_id) != 0);
+    assert(strlen(resource_type_str) < CSV_MAX_STRING_SIZE && strlen(resource_id) < CSV_MAX_STRING_SIZE);
 
     // (XXX) Arya: something goes wrong with the new_row->resource_id snprintf below
     // Without this local variable, the model_state arg gets overwritten
@@ -292,7 +302,7 @@ void add_resource_rr(rr_state_t *model_state, char *resource_type, char *resourc
     init_rr_row(new_row);
 
     // Set the resource type and ID
-    snprintf(new_row->resource_type, CSV_MAX_STRING_SIZE, "%s", resource_type);
+    snprintf(new_row->resource_type, CSV_MAX_STRING_SIZE, "%s", resource_type_str);
     snprintf(new_row->resource_id, CSV_MAX_STRING_SIZE, "%s", resource_id);
     model_state->num_resources++;
 

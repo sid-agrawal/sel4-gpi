@@ -10,7 +10,6 @@
 #define RAMDISK_BLOCK_SIZE (1u << seL4_PageBits) // Block size for the ramdisk
 #define RAMDISK_SIZE_BITS 21                     // Size of total ramdisk
 #define RAMDISK_SIZE_BYTES (1u << RAMDISK_SIZE_BITS)
-#define BLOCK_RESOURCE_NAME "BLOCK"
 
 /* API of the ramdisk server */
 

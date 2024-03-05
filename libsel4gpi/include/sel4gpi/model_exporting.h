@@ -75,6 +75,10 @@ void print_model_state(model_state_t *model_state);
 // Add any resource relations from a rr_state_t to the model state
 void combine_model_states(model_state_t *ms, rr_state_t *rs);
 
+// Write a string resource ID from cap type and integer ID
+// Requires that the length of res_id is CSV_MAX_STRING_SIZE
+void make_res_id(char *res_id, gpi_cap_t cap_type, uint64_t res_id_int);
+
 // Function to add a resource to the model state
 void add_resource(model_state_t *model_state, char *resource_type, char *resource_id);
 
@@ -88,7 +92,7 @@ void add_has_access_to(model_state_t *model_state, char *pd_from, char *resource
 void add_resource_depends_on(model_state_t *model_state, char *resource_from, char *resource_to);
 
 // Function to add a resource to the rr state
-void add_resource_rr(rr_state_t *model_state, char *resource_type, char *resource_id, csv_rr_row_t *new_row);
+void add_resource_rr(rr_state_t *model_state, gpi_cap_t resource_type, char *resource_id, csv_rr_row_t *new_row);
 
 // Function to add a resource relationship to the rr state
 void add_resource_depends_on_rr(rr_state_t *model_state, char *resource_from, char *resource_to, csv_rr_row_t *new_row);
