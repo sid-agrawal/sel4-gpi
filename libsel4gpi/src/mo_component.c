@@ -117,7 +117,7 @@ mo_component_registry_entry_t *mo_component_registry_get_entry_by_badge(seL4_Wor
 }
 
 // (XXX): Somwehere here we should call mo_new
-void mo_handle_allocation_request(seL4_MessageInfo_t *reply_tag)
+void mo_handle_allocation_request(seL4_Word sender_badge, seL4_MessageInfo_t *reply_tag)
 {
     seL4_Word num_pages = seL4_GetMR(MOMSGREG_CONNECT_REQ_NUM_PAGES);
     OSDB_PRINTF(MOSERVS "Got connect request for %ld pages\n", num_pages);
@@ -135,7 +135,7 @@ void mo_handle_allocation_request(seL4_MessageInfo_t *reply_tag)
                                                  &frame_obj);
         assert(error == 0);
         frame_caps[i] = frame_obj.cptr;
-        OSDB_PRINTF(MOSERVS "%s %d: Allocated frame %lu\n", __FUNCTION__, __LINE__, frame_caps[i]);
+        // OSDB_PRINTF(MOSERVS "%s %d: Allocated frame %lu\n", __FUNCTION__, __LINE__, frame_caps[i]);
     }
 
     /* Allocate a new registry entry for the client. */
@@ -174,6 +174,15 @@ void mo_handle_allocation_request(seL4_MessageInfo_t *reply_tag)
 
     // Add the latest ID to the obj and to the badlge.
     seL4_Word badge = mo_assign_new_badge_and_objectID(client_reg_ptr);
+    uint32_t client_id = get_client_id_from_badge(sender_badge);
+    
+    // (XXX) Linh: this is not very nice as we're coupling the PD and MO components
+    osmosis_pd_cap_t *res = pd_add_resource_by_id(client_id, GPICAP_TYPE_MO, get_object_id_from_badge(badge));
+    if (res) {
+        res->slot_in_RT_Debug = dest_cptr;
+        badge = set_client_id_to_badge(badge, client_id);
+    }
+
     error = vka_cnode_mint(&dest,
                            &src,
                            seL4_AllRights,
@@ -192,6 +201,7 @@ void mo_handle_allocation_request(seL4_MessageInfo_t *reply_tag)
 
 int forge_mo_caps_from_vspace(vspace_t *child_vspace,
                               vka_t *vka,
+                              uint32_t client_pd_id,
                               uint32_t *num_ret_caps,
                               seL4_CPtr *cap_ret)
 {
@@ -239,6 +249,7 @@ int forge_mo_caps_from_vspace(vspace_t *child_vspace,
             int error = forge_mo_cap_from_frames(frame_caps,
                                                  num_frames,
                                                  vka,
+                                                 client_pd_id,
                                                  &cap_ret[j],
                                                  (mo_t **)&res->mo_ref);
             assert(error == 0);
@@ -257,6 +268,7 @@ int forge_mo_caps_from_vspace(vspace_t *child_vspace,
 int forge_mo_cap_from_frames(seL4_CPtr *frame_caps,
                              uint32_t num_pages,
                              vka_t *vka,
+                             uint32_t client_pd_id,
                              seL4_CPtr *cap_ret,
                              mo_t **mo_ret)
 {
@@ -283,6 +295,7 @@ int forge_mo_cap_from_frames(seL4_CPtr *frame_caps,
 
     /* Update the info in the registry entry. */
     seL4_Word badge = mo_assign_new_badge_and_objectID(client_reg_ptr);
+    badge = set_client_id_to_badge(badge, client_pd_id);
     mo_component_registry_insert(client_reg_ptr);
 
     client_reg_ptr->mo.frame_caps_in_root_task = malloc(sizeof(seL4_CPtr) * num_pages);

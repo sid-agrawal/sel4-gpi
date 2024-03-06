@@ -118,7 +118,7 @@ static cpu_component_registry_entry_t *cpu_component_registry_get_entry_by_badge
 }
 
 // (XXX): Somwehere here we should call cpu_new
-void cpu_handle_allocation_request(seL4_MessageInfo_t *reply_tag)
+void cpu_handle_allocation_request(seL4_Word sender_badge, seL4_MessageInfo_t *reply_tag)
 {
     OSDB_PRINTF(CPUSERVS "main: Got connect request\n");
 
@@ -154,6 +154,14 @@ void cpu_handle_allocation_request(seL4_MessageInfo_t *reply_tag)
 
     // Add the latest ID to the obj and to the badlge.
     seL4_Word badge = cpu_assign_new_badge_and_objectID(client_reg_ptr);
+    uint32_t client_id = get_client_id_from_badge(sender_badge);
+    
+    // (XXX) Linh: this is not very nice as we're coupling the PD and CPU components
+    osmosis_pd_cap_t *res = pd_add_resource_by_id(client_id, GPICAP_TYPE_CPU, get_object_id_from_badge(badge));
+    if (res) {
+        res->slot_in_RT_Debug = dest_cptr;
+        badge = set_client_id_to_badge(badge, client_id);
+    }
     error = vka_cnode_mint(&dest,
                            &src,
                            seL4_AllRights,

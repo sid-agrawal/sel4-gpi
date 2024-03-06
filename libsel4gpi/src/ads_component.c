@@ -137,7 +137,7 @@ ads_component_registry_entry_t *ads_component_registry_get_entry_by_id(seL4_Word
     }
     return current_ctx;
 }
-void ads_handle_allocation_request(seL4_MessageInfo_t *reply_tag)
+void ads_handle_allocation_request(seL4_Word sender_badge, seL4_MessageInfo_t *reply_tag)
 {
     OSDB_PRINTF(ADSSERVS "main: Got ADS connect request\n");
 
@@ -172,6 +172,15 @@ void ads_handle_allocation_request(seL4_MessageInfo_t *reply_tag)
     vka_cspace_make_path(get_ads_component()->server_vka, dest_cptr, &dest);
 
     seL4_Word badge = ads_assign_new_badge_and_objectID(client_reg_ptr);
+    uint32_t client_id = get_client_id_from_badge(sender_badge);
+    
+    // (XXX) Linh: this is not very nice as we're coupling the PD and ADS components
+    osmosis_pd_cap_t *res = pd_add_resource_by_id(client_id, GPICAP_TYPE_ADS, get_object_id_from_badge(badge));
+    if (res) {
+        res->slot_in_RT_Debug = dest_cptr;
+        badge = set_client_id_to_badge(badge, client_id);
+    }
+
     error = vka_cnode_mint(&dest,
                            &src,
                            seL4_AllRights,
@@ -260,7 +269,7 @@ static void handle_attach_req(seL4_Word sender_badge, seL4_MessageInfo_t old_tag
         attach_node->frame_caps[i] = to_path.capPtr;
 
         void *frame_paddr = (void *)seL4_DebugCapPaddr(attach_node->frame_caps[i]);
-        OSDB_PRINTF(ADSSERVS "paddr of frame to map: %p\n", frame_paddr);
+        // OSDB_PRINTF(ADSSERVS "paddr of frame to map: %p\n", frame_paddr);
     }
 
     error = ads_attach(&client_data->ads,
@@ -441,7 +450,7 @@ void ads_component_handle(seL4_MessageInfo_t tag,
     }
 }
 
-int forge_ads_cap_from_vspace(vspace_t *vspace, vka_t *vka, seL4_CPtr *cap_ret)
+int forge_ads_cap_from_vspace(vspace_t *vspace, vka_t *vka, uint32_t client_pd_id, seL4_CPtr *cap_ret)
 {
 
     assert(vspace != NULL);
@@ -466,6 +475,7 @@ int forge_ads_cap_from_vspace(vspace_t *vspace, vka_t *vka, seL4_CPtr *cap_ret)
 
     /* Update the info in the registry entry. */
     seL4_Word badge = ads_assign_new_badge_and_objectID(client_reg_ptr);
+    badge = set_client_id_to_badge(badge, client_pd_id);
     ads_component_registry_insert(client_reg_ptr);
     client_reg_ptr->ads.vspace = vspace;
     int error = vka_cnode_mint(&dest,

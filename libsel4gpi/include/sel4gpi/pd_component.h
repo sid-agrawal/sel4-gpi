@@ -228,7 +228,7 @@ void pd_component_handle(seL4_MessageInfo_t tag,
 /* Global server instance accessor functions. */
 pd_component_context_t *get_pd_component(void);
 
-void pd_handle_allocation_request(seL4_MessageInfo_t *reply_tag);
+void pd_handle_allocation_request(seL4_Word sender_badge, seL4_MessageInfo_t *reply_tag);
 
 int forge_pd_cap_from_init_data(
     test_init_data_t *init_data, // Change this to something else
@@ -245,3 +245,5 @@ void update_forged_pd_cap_from_init_data(test_init_data_t *init_data, seL4_CPtr 
  * @return pd_component_resource_server_entry_t*
  */
 pd_component_resource_server_entry_t *pd_component_server_registry_get_entry_by_id(seL4_Word object_id);
+
+osmosis_pd_cap_t *pd_add_resource_by_id(uint32_t client_id, gpi_cap_t cap_type, uint32_t res_id);

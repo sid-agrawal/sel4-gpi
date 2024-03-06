@@ -133,5 +133,5 @@ void cpu_component_handle(seL4_MessageInfo_t tag,
 /* Global server instance accessor functions. */
 cpu_component_context_t *get_cpu_component(void);
 
-void cpu_handle_allocation_request(seL4_MessageInfo_t *reply_tag);
+void cpu_handle_allocation_request(seL4_Word sender_badge, seL4_MessageInfo_t *reply_tag);
 int forge_cpu_cap_from_tcb(sel4utils_process_t *proc, vka_t *vka, seL4_CPtr *cap_ret);

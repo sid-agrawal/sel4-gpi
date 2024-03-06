@@ -142,42 +142,14 @@ int test_new_process_osmosis_shmem(env_t env)
     assert(error == 0);
     printf("Loaded hello\n");
 
-#if 1
-    // Copy the ep_object to the new PD
-    seL4_CPtr slot;
-    error = pd_client_next_slot(&pd_os_cap, &slot);
-    assert(error == 0);
-    printf("Next free slot is %ld\n", (seL4_Word)slot);
 
-    mo_client_context_t mo_conn;
-    error = mo_component_client_connect(env->gpi_endpoint,
-                                        slot,
-                                        5,
-                                        &mo_conn);
-    test_error_eq(error, 0);
-
-    /* request some EP cap from the gpi-server*/
-    error = pd_client_send_cap(&pd_os_cap,
-                               mo_conn.badged_server_ep_cspath.capPtr,
-                               &slot);
-    test_error_eq(error, 0);
-
-    // Create a new CPU cap, and make that the PD's primary cap.
-    void *ret_vaddr;
-    error = ads_client_attach(&ads_os_cap,
-                              0, /*vaddr*/
-                              &mo_conn,
-                              &ret_vaddr);
-    assert(error == 0);
-
-#if 1
     // Start the CPU.
     error = pd_client_start(&pd_os_cap,
                             /* The (ADS, CPU) tuple to use */
-                            slot); // with this arg.
+                            0); // with this arg.
     assert(error == 0);
-#endif
 
+    TEST_LOG("making new MO cap");
     // Make a new MO cap
     cspacepath_t mo_cap_path;
     error = vka_cspace_alloc_path(&env->vka, &mo_cap_path);
@@ -201,6 +173,7 @@ int test_new_process_osmosis_shmem(env_t env)
                               &vaddr);
     test_error_eq(error, 0);
 
+    seL4_CPtr slot;
     // Send it to "hello" PD
     error = pd_client_send_cap(&pd_os_cap,
                                mo_conn_shared.badged_server_ep_cspath.capPtr,
@@ -208,7 +181,8 @@ int test_new_process_osmosis_shmem(env_t env)
     test_error_eq(error, 0);
 
     TEST_LOG("mo slot: %ld", slot);
-#endif
+
+    pd_client_dump(&pd_os_cap, NULL, 0);
     // Hello PD should also attach it.
 #if 0
 

@@ -24,6 +24,7 @@
 #include <sel4gpi/ads_obj.h>
 #include <sel4gpi/debug.h>
 #include <sel4gpi/resource_server_utils.h>
+// #include <sel4gpi/gpi_rde.h>
 
 #include <vka/capops.h>
 #include <allocman/bootstrap.h>
@@ -66,13 +67,13 @@ static int copy_cap_to_pd(pd_t *to_pd,
     return 0;
 }
 
-osmosis_pd_cap_t *pd_add_resource(pd_t *pd, gpi_cap_t type, seL4_Word res_id)
+osmosis_pd_cap_t *pd_add_resource(pd_t *pd, gpi_cap_t type, uint32_t res_id)
 {
     osmosis_pd_cap_t *new = calloc(1, sizeof(osmosis_pd_cap_t));
     new->type = type;
     new->res_id = res_id;
     pd->has_access_to_count++;
-    HASH_ADD(hh, pd->has_access_to, res_id, sizeof(seL4_Word), new);
+    HASH_ADD(hh, pd->has_access_to, res_id, sizeof(uint32_t), new);
     return new;
 }
 
@@ -85,6 +86,7 @@ int pd_add_rde(pd_t *pd, rde_type_t type, uint32_t pd_obj_id, seL4_CPtr server_e
     /* we don't really need to keep this if we index by type, but let's just keep it around for now */
     pd->rde[idx].type = type;
     pd->rde[idx].slot_in_RT = server_ep;
+    uint32_t client_id = pd->pd_obj_id;
 
     // Copy cap to PD, badge if necessary
     if (needs_badge)
@@ -100,7 +102,7 @@ int pd_add_rde(pd_t *pd, rde_type_t type, uint32_t pd_obj_id, seL4_CPtr server_e
 
         seL4_Word badge_val = gpi_new_badge(idx,
                                             0x00,
-                                            pd->pd_obj_id,
+                                            client_id,
                                             BADGE_OBJ_ID_NULL);
 
         error = vka_cnode_mint(&dest,
@@ -119,6 +121,7 @@ int pd_add_rde(pd_t *pd, rde_type_t type, uint32_t pd_obj_id, seL4_CPtr server_e
         copy_cap_to_pd(pd, pd->rde[idx].slot_in_RT, &pd->rde[idx].slot_in_PD);
     }
 
+    // gpi_add_global_rde(&pd->rde[idx], client_id); // do we need this?
     OSDB_PRINTF("adding new RDE of type %d\n", type.type);
     pd->rde_count++;
     return 0;
@@ -314,27 +317,31 @@ int pd_load_image(pd_t *pd,
 
     /* These are RDE Entries. */
     seL4_CPtr child_ads_cap_in_parent;
-    error = forge_ads_cap_from_vspace(&pd->proc.vspace, pd->vka, &child_ads_cap_in_parent);
-    if (error)
-    {
-        ZF_LOGF("Failed to forge child's as cap");
-    }
+    error = forge_ads_cap_from_vspace(&pd->proc.vspace, pd->vka, pd->pd_obj_id, &child_ads_cap_in_parent);
+    ZF_LOGF_IFERR(error, "Failed to forge child's as cap");
+
     rde_type_t ads_rde_type = {.type = GPICAP_TYPE_ADS};
     error = pd_add_rde(pd, ads_rde_type, 0, child_ads_cap_in_parent, 0);
-    if (error)
-    {
-        ZF_LOGF("Failed to add ADS cap to RDE");
-    }
+    ZF_LOGF_IFERR(error, "Failed to add ADS cap to RDE");
 
     // For the GPI server, no need to forge
     seL4_CPtr gpi_endpoint_in_parent = get_gpi_server()->server_ep_obj.cptr;
+    // badge the EP with the client ID
+    uint64_t badge = gpi_new_badge(GPICAP_TYPE_MO, 0x00, pd->pd_obj_id, BADGE_OBJ_ID_NULL);
+    cspacepath_t src;
+    vka_cspace_make_path(vka, gpi_endpoint_in_parent, &src);
+
+    cspacepath_t dest;
+    error = vka_cspace_alloc_path(vka, &dest);
+    ZF_LOGF_IFERR(error, "Couldn't allocate slot for badged EP")
+
+    error = vka_cnode_mint(&dest, &src, seL4_AllRights, badge);
+    ZF_LOGF_IFERR(error, "Couldn't mint a badged EP");
+
     // (XXX) linh: this shouldn't really be of type MO, but it is how PDs get their MOs
     rde_type_t gpi_rde_type = {.type = GPICAP_TYPE_MO};
-    error = pd_add_rde(pd, gpi_rde_type, 0, gpi_endpoint_in_parent, 0);
-    if (error)
-    {
-        ZF_LOGF("Failed to add GPI cap to RDE");
-    }
+    error = pd_add_rde(pd, gpi_rde_type, 0, dest.capPtr, 0);
+    ZF_LOGF_IFERR(error, "Failed to add GPI cap to RDE");
 
     /* copy the device frame, if any */
     // if (pd->device_frame_cap) {
@@ -359,6 +366,7 @@ int pd_load_image(pd_t *pd,
     printf("%s: %d\n", __FUNCTION__, __LINE__);
     error = forge_mo_caps_from_vspace(target_vspace,
                                       pd->vka,
+                                      pd->pd_obj_id,
                                       &num_mo_caps,
                                       mo_caps);
     assert(error == 0);
@@ -389,6 +397,7 @@ int pd_send_cap(pd_t *to_pd,
     int error = 0;
     cspacepath_t src, dest;
     seL4_CPtr dest_cptr;
+    osmosis_pd_cap_t *res;
     /*
         Find out if the cap is an OSmosis cap or not.
     */
@@ -426,7 +435,7 @@ int pd_send_cap(pd_t *to_pd,
                 return 1;
             }
             cap = dest_cptr;
-            osmosis_pd_cap_t *res = pd_add_resource(to_pd, GPICAP_TYPE_ADS, ads_reg->ads.ads_obj_id);
+            res = pd_add_resource(to_pd, GPICAP_TYPE_ADS, ads_reg->ads.ads_obj_id);
             res->slot_in_PD_Debug = cap;
             res->slot_in_RT_Debug = src.capPtr;
             res->slot_in_ServerPD_Debug = src.capPtr;
@@ -458,6 +467,10 @@ int pd_send_cap(pd_t *to_pd,
                 return 1;
             }
             cap = dest_cptr;
+            res = pd_add_resource(to_pd, GPICAP_TYPE_MO, mo_reg->mo.mo_obj_id);
+            res->slot_in_PD_Debug = cap;
+            res->slot_in_RT_Debug = src.capPtr;
+            res->slot_in_ServerPD_Debug = src.capPtr;
             break;
         case GPICAP_TYPE_CPU:
             ZF_LOGF("Sending CPU cap is not supported yet");
@@ -468,7 +481,7 @@ int pd_send_cap(pd_t *to_pd,
         default:
             // ZF_LOGF("Unknown cap type in %s", __FUNCTION__);
             //  (XXX) Arya: allowing unknown cap type for now to send parent ep
-            ZF_LOGI("Unknown cap type %d in %s", cap_type, __FUNCTION__);
+            ZF_LOGF("Unknown cap type %d in %s", cap_type, __FUNCTION__);
         }
 
         // Find the pd where the cap is going, and basd
@@ -536,7 +549,7 @@ int pd_start(pd_t *pd,
 
     seL4_CPtr rde_mo_cap;
     mo_t *rde_mo_obj;
-    error = forge_mo_cap_from_frames(&rde_parent_cap, 1, vka, &rde_mo_cap, &rde_mo_obj);
+    error = forge_mo_cap_from_frames(&rde_parent_cap, 1, vka, pd->pd_obj_id, &rde_mo_cap, &rde_mo_obj);
     if (error)
     {
         ZF_LOGE("Couldn't forge an MO for PD's resource directory");
@@ -569,6 +582,8 @@ int pd_start(pd_t *pd,
     ZF_LOGF_IF(error != 0, "Failed to start test process!");
     OSDB_PRINTF(PDSERVS "pd_start: starting PD\n");
     pd->pd_started = true;
+    // (XXX) Linh: for some reason, unmapping this makes the MO no longer valid?
+    // vspace_unmap_pages(server_vspace, rde_parent, 1, seL4_PageBits, vka);
     return 0;
 }
 
@@ -628,8 +643,6 @@ int pd_dump(pd_t *pd)
     }
     */
 
-    gpi_server_context_t *gpis = get_gpi_server();
-
     for (osmosis_pd_cap_t *current_cap = pd->has_access_to; current_cap != NULL; current_cap = current_cap->hh.next)
     {
         print_pd_osm_cap_info(current_cap);
@@ -644,15 +657,10 @@ int pd_dump(pd_t *pd)
         case GPICAP_TYPE_ADS:
             char res_id[CSV_MAX_STRING_SIZE];
             make_res_id(res_id, current_cap->type, current_cap->res_id);
-
-            add_has_access_to(ms,
-                              pd_id,
-                              res_id,
-                              "true");
             ads_component_registry_entry_t *ads_data =
                 ads_component_registry_get_entry_by_id(current_cap->res_id);
             assert(ads_data != NULL);
-            ads_dump_rr(&ads_data->ads, ms);
+            // ads_dump_rr(&ads_data->ads, ms);
             add_has_access_to(ms,
                               pd_id,
                               res_id,
@@ -775,7 +783,8 @@ int pd_dump(pd_t *pd)
 
 inline void print_pd_osm_cap_info(osmosis_pd_cap_t *o)
 {
-    printf("Slot_RT:%lx\t Slot_PD: %lx\t Slot_ServerPD: %lx\t T: %s\n",
+    printf("Resource_ID: %d Slot_RT:%lx\t Slot_PD: %lx\t Slot_ServerPD: %lx\t T: %s\n",
+           o->res_id,
            o->slot_in_RT_Debug,
            o->slot_in_PD_Debug,
            o->slot_in_ServerPD_Debug,

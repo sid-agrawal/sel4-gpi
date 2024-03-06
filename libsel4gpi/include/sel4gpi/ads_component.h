@@ -160,7 +160,7 @@ void ads_component_handle(seL4_MessageInfo_t tag,
                           cspacepath_t *received_cap,
                           seL4_MessageInfo_t *reply_tag);
 
-void ads_handle_allocation_request(seL4_MessageInfo_t *reply_tag);
+void ads_handle_allocation_request(seL4_Word sender_badge, seL4_MessageInfo_t *reply_tag);
 
 /* Global server instance accessor functions. */
 ads_component_context_t *get_ads_component(void);
@@ -173,7 +173,7 @@ ads_component_context_t *get_ads_component(void);
  * @param cap_ret The cap to the vspace.
  * @return int
  */
-int forge_ads_cap_from_vspace(vspace_t *vspace, vka_t *vka, seL4_CPtr *cap_ret);
+int forge_ads_cap_from_vspace(vspace_t *vspace, vka_t *vka, uint32_t client_pd_id, seL4_CPtr *cap_ret);
 
 ads_component_registry_entry_t *ads_component_registry_get_entry_by_badge(seL4_Word badge);
 

@@ -81,7 +81,7 @@ typedef struct osmosis_pd_cap
         to find out when OSM resources are shared.
         But let's keep track of slot_in* (above) for now.
     */
-    seL4_Word res_id; // key to uthash
+    uint32_t res_id; // key to uthash
     
     /*
         Type is PD/MO/CPU/ADS then look locally, else
@@ -280,7 +280,7 @@ void print_pd_osm_rde_info(osmosis_rde_t *o);
  */
 int pd_populate_init_data(pd_t *pd, seL4_CPtr server_ep);
 
-osmosis_pd_cap_t *pd_add_resource(pd_t *pd, gpi_cap_t type, seL4_Word res_id);
+osmosis_pd_cap_t *pd_add_resource(pd_t *pd, gpi_cap_t type, uint32_t res_id);
 
 /**
  * Note: This must be called after the PD is loaded, and before it is started

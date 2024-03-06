@@ -209,6 +209,7 @@ out:
 }
 
 void handle_untyped_request(seL4_MessageInfo_t tag,
+                            seL4_Word sender_badge,
                             cspacepath_t *received_cap_path,
                             seL4_MessageInfo_t *reply_tag)
 {
@@ -221,18 +222,22 @@ void handle_untyped_request(seL4_MessageInfo_t tag,
     {
     case GPICAP_TYPE_ADS:
         ads_handle_allocation_request(
+            sender_badge,
             reply_tag); /*unused*/
         break;
     case GPICAP_TYPE_MO:
         mo_handle_allocation_request(
+            sender_badge,
             reply_tag); /*unused*/
         break;
     case GPICAP_TYPE_CPU:
         cpu_handle_allocation_request(
+            sender_badge,
             reply_tag); /*unused*/
         break;
     case GPICAP_TYPE_PD:
         pd_handle_allocation_request(
+            sender_badge,
             reply_tag); /*unused*/
         break;
     default:
@@ -294,10 +299,13 @@ void gpi_server_main()
         tag = recv(&sender_badge);
 
         seL4_MessageInfo_t reply_tag;
-        if (sender_badge == 0)
-        { /* Handle Typed Request */
-            OSDB_PRINTF(GPISERVS "Got message on EP with no-BADGE_VALUE\n");
+        if (sender_badge == 0 || 
+            (get_object_id_from_badge(sender_badge) == BADGE_OBJ_ID_NULL
+            && get_cap_type_from_badge(sender_badge) == GPICAP_TYPE_MO)) // PDs will have badged gpi caps with type MO
+        { /* Handle Untyped Request */
+            OSDB_PRINTF(GPISERVS "Got an allocation request\n");
             handle_untyped_request(tag,
+                                   sender_badge,
                                    &received_cap_path,
                                    &reply_tag); /*unused*/
         }

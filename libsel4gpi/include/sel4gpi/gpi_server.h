@@ -24,6 +24,7 @@
 #include <sel4gpi/pd_component.h>
 #include <sel4gpi/cpu_component.h>
 #include <sel4gpi/cap_tracking.h>
+// #include <sel4gpi/gpi_rde.h>
 
 #define GPI_SERVER_DEFAULT_PRIORITY (seL4_MaxPrio - 1)
 
@@ -88,8 +89,10 @@ typedef struct _gpi_server_context
 
     osmosis_cap_t *osm_caps;
     osmosis_cap_t *osm_caps_tail;
-    // TODO linh: put RD here
-    uint32_t pd_count;
+
+    // do we need this?
+    // gpi_global_rde_t *osm_rde;
+    // gpi_global_rde_t *osm_rde_tail;
 } gpi_server_context_t;
 
 /**

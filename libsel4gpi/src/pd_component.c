@@ -280,7 +280,19 @@ void update_forged_pd_cap_from_init_data(test_init_data_t *init_data, seL4_CPtr 
     assert(pd->free_slots.start < pd->free_slots.end);
 }
 
-void pd_handle_allocation_request(seL4_MessageInfo_t *reply_tag)
+osmosis_pd_cap_t *pd_add_resource_by_id(uint32_t client_id, gpi_cap_t cap_type, uint32_t res_id)
+{
+    if (client_id != 0) // only test processes would have no client ID
+    {
+        pd_component_registry_entry_t *client_pd_data = pd_component_registry_get_entry_by_id(client_id);
+        ZF_LOGF_IF(client_pd_data == NULL, "Couldn't find PD client data");
+        osmosis_pd_cap_t *res = pd_add_resource(&client_pd_data->pd, cap_type, res_id);
+        return res;
+    }
+    return NULL;
+}
+
+void pd_handle_allocation_request(seL4_Word sender_badge, seL4_MessageInfo_t *reply_tag)
 {
     OSDB_PRINTF(PDSERVS "main: Got connect request\n");
 
@@ -315,6 +327,13 @@ void pd_handle_allocation_request(seL4_MessageInfo_t *reply_tag)
 
     // Add the latest ID to the obj and to the badlge.
     seL4_Word badge = pd_assign_new_badge_and_objectID(client_reg_ptr);
+    uint32_t client_id = get_client_id_from_badge(sender_badge); 
+    osmosis_pd_cap_t *res = pd_add_resource_by_id(client_id, GPICAP_TYPE_PD, get_object_id_from_badge(badge));
+    if (res) {
+        res->slot_in_RT_Debug = dest_cptr;
+        badge = set_client_id_to_badge(badge, client_id);
+    }
+
     error = vka_cnode_mint(&dest,
                            &src,
                            seL4_AllRights,
