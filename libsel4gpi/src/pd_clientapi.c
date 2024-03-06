@@ -210,7 +210,6 @@ int pd_client_add_rde(pd_client_context_t *conn, seL4_CPtr server_ep,
     seL4_SetMR(PDMSGREG_ADD_RDE_REQ_NEEDS_BADGE, needs_badge);
     seL4_SetCap(0, server_ep);
     seL4_SetCap(1, server_pd_cap);
-    ZF_LOGE("server pd cap: %lx", server_pd_cap);
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 2,
                                                   PDMSGREG_ADD_RDE_REQ_END);
     tag = seL4_Call(conn->badged_server_ep_cspath.capPtr, tag);

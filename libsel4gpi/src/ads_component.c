@@ -233,22 +233,22 @@ static void handle_attach_req(seL4_Word sender_badge, seL4_MessageInfo_t old_tag
     assert(mo_reg != NULL);
 
     uint32_t num_pages = mo_reg->mo.num_pages;
-    seL4_CPtr *root_frame_caps = mo_reg->mo.frame_caps_in_root_task;
+    mo_frame_t *root_frame_caps = mo_reg->mo.frame_caps_in_root_task;
     void *ret_vaddr = NULL;
 
     OSDB_PRINTF(ADSSERVS "attaching mo with id %lu\n", mo_reg->mo.mo_obj_id);
 
     /* Make a copy of the frame caps for this new mapping */
     attach_node_t *attach_node = malloc(sizeof(attach_node_t));
-    attach_node->ads_obj_id = client_data->ads.ads_obj_id;
+    attach_node->mo_badge = mo_badge;
     attach_node->frame_caps = malloc(sizeof(seL4_CPtr) * num_pages);
-    attach_node->next = mo_reg->mo.attach_nodes;
-    mo_reg->mo.attach_nodes = attach_node;
+    attach_node->next = client_data->ads.attach_nodes;
+    client_data->ads.attach_nodes = attach_node;
 
     for (int i = 0; i < num_pages; i++)
     {
         cspacepath_t from_path, to_path;
-        vka_cspace_make_path(get_ads_component()->server_vka, mo_reg->mo.frame_caps_in_root_task[i], &from_path);
+        vka_cspace_make_path(get_ads_component()->server_vka, root_frame_caps[i].cap, &from_path);
 
         /* allocate a path for the copy*/
         int error = vka_cspace_alloc_path(get_ads_component()->server_vka, &to_path);
@@ -268,7 +268,7 @@ static void handle_attach_req(seL4_Word sender_badge, seL4_MessageInfo_t old_tag
 
         attach_node->frame_caps[i] = to_path.capPtr;
 
-        void *frame_paddr = (void *)seL4_DebugCapPaddr(attach_node->frame_caps[i]);
+        // void *frame_paddr = (void *)seL4_DebugCapPaddr(attach_node->frame_caps[i]);
         // OSDB_PRINTF(ADSSERVS "paddr of frame to map: %p\n", frame_paddr);
     }
 
@@ -450,7 +450,7 @@ void ads_component_handle(seL4_MessageInfo_t tag,
     }
 }
 
-int forge_ads_cap_from_vspace(vspace_t *vspace, vka_t *vka, uint32_t client_pd_id, seL4_CPtr *cap_ret)
+int forge_ads_cap_from_vspace(vspace_t *vspace, vka_t *vka, uint32_t client_pd_id, seL4_CPtr *cap_ret, uint32_t *ads_obj_id_ret)
 {
 
     assert(vspace != NULL);
@@ -491,19 +491,24 @@ int forge_ads_cap_from_vspace(vspace_t *vspace, vka_t *vka, uint32_t client_pd_i
                 dest.capPtr, badge);
 
     /* Iterate and print reservation_list*/
-    sel4utils_res_t *res = get_alloc_data(vspace)->reservation_head;
-    while (res != NULL)
-    {
-        OSDB_PRINTF(ADSSERVS "\tmain: Reservation: 0x%lx --> 0x%lx\n", res->start, res->end);
-        /* print cap for each page in the reservation*/
-        for (void *va = (void *)res->start; va < (void *)res->end; va += PAGE_SIZE_4K)
-        {
-            seL4_CPtr cap;
-            cap = vspace_get_cap(vspace, va);
-            // OSDB_PRINTF(ADSSERVS "\tmain: Cap for va: %p is %d TYPE: %d\n", va, cap, seL4_DebugCapIdentify(cap));
-        }
+    // sel4utils_res_t *res = get_alloc_data(vspace)->reservation_head;
+    // while (res != NULL)
+    // {
+    //     OSDB_PRINTF(ADSSERVS "\tmain: Reservation: 0x%lx --> 0x%lx\n", res->start, res->end);
+    //     /* print cap for each page in the reservation*/
+    //     for (void *va = (void *)res->start; va < (void *)res->end; va += PAGE_SIZE_4K)
+    //     {
+    //         seL4_CPtr cap;
+    //         cap = vspace_get_cap(vspace, va);
+    //         OSDB_PRINTF(ADSSERVS "\tmain: Cap for va: %p is %d TYPE: %d\n", va, cap, seL4_DebugCapIdentify(cap));
+    //     }
 
-        res = res->next;
+    //     res = res->next;
+    // }
+
+    if (ads_obj_id_ret) 
+    {
+        *ads_obj_id_ret = get_object_id_from_badge(badge);
     }
 
     *cap_ret = dest_cptr;

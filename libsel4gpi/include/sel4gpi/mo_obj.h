@@ -12,29 +12,19 @@
 #include <vspace/vspace.h>
 #include <sel4utils/vspace_internal.h>
 #include <sel4utils/process.h>
+#include <sel4gpi/model_exporting.h>
 
-/**
- * Represents at attachment of a memory object
- * to an ADS
- *
- * Each attach of the same MO requires a copy
- * of the frame capabilities
- * */
-typedef struct _attach_node
+typedef struct _mo_frame
 {
-    uint32_t ads_obj_id;
-    void *vaddr;
-    seL4_CPtr *frame_caps;
-
-    struct _attach_node *next;
-} attach_node_t;
+    seL4_CPtr cap;
+    seL4_Word paddr;
+} mo_frame_t;
 
 typedef struct _mo
 {
     uint64_t mo_obj_id;
-    seL4_CPtr *frame_caps_in_root_task;
+    mo_frame_t *frame_caps_in_root_task;
     uint32_t num_pages;
-    attach_node_t *attach_nodes;
 } mo_t;
 
 /**
@@ -47,6 +37,8 @@ typedef struct _mo
  * @return int 0 on success, -1 on failure.
  */
 int mo_new(mo_t *mo,
-           seL4_CPtr *frame_caps,
+           mo_frame_t *frame_caps,
            uint32_t num_caps,
            vka_t *vka);
+
+void mo_dump_rr(mo_t *mo, model_state_t *ms);

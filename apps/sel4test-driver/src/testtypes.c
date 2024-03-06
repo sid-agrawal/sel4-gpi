@@ -278,7 +278,7 @@ void basic_set_up(uintptr_t e)
     // For the child's as cap in the child
     // First forge a cap to the child's vspace
     seL4_CPtr child_as_cap_in_parent;
-    error = forge_ads_cap_from_vspace(&env->test_process.vspace, &env->vka, TEST_PD_ID, &child_as_cap_in_parent);
+    error = forge_ads_cap_from_vspace(&env->test_process.vspace, &env->vka, NULL_PD_ID, &child_as_cap_in_parent, NULL);
     if (error)
     {
         ZF_LOGF("Failed to forge child's as cap");
@@ -297,7 +297,7 @@ void basic_set_up(uintptr_t e)
     error = forge_mo_caps_from_vspace(
         &env->test_process.vspace,
         &env->vka,
-        TEST_PD_ID,
+        NULL_PD_ID,
         &ret_num_mo,
         mo_caps);
     assert(error == 0);

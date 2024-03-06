@@ -14,12 +14,28 @@
 #include <sel4utils/process.h>
 #include <sel4gpi/model_exporting.h>
 
+/**
+ * Represents at attachment of a memory object
+ * to an ADS
+ *
+ * Each attach of the same MO requires a copy
+ * of the frame capabilities
+ * */
+typedef struct _attach_node
+{
+    seL4_Word mo_badge; // keeping entire badge so we can get other info from the MO
+    void *vaddr;
+    seL4_CPtr *frame_caps;
+    struct _attach_node *next;
+} attach_node_t;
+
 typedef struct _ads
 {
     vspace_t *vspace;
     vka_object_t *root_page_dir;
     sel4utils_process_t *process_for_cookies;
     uint32_t ads_obj_id;
+    attach_node_t *attach_nodes;
 } ads_t;
 
 /**

@@ -116,6 +116,27 @@ mo_component_registry_entry_t *mo_component_registry_get_entry_by_badge(seL4_Wor
     return current_ctx;
 }
 
+/**
+ * @brief Lookup the client registry entry for the given objectID
+ *
+ * @param res_id
+ * @return ads_component_registry_entry_t*
+ */
+mo_component_registry_entry_t *mo_component_registry_get_entry_by_id(seL4_Word objectID)
+{
+    mo_component_registry_entry_t *current_ctx = get_mo_component()->client_registry;
+
+    while (current_ctx != NULL)
+    {
+        if (current_ctx->mo.mo_obj_id == objectID)
+        {
+            break;
+        }
+        current_ctx = current_ctx->next;
+    }
+    return current_ctx;
+}
+
 // (XXX): Somwehere here we should call mo_new
 void mo_handle_allocation_request(seL4_Word sender_badge, seL4_MessageInfo_t *reply_tag)
 {
@@ -123,7 +144,7 @@ void mo_handle_allocation_request(seL4_Word sender_badge, seL4_MessageInfo_t *re
     OSDB_PRINTF(MOSERVS "Got connect request for %ld pages\n", num_pages);
 
     /* Allocator numm_pages frame */
-    seL4_CPtr *frame_caps = malloc(sizeof(seL4_CPtr) * num_pages);
+    mo_frame_t *frame_caps = malloc(sizeof(mo_frame_t) * num_pages);
     assert(frame_caps != NULL);
 
     vka_object_t frame_obj;
@@ -134,7 +155,8 @@ void mo_handle_allocation_request(seL4_Word sender_badge, seL4_MessageInfo_t *re
                                                  false,
                                                  &frame_obj);
         assert(error == 0);
-        frame_caps[i] = frame_obj.cptr;
+        frame_caps[i].cap = frame_obj.cptr;
+        frame_caps[i].paddr = vka_object_paddr(get_mo_component()->server_vka, &frame_obj);
         // OSDB_PRINTF(MOSERVS "%s %d: Allocated frame %lu\n", __FUNCTION__, __LINE__, frame_caps[i]);
     }
 
@@ -298,13 +320,14 @@ int forge_mo_cap_from_frames(seL4_CPtr *frame_caps,
     badge = set_client_id_to_badge(badge, client_pd_id);
     mo_component_registry_insert(client_reg_ptr);
 
-    client_reg_ptr->mo.frame_caps_in_root_task = malloc(sizeof(seL4_CPtr) * num_pages);
+    client_reg_ptr->mo.frame_caps_in_root_task = malloc(sizeof(mo_frame_t) * num_pages);
     assert(client_reg_ptr->mo.frame_caps_in_root_task != NULL);
 
     // (XXX) A lot more will go here.
     for (int i = 0; i < num_pages; i++)
     {
-        client_reg_ptr->mo.frame_caps_in_root_task[i] = frame_caps[i];
+        // do we want to invoke a syscall to get the paddr of the frame here?
+        client_reg_ptr->mo.frame_caps_in_root_task[i].cap = frame_caps[i];
     }
     client_reg_ptr->mo.num_pages = num_pages;
 

@@ -49,8 +49,8 @@ int test_model_state_export(env_t env)
     add_resource_depends_on(&model_state, "V.2", "P.2");
     add_resource_depends_on(&model_state, "V.1", "P.1");
 
-    add_pd_requestes(&model_state, "PD.2.0", "PD.0.0");
-    add_pd_requestes(&model_state, "PD.1.0", "PD.0.0");
+    add_pd_requests(&model_state, "PD.2.0", "PD.0.0");
+    add_pd_requests(&model_state, "PD.1.0", "PD.0.0");
 
     add_has_access_to(&model_state, "PD.1.0", "V.1", true);
     add_has_access_to(&model_state, "PD.2.0", "V.2", false);

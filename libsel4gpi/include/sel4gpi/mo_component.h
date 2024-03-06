@@ -116,3 +116,5 @@ int forge_mo_caps_from_vspace(vspace_t *child_vspace,
                               seL4_CPtr *cap_ret);
 
 mo_component_registry_entry_t *mo_component_registry_get_entry_by_badge(seL4_Word badge);
+
+mo_component_registry_entry_t *mo_component_registry_get_entry_by_id(seL4_Word objectID);

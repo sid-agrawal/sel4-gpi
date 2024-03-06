@@ -572,7 +572,7 @@ void *main_continued(void *arg UNUSED)
     printf("Starting ramdisk thread\n");
 
     seL4_CPtr ads_conn;
-    error = forge_ads_cap_from_vspace(&env.vspace, &env.vka, &ads_conn);
+    error = forge_ads_cap_from_vspace(&env.vspace, &env.vka, NULL_PD_ID, &ads_conn, NULL);
     assert(error == 0);
 
     /* start ramdisk thread */

@@ -400,10 +400,6 @@ static void handle_load_req(seL4_Word sender_badge,
     }
     OSDB_PRINTF(PDSERVS "main: config done.\n");
 
-    // Insert into has access to.
-    uint32_t idx = client_data->pd.has_access_to_count++;
-    pd_add_resource(&client_data->pd, GPICAP_TYPE_ADS, ads_data->ads.ads_obj_id);
-
     seL4_SetMR(PDMSGREG_FUNC, PD_FUNC_LOAD_ACK);
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(error, 0, 0, PDMSGREG_LOAD_ACK_END);
     return reply(tag);

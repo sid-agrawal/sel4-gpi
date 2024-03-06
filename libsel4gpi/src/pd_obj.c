@@ -317,12 +317,18 @@ int pd_load_image(pd_t *pd,
 
     /* These are RDE Entries. */
     seL4_CPtr child_ads_cap_in_parent;
-    error = forge_ads_cap_from_vspace(&pd->proc.vspace, pd->vka, pd->pd_obj_id, &child_ads_cap_in_parent);
+    uint32_t ads_obj_id;
+    error = forge_ads_cap_from_vspace(&pd->proc.vspace, pd->vka, pd->pd_obj_id, &child_ads_cap_in_parent, &ads_obj_id);
     ZF_LOGF_IFERR(error, "Failed to forge child's as cap");
 
+    // the ADS cap is both an RDE and a resource
     rde_type_t ads_rde_type = {.type = GPICAP_TYPE_ADS};
     error = pd_add_rde(pd, ads_rde_type, 0, child_ads_cap_in_parent, 0);
     ZF_LOGF_IFERR(error, "Failed to add ADS cap to RDE");
+    osmosis_pd_cap_t *res = pd_add_resource(pd, GPICAP_TYPE_ADS, ads_obj_id);
+    res->slot_in_RT_Debug = child_ads_cap_in_parent;
+    res->slot_in_ServerPD_Debug = child_ads_cap_in_parent;
+    res->slot_in_PD_Debug = pd->rde[GPICAP_TYPE_ADS].slot_in_PD;
 
     // For the GPI server, no need to forge
     seL4_CPtr gpi_endpoint_in_parent = get_gpi_server()->server_ep_obj.cptr;
@@ -481,7 +487,7 @@ int pd_send_cap(pd_t *to_pd,
         default:
             // ZF_LOGF("Unknown cap type in %s", __FUNCTION__);
             //  (XXX) Arya: allowing unknown cap type for now to send parent ep
-            ZF_LOGF("Unknown cap type %d in %s", cap_type, __FUNCTION__);
+            ZF_LOGE("Unknown cap type %d in %s", cap_type, __FUNCTION__);
         }
 
         // Find the pd where the cap is going, and basd
@@ -643,6 +649,42 @@ int pd_dump(pd_t *pd)
     }
     */
 
+    char rde_id[CSV_MAX_STRING_SIZE];
+    char rde_name[CSV_MAX_STRING_SIZE];
+    uint32_t added_pd_rr[MAX_PD_OSM_RDE] = {0};
+    memset(added_pd_rr, -1, sizeof(uint32_t) * MAX_PD_OSM_RDE);
+
+    for (int i = 0; i < MAX_PD_OSM_RDE; i++)
+    {
+        osmosis_rde_t rde = pd->rde[i];
+        if (rde.type.type != GPICAP_TYPE_NONE)
+        {
+            make_res_id(rde_id, GPICAP_TYPE_PD, rde.pd_obj_id);
+            snprintf(rde_name, CSV_MAX_STRING_SIZE, "%s_Server", cap_type_to_str(rde.type.type));
+            add_pd(ms, rde_name, rde_id);
+
+            int j = 0;
+            while (added_pd_rr[j] != -1 && added_pd_rr[j] != rde.pd_obj_id && j < MAX_PD_OSM_RDE)
+            {
+                OSDB_PRINTF("added_pd_rr[%d] = %d\n", j, added_pd_rr[j]);
+                j++;
+            }
+
+            if (added_pd_rr[j] == -1 && j < MAX_PD_OSM_RDE)
+            {
+                add_pd_requests(ms, rde_id, pd_id);
+                added_pd_rr[j] = rde.pd_obj_id;
+            }
+        }
+    }
+
+    /* add a special resource for the RT */
+    char root_task_id[CSV_MAX_STRING_SIZE];
+    make_res_id(root_task_id, GPICAP_TYPE_PD, 0);
+    add_resource(ms, "All", "RT_ALL");
+    add_has_access_to(ms, root_task_id, "RT_ALL", true);
+
+    char res_id[CSV_MAX_STRING_SIZE];
     for (osmosis_pd_cap_t *current_cap = pd->has_access_to; current_cap != NULL; current_cap = current_cap->hh.next)
     {
         print_pd_osm_cap_info(current_cap);
@@ -655,12 +697,11 @@ int pd_dump(pd_t *pd)
         case GPICAP_TYPE_NONE:
             break;
         case GPICAP_TYPE_ADS:
-            char res_id[CSV_MAX_STRING_SIZE];
             make_res_id(res_id, current_cap->type, current_cap->res_id);
             ads_component_registry_entry_t *ads_data =
                 ads_component_registry_get_entry_by_id(current_cap->res_id);
             assert(ads_data != NULL);
-            // ads_dump_rr(&ads_data->ads, ms);
+            ads_dump_rr(&ads_data->ads, ms);
             add_has_access_to(ms,
                               pd_id,
                               res_id,
@@ -668,9 +709,14 @@ int pd_dump(pd_t *pd)
                               // When TRUE it shows that this ads is in use by some TCB.
                               // We specifically add this to handle the scenario where a PD can have mutliple ads, but only one of them is in use.
                               // Think LWC.
-                              "true");
+                              true);
             break;
         case GPICAP_TYPE_MO:
+            make_res_id(res_id, current_cap->type, current_cap->res_id);
+            mo_component_registry_entry_t* mo_data = mo_component_registry_get_entry_by_id(current_cap->res_id);
+            assert(mo_data != NULL);
+            mo_dump_rr(&mo_data->mo, ms);
+            add_has_access_to(ms, pd_id, res_id, false);
             break;
         case GPICAP_TYPE_CPU:
             break;

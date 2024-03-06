@@ -173,7 +173,7 @@ ads_component_context_t *get_ads_component(void);
  * @param cap_ret The cap to the vspace.
  * @return int
  */
-int forge_ads_cap_from_vspace(vspace_t *vspace, vka_t *vka, uint32_t client_pd_id, seL4_CPtr *cap_ret);
+int forge_ads_cap_from_vspace(vspace_t *vspace, vka_t *vka, uint32_t client_pd_id, seL4_CPtr *cap_ret, uint32_t *ads_obj_id_ret);
 
 ads_component_registry_entry_t *ads_component_registry_get_entry_by_badge(seL4_Word badge);
 

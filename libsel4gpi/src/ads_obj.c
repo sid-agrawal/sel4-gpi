@@ -164,6 +164,22 @@ int ads_bind(ads_t *ads, vka_t *vka, seL4_CPtr *cpu_cap)
 
 void ads_dump_rr(ads_t *ads, model_state_t *ms)
 {
+    char ads_res_id[CSV_MAX_STRING_SIZE];
+    make_res_id(ads_res_id, GPICAP_TYPE_ADS, ads->ads_obj_id);
+    add_resource(ms, cap_type_to_str(GPICAP_TYPE_ADS), ads_res_id);
+
+    for (attach_node_t *res = ads->attach_nodes; res != NULL; res = res->next)
+    {
+        char res_id[CSV_MAX_STRING_SIZE];
+        make_virtual_res_id(res_id, ads->ads_obj_id, res->vaddr);
+        add_resource(ms, "VirtualRegion", res_id);
+        add_resource_depends_on(ms, ads_res_id, res_id);
+
+        char mo_res_id[CSV_MAX_STRING_SIZE];
+        make_res_id(mo_res_id, GPICAP_TYPE_MO, get_object_id_from_badge(res->mo_badge));
+        add_resource_depends_on(ms, res_id, mo_res_id);
+    }
+#if 0
     vspace_t *ads_vspace = ads->vspace;
 
     /* Dump the info */
@@ -174,10 +190,6 @@ void ads_dump_rr(ads_t *ads, model_state_t *ms)
 
     assert(vka != NULL);
     OSDB_PRINTF(ADSSERVS "vka address: %p\n", vka);
-
-    char ads_res_id[CSV_MAX_STRING_SIZE];
-    snprintf(ads_res_id, CSV_MAX_STRING_SIZE, "ADS_%u", ads->ads_obj_id);
-    add_resource(ms, "ADS", ads_res_id);
 
     while (from_sel4_res != NULL)
     {
@@ -246,6 +258,7 @@ void ads_dump_rr(ads_t *ads, model_state_t *ms)
 
         from_sel4_res = from_sel4_res->next;
     }
+#endif
 }
 
 int ads_shallow_copy(vspace_t *loader,
