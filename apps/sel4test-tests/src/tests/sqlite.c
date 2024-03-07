@@ -183,7 +183,8 @@ int test_sqlite(env_t env)
 
     /* Start fs server process */
     seL4_CPtr fs_ep;
-    error = start_xv6fs_pd(&env->vka, env->gpi_endpoint, ramdisk_ep, ramdisk_pd_cap, &fs_ep);
+    seL4_CPtr fs_pd_cap;
+    error = start_xv6fs_pd(&env->vka, env->gpi_endpoint, ramdisk_ep, ramdisk_pd_cap, &fs_ep, &fs_pd_cap);
     test_assert(error == 0);
 
     /* Badge the FS EP with a client ID to simulate being a client */

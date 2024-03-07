@@ -107,8 +107,9 @@ int test_fs(env_t env)
 
     /* Start fs server process */
     seL4_CPtr fs_ep;
+    seL4_CPtr fs_pd_cap;
     // error = start_fs_thread(env, ramdisk_ep, &fs_ep);
-    error = start_xv6fs_pd(&env->vka, env->gpi_endpoint, ramdisk_pd_cap, ramdisk_ep, &fs_ep);
+    error = start_xv6fs_pd(&env->vka, env->gpi_endpoint, ramdisk_ep, ramdisk_pd_cap, &fs_ep, &fs_pd_cap);
     test_assert(error == 0);
 
     /* Badge the FS EP with a client ID to simulate being a client */
@@ -130,6 +131,7 @@ int test_fs(env_t env)
                            badge_val);
     test_assert(error == 0);
     fs_client_ep = dest.capPtr;
+    pd_client_add_rde(&pd_conn, fs_ep, fs_pd_cap, GPICAP_TYPE_FILE, false);
 
     printf("------------------STARTING TESTS: %s------------------\n", __func__);
 

@@ -153,7 +153,7 @@ void print_model_state(model_state_t *model_state)
 
     size_t buf_written_total = 0;
     csv_row_t *current_row = model_state->csv_rows;
-    uint8_t width = 15;
+    uint8_t width = 0;
 
     while (current_row != NULL)
     {
@@ -203,7 +203,7 @@ void make_res_id(char *res_id, gpi_cap_t cap_type, uint64_t res_id_int)
     assert(strlen(resource_type_str) != 0);
     assert(strlen(resource_type_str) < CSV_MAX_STRING_SIZE);
 
-    snprintf(res_id, CSV_MAX_STRING_SIZE, "%s_%lx", resource_type_str, res_id_int);
+    snprintf(res_id, CSV_MAX_STRING_SIZE, "%s_%ld", resource_type_str, res_id_int);
 }
 
 // Function to add a resource to the model state

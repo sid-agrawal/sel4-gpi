@@ -664,7 +664,7 @@ static void handle_add_rde_req(seL4_Word sender_badge, seL4_MessageInfo_t old_ta
     }
     else
     {
-        seL4_Word server_pd_badge = seL4_GetBadge(0);
+        seL4_Word server_pd_badge = seL4_GetBadge(1);
         OSDB_PRINTF(PDSERVS "main: RDE server's badge %lx\n", server_pd_badge);
         pd_component_registry_entry_t *server_pd_data = pd_component_registry_get_entry_by_badge(server_pd_badge);
         if (server_pd_data == NULL)

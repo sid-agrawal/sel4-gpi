@@ -561,6 +561,10 @@ int pd_start(pd_t *pd,
         ZF_LOGE("Couldn't forge an MO for PD's resource directory");
     }
     copy_cap_to_pd(pd, rde_mo_cap, &pd->pd_rde_in_child);
+    osmosis_pd_cap_t *res = pd_add_resource(pd, GPICAP_TYPE_MO, rde_mo_obj->mo_obj_id);
+    res->slot_in_PD_Debug = pd->pd_rde_in_child;
+    res->slot_in_RT_Debug = rde_mo_cap;
+    res->slot_in_ServerPD_Debug = rde_mo_cap;
     OSDB_PRINTF("copied PD's resource directory cap at %lx\n", pd->pd_rde_in_child);
 
     // Phase1: Start it.
@@ -672,7 +676,7 @@ int pd_dump(pd_t *pd)
 
             if (added_pd_rr[j] == -1 && j < MAX_PD_OSM_RDE)
             {
-                add_pd_requests(ms, rde_id, pd_id);
+                add_pd_requests(ms, pd_id, rde_id);
                 added_pd_rr[j] = rde.pd_obj_id;
             }
         }

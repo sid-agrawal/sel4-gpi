@@ -29,7 +29,8 @@ int start_xv6fs_pd(vka_t *vka,
                    seL4_CPtr gpi_ep,
                    seL4_CPtr rd_ep,
                    seL4_CPtr rde_pd_cap,
-                   seL4_CPtr *fs_ep);
+                   seL4_CPtr *fs_ep,
+                   seL4_CPtr *fs_pd_cap);
 
 /**
  * Initializes a process as a xv6fs client

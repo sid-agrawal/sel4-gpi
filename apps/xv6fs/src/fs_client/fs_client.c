@@ -132,11 +132,12 @@ int start_xv6fs_pd(vka_t *vka,
                    seL4_CPtr gpi_ep,
                    seL4_CPtr rd_ep,
                    seL4_CPtr rde_pd_cap,
-                   seL4_CPtr *fs_ep)
+                   seL4_CPtr *fs_ep,
+                   seL4_CPtr *fs_pd_cap)
 {
   int error = start_resource_server_pd(vka, gpi_ep,
                                        GPICAP_TYPE_BLOCK, rd_ep, rde_pd_cap,
-                                       FS_APP, fs_ep, NULL);
+                                       FS_APP, fs_ep, fs_pd_cap);
   CHECK_ERROR(error, "failed to start file resource server\n");
   XV6FS_PRINTF("Successfully started file system server\n");
   return 0;
