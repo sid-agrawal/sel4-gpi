@@ -327,9 +327,10 @@ void pd_handle_allocation_request(seL4_Word sender_badge, seL4_MessageInfo_t *re
 
     // Add the latest ID to the obj and to the badlge.
     seL4_Word badge = pd_assign_new_badge_and_objectID(client_reg_ptr);
-    uint32_t client_id = get_client_id_from_badge(sender_badge); 
+    uint32_t client_id = get_client_id_from_badge(sender_badge);
     osmosis_pd_cap_t *res = pd_add_resource_by_id(client_id, GPICAP_TYPE_PD, get_object_id_from_badge(badge));
-    if (res) {
+    if (res)
+    {
         res->slot_in_RT_Debug = dest_cptr;
         badge = set_client_id_to_badge(badge, client_id);
     }
@@ -758,7 +759,13 @@ static void handle_give_resource_req(seL4_Word sender_badge, seL4_MessageInfo_t 
         OSDB_PRINTF(PDSERVS "server 0x%lx gives resource ID 0x%lx to client 0x%lx\n",
                     client_data->pd.pd_obj_id, resource_id, recipient_id);
 
-        pd_add_resource(&recipient_data->pd, resource_type, resource_id);
+        osmosis_pd_cap_t *out;
+        HASH_FIND_INT(recipient_data->pd.has_access_to, &resource_id, out);
+        if (out == NULL)
+        {
+            // Resource is not already in the hash
+            pd_add_resource(&recipient_data->pd, resource_type, resource_id);
+        }
     }
 
     seL4_SetMR(PDMSGREG_FUNC, PD_FUNC_GIVE_RES_ACK);

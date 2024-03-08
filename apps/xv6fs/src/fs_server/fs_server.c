@@ -395,6 +395,7 @@ seL4_MessageInfo_t xv6fs_request_handler(seL4_MessageInfo_t tag, seL4_Word sende
                                                          file->id,
                                                          get_client_id_from_badge(sender_badge));
       CHECK_ERROR_GOTO(badge == 0, "failed to assign new badge", FS_SERVER_ERROR_UNKNOWN, done);
+      printf("TEMPA filepath %s, badge %ld\n", pathname, badge);
 
       seL4_CPtr badged_ep;
 
@@ -483,8 +484,10 @@ seL4_MessageInfo_t xv6fs_request_handler(seL4_MessageInfo_t tag, seL4_Word sende
       reg_entry->count--;
       if (reg_entry->count <= 0)
       {
-        XV6FS_PRINTF("Removing registry entry for file with 0 refcount\n");
-        fs_registry_remove(reg_entry);
+        //XV6FS_PRINTF("Removing registry entry for file with 0 refcount\n");
+        //fs_registry_remove(reg_entry);
+
+        // (XXX) Arya: Do we actually want to remove the registry entry?
       }
 
       seL4_MessageInfo_ptr_set_length(&reply_tag, FSMSGREG_CLOSE_ACK_END);

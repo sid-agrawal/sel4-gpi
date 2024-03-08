@@ -225,7 +225,6 @@ int pd_client_register_resource_server(pd_client_context_t *conn,
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 1,
                                                   PDMSGREG_REGISTER_SERV_REQ_END);
 
-    printf("TEMPA pd_client_register_resource_server sending cap %d\n", (server_ep));
     seL4_SetCap(0, server_ep);
     tag = seL4_Call(conn->badged_server_ep_cspath.capPtr, tag);
     assert(seL4_MessageInfo_ptr_get_label(&tag) == 0);
