@@ -217,33 +217,69 @@ int pd_client_add_rde(pd_client_context_t *conn, seL4_CPtr server_ep,
     return 0;
 }
 
-int pd_client_register_resource_server(pd_client_context_t *conn,
-                                       seL4_CPtr server_ep,
-                                       seL4_Word *server_id)
+int pd_client_register_resource_manager(pd_client_context_t *conn,
+                                        gpi_cap_t resource_type,
+                                        seL4_CPtr server_ep,
+                                        seL4_Word *manager_id)
 {
-    seL4_SetMR(PDMSGREG_FUNC, PD_FUNC_REGISTER_SERV_REQ);
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 1,
                                                   PDMSGREG_REGISTER_SERV_REQ_END);
-
+    seL4_SetMR(PDMSGREG_FUNC, PD_FUNC_REGISTER_SERV_REQ);
+    seL4_SetMR(PDMSGREG_REGISTER_SERV_REQ_TYPE, resource_type);
     seL4_SetCap(0, server_ep);
     tag = seL4_Call(conn->badged_server_ep_cspath.capPtr, tag);
     assert(seL4_MessageInfo_ptr_get_label(&tag) == 0);
-    *server_id = seL4_GetMR(PDMSGREG_REGISTER_SERV_ACK_ID);
+    *manager_id = seL4_GetMR(PDMSGREG_REGISTER_SERV_ACK_ID);
+    return 0;
+}
+
+int pd_client_create_resource(pd_client_context_t *conn,
+                              gpi_cap_t manager_id,
+                              seL4_Word resource_id)
+{
+    seL4_SetMR(PDMSGREG_FUNC, PD_FUNC_CREATE_RES_REQ);
+    seL4_SetMR(PDMSGREG_CREATE_RES_REQ_MANAGER_ID, manager_id);
+    seL4_SetMR(PDMSGREG_CREATE_RES_REQ_RES_ID, resource_id);
+    seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0,
+                                                  PDMSGREG_CREATE_RES_REQ_END);
+    tag = seL4_Call(conn->badged_server_ep_cspath.capPtr, tag);
+    assert(seL4_MessageInfo_ptr_get_label(&tag) == 0);
     return 0;
 }
 
 int pd_client_give_resource(pd_client_context_t *conn,
-                                seL4_Word recipient_id,
-                                gpi_cap_t resource_type,
-                                seL4_Word resource_id)
+                            seL4_Word manager_id,
+                            seL4_Word recipient_id,
+                            seL4_Word resource_id,
+                            seL4_CPtr *dest)
 {
     seL4_SetMR(PDMSGREG_FUNC, PD_FUNC_GIVE_RES_REQ);
-    seL4_SetMR(PDMSGREG_GIVE_RES_REQ_TYPE, resource_type);
+    seL4_SetMR(PDMSGREG_GIVE_RES_REQ_MANAGER_ID, manager_id);
     seL4_SetMR(PDMSGREG_GIVE_RES_REQ_CLIENT_ID, recipient_id);
     seL4_SetMR(PDMSGREG_GIVE_RES_REQ_RES_ID, resource_id);
-    seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 1,
+    seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0,
                                                   PDMSGREG_GIVE_RES_REQ_END);
     tag = seL4_Call(conn->badged_server_ep_cspath.capPtr, tag);
     assert(seL4_MessageInfo_ptr_get_label(&tag) == 0);
+    *dest = seL4_GetMR(PDMSGREG_GIVE_RES_ACK_DEST);
+    return 0;
+}
+
+int pd_client_init_vka(pd_client_context_t *conn,
+                       seL4_CPtr root,
+                       seL4_Word start_slot,
+                       seL4_Word end_slot,
+                       seL4_Word size_bits,
+                       seL4_Word guard_bits)
+{
+    seL4_SetMR(PDMSGREG_FUNC, PD_FUNC_INIT_VKA_REQ);
+    seL4_SetMR(PDMSGREG_INIT_VKA_REQ_START_SLOT, start_slot);
+    seL4_SetMR(PDMSGREG_INIT_VKA_REQ_END_SLOT, end_slot);
+    seL4_SetMR(PDMSGREG_INIT_VKA_REQ_SIZE, size_bits);
+    seL4_SetMR(PDMSGREG_INIT_VKA_REQ_GUARD, guard_bits);
+    seL4_SetCap(0, root);
+    seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 1,
+                                                  PDMSGREG_INIT_VKA_REQ_END);
+    tag = seL4_Call(conn->badged_server_ep_cspath.capPtr, tag);
     return 0;
 }

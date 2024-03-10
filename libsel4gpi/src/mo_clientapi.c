@@ -51,6 +51,7 @@ int mo_component_client_connect(seL4_CPtr server_ep_cap,
     assert(seL4_MessageInfo_ptr_get_label(&tag) == 0);
 
     ret_conn->badged_server_ep_cspath.capPtr = free_slot;
+    ret_conn->id = seL4_GetMR(MOMSGREG_CONNECT_ACK_ID);
 
     OSDB_PRINTF(MOSERVC "received badged endpoint and it was kept in %lu:__\n",
                 free_slot);

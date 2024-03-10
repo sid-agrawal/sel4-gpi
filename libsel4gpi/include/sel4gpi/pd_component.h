@@ -78,8 +78,14 @@ enum pd_component_funcs
     PD_FUNC_REGISTER_SERV_REQ,
     PD_FUNC_REGISTER_SERV_ACK,
 
+    PD_FUNC_CREATE_RES_REQ,
+    PD_FUNC_CREATE_RES_ACK,
+
     PD_FUNC_GIVE_RES_REQ,
     PD_FUNC_GIVE_RES_ACK,
+
+    PD_FUNC_INIT_VKA_REQ,
+    PD_FUNC_INIT_VKA_ACK,
 };
 
 /* Designated purposes of each message register in the mini-protocol. */
@@ -165,18 +171,38 @@ enum pd_component_msgregs
 
     PDMSGREG_ADD_RDE_ACK_END = PDMSGREG_LABEL0,
 
-    /* Register Resource Server */
-    PDMSGREG_REGISTER_SERV_REQ_END = PDMSGREG_LABEL0,
+    /* Register Resource Manager */
+    PDMSGREG_REGISTER_SERV_REQ_TYPE = PDMSGREG_LABEL0,
+    PDMSGREG_REGISTER_SERV_REQ_END,
+
     PDMSGREG_REGISTER_SERV_ACK_ID = PDMSGREG_LABEL0,
     PDMSGREG_REGISTER_SERV_ACK_END,
 
+    /* Create Resource */
+    PDMSGREG_CREATE_RES_REQ_MANAGER_ID = PDMSGREG_LABEL0,
+    PDMSGREG_CREATE_RES_REQ_RES_ID,
+    PDMSGREG_CREATE_RES_REQ_END,
+
+    PDMSGREG_CREATE_RES_ACK_DEST = PDMSGREG_LABEL0,
+    PDMSGREG_CREATE_RES_ACK_END,
+
     /* Give Resource */
-    PDMSGREG_GIVE_RES_REQ_TYPE = PDMSGREG_LABEL0,
+    PDMSGREG_GIVE_RES_REQ_MANAGER_ID = PDMSGREG_LABEL0,
     PDMSGREG_GIVE_RES_REQ_CLIENT_ID,
     PDMSGREG_GIVE_RES_REQ_RES_ID,
     PDMSGREG_GIVE_RES_REQ_END,
 
-    PDMSGREG_GIVE_RES_ACK_END = PDMSGREG_LABEL0,
+    PDMSGREG_GIVE_RES_ACK_DEST = PDMSGREG_LABEL0,
+    PDMSGREG_GIVE_RES_ACK_END,
+
+    /* Init VKA */
+    PDMSGREG_INIT_VKA_REQ_START_SLOT = PDMSGREG_LABEL0,
+    PDMSGREG_INIT_VKA_REQ_END_SLOT,
+    PDMSGREG_INIT_VKA_REQ_SIZE,
+    PDMSGREG_INIT_VKA_REQ_GUARD,
+    PDMSGREG_INIT_VKA_REQ_END,
+
+    PDMSGREG_INIT_VKA_ACK_END = PDMSGREG_LABEL0,
 };
 
 /* Per-client context maintained by the server. */
@@ -191,14 +217,15 @@ typedef struct _pd_component_registry_entry
 } pd_component_registry_entry_t;
 
 /* Tracks resource servers that have registered with the pd component */
-typedef struct _pd_component_resource_server_entry
+typedef struct _pd_component_resource_manager_entry
 {
-    uint32_t pd_id;
+    uint32_t manager_id;
+    gpi_cap_t resource_type;
     seL4_CPtr server_ep;
     pd_t *pd;
 
-    struct _pd_component_resource_server_entry *next;
-} pd_component_resource_server_entry_t;
+    struct _pd_component_resource_manager_entry *next;
+} pd_component_resource_manager_entry_t;
 
 /* State maintained by the server. */
 typedef struct _pd_component_context
@@ -214,7 +241,7 @@ typedef struct _pd_component_context
 
     int registry_n_entries;
     pd_component_registry_entry_t *client_registry;
-    pd_component_resource_server_entry_t *server_registry;
+    pd_component_resource_manager_entry_t *server_registry;
 } pd_component_context_t;
 
 /**
@@ -242,8 +269,8 @@ void update_forged_pd_cap_from_init_data(test_init_data_t *init_data, seL4_CPtr 
  * (XXX) Arya: This needs to be exposed for pd_obj to use it. Is there a better way?
  *
  * @param object_id
- * @return pd_component_resource_server_entry_t*
+ * @return pd_component_resource_manager_entry_t*
  */
-pd_component_resource_server_entry_t *pd_component_server_registry_get_entry_by_id(seL4_Word object_id);
+pd_component_resource_manager_entry_t *pd_component_resource_manager_get_entry_by_id(seL4_Word manager_id);
 
 osmosis_pd_cap_t *pd_add_resource_by_id(uint32_t client_id, gpi_cap_t cap_type, uint32_t res_id);

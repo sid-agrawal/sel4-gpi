@@ -76,33 +76,8 @@ int ramdisk_client_sanity_test(seL4_CPtr server_ep_cap,
 }
 
 int ramdisk_client_alloc_block(seL4_CPtr server_ep_cap,
-                               vka_t *client_vka,
-                               seL4_CPtr free_slot,
-                               ramdisk_client_context_t *ret_conn,
-                               uint64_t *block_id)
+                               ramdisk_client_context_t *ret_conn)
 {
-    /* Send a request to the server on its public EP */
-
-    cspacepath_t path;
-    if (client_vka != NULL)
-    {
-        // Alloc a slot for the incoming cap.
-        seL4_CPtr dest_cptr;
-        vka_cspace_alloc(client_vka, &dest_cptr);
-        vka_cspace_make_path(client_vka, dest_cptr, &path);
-    }
-    else
-    {
-        path.capDepth = PD_CAP_DEPTH;
-        path.root = PD_CAP_ROOT;
-        path.capPtr = free_slot;
-    }
-
-    seL4_SetCapReceivePath(
-        /* _service */ path.root,
-        /* index */ path.capPtr,
-        /* depth */ path.capDepth);
-
     /* Request a new block from server */
     seL4_SetMR(RDMSGREG_FUNC, RD_FUNC_CREATE_REQ);
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0, 1);
@@ -111,11 +86,8 @@ int ramdisk_client_alloc_block(seL4_CPtr server_ep_cap,
     int error = seL4_MessageInfo_get_label(tag);
     CHECK_ERROR(error, "failed to get block from ramdisk server\n");
 
-    if (block_id != NULL) {
-        *block_id = seL4_GetMR(RDMSGREG_CREATE_ACK_ID);
-    }
-
-    ret_conn->badged_server_ep_cspath = path;
+    ret_conn->badged_server_ep_cspath.capPtr = seL4_GetMR(RDMSGREG_CREATE_ACK_DEST);
+    ret_conn->id = seL4_GetMR(RDMSGREG_CREATE_ACK_ID);
     return 0;
 }
 

@@ -13,7 +13,7 @@
  * Utility functions for PDs that serve GPI resources
  */
 
-#define RESOURCE_SERVER_DEBUG 0
+#define RESOURCE_SERVER_DEBUG 1
 
 /* IPC values returned in the "label" message header. */
 enum rs_errors
@@ -21,7 +21,7 @@ enum rs_errors
     RS_NOERROR = 0,
     /* No future collisions with seL4_Error.*/
     RS_ERROR_RR_SIZE = seL4_NumErrors, // RR request shared memory is too small
-    RS_ERROR_DNE, // RR request resource no longer exists
+    RS_ERROR_DNE,                      // RR request resource no longer exists
     RS_NUM_ERRORS
 };
 
@@ -197,13 +197,6 @@ int resource_server_free_slot(resource_server_context_t *context,
                               seL4_CPtr slot);
 
 /**
- * Creates a badged version of a raw endpoint capability
- * Uses the vka if the resource server has one, otherwise uses pd clientapi
- */
-int resource_server_badge_ep(resource_server_context_t *context,
-                             seL4_Word badge, seL4_CPtr *badged_ep);
-
-/**
  * Main function for a resource server, receives requests
  */
 int resource_server_main(void *context_v);
@@ -216,22 +209,6 @@ int resource_server_main(void *context_v);
 int resource_server_attach_mo(resource_server_context_t *context,
                               seL4_CPtr mo_cap,
                               void **vaddr);
-
-/**
- * Notifies the GPI server of a resource transfer to a client PD
- * The GPI server places the resource's cap in the PD's cspace,
- * and returns the destination slot
- *
- * @param client_id PD id of the client
- * @param cap_type GPI cap type of the resource to send
- * @param resource Slot for the resource to send
- * @param dest Returns the destination slot of the resource in the client PD
- */
-int resource_server_send_resource(resource_server_context_t *context,
-                                  int client_id,
-                                  gpi_cap_t cap_type,
-                                  seL4_CPtr resource,
-                                  seL4_CPtr *dest);
 
 /**
  * Request a resource server to dump resource relations
@@ -256,10 +233,24 @@ int resource_server_get_rr(seL4_CPtr server_ep,
                            rr_state_t **ret_rr_state);
 
 /**
- * Generate a badge value for a new resource to give to a client
+ * Notifies the PD component of a resource that is created, but not yet
+ * given to a client PD
+ *
+ * @param resource_id ID of the resource, needs to be unique within this server
+ * @param dest Returns the slot of the badged copy in the recipient's cspace
+ */
+int resource_server_create_resource(resource_server_context_t *context,
+                                    uint64_t resource_id);
+
+/**
+ * Notifies the PD component to create a badged copy of the server's endpoint
+ * as a new resource in the recipient's cspace
  *
  * @param resource_id ID of the resource, needs to be unique within this server
  * @param client_id ID of the client PD
+ * @param dest Returns the slot of the badged copy in the recipient's cspace
  */
-uint64_t resource_server_assign_new_badge(resource_server_context_t *context,
-                                          uint64_t resource_id, uint64_t client_id);
+int resource_server_give_resource(resource_server_context_t *context,
+                                  uint64_t resource_id,
+                                  uint64_t client_id,
+                                  seL4_CPtr *dest);

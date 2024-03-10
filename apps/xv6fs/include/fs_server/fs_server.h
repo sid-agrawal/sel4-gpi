@@ -84,7 +84,6 @@ typedef struct _xv6fs_server_context
     mo_client_context_t *shared_mem;
     void *shared_mem_vaddr;
     ramdisk_client_context_t naive_blocks[FS_SIZE];
-    uint64_t naive_blocks_ids[FS_SIZE];
 } xv6fs_server_context_t;
 
 /**

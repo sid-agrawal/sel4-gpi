@@ -41,6 +41,9 @@ enum mo_component_errors
 /* IPC Message register values for SSMSGREG_FUNC */
 enum mo_component_funcs
 {
+    MO_FUNC_CONNECT_REQ,
+    MO_FUNC_CONNECT_ACK,
+
     MO_FUNC_DISCONNECT_REQ,
     MO_FUNC_DISCONNECT_ACK,
 };
@@ -57,7 +60,8 @@ enum mo_component_msgregs
     MOMSGREG_CONNECT_REQ_NUM_PAGES = MOMSGREG_LABEL0,
     MOMSGREG_CONNECT_REQ_END,
 
-    MOMSGREG_CONNECT_ACK_END = MOMSGREG_LABEL0,
+    MOMSGREG_CONNECT_ACK_ID = MOMSGREG_LABEL0,
+    MOMSGREG_CONNECT_ACK_END,
 
     /* Disconnect / Delete*/
     MOMSGREG_DISCONNECT_REQ_END = MOMSGREG_LABEL0,

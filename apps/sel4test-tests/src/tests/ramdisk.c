@@ -157,7 +157,7 @@ int test_ramdisk(env_t env)
 
     // Get a block
     ramdisk_client_context_t block;
-    error = ramdisk_client_alloc_block(ramdisk_client_ep, &env->vka, 0, &block, NULL);
+    error = ramdisk_client_alloc_block(ramdisk_client_ep, &block);
     test_assert(error == seL4_NoError);
 
     // Write and read from beginning of disk
@@ -173,7 +173,7 @@ int test_ramdisk(env_t env)
 
     // Write and read from another block
     ramdisk_client_context_t block2;
-    error = ramdisk_client_alloc_block(ramdisk_client_ep, &env->vka, 0, &block2, NULL);
+    error = ramdisk_client_alloc_block(ramdisk_client_ep, &block2);
     test_assert(error == seL4_NoError);
 
     strcpy(buf, TEST_STR_2);
@@ -201,7 +201,7 @@ int test_ramdisk(env_t env)
     for (int i = 3; i <= 20; i++)
     {
         printf("----- Allocating block %d ---- \n", i);
-        error = ramdisk_client_alloc_block(ramdisk_client_ep, &env->vka, 0, &block, NULL);
+        error = ramdisk_client_alloc_block(ramdisk_client_ep, &block);
         test_assert(error == seL4_NoError);
 
         buf[0] = i;

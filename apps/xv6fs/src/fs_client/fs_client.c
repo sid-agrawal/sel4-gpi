@@ -228,10 +228,6 @@ static int xv6fs_libc_open(const char *pathname, int flags, int modes)
   // (XXX) Currently ignore modes
 
   // Alloc received cap ep
-  cspacepath_t path;
-  error = vka_cspace_alloc_path(get_xv6fs_client()->client_vka, &path);
-  CHECK_ERROR(error, "failed to alloc slot");
-  seL4_SetCapReceivePath(path.root, path.capPtr, path.capDepth);
   tag = seL4_Call(get_xv6fs_client()->fs_ep, tag);
 
   if (seL4_MessageInfo_get_label(tag) != seL4_NoError)
@@ -240,7 +236,8 @@ static int xv6fs_libc_open(const char *pathname, int flags, int modes)
   }
 
   // Add file to FD table
-  int fd = fd_bind(path.capPtr);
+  seL4_CPtr dest = seL4_GetMR(FSMSGREG_CREATE_ACK_DEST);
+  int fd = fd_bind(dest);
 
   if (fd == -1)
   {

@@ -96,7 +96,7 @@ int pd_client_alloc_ep(pd_client_context_t *conn,
 
 /**
  * @brief Create a badged copy of an endpoint capability
- *
+ * (XXX) Arya: TO BE DEPRECATED
  * @param conn client connection object
  * @param src_ep raw endpoint in pd's cspace
  * @param badge badge to apply to the endpoint
@@ -144,30 +144,63 @@ int pd_client_add_rde(pd_client_context_t *conn,
                       gpi_cap_t server_type,
                       bool needs_badge);
 
-/**
- * To be called by a resource server when it starts running
- * This allows the GPI server to request resource relations
- * The resource server needs to prefix all of its resource IDs
- * with the given server_id, so resource IDs are globally unique
- *
- * @param conn the resource server's pd connection
- * @param server_ep the unbadged endpoint that the resource server listens on
- * @param server_id returns the resource server's unique ID
- */
-int pd_client_register_resource_server(pd_client_context_t *conn,
-                                       seL4_CPtr server_ep,
-                                       seL4_Word *server_id);
+/* -- Resource Manager Functions -- */
+// (XXX) Arya: Should these be part of a different component?
 
 /**
- * To be called by a resource server when it creates a new
- * resource and sends it to another PD
+ * To be called by a resource manager when it starts running
+ * It will use the given manager_id to allocate resources in the future
  *
  * @param conn the resource server's pd connection
+ * @param resource_type the resource type the manager provides
+ * @param server_ep unbadged ep the resource server listens on
+ * @param manager_id returns the resource manager's unique ID
+ */
+int pd_client_register_resource_manager(pd_client_context_t *conn,
+                                        gpi_cap_t resource_type,
+                                        seL4_CPtr server_ep,
+                                        seL4_Word *manager_id);
+
+/**
+ * To be called by a resource manager when it creates a new resource
+ *
+ * @param conn the resource server's pd connection
+ * @param manager_id the resource manager id, given by pd_client_register_resource_manager
+ * @param resource_id id of the resource (local id to the resource manager)
+ */
+int pd_client_create_resource(pd_client_context_t *conn,
+                              gpi_cap_t manager_id,
+                              seL4_Word resource_id);
+
+/**
+ * To be called by a resource server when it allocates
+ * a resource to another PD
+ *
+ * @param conn the resource server's pd connection
+ * @param manager_id the resource manager id, given by pd_client_register_resource_manager
  * @param recipient_id the recipient PD's ID
- * @param resource_type the type of the resource
- * @param resource_id unique ID of the resource
+ * @param resource_id id of the resource (local id to the resource manager)
+ * @param dest returns the destination slot in the recipient PD
  */
 int pd_client_give_resource(pd_client_context_t *conn,
+                            seL4_Word manager_id,
                             seL4_Word recipient_id,
-                            gpi_cap_t resource_type,
-                            seL4_Word resource_id);
+                            seL4_Word resource_id,
+                            seL4_CPtr *dest);
+
+/**
+ * (XXX) Arya: This is a workaround so the test process has a VKA useable by the pd component
+ *
+ * @param conn the resource server's pd connection
+ * @param root the client's root cnode
+ * @param start_slot start slot of the section for the PD component to manage
+ * @param end_slot final slot of the section for the PD component to manage
+ * @param size_bits size of the (entire) cspace
+ * @param guard_bits guard bits to use for the cspace
+ */
+int pd_client_init_vka(pd_client_context_t *conn,
+                       seL4_CPtr root,
+                       seL4_Word start_slot,
+                       seL4_Word end_slot,
+                       seL4_Word size_bits,
+                       seL4_Word guard_bits);

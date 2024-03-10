@@ -106,7 +106,7 @@ static void fs_registry_insert(fs_registry_entry_t *new_node)
 static fs_registry_entry_t *fs_registry_get_entry_by_id(uint64_t object_id)
 {
   fs_registry_entry_t *current_ctx = get_xv6fs_server()->client_registry;
-  uint64_t file_id = get_local_object_id(object_id);
+  uint64_t file_id = get_local_object_id_from_badge(object_id);
 
   while (current_ctx != NULL)
   {
@@ -184,13 +184,9 @@ static int init_naive_blocks()
 
   for (int i = 0; i < FS_SIZE; i++)
   {
-    seL4_CPtr free_slot;
-    error = resource_server_next_slot(&get_xv6fs_server()->gen, &free_slot);
-
     CHECK_ERROR(error, "failed to get a free slot");
-    error = ramdisk_client_alloc_block(ramdisk_ep, NULL, free_slot,
-                                       &get_xv6fs_server()->naive_blocks[i],
-                                       &get_xv6fs_server()->naive_blocks_ids[i]);
+    error = ramdisk_client_alloc_block(ramdisk_ep,
+                                       &get_xv6fs_server()->naive_blocks[i]);
     CHECK_ERROR(error, "failed to alloc a block from ramdisk");
   }
 
@@ -297,7 +293,7 @@ seL4_MessageInfo_t xv6fs_request_handler(seL4_MessageInfo_t tag, seL4_Word sende
       if (reg_entry == NULL)
       {
         XV6FS_PRINTF("Received invalid resource for RR request, ID is 0x%lx, local ID is 0x%lx\n",
-                     resource_id, get_local_object_id(resource_id));
+                     resource_id, get_local_object_id_from_badge(resource_id));
         error = RS_ERROR_DNE;
 
         // (XXX) Arya: Ideally, we should have let the PD component know tha this file was deleted
@@ -331,7 +327,7 @@ seL4_MessageInfo_t xv6fs_request_handler(seL4_MessageInfo_t tag, seL4_Word sende
           break;
         }
 
-        uint64_t block_id = get_xv6fs_server()->naive_blocks_ids[blocknos[i]];
+        uint64_t block_id = get_xv6fs_server()->naive_blocks[blocknos[i]].id;
         make_res_id(block_res_id, GPICAP_TYPE_BLOCK, block_id);
         add_resource_depends_on_rr(rr_state, file_res_id, block_res_id, row_ptr);
         row_ptr++;
@@ -381,6 +377,10 @@ seL4_MessageInfo_t xv6fs_request_handler(seL4_MessageInfo_t tag, seL4_Word sende
         reg_entry->count = 1;
         reg_entry->file = file;
         fs_registry_insert(reg_entry);
+
+        // Notify the PD component about the new reousrce
+        error = resource_server_create_resource(&get_xv6fs_server()->gen, file->id);
+        CHECK_ERROR_GOTO(error, "Failed to create the resource", error, done);
       }
       else
       {
@@ -390,28 +390,18 @@ seL4_MessageInfo_t xv6fs_request_handler(seL4_MessageInfo_t tag, seL4_Word sende
         file = reg_entry->file;
       }
 
-      // Create the badged endpoint
-      seL4_Word badge = resource_server_assign_new_badge(&get_xv6fs_server()->gen,
-                                                         file->id,
-                                                         get_client_id_from_badge(sender_badge));
-      CHECK_ERROR_GOTO(badge == 0, "failed to assign new badge", FS_SERVER_ERROR_UNKNOWN, done);
-      printf("TEMPA filepath %s, badge %ld\n", pathname, badge);
+      // Create the resource endpoint
+      seL4_CPtr dest;
+      error = resource_server_give_resource(&get_xv6fs_server()->gen,
+                                            file->id,
+                                            get_client_id_from_badge(sender_badge),
+                                            &dest);
+      CHECK_ERROR_GOTO(error, "Failed to give the resource", error, done);
 
-      seL4_CPtr badged_ep;
-
-      error = resource_server_badge_ep(&get_xv6fs_server()->gen,
-                                       badge, &badged_ep);
-      CHECK_ERROR_GOTO(error, "failed to mint client badge", error, done);
-
-      /* Return this badged end point in the return message. */
-      seL4_SetCap(0, badged_ep);
-      seL4_MessageInfo_ptr_set_extraCaps(&reply_tag, 1);
+      // Send the reply
       seL4_MessageInfo_ptr_set_length(&reply_tag, FSMSGREG_CREATE_ACK_END);
-      seL4_SetMR(RDMSGREG_FUNC, FS_FUNC_CREATE_ACK);
-
-      XV6FS_PRINTF("Replying with badged EP: ");
-      badge_print(badge);
-      XV6FS_PRINTF("\n");
+      seL4_SetMR(FSMSGREG_CREATE_ACK_DEST, dest);
+      seL4_SetMR(RSMSGREG_FUNC, FS_FUNC_CREATE_ACK);
       break;
     case FS_FUNC_UNLINK_REQ:
       /* Attach memory object to server ADS (contains pathname) */
@@ -484,8 +474,8 @@ seL4_MessageInfo_t xv6fs_request_handler(seL4_MessageInfo_t tag, seL4_Word sende
       reg_entry->count--;
       if (reg_entry->count <= 0)
       {
-        //XV6FS_PRINTF("Removing registry entry for file with 0 refcount\n");
-        //fs_registry_remove(reg_entry);
+        // XV6FS_PRINTF("Removing registry entry for file with 0 refcount\n");
+        // fs_registry_remove(reg_entry);
 
         // (XXX) Arya: Do we actually want to remove the registry entry?
       }

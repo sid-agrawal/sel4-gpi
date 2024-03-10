@@ -54,6 +54,7 @@ enum rd_msgregs
     /* Create */
     RDMSGREG_CREATE_REQ_END = RDMSGREG_LABEL0,
     RDMSGREG_CREATE_ACK_ID = RDMSGREG_LABEL0,
+    RDMSGREG_CREATE_ACK_DEST,
     RDMSGREG_CREATE_ACK_END,
 
     // Other ramdisk server API calls have no arguments

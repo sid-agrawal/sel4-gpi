@@ -82,7 +82,7 @@ typedef struct osmosis_pd_cap
         But let's keep track of slot_in* (above) for now.
     */
     uint32_t res_id; // key to uthash
-    
+
     /*
         Type is PD/MO/CPU/ADS then look locally, else
         Copy the cap from PD to RT and then calls RR on it.
@@ -259,6 +259,19 @@ int pd_alloc_ep(pd_t *pd,
                 seL4_CPtr *ret_ep);
 
 /**
+ * Mints a source path into the PD's cspace
+ *
+ * @param pd The destination PD
+ * @param src Path to the source cap
+ * @param badge Badge to apply
+ * @param ret Returns the destination slot in the PD
+ */
+int pd_mint(pd_t *pd,
+            cspacepath_t *src,
+            seL4_Word badge,
+            seL4_CPtr *ret);
+
+/**
  * Mints an endpoint in the PD's cspace and attaches the badge
  *
  * @param pd The pd to allocate an endpoint for
@@ -271,14 +284,25 @@ int pd_badge_ep(pd_t *pd,
                 seL4_Word badge,
                 seL4_CPtr *ret_ep);
 
+/**
+ * Bootstraps a VKA allocator for the PD's cspace
+ * Requires an existing 1-level cspace
+ *
+ * @param root The root cnode for a 1-level cspace
+ * @param start_slot First free slot in the cspace
+ * @param end_slot Last free slot in the cspace
+ * @param size_bits Size bits of the entire cspace
+ * @param guard_bits Number of guard bits used for this cspace
+ */
+int pd_bootstrap_allocator(pd_t *pd,
+                           seL4_CPtr root,
+                           size_t start_slot,
+                           size_t end_slot,
+                           size_t size_bits,
+                           size_t guard_bits);
+
 void print_pd_osm_cap_info(osmosis_pd_cap_t *o);
 void print_pd_osm_rde_info(osmosis_rde_t *o);
-
-/**
- * Populates a structure of init data to be mapped into pd AS
- * Should be called after all pd_send_cap calls
- */
-int pd_populate_init_data(pd_t *pd, seL4_CPtr server_ep);
 
 osmosis_pd_cap_t *pd_add_resource(pd_t *pd, gpi_cap_t type, uint32_t res_id);
 

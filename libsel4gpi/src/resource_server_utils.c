@@ -285,37 +285,6 @@ int resource_server_free_slot(resource_server_context_t *context,
     }
 }
 
-int resource_server_badge_ep(resource_server_context_t *context,
-                             seL4_Word badge, seL4_CPtr *badged_ep)
-{
-    if (context->server_vka != NULL)
-    {
-        cspacepath_t src, dest;
-        vka_cspace_make_path(context->server_vka,
-                             context->server_ep, &src);
-        int error = vka_cspace_alloc_path(context->server_vka,
-                                          &dest);
-        if (error)
-        {
-            return error;
-        }
-
-        error = vka_cnode_mint(&dest,
-                               &src,
-                               seL4_AllRights,
-                               badge);
-
-        *badged_ep = dest.capPtr;
-        return error;
-    }
-    else
-    {
-        return pd_client_badge_ep(context->pd_conn,
-                                  context->server_ep,
-                                  badge, badged_ep);
-    }
-}
-
 int resource_server_main(void *context_v)
 {
     resource_server_context_t *context = (resource_server_context_t *)context_v;
@@ -326,6 +295,12 @@ int resource_server_main(void *context_v)
     received_cap_path.root = PD_CAP_ROOT;
     received_cap_path.capDepth = PD_CAP_DEPTH;
 
+    // Register the resource server with the PD component
+    RESOURCE_SERVER_PRINTF("Registering the resource server with the PD component\n");
+    error = pd_client_register_resource_manager(context->pd_conn, context->resource_type, context->server_ep, &context->server_id);
+    CHECK_ERROR_GOTO(error, "failed to register resource server", exit_main);
+    RESOURCE_SERVER_PRINTF("Registered resource server, ID is 0x%lx\n", context->server_id);
+
     // Perform any server-specific initialization
     if (context->init_fn != NULL)
     {
@@ -334,13 +309,6 @@ int resource_server_main(void *context_v)
         error = context->init_fn();
         CHECK_ERROR_GOTO(error, "failed to initialize resource server", exit_main);
     }
-
-    // Register the resource server with the PD component
-    RESOURCE_SERVER_PRINTF("Registering the resource server with the PD component\n");
-    error = pd_client_register_resource_server(context->pd_conn,
-                                               context->server_ep, &context->server_id);
-    CHECK_ERROR_GOTO(error, "failed to register resource server", exit_main);
-    RESOURCE_SERVER_PRINTF("Registered resource server, ID is 0x%lx\n", context->server_id);
 
     // Allocate the first cap receive slot
     error = resource_server_next_slot(context, &received_cap_path.capPtr);
@@ -352,6 +320,8 @@ int resource_server_main(void *context_v)
         received_cap_path.capDepth);
 
     // Send our ep to the parent process
+    // (XXX) Arya: We should not send out an unbadged copy of the endpoint
+    // In the future, replace this with a new RDE mechanism?
     RESOURCE_SERVER_PRINTF("Messaging parent process at slot %d, sending ep %d\n", (int)context->parent_ep, (int)context->server_ep);
     tag = seL4_MessageInfo_new(0, 0, 1, 0);
     seL4_SetCap(0, context->server_ep);
@@ -366,7 +336,7 @@ int resource_server_main(void *context_v)
         RESOURCE_SERVER_PRINTF("Received message, op is %d, passing to request handler\n", op);
         seL4_MessageInfo_t reply_tag = context->request_handler(tag, sender_badge, received_cap_path.capPtr);
 
-         /**
+        /**
          * Free slot and reallocate unless if this is an RR request
          * RR requests come from the root task, so we cannot message it
          * */
@@ -379,7 +349,7 @@ int resource_server_main(void *context_v)
             // Save state of message registers for reply
             seL4_Word arg0 = seL4_GetMR(0);
             seL4_Word arg1 = seL4_GetMR(1);
-            
+
             RESOURCE_SERVER_PRINTF("Freeing cap receive slot\n");
             error = resource_server_free_slot(context, received_cap_path.capPtr);
             CHECK_ERROR_GOTO(error, "failed to free cap receive slot", exit_main);
@@ -446,7 +416,7 @@ int resource_server_get_rr(seL4_CPtr server_ep,
     // Send IPC to resource server
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 1, RSMSGREG_EXTRACT_RR_REQ_END);
     seL4_SetMR(RSMSGREG_FUNC, RS_FUNC_GET_RR_REQ);
-    seL4_SetMR(RSMSGREG_EXTRACT_RR_REQ_VADDR, (seL4_Word) remote_vaddr);
+    seL4_SetMR(RSMSGREG_EXTRACT_RR_REQ_VADDR, (seL4_Word)remote_vaddr);
     seL4_SetMR(RSMSGREG_EXTRACT_RR_REQ_SIZE, size);
     seL4_SetMR(RSMSGREG_EXTRACT_RR_REQ_ID, res_id);
     tag = seL4_Call(server_ep, tag);
@@ -463,34 +433,34 @@ int resource_server_get_rr(seL4_CPtr server_ep,
     return result;
 }
 
-uint64_t resource_server_assign_new_badge(resource_server_context_t *context,
-                                          uint64_t resource_id, uint64_t client_id)
+int resource_server_create_resource(resource_server_context_t *context,
+                                    uint64_t resource_id)
 {
     int error;
 
-    // Add the server id to the resource id
-    resource_id = set_server_id_to_object_id(resource_id, context->server_id);
+    RESOURCE_SERVER_PRINTF("Creating resource with ID 0x%lx\n", resource_id);
 
-    // Add the type, client id, and resource id to the badge
-    seL4_Word badge_val = gpi_new_badge(context->resource_type,
-                                        client_id,
-                                        0x00,
-                                        resource_id);
+    error = pd_client_create_resource(context->pd_conn,
+                                      context->server_id,
+                                      resource_id);
 
-    // Notify the PD component that we are giving out this new resource
-    // (XXX) Arya: some risk that the server does not follow through after
-    //             assigning the badge
+    return error;
+}
+
+int resource_server_give_resource(resource_server_context_t *context,
+                                  uint64_t resource_id,
+                                  uint64_t client_id,
+                                  seL4_CPtr *dest)
+{
+    int error;
+
     RESOURCE_SERVER_PRINTF("Giving resource to client, resource ID 0x%lx, client ID 0x%lx\n", resource_id, client_id);
 
-    error = pd_client_give_resource(context->pd_conn, client_id,
-                                    context->resource_type, resource_id);
-    if (error != seL4_NoError)
-    {
-        RESOURCE_SERVER_PRINTF("resource_server_assign_new_badge: failed to notify pd component\n");
-        return 0;
-    }
+    error = pd_client_give_resource(context->pd_conn,
+                                    context->server_id,
+                                    client_id,
+                                    resource_id,
+                                    dest);
 
-    assert(badge_val != 0);
-    RESOURCE_SERVER_PRINTF("resource_server_assign_new_badge: new badge: %lx\n", badge_val);
-    return badge_val;
+    return error;
 }

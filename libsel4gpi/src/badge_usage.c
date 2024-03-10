@@ -76,24 +76,39 @@ uint64_t set_object_id_to_badge(seL4_Word badge, uint64_t object_id)
 }
 
 // Bits: 19:16 are for the server id. Total of 4 bits, so 16 resource servers.
-// 2^16 objects per server.
-uint64_t set_server_id_to_object_id(uint64_t object_id, uint64_t server_id)
+uint64_t set_server_id_to_badge(seL4_Word badge, uint64_t server_id)
 {
     assert(server_id <= 0xF);
-    return (object_id & 0x0FFFF) | (server_id << 16);
+    return (badge & 0xFFFFFFFFFFF0FFFF) | (server_id << 16);
 }
 
 // Bits: 19:16 are for the server id. Total of 4 bits, so 16 resource servers.
-// 2^16 objects per server.
-uint64_t get_server_id_from_object_id(uint64_t object_id)
+uint64_t get_server_id_from_badge(seL4_Word badge)
 {
-    return (object_id & 0xF0000) >> 16;
+    return (badge & 0xF0000) >> 16;
+}
+
+// Sets local object ID, unique to a given server, but not unique globally
+// 2^16 objects per server.
+uint64_t set_local_object_id_to_badge(seL4_Word badge, uint64_t object_id)
+{
+    assert(object_id <= 0xFFFF);
+    return (badge & 0xFFFFFFFFFFFF0000) | object_id;
 }
 
 // Gets local object ID, unique to a given server, but not unique globally
-uint64_t get_local_object_id(uint64_t object_id)
+// 2^16 objects per server
+uint64_t get_local_object_id_from_badge(seL4_Word badge)
 {
-    return (object_id & 0xFFFF);
+    return (badge & 0xFFFF);
+}
+
+// Combine server id and local object id to get global object id
+uint64_t get_global_object_id_from_local(uint64_t server_id, uint64_t object_id)
+{
+    assert(server_id <= 0xF);
+    assert(object_id <= 0xFFFF);
+    return (server_id << 16) | object_id;
 }
 
 uint64_t gpi_new_badge(gpi_cap_t cap_type,
@@ -101,11 +116,25 @@ uint64_t gpi_new_badge(gpi_cap_t cap_type,
                        uint64_t client_id,
                        uint64_t object_id)
 {
-
     uint64_t badge_value = 0;
     badge_value = set_cap_type_to_badge(badge_value, cap_type);
     badge_value = set_perms_to_badge(badge_value, perms);
     badge_value = set_object_id_to_badge(badge_value, object_id);
+    badge_value = set_client_id_to_badge(badge_value, client_id);
+    return badge_value;
+}
+
+uint64_t gpi_new_badge_server(gpi_cap_t cap_type,
+                              uint64_t perms,
+                              uint64_t client_id,
+                              uint64_t server_id,
+                              uint64_t object_id)
+{
+    uint64_t badge_value = 0;
+    badge_value = set_cap_type_to_badge(badge_value, cap_type);
+    badge_value = set_perms_to_badge(badge_value, perms);
+    badge_value = set_server_id_to_badge(badge_value, server_id);
+    badge_value = set_local_object_id_to_badge(badge_value, object_id);
     badge_value = set_client_id_to_badge(badge_value, client_id);
     return badge_value;
 }

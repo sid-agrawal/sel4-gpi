@@ -133,6 +133,12 @@ int ramdisk_init()
     server->free_blocks->n_blocks = RAMDISK_SIZE_BYTES / RAMDISK_BLOCK_SIZE;
     server->free_blocks->next = NULL;
 
+    /* Create the block resources */
+    for (int i = 0; i < server->free_blocks->n_blocks; i++) {
+        // Local resource ID is the block ID
+        resource_server_create_resource(&server->gen, i);
+    }
+
     return error;
 }
 
@@ -153,7 +159,7 @@ seL4_MessageInfo_t ramdisk_request_handler(seL4_MessageInfo_t tag, seL4_Word sen
         {
         case RS_FUNC_GET_RR_REQ:
             uint64_t resource_id = seL4_GetMR(RSMSGREG_EXTRACT_RR_REQ_ID);
-            uint64_t blockno = get_local_object_id(resource_id);
+            uint64_t blockno = get_local_object_id_from_badge(resource_id);
 
             RAMDISK_PRINTF("Get RR for blockno %d\n", blockno);
 
@@ -164,7 +170,7 @@ seL4_MessageInfo_t ramdisk_request_handler(seL4_MessageInfo_t tag, seL4_Word sen
             RAMDISK_PRINTF("Can access shared mem %d\n", *((int *)mem_vaddr));
 
             // Initialize the model state
-            CHECK_ERROR_GOTO(mem_size < (sizeof(rr_state_t) + sizeof(csv_rr_row_t)),
+            CHECK_ERROR_GOTO(mem_size < (sizeof(rr_state_t) + 2 * sizeof(csv_rr_row_t)),
                              "Shared memory for RR is too small", RS_ERROR_RR_SIZE, done);
             rr_state_t *rr_state = (rr_state_t *)mem_vaddr;
             init_rr_state(rr_state);
@@ -174,6 +180,12 @@ seL4_MessageInfo_t ramdisk_request_handler(seL4_MessageInfo_t tag, seL4_Word sen
             char block_res_id[CSV_MAX_STRING_SIZE];
             make_res_id(block_res_id, GPICAP_TYPE_BLOCK, resource_id);
             add_resource_rr(rr_state, GPICAP_TYPE_BLOCK, block_res_id, row_ptr);
+            row_ptr++;
+
+            // Add RR from block to MO
+            char mo_res_id[CSV_MAX_STRING_SIZE];
+            make_res_id(mo_res_id, GPICAP_TYPE_MO, get_ramdisk_server()->ramdisk_mo->id);
+            add_resource_depends_on_rr(rr_state, block_res_id, mo_res_id, row_ptr);
 
             seL4_SetMR(RDMSGREG_FUNC, RS_FUNC_GET_RR_ACK);
             RAMDISK_PRINTF("Returning RR\n");
@@ -218,28 +230,21 @@ seL4_MessageInfo_t ramdisk_request_handler(seL4_MessageInfo_t tag, seL4_Word sen
                 get_ramdisk_server()->free_blocks = get_ramdisk_server()->free_blocks->next;
             }
 
-            // Create the badged endpoint
-            seL4_Word badge = resource_server_assign_new_badge(&get_ramdisk_server()->gen,
-                                                               blockno,
-                                                               get_client_id_from_badge(sender_badge));
-            CHECK_ERROR_GOTO(badge == 0, "failed to assign new badge", RD_SERVER_ERROR_UNKNOWN, done);
+            // Create the resource endpoint
+            seL4_CPtr dest;
+            error = resource_server_give_resource(&get_ramdisk_server()->gen,
+                                                  blockno,
+                                                  get_client_id_from_badge(sender_badge),
+                                                  &dest);
+            CHECK_ERROR_GOTO(error, "Failed to give the resource", error, done);
 
-            seL4_CPtr badged_ep;
-
-            error = resource_server_badge_ep(&get_ramdisk_server()->gen,
-                                             badge, &badged_ep);
-            CHECK_ERROR_GOTO(error, "failed to mint client badge", error, done);
-
-            /* Return this badged end point in the return message. */
-            seL4_SetCap(0, badged_ep);
-            seL4_MessageInfo_ptr_set_extraCaps(&reply_tag, 1);
+            // Send the reply
             seL4_MessageInfo_ptr_set_length(&reply_tag, RDMSGREG_CREATE_ACK_END);
-            seL4_SetMR(RDMSGREG_CREATE_ACK_ID, get_object_id_from_badge(badge));
+            seL4_SetMR(RDMSGREG_CREATE_ACK_DEST, dest);
+            seL4_SetMR(RDMSGREG_CREATE_ACK_ID, get_global_object_id_from_local(get_ramdisk_server()->gen.server_id, blockno));
             seL4_SetMR(RDMSGREG_FUNC, RD_FUNC_CREATE_ACK);
 
-            RAMDISK_PRINTF("Replying with badged EP: ");
-            badge_print(badge);
-            RAMDISK_PRINTF("\n");
+            RAMDISK_PRINTF("Resource is in dest slot %d\n", (int) dest);
             break;
         default:
             RAMDISK_PRINTF("Op is %d\n", op);
@@ -255,7 +260,7 @@ seL4_MessageInfo_t ramdisk_request_handler(seL4_MessageInfo_t tag, seL4_Word sen
         gpi_cap_t cap_type = get_cap_type_from_badge(sender_badge);
         CHECK_ERROR_GOTO(cap_type != GPICAP_TYPE_BLOCK, "ramdisk server got invalid captype in badged EP",
                          RD_SERVER_ERROR_UNKNOWN, done);
-        uint64_t blockno = get_local_object_id(obj_id);
+        uint64_t blockno = get_local_object_id_from_badge(obj_id);
         RAMDISK_PRINTF("Got op for blockno %ld\n", blockno);
 
         switch (op)

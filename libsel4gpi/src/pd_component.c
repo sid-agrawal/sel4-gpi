@@ -137,11 +137,11 @@ static pd_component_registry_entry_t *pd_component_registry_get_entry_by_badge(s
  *
  * @param new_node
  */
-static void pd_component_server_registry_insert(pd_component_resource_server_entry_t *new_node)
+static void pd_component_server_registry_insert(pd_component_resource_manager_entry_t *new_node)
 {
     // TODO:Use a mutex
 
-    pd_component_resource_server_entry_t *head = get_pd_component()->server_registry;
+    pd_component_resource_manager_entry_t *head = get_pd_component()->server_registry;
 
     if (head == NULL)
     {
@@ -162,16 +162,16 @@ static void pd_component_server_registry_insert(pd_component_resource_server_ent
  * @brief Lookup the resource server registry entry for the given object id.
  *
  * @param server_id
- * @return pd_component_resource_server_entry_t*
+ * @return pd_component_resource_manager_entry_t*
  */
-pd_component_resource_server_entry_t *pd_component_server_registry_get_entry_by_id(seL4_Word server_id)
+pd_component_resource_manager_entry_t *pd_component_resource_manager_get_entry_by_id(seL4_Word manager_id)
 {
     /* Get the head of the list */
-    pd_component_resource_server_entry_t *current_ctx = get_pd_component()->server_registry;
+    pd_component_resource_manager_entry_t *current_ctx = get_pd_component()->server_registry;
 
     while (current_ctx != NULL)
     {
-        if ((seL4_Word)current_ctx->pd_id == server_id)
+        if ((seL4_Word)current_ctx->manager_id == manager_id)
         {
             break;
         }
@@ -438,8 +438,8 @@ static void handle_free_slot_req(seL4_Word sender_badge,
                                  seL4_CPtr received_cap)
 {
 
-    OSDB_PRINTF(PDSERVS "Got free slot request from client badge %lx.\n",
-                sender_badge);
+    OSDB_PRINTF(PDSERVS "Got free slot request from client badge %lx, id %ld.\n",
+                sender_badge, get_client_id_from_badge(sender_badge));
 
     pd_component_registry_entry_t *client_data = pd_component_registry_get_entry_by_badge(sender_badge);
     if (client_data == NULL)
@@ -688,7 +688,7 @@ static void handle_add_rde_req(seL4_Word sender_badge, seL4_MessageInfo_t old_ta
     return reply(tag);
 }
 
-static void handle_register_server_req(seL4_Word sender_badge, seL4_MessageInfo_t old_tag, seL4_CPtr received_cap)
+static void handle_register_resource_manager_req(seL4_Word sender_badge, seL4_MessageInfo_t old_tag, seL4_CPtr received_cap)
 {
     int error = 0;
 
@@ -698,23 +698,20 @@ static void handle_register_server_req(seL4_Word sender_badge, seL4_MessageInfo_
     pd_component_registry_entry_t *client_data = pd_component_registry_get_entry_by_badge(sender_badge);
     if (client_data == NULL)
     {
-        OSDB_PRINTF(PDSERVS "handle_register_server_req: Failed to find client badge %lx.\n",
+        OSDB_PRINTF(PDSERVS "register_resource_manager: Failed to find client badge %lx.\n",
                     sender_badge);
-        error = -1;
-    }
-    else if (seL4_MessageInfo_get_extraCaps(old_tag) < 1)
-    {
-        OSDB_PRINTF(PDSERVS "handle_register_server_req missing server cap\n");
         error = -1;
     }
     else
     {
-        // (XXX) Arya: This does not check if the server registers itself twice
-        pd_component_resource_server_entry_t *rs_entry = malloc(sizeof(pd_component_resource_server_entry_t));
-        rs_entry->pd_id = client_data->pd.pd_obj_id;
-        // (XXX) Arya: this is ok for now because the received cap is never freed
-        rs_entry->server_ep = received_cap;
+        assert(seL4_MessageInfo_get_extraCaps(old_tag) == 1);
+
+        pd_component_resource_manager_entry_t *rs_entry = malloc(sizeof(pd_component_resource_manager_entry_t));
+        // (XXX) Arya: temporarily use pd id as resource manager id, will need to be updated when we have > 1 resource manager per PD
+        rs_entry->manager_id = client_data->pd.pd_obj_id;
         rs_entry->pd = &client_data->pd;
+        rs_entry->server_ep = received_cap;
+        rs_entry->resource_type = seL4_GetMR(PDMSGREG_REGISTER_SERV_REQ_TYPE);
 
         pd_component_server_registry_insert(rs_entry);
         OSDB_PRINTF(PDSERVS "Registered server, cap is at %ld.\n", rs_entry->server_ep);
@@ -729,48 +726,172 @@ static void handle_register_server_req(seL4_Word sender_badge, seL4_MessageInfo_
     return reply(tag);
 }
 
-static void handle_give_resource_req(seL4_Word sender_badge, seL4_MessageInfo_t old_tag, seL4_CPtr received_cap)
+static void handle_create_resource_req(seL4_Word sender_badge, seL4_MessageInfo_t old_tag, seL4_CPtr received_cap)
 {
     int error = 0;
 
-    OSDB_PRINTF(PDSERVS "Got give resource request from client badge %lx.\n",
+    OSDB_PRINTF(PDSERVS "Got create resource request from client badge %lx.\n",
                 sender_badge);
 
-    seL4_Word recipient_id = seL4_GetMR(PDMSGREG_GIVE_RES_REQ_CLIENT_ID);
-    pd_component_registry_entry_t *client_data = pd_component_registry_get_entry_by_badge(sender_badge);
-    pd_component_registry_entry_t *recipient_data = pd_component_registry_get_entry_by_id(recipient_id);
-    if (client_data == NULL)
+    seL4_Word server_id = get_object_id_from_badge(sender_badge);
+    seL4_Word manager_id = seL4_GetMR(PDMSGREG_CREATE_RES_REQ_MANAGER_ID);
+    seL4_Word resource_id = get_global_object_id_from_local(manager_id, seL4_GetMR(PDMSGREG_CREATE_RES_REQ_RES_ID));
+
+    pd_component_registry_entry_t *server_data = pd_component_registry_get_entry_by_id(server_id);
+    pd_component_resource_manager_entry_t *resource_manager_data = pd_component_resource_manager_get_entry_by_id(manager_id);
+    if (server_data == NULL)
     {
-        OSDB_PRINTF(PDSERVS "handle_give_resource_req: Failed to find client badge 0x%lx.\n",
-                    sender_badge);
+        OSDB_PRINTF(PDSERVS "handle_create_resource_req: Failed to find resource server with ID %ld.\n",
+                    server_id);
         error = -1;
     }
-    else if (recipient_data == NULL)
+    else if (resource_manager_data == NULL)
     {
-        OSDB_PRINTF(PDSERVS "handle_give_resource_req: Failed to find recipient id 0x%lx.\n",
-                    recipient_id);
+        OSDB_PRINTF(PDSERVS "handle_create_resource_req: Failed to find resource manager with ID %ld.\n",
+                    manager_id);
         error = -1;
     }
     else
     {
-        gpi_cap_t resource_type = (gpi_cap_t)seL4_GetMR(PDMSGREG_GIVE_RES_REQ_TYPE);
-        seL4_Word resource_id = seL4_GetMR(PDMSGREG_GIVE_RES_REQ_RES_ID);
+        gpi_cap_t resource_type = resource_manager_data->resource_type;
 
-        OSDB_PRINTF(PDSERVS "server 0x%lx gives resource ID 0x%lx to client 0x%lx\n",
-                    client_data->pd.pd_obj_id, resource_id, recipient_id);
+        OSDB_PRINTF(PDSERVS "resource manager %ld creates resource with ID %ld\n",
+                    manager_id, resource_id);
 
-        osmosis_pd_cap_t *out;
-        HASH_FIND_INT(recipient_data->pd.has_access_to, &resource_id, out);
-        if (out == NULL)
+        osmosis_pd_cap_t *osm_cap;
+        HASH_FIND_INT(server_data->pd.has_access_to, &resource_id, osm_cap);
+        if (osm_cap == NULL)
         {
             // Resource is not already in the hash
-            pd_add_resource(&recipient_data->pd, resource_type, resource_id);
+            osm_cap = pd_add_resource(&server_data->pd, resource_type, resource_id);
         }
+        else
+        {
+            OSDB_PRINTF(PDSERVS "handle_create_resource_req: Resource already exists %ld.\n",
+                        resource_id);
+        }
+    }
+
+    seL4_SetMR(PDMSGREG_FUNC, PD_FUNC_CREATE_RES_ACK);
+    seL4_MessageInfo_t tag = seL4_MessageInfo_new(error, 0, 0,
+                                                  PDMSGREG_CREATE_RES_ACK_END);
+    return reply(tag);
+}
+
+static void handle_give_resource_req(seL4_Word sender_badge, seL4_MessageInfo_t old_tag, seL4_CPtr received_cap)
+{
+    int error = 0;
+
+    OSDB_PRINTF(PDSERVS "Got give resource request from client badge %lx, resource ID %ld.\n",
+                sender_badge, seL4_GetMR(PDMSGREG_GIVE_RES_REQ_RES_ID));
+
+    seL4_Word server_id = get_object_id_from_badge(sender_badge);
+    seL4_Word recipient_id = seL4_GetMR(PDMSGREG_GIVE_RES_REQ_CLIENT_ID);
+    seL4_Word manager_id = seL4_GetMR(PDMSGREG_GIVE_RES_REQ_MANAGER_ID);
+    seL4_Word resource_id = get_global_object_id_from_local(manager_id, seL4_GetMR(PDMSGREG_GIVE_RES_REQ_RES_ID));
+    pd_component_registry_entry_t *server_data = pd_component_registry_get_entry_by_id(server_id);
+    pd_component_registry_entry_t *recipient_data = pd_component_registry_get_entry_by_id(recipient_id);
+    pd_component_resource_manager_entry_t *resource_manager_data = pd_component_resource_manager_get_entry_by_id(manager_id);
+
+    if (server_data == NULL)
+    {
+        OSDB_PRINTF(PDSERVS "handle_give_resource_req: Failed to find resource server with ID %ld.\n",
+                    server_id);
+        error = -1;
+    }
+    else if (resource_manager_data == NULL)
+    {
+        OSDB_PRINTF(PDSERVS "handle_give_resource_req: Failed to find resource manager with ID %ld.\n",
+                    manager_id);
+        error = -1;
+    }
+    else if (recipient_data == NULL)
+    {
+        OSDB_PRINTF(PDSERVS "handle_give_resource_req: Failed to find recipient id %ld.\n",
+                    recipient_id);
+        error = -1;
+    }
+
+    osmosis_pd_cap_t *resource_data;
+    HASH_FIND_INT(server_data->pd.has_access_to, &resource_id, resource_data);
+
+    if (resource_data == NULL)
+    {
+        OSDB_PRINTF(PDSERVS "handle_give_resource_req: Failed to find resource with id %ld.\n",
+                    resource_id);
+        error = -1;
+    }
+    else
+    {
+        OSDB_PRINTF(PDSERVS "resource manager %ld gives resource ID %ld to client %ld\n",
+                    manager_id, resource_id, recipient_id);
+
+        osmosis_pd_cap_t *osm_cap;
+        HASH_FIND_INT(recipient_data->pd.has_access_to, &resource_id, osm_cap);
+        if (osm_cap == NULL)
+        {
+            // Resource is not already in the recipient's hash table
+            osm_cap = pd_add_resource(&recipient_data->pd, resource_manager_data->resource_type, resource_id);
+        }
+
+        seL4_Word badge = gpi_new_badge(resource_manager_data->resource_type,
+                                        0x00,
+                                        recipient_id,
+                                        resource_id);
+
+        // (XXX) Arya: How to handle duplicate entries to the same resource?
+        // The hash table is keyed by resource ID
+        // Badge the resource manager's endpoint to create a resource capability
+        cspacepath_t src_path;
+        seL4_CPtr dest;
+        vka_cspace_make_path(get_pd_component()->server_vka, resource_manager_data->server_ep, &src_path);
+        error = pd_mint(&recipient_data->pd, &src_path, badge, &dest);
+        osm_cap->slot_in_PD_Debug = dest;
+        seL4_SetMR(PDMSGREG_GIVE_RES_ACK_DEST, dest);
     }
 
     seL4_SetMR(PDMSGREG_FUNC, PD_FUNC_GIVE_RES_ACK);
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(error, 0, 0,
                                                   PDMSGREG_GIVE_RES_ACK_END);
+    return reply(tag);
+}
+
+static void handle_init_vka_req(seL4_Word sender_badge, seL4_MessageInfo_t old_tag, seL4_CPtr received_cap)
+{
+    int error = 0;
+
+    OSDB_PRINTF(PDSERVS "Got init vka request from client badge %lx.\n",
+                sender_badge);
+
+    pd_component_registry_entry_t *client_data = pd_component_registry_get_entry_by_badge(sender_badge);
+    if (client_data == NULL)
+    {
+        OSDB_PRINTF(PDSERVS "init_vka: Failed to find client badge %lx.\n",
+                    sender_badge);
+        error = -1;
+    }
+    else
+    {
+        seL4_Word start_slot = seL4_GetMR(PDMSGREG_INIT_VKA_REQ_START_SLOT);
+        seL4_Word end_slot = seL4_GetMR(PDMSGREG_INIT_VKA_REQ_END_SLOT);
+        seL4_Word size_bits = seL4_GetMR(PDMSGREG_INIT_VKA_REQ_SIZE);
+        seL4_Word guard_bits = seL4_GetMR(PDMSGREG_INIT_VKA_REQ_GUARD);
+        seL4_CPtr root_cptr = received_cap;
+
+        error = pd_bootstrap_allocator(&client_data->pd,
+                                       root_cptr,
+                                       start_slot,
+                                       end_slot,
+                                       size_bits,
+                                       guard_bits);
+
+        OSDB_PRINTF(PDSERVS "Initialized VKA for client %ld, start slot %ld, end slot %ld.\n",
+                    get_client_id_from_badge(sender_badge), start_slot, end_slot);
+    }
+
+    seL4_SetMR(PDMSGREG_FUNC, PD_FUNC_INIT_VKA_ACK);
+    seL4_MessageInfo_t tag = seL4_MessageInfo_new(error, 0, 0,
+                                                  PDMSGREG_INIT_VKA_ACK_END);
     return reply(tag);
 }
 
@@ -818,10 +939,16 @@ void pd_component_handle(seL4_MessageInfo_t tag,
         handle_add_rde_req(sender_badge, tag, received_cap->capPtr);
         break;
     case PD_FUNC_REGISTER_SERV_REQ:
-        handle_register_server_req(sender_badge, tag, received_cap->capPtr);
+        handle_register_resource_manager_req(sender_badge, tag, received_cap->capPtr);
+        break;
+    case PD_FUNC_CREATE_RES_REQ:
+        handle_create_resource_req(sender_badge, tag, received_cap->capPtr);
         break;
     case PD_FUNC_GIVE_RES_REQ:
         handle_give_resource_req(sender_badge, tag, received_cap->capPtr);
+        break;
+    case PD_FUNC_INIT_VKA_REQ:
+        handle_init_vka_req(sender_badge, tag, received_cap->capPtr);
         break;
     default:
         gpi_panic(PDSERVS "Unknown func type.", (seL4_Word)func);

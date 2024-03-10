@@ -217,7 +217,9 @@ void mo_handle_allocation_request(seL4_Word sender_badge, seL4_MessageInfo_t *re
     OSDB_PRINTF(MOSERVS "Minted MO with new badge: %lx\n", badge);
     /* Return this badged end point in the return message. */
     seL4_SetCap(0, dest.capPtr);
-    seL4_MessageInfo_t tag = seL4_MessageInfo_new(error, 0, 1, 1);
+    seL4_SetMR(MOMSGREG_FUNC, MO_FUNC_CONNECT_ACK);
+    seL4_SetMR(MOMSGREG_CONNECT_ACK_ID, get_object_id_from_badge(badge));
+    seL4_MessageInfo_t tag = seL4_MessageInfo_new(error, 0, 1, MOMSGREG_CONNECT_ACK_END);
     return reply(tag);
 }
 

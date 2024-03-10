@@ -195,26 +195,75 @@ int pd_alloc_ep(pd_t *pd,
     return error;
 }
 
-int pd_badge_ep(pd_t *pd,
-                seL4_CPtr src_ep,
-                seL4_Word badge,
-                seL4_CPtr *ret_ep)
+int pd_mint(pd_t *pd,
+            cspacepath_t *src,
+            seL4_Word badge,
+            seL4_CPtr *ret)
 {
-    cspacepath_t src, dest;
-    vka_cspace_make_path(&pd->pd_vka, src_ep, &src);
+    cspacepath_t dest;
+
     int error = vka_cspace_alloc_path(&pd->pd_vka, &dest);
+    // int error = vka_cspace_alloc_path(get_pd_component()->server_vka, &dest);
     if (error)
     {
         return error;
     }
 
     error = vka_cnode_mint(&dest,
-                           &src,
+                           src,
                            seL4_AllRights,
                            badge);
 
-    *ret_ep = error == seL4_NoError ? dest.capPtr : seL4_CapNull;
+    *ret = error == seL4_NoError ? dest.capPtr : seL4_CapNull;
     return error;
+}
+
+int pd_badge_ep(pd_t *pd,
+                seL4_CPtr src_ep,
+                seL4_Word badge,
+                seL4_CPtr *ret_ep)
+{
+    cspacepath_t src;
+    vka_cspace_make_path(&pd->pd_vka, src_ep, &src);
+
+    return pd_mint(pd, &src, badge, ret_ep);
+}
+
+int pd_bootstrap_allocator(pd_t *pd,
+                           seL4_CPtr root,
+                           size_t start_slot,
+                           size_t end_slot,
+                           size_t size_bits,
+                           size_t guard_bits)
+{
+    int error;
+    allocman_t *allocator = bootstrap_create_allocman(PD_ALLOCATOR_STATIC_POOL_SIZE,
+                                                      pd->allocator_mem_pool);
+
+    cspace_single_level_t *cspace = malloc(sizeof(cspace_single_level_t));
+
+    error = cspace_single_level_create(allocator, cspace, (struct cspace_single_level_config){.cnode = root, .cnode_size_bits = size_bits,
+                                                                                              //.cnode_guard_bits = seL4_WordBits - pd->cspace_size_bits,
+                                                                                              .cnode_guard_bits = guard_bits,
+                                                                                              .first_slot = start_slot,
+                                                                                              .end_slot = end_slot});
+    if (error != seL4_NoError)
+    {
+        OSDB_PRINTF(PDSERVS "%s: Failed to initialize single-level cspace for PD id %ld.\n",
+                    __FUNCTION__, pd->pd_obj_id);
+        return -1;
+    }
+
+    error = allocman_attach_cspace(allocator, cspace_single_level_make_interface(cspace));
+    if (error != seL4_NoError)
+    {
+        OSDB_PRINTF(PDSERVS "%s: Failed to attach cspace to allocman for PD id %ld.\n",
+                    __FUNCTION__, pd->pd_obj_id);
+        return -1;
+    }
+
+    allocman_make_vka(&pd->pd_vka, allocator);
+    return 0;
 }
 
 int pd_load_image(pd_t *pd,
@@ -247,26 +296,9 @@ int pd_load_image(pd_t *pd,
     assert(error == 0);
 
     /* Initialize a vka for the PD's cspace */
-    allocman_t *allocator = bootstrap_create_allocman(PD_ALLOCATOR_STATIC_POOL_SIZE,
-                                                      pd->allocator_mem_pool);
-
-    cspace_single_level_t *cspace = malloc(sizeof(cspace_single_level_t));
-
-    error = cspace_single_level_create(allocator, cspace, (struct cspace_single_level_config){.cnode = pd->proc.cspace.cptr, .cnode_size_bits = CSPACE_SIZE_BITS,
-                                                                                              //.cnode_guard_bits = seL4_WordBits - pd->cspace_size_bits,
-                                                                                              .cnode_guard_bits = 0,
-                                                                                              .first_slot = pd->proc.cspace_next_free,
-                                                                                              .end_slot = BIT(CSPACE_SIZE_BITS)});
+    error = pd_bootstrap_allocator(pd, pd->proc.cspace.cptr, pd->proc.cspace_next_free,
+                                   BIT(CSPACE_SIZE_BITS), CSPACE_SIZE_BITS, 0);
     assert(error == 0);
-
-    error = allocman_attach_cspace(allocator, cspace_single_level_make_interface(cspace));
-    assert(error == 0);
-
-    if (allocator == NULL)
-    {
-        ZF_LOGF("Failed to bootstrap allocator for pd");
-    }
-    allocman_make_vka(&pd->pd_vka, allocator);
 
     /* Add the forged MOs*/
 
@@ -717,7 +749,7 @@ int pd_dump(pd_t *pd)
             break;
         case GPICAP_TYPE_MO:
             make_res_id(res_id, current_cap->type, current_cap->res_id);
-            mo_component_registry_entry_t* mo_data = mo_component_registry_get_entry_by_id(current_cap->res_id);
+            mo_component_registry_entry_t *mo_data = mo_component_registry_get_entry_by_id(current_cap->res_id);
             assert(mo_data != NULL);
             mo_dump_rr(&mo_data->mo, ms);
             add_has_access_to(ms, pd_id, res_id, false);
@@ -733,8 +765,8 @@ int pd_dump(pd_t *pd)
 
             // Find the server that created this resource based on the resource id
             uint64_t obj_id = current_cap->res_id;
-            uint64_t server_id = get_server_id_from_object_id(obj_id);
-            pd_component_resource_server_entry_t *server_entry = pd_component_server_registry_get_entry_by_id(server_id);
+            uint64_t server_id = get_server_id_from_badge(obj_id);
+            pd_component_resource_manager_entry_t *server_entry = pd_component_resource_manager_get_entry_by_id(server_id);
 
             if (server_entry == NULL)
             {
