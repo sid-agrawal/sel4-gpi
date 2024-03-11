@@ -171,12 +171,12 @@ void ads_dump_rr(ads_t *ads, model_state_t *ms)
     for (attach_node_t *res = ads->attach_nodes; res != NULL; res = res->next)
     {
         char res_id[CSV_MAX_STRING_SIZE];
-        make_virtual_res_id(res_id, ads->ads_obj_id, res->vaddr);
+        make_virtual_res_id(res_id, ads->ads_obj_id, (uint64_t) res->vaddr);
         add_resource(ms, "VirtualRegion", res_id);
         add_resource_depends_on(ms, ads_res_id, res_id);
 
         char mo_res_id[CSV_MAX_STRING_SIZE];
-        make_res_id(mo_res_id, GPICAP_TYPE_MO, get_object_id_from_badge(res->mo_badge));
+        make_res_id(mo_res_id, GPICAP_TYPE_MO, res->mo_id);
         add_resource_depends_on(ms, res_id, mo_res_id);
     }
 #if 0

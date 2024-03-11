@@ -122,26 +122,10 @@ static void init_allocator(env_t env, test_init_data_t *init_data)
     UNUSED int error;
     UNUSED reservation_t virtual_reservation;
 
-    /* (Arya) Split the cspace into two, root task handles half */
-    // Get the PD connection
-    pd_client_context_t pd_conn;
-    pd_conn.badged_server_ep_cspath.capPtr = env->self_pd_cptr;
-
-    // Split the cspace
-    seL4_CPtr mid_slot = DIV_ROUND_UP(init_data->free_slots.start + init_data->free_slots.end, 2);
-    error = pd_client_init_vka(&pd_conn, init_data->root_cnode,
-                               mid_slot, init_data->free_slots.end,
-                               init_data->cspace_size_bits, seL4_WordBits - init_data->cspace_size_bits);
-
-    if (error != seL4_NoError)
-    {
-        ZF_LOGF("Failed to initialize PD VKA\n");
-    }
-
     /* initialise allocator */
     allocman_t *allocator = bootstrap_use_current_1level(init_data->root_cnode,
                                                          init_data->cspace_size_bits, init_data->free_slots.start,
-                                                         mid_slot, ALLOCATOR_STATIC_POOL_SIZE,
+                                                         init_data->free_slots.end, ALLOCATOR_STATIC_POOL_SIZE,
                                                          allocator_mem_pool);
     if (allocator == NULL)
     {
@@ -244,8 +228,10 @@ int main(int argc, char **argv)
     test_init_data_t *init_data;
     struct env env;
 
+    printf("TEMPA arrived at test main\n");
+    
     /* parse args */
-    assert(argc == 7);
+    assert(argc == 6);
     endpoint = (seL4_CPtr)atoi(argv[0]);
 
     /* read in init data */
@@ -255,7 +241,6 @@ int main(int argc, char **argv)
     self_cpu_cap = (seL4_CPtr)atoi(argv[3]);
     self_pd_cap = (seL4_CPtr)atoi(argv[4]);
     gpi_endpoint = (seL4_CPtr)atoi(argv[5]);
-    seL4_CPtr ramdisk_endpoint = (seL4_CPtr)atoi(argv[6]);
 
     /* configure env */
     env.cspace_root = init_data->root_cnode;
@@ -265,7 +250,6 @@ int main(int argc, char **argv)
     env.self_cpu_cptr = self_cpu_cap;
     env.self_pd_cptr = self_pd_cap;
     env.gpi_endpoint = gpi_endpoint;
-    env.ramdisk_endpoint = ramdisk_endpoint;
     env.priority = init_data->priority;
     env.cspace_size_bits = init_data->cspace_size_bits;
     env.tcb = init_data->tcb;

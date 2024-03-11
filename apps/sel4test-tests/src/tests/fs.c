@@ -22,54 +22,6 @@
 #define RR_MO_N_PAGES 2
 #define FAKE_CLIENT_ID 1
 
-/**
- * Starts the fs as a thread
- */
-
-int start_fs_thread(env_t env, seL4_CPtr ramdisk_ep, seL4_CPtr *fs_ep)
-{
-
-    int error;
-
-    /* create an endpoint for the parent to listen on*/
-    vka_object_t ep_object = {0};
-    error = vka_alloc_endpoint(&env->vka, &ep_object);
-    test_assert(error == 0);
-
-    printf("Starting fs thread\n");
-
-    /* start fs thread */
-    error = xv6fs_server_spawn_thread(&env->simple,
-                                      &env->vka,
-                                      &env->vspace,
-                                      env->gpi_endpoint,
-                                      ramdisk_ep,
-                                      ep_object.cptr,
-                                      env->self_ads_cptr,
-                                      env->self_pd_cptr,
-                                      XV6FS_SERVER_DEFAULT_PRIORITY);
-
-    test_assert(error == 0);
-
-    /* Wait for message from thread */
-    cspacepath_t received_cap_path;
-    error = vka_cspace_alloc_path(&env->vka, &received_cap_path);
-    test_assert(error == 0);
-
-    seL4_SetCapReceivePath(received_cap_path.root,
-                           received_cap_path.capPtr,
-                           received_cap_path.capDepth);
-
-    seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0, 0);
-    tag = seL4_Recv(ep_object.cptr, NULL);
-    test_assert(seL4_MessageInfo_get_extraCaps(tag) == 1);
-    test_assert(received_cap_path.capPtr != 0);
-    *fs_ep = received_cap_path.capPtr;
-
-    printf("Received ep from fs\n");
-    return sel4test_get_result();
-}
-
 int test_fs(env_t env)
 {
     int error;
@@ -101,15 +53,15 @@ int test_fs(env_t env)
 
     /* Start ramdisk server process */
     seL4_CPtr ramdisk_ep;
+    uint64_t ramdisk_id;
     seL4_CPtr ramdisk_pd_cap;
-    error = start_ramdisk_pd(&env->vka, env->gpi_endpoint, &ramdisk_ep, &ramdisk_pd_cap);
+    error = start_ramdisk_pd(&env->vka, &ramdisk_ep, &ramdisk_pd_cap, &ramdisk_id);
     test_assert(error == 0);
 
     /* Start fs server process */
     seL4_CPtr fs_ep;
     seL4_CPtr fs_pd_cap;
-    // error = start_fs_thread(env, ramdisk_ep, &fs_ep);
-    error = start_xv6fs_pd(&env->vka, env->gpi_endpoint, ramdisk_ep, ramdisk_pd_cap, &fs_ep, &fs_pd_cap);
+    error = start_xv6fs_pd(&env->vka, ramdisk_id, ramdisk_pd_cap, &fs_ep, &fs_pd_cap, NULL);
     test_assert(error == 0);
 
     /* Badge the FS EP with a client ID to simulate being a client */
@@ -131,7 +83,7 @@ int test_fs(env_t env)
                            badge_val);
     test_assert(error == 0);
     fs_client_ep = dest.capPtr;
-    pd_client_add_rde(&pd_conn, fs_ep, fs_pd_cap, GPICAP_TYPE_FILE, false);
+    //pd_client_add_rde(&pd_conn, fs_ep, fs_pd_cap, GPICAP_TYPE_FILE, false);
 
     printf("------------------STARTING TESTS: %s------------------\n", __func__);
 

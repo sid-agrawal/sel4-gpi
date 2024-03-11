@@ -133,11 +133,12 @@ static pd_component_registry_entry_t *pd_component_registry_get_entry_by_badge(s
 }
 
 /**
- * @brief Insert a new resource server into the resourcer server registry Linked List.
+ * @brief Insert a new resource manager into the resource manager registry Linked List.
+ * Returns a new ID assigned to the resource manager
  *
  * @param new_node
  */
-static void pd_component_server_registry_insert(pd_component_resource_manager_entry_t *new_node)
+int pd_component_resource_manager_insert(pd_component_resource_manager_entry_t *new_node)
 {
     // TODO:Use a mutex
 
@@ -147,15 +148,21 @@ static void pd_component_server_registry_insert(pd_component_resource_manager_en
     {
         get_pd_component()->server_registry = new_node;
         new_node->next = NULL;
-        return;
+    }
+    else
+    {
+
+        while (head->next != NULL)
+        {
+            head = head->next;
+        }
+        head->next = new_node;
+        new_node->next = NULL;
     }
 
-    while (head->next != NULL)
-    {
-        head = head->next;
-    }
-    head->next = new_node;
-    new_node->next = NULL;
+    new_node->manager_id = get_pd_component()->resource_manager_n_entries;
+    get_pd_component()->resource_manager_n_entries++;
+    return new_node->manager_id;
 }
 
 /**
@@ -185,8 +192,8 @@ int forge_pd_cap_from_init_data(
     vka_t *vka,
     seL4_CPtr *cap_ret)
 {
-
     assert(init_data != NULL);
+
     /* Allocate a new registry entry for the client. */
     pd_component_registry_entry_t *client_reg_ptr = malloc(sizeof(pd_component_registry_entry_t));
     if (client_reg_ptr == 0)
@@ -196,10 +203,17 @@ int forge_pd_cap_from_init_data(
     }
     memset((void *)client_reg_ptr, 0, sizeof(pd_component_registry_entry_t));
 
+    pd_t *pd = &client_reg_ptr->pd;
+    pd_new(pd,
+           get_pd_component()->server_vka,
+           get_pd_component()->server_vspace);
+
     /* Create a badged endpoint for the client to send messages to.
      * Use the address of the client_registry_entry as the badge.
      */
-    cspacepath_t src, dest;
+    // (XXX) Arya: We might be able to replace this with the RDE in init data
+    cspacepath_t src,
+        dest;
     vka_cspace_make_path(
         get_pd_component()->server_vka,
         get_pd_component()->server_ep_obj.cptr, &src);
@@ -211,45 +225,6 @@ int forge_pd_cap_from_init_data(
     seL4_Word badge = pd_assign_new_badge_and_objectID(client_reg_ptr);
     pd_component_registry_insert(client_reg_ptr);
 
-    // (XXX) A lot more will go here.
-    // client_reg_ ptr->pd ...
-    client_reg_ptr->pd.vka = vka;
-    client_reg_ptr->pd.stack_pages = init_data->stack_pages;
-    client_reg_ptr->pd.stack = init_data->stack;
-    client_reg_ptr->pd.page_directory_in_pd = init_data->page_directory;
-    client_reg_ptr->pd.root_cnode_in_pd = init_data->root_cnode;
-    client_reg_ptr->pd.tcb_in_pd = init_data->tcb;
-    client_reg_ptr->pd.domain_in_pd = init_data->domain;
-    client_reg_ptr->pd.asid_pool_in_pd = init_data->asid_pool;
-    client_reg_ptr->pd.asid_ctrl_in_pd = init_data->asid_ctrl;
-
-    // Look at device frame caps and anyother relevant caps
-
-#ifdef CONFIG_IOMMU
-    client_reg_ptr - pd.io_space = init_data->io_space;
-#endif /* CONFIG_IOMMU */
-
-#ifdef CONFIG_TK1_SMMU
-    client_reg_ptr->pd.io_space_caps = init_data->io_space_caps;
-#endif
-
-    client_reg_ptr->pd.cores = init_data->cores;
-    /* copy the sched ctrl caps to the remote process */
-    if (config_set(CONFIG_KERNEL_MCS))
-    {
-        client_reg_ptr->pd.sched_ctrl_in_pd = init_data->sched_ctrl;
-    }
-
-    client_reg_ptr->pd.untypeds = init_data->untypeds;
-    memcpy(
-        client_reg_ptr->pd.untyped_size_bits_list,
-        init_data->untyped_size_bits_list,
-        sizeof(uint8_t) * CONFIG_MAX_NUM_BOOTINFO_UNTYPED_CAPS);
-
-    // client_reg_ptr->pd.cspace_size_bits = init_data->cspace_size_bits;
-    // client_reg_ptr->pd.free_slots = init_data->free_slots;
-    // assert(client_reg_ptr->pd.free_slots.start < client_reg_ptr->pd.free_slots.end);
-
     int error = vka_cnode_mint(&dest,
                                &src,
                                seL4_AllRights,
@@ -259,7 +234,43 @@ int forge_pd_cap_from_init_data(
         OSDB_PRINTF(CPUSERVS "main: Failed to mint client badge %lx.\n", badge);
         return 1;
     }
-    OSDB_PRINTF(CPUSERVS "main: Forged a new PD cap(EP: %lx) with badge value: %lx \n",
+
+    // (XXX) A lot more will go here.
+    // client_reg_ ptr->pd ...
+    pd->vka = vka;
+    pd->stack_pages = init_data->stack_pages;
+    pd->stack = init_data->stack;
+    pd->page_directory_in_pd = init_data->page_directory;
+    pd->root_cnode_in_pd = init_data->root_cnode;
+    pd->tcb_in_pd = init_data->tcb;
+    pd->domain_in_pd = init_data->domain;
+    pd->asid_pool_in_pd = init_data->asid_pool;
+    pd->asid_ctrl_in_pd = init_data->asid_ctrl;
+
+    // Look at device frame caps and anyother relevant caps
+
+#ifdef CONFIG_IOMMU
+    client_reg_ptr - pd.io_space = init_data->io_space;
+#endif /* CONFIG_IOMMU */
+
+#ifdef CONFIG_TK1_SMMU
+    pd->io_space_caps = init_data->io_space_caps;
+#endif
+
+    pd->cores = init_data->cores;
+    /* copy the sched ctrl caps to the remote process */
+    if (config_set(CONFIG_KERNEL_MCS))
+    {
+        pd->sched_ctrl_in_pd = init_data->sched_ctrl;
+    }
+
+    pd->untypeds = init_data->untypeds;
+    memcpy(
+        pd->untyped_size_bits_list,
+        init_data->untyped_size_bits_list,
+        sizeof(uint8_t) * CONFIG_MAX_NUM_BOOTINFO_UNTYPED_CAPS);
+
+    OSDB_PRINTF(PDSERVS "main: Forged a new PD cap(EP: %lx) with badge value: %lx \n",
                 dest.capPtr, badge);
 
     *cap_ret = dest_cptr;
@@ -267,17 +278,90 @@ int forge_pd_cap_from_init_data(
     return 0;
 }
 
-void update_forged_pd_cap_from_init_data(test_init_data_t *init_data, seL4_CPtr cap)
+void update_forged_pd_cap_from_init_data(test_init_data_t *init_data, seL4_CPtr cspace_root)
 {
+    int error;
     assert(init_data != NULL);
 
+    // Assumes this is called to set up the test process
+    // (XXX) Arya: Would this fail if used for a second test?
     pd_t *pd = &get_pd_component()->client_registry->pd;
     assert(pd != NULL);
     assert(pd->pd_obj_id == 0x1);
     pd->free_slots = init_data->free_slots;
     pd->cspace_size_bits = init_data->cspace_size_bits;
 
+    // Split the test process' cspace and initialize a vka with half
+    seL4_CPtr mid_slot = DIV_ROUND_UP(init_data->free_slots.start + init_data->free_slots.end, 2);
+    error = pd_bootstrap_allocator(pd, cspace_root,
+                                   mid_slot, init_data->free_slots.end,
+                                   init_data->cspace_size_bits,
+                                   // seL4_WordBits - init_data->cspace_size_bits);
+                                   0);
+    if (error != seL4_NoError)
+    {
+        ZF_LOGF("Failed to initialize PD VKA\n");
+    }
+    init_data->free_slots.end = mid_slot - 1;
+
+    // Setup the test process' init data
+    rde_type_t ads_type = {.type = GPICAP_TYPE_ADS};
+    pd_add_rde(pd, ads_type, get_gpi_server()->ads_manager_id, get_gpi_server()->server_ep_obj.cptr);
+    rde_type_t cpu_type = {.type = GPICAP_TYPE_CPU};
+    pd_add_rde(pd, cpu_type, get_gpi_server()->cpu_manager_id, get_gpi_server()->server_ep_obj.cptr);
+    rde_type_t mo_type = {.type = GPICAP_TYPE_MO};
+    pd_add_rde(pd, mo_type, get_gpi_server()->mo_manager_id, get_gpi_server()->server_ep_obj.cptr);
+    rde_type_t pd_type = {.type = GPICAP_TYPE_PD};
+    pd_add_rde(pd, pd_type, get_gpi_server()->pd_manager_id, get_gpi_server()->server_ep_obj.cptr);
+
     assert(pd->free_slots.start < pd->free_slots.end);
+}
+
+void *get_osmosis_pd_init_data(vspace_t *test_vspace)
+{
+    // Assumes this is called to set up the test process
+    // (XXX) Arya: Would this fail if used for a second test?
+    pd_t *pd = &get_pd_component()->client_registry->pd;
+
+    // Copy the init data frame cap
+    cspacepath_t src, dest;
+    vka_cspace_make_path(get_pd_component()->server_vka, pd->init_data_frame, &src);
+    vka_cspace_alloc_path(get_pd_component()->server_vka, &dest);
+    vka_cnode_copy(&dest, &src, seL4_AllRights);
+
+    // Map the init data frame in test process
+    // (XXX) Arya: It's possible that the test process vspace will not be
+    // aware of this allocation. Ideally we replace this whole workaround evenutally
+    void *init_data_vaddr = 0x50000000;
+
+    reservation_t res = sel4utils_reserve_range_at(test_vspace,
+                                                   init_data_vaddr,
+                                                   1 * PAGE_SIZE_4K,
+                                                   seL4_AllRights, 1);
+
+    if (res.res == NULL)
+    {
+        ZF_LOGF("get_osmosis_pd_init_data failed to reserve range\n");
+    }
+
+    size_t size_bits = seL4_PageBits;
+    int error = sel4utils_map_pages_at_vaddr(test_vspace,
+                                             &dest.capPtr,
+                                             NULL,
+                                             init_data_vaddr,
+                                             1,
+                                             seL4_PageBits,
+                                             res);
+
+    if (error != seL4_NoError)
+    {
+        ZF_LOGF("get_osmosis_pd_init_data failed to map init data to test vspace\n");
+    }
+
+    pd->init_data_in_PD = init_data_vaddr;
+    OSDB_PRINTF(PDSERVS "Test process init data is at %p\n", pd->init_data_in_PD);
+
+    return pd->init_data_in_PD;
 }
 
 osmosis_pd_cap_t *pd_add_resource_by_id(uint32_t client_id, gpi_cap_t cap_type, uint32_t res_id)
@@ -312,8 +396,7 @@ void pd_handle_allocation_request(seL4_Word sender_badge, seL4_MessageInfo_t *re
 
     int error = pd_new(&client_reg_ptr->pd,
                        get_pd_component()->server_vka,
-                       get_pd_component()->server_vspace,
-                       get_pd_component()->server_simple);
+                       get_pd_component()->server_vspace);
 
     /* Create a badged endpoint for the client to send messages to.
      * Use the address of the client_registry_entry as the badge.
@@ -644,42 +727,54 @@ static void handle_start_req(seL4_Word sender_badge, seL4_MessageInfo_t old_tag,
 
 static void handle_add_rde_req(seL4_Word sender_badge, seL4_MessageInfo_t old_tag, seL4_CPtr received_cap)
 {
-    OSDB_PRINTF(PDSERVS "main: Got add rde request from client badge %lx.\n",
+    int error;
+
+    OSDB_PRINTF(PDSERVS "add_rde_req: Got request from client badge %lx.\n",
                 sender_badge);
 
-    pd_component_registry_entry_t *client_data = pd_component_registry_get_entry_by_badge(sender_badge);
-    if (client_data == NULL)
+    seL4_Word server_badge = seL4_GetBadge(0);
+    seL4_Word manager_id = seL4_GetMR(PDMSGREG_ADD_RDE_REQ_ID);
+    pd_component_registry_entry_t *target_data = pd_component_registry_get_entry_by_badge(sender_badge);
+    pd_component_registry_entry_t *server_data = pd_component_registry_get_entry_by_badge(server_badge);
+    pd_component_resource_manager_entry_t *resource_manager_data = pd_component_resource_manager_get_entry_by_id(manager_id);
+
+    if (target_data == NULL)
     {
-        OSDB_PRINTF(PDSERVS "main: Failed to find client badge %lx.\n",
+        OSDB_PRINTF(PDSERVS "add_rde_req: Failed to find target badge %lx.\n",
                     sender_badge);
-        return;
+        error = -1;
     }
-
-    int error = 0;
-    bool entry_needs_badge = seL4_GetMR(PDMSGREG_ADD_RDE_REQ_NEEDS_BADGE);
-
-    if (client_data->pd.pd_started)
+    else if (server_data == NULL)
     {
-        OSDB_PRINTF(PDSERVS "main: cannot add new RDEs after PD has been started\n");
-        error = 1;
+        OSDB_PRINTF(PDSERVS "add_rde_req: Failed to find server badge %lx.\n",
+                    server_badge);
+        error = -1;
+    }
+    else if (resource_manager_data == NULL)
+    {
+        OSDB_PRINTF(PDSERVS "add_rde_req: Failed to find resource manager ID %ld.\n",
+                    manager_id);
+        error = -1;
+    }
+    else if (target_data->pd.pd_started)
+    {
+        OSDB_PRINTF(PDSERVS "add_rde_req: cannot add new RDEs after PD has been started\n");
+        error = -1;
+    }
+    else if (server_data->pd.pd_obj_id != resource_manager_data->pd->pd_obj_id)
+    {
+        OSDB_PRINTF(PDSERVS "add_rde_req: wrong server PD provided (%d) for resource manager in PD %d\n",
+                    server_data->pd.pd_obj_id,
+                    resource_manager_data->pd->pd_obj_id);
+        error = -1;
     }
     else
     {
-        seL4_Word server_pd_badge = seL4_GetBadge(1);
-        OSDB_PRINTF(PDSERVS "main: RDE server's badge %lx\n", server_pd_badge);
-        pd_component_registry_entry_t *server_pd_data = pd_component_registry_get_entry_by_badge(server_pd_badge);
-        if (server_pd_data == NULL)
-        {
-            OSDB_PRINTF(PDSERVS "error: cannot find server RDE's pd data\n");
-            error = 1;
-        }
-        else
-        {
-            gpi_cap_t server_type = (gpi_cap_t)seL4_GetMR(PDMSGREG_ADD_RDE_REQ_TYPE);
-            rde_type_t rde_type = {.type = server_type};
-            error = pd_add_rde(&client_data->pd, rde_type, server_pd_data->pd.pd_obj_id,
-                               received_cap, entry_needs_badge);
-        }
+        rde_type_t rde_type = {.type = resource_manager_data->resource_type};
+        error = pd_add_rde(&target_data->pd,
+                           rde_type,
+                           resource_manager_data->manager_id,
+                           resource_manager_data->server_ep);
     }
 
     seL4_SetMR(PDMSGREG_FUNC, PD_FUNC_ADD_RDE_ACK);
@@ -707,17 +802,14 @@ static void handle_register_resource_manager_req(seL4_Word sender_badge, seL4_Me
         assert(seL4_MessageInfo_get_extraCaps(old_tag) == 1);
 
         pd_component_resource_manager_entry_t *rs_entry = malloc(sizeof(pd_component_resource_manager_entry_t));
-        // (XXX) Arya: temporarily use pd id as resource manager id, will need to be updated when we have > 1 resource manager per PD
-        rs_entry->manager_id = client_data->pd.pd_obj_id;
         rs_entry->pd = &client_data->pd;
         rs_entry->server_ep = received_cap;
         rs_entry->resource_type = seL4_GetMR(PDMSGREG_REGISTER_SERV_REQ_TYPE);
 
-        pd_component_server_registry_insert(rs_entry);
+        int manager_id = pd_component_resource_manager_insert(rs_entry);
         OSDB_PRINTF(PDSERVS "Registered server, cap is at %ld.\n", rs_entry->server_ep);
 
-        // (XXX) Arya: Is there any danger in a PD being able to find its own ID this way?
-        seL4_SetMR(PDMSGREG_REGISTER_SERV_ACK_ID, client_data->pd.pd_obj_id);
+        seL4_SetMR(PDMSGREG_REGISTER_SERV_ACK_ID, manager_id);
     }
 
     seL4_SetMR(PDMSGREG_FUNC, PD_FUNC_REGISTER_SERV_ACK);
@@ -856,45 +948,6 @@ static void handle_give_resource_req(seL4_Word sender_badge, seL4_MessageInfo_t 
     return reply(tag);
 }
 
-static void handle_init_vka_req(seL4_Word sender_badge, seL4_MessageInfo_t old_tag, seL4_CPtr received_cap)
-{
-    int error = 0;
-
-    OSDB_PRINTF(PDSERVS "Got init vka request from client badge %lx.\n",
-                sender_badge);
-
-    pd_component_registry_entry_t *client_data = pd_component_registry_get_entry_by_badge(sender_badge);
-    if (client_data == NULL)
-    {
-        OSDB_PRINTF(PDSERVS "init_vka: Failed to find client badge %lx.\n",
-                    sender_badge);
-        error = -1;
-    }
-    else
-    {
-        seL4_Word start_slot = seL4_GetMR(PDMSGREG_INIT_VKA_REQ_START_SLOT);
-        seL4_Word end_slot = seL4_GetMR(PDMSGREG_INIT_VKA_REQ_END_SLOT);
-        seL4_Word size_bits = seL4_GetMR(PDMSGREG_INIT_VKA_REQ_SIZE);
-        seL4_Word guard_bits = seL4_GetMR(PDMSGREG_INIT_VKA_REQ_GUARD);
-        seL4_CPtr root_cptr = received_cap;
-
-        error = pd_bootstrap_allocator(&client_data->pd,
-                                       root_cptr,
-                                       start_slot,
-                                       end_slot,
-                                       size_bits,
-                                       guard_bits);
-
-        OSDB_PRINTF(PDSERVS "Initialized VKA for client %ld, start slot %ld, end slot %ld.\n",
-                    get_client_id_from_badge(sender_badge), start_slot, end_slot);
-    }
-
-    seL4_SetMR(PDMSGREG_FUNC, PD_FUNC_INIT_VKA_ACK);
-    seL4_MessageInfo_t tag = seL4_MessageInfo_new(error, 0, 0,
-                                                  PDMSGREG_INIT_VKA_ACK_END);
-    return reply(tag);
-}
-
 /**
  * @brief The starting point for the pd server's thread.
  *
@@ -946,9 +999,6 @@ void pd_component_handle(seL4_MessageInfo_t tag,
         break;
     case PD_FUNC_GIVE_RES_REQ:
         handle_give_resource_req(sender_badge, tag, received_cap->capPtr);
-        break;
-    case PD_FUNC_INIT_VKA_REQ:
-        handle_init_vka_req(sender_badge, tag, received_cap->capPtr);
         break;
     default:
         gpi_panic(PDSERVS "Unknown func type.", (seL4_Word)func);

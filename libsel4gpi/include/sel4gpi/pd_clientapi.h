@@ -128,7 +128,8 @@ int pd_client_dump(pd_client_context_t *conn,
 int pd_client_start(pd_client_context_t *conn, seL4_Word arg0);
 
 /**
- * @brief add a new RDE to the PD
+ * @brief Share an RDE with another PD
+ * This shares an RDE from the client PD with the target PD
  *
  * @param conn client connection object
  * @param server_ep EP to the server
@@ -138,11 +139,29 @@ int pd_client_start(pd_client_context_t *conn, seL4_Word arg0);
  *                    to be badged with client PD's ID
  * @return int 0 on success, -1 on failure.
  */
+int pd_client_share_rde(pd_client_context_t *conn,
+                        seL4_CPtr server_ep,
+                        seL4_CPtr server_pd_cap,
+                        gpi_cap_t server_type,
+                        bool needs_badge);
+
+/**
+ * @brief Add a new RDE to the PD
+ * This creates a new RDE for a resource manager in a freshly-started PD
+ * There are up to 3 PDs involved in this operation:
+ * - Client PD: Has created a resource server PD, calls this function
+ * - Target PD: The PD to add an RDE in, the PD resource sent through conn
+ * - Resource Manager PD: The PD that hosts a resource manager,
+ *                        which the target PD's new RDE will point to
+ *
+ * @param conn client connection object
+ * @param server_pd PD resource for the resource manager PD
+ * @param manager_id Resource manager ID
+ * @return int 0 on success, -1 on failure.
+ */
 int pd_client_add_rde(pd_client_context_t *conn,
-                      seL4_CPtr server_ep,
-                      seL4_CPtr server_pd_cap,
-                      gpi_cap_t server_type,
-                      bool needs_badge);
+                      seL4_CPtr server_pd,
+                      uint64_t manager_id);
 
 /* -- Resource Manager Functions -- */
 // (XXX) Arya: Should these be part of a different component?
@@ -172,6 +191,7 @@ int pd_client_create_resource(pd_client_context_t *conn,
                               gpi_cap_t manager_id,
                               seL4_Word resource_id);
 
+// (XXX) Arya: TODO IMPLEMENT THIS
 /**
  * To be called by a resource server when it allocates
  * a resource to another PD
@@ -187,20 +207,3 @@ int pd_client_give_resource(pd_client_context_t *conn,
                             seL4_Word recipient_id,
                             seL4_Word resource_id,
                             seL4_CPtr *dest);
-
-/**
- * (XXX) Arya: This is a workaround so the test process has a VKA useable by the pd component
- *
- * @param conn the resource server's pd connection
- * @param root the client's root cnode
- * @param start_slot start slot of the section for the PD component to manage
- * @param end_slot final slot of the section for the PD component to manage
- * @param size_bits size of the (entire) cspace
- * @param guard_bits guard bits to use for the cspace
- */
-int pd_client_init_vka(pd_client_context_t *conn,
-                       seL4_CPtr root,
-                       seL4_Word start_slot,
-                       seL4_Word end_slot,
-                       seL4_Word size_bits,
-                       seL4_Word guard_bits);

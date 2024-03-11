@@ -8,6 +8,7 @@
 #include <vka/capops.h>
 #include <vspace/vspace.h>
 
+#include <sel4gpi/pd_utils.h>
 #include <sel4gpi/resource_server_utils.h>
 
 #define SERVER_UTILS "SERVER_UTILS"
@@ -44,9 +45,8 @@
     {                                     \
         if ((check) != seL4_NoError)      \
         {                                 \
-            ZF_LOGE(SERVER_UTILS "%s: %s" \
+            ZF_LOGE(SERVER_UTILS "%s"     \
                                  ", %d.", \
-                    __func__,             \
                     msg,                  \
                     check);               \
             error = -1;                   \
@@ -55,13 +55,12 @@
     } while (0);
 
 int start_resource_server_pd(vka_t *vka,
-                             seL4_CPtr gpi_ep,
-                             gpi_cap_t rde_type,
-                             seL4_CPtr rde_ep,
+                             uint64_t rde_id,
                              seL4_CPtr rde_pd_cap,
                              char *image_name,
                              seL4_CPtr *server_ep,
-                             seL4_CPtr *server_pd_cap)
+                             seL4_CPtr *server_pd_cap,
+                             uint64_t *resource_manager_id)
 {
     int error;
 
@@ -72,7 +71,7 @@ int start_resource_server_pd(vka_t *vka,
 
     // Create a new PD
     pd_client_context_t pd_os_cap;
-    error = pd_component_client_connect(gpi_ep, vka, &pd_os_cap);
+    error = pd_component_client_connect(sel4gpi_get_rde(GPICAP_TYPE_PD), vka, &pd_os_cap);
     CHECK_ERROR(error, "failed to create new pd");
 
     if (server_pd_cap)
@@ -82,7 +81,7 @@ int start_resource_server_pd(vka_t *vka,
 
     // Create a new ADS Cap, which will be in the context of a PD and image
     ads_client_context_t ads_os_cap;
-    error = ads_component_client_connect(gpi_ep, vka, &ads_os_cap);
+    error = ads_component_client_connect(sel4gpi_get_rde(GPICAP_TYPE_ADS), vka, &ads_os_cap);
     CHECK_ERROR(error, "failed to create new ads");
 
     // Make a new AS, loads an image
@@ -95,11 +94,10 @@ int start_resource_server_pd(vka_t *vka,
     CHECK_ERROR(error, "failed to send parent's ep cap to pd");
 
     // Copy the RDE to the new PD
-    // (XXX) Arya: Todo Badge the RDE with the pd ID
-    if (rde_ep > 0)
+    if (rde_pd_cap > 0)
     {
         RESOURCE_SERVER_PRINTF("SENDING RDE\n");
-        error = pd_client_add_rde(&pd_os_cap, rde_ep, rde_pd_cap, rde_type, true);
+        error = pd_client_add_rde(&pd_os_cap, rde_pd_cap, rde_id);
         CHECK_ERROR(error, "failed to send rde to pd");
     }
 
@@ -124,6 +122,11 @@ int start_resource_server_pd(vka_t *vka,
     CHECK_ERROR(n_caps != 1, "message from server does not contain ep");
     *server_ep = received_cap_path.capPtr;
 
+    if (resource_manager_id)
+    {
+        *resource_manager_id = seL4_GetMR(0);
+    }
+
     // Cleanup temporary endpoint
     // (XXX) Arya: why does this free cause future allocs to break?
     // vka_free_object(vka, &ep_object);
@@ -131,86 +134,9 @@ int start_resource_server_pd(vka_t *vka,
     return 0;
 }
 
-int resource_server_spawn_thread(resource_server_context_t *context,
-                                 gpi_cap_t server_type,
-                                 seL4_MessageInfo_t (*request_handler)(seL4_MessageInfo_t, seL4_Word, seL4_CPtr),
-                                 simple_t *parent_simple,
-                                 vka_t *parent_vka,
-                                 vspace_t *parent_vspace,
-                                 seL4_CPtr gpi_ep,
-                                 seL4_CPtr parent_ep,
-                                 seL4_CPtr ads_ep,
-                                 uint8_t priority,
-                                 char *thread_name,
-                                 int (*init_fn)())
-{
-    RESOURCE_SERVER_PRINTF("Starting resource server thread\n");
-
-    int error;
-    cspacepath_t parent_cspace_cspath;
-    seL4_MessageInfo_t tag;
-
-    if (parent_simple == NULL || parent_vka == NULL || parent_vspace == NULL)
-    {
-        return seL4_InvalidArgument;
-    }
-
-    context->resource_type = server_type;
-    context->request_handler = request_handler;
-    context->server_vka = parent_vka;
-    context->gpi_ep = gpi_ep;
-    context->parent_ep = parent_ep;
-    context->ads_conn = malloc(sizeof(ads_client_context_t));
-    context->ads_conn->badged_server_ep_cspath.capPtr = ads_ep;
-    context->init_fn = init_fn;
-
-    /* Get a CPtr to the parent's root cnode. */
-    vka_cspace_make_path(parent_vka, 0, &parent_cspace_cspath);
-
-    /* Allocate the Endpoint that the server will be listening on. */
-    vka_object_t server_ep_obj;
-    error = vka_alloc_endpoint(parent_vka, &server_ep_obj);
-    CHECK_ERROR(error, "failed in vka_alloc_endpoint");
-    context->server_ep = server_ep_obj.cptr;
-
-    RESOURCE_SERVER_PRINTF("Allocated endpoint\n");
-
-    /* Configure thread */
-    sel4utils_thread_config_t config = thread_config_default(parent_simple,
-                                                             parent_cspace_cspath.root,
-                                                             seL4_NilData,
-                                                             context->server_ep,
-                                                             priority);
-
-    sel4utils_thread_t thread;
-    error = sel4utils_configure_thread_config(parent_vka,
-                                              parent_vspace,
-                                              parent_vspace,
-                                              config,
-                                              &thread);
-    CHECK_ERROR_GOTO(error, "sel4utils_configure_thread failed", out);
-
-    RESOURCE_SERVER_PRINTF("Starting resource server thread\n");
-    NAME_THREAD(thread.tcb.cptr, thread_name);
-    error = sel4utils_start_thread(&thread,
-                                   (sel4utils_thread_entry_fn)resource_server_main,
-                                   context, NULL, 1);
-    CHECK_ERROR_GOTO(error, "sel4utils_start_thread failed", out);
-
-    return 0;
-
-out:
-    RESOURCE_SERVER_PRINTF("spawn_thread: Server ran into an error.\n");
-    vka_free_object(parent_vka, &server_ep_obj);
-    return error;
-}
-
 int resource_server_start(resource_server_context_t *context,
                           gpi_cap_t server_type,
                           seL4_MessageInfo_t (*request_handler)(seL4_MessageInfo_t, seL4_Word, seL4_CPtr),
-                          ads_client_context_t *ads_conn,
-                          pd_client_context_t *pd_conn,
-                          seL4_CPtr gpi_ep,
                           seL4_CPtr parent_ep,
                           int (*init_fn)())
 {
@@ -219,14 +145,18 @@ int resource_server_start(resource_server_context_t *context,
     context->resource_type = server_type;
     context->request_handler = request_handler;
     context->server_vka = NULL;
-    context->gpi_ep = gpi_ep;
-    context->ads_conn = ads_conn;
-    context->pd_conn = pd_conn;
+    context->mo_ep = sel4gpi_get_rde(GPICAP_TYPE_MO);
+    context->ads_conn.badged_server_ep_cspath.capPtr = sel4gpi_get_ads_cap();
+    context->pd_conn.badged_server_ep_cspath.capPtr = sel4gpi_get_pd_cap();
     context->parent_ep = parent_ep;
     context->init_fn = init_fn;
 
+    printf("Ramdisk: ADS_CAP: %ld\n", (seL4_Word)context->ads_conn.badged_server_ep_cspath.capPtr);
+    printf("Ramdisk: PD_CAP: %ld\n", (seL4_Word)context->pd_conn.badged_server_ep_cspath.capPtr);
+    printf("Ramdisk: MO ep: %ld\n", (seL4_Word)context->mo_ep);
+
     /* Allocate the Endpoint that the server will be listening on. */
-    error = pd_client_alloc_ep(context->pd_conn, &context->server_ep);
+    error = pd_client_alloc_ep(&context->pd_conn, &context->server_ep);
     CHECK_ERROR(error, "Failed to allocate endpoint for resource server");
     RESOURCE_SERVER_PRINTF("Allocated server ep at %d\n", (int)context->server_ep);
 
@@ -262,7 +192,7 @@ int resource_server_next_slot(resource_server_context_t *context,
     }
     else
     {
-        return pd_client_next_slot(context->pd_conn, slot);
+        return pd_client_next_slot(&context->pd_conn, slot);
     }
     return vka_cspace_alloc(context->server_vka, slot);
 }
@@ -281,7 +211,7 @@ int resource_server_free_slot(resource_server_context_t *context,
     }
     else
     {
-        return pd_client_free_slot(context->pd_conn, slot);
+        return pd_client_free_slot(&context->pd_conn, slot);
     }
 }
 
@@ -297,7 +227,7 @@ int resource_server_main(void *context_v)
 
     // Register the resource server with the PD component
     RESOURCE_SERVER_PRINTF("Registering the resource server with the PD component\n");
-    error = pd_client_register_resource_manager(context->pd_conn, context->resource_type, context->server_ep, &context->server_id);
+    error = pd_client_register_resource_manager(&context->pd_conn, context->resource_type, context->server_ep, &context->server_id);
     CHECK_ERROR_GOTO(error, "failed to register resource server", exit_main);
     RESOURCE_SERVER_PRINTF("Registered resource server, ID is 0x%lx\n", context->server_id);
 
@@ -323,8 +253,9 @@ int resource_server_main(void *context_v)
     // (XXX) Arya: We should not send out an unbadged copy of the endpoint
     // In the future, replace this with a new RDE mechanism?
     RESOURCE_SERVER_PRINTF("Messaging parent process at slot %d, sending ep %d\n", (int)context->parent_ep, (int)context->server_ep);
-    tag = seL4_MessageInfo_new(0, 0, 1, 0);
+    tag = seL4_MessageInfo_new(0, 0, 1, 1);
     seL4_SetCap(0, context->server_ep);
+    seL4_SetMR(0, context->server_id);
     seL4_Send(context->parent_ep, tag);
 
     while (1)
@@ -394,7 +325,7 @@ int resource_server_attach_mo(resource_server_context_t *context,
     CHECK_ERROR(mo_cap == 0, "client did not attach MO for read/write op");
 
     mo_conn.badged_server_ep_cspath.capPtr = mo_cap;
-    error = ads_client_attach(context->ads_conn,
+    error = ads_client_attach(&context->ads_conn,
                               NULL,
                               &mo_conn,
                               vaddr);
@@ -440,7 +371,7 @@ int resource_server_create_resource(resource_server_context_t *context,
 
     RESOURCE_SERVER_PRINTF("Creating resource with ID 0x%lx\n", resource_id);
 
-    error = pd_client_create_resource(context->pd_conn,
+    error = pd_client_create_resource(&context->pd_conn,
                                       context->server_id,
                                       resource_id);
 
@@ -456,7 +387,7 @@ int resource_server_give_resource(resource_server_context_t *context,
 
     RESOURCE_SERVER_PRINTF("Giving resource to client, resource ID 0x%lx, client ID 0x%lx\n", resource_id, client_id);
 
-    error = pd_client_give_resource(context->pd_conn,
+    error = pd_client_give_resource(&context->pd_conn,
                                     context->server_id,
                                     client_id,
                                     resource_id,

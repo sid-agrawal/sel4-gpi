@@ -184,40 +184,12 @@ static int init_naive_blocks()
 
   for (int i = 0; i < FS_SIZE; i++)
   {
-    CHECK_ERROR(error, "failed to get a free slot");
     error = ramdisk_client_alloc_block(ramdisk_ep,
                                        &get_xv6fs_server()->naive_blocks[i]);
     CHECK_ERROR(error, "failed to alloc a block from ramdisk");
   }
 
   return 0;
-}
-
-int xv6fs_server_spawn_thread(simple_t *parent_simple,
-                              vka_t *parent_vka,
-                              vspace_t *parent_vspace,
-                              seL4_CPtr gpi_ep,
-                              seL4_CPtr rd_ep,
-                              seL4_CPtr parent_ep,
-                              seL4_CPtr ads_ep,
-                              seL4_CPtr pd_ep,
-                              uint8_t priority)
-{
-  get_xv6fs_server()->rd_ep = rd_ep;
-
-  return resource_server_spawn_thread(
-      &get_xv6fs_server()->gen,
-      GPICAP_TYPE_BLOCK,
-      xv6fs_request_handler,
-      parent_simple,
-      parent_vka,
-      parent_vspace,
-      gpi_ep,
-      parent_ep,
-      ads_ep,
-      priority,
-      "fs server",
-      xv6fs_init);
 }
 
 /**
@@ -239,13 +211,13 @@ int xv6fs_init()
 
   CHECK_ERROR(error, "failed to get next cspace slot");
 
-  error = mo_component_client_connect(server->gen.gpi_ep,
+  error = mo_component_client_connect(server->gen.mo_ep,
                                       free_slot,
                                       1,
                                       server->shared_mem);
   CHECK_ERROR(error, "failed to allocate shared mem page");
 
-  error = ads_client_attach(server->gen.ads_conn,
+  error = ads_client_attach(&server->gen.ads_conn,
                             NULL,
                             server->shared_mem,
                             &server->shared_mem_vaddr);

@@ -90,6 +90,12 @@ typedef struct _gpi_server_context
     osmosis_cap_t *osm_caps;
     osmosis_cap_t *osm_caps_tail;
 
+    /* IDs of the core resource managers */
+    uint64_t ads_manager_id;
+    uint64_t mo_manager_id;
+    uint64_t cpu_manager_id;
+    uint64_t pd_manager_id;
+
     // do we need this?
     // gpi_global_rde_t *osm_rde;
     // gpi_global_rde_t *osm_rde_tail;

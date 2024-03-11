@@ -27,14 +27,15 @@ typedef struct _ramdisk_client_context
  * Starts the ramdisk server in a new process
  *
  * @param vka vka to use while creating the process
- * @param gpi_ep endpoint of the gpi server
- * @param ramdisk_ep otputs the ep of the new ramdisk server
+ * @param ramdisk_ep returns the ep of the new ramdisk server
+ * @param ramdisk_pd_cap returns the PD resource of the new ramdisk server
+ * @param ramdisk_id returns the resource manager ID of the ramdisk
  * @return 0 on success, or -1 otherwise
  */
 int start_ramdisk_pd(vka_t *vka,
-                     seL4_CPtr gpi_ep,
                      seL4_CPtr *ramdisk_ep,
-                     seL4_CPtr *ramdisk_pd_cap);
+                     seL4_CPtr *ramdisk_pd_cap,
+                     uint64_t *ramdisk_id);
 
 /**
  * @brief Sanity test for shared memory with ramdisk

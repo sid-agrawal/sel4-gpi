@@ -343,17 +343,13 @@ void basic_set_up(uintptr_t e)
     //--------------------------------------------------------------------
 #endif
 
-    // For the ads-server
     env->gpi_endpoint_in_child = sel4utils_copy_cap_to_process(&(env->test_process),
-                                                               &env->vka, env->gpi_endpoint_in_parent);
-
-    // For the ads-server
-    env->ramdisk_endpoint_in_child = sel4utils_copy_cap_to_process(&(env->test_process),
-                                                                   &env->vka, env->ramdisk_endpoint_in_parent);
+                                                                &env->vka, env->gpi_endpoint_in_parent);
+    assert(env->gpi_endpoint_in_child != 0);
 
     // Keep this one as the last COPY, so that  init->free_slot.start a few lines below stays valid.
     // See at label "Warning"
-    seL4_CPtr free_slot_start = env->ramdisk_endpoint_in_child + 1;
+    seL4_CPtr free_slot_start = env->gpi_endpoint_in_child + 1;
 
     /* copy the device frame, if any */
     if (env->init->device_frame_cap)
@@ -380,7 +376,7 @@ Warning:
     assert(env->init->free_slots.start < env->init->free_slots.end);
 
 #ifdef PD_FORGE
-    update_forged_pd_cap_from_init_data(env->init, env->child_pd_cptr_in_child);
+    update_forged_pd_cap_from_init_data(env->init, env->test_process.cspace.cptr);
 #endif
 }
 
@@ -398,7 +394,7 @@ test_result_t basic_run_test(struct testcase *test, uintptr_t e)
 #endif
 
     /* set up args for the test process */
-    seL4_Word argc = 7;
+    seL4_Word argc = 6;
     char string_args[argc][WORD_STRING_SIZE];
     char *argv[argc];
     sel4utils_create_word_args(string_args, argv, argc,
@@ -407,13 +403,23 @@ test_result_t basic_run_test(struct testcase *test, uintptr_t e)
                                env->child_ads_cptr_in_child,
                                env->child_cpu_cptr_in_child,
                                env->child_pd_cptr_in_child,
-                               env->gpi_endpoint_in_child,
-                               env->ramdisk_endpoint_in_child);
+                               env->gpi_endpoint_in_child);
 
     int num_res;
-    /* spawn the process */
+
+/* spawn the process */
+#ifdef PD_FORGE
+    // (XXX) Arya: We aren't starting the test process as a normal PD yet,
+    // so use this workaround to give it a resource directory anyway
+    void *osm_init_data = get_osmosis_pd_init_data(&env->test_process.vspace);
+    error = sel4utils_osm_spawn_process_v(&(env->test_process), osm_init_data,
+                                          &env->vka, &env->vspace,
+                                          argc, argv, 1);
+#else
     error = sel4utils_spawn_process_v(&(env->test_process), &env->vka, &env->vspace,
                                       argc, argv, 1);
+#endif
+
     ZF_LOGF_IF(error != 0, "Failed to start test process!");
 
     if (config_set(CONFIG_HAVE_TIMER))

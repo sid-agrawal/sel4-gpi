@@ -177,14 +177,15 @@ int test_sqlite(env_t env)
 
     /* Start ramdisk server process */
     seL4_CPtr ramdisk_ep;
+    uint64_t ramdisk_id;
     seL4_CPtr ramdisk_pd_cap;
-    error = start_ramdisk_pd(&env->vka, env->gpi_endpoint, &ramdisk_ep, &ramdisk_pd_cap);
+    error = start_ramdisk_pd(&env->vka, &ramdisk_ep, &ramdisk_pd_cap, &ramdisk_id);
     test_assert(error == 0);
 
     /* Start fs server process */
     seL4_CPtr fs_ep;
     seL4_CPtr fs_pd_cap;
-    error = start_xv6fs_pd(&env->vka, env->gpi_endpoint, ramdisk_ep, ramdisk_pd_cap, &fs_ep, &fs_pd_cap);
+    error = start_xv6fs_pd(&env->vka, ramdisk_id, ramdisk_pd_cap, &fs_ep, &fs_pd_cap, NULL);
     test_assert(error == 0);
 
     /* Badge the FS EP with a client ID to simulate being a client */

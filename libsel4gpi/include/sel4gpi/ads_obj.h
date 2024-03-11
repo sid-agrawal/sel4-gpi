@@ -23,7 +23,7 @@
  * */
 typedef struct _attach_node
 {
-    seL4_Word mo_badge; // keeping entire badge so we can get other info from the MO
+    seL4_Word mo_id; // keeping mo ID so we can get other info from the MO
     void *vaddr;
     seL4_CPtr *frame_caps;
     struct _attach_node *next;

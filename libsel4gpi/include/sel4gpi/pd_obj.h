@@ -60,9 +60,9 @@ typedef struct osmosis_rde
         But let's keep track of slot_in* (above) for now.
     */
 
-    /*OSmosis generated PD ID of the server for RDE */
-    // osmosis_pd_id_t pd_obj_id;
+    /* OSmosis generated resource manager ID for RDE */
     uint32_t pd_obj_id;
+    uint32_t manager_id;
 
     /* Info about what the RDE is for ?*/
     rde_type_t type;
@@ -91,6 +91,20 @@ typedef struct osmosis_pd_cap
     UT_hash_handle hh;
 } osmosis_pd_cap_t;
 
+/**
+ * The data given to initialize a new Osmosis PD
+ */
+typedef struct _osm_pd_init_data
+{
+    // PD's own PD resource and ADS resource
+    seL4_CPtr pd_cap;
+    seL4_CPtr ads_cap;
+
+    // Resource directory
+    osmosis_rde_t rde[MAX_PD_OSM_RDE];
+    uint64_t rde_count;
+} osm_pd_init_data_t;
+
 typedef struct _pd
 {
     // seL4_CPtr cspace_root;
@@ -100,9 +114,6 @@ typedef struct _pd
     uint32_t pd_obj_id;
 
     sel4utils_process_t proc;
-
-    /* AS endpoint for child */
-    seL4_CPtr ads_ep_in_child;
 
     // CPU_CAP
     simple_t *simple;
@@ -191,12 +202,24 @@ typedef struct _pd
         (XXX) Convert both of there to linked lists
     */
 
+    // PD start state
+    int pd_started; // whether or not the pd has been started
+
+    // PD's accessible resources
     osmosis_pd_cap_t *has_access_to;
     uint64_t has_access_to_count;
-    osmosis_rde_t rde[MAX_PD_OSM_RDE];
-    uint64_t rde_count;
-    int pd_started; // whether or not the pd has been started
-    seL4_CPtr pd_rde_in_child;
+
+    // Init data is mapped to PD and includes RDE and ADS/PD caps
+    mo_client_context_t init_data_mo;
+    seL4_CPtr init_data_frame;
+    uint64_t init_data_mo_id;
+    osm_pd_init_data_t *init_data; // RT vaddr of the init data
+    osm_pd_init_data_t *init_data_in_PD; // PD's vaddr of the init data
+
+    // Special caps to send to all PDs
+    seL4_CPtr pd_cap_in_RT;
+    seL4_CPtr ads_cap_in_RT;
+    uint32_t ads_obj_id;
 
     /**
      * =========================================================================
@@ -216,9 +239,8 @@ EP if applicable
 */
 
 int pd_new(pd_t *pd,
-           vka_t *vka,
-           vspace_t *server_vspace,
-           simple_t *simple);
+           vka_t *server_vka,
+           vspace_t *server_vspace);
 
 int pd_load_image(pd_t *pd,
                   vka_t *vka,
@@ -307,7 +329,16 @@ void print_pd_osm_rde_info(osmosis_rde_t *o);
 osmosis_pd_cap_t *pd_add_resource(pd_t *pd, gpi_cap_t type, uint32_t res_id);
 
 /**
+ * @brief Add an RDE to a PD
+ *
  * Note: This must be called after the PD is loaded, and before it is started
+ *
+ * @param pd The target PD to add an RDE to
+ * @param type the type of the RDE
+ * @param manager_id the resource manager ID of this RDE
+ * @param server_ep the raw endpoint of the resource manager
  */
-int pd_add_rde(pd_t *pd, rde_type_t type, uint32_t pd_obj_id,
-               seL4_CPtr server_ep, bool needs_badge);
+int pd_add_rde(pd_t *pd,
+               rde_type_t type,
+               uint32_t manager_id,
+               seL4_CPtr server_ep);

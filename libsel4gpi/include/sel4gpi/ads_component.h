@@ -178,3 +178,15 @@ int forge_ads_cap_from_vspace(vspace_t *vspace, vka_t *vka, uint32_t client_pd_i
 ads_component_registry_entry_t *ads_component_registry_get_entry_by_badge(seL4_Word badge);
 
 ads_component_registry_entry_t *ads_component_registry_get_entry_by_id(seL4_Word object_ID);
+
+/**
+ * Attach an MO to an ADS by ID
+ * Note: Only useable from the root task
+ *       This is needed since the root task cannot send IPCs to itself
+ *
+ * @param ads_id ID of the ADS to attach to
+ * @param mo_id ID of the MO to attach
+ * @param vaddr Requested vaddr to attach at, or NULL
+ * @param ret_vaddr Returns the attached vaddr
+ */
+int ads_component_attach(uint64_t ads_id, uint64_t mo_id, void *vaddr, void **ret_vaddr);

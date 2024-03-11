@@ -83,9 +83,6 @@ enum pd_component_funcs
 
     PD_FUNC_GIVE_RES_REQ,
     PD_FUNC_GIVE_RES_ACK,
-
-    PD_FUNC_INIT_VKA_REQ,
-    PD_FUNC_INIT_VKA_ACK,
 };
 
 /* Designated purposes of each message register in the mini-protocol. */
@@ -165,8 +162,7 @@ enum pd_component_msgregs
     PDMSGREG_DISCONNECT_ACK_END = PDMSGREG_LABEL0,
 
     /* Add RDE */
-    PDMSGREG_ADD_RDE_REQ_TYPE = PDMSGREG_LABEL0,
-    PDMSGREG_ADD_RDE_REQ_NEEDS_BADGE,
+    PDMSGREG_ADD_RDE_REQ_ID = PDMSGREG_LABEL0,
     PDMSGREG_ADD_RDE_REQ_END,
 
     PDMSGREG_ADD_RDE_ACK_END = PDMSGREG_LABEL0,
@@ -194,15 +190,6 @@ enum pd_component_msgregs
 
     PDMSGREG_GIVE_RES_ACK_DEST = PDMSGREG_LABEL0,
     PDMSGREG_GIVE_RES_ACK_END,
-
-    /* Init VKA */
-    PDMSGREG_INIT_VKA_REQ_START_SLOT = PDMSGREG_LABEL0,
-    PDMSGREG_INIT_VKA_REQ_END_SLOT,
-    PDMSGREG_INIT_VKA_REQ_SIZE,
-    PDMSGREG_INIT_VKA_REQ_GUARD,
-    PDMSGREG_INIT_VKA_REQ_END,
-
-    PDMSGREG_INIT_VKA_ACK_END = PDMSGREG_LABEL0,
 };
 
 /* Per-client context maintained by the server. */
@@ -241,6 +228,7 @@ typedef struct _pd_component_context
 
     int registry_n_entries;
     pd_component_registry_entry_t *client_registry;
+    int resource_manager_n_entries;
     pd_component_resource_manager_entry_t *server_registry;
 } pd_component_context_t;
 
@@ -257,12 +245,32 @@ pd_component_context_t *get_pd_component(void);
 
 void pd_handle_allocation_request(seL4_Word sender_badge, seL4_MessageInfo_t *reply_tag);
 
+// Only used to forge the test process' PD cap
 int forge_pd_cap_from_init_data(
     test_init_data_t *init_data, // Change this to something else
     vka_t *vka,
     seL4_CPtr *cap_ret);
 
-void update_forged_pd_cap_from_init_data(test_init_data_t *init_data, seL4_CPtr cap);
+// Only used to update the test process' PD cap
+void update_forged_pd_cap_from_init_data(test_init_data_t *init_data, seL4_CPtr cspace_root);
+
+/**
+ * Only used for starting the test process, maps the init data
+ * into the test process vspace
+ * (XXX) Arya: Ideally we use something better
+ *
+ * @param test_vspace The test process vspace
+ * Returns the address where init data was mapped
+ */
+void *get_osmosis_pd_init_data(vspace_t *test_vspace);
+
+/**
+ * @brief Insert a new resource manager into the resource manager registry Linked List.
+ * Returns a new ID assigned to the resource manager
+ *
+ * @param new_node
+ */
+int pd_component_resource_manager_insert(pd_component_resource_manager_entry_t *new_node);
 
 /**
  * @brief Lookup the resource server registry entry for the given object id.

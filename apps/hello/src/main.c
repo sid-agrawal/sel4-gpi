@@ -20,6 +20,7 @@ char _cpio_archive_end[1];
 #include <sel4gpi/mo_clientapi.h>
 #include <sel4gpi/ads_clientapi.h>
 #include <sel4gpi/pd_clientapi.h>
+#include <sel4gpi/pd_utils.h>
 
 #define APP_MALLOC_SIZE PAGE_SIZE_4K
 
@@ -38,41 +39,30 @@ int main(int argc, char **argv)
     ccnt_t creation_start, creation_end;
     SEL4BENCH_READ_CCNT(creation_end);
 
-    // Do we need to initialize a vka?
-    // No we can add a function called, next PD slot.
+    int error;
 
-    seL4_CPtr ads_cap = sel4runtime_get_initial_ads_cap();
-    seL4_CPtr rde_cap = sel4runtime_get_rde_cap();
+    osm_pd_init_data_t *init_data = sel4runtime_get_osm_init_data();
+    seL4_CPtr ads_cap = sel4gpi_get_ads_cap();
+    seL4_CPtr pd_cap = sel4gpi_get_pd_cap();
 
     printf("Hello: ADS_CAP: %ld\n", (seL4_Word)ads_cap);
-    printf("Hello: RDE_CAP: %ld\n", (seL4_Word)rde_cap);
+    printf("Hello: PD_CAP: %ld\n", (seL4_Word)pd_cap);
 
     ads_client_context_t ads_conn;
     ads_conn.badged_server_ep_cspath.capPtr = ads_cap;
 
-    void *rde_vaddr;
-    mo_client_context_t rde_mo;
-    rde_mo.badged_server_ep_cspath.capPtr = rde_cap;
-    int error = ads_client_attach(&ads_conn,
-                              0, /*vaddr*/
-                              &rde_mo,
-                              &rde_vaddr);
-    assert(error == 0);
-    printf("Attached to vaddr %p\n", rde_vaddr);
+    pd_client_context_t pd_conn;
+    pd_conn.badged_server_ep_cspath.capPtr = pd_cap;
 
-    osmosis_rde_t *pd_rde = (osmosis_rde_t *) rde_vaddr;
-    seL4_CPtr gpi_cap = pd_rde[GPICAP_TYPE_MO].slot_in_PD;
+    seL4_CPtr mo_server_ep = sel4gpi_get_rde(GPICAP_TYPE_MO);
 
     seL4_CPtr slot;
-    pd_client_context_t pd_conn;
-    printf("pd_rde[pd]: %lx\n", pd_rde[GPICAP_TYPE_PD].slot_in_PD);
-    pd_conn.badged_server_ep_cspath.capPtr = pd_rde[GPICAP_TYPE_PD].slot_in_PD;
     error = pd_client_next_slot(&pd_conn, &slot);
     assert(error == 0);
     printf("Next free slot is %ld\n", (seL4_Word)slot);
 
     mo_client_context_t mo_conn;
-    error = mo_component_client_connect(gpi_cap,
+    error = mo_component_client_connect(mo_server_ep,
                                         slot,
                                         5,
                                         &mo_conn);

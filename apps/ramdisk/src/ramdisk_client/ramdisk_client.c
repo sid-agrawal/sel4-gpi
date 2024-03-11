@@ -46,16 +46,16 @@
 static ramdisk_client_context_t ramdisk_client;
 
 int start_ramdisk_pd(vka_t *vka,
-                     seL4_CPtr gpi_ep,
                      seL4_CPtr *ramdisk_ep,
-                     seL4_CPtr *ramdisk_pd_cap)
+                     seL4_CPtr *ramdisk_pd_cap,
+                     uint64_t *ramdisk_id)
 {
     int error;
-    error = start_resource_server_pd(vka, gpi_ep,
-                                     0, 0, 0,
-                                     RAMDISK_APP, ramdisk_ep, ramdisk_pd_cap);
+    error = start_resource_server_pd(vka, 0, 0, RAMDISK_APP,
+                                     ramdisk_ep, ramdisk_pd_cap, ramdisk_id);
     CHECK_ERROR(error, "failed to start ramdisk server\n");
-    RAMDISK_PRINTF("Successfully started ramdisk server, ep is at %d\n", (int)*ramdisk_ep);
+    RAMDISK_PRINTF("Successfully started ramdisk server, ep is at %d, resource manager ID is %d\n",
+                   (int)*ramdisk_ep, (int)*ramdisk_id);
     return 0;
 }
 

@@ -22,60 +22,6 @@
 #define TEST_STR_2 "Fuzzy Wuzzy had no hair"
 #define FAKE_CLIENT_ID 1
 
-/**
- * Starts the ramdisk as a thread
- */
-int start_ramdisk_thread(env_t env, seL4_CPtr *ramdisk_ep)
-{
-
-    int error;
-
-    /* create an endpoint for the parent to listen on*/
-    vka_object_t ep_object = {0};
-    error = vka_alloc_endpoint(&env->vka, &ep_object);
-    test_assert(error == 0);
-
-    printf("Starting ramdisk thread\n");
-
-    /* start ramdisk thread */
-    error = ramdisk_server_spawn_thread(&env->simple,
-                                        &env->vka,
-                                        &env->vspace,
-                                        env->gpi_endpoint,
-                                        ep_object.cptr,
-                                        env->self_ads_cptr,
-                                        250);
-
-    test_assert(error == 0);
-
-    /* Wait for message from thread */
-    cspacepath_t received_cap_path;
-    error = vka_cspace_alloc_path(&env->vka, &received_cap_path);
-    test_assert(error == 0);
-
-    seL4_SetCapReceivePath(received_cap_path.root,
-                           received_cap_path.capPtr,
-                           received_cap_path.capDepth);
-
-    seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0, 0);
-    tag = seL4_Recv(ep_object.cptr, NULL);
-    test_assert(seL4_MessageInfo_get_extraCaps(tag) == 1);
-    test_assert(received_cap_path.capPtr != 0);
-    *ramdisk_ep = received_cap_path.capPtr;
-
-    printf("Received ep from ramdisk\n");
-    return sel4test_get_result();
-}
-
-/**
- * Uses the ramdisk already started by the root task
- */
-int use_rt_ramdisk_thread(env_t env, seL4_CPtr *ramdisk_ep)
-{
-    *ramdisk_ep = env->ramdisk_endpoint;
-    return 0;
-}
-
 int test_ramdisk(env_t env)
 {
     seL4_Error error;
@@ -113,8 +59,9 @@ int test_ramdisk(env_t env)
 
     /* Start ramdisk server process */
     seL4_CPtr ramdisk_ep;
+    uint64_t ramdisk_id;
     seL4_CPtr ramdisk_pd_cap;
-    error = start_ramdisk_pd(&env->vka, env->gpi_endpoint, &ramdisk_ep, &ramdisk_pd_cap);
+    error = start_ramdisk_pd(&env->vka, &ramdisk_ep, &ramdisk_pd_cap, &ramdisk_id);
     test_assert(error == 0);
 
     /* Badge the ramdisk EP with a client ID to simulate being a client */

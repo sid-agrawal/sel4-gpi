@@ -173,10 +173,11 @@ void ads_handle_allocation_request(seL4_Word sender_badge, seL4_MessageInfo_t *r
 
     seL4_Word badge = ads_assign_new_badge_and_objectID(client_reg_ptr);
     uint32_t client_id = get_client_id_from_badge(sender_badge);
-    
+
     // (XXX) Linh: this is not very nice as we're coupling the PD and ADS components
     osmosis_pd_cap_t *res = pd_add_resource_by_id(client_id, GPICAP_TYPE_ADS, get_object_id_from_badge(badge));
-    if (res) {
+    if (res)
+    {
         res->slot_in_RT_Debug = dest_cptr;
         badge = set_client_id_to_badge(badge, client_id);
     }
@@ -197,50 +198,37 @@ void ads_handle_allocation_request(seL4_Word sender_badge, seL4_MessageInfo_t *r
     return reply(tag);
 }
 
-static void handle_attach_req(seL4_Word sender_badge, seL4_MessageInfo_t old_tag, seL4_CPtr mo_cap)
-{
-    OSDB_PRINTF(ADSSERVS "main: Got attach request from client badge %lx.\n",
-                sender_badge);
 
-    // No longer needed as we are now sending slots.
-    // assert(seL4_MessageInfo_get_extraCaps(old_tag) == 1);
+int ads_component_attach(uint64_t ads_id, uint64_t mo_id, void *vaddr, void **ret_vaddr)
+{
     int error;
+
     /* Find the client */
-    ads_component_registry_entry_t *client_data = ads_component_registry_get_entry_by_badge(sender_badge);
+    ads_component_registry_entry_t *client_data = ads_component_registry_get_entry_by_id(ads_id);
     if (client_data == NULL)
     {
-        OSDB_PRINTF(ADSSERVS "main: Failed to find client badge %lx.\n",
-                    sender_badge);
-        return;
+        OSDB_PRINTF(ADSSERVS "main: Failed to find ADS with ID %ld.\n",
+                    ads_id);
+        return -1;
     }
-    OSDB_PRINTF(ADSSERVS "main: found client_data badge details:");
-    badge_print(sender_badge);
 
-    void *vaddr = (void *)seL4_GetMR(ADSMSGREG_ATTACH_REQ_VA);
-    OSDB_PRINTF(ADSSERVS "main: vaddr %p \n", vaddr);
-
-    /*
-        The MO will be one of the caps Unwrapped.
-        Get its badge using seL4_GetBadge(0) see handle_config_req
-        where ads cap is passed.
-        Get frame cap from the MO cap.
-    */
-
-    seL4_Word mo_badge = seL4_GetBadge(0);
-    OSDB_PRINTF(ADSSERVS "Extra Caps: %s Badge: %lx\n",
-                seL4_MessageInfo_get_extraCaps(old_tag) ? "true" : "false", mo_badge);
-    mo_component_registry_entry_t *mo_reg = mo_component_registry_get_entry_by_badge(mo_badge);
-    assert(mo_reg != NULL);
+    /* Find the MO */
+    mo_component_registry_entry_t *mo_reg = mo_component_registry_get_entry_by_id(mo_id);
+    if (mo_reg == NULL)
+    {
+        OSDB_PRINTF(ADSSERVS "main: Failed to find MO with ID %ld.\n",
+                    mo_id);
+        return -1;
+    }
 
     uint32_t num_pages = mo_reg->mo.num_pages;
     mo_frame_t *root_frame_caps = mo_reg->mo.frame_caps_in_root_task;
-    void *ret_vaddr = NULL;
 
     OSDB_PRINTF(ADSSERVS "attaching mo with id %lu\n", mo_reg->mo.mo_obj_id);
 
     /* Make a copy of the frame caps for this new mapping */
     attach_node_t *attach_node = malloc(sizeof(attach_node_t));
-    attach_node->mo_badge = mo_badge;
+    attach_node->mo_id = mo_id;
     attach_node->frame_caps = malloc(sizeof(seL4_CPtr) * num_pages);
     attach_node->next = client_data->ads.attach_nodes;
     client_data->ads.attach_nodes = attach_node;
@@ -255,7 +243,7 @@ static void handle_attach_req(seL4_Word sender_badge, seL4_MessageInfo_t old_tag
         if (error)
         {
             OSDB_PRINTF(ADSSERVS "main: Failed to allocate slot in root cspace, error: %d", error);
-            return;
+            return -1;
         }
 
         /* copy the frame cap */
@@ -263,7 +251,7 @@ static void handle_attach_req(seL4_Word sender_badge, seL4_MessageInfo_t old_tag
         if (error)
         {
             OSDB_PRINTF(ADSSERVS "main: Failed to copy cap, error: %d", error);
-            return;
+            return -1;
         }
 
         attach_node->frame_caps[i] = to_path.capPtr;
@@ -277,19 +265,43 @@ static void handle_attach_req(seL4_Word sender_badge, seL4_MessageInfo_t old_tag
                        vaddr,
                        num_pages,
                        attach_node->frame_caps,
-                       &ret_vaddr,
+                       ret_vaddr,
                        client_data->ads.vspace);
+
     if (error)
     {
-        OSDB_PRINTF(ADSSERVS "main: Failed to attach at vaddr:%p num_pages: %u to client badge %lx.\n",
-                    vaddr, num_pages, sender_badge);
-        return;
+        OSDB_PRINTF(ADSSERVS "main: Failed to attach at vaddr:%p num_pages: %u to client ID %ld.\n",
+                    vaddr, num_pages, ads_id);
+        return -1;
     }
-    attach_node->vaddr = ret_vaddr;
+    attach_node->vaddr = *ret_vaddr;
+
+    return error;
+}
+
+static void handle_attach_req(seL4_Word sender_badge, seL4_MessageInfo_t old_tag, seL4_CPtr mo_cap)
+{
+    OSDB_PRINTF(ADSSERVS "main: Got attach request from client badge %lx.\n",
+                sender_badge);
+
+    int error;
+
+    uint64_t ads_id = get_object_id_from_badge(sender_badge);
+
+    /*
+        The MO will be one of the caps Unwrapped.
+        Get its badge using seL4_GetBadge(0) see handle_config_req
+        where ads cap is passed.
+        Get frame cap from the MO cap.
+    */
+    uint64_t mo_id = get_object_id_from_badge(seL4_GetBadge(0));
+    void *vaddr = (void *)seL4_GetMR(ADSMSGREG_ATTACH_REQ_VA);
+
+    error = ads_component_attach(ads_id, mo_id, vaddr, &vaddr);
 
     // sel4utils_walk_vspace(client_data->ads.vspace, NULL);
     seL4_SetMR(ADSMSGREG_FUNC, ADS_FUNC_ATTACH_ACK);
-    seL4_SetMR(ADSMSGREG_ATTACH_ACK_VA, (seL4_Word)ret_vaddr);
+    seL4_SetMR(ADSMSGREG_ATTACH_ACK_VA, (seL4_Word)vaddr);
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0, ADSMSGREG_ATTACH_ACK_END);
     return reply(tag);
 }
@@ -506,7 +518,7 @@ int forge_ads_cap_from_vspace(vspace_t *vspace, vka_t *vka, uint32_t client_pd_i
     //     res = res->next;
     // }
 
-    if (ads_obj_id_ret) 
+    if (ads_obj_id_ret)
     {
         *ads_obj_id_ret = get_object_id_from_badge(badge);
     }

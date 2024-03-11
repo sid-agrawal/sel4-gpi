@@ -64,29 +64,6 @@ ramdisk_server_context_t *get_ramdisk_server(void)
     return &ramdisk_server;
 }
 
-int ramdisk_server_spawn_thread(simple_t *parent_simple,
-                                vka_t *parent_vka,
-                                vspace_t *parent_vspace,
-                                seL4_CPtr gpi_ep,
-                                seL4_CPtr parent_ep,
-                                seL4_CPtr ads_ep,
-                                uint8_t priority)
-{
-    return resource_server_spawn_thread(
-        &get_ramdisk_server()->gen,
-        GPICAP_TYPE_FILE,
-        ramdisk_request_handler,
-        parent_simple,
-        parent_vka,
-        parent_vspace,
-        gpi_ep,
-        parent_ep,
-        ads_ep,
-        priority,
-        "ramdisk server",
-        ramdisk_init);
-}
-
 /**
  * Create a pointer to the ramdisk buf from a sector and offset
  */
@@ -112,7 +89,7 @@ int ramdisk_init()
     error = resource_server_next_slot(&get_ramdisk_server()->gen, &free_slot);
     CHECK_ERROR(error, "failed to get next cspace slot");
 
-    error = mo_component_client_connect(server->gen.gpi_ep,
+    error = mo_component_client_connect(server->gen.mo_ep,
                                         free_slot,
                                         n_pages,
                                         server->ramdisk_mo);
@@ -120,7 +97,7 @@ int ramdisk_init()
     RAMDISK_PRINTF("Allocated ramdisk\n");
 
     /* Map the virtual disk */
-    error = ads_client_attach(server->gen.ads_conn,
+    error = ads_client_attach(&server->gen.ads_conn,
                               NULL,
                               server->ramdisk_mo,
                               &server->ramdisk_buf);
@@ -134,7 +111,8 @@ int ramdisk_init()
     server->free_blocks->next = NULL;
 
     /* Create the block resources */
-    for (int i = 0; i < server->free_blocks->n_blocks; i++) {
+    for (int i = 0; i < server->free_blocks->n_blocks; i++)
+    {
         // Local resource ID is the block ID
         resource_server_create_resource(&server->gen, i);
     }
@@ -244,7 +222,7 @@ seL4_MessageInfo_t ramdisk_request_handler(seL4_MessageInfo_t tag, seL4_Word sen
             seL4_SetMR(RDMSGREG_CREATE_ACK_ID, get_global_object_id_from_local(get_ramdisk_server()->gen.server_id, blockno));
             seL4_SetMR(RDMSGREG_FUNC, RD_FUNC_CREATE_ACK);
 
-            RAMDISK_PRINTF("Resource is in dest slot %d\n", (int) dest);
+            RAMDISK_PRINTF("Resource is in dest slot %d\n", (int)dest);
             break;
         default:
             RAMDISK_PRINTF("Op is %d\n", op);
@@ -277,7 +255,7 @@ seL4_MessageInfo_t ramdisk_request_handler(seL4_MessageInfo_t tag, seL4_Word sen
 
             /* Detach MO from server ADS */
             // ARYA-TODO what if the MO is not of RAMDISK_BLOCK_SIZE?
-            error = ads_client_rm(get_ramdisk_server()->gen.ads_conn, mo_vaddr, RAMDISK_BLOCK_SIZE);
+            error = ads_client_rm(&get_ramdisk_server()->gen.ads_conn, mo_vaddr, RAMDISK_BLOCK_SIZE);
 
             CHECK_ERROR_GOTO(error, "failed to detach client's MO from ADS", error, done);
 
@@ -295,7 +273,7 @@ seL4_MessageInfo_t ramdisk_request_handler(seL4_MessageInfo_t tag, seL4_Word sen
 
             /* Detach MO from server ADS */
             // ARYA-TODO what if the MO is not of RAMDISK_BLOCK_SIZE?
-            error = ads_client_rm(get_ramdisk_server()->gen.ads_conn, mo_vaddr, RAMDISK_BLOCK_SIZE);
+            error = ads_client_rm(&get_ramdisk_server()->gen.ads_conn, mo_vaddr, RAMDISK_BLOCK_SIZE);
             seL4_SetMR(RDMSGREG_FUNC, RD_FUNC_WRITE_ACK);
             CHECK_ERROR_GOTO(error, "failed to detach client's MO from ADS", error, done);
 

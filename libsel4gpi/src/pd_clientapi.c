@@ -201,16 +201,14 @@ int pd_client_start(pd_client_context_t *conn, seL4_Word arg0)
     return 0;
 }
 
-int pd_client_add_rde(pd_client_context_t *conn, seL4_CPtr server_ep,
-                      seL4_CPtr server_pd_cap, gpi_cap_t server_type,
-                      bool needs_badge)
+int pd_client_add_rde(pd_client_context_t *conn,
+                      seL4_CPtr server_pd,
+                      uint64_t manager_id)
 {
     seL4_SetMR(PDMSGREG_FUNC, PD_FUNC_ADD_RDE_REQ);
-    seL4_SetMR(PDMSGREG_ADD_RDE_REQ_TYPE, server_type);
-    seL4_SetMR(PDMSGREG_ADD_RDE_REQ_NEEDS_BADGE, needs_badge);
-    seL4_SetCap(0, server_ep);
-    seL4_SetCap(1, server_pd_cap);
-    seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 2,
+    seL4_SetMR(PDMSGREG_ADD_RDE_REQ_ID, manager_id);
+    seL4_SetCap(0, server_pd);
+    seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 1,
                                                   PDMSGREG_ADD_RDE_REQ_END);
     tag = seL4_Call(conn->badged_server_ep_cspath.capPtr, tag);
     assert(seL4_MessageInfo_ptr_get_label(&tag) == 0);
@@ -262,24 +260,5 @@ int pd_client_give_resource(pd_client_context_t *conn,
     tag = seL4_Call(conn->badged_server_ep_cspath.capPtr, tag);
     assert(seL4_MessageInfo_ptr_get_label(&tag) == 0);
     *dest = seL4_GetMR(PDMSGREG_GIVE_RES_ACK_DEST);
-    return 0;
-}
-
-int pd_client_init_vka(pd_client_context_t *conn,
-                       seL4_CPtr root,
-                       seL4_Word start_slot,
-                       seL4_Word end_slot,
-                       seL4_Word size_bits,
-                       seL4_Word guard_bits)
-{
-    seL4_SetMR(PDMSGREG_FUNC, PD_FUNC_INIT_VKA_REQ);
-    seL4_SetMR(PDMSGREG_INIT_VKA_REQ_START_SLOT, start_slot);
-    seL4_SetMR(PDMSGREG_INIT_VKA_REQ_END_SLOT, end_slot);
-    seL4_SetMR(PDMSGREG_INIT_VKA_REQ_SIZE, size_bits);
-    seL4_SetMR(PDMSGREG_INIT_VKA_REQ_GUARD, guard_bits);
-    seL4_SetCap(0, root);
-    seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 1,
-                                                  PDMSGREG_INIT_VKA_REQ_END);
-    tag = seL4_Call(conn->badged_server_ep_cspath.capPtr, tag);
     return 0;
 }

@@ -20,17 +20,19 @@
  * Starts the fs server in a new process
  *
  * @param vka vka to use while creating the process
- * @param gpi_ep endpoint of the gpi server
- * @param rd_ep endpoint of the ramdisk server
- * @param fs_ep outputs the ep of the new fs server
+ * @param rd_id resource manager ID of the ramdisk server
+ * @param rd_pd_cap PD resource of the ramdisk server
+ * @param fs_ep returns the ep of the new fs server
+ * @param fs_pd_cap returns the PD resource of the new fs server
+ * @param fs_id returns the resource manager ID of the new fs server
  * @return 0 on success, or -1 otherwise
  */
 int start_xv6fs_pd(vka_t *vka,
-                   seL4_CPtr gpi_ep,
-                   seL4_CPtr rd_ep,
-                   seL4_CPtr rde_pd_cap,
+                   uint64_t rd_id,
+                   seL4_CPtr rd_pd_cap,
                    seL4_CPtr *fs_ep,
-                   seL4_CPtr *fs_pd_cap);
+                   seL4_CPtr *fs_pd_cap,
+                   uint64_t *fs_id);
 
 /**
  * Initializes a process as a xv6fs client

@@ -96,6 +96,11 @@ gpi_server_parent_spawn_thread(simple_t *parent_simple, vka_t *parent_vka,
     adsc->server_thread = get_gpi_server()->server_thread;
     adsc->server_ep_obj = get_gpi_server()->server_ep_obj;
 
+    pd_component_resource_manager_entry_t *manager_entry = malloc(sizeof(pd_component_resource_manager_entry_t));
+    manager_entry->resource_type = GPICAP_TYPE_ADS;
+    manager_entry->server_ep = get_gpi_server()->server_ep_obj.cptr;
+    get_gpi_server()->ads_manager_id = pd_component_resource_manager_insert(manager_entry);
+
     /* Setup MO Component */
     mo_component_context_t *moc = &get_gpi_server()->mo_component;
     moc->server_simple = parent_simple;
@@ -104,6 +109,11 @@ gpi_server_parent_spawn_thread(simple_t *parent_simple, vka_t *parent_vka,
     moc->server_vspace = parent_vspace;
     moc->server_thread = get_gpi_server()->server_thread;
     moc->server_ep_obj = get_gpi_server()->server_ep_obj;
+
+    manager_entry = malloc(sizeof(pd_component_resource_manager_entry_t));
+    manager_entry->resource_type = GPICAP_TYPE_MO;
+    manager_entry->server_ep = get_gpi_server()->server_ep_obj.cptr;
+    get_gpi_server()->mo_manager_id = pd_component_resource_manager_insert(manager_entry);
 
     /* Setup the CPU Component */
     cpu_component_context_t *cpuc = &get_gpi_server()->cpu_component;
@@ -114,6 +124,11 @@ gpi_server_parent_spawn_thread(simple_t *parent_simple, vka_t *parent_vka,
     cpuc->server_thread = get_gpi_server()->server_thread;
     cpuc->server_ep_obj = get_gpi_server()->server_ep_obj;
 
+    manager_entry = malloc(sizeof(pd_component_resource_manager_entry_t));
+    manager_entry->resource_type = GPICAP_TYPE_CPU;
+    manager_entry->server_ep = get_gpi_server()->server_ep_obj.cptr;
+    get_gpi_server()->cpu_manager_id = pd_component_resource_manager_insert(manager_entry);
+
     /* Setup the PD Component */
     pd_component_context_t *pdc = &get_gpi_server()->pd_component;
     pdc->server_simple = parent_simple;
@@ -122,6 +137,11 @@ gpi_server_parent_spawn_thread(simple_t *parent_simple, vka_t *parent_vka,
     pdc->server_vspace = parent_vspace;
     pdc->server_thread = get_gpi_server()->server_thread;
     pdc->server_ep_obj = get_gpi_server()->server_ep_obj;
+
+    manager_entry = malloc(sizeof(pd_component_resource_manager_entry_t));
+    manager_entry->resource_type = GPICAP_TYPE_PD;
+    manager_entry->server_ep = get_gpi_server()->server_ep_obj.cptr;
+    get_gpi_server()->pd_manager_id = pd_component_resource_manager_insert(manager_entry);
 
     /* And also allocate a badged copy of the Server's endpoint that the Parent
      * can use to send to the Server. This is used to allow the Server to report
@@ -299,10 +319,10 @@ void gpi_server_main()
         tag = recv(&sender_badge);
 
         seL4_MessageInfo_t reply_tag;
-        if (sender_badge == 0 || 
-            (get_object_id_from_badge(sender_badge) == BADGE_OBJ_ID_NULL
-            && get_cap_type_from_badge(sender_badge) == GPICAP_TYPE_MO)) // PDs will have badged gpi caps with type MO
-        { /* Handle Untyped Request */
+        if (sender_badge == 0 ||
+            get_object_id_from_badge(sender_badge) == BADGE_OBJ_ID_NULL)
+        {
+            // PDs will have badged GPI caps with null object ID
             OSDB_PRINTF(GPISERVS "Got an allocation request\n");
             handle_untyped_request(tag,
                                    sender_badge,
