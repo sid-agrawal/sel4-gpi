@@ -189,8 +189,7 @@ pd_component_resource_manager_entry_t *pd_component_resource_manager_get_entry_b
 
 int forge_pd_cap_from_init_data(
     test_init_data_t *init_data, // Change this to something else
-    vka_t *vka,
-    seL4_CPtr *cap_ret)
+    vka_t *vka)
 {
     assert(init_data != NULL);
 
@@ -223,6 +222,8 @@ int forge_pd_cap_from_init_data(
 
     /* Update the info in the registry entry. */
     seL4_Word badge = pd_assign_new_badge_and_objectID(client_reg_ptr);
+    set_client_id_to_badge(badge, pd->pd_obj_id);
+
     pd_component_registry_insert(client_reg_ptr);
 
     int error = vka_cnode_mint(&dest,
@@ -236,7 +237,6 @@ int forge_pd_cap_from_init_data(
     }
 
     // (XXX) A lot more will go here.
-    // client_reg_ ptr->pd ...
     pd->vka = vka;
     pd->stack_pages = init_data->stack_pages;
     pd->stack = init_data->stack;
@@ -273,19 +273,19 @@ int forge_pd_cap_from_init_data(
     OSDB_PRINTF(PDSERVS "main: Forged a new PD cap(EP: %lx) with badge value: %lx \n",
                 dest.capPtr, badge);
 
-    *cap_ret = dest_cptr;
     client_reg_ptr->raw_cap_in_root = dest_cptr;
     return 0;
 }
 
-void update_forged_pd_cap_from_init_data(test_init_data_t *init_data, seL4_CPtr cspace_root)
+void update_forged_pd_cap_from_init_data(test_init_data_t *init_data, seL4_CPtr cspace_root, vspace_t *vspace)
 {
     int error;
     assert(init_data != NULL);
 
     // Assumes this is called to set up the test process
     // (XXX) Arya: Would this fail if used for a second test?
-    pd_t *pd = &get_pd_component()->client_registry->pd;
+    pd_component_registry_entry_t *reg_ptr = get_pd_component()->client_registry;
+    pd_t *pd = &reg_ptr->pd;
     assert(pd != NULL);
     assert(pd->pd_obj_id == 0x1);
     pd->free_slots = init_data->free_slots;
@@ -304,7 +304,19 @@ void update_forged_pd_cap_from_init_data(test_init_data_t *init_data, seL4_CPtr 
     }
     init_data->free_slots.end = mid_slot - 1;
 
+    // Forge ADS cap
+    seL4_CPtr child_as_cap_in_parent;
+    error = forge_ads_cap_from_vspace(vspace, get_pd_component()->server_vka, pd->pd_obj_id, &child_as_cap_in_parent, NULL);
+    if (error)
+    {
+        ZF_LOGF("Failed to forge child's as cap");
+    }
+
     // Setup the test process' init data
+    error = copy_cap_to_pd(pd, child_as_cap_in_parent, &pd->init_data->ads_cap);
+    assert(error == 0);
+    error = copy_cap_to_pd(pd, reg_ptr->raw_cap_in_root, &pd->init_data->pd_cap);
+    assert(error == 0);
     rde_type_t ads_type = {.type = GPICAP_TYPE_ADS};
     pd_add_rde(pd, ads_type, get_gpi_server()->ads_manager_id, get_gpi_server()->server_ep_obj.cptr);
     rde_type_t cpu_type = {.type = GPICAP_TYPE_CPU};
@@ -378,7 +390,7 @@ osmosis_pd_cap_t *pd_add_resource_by_id(uint32_t client_id, gpi_cap_t cap_type, 
 
 void pd_handle_allocation_request(seL4_Word sender_badge, seL4_MessageInfo_t *reply_tag)
 {
-    OSDB_PRINTF(PDSERVS "main: Got connect request\n");
+    OSDB_PRINTF(PDSERVS "main: Got connect request from badge %lx\n", sender_badge);
 
     /* Allocate a new registry entry for the client. */
     pd_component_registry_entry_t *client_reg_ptr =
@@ -409,6 +421,7 @@ void pd_handle_allocation_request(seL4_Word sender_badge, seL4_MessageInfo_t *re
     vka_cspace_make_path(get_pd_component()->server_vka, dest_cptr, &dest);
 
     // Add the latest ID to the obj and to the badlge.
+    // (XXX) Arya: replace with pd_send_cap?
     seL4_Word badge = pd_assign_new_badge_and_objectID(client_reg_ptr);
     uint32_t client_id = get_client_id_from_badge(sender_badge);
     osmosis_pd_cap_t *res = pd_add_resource_by_id(client_id, GPICAP_TYPE_PD, get_object_id_from_badge(badge));
@@ -756,9 +769,10 @@ static void handle_add_rde_req(seL4_Word sender_badge, seL4_MessageInfo_t old_ta
                     manager_id);
         error = -1;
     }
-    else if (target_data->pd.pd_started)
+    else if (get_client_id_from_badge(sender_badge) != target_data->pd.pd_obj_id && target_data->pd.pd_started)
     {
-        OSDB_PRINTF(PDSERVS "add_rde_req: cannot add new RDEs after PD has been started\n");
+        // (XXX) Arya: Allow a PD to update its own RDE mid-flight, but not another PD's
+        OSDB_PRINTF(PDSERVS "add_rde_req: cannot add new RDEs to another PD after it has been started\n");
         error = -1;
     }
     else if (server_data->pd.pd_obj_id != resource_manager_data->pd->pd_obj_id)
@@ -780,6 +794,60 @@ static void handle_add_rde_req(seL4_Word sender_badge, seL4_MessageInfo_t old_ta
     seL4_SetMR(PDMSGREG_FUNC, PD_FUNC_ADD_RDE_ACK);
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(error, 0, 0,
                                                   PDMSGREG_ADD_RDE_ACK_END);
+    return reply(tag);
+}
+
+static void handle_share_rde_req(seL4_Word sender_badge, seL4_MessageInfo_t old_tag, seL4_CPtr received_cap)
+{
+    int error;
+
+    seL4_Word rde_key = seL4_GetMR(PDMSGREG_SHARE_RDE_REQ_TYPE);
+    OSDB_PRINTF(PDSERVS "share_rde_req: Got request from client badge %lx for RDE key %d.\n",
+                sender_badge, rde_key);
+
+    seL4_Word client_id = get_client_id_from_badge(sender_badge);
+    pd_component_registry_entry_t *target_data = pd_component_registry_get_entry_by_badge(sender_badge);
+    pd_component_registry_entry_t *client_data = pd_component_registry_get_entry_by_id(client_id);
+
+    if (target_data == NULL)
+    {
+        OSDB_PRINTF(PDSERVS "share_rde_req: Failed to find target badge %lx.\n",
+                    sender_badge);
+        error = -1;
+    }
+    else if (client_data == NULL)
+    {
+        OSDB_PRINTF(PDSERVS "share_rde_req: Failed to find client ID %d.\n",
+                    client_id);
+        error = -1;
+    }
+
+    uint64_t manager_id = client_data->pd.init_data->rde[rde_key].manager_id;
+    pd_component_resource_manager_entry_t *resource_manager_data = pd_component_resource_manager_get_entry_by_id(manager_id);
+
+    if (resource_manager_data == NULL)
+    {
+        OSDB_PRINTF(PDSERVS "share_rde_req: Failed to find resource manager ID %ld.\n",
+                    manager_id);
+        error = -1;
+    }
+    else if (target_data->pd.pd_started)
+    {
+        OSDB_PRINTF(PDSERVS "share_rde_req: cannot add new RDEs after PD has been started\n");
+        error = -1;
+    }
+    else
+    {
+        rde_type_t rde_type = {.type = rde_key};
+        error = pd_add_rde(&target_data->pd,
+                           rde_type,
+                           resource_manager_data->manager_id,
+                           resource_manager_data->server_ep);
+    }
+
+    seL4_SetMR(PDMSGREG_FUNC, PD_FUNC_SHARE_RDE_ACK);
+    seL4_MessageInfo_t tag = seL4_MessageInfo_new(error, 0, 0,
+                                                  PDMSGREG_SHARE_RDE_ACK_END);
     return reply(tag);
 }
 
@@ -990,6 +1058,9 @@ void pd_component_handle(seL4_MessageInfo_t tag,
         break;
     case PD_FUNC_ADD_RDE_REQ:
         handle_add_rde_req(sender_badge, tag, received_cap->capPtr);
+        break;
+    case PD_FUNC_SHARE_RDE_REQ:
+        handle_share_rde_req(sender_badge, tag, received_cap->capPtr);
         break;
     case PD_FUNC_REGISTER_SERV_REQ:
         handle_register_resource_manager_req(sender_badge, tag, received_cap->capPtr);

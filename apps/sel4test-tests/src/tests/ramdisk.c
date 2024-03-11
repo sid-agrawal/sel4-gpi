@@ -14,6 +14,7 @@
 #include <sel4gpi/ads_clientapi.h>
 #include <sel4gpi/pd_clientapi.h>
 #include <sel4gpi/pd_obj.h>
+#include <sel4gpi/pd_utils.h>
 
 #include <ramdisk_client.h>
 #include <ramdisk_server.h>
@@ -31,12 +32,12 @@ int test_ramdisk(env_t env)
 
     /* Initialize the ADS */
     ads_client_context_t ads_conn;
-    vka_cspace_make_path(&env->vka, env->self_ads_cptr, &ads_conn.badged_server_ep_cspath);
+    vka_cspace_make_path(&env->vka, sel4gpi_get_ads_cap(), &ads_conn.badged_server_ep_cspath);
     test_assert(error == 0);
 
     /* Initialize the PD */
     pd_client_context_t pd_conn;
-    vka_cspace_make_path(&env->vka, env->self_pd_cptr, &pd_conn.badged_server_ep_cspath);
+    vka_cspace_make_path(&env->vka, sel4gpi_get_pd_cap(), &pd_conn.badged_server_ep_cspath);
     test_assert(error == 0);
 
     /* Create a memory object for the buffer */
@@ -64,25 +65,10 @@ int test_ramdisk(env_t env)
     error = start_ramdisk_pd(&env->vka, &ramdisk_ep, &ramdisk_pd_cap, &ramdisk_id);
     test_assert(error == 0);
 
-    /* Badge the ramdisk EP with a client ID to simulate being a client */
-    cspacepath_t src, dest;
-    seL4_CPtr ramdisk_client_ep;
-    vka_cspace_make_path(&env->vka, ramdisk_ep, &src);
-
-    error = vka_cspace_alloc_path(&env->vka, &dest);
+    /* Add the ramdisk to local RD */
+    error = pd_client_add_rde(&pd_conn, ramdisk_pd_cap, ramdisk_id);
     test_assert(error == 0);
-
-    seL4_Word badge_val = gpi_new_badge(GPICAP_TYPE_BLOCK,
-                                        0x00,
-                                        FAKE_CLIENT_ID,
-                                        BADGE_OBJ_ID_NULL);
-
-    error = vka_cnode_mint(&dest,
-                           &src,
-                           seL4_AllRights,
-                           badge_val);
-    test_assert(error == 0);
-    ramdisk_client_ep = dest.capPtr;
+    seL4_CPtr ramdisk_client_ep = sel4gpi_get_rde(GPICAP_TYPE_BLOCK);
 
     printf("------------------STARTING TESTS: %s------------------\n", __func__);
 

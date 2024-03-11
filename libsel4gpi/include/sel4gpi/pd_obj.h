@@ -213,7 +213,7 @@ typedef struct _pd
     mo_client_context_t init_data_mo;
     seL4_CPtr init_data_frame;
     uint64_t init_data_mo_id;
-    osm_pd_init_data_t *init_data; // RT vaddr of the init data
+    osm_pd_init_data_t *init_data;       // RT vaddr of the init data
     osm_pd_init_data_t *init_data_in_PD; // PD's vaddr of the init data
 
     // Special caps to send to all PDs
@@ -342,3 +342,14 @@ int pd_add_rde(pd_t *pd,
                rde_type_t type,
                uint32_t manager_id,
                seL4_CPtr server_ep);
+
+/**
+ * @brief Send a cap to a PD's cspace
+ *
+ * @param to_pd destination PD
+ * @param cap the cap to send
+ * @param slot the slot in destination cspace
+ */
+int copy_cap_to_pd(pd_t *to_pd,
+                   seL4_CPtr cap,
+                   seL4_Word *slot);

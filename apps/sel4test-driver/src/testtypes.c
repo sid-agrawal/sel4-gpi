@@ -275,21 +275,7 @@ void basic_set_up(uintptr_t e)
      * or a fault to see when the test finishes */
     env->endpoint = sel4utils_copy_cap_to_process(&(env->test_process), &env->vka, env->test_process.fault_endpoint.cptr);
 
-    // For the child's as cap in the child
-    // First forge a cap to the child's vspace
-    seL4_CPtr child_as_cap_in_parent;
-    error = forge_ads_cap_from_vspace(&env->test_process.vspace, &env->vka, NULL_PD_ID, &child_as_cap_in_parent, NULL);
-    if (error)
-    {
-        ZF_LOGF("Failed to forge child's as cap");
-    }
-    // ads_component_registry_entry_t *head = get_ads_component()->client_registry;
-
-    env->child_ads_cptr_in_child = sel4utils_copy_cap_to_process(&(env->test_process),
-                                                                 &env->vka, child_as_cap_in_parent);
-
-    assert(env->child_ads_cptr_in_child != 0);
-
+    // (XXX) Arya: Are these used?
     /* Forge MO caps for the ADS */
     seL4_CPtr mo_caps[MAX_MO_CHILD];
     uint32_t ret_num_mo;
@@ -331,15 +317,11 @@ void basic_set_up(uintptr_t e)
     //--------------------------------------------------------------------
 #define PD_FORGE 1
 #ifdef PD_FORGE
-    seL4_CPtr child_pd_cap_in_parent;
-    error = forge_pd_cap_from_init_data(env->init, &env->vka, &child_pd_cap_in_parent);
+    error = forge_pd_cap_from_init_data(env->init, &env->vka);
     if (error)
     {
         ZF_LOGF("Failed to forge child's PD cap");
     }
-    env->child_pd_cptr_in_child = sel4utils_copy_cap_to_process(&(env->test_process),
-                                                                &env->vka, child_pd_cap_in_parent);
-    assert(env->child_pd_cptr_in_child != 0);
     //--------------------------------------------------------------------
 #endif
 
@@ -376,7 +358,7 @@ Warning:
     assert(env->init->free_slots.start < env->init->free_slots.end);
 
 #ifdef PD_FORGE
-    update_forged_pd_cap_from_init_data(env->init, env->test_process.cspace.cptr);
+    update_forged_pd_cap_from_init_data(env->init, env->test_process.cspace.cptr, &env->test_process.vspace);
 #endif
 }
 

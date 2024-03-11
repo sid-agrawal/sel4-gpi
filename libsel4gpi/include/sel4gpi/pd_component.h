@@ -75,6 +75,9 @@ enum pd_component_funcs
     PD_FUNC_ADD_RDE_REQ,
     PD_FUNC_ADD_RDE_ACK,
 
+    PD_FUNC_SHARE_RDE_REQ,
+    PD_FUNC_SHARE_RDE_ACK,
+
     PD_FUNC_REGISTER_SERV_REQ,
     PD_FUNC_REGISTER_SERV_ACK,
 
@@ -160,6 +163,12 @@ enum pd_component_msgregs
     PDMSGREG_DISCONNECT_REQ_END = PDMSGREG_LABEL0,
 
     PDMSGREG_DISCONNECT_ACK_END = PDMSGREG_LABEL0,
+
+    /* Share RDE */
+    PDMSGREG_SHARE_RDE_REQ_TYPE = PDMSGREG_LABEL0,
+    PDMSGREG_SHARE_RDE_REQ_END,
+
+    PDMSGREG_SHARE_RDE_ACK_END = PDMSGREG_LABEL0,
 
     /* Add RDE */
     PDMSGREG_ADD_RDE_REQ_ID = PDMSGREG_LABEL0,
@@ -248,11 +257,10 @@ void pd_handle_allocation_request(seL4_Word sender_badge, seL4_MessageInfo_t *re
 // Only used to forge the test process' PD cap
 int forge_pd_cap_from_init_data(
     test_init_data_t *init_data, // Change this to something else
-    vka_t *vka,
-    seL4_CPtr *cap_ret);
+    vka_t *vka);
 
 // Only used to update the test process' PD cap
-void update_forged_pd_cap_from_init_data(test_init_data_t *init_data, seL4_CPtr cspace_root);
+void update_forged_pd_cap_from_init_data(test_init_data_t *init_data, seL4_CPtr cspace_root, vspace_t *vspace);
 
 /**
  * Only used for starting the test process, maps the init data

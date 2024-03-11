@@ -215,6 +215,18 @@ int pd_client_add_rde(pd_client_context_t *conn,
     return 0;
 }
 
+int pd_client_share_rde(pd_client_context_t *conn,
+                        gpi_cap_t cap_type)
+{
+    seL4_SetMR(PDMSGREG_FUNC, PD_FUNC_SHARE_RDE_REQ);
+    seL4_SetMR(PDMSGREG_SHARE_RDE_REQ_TYPE, cap_type);
+    seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 1,
+                                                  PDMSGREG_SHARE_RDE_REQ_END);
+    tag = seL4_Call(conn->badged_server_ep_cspath.capPtr, tag);
+    assert(seL4_MessageInfo_ptr_get_label(&tag) == 0);
+    return 0;
+}
+
 int pd_client_register_resource_manager(pd_client_context_t *conn,
                                         gpi_cap_t resource_type,
                                         seL4_CPtr server_ep,

@@ -34,9 +34,9 @@
 
 #define CSPACE_SIZE_BITS 17
 
-static int copy_cap_to_pd(pd_t *to_pd,
-                          seL4_CPtr cap,
-                          seL4_Word *slot)
+int copy_cap_to_pd(pd_t *to_pd,
+                   seL4_CPtr cap,
+                   seL4_Word *slot)
 {
     int error;
     seL4_CPtr free_slot;
@@ -372,12 +372,6 @@ int pd_load_image(pd_t *pd,
     seL4_Word badge = gpi_new_badge(GPICAP_TYPE_ADS, 0x00, pd->pd_obj_id, pd->ads_obj_id);
     error = pd_send_cap(pd, pd->ads_cap_in_RT, badge, &pd->init_data->ads_cap);
     ZF_LOGF_IFERR(error, "Failed to send ADS cap to RDE");
-
-    // (XXX) Arya: Currently gives all PDs the MO resource manager by default
-    // Will need to modify this
-    rde_type_t rde_type = {.type = GPICAP_TYPE_MO};
-    error = pd_add_rde(pd, rde_type, get_gpi_server()->mo_manager_id, get_gpi_server()->server_ep_obj.cptr);
-    ZF_LOGF_IFERR(error, "Failed to add MO component to RDE");
 
     /* set up free slot range */
     pd->cspace_size_bits = pd->proc.cspace_size;

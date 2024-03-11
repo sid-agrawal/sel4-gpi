@@ -228,8 +228,6 @@ int main(int argc, char **argv)
     test_init_data_t *init_data;
     struct env env;
 
-    printf("TEMPA arrived at test main\n");
-    
     /* parse args */
     assert(argc == 6);
     endpoint = (seL4_CPtr)atoi(argv[0]);

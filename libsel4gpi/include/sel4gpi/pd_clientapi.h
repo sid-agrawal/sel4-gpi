@@ -130,20 +130,15 @@ int pd_client_start(pd_client_context_t *conn, seL4_Word arg0);
 /**
  * @brief Share an RDE with another PD
  * This shares an RDE from the client PD with the target PD
+ * The RDE is keyed by cap type
+ * (XXX) Arya: Assumes only one RDE per cap type
  *
  * @param conn client connection object
- * @param server_ep EP to the server
- * @param server_pd_cap PD cap of the server
- * @param server_type type of resource provided by server
- * @param needs_badge True if this is a raw endpoint that needs
- *                    to be badged with client PD's ID
+ * @param server_type key of the RDE to share
  * @return int 0 on success, -1 on failure.
  */
 int pd_client_share_rde(pd_client_context_t *conn,
-                        seL4_CPtr server_ep,
-                        seL4_CPtr server_pd_cap,
-                        gpi_cap_t server_type,
-                        bool needs_badge);
+                        gpi_cap_t cap_type);
 
 /**
  * @brief Add a new RDE to the PD
@@ -191,7 +186,6 @@ int pd_client_create_resource(pd_client_context_t *conn,
                               gpi_cap_t manager_id,
                               seL4_Word resource_id);
 
-// (XXX) Arya: TODO IMPLEMENT THIS
 /**
  * To be called by a resource server when it allocates
  * a resource to another PD

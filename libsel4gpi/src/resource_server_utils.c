@@ -93,6 +93,10 @@ int start_resource_server_pd(vka_t *vka,
     error = pd_client_send_cap(&pd_os_cap, ep_object.cptr, &parent_ep_slot);
     CHECK_ERROR(error, "failed to send parent's ep cap to pd");
 
+    // Share the MO RDE (requires that the current process has one)
+    error = pd_client_share_rde(&pd_os_cap, GPICAP_TYPE_MO);
+    CHECK_ERROR(error, "failed to share parent's MO RDE with pd");
+
     // Copy the RDE to the new PD
     if (rde_pd_cap > 0)
     {
