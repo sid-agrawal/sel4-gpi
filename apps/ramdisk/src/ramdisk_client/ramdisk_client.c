@@ -4,8 +4,6 @@
 
 #include <sel4/sel4.h>
 #include <sel4utils/process.h>
-#include <vka/vka.h>
-#include <vka/capops.h>
 #include <vspace/vspace.h>
 
 #include <sel4gpi/pd_clientapi.h>
@@ -45,17 +43,15 @@
 
 static ramdisk_client_context_t ramdisk_client;
 
-int start_ramdisk_pd(vka_t *vka,
-                     seL4_CPtr *ramdisk_ep,
-                     seL4_CPtr *ramdisk_pd_cap,
+int start_ramdisk_pd(seL4_CPtr *ramdisk_pd_cap,
                      uint64_t *ramdisk_id)
 {
     int error;
-    error = start_resource_server_pd(vka, 0, 0, RAMDISK_APP,
-                                     ramdisk_ep, ramdisk_pd_cap, ramdisk_id);
+    error = start_resource_server_pd(0, 0, RAMDISK_APP,
+                                     ramdisk_pd_cap, ramdisk_id);
     CHECK_ERROR(error, "failed to start ramdisk server\n");
-    RAMDISK_PRINTF("Successfully started ramdisk server, ep is at %d, resource manager ID is %d\n",
-                   (int)*ramdisk_ep, (int)*ramdisk_id);
+    RAMDISK_PRINTF("Successfully started ramdisk server, resource manager ID is %d\n",
+                   (int)*ramdisk_id);
     return 0;
 }
 

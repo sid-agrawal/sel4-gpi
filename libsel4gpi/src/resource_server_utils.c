@@ -4,10 +4,6 @@
 
 #include <sel4/sel4.h>
 #include <sel4utils/process.h>
-#include <vka/vka.h>
-#include <vka/capops.h>
-#include <vspace/vspace.h>
-
 #include <sel4gpi/pd_utils.h>
 #include <sel4gpi/resource_server_utils.h>
 
@@ -54,77 +50,74 @@
         }                                 \
     } while (0);
 
-int start_resource_server_pd(vka_t *vka,
-                             uint64_t rde_id,
+int start_resource_server_pd(uint64_t rde_id,
                              seL4_CPtr rde_pd_cap,
                              char *image_name,
-                             seL4_CPtr *server_ep,
                              seL4_CPtr *server_pd_cap,
                              uint64_t *resource_manager_id)
 {
     int error;
 
+    // Current pd
+    pd_client_context_t current_pd;
+    current_pd.badged_server_ep_cspath.capPtr = sel4gpi_get_pd_cap();
+
     // Create a temporary endpoint for the parent to listen on
-    vka_object_t ep_object = {0};
-    error = vka_alloc_endpoint(vka, &ep_object);
+    seL4_CPtr ep;
+    error = pd_client_alloc_ep(&current_pd, &ep);
     CHECK_ERROR(error, "failed to allocate endpoint");
 
     // Create a new PD
-    pd_client_context_t pd_os_cap;
-    error = pd_component_client_connect(sel4gpi_get_rde(GPICAP_TYPE_PD), vka, &pd_os_cap);
+    pd_client_context_t new_pd;
+    seL4_CPtr free_slot;
+    error = pd_client_next_slot(&current_pd, &free_slot);
+    CHECK_ERROR(error, "failed to allocate slot");
+    error = pd_component_client_connect(sel4gpi_get_rde(GPICAP_TYPE_PD), free_slot, &new_pd);
     CHECK_ERROR(error, "failed to create new pd");
 
     if (server_pd_cap)
     {
-        *server_pd_cap = pd_os_cap.badged_server_ep_cspath.capPtr;
+        *server_pd_cap = new_pd.badged_server_ep_cspath.capPtr;
     }
 
     // Create a new ADS Cap, which will be in the context of a PD and image
-    ads_client_context_t ads_os_cap;
-    error = ads_component_client_connect(sel4gpi_get_rde(GPICAP_TYPE_ADS), vka, &ads_os_cap);
+    ads_client_context_t new_ads;
+    error = pd_client_next_slot(&current_pd, &free_slot);
+    CHECK_ERROR(error, "failed to allocate slot");
+    error = ads_component_client_connect(sel4gpi_get_rde(GPICAP_TYPE_ADS), free_slot, &new_ads);
     CHECK_ERROR(error, "failed to create new ads");
 
     // Make a new AS, loads an image
-    error = pd_client_load(&pd_os_cap, &ads_os_cap, image_name);
+    error = pd_client_load(&new_pd, &new_ads, image_name);
     CHECK_ERROR(error, "failed to load pd image");
 
     // Copy the parent ep to the new PD
     seL4_Word parent_ep_slot;
-    error = pd_client_send_cap(&pd_os_cap, ep_object.cptr, &parent_ep_slot);
+    error = pd_client_send_cap(&new_pd, ep, &parent_ep_slot);
     CHECK_ERROR(error, "failed to send parent's ep cap to pd");
 
     // Share the MO RDE (requires that the current process has one)
-    error = pd_client_share_rde(&pd_os_cap, GPICAP_TYPE_MO);
+    error = pd_client_share_rde(&new_pd, GPICAP_TYPE_MO);
     CHECK_ERROR(error, "failed to share parent's MO RDE with pd");
 
     // Copy the RDE to the new PD
     if (rde_pd_cap > 0)
     {
         RESOURCE_SERVER_PRINTF("SENDING RDE\n");
-        error = pd_client_add_rde(&pd_os_cap, rde_pd_cap, rde_id);
+        error = pd_client_add_rde(&new_pd, rde_pd_cap, rde_id);
         CHECK_ERROR(error, "failed to send rde to pd");
     }
 
     // Start it
-    error = pd_client_start(&pd_os_cap, parent_ep_slot); // with this arg.
+    error = pd_client_start(&new_pd, parent_ep_slot); // with this arg.
     CHECK_ERROR(error, "failed to start pd");
 
     // Wait for it to finish starting
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0, 0);
-
-    // Alloc cap receive path
-    cspacepath_t received_cap_path;
-    error = vka_cspace_alloc_path(vka, &received_cap_path);
-    CHECK_ERROR(error, "failed to alloc receive endpoint");
-
-    seL4_SetCapReceivePath(received_cap_path.root,
-                           received_cap_path.capPtr,
-                           received_cap_path.capDepth);
-
-    tag = seL4_Recv(ep_object.cptr, NULL);
+    tag = seL4_Recv(ep, NULL);
     int n_caps = seL4_MessageInfo_get_extraCaps(tag);
-    CHECK_ERROR(n_caps != 1, "message from server does not contain ep");
-    *server_ep = received_cap_path.capPtr;
+    error = seL4_MessageInfo_get_label(tag);
+    CHECK_ERROR(error, "message from server is a failure");
 
     if (resource_manager_id)
     {
@@ -148,7 +141,6 @@ int resource_server_start(resource_server_context_t *context,
 
     context->resource_type = server_type;
     context->request_handler = request_handler;
-    context->server_vka = NULL;
     context->mo_ep = sel4gpi_get_rde(GPICAP_TYPE_MO);
     context->ads_conn.badged_server_ep_cspath.capPtr = sel4gpi_get_ads_cap();
     context->pd_conn.badged_server_ep_cspath.capPtr = sel4gpi_get_pd_cap();
@@ -190,33 +182,13 @@ void resource_server_reply(resource_server_context_t *context,
 int resource_server_next_slot(resource_server_context_t *context,
                               seL4_CPtr *slot)
 {
-    if (context->server_vka != NULL)
-    {
-        return vka_cspace_alloc(context->server_vka, slot);
-    }
-    else
-    {
-        return pd_client_next_slot(&context->pd_conn, slot);
-    }
-    return vka_cspace_alloc(context->server_vka, slot);
+    return pd_client_next_slot(&context->pd_conn, slot);
 }
 
 int resource_server_free_slot(resource_server_context_t *context,
                               seL4_CPtr slot)
 {
-    if (context->server_vka != NULL)
-    {
-        // First try to delete slot contents,
-        // ignore error if slot is already empty
-        cspacepath_t path;
-        vka_cspace_make_path(context->server_vka, slot, &path);
-        vka_cnode_delete(&path);
-        vka_cspace_free(context->server_vka, slot);
-    }
-    else
-    {
-        return pd_client_free_slot(&context->pd_conn, slot);
-    }
+    return pd_client_free_slot(&context->pd_conn, slot);
 }
 
 int resource_server_main(void *context_v)

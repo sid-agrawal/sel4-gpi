@@ -21,9 +21,12 @@
 #include <sel4bench/arch/sel4bench.h>
 #include <utils/uthash.h>
 
-#define TEST_LOG(msg, ...) \
-    do { printf("%s(): " msg "\n", __func__, ##__VA_ARGS__); } while (0)
-   
+#define TEST_LOG(msg, ...)                                  \
+    do                                                      \
+    {                                                       \
+        printf("%s(): " msg "\n", __func__, ##__VA_ARGS__); \
+    } while (0)
+
 int test_new_process_osmosis(env_t env)
 {
     int error;
@@ -37,12 +40,15 @@ int test_new_process_osmosis(env_t env)
 
     /* Create a new PD */
     pd_client_context_t pd_os_cap;
-    error = pd_component_client_connect(env->gpi_endpoint, &env->vka, &pd_os_cap);
+    seL4_CPtr free_slot;
+    vka_cspace_alloc(&env->vka, &free_slot);
+    error = pd_component_client_connect(env->gpi_endpoint, free_slot, &pd_os_cap);
     assert(error == 0);
 
     /* Create a new ADS Cap, which will be in the context of a PD and image */
     ads_client_context_t ads_os_cap;
-    error = ads_component_client_connect(env->gpi_endpoint, &env->vka, &ads_os_cap);
+    vka_cspace_alloc(&env->vka, &free_slot);
+    error = ads_component_client_connect(env->gpi_endpoint, free_slot, &ads_os_cap);
     assert(error == 0);
 
     /*
@@ -77,12 +83,14 @@ int test_new_process_osmosis(env_t env)
 
     /* Create a new PD */
     pd_client_context_t pd_os_cap2;
-    error = pd_component_client_connect(env->gpi_endpoint, &env->vka, &pd_os_cap2);
+    vka_cspace_alloc(&env->vka, &free_slot);
+    error = pd_component_client_connect(env->gpi_endpoint, free_slot, &pd_os_cap2);
     assert(error == 0);
 
     /* Create a new ADS Cap, which will be in the context of a PD and image */
     ads_client_context_t ads_os_cap2;
-    error = ads_component_client_connect(env->gpi_endpoint, &env->vka, &ads_os_cap2);
+    vka_cspace_alloc(&env->vka, &free_slot);
+    error = ads_component_client_connect(env->gpi_endpoint, free_slot, &ads_os_cap2);
     assert(error == 0);
 
     /*
@@ -129,19 +137,21 @@ int test_new_process_osmosis_shmem(env_t env)
 
     /* Create a new PD */
     pd_client_context_t pd_os_cap;
-    error = pd_component_client_connect(env->gpi_endpoint, &env->vka, &pd_os_cap);
+    seL4_CPtr free_slot;
+    vka_cspace_alloc(&env->vka, &free_slot);
+    error = pd_component_client_connect(env->gpi_endpoint, free_slot, &pd_os_cap);
     assert(error == 0);
 
     /* Create a new ADS Cap, which will be in the context of a PD and image */
     ads_client_context_t ads_os_cap;
-    error = ads_component_client_connect(env->gpi_endpoint, &env->vka, &ads_os_cap);
+    vka_cspace_alloc(&env->vka, &free_slot);
+    error = ads_component_client_connect(env->gpi_endpoint, free_slot, &ads_os_cap);
     assert(error == 0);
 
     // Make a new AS, loads an image
     error = pd_client_load(&pd_os_cap, &ads_os_cap, "hello");
     assert(error == 0);
     printf("Loaded hello\n");
-
 
     // Start the CPU.
     error = pd_client_start(&pd_os_cap,

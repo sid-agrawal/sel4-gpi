@@ -321,7 +321,9 @@ int test_ads_bind_cpu(env_t env)
 {
     ads_client_context_t conn;
     // Using a known EP, get a new ads CAP.
-    int error = ads_component_client_connect(env->ads_endpoint, &env->vka, &conn);
+    seL4_CPtr free_slot;
+    vka_cspace_alloc(&env->vka, &free_slot);
+    int error = ads_component_client_connect(env->gpi_endpoint, free_slot, &conn);
     test_error_eq(error, 0);
 
     // Increment the ads cap.
@@ -339,7 +341,9 @@ int test_ads_shallow_copy(env_t env)
 {
     ads_client_context_t conn;
     // Using a known EP, get a new ads CAP.
-    int error = ads_component_client_connect(env->ads_endpoint, &env->vka, &conn);
+    seL4_CPtr free_slot;
+    vka_cspace_alloc(&env->vka, &free_slot);
+    int error = ads_component_client_connect(env->gpi_endpoint, free_slot, &conn);
     test_error_eq(error, 0);
 
     // Increment the ads cap.
@@ -356,7 +360,9 @@ int test_ads_stack_isolated(env_t env)
 {
     ads_client_context_t conn;
     // Using a known EP, get a new ads CAP.
-    int error = ads_component_client_connect(env->ads_endpoint, &env->vka, &conn);
+    seL4_CPtr free_slot;
+    vka_cspace_alloc(&env->vka, &free_slot);
+    int error = ads_component_client_connect(env->gpi_endpoint, free_slot, &conn);
     test_error_eq(error, 0);
 
     // shallow_copy the ads,

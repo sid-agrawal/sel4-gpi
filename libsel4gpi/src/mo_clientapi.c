@@ -21,15 +21,8 @@ int mo_component_client_connect(seL4_CPtr server_ep_cap,
 {
 
     /* Send a REQ message to the server on its public EP */
-
-    // Alloc a slot for the incoming cap.
-    // seL4_CPtr dest_cptr;
-    // vka_cspace_alloc(client_vka, &dest_cptr);
-    // cspacepath_t path;
-    // vka_cspace_make_path(client_vka, dest_cptr, &path);
-
     seL4_SetCapReceivePath(SEL4UTILS_CNODE_SLOT, /* Position of the cap to the CNODE */
-                           free_slot,            /* CPTR in this CSPACE*/
+                           free_slot,            /* CPTR in this CSPACE */
                            /* This works coz we have a single level cnode with no guard.*/
                            seL4_WordBits); /* Depth i.e. how many bits of free_slot to interpret*/
 

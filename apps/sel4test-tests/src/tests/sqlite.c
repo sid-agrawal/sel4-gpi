@@ -8,6 +8,8 @@
 #include "../helpers.h"
 #include <vka/capops.h>
 
+#include <sel4gpi/pd_utils.h>
+
 #include <ramdisk_client.h>
 #include <fs_client.h>
 #include <sqlite3/sqlite3.h>
@@ -19,7 +21,6 @@
 #define T2_NAME "t2"
 #define N_INSERT 50
 #define CMDLEN 128
-#define FAKE_CLIENT_ID 1
 
 #define SQL_EXEC_SELECT(sql_db, format, ...)                                       \
     do                                                                             \
@@ -175,46 +176,32 @@ int test_sqlite(env_t env)
 
     printf("------------------STARTING SETUP: %s------------------\n", __func__);
 
+    /* Initialize the PD */
+    pd_client_context_t pd_conn;
+    vka_cspace_make_path(&env->vka, sel4gpi_get_pd_cap(), &pd_conn.badged_server_ep_cspath);
+    test_assert(error == 0);
+
     /* Start ramdisk server process */
-    seL4_CPtr ramdisk_ep;
     uint64_t ramdisk_id;
     seL4_CPtr ramdisk_pd_cap;
-    error = start_ramdisk_pd(&env->vka, &ramdisk_ep, &ramdisk_pd_cap, &ramdisk_id);
+    error = start_ramdisk_pd(&ramdisk_pd_cap, &ramdisk_id);
     test_assert(error == 0);
 
     /* Start fs server process */
-    seL4_CPtr fs_ep;
+    uint64_t fs_id;
     seL4_CPtr fs_pd_cap;
-    error = start_xv6fs_pd(&env->vka, ramdisk_id, ramdisk_pd_cap, &fs_ep, &fs_pd_cap, NULL);
+    error = start_xv6fs_pd(ramdisk_id, ramdisk_pd_cap, &fs_pd_cap, &fs_id);
     test_assert(error == 0);
 
-    /* Badge the FS EP with a client ID to simulate being a client */
-    cspacepath_t src, dest;
-    seL4_CPtr fs_client_ep;
-    vka_cspace_make_path(&env->vka, fs_ep, &src);
-
-    error = vka_cspace_alloc_path(&env->vka, &dest);
+    // Add FS ep to RDE
+    error = pd_client_add_rde(&pd_conn, fs_pd_cap, fs_id);
     test_assert(error == 0);
-
-    seL4_Word badge_val = gpi_new_badge(GPICAP_TYPE_FILE,
-                                        0x00,
-                                        FAKE_CLIENT_ID,
-                                        BADGE_OBJ_ID_NULL);
-
-    error = vka_cnode_mint(&dest,
-                           &src,
-                           seL4_AllRights,
-                           badge_val);
-    test_assert(error == 0);
-    fs_client_ep = dest.capPtr;
+    seL4_CPtr fs_client_ep = sel4gpi_get_rde(GPICAP_TYPE_FILE);
 
     printf("------------------STARTING TESTS: %s------------------\n", __func__);
 
     // The libc fs ops should go to the xv6fs server
-    xv6fs_client_init(&env->vka, fs_client_ep,
-                      env->gpi_endpoint,
-                      env->self_ads_cptr,
-                      env->self_pd_cptr);
+    xv6fs_client_init();
 
     // Load an initial db
     sqlite3 *db;

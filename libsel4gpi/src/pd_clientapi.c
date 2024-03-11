@@ -16,26 +16,21 @@
 #include <sel4gpi/debug.h>
 
 int pd_component_client_connect(seL4_CPtr server_ep_cap,
-                                vka_t *client_vka,
+                                seL4_CPtr free_slot,
                                 pd_client_context_t *ret_conn)
 {
 
-    /* Send a REQ message to the server on its publicS EP */
-
-    // Alloc a slot for the incoming cap.
-    seL4_CPtr dest_cptr;
-    vka_cspace_alloc(client_vka, &dest_cptr);
-    cspacepath_t path;
-    vka_cspace_make_path(client_vka, dest_cptr, &path);
-    seL4_SetCapReceivePath(
-        /* _service */ path.root,
-        /* index */ path.capPtr,
-        /* depth */ path.capDepth);
+    /* Send a REQ message to the server on its public EP */
+    seL4_SetCapReceivePath(SEL4UTILS_CNODE_SLOT, /* Position of the cap to the CNODE */
+                           free_slot,            /* CPTR in this CSPACE */
+                           /* This works coz we have a single level cnode with no guard.*/
+                           seL4_WordBits); /* Depth i.e. how many bits of free_slot to interpret*/
 
     OSDB_PRINTF(PDSERVC "%s %d pd_endpoint is %lu:__ \n", __FUNCTION__, __LINE__, server_ep_cap);
     // debug_cap_identify(PDSERVC, server_ep_cap);
 
-    OSDB_PRINTF(PDSERVC "Set a receive path for the badged ep: %lu\n", path.capPtr);
+    OSDB_PRINTF(PDSERVC "Set a receive path for the badged ep: %d\n", (int) free_slot);
+
     /* Set request type */
     seL4_SetMR(0, GPICAP_TYPE_PD);
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0, 1);
@@ -43,10 +38,9 @@ int pd_component_client_connect(seL4_CPtr server_ep_cap,
     tag = seL4_Call(server_ep_cap, tag);
     assert(seL4_MessageInfo_get_extraCaps(tag) == 1);
 
-    ret_conn->badged_server_ep_cspath = path;
-    ;
+    ret_conn->badged_server_ep_cspath.capPtr = free_slot;
 
-    OSDB_PRINTF(PDSERVC "received badged endpoint and it was kept in %lu:__\n", path.capPtr);
+    OSDB_PRINTF(PDSERVC "received badged endpoint and it was kept in %d:__\n", (int) free_slot);
     // debug_cap_identify(PDSERVC, path.capPtr);
     return 0;
 }

@@ -19,37 +19,24 @@
 /**
  * Starts the fs server in a new process
  *
- * @param vka vka to use while creating the process
  * @param rd_id resource manager ID of the ramdisk server
  * @param rd_pd_cap PD resource of the ramdisk server
- * @param fs_ep returns the ep of the new fs server
  * @param fs_pd_cap returns the PD resource of the new fs server
  * @param fs_id returns the resource manager ID of the new fs server
  * @return 0 on success, or -1 otherwise
  */
-int start_xv6fs_pd(vka_t *vka,
-                   uint64_t rd_id,
+int start_xv6fs_pd(uint64_t rd_id,
                    seL4_CPtr rd_pd_cap,
-                   seL4_CPtr *fs_ep,
                    seL4_CPtr *fs_pd_cap,
                    uint64_t *fs_id);
 
 /**
  * Initializes a process as a xv6fs client
  * Relevant libc functions will be overridden in the current process
- *
- * @param client_vka Initialized vka_t for the client process
- * @param fs_ep xv6fs server's endpoint
- * @param ads_conn
- * @param pd_conn
  * @return seL4_Error value.
  */
 seL4_Error
-xv6fs_client_init(vka_t *client_vka,
-                  seL4_CPtr fs_ep,
-                  seL4_CPtr gpi_ep,
-                  seL4_CPtr ads_ep,
-                  seL4_CPtr pd_ep);
+xv6fs_client_init(void);
 
 /**
  * Get the file resource for a given file descriptor
@@ -75,10 +62,9 @@ typedef struct _global_xv6fs_client_context_t
 {
     vka_t *client_vka;
     seL4_CPtr fs_ep;
-    seL4_CPtr gpi_ep;
+    seL4_CPtr mo_ep;
     ads_client_context_t *ads_conn;
     pd_client_context_t *pd_conn;
-    int (*next_slot)(seL4_CPtr *);
 
     // Temporary fields for naive implementation
     mo_client_context_t *shared_mem;

@@ -65,9 +65,6 @@ typedef struct _resource_server_context
     // Run once when the server is started
     int (*init_fn)();
 
-    // Used only when server started as thread
-    vka_t *server_vka;
-
     // RDEs and other EPs
     seL4_CPtr parent_ep;
     seL4_CPtr mo_ep;
@@ -83,19 +80,15 @@ typedef struct _resource_server_context
 
 /**
  * Starts a resource server in a new PD
- * @param vka vka to use for temporary startup resources
  * @param rde_id Manager ID of RDE to add, optionsl
  * @param rde_pd_cap PD resource for RDE to add, optional
  * @param image_name name of the resource server's image
- * @param server_ep returns the endpoint of the started server
  * @param server_pd_cap returns the PD resource of the started server
  * @param resource_manager_id returns the resource manager ID of the started server
  */
-int start_resource_server_pd(vka_t *vka,
-                             uint64_t rde_id,
+int start_resource_server_pd(uint64_t rde_id,
                              seL4_CPtr rde_pd_cap,
                              char *image_name,
-                             seL4_CPtr *server_ep,
                              seL4_CPtr *server_pd_cap,
                              uint64_t *resource_manager_id);
 
@@ -132,15 +125,13 @@ void resource_server_reply(resource_server_context_t *context,
                            seL4_MessageInfo_t tag);
 
 /**
- * Gets the next free cspace slot for a resource server to use
- * Uses the vka if the resource server has one, otherwise uses pd clientapi
+ * Gets the next free cspace slot, otherwise uses pd clientapi
  */
 int resource_server_next_slot(resource_server_context_t *context,
                               seL4_CPtr *slot);
 
 /**
- * Frees a previously allocated cspace slot
- * Uses the vka if the resource server has one, otherwise uses pd clientapi
+ * Frees a previously allocated cspace slot, otherwise uses pd clientapi
  */
 int resource_server_free_slot(resource_server_context_t *context,
                               seL4_CPtr slot);

@@ -10,6 +10,7 @@
 #include "../helpers.h"
 
 #include <sel4gpi/ads_clientapi.h>
+#include <sel4gpi/pd_utils.h>
 
 #include <ramdisk_client.h>
 #include <fs_client.h>
@@ -20,7 +21,6 @@
 #define TEST_FNAME "somefile"
 #define TEST_FNAME_2 "longfile"
 #define RR_MO_N_PAGES 2
-#define FAKE_CLIENT_ID 1
 
 int test_fs(env_t env)
 {
@@ -31,20 +31,18 @@ int test_fs(env_t env)
 
     /* Initialize the ADS */
     ads_client_context_t ads_conn;
-    vka_cspace_make_path(&env->vka, env->self_ads_cptr, &ads_conn.badged_server_ep_cspath);
-    test_assert(error == 0);
+    vka_cspace_make_path(&env->vka, sel4gpi_get_ads_cap(), &ads_conn.badged_server_ep_cspath);
 
     /* Initialize the PD */
     pd_client_context_t pd_conn;
-    vka_cspace_make_path(&env->vka, env->self_pd_cptr, &pd_conn.badged_server_ep_cspath);
-    test_assert(error == 0);
+    vka_cspace_make_path(&env->vka, sel4gpi_get_pd_cap(), &pd_conn.badged_server_ep_cspath);
 
     /* Create a memory object for the RR dump */
     seL4_CPtr slot;
     vka_cspace_alloc(&env->vka, &slot);
 
     mo_client_context_t mo_conn;
-    error = mo_component_client_connect(env->gpi_endpoint,
+    error = mo_component_client_connect(sel4gpi_get_rde(GPICAP_TYPE_MO),
                                         slot,
                                         RR_MO_N_PAGES,
                                         &mo_conn);
@@ -52,38 +50,21 @@ int test_fs(env_t env)
     printf("Finished mo_component_client_connect\n");
 
     /* Start ramdisk server process */
-    seL4_CPtr ramdisk_ep;
     uint64_t ramdisk_id;
     seL4_CPtr ramdisk_pd_cap;
-    error = start_ramdisk_pd(&env->vka, &ramdisk_ep, &ramdisk_pd_cap, &ramdisk_id);
+    error = start_ramdisk_pd(&ramdisk_pd_cap, &ramdisk_id);
     test_assert(error == 0);
 
     /* Start fs server process */
-    seL4_CPtr fs_ep;
+    uint64_t fs_id;
     seL4_CPtr fs_pd_cap;
-    error = start_xv6fs_pd(&env->vka, ramdisk_id, ramdisk_pd_cap, &fs_ep, &fs_pd_cap, NULL);
+    error = start_xv6fs_pd(ramdisk_id, ramdisk_pd_cap, &fs_pd_cap, &fs_id);
     test_assert(error == 0);
 
-    /* Badge the FS EP with a client ID to simulate being a client */
-    cspacepath_t src, dest;
-    seL4_CPtr fs_client_ep;
-    vka_cspace_make_path(&env->vka, fs_ep, &src);
-
-    error = vka_cspace_alloc_path(&env->vka, &dest);
+    // Add FS ep to RDE
+    error = pd_client_add_rde(&pd_conn, fs_pd_cap, fs_id);
     test_assert(error == 0);
-
-    seL4_Word badge_val = gpi_new_badge(GPICAP_TYPE_FILE,
-                                        0x00,
-                                        FAKE_CLIENT_ID,
-                                        BADGE_OBJ_ID_NULL);
-
-    error = vka_cnode_mint(&dest,
-                           &src,
-                           seL4_AllRights,
-                           badge_val);
-    test_assert(error == 0);
-    fs_client_ep = dest.capPtr;
-    //pd_client_add_rde(&pd_conn, fs_ep, fs_pd_cap, GPICAP_TYPE_FILE, false);
+    seL4_CPtr fs_client_ep = sel4gpi_get_rde(GPICAP_TYPE_FILE);
 
     printf("------------------STARTING TESTS: %s------------------\n", __func__);
 
@@ -96,10 +77,7 @@ int test_fs(env_t env)
     test_assert(error == 0);
 
     // The libc fs ops should go to the xv6fs server
-    xv6fs_client_init(&env->vka, fs_client_ep,
-                      env->gpi_endpoint,
-                      env->self_ads_cptr,
-                      env->self_pd_cptr);
+    xv6fs_client_init();
 
     // Test file open/write
     int f = open(TEST_FNAME, O_CREAT | O_RDWR);

@@ -7,14 +7,13 @@
 
 #include <sel4/sel4.h>
 #include <sel4utils/process.h>
-#include <vka/vka.h>
-#include <vka/capops.h>
 #include <vspace/vspace.h>
 
 #include <sel4gpi/ads_clientapi.h>
 #include <sel4gpi/mo_clientapi.h>
 #include <sel4gpi/pd_clientapi.h>
 #include <sel4gpi/resource_server_utils.h>
+#include <sel4gpi/pd_utils.h>
 
 #include <libc_fs_helpers.h>
 #include <fs_shared.h>
@@ -123,52 +122,39 @@ global_xv6fs_client_context_t *get_xv6fs_client(void)
   return &xv6fs_client;
 }
 
-static int vka_next_slot_fn(seL4_CPtr *slot)
-{
-  return vka_cspace_alloc(get_xv6fs_client()->client_vka, slot);
-}
-
-int start_xv6fs_pd(vka_t *vka,
-                   uint64_t rd_id,
+int start_xv6fs_pd(uint64_t rd_id,
                    seL4_CPtr rd_pd_cap,
-                   seL4_CPtr *fs_ep,
                    seL4_CPtr *fs_pd_cap,
                    uint64_t *fs_id)
 {
-  int error = start_resource_server_pd(vka, rd_id, rd_pd_cap,
-                                       FS_APP, fs_ep, fs_pd_cap, fs_id);
+  int error = start_resource_server_pd(rd_id, rd_pd_cap,
+                                       FS_APP, fs_pd_cap, fs_id);
   CHECK_ERROR(error, "failed to start file resource server\n");
   XV6FS_PRINTF("Successfully started file system server\n");
   return 0;
 }
 
 seL4_Error
-xv6fs_client_init(vka_t *client_vka,
-                  seL4_CPtr fs_ep,
-                  seL4_CPtr gpi_ep,
-                  seL4_CPtr ads_ep,
-                  seL4_CPtr pd_ep)
+xv6fs_client_init(void)
 {
   XV6FS_PRINTF("Initializing client of FS server\n");
 
   int error;
 
-  get_xv6fs_client()->client_vka = client_vka;
-  get_xv6fs_client()->fs_ep = fs_ep;
-  get_xv6fs_client()->gpi_ep = gpi_ep;
+  get_xv6fs_client()->fs_ep = sel4gpi_get_rde(GPICAP_TYPE_FILE);
+  get_xv6fs_client()->mo_ep = sel4gpi_get_rde(GPICAP_TYPE_MO);
   get_xv6fs_client()->ads_conn = malloc(sizeof(ads_client_context_t));
-  get_xv6fs_client()->ads_conn->badged_server_ep_cspath.capPtr = ads_ep;
+  get_xv6fs_client()->ads_conn->badged_server_ep_cspath.capPtr = sel4gpi_get_ads_cap();
   get_xv6fs_client()->pd_conn = malloc(sizeof(pd_client_context_t));
-  get_xv6fs_client()->pd_conn->badged_server_ep_cspath.capPtr = pd_ep;
-  get_xv6fs_client()->next_slot = vka_next_slot_fn;
+  get_xv6fs_client()->pd_conn->badged_server_ep_cspath.capPtr = sel4gpi_get_pd_cap();
 
   /* Allocate the TEMP shared memory object */
   get_xv6fs_client()->shared_mem = malloc(sizeof(mo_client_context_t));
   seL4_CPtr free_slot;
-  error = get_xv6fs_client()->next_slot(&free_slot);
+  error = pd_client_next_slot(get_xv6fs_client()->pd_conn, &free_slot);
   CHECK_ERROR(error, "failed to get next cspace slot");
 
-  error = mo_component_client_connect(get_xv6fs_client()->gpi_ep,
+  error = mo_component_client_connect(get_xv6fs_client()->mo_ep,
                                       free_slot,
                                       1,
                                       get_xv6fs_client()->shared_mem);

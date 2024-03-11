@@ -21,7 +21,6 @@
 
 #define TEST_STR_1 "Fuzzy Wuzzy was a bear"
 #define TEST_STR_2 "Fuzzy Wuzzy had no hair"
-#define FAKE_CLIENT_ID 1
 
 int test_ramdisk(env_t env)
 {
@@ -59,10 +58,9 @@ int test_ramdisk(env_t env)
     */
 
     /* Start ramdisk server process */
-    seL4_CPtr ramdisk_ep;
     uint64_t ramdisk_id;
     seL4_CPtr ramdisk_pd_cap;
-    error = start_ramdisk_pd(&env->vka, &ramdisk_ep, &ramdisk_pd_cap, &ramdisk_id);
+    error = start_ramdisk_pd(&ramdisk_pd_cap, &ramdisk_id);
     test_assert(error == 0);
 
     /* Add the ramdisk to local RD */
