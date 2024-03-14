@@ -55,6 +55,7 @@ int main(int argc, char **argv)
     pd_conn.badged_server_ep_cspath.capPtr = pd_cap;
 
     seL4_CPtr mo_server_ep = sel4gpi_get_rde(GPICAP_TYPE_MO);
+    assert(mo_server_ep != seL4_CapNull);
 
     seL4_CPtr slot;
     error = pd_client_next_slot(&pd_conn, &slot);
@@ -80,6 +81,29 @@ int main(int argc, char **argv)
     error = pd_client_next_slot(&pd_conn, &slot);
     assert(error == 0);
     printf("Next free slot is %ld\n", (seL4_Word)slot);
+
+    if (argc > 0)
+    {
+        seL4_CPtr ep;
+        pd_client_alloc_ep(&pd_conn, &ep);
+        assert(error == 0);
+
+        seL4_CPtr cap_arg = (seL4_CPtr) strtol(argv[0], NULL, 10);
+        seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 1, 0);
+        seL4_SetCap(0, ep);
+        printf("argc: %d cap_arg: %lx\n", argc, cap_arg);
+        seL4_Send(cap_arg, tag);
+
+        tag = seL4_Recv(ep, NULL);
+        seL4_Word slot = seL4_GetMR(0);
+        
+        mo_conn.badged_server_ep_cspath.capPtr = (seL4_CPtr) slot;
+        error = ads_client_attach(&ads_conn,
+                                  0,
+                                  &mo_conn,
+                                  &ret_vaddr);
+        printf("Attached given MO to vaddr %p\n", ret_vaddr);
+    }
 
     printf(".... Goodbye Cruel World\n");
     return 0;

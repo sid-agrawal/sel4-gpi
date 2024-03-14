@@ -131,6 +131,7 @@ int pd_client_start(pd_client_context_t *conn, seL4_Word arg0);
  * @brief Share an RDE with another PD
  * This shares an RDE from the client PD with the target PD
  * The RDE is keyed by cap type
+ * Must call this AFTER the pd has been loaded
  * (XXX) Arya: Assumes only one RDE per cap type
  *
  * @param conn client connection object

@@ -31,7 +31,7 @@
 #define FS_APP "fs_server"
 //#define RAMDISK_IN_RT
 //#define FS_IN_RT
-#define NULL_PD_ID 0x00 // (XXX) Linh: is there a better value we can set for this?
+#define TEST_PD_ID 1
 
 #define MAX_TIMER_IRQS 4
 
