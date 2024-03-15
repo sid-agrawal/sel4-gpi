@@ -100,7 +100,7 @@ static void cpu_component_registry_insert(cpu_component_registry_entry_t *new_no
  * @param badge
  * @return cpu_component_registry_entry_t*
  */
-static cpu_component_registry_entry_t *cpu_component_registry_get_entry_by_badge(seL4_Word badge)
+cpu_component_registry_entry_t *cpu_component_registry_get_entry_by_badge(seL4_Word badge)
 {
 
     uint64_t objectID = get_object_id_from_badge(badge);
@@ -155,10 +155,11 @@ void cpu_handle_allocation_request(seL4_Word sender_badge, seL4_MessageInfo_t *r
     // Add the latest ID to the obj and to the badlge.
     seL4_Word badge = cpu_assign_new_badge_and_objectID(client_reg_ptr);
     uint32_t client_id = get_client_id_from_badge(sender_badge);
-    
+
     // (XXX) Linh: this is not very nice as we're coupling the PD and CPU components
     osmosis_pd_cap_t *res = pd_add_resource_by_id(client_id, GPICAP_TYPE_CPU, get_object_id_from_badge(badge));
-    if (res) {
+    if (res)
+    {
         res->slot_in_RT_Debug = dest_cptr;
         badge = set_client_id_to_badge(badge, client_id);
     }
@@ -350,8 +351,30 @@ static void handle_change_vspace_req(seL4_Word sender_badge,
     return reply(tag);
 }
 
+/**
+ * @brief Lookup the client registry entry for the given objectID
+ *
+ * @param res_id
+ * @return cpu_component_registry_entry_t*
+ */
+cpu_component_registry_entry_t *cpu_component_registry_get_entry_by_id(seL4_Word objectID)
+{
+    cpu_component_registry_entry_t *current_ctx = get_cpu_component()->client_registry;
+
+    while (current_ctx != NULL)
+    {
+        if (current_ctx->cpu.cpu_obj_id == objectID)
+        {
+            break;
+        }
+        current_ctx = current_ctx->next;
+    }
+    return current_ctx;
+}
+
 int forge_cpu_cap_from_tcb(sel4utils_process_t *process, // Change this to the sel4utils_thread_t
-                           vka_t *vka, seL4_CPtr *cap_ret)
+                           vka_t *vka, uint32_t client_id,
+                           seL4_CPtr *cap_ret, uint32_t *cpu_obj_id_ret)
 {
 
     assert(process != NULL);
@@ -376,6 +399,7 @@ int forge_cpu_cap_from_tcb(sel4utils_process_t *process, // Change this to the s
 
     /* Update the info in the registry entry. */
     seL4_Word badge = cpu_assign_new_badge_and_objectID(client_reg_ptr);
+    badge = set_client_id_to_badge(badge, client_id);
     cpu_component_registry_insert(client_reg_ptr);
 
     // (XXX) A lot more will go here.
@@ -399,6 +423,10 @@ int forge_cpu_cap_from_tcb(sel4utils_process_t *process, // Change this to the s
                 dest.capPtr, badge, client_reg_ptr->cpu.ipc_buffer_addr, client_reg_ptr->cpu.stack_top);
 
     *cap_ret = dest_cptr;
+    if (cpu_obj_id_ret)
+    {
+        *cpu_obj_id_ret = get_object_id_from_badge(badge);
+    }
     return 0;
 }
 

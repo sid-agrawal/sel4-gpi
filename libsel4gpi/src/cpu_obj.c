@@ -17,6 +17,8 @@
 #include <sel4gpi/cpu_component.h>
 #include <sel4gpi/cpu_obj.h>
 #include <sel4gpi/debug.h>
+#include <sel4gpi/model_exporting.h>
+#include <sel4/sel4.h>
 
 int cpu_start(cpu_t *cpu, sel4utils_thread_entry_fn entry_point, seL4_Word arg0)
 {
@@ -126,4 +128,20 @@ int cpu_new(cpu_t *cpu,
         void *ipc_buffer_addr;
         seL4_CPtr ipc_buffer_frame;
     */
+}
+
+void cpu_dump_rr(cpu_t *cpu, model_state_t *ms)
+{
+    char cpu_res_id[CSV_MAX_STRING_SIZE];
+    make_res_id(cpu_res_id, GPICAP_TYPE_CPU, cpu->cpu_obj_id);
+    add_resource(ms, cap_type_to_str(GPICAP_TYPE_CPU), cpu_res_id);
+    seL4_Word affinity = 0;
+#if CONFIG_MAX_NUM_NODES > 1
+    seL4_TCB_GetAffinity_t affinity_res = seL4_TCB_GetAffinity(cpu->tcb->cptr);
+    affinity = affinity_res.affinity;
+#endif
+    char core_res_id[CSV_MAX_STRING_SIZE];
+    make_phys_res_id(core_res_id, cpu->cpu_obj_id, affinity, "Core");
+    add_resource(ms, "CpuCore", core_res_id);
+    add_resource_depends_on(ms, cpu_res_id, core_res_id);
 }

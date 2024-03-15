@@ -171,7 +171,7 @@ void ads_dump_rr(ads_t *ads, model_state_t *ms)
     for (attach_node_t *res = ads->attach_nodes; res != NULL; res = res->next)
     {
         char res_id[CSV_MAX_STRING_SIZE];
-        make_virtual_res_id(res_id, ads->ads_obj_id, (uint64_t) res->vaddr);
+        make_virtual_res_id(res_id, ads->ads_obj_id, (uint64_t)res->vaddr, "VMR");
         add_resource(ms, "VirtualRegion", res_id);
         add_resource_depends_on(ms, ads_res_id, res_id);
 

@@ -229,7 +229,7 @@ int test_new_process_osmosis_shmem(env_t env)
     TEST_LOG("Sent MO to PD at slot %lx", slot);
 
     pd_client_dump(&test_pd_os_cap, NULL, 0);
-    pd_client_dump(&pd_os_cap, NULL, 0);
+    // pd_client_dump(&pd_os_cap, NULL, 0);
     // Hello PD should also attach it.
 #if 0
 

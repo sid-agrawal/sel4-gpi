@@ -12,6 +12,7 @@
 #include <vspace/vspace.h>
 #include <sel4utils/vspace_internal.h>
 #include <sel4utils/process.h>
+#include <sel4gpi/model_exporting.h>
 
 typedef struct _cpu
 {
@@ -67,3 +68,5 @@ int cpu_change_vspace(cpu_t *cpu,
  */
 int cpu_new(cpu_t *cpu,
             vka_t *vka);
+
+void cpu_dump_rr(cpu_t *cpu, model_state_t *ms);

@@ -99,6 +99,7 @@ typedef struct _osm_pd_init_data
     // PD's own PD resource and ADS resource
     seL4_CPtr pd_cap;
     seL4_CPtr ads_cap;
+    seL4_CPtr cpu_cap;
 
     // Resource directory
     osmosis_rde_t rde[MAX_PD_OSM_RDE];
@@ -219,6 +220,7 @@ typedef struct _pd
     // Special caps to send to all PDs
     seL4_CPtr pd_cap_in_RT;
     seL4_CPtr ads_cap_in_RT;
+    seL4_CPtr cpu_cap_in_RT;
     uint32_t ads_obj_id;
 
     /**

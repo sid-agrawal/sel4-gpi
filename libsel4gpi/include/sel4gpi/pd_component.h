@@ -260,7 +260,7 @@ int forge_pd_cap_from_init_data(
     vka_t *vka);
 
 // Only used to update the test process' PD cap
-void update_forged_pd_cap_from_init_data(test_init_data_t *init_data, seL4_CPtr cspace_root, vspace_t *vspace);
+void update_forged_pd_cap_from_init_data(test_init_data_t *init_data, sel4utils_process_t *test_process);
 
 /**
  * Only used for starting the test process, maps the init data
@@ -290,3 +290,5 @@ int pd_component_resource_manager_insert(pd_component_resource_manager_entry_t *
 pd_component_resource_manager_entry_t *pd_component_resource_manager_get_entry_by_id(seL4_Word manager_id);
 
 osmosis_pd_cap_t *pd_add_resource_by_id(uint32_t client_id, gpi_cap_t cap_type, uint32_t res_id);
+
+pd_component_registry_entry_t *pd_component_registry_get_entry_by_id(seL4_Word object_id);

@@ -19,9 +19,11 @@
 #include <sel4gpi/badge_usage.h>
 #include <sel4gpi/mo_component.h>
 #include <sel4gpi/ads_component.h>
+#include <sel4gpi/cpu_component.h>
 #include <sel4gpi/cap_tracking.h>
 #include <sel4gpi/pd_obj.h>
 #include <sel4gpi/ads_obj.h>
+#include <sel4gpi/cpu_obj.h>
 #include <sel4gpi/debug.h>
 #include <sel4gpi/resource_server_utils.h>
 // #include <sel4gpi/gpi_rde.h>
@@ -311,6 +313,11 @@ int pd_load_image(pd_t *pd,
                                                    config);
     assert(error == 0);
 
+#if CONFIG_MAX_NUM_NODES > 1
+    seL4_Error syserr = seL4_TCB_SetAffinity(pd->proc.thread.tcb.cptr, 1);
+    ZF_LOGE_IFERR(syserr, "Failed to set TCB Affinity");
+#endif // CONFIG_MAX_NUM_NODES > 1
+
     /* Initialize a vka for the PD's cspace */
     error = pd_bootstrap_allocator(pd, pd->proc.cspace.cptr, pd->proc.cspace_next_free,
                                    BIT(CSPACE_SIZE_BITS), CSPACE_SIZE_BITS, 0);
@@ -371,7 +378,14 @@ int pd_load_image(pd_t *pd,
     // Send the ADS cap as a resource
     seL4_Word badge = gpi_new_badge(GPICAP_TYPE_ADS, 0x00, pd->pd_obj_id, pd->ads_obj_id);
     error = pd_send_cap(pd, pd->ads_cap_in_RT, badge, &pd->init_data->ads_cap);
-    ZF_LOGF_IFERR(error, "Failed to send ADS cap to RDE");
+    ZF_LOGF_IFERR(error, "Failed to send ADS cap to PD");
+
+    // Send CPU cap as a resource
+    uint32_t cpu_obj_id;
+    error = forge_cpu_cap_from_tcb(&pd->proc, pd->vka, pd->pd_obj_id, &pd->cpu_cap_in_RT, &cpu_obj_id);
+    badge = gpi_new_badge(GPICAP_TYPE_CPU, 0x00, pd->pd_obj_id, cpu_obj_id);
+    pd_send_cap(pd, pd->cpu_cap_in_RT, badge, &pd->init_data->cpu_cap);
+    ZF_LOGF_IFERR(error, "Failed to send CPU cap to PD");
 
     /* set up free slot range */
     pd->cspace_size_bits = pd->proc.cspace_size;
@@ -414,83 +428,46 @@ int pd_send_cap(pd_t *to_pd,
     cspacepath_t src, dest;
     seL4_CPtr dest_cptr;
     osmosis_pd_cap_t *res;
+    bool should_mint = true;
     /*
         Find out if the cap is an OSmosis cap or not.
     */
     if (badge)
     {
-        // Find the pd from where ths cap came (do we need this info??)
-
         gpi_cap_t cap_type = get_cap_type_from_badge(badge);
+        uint32_t res_id;
+        vka_t *server_vka;
+        seL4_CPtr server_src_cap;
+
         switch (cap_type)
         {
         case GPICAP_TYPE_ADS:
-            // ZF_LOGF("Sending ADS cap is not supported yet");
-            new_badge = gpi_new_badge(cap_type,
-                                      get_perms_from_badge(badge),
-                                      to_pd->pd_obj_id, /* Client ID */
-                                      get_object_id_from_badge(badge));
+            server_vka = get_ads_component()->server_vka;
+            server_src_cap = get_ads_component()->server_ep_obj.cptr;
 
             ads_component_registry_entry_t *ads_reg = ads_component_registry_get_entry_by_badge(badge);
             assert(ads_reg != NULL);
 
-            // Mint a new cap for the child.
-            vka_cspace_make_path(get_ads_component()->server_vka,
-                                 get_ads_component()->server_ep_obj.cptr, &src);
-            vka_cspace_alloc(get_ads_component()->server_vka, &dest_cptr);
-            vka_cspace_make_path(get_ads_component()->server_vka, dest_cptr, &dest);
-
-            error = vka_cnode_mint(&dest,
-                                   &src,
-                                   seL4_AllRights,
-                                   new_badge);
-            if (error)
-            {
-                OSDB_PRINTF(PDSERVS "%s: Failed to mint new_badge %lx.\n",
-                            __FUNCTION__, new_badge);
-                return 1;
-            }
-            cap = dest_cptr;
-            res = pd_add_resource(to_pd, GPICAP_TYPE_ADS, ads_reg->ads.ads_obj_id);
-            res->slot_in_PD_Debug = cap;
-            res->slot_in_RT_Debug = src.capPtr;
-            res->slot_in_ServerPD_Debug = src.capPtr;
+            res_id = ads_reg->ads.ads_obj_id;
             break;
         case GPICAP_TYPE_MO:
-            new_badge = gpi_new_badge(cap_type,
-                                      get_perms_from_badge(badge),
-                                      to_pd->pd_obj_id, /* Client ID */
-                                      get_object_id_from_badge(badge));
-
+            server_vka = get_mo_component()->server_vka;
+            server_src_cap = get_mo_component()->server_ep_obj.cptr;
             // Increment the counter in the mo_t object.
             mo_component_registry_entry_t *mo_reg = mo_component_registry_get_entry_by_badge(badge);
             assert(mo_reg != NULL);
             mo_reg->count++;
 
-            // Mint a new cap for the child.
-            vka_cspace_make_path(get_mo_component()->server_vka,
-                                 get_mo_component()->server_ep_obj.cptr, &src);
-            vka_cspace_alloc(get_mo_component()->server_vka, &dest_cptr);
-            vka_cspace_make_path(get_mo_component()->server_vka, dest_cptr, &dest);
-
-            error = vka_cnode_mint(&dest,
-                                   &src,
-                                   seL4_AllRights,
-                                   new_badge);
-            if (error)
-            {
-                OSDB_PRINTF(PDSERVS "%s: Failed to mint new_badge %lx.\n",
-                            __FUNCTION__, new_badge);
-                return 1;
-            }
-            cap = dest_cptr;
-            res = pd_add_resource(to_pd, GPICAP_TYPE_MO, mo_reg->mo.mo_obj_id);
-            res->slot_in_PD_Debug = cap;
-            res->slot_in_RT_Debug = src.capPtr;
-            res->slot_in_ServerPD_Debug = src.capPtr;
+            res_id = mo_reg->mo.mo_obj_id;
             break;
         case GPICAP_TYPE_CPU:
-            ZF_LOGF("Sending CPU cap is not supported yet");
+            server_vka = get_cpu_component()->server_vka;
+            server_src_cap = get_cpu_component()->server_ep_obj.cptr;
+
+            cpu_component_registry_entry_t *cpu_reg = cpu_component_registry_get_entry_by_badge(badge);
+            assert(cpu_reg != NULL);
+
+            res_id = cpu_reg->cpu.cpu_obj_id;
             break;
         case GPICAP_TYPE_PD:
             ZF_LOGF("Sending PD cap is not supported yet");
@@ -499,6 +476,8 @@ int pd_send_cap(pd_t *to_pd,
             // ZF_LOGF("Unknown cap type in %s", __FUNCTION__);
             //  (XXX) Arya: allowing unknown cap type for now to send parent ep
             ZF_LOGE("Unknown cap type %d in %s", cap_type, __FUNCTION__);
+            should_mint = false;
+            break;
         }
 
         // Find the pd where the cap is going, and basd
@@ -507,7 +486,34 @@ int pd_send_cap(pd_t *to_pd,
 
         // forge a copy of the cap with the type, perms, and obj id, but different client id
         // Insert it in the appropirate list
+        if (should_mint) // (XXX) remove this once we stop sending non-osmosis caps through here
+        {
+            new_badge = gpi_new_badge(cap_type,
+                                      get_perms_from_badge(badge),
+                                      to_pd->pd_obj_id, /* Client ID */
+                                      get_object_id_from_badge(badge));
 
+            vka_cspace_make_path(server_vka, server_src_cap, &src);
+            vka_cspace_alloc(server_vka, &dest_cptr);
+            vka_cspace_make_path(server_vka, dest_cptr, &dest);
+
+            error = vka_cnode_mint(&dest,
+                                   &src,
+                                   seL4_AllRights,
+                                   new_badge);
+            if (error)
+            {
+                OSDB_PRINTF(PDSERVS "%s: Failed to mint new_badge %lx.\n",
+                            __FUNCTION__, new_badge);
+                return 1;
+            }
+
+            cap = dest_cptr;
+            res = pd_add_resource(to_pd, cap_type, res_id);
+            res->slot_in_PD_Debug = cap;
+            res->slot_in_RT_Debug = src.capPtr;
+            res->slot_in_ServerPD_Debug = src.capPtr;
+        }
         // do the same copy as above
     }
     else
@@ -642,10 +648,11 @@ int pd_dump(pd_t *pd)
     }
     */
 
-    char rde_id[CSV_MAX_STRING_SIZE];
+    // char rde_id[CSV_MAX_STRING_SIZE];
     char rde_name[CSV_MAX_STRING_SIZE];
-    uint32_t added_pd_rr[MAX_PD_OSM_RDE] = {0};
-    memset(added_pd_rr, -1, sizeof(uint32_t) * MAX_PD_OSM_RDE);
+    char rm_id[CSV_MAX_STRING_SIZE];
+    // uint32_t added_pd_rr[MAX_PD_OSM_RDE] = {0};
+    // memset(added_pd_rr, -1, sizeof(uint32_t) * MAX_PD_OSM_RDE);
 
     for (int i = 0; i < MAX_PD_OSM_RDE; i++)
     {
@@ -659,25 +666,11 @@ int pd_dump(pd_t *pd)
             {
                 ZF_LOGF("Couldn't find resource manager with ID %d\n", rde.manager_id);
             }
-            // Root task has no PD object, give it ID 0
-            uint64_t rde_pd_id = rm->pd ? rm->pd->pd_obj_id : 0;
 
-            make_res_id(rde_id, GPICAP_TYPE_PD, rde_pd_id);
+            snprintf(rm_id, CSV_MAX_STRING_SIZE, "RM_%d", rm->manager_id);
             snprintf(rde_name, CSV_MAX_STRING_SIZE, "%s_Server", cap_type_to_str(rde.type.type));
-            add_pd(ms, rde_name, rde_id);
-
-            int j = 0;
-            while (added_pd_rr[j] != -1 && added_pd_rr[j] != rde_pd_id && j < MAX_PD_OSM_RDE)
-            {
-                OSDB_PRINTF("added_pd_rr[%d] = %d\n", j, added_pd_rr[j]);
-                j++;
-            }
-
-            if (added_pd_rr[j] == -1 && j < MAX_PD_OSM_RDE)
-            {
-                add_pd_requests(ms, pd_id, rde_id);
-                added_pd_rr[j] = rde_pd_id;
-            }
+            add_pd(ms, rde_name, rm_id);       // (XXX) Linh: placeholder before we implement dumping of RDE PDs
+            add_pd_requests(ms, pd_id, rm_id); // rm_id should always be unique
         }
     }
 
@@ -686,6 +679,7 @@ int pd_dump(pd_t *pd)
     make_res_id(root_task_id, GPICAP_TYPE_PD, 0);
     add_resource(ms, "All", "RT_ALL");
     add_has_access_to(ms, root_task_id, "RT_ALL", true);
+    add_pd(ms, "ROOT TASK", root_task_id);
 
     char res_id[CSV_MAX_STRING_SIZE];
     for (osmosis_pd_cap_t *current_cap = pd->has_access_to; current_cap != NULL; current_cap = current_cap->hh.next)
@@ -695,12 +689,12 @@ int pd_dump(pd_t *pd)
         //  print_pd_osm_cap_info(&current_cap);
         //  else if type osmosis cap
         //  get the RR for that cap
+        make_res_id(res_id, current_cap->type, current_cap->res_id);
         switch (current_cap->type)
         {
         case GPICAP_TYPE_NONE:
             break;
         case GPICAP_TYPE_ADS:
-            make_res_id(res_id, current_cap->type, current_cap->res_id);
             ads_component_registry_entry_t *ads_data =
                 ads_component_registry_get_entry_by_id(current_cap->res_id);
             assert(ads_data != NULL);
@@ -715,13 +709,16 @@ int pd_dump(pd_t *pd)
                               true);
             break;
         case GPICAP_TYPE_MO:
-            make_res_id(res_id, current_cap->type, current_cap->res_id);
             mo_component_registry_entry_t *mo_data = mo_component_registry_get_entry_by_id(current_cap->res_id);
             assert(mo_data != NULL);
             mo_dump_rr(&mo_data->mo, ms);
             add_has_access_to(ms, pd_id, res_id, false);
             break;
         case GPICAP_TYPE_CPU:
+            cpu_component_registry_entry_t *cpu_data = cpu_component_registry_get_entry_by_id(current_cap->res_id);
+            assert(cpu_data != NULL);
+            cpu_dump_rr(&cpu_data->cpu, ms);
+            add_has_access_to(ms, pd_id, res_id, false);
             break;
         case GPICAP_TYPE_seL4:
             // Use some other method to get the cap details
@@ -798,7 +795,6 @@ int pd_dump(pd_t *pd)
             combine_model_states(ms, rs);
 
             // Add the has_access_to row
-            make_res_id(res_id, current_cap->type, current_cap->res_id);
             add_has_access_to(ms,
                               pd_id,
                               res_id,
@@ -808,6 +804,12 @@ int pd_dump(pd_t *pd)
             vspace_unmap_pages(&server_entry->pd->proc.vspace, rr_remote_vaddr, 1, seL4_PageBits, NULL);
             vka_cnode_delete(&rr_frame_copy_path);
 
+            break;
+        case GPICAP_TYPE_PD:
+            pd_component_registry_entry_t *pd_data = pd_component_registry_get_entry_by_id(current_cap->res_id);
+            assert(pd_data != NULL);
+            pd_dump(&pd_data->pd);
+            // add_has_access_to(ms, pd_id, res_id, false);
             break;
         default:
             ZF_LOGE("Invalid has_access_to cap type 0x%x", current_cap->type);

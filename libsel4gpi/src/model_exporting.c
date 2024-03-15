@@ -356,13 +356,12 @@ void add_pd_requests(model_state_t *model_state, char *pd_from, char *pd_to)
     model_state->num_requests++;
 }
 
-void make_virtual_res_id(char *res_id, uint32_t obj_id,  uint64_t res_id_int)
+void make_virtual_res_id(char *res_id, uint32_t obj_id, uint64_t res_id_int, char *prefix)
 {
-    snprintf(res_id, CSV_MAX_STRING_SIZE, "VMR_%u_0x%lx", obj_id, res_id_int);
+    snprintf(res_id, CSV_MAX_STRING_SIZE, "%s_%u_0x%lx", prefix, obj_id, res_id_int);
 }
 
-void make_phys_res_id(char* res_id, uint32_t obj_id, uint64_t res_id_int)
+void make_phys_res_id(char *res_id, uint32_t obj_id, uint64_t res_id_int, char *prefix)
 {
-    snprintf(res_id, CSV_MAX_STRING_SIZE, "PMR_%u_0x%lx", obj_id, res_id_int);
+    snprintf(res_id, CSV_MAX_STRING_SIZE, "%s_%u_0x%lx", prefix, obj_id, res_id_int);
 }
-

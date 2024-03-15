@@ -103,7 +103,7 @@ static void pd_component_registry_insert(pd_component_registry_entry_t *new_node
  * @param object_id
  * @return pd_component_registry_entry_t*
  */
-static pd_component_registry_entry_t *pd_component_registry_get_entry_by_id(seL4_Word object_id)
+pd_component_registry_entry_t *pd_component_registry_get_entry_by_id(seL4_Word object_id)
 {
     /* Get the head of the list */
     pd_component_registry_entry_t *current_ctx = get_pd_component()->client_registry;
@@ -277,7 +277,7 @@ int forge_pd_cap_from_init_data(
     return 0;
 }
 
-void update_forged_pd_cap_from_init_data(test_init_data_t *init_data, seL4_CPtr cspace_root, vspace_t *vspace)
+void update_forged_pd_cap_from_init_data(test_init_data_t *init_data, sel4utils_process_t *test_process)
 {
     int error;
     assert(init_data != NULL);
@@ -293,29 +293,30 @@ void update_forged_pd_cap_from_init_data(test_init_data_t *init_data, seL4_CPtr 
 
     // Split the test process' cspace and initialize a vka with half
     seL4_CPtr mid_slot = DIV_ROUND_UP(init_data->free_slots.start + init_data->free_slots.end, 2);
-    error = pd_bootstrap_allocator(pd, cspace_root,
+    error = pd_bootstrap_allocator(pd, test_process->cspace.cptr,
                                    mid_slot, init_data->free_slots.end,
                                    init_data->cspace_size_bits,
                                    // seL4_WordBits - init_data->cspace_size_bits);
                                    0);
-    if (error != seL4_NoError)
-    {
-        ZF_LOGF("Failed to initialize PD VKA\n");
-    }
+    ZF_LOGF_IFERR(error, "Failed to initialize PD VKA");
     init_data->free_slots.end = mid_slot - 1;
 
     // Forge ADS cap
     seL4_CPtr child_as_cap_in_parent;
-    error = forge_ads_cap_from_vspace(vspace, get_pd_component()->server_vka, pd->pd_obj_id, &child_as_cap_in_parent, NULL);
-    if (error)
-    {
-        ZF_LOGF("Failed to forge child's as cap");
-    }
+    error = forge_ads_cap_from_vspace(&test_process->vspace, get_pd_component()->server_vka, pd->pd_obj_id, &child_as_cap_in_parent, NULL);
+    ZF_LOGF_IFERR(error, "Failed to forge child's as cap");
+
+    // Forge CPU cap
+    seL4_CPtr child_cpu_cap_in_parent;
+    error = forge_cpu_cap_from_tcb(test_process, get_pd_component()->server_vka, pd->pd_obj_id, &child_cpu_cap_in_parent, NULL);
+    ZF_LOGF_IFERR(error, "Failed to forge child's CPU cap");
 
     // Setup the test process' init data
     error = copy_cap_to_pd(pd, child_as_cap_in_parent, &pd->init_data->ads_cap);
     assert(error == 0);
     error = copy_cap_to_pd(pd, reg_ptr->raw_cap_in_root, &pd->init_data->pd_cap);
+    assert(error == 0);
+    error = copy_cap_to_pd(pd, child_cpu_cap_in_parent, &pd->init_data->cpu_cap);
     assert(error == 0);
     rde_type_t ads_type = {.type = GPICAP_TYPE_ADS};
     pd_add_rde(pd, ads_type, get_gpi_server()->ads_manager_id, get_gpi_server()->server_ep_obj.cptr);

@@ -298,23 +298,6 @@ void basic_set_up(uintptr_t e)
         assert(env->child_mo_cptr_in_child[i] != 0);
     }
 
-    // Here, do the same for the CPU cap too
-    seL4_CPtr child_cpu_cap_in_parent;
-    error = forge_cpu_cap_from_tcb(&env->test_process, &env->vka, &child_cpu_cap_in_parent);
-    if (error)
-    {
-        ZF_LOGF("Failed to forge child's CPU cap");
-    }
-    // cpu_component_registry_entry_t *head_cpu = get_cpu_component()->client_registry;
-
-    env->child_cpu_cptr_in_child = sel4utils_copy_cap_to_process(&(env->test_process),
-                                                                 &env->vka, child_cpu_cap_in_parent);
-    assert(env->child_cpu_cptr_in_child != 0);
-
-    // Here, do the same for the CPU cap too
-    // We have a cathc 22 here. The
-
-    //--------------------------------------------------------------------
 #define PD_FORGE 1
 #ifdef PD_FORGE
     error = forge_pd_cap_from_init_data(env->init, &env->vka);
@@ -326,7 +309,7 @@ void basic_set_up(uintptr_t e)
 #endif
 
     env->gpi_endpoint_in_child = sel4utils_copy_cap_to_process(&(env->test_process),
-                                                                &env->vka, env->gpi_endpoint_in_parent);
+                                                               &env->vka, env->gpi_endpoint_in_parent);
     assert(env->gpi_endpoint_in_child != 0);
 
     // Keep this one as the last COPY, so that  init->free_slot.start a few lines below stays valid.
@@ -358,7 +341,7 @@ Warning:
     assert(env->init->free_slots.start < env->init->free_slots.end);
 
 #ifdef PD_FORGE
-    update_forged_pd_cap_from_init_data(env->init, env->test_process.cspace.cptr, &env->test_process.vspace);
+    update_forged_pd_cap_from_init_data(env->init, &env->test_process);
 #endif
 }
 

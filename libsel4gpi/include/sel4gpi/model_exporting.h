@@ -79,9 +79,9 @@ void combine_model_states(model_state_t *ms, rr_state_t *rs);
 // Requires that the length of res_id is CSV_MAX_STRING_SIZE
 void make_res_id(char *res_id, gpi_cap_t cap_type, uint64_t res_id_int);
 
-void make_virtual_res_id(char *res_id, uint32_t obj_id, uint64_t res_id_int);
+void make_virtual_res_id(char *res_id, uint32_t obj_id, uint64_t res_id_int, char *prefix);
 
-void make_phys_res_id(char* res_id, uint32_t obj_id, uint64_t res_id_int);
+void make_phys_res_id(char *res_id, uint32_t obj_id, uint64_t res_id_int, char *prefix);
 
 // Function to add a resource to the model state
 void add_resource(model_state_t *model_state, char *resource_type, char *resource_id);
