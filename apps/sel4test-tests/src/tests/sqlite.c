@@ -205,7 +205,6 @@ int test_sqlite(env_t env)
 
     // Load an initial db
     sqlite3 *db;
-    // open(DB_NAME, O_CREAT | O_RDWR);
     error = sqlite3_open(DB_NAME, &db);
     test_assert(error == SQLITE_OK);
     test_assert(db != NULL);

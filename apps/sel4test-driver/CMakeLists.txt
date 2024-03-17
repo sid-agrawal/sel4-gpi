@@ -47,7 +47,6 @@ sel4_projects_libs_import_libraries()
 add_subdirectory(../../libsel4testsupport libsel4testsupport)
 add_subdirectory(../../libsel4gpi libsel4gpi)
 add_subdirectory(../../vmm libsel4vmm)
-add_subdirectory(../xv6fs xv6fs)
 
 file(
     GLOB
@@ -63,7 +62,11 @@ file(
 # Import build rules for test app
 add_subdirectory(../sel4test-tests sel4test-tests)
 add_subdirectory(../ramdisk ramdisk)
+add_subdirectory(../xv6fs xv6fs)
+add_subdirectory(../kvstore kvstore)
 add_subdirectory(../hello hello)
+add_subdirectory(../hello-kvstore hello-kvstore)
+
 include(cpio)
 set(cpio_files "")
 # New binaries in the CPIO go here.
@@ -71,6 +74,8 @@ list(APPEND cpio_files "$<TARGET_FILE:sel4test-tests>")
 list(APPEND cpio_files "$<TARGET_FILE:hello>")
 list(APPEND cpio_files "$<TARGET_FILE:ramdisk_server>")
 list(APPEND cpio_files "$<TARGET_FILE:fs_server>")
+list(APPEND cpio_files "$<TARGET_FILE:kvstore_server>")
+list(APPEND cpio_files "$<TARGET_FILE:hello_kvstore>")
 MakeCPIO(archive.o "${cpio_files}")
 
 add_executable(sel4test-driver EXCLUDE_FROM_ALL ${static} archive.o)
@@ -91,8 +96,6 @@ target_link_libraries(
         sel4platsupport
         sel4muslcsys
         sel4testsupport
-        ramdisk_server_lib
-        fs_server_lib
     PRIVATE sel4test-driver_Config
 )
 target_compile_options(sel4test-driver PRIVATE -Werror -g)

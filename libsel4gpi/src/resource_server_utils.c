@@ -108,8 +108,13 @@ int start_resource_server_pd(uint64_t rde_id,
         CHECK_ERROR(error, "failed to send rde to pd");
     }
 
+    // Setup the args
+    int argc = 1;
+    seL4_Word args[argc];
+    args[0] = parent_ep_slot;
+
     // Start it
-    error = pd_client_start(&new_pd, parent_ep_slot); // with this arg.
+    error = pd_client_start(&new_pd, argc, args);
     CHECK_ERROR(error, "failed to start pd");
 
     // Wait for it to finish starting
@@ -226,11 +231,8 @@ int resource_server_main(void *context_v)
         received_cap_path.capDepth);
 
     // Send our ep to the parent process
-    // (XXX) Arya: We should not send out an unbadged copy of the endpoint
-    // In the future, replace this with a new RDE mechanism?
-    RESOURCE_SERVER_PRINTF("Messaging parent process at slot %d, sending ep %d\n", (int)context->parent_ep, (int)context->server_ep);
-    tag = seL4_MessageInfo_new(0, 0, 1, 1);
-    seL4_SetCap(0, context->server_ep);
+    RESOURCE_SERVER_PRINTF("Messaging parent process at slot %d, sending ID %d\n", (int)context->parent_ep, context->server_id);
+    tag = seL4_MessageInfo_new(0, 0, 0, 1);
     seL4_SetMR(0, context->server_id);
     seL4_Send(context->parent_ep, tag);
 

@@ -71,9 +71,7 @@ target_link_libraries(
         sel4serialserver_tests
         sel4vmm
         ramdisk_client
-        ramdisk_server_lib
         fs_client
-        fs_server_lib
         sqlite3
     PRIVATE sel4test-driver_Config
 )

@@ -122,10 +122,11 @@ int pd_client_dump(pd_client_context_t *conn,
  * @brief Start the pd oject.
  *
  * @param conn client connection object
- * @param arg0 arg0 (XXX: Need to extend this to pass more args)
+ * @param argc number of args to pass to pd
+ * @param args word args to pass to pd, length >= argc
  * @return int 0 on success, -1 on failure.
  */
-int pd_client_start(pd_client_context_t *conn, seL4_Word arg0);
+int pd_client_start(pd_client_context_t *conn, int argc, seL4_Word *args);
 
 /**
  * @brief Share an RDE with another PD

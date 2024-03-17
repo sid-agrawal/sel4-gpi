@@ -540,12 +540,13 @@ int pd_start(pd_t *pd,
              vka_t *vka,
              seL4_CPtr pd_endpoint_in_root,
              vspace_t *server_vspace,
-             seL4_Word arg0)
+             int argc,
+             seL4_Word *args)
 {
     int error;
 
-    OSDB_PRINTF(PDSERVS "pd_start: ARGS: pd_endpoint_in_root: %ld, arg0: %ld\n",
-                pd_endpoint_in_root, arg0);
+    OSDB_PRINTF(PDSERVS "pd_start: ARGS: pd_endpoint_in_root: %ld, argc: %d\n",
+                pd_endpoint_in_root, argc);
     assert(&pd->proc != NULL);
     assert(&pd->proc.vspace != NULL);
 
@@ -567,14 +568,21 @@ int pd_start(pd_t *pd,
     // Phase1: Start it.
     // Phase2: start the CPU thread.
 
-    /* set up args for the test process */
-    seL4_Word argc = 1;
+    /* set up string args for the process */
     char string_args[argc][WORD_STRING_SIZE];
     char *argv[argc];
-    sel4utils_create_word_args(string_args, argv, argc, arg0);
 
-    // argc = 1;
-    // snprintf(argv[0], WORD_STRING_SIZE, "%ld", arg0);
+    for (int i = 0; i < argc; i++) {
+        argv[i] = string_args[i];
+        snprintf(argv[i], WORD_STRING_SIZE, "%"PRIuPTR"", args[i]);
+    }
+
+    OSDB_PRINTF("Starting PD with string args: [", argc);
+    for (int i = 0; i < argc; i++)
+    {
+        OSDB_PRINTF("%s, ", string_args[i]);
+    }
+    OSDB_PRINTF("]\n");
 
     /* spawn the process */
     OSDB_PRINTF(PDSERVS "pd_start: starting PD\n");

@@ -14,6 +14,8 @@
 #include <sel4gpi/ads_clientapi.h>
 #include <sel4gpi/pd_clientapi.h>
 
+#include <fs_shared.h>
+
 #define XV6FS_C "xv6fs Client: "
 
 /**

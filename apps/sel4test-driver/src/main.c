@@ -48,8 +48,6 @@
 
 #include <sel4platsupport/io.h>
 #include <sel4gpi/gpi_server.h>
-#include <fs_server.h>
-#include <ramdisk_server.h>
 
 #define RT_MALLOC_SIZE 16 * 1024 * 1024
 char __attribute__((aligned(PAGE_SIZE_4K))) morecore_area[RT_MALLOC_SIZE];

@@ -14,7 +14,6 @@
 
 #include <ramdisk_client.h>
 #include <fs_client.h>
-#include <fs_server.h>
 
 #define TEST_STR_1 "Fuzzy Wuzzy was a bear"
 #define TEST_STR_2 "Fuzzy Wuzzy had no hair"

@@ -30,8 +30,10 @@
 #define PD_SERVER_BADGE_PARENT_VALUE (0xDEADBEEF)
 
 /* Temp definition of supported images */
-#define PD_N_IMAGES 3
-static const char *pd_images[PD_N_IMAGES] = {"hello", "ramdisk_server", "fs_server"};
+#define PD_N_IMAGES 5
+static const char *pd_images[PD_N_IMAGES] = {"hello", "hello_kvstore", "ramdisk_server", "fs_server", "kvstore_server"};
+
+#define PD_MAX_ARGC 4
 
 /* IPC values returned in the "label" message header. */
 enum pd_component_errors
@@ -153,8 +155,12 @@ enum pd_component_msgregs
     PDMSGREG_DUMP_ACK_END = PDMSGREG_LABEL0,
 
     /* Start */
-    /* (XXX) For now,  we only pass 1 arg, which clearly needs fixing */
-    PDMSGREG_START_ARG0 = PDMSGREG_LABEL0,
+    /* (XXX) For now,  we only pass upt to 4 args, which may need fixing */
+    PDMSGREG_START_ARGC = PDMSGREG_LABEL0,
+    PDMSGREG_START_ARG0,
+    PDMSGREG_START_ARG1,
+    PDMSGREG_START_ARG2,
+    PDMSGREG_START_ARG3,
     PDMSGREG_START_REQ_END,
 
     PDMSGREG_START_ACK_END = PDMSGREG_LABEL0,

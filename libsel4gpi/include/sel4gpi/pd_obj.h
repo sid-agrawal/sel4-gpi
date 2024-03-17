@@ -263,7 +263,8 @@ int pd_start(pd_t *pd,
              vka_t *vka,
              seL4_CPtr pd_endpoint_in_root,
              vspace_t *vspace,
-             seL4_Word arg0);
+             int argc,
+             seL4_Word *args);
 
 int pd_next_slot(pd_t *pd,
                  seL4_CPtr *next_free_slot);

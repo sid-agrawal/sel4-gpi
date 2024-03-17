@@ -29,8 +29,7 @@
 #define MAX_MO_CHILD 10
 #define RAMDISK_APP "ramdisk_server"
 #define FS_APP "fs_server"
-//#define RAMDISK_IN_RT
-//#define FS_IN_RT
+#define KVSTORE_APP "kvstore_server"
 #define TEST_PD_ID 1
 
 #define MAX_TIMER_IRQS 4

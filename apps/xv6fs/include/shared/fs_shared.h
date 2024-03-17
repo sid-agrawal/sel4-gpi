@@ -5,7 +5,7 @@
 #include <ramdisk_shared.h>
 
 /* General file system configuration */
-#define FS_DEBUG 1
+#define FS_DEBUG 0
 #define FS_SIZE (RAMDISK_SIZE_BYTES / RAMDISK_BLOCK_SIZE) // Size of file system in blocks
 #define BSIZE RAMDISK_BLOCK_SIZE                          // Block size in bytes
 #define N_INODES FS_SIZE / 4                              // Max number of inodes in the filesystem

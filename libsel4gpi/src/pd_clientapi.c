@@ -29,7 +29,7 @@ int pd_component_client_connect(seL4_CPtr server_ep_cap,
     OSDB_PRINTF(PDSERVC "%s %d pd_endpoint is %lu:__ \n", __FUNCTION__, __LINE__, server_ep_cap);
     // debug_cap_identify(PDSERVC, server_ep_cap);
 
-    OSDB_PRINTF(PDSERVC "Set a receive path for the badged ep: %d\n", (int) free_slot);
+    OSDB_PRINTF(PDSERVC "Set a receive path for the badged ep: %d\n", (int)free_slot);
 
     /* Set request type */
     seL4_SetMR(0, GPICAP_TYPE_PD);
@@ -40,7 +40,7 @@ int pd_component_client_connect(seL4_CPtr server_ep_cap,
 
     ret_conn->badged_server_ep_cspath.capPtr = free_slot;
 
-    OSDB_PRINTF(PDSERVC "received badged endpoint and it was kept in %d:__\n", (int) free_slot);
+    OSDB_PRINTF(PDSERVC "received badged endpoint and it was kept in %d:__\n", (int)free_slot);
     // debug_cap_identify(PDSERVC, path.capPtr);
     return 0;
 }
@@ -184,10 +184,42 @@ int pd_client_badge_ep(pd_client_context_t *conn,
     return 0;
 }
 
-int pd_client_start(pd_client_context_t *conn, seL4_Word arg0)
+int pd_client_start(pd_client_context_t *conn, int argc, seL4_Word *args)
 {
+    if (argc > PD_MAX_ARGC)
+    {
+        ZF_LOGE(PDSERVC "invalid argc (%d) to start pd client, max is (%d)\n", argc, PD_MAX_ARGC);
+        return -1;
+    }
     seL4_SetMR(PDMSGREG_FUNC, PD_FUNC_START_REQ);
-    seL4_SetMR(PDMSGREG_START_ARG0, arg0);
+
+    // Setup the arguments
+    OSDB_PRINTF(PDSERVC "Starting PD with %d args: [", argc);
+
+    seL4_SetMR(PDMSGREG_START_ARGC, argc);
+
+    for (int i = 0; i < argc; i++)
+    {
+        OSDB_PRINTF("%ld, ", args[i]);
+
+        switch (i)
+        {
+        case 0:
+            seL4_SetMR(PDMSGREG_START_ARG0, args[i]);
+            break;
+        case 1:
+            seL4_SetMR(PDMSGREG_START_ARG1, args[i]);
+            break;
+        case 2:
+            seL4_SetMR(PDMSGREG_START_ARG2, args[i]);
+            break;
+        case 3:
+            seL4_SetMR(PDMSGREG_START_ARG3, args[i]);
+            break;
+        }
+    }
+    OSDB_PRINTF("]\n");
+
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0,
                                                   PDMSGREG_START_REQ_END);
     tag = seL4_Call(conn->badged_server_ep_cspath.capPtr, tag);

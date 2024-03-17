@@ -77,7 +77,8 @@ int test_new_process_osmosis(env_t env)
     // Start the CPU.
     error = pd_client_start(&pd_os_cap,
                             /* The (ADS, CPU) tuple to use */
-                            slot); // with this arg.
+                            1,
+                            &slot); // with this arg.
     assert(error == 0);
 
     /*********************************************/
@@ -108,7 +109,8 @@ int test_new_process_osmosis(env_t env)
     // Start the CPU.
     error = pd_client_start(&pd_os_cap2,
                             /* The (ADS, CPU) tuple to use */
-                            slot); // with this arg.
+                            1,
+                            &slot); // with this arg.
     assert(error == 0);
 
     error = pd_client_dump(&pd_os_cap2, NULL, 0);
@@ -206,7 +208,8 @@ int test_new_process_osmosis_shmem(env_t env)
     // Start the CPU.
     error = pd_client_start(&pd_os_cap,
                             /* The (ADS, CPU) tuple to use */
-                            slot); // with this arg.
+                            1,
+                            &slot); // with this arg.
     test_error_eq(error, 0);
 
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0, 0);
