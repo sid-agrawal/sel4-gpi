@@ -160,7 +160,13 @@ void ads_component_handle(seL4_MessageInfo_t tag,
                           cspacepath_t *received_cap,
                           seL4_MessageInfo_t *reply_tag);
 
-void ads_handle_allocation_request(seL4_Word sender_badge, seL4_MessageInfo_t *reply_tag);
+/**
+ * @brief handles an allocation request to create an entirely new ADS
+ *
+ * @param sender_badge
+ * @param reply_tag
+ */
+void ads_handle_allocation_request(seL4_MessageInfo_t tag, seL4_Word sender_badge, cspacepath_t *received_cap, seL4_MessageInfo_t *reply_tag);
 
 /* Global server instance accessor functions. */
 ads_component_context_t *get_ads_component(void);

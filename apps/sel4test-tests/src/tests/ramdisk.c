@@ -30,7 +30,7 @@ int test_ramdisk(env_t env)
 
     /* Initialize the ADS */
     ads_client_context_t ads_conn;
-    vka_cspace_make_path(&env->vka, sel4gpi_get_ads_cap(), &ads_conn.badged_server_ep_cspath);
+    vka_cspace_make_path(&env->vka, sel4gpi_get_rde_by_ns_id(sel4gpi_get_binded_ads_id(), GPICAP_TYPE_ADS), &ads_conn.badged_server_ep_cspath);
     test_assert(error == 0);
 
     /* Initialize the PD */

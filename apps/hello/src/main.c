@@ -42,8 +42,9 @@ int main(int argc, char **argv)
     int error;
 
     osm_pd_init_data_t *init_data = sel4runtime_get_osm_init_data();
-    seL4_CPtr ads_cap = sel4gpi_get_ads_cap();
     seL4_CPtr pd_cap = sel4gpi_get_pd_cap();
+    seL4_CPtr ads_cap = sel4gpi_get_rde_by_ns_id(sel4gpi_get_binded_ads_id(), GPICAP_TYPE_ADS);
+    assert(ads_cap != seL4_CapNull);
 
     printf("Hello: ADS_CAP: %ld\n", (seL4_Word)ads_cap);
     printf("Hello: PD_CAP: %ld\n", (seL4_Word)pd_cap);
@@ -88,7 +89,7 @@ int main(int argc, char **argv)
         pd_client_alloc_ep(&pd_conn, &ep);
         assert(error == 0);
 
-        seL4_CPtr cap_arg = (seL4_CPtr) strtol(argv[0], NULL, 10);
+        seL4_CPtr cap_arg = (seL4_CPtr)strtol(argv[0], NULL, 10);
         seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 1, 0);
         seL4_SetCap(0, ep);
         printf("argc: %d cap_arg: %lx\n", argc, cap_arg);
@@ -96,8 +97,8 @@ int main(int argc, char **argv)
 
         tag = seL4_Recv(ep, NULL);
         seL4_Word slot = seL4_GetMR(0);
-        
-        mo_conn.badged_server_ep_cspath.capPtr = (seL4_CPtr) slot;
+
+        mo_conn.badged_server_ep_cspath.capPtr = (seL4_CPtr)slot;
         error = ads_client_attach(&ads_conn,
                                   0,
                                   &mo_conn,

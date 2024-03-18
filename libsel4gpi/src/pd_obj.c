@@ -69,11 +69,15 @@ int copy_cap_to_pd(pd_t *to_pd,
     return 0;
 }
 
-osmosis_pd_cap_t *pd_add_resource(pd_t *pd, gpi_cap_t type, uint32_t res_id)
+osmosis_pd_cap_t *pd_add_resource(pd_t *pd, gpi_cap_t type, uint32_t res_id,
+                                  seL4_CPtr slot_in_RT, seL4_CPtr slot_in_PD, seL4_CPtr slot_in_serverPD)
 {
     osmosis_pd_cap_t *new = calloc(1, sizeof(osmosis_pd_cap_t));
     new->type = type;
     new->res_id = res_id;
+    new->slot_in_RT_Debug = slot_in_RT;
+    new->slot_in_PD_Debug = slot_in_PD;
+    new->slot_in_ServerPD_Debug = slot_in_serverPD;
     pd->has_access_to_count++;
     HASH_ADD(hh, pd->has_access_to, res_id, sizeof(uint32_t), new);
     return new;
@@ -82,15 +86,44 @@ osmosis_pd_cap_t *pd_add_resource(pd_t *pd, gpi_cap_t type, uint32_t res_id)
 int pd_add_rde(pd_t *pd,
                rde_type_t type,
                uint32_t manager_id,
+               uint32_t ns_id,
                seL4_CPtr server_ep)
 {
-    int idx = type.type;
+    int idx;
+
+    if (ns_id == 0)
+    {
+        idx = type.type;
+    }
+    else
+    {
+        int start = GPICAP_TYPE_MAX + (MAX_NS_PER_RDE * (type.type - 1)); // -1 since we don't have ns's for the none type
+
+        assert(start > 0 && start < MAX_PD_OSM_RDE);
+        int i;
+        for (i = start; i < start + MAX_NS_PER_RDE; i++)
+        {
+            if (pd->init_data->rde[i].type.type == GPICAP_TYPE_NONE)
+            {
+                idx = i;
+                break;
+            }
+        }
+
+        if (i >= start + MAX_NS_PER_RDE)
+        {
+            OSDB_PRINTF("No more RDE NS slots available for type %d\n", type.type);
+            return 1;
+        }
+    }
+
     assert(idx > 0 && idx < MAX_PD_OSM_RDE);
 
     pd->init_data->rde[idx].manager_id = manager_id;
     /* we don't really need to keep this if we index by type, but let's just keep it around for now */
     pd->init_data->rde[idx].type = type;
     pd->init_data->rde[idx].slot_in_RT = server_ep;
+    pd->init_data->rde[idx].ns_id = ns_id;
     uint32_t client_id = pd->pd_obj_id;
 
     // Badge the raw endpoint for the client PD
@@ -103,9 +136,10 @@ int pd_add_rde(pd_t *pd,
         return error;
     }
 
-    seL4_Word badge_val = gpi_new_badge(idx,
+    seL4_Word badge_val = gpi_new_badge(type.type,
                                         0x00,
                                         client_id,
+                                        ns_id,
                                         BADGE_OBJ_ID_NULL);
 
     error = vka_cnode_mint(&dest,
@@ -376,14 +410,21 @@ int pd_load_image(pd_t *pd,
     ZF_LOGF_IFERR(error, "Failed to forge child's as cap");
 
     // Send the ADS cap as a resource
-    seL4_Word badge = gpi_new_badge(GPICAP_TYPE_ADS, 0x00, pd->pd_obj_id, pd->ads_obj_id);
+    seL4_Word badge = gpi_new_badge(GPICAP_TYPE_ADS, 0x00, pd->pd_obj_id, pd->ads_obj_id, pd->ads_obj_id);
     error = pd_send_cap(pd, pd->ads_cap_in_RT, badge, &pd->init_data->ads_cap);
-    ZF_LOGF_IFERR(error, "Failed to send ADS cap to PD");
+    ZF_LOGF_IFERR(error, "Failed to send ADS resource cap to PD");
+
+    // the ADS cap also acts an as RDE, however since its object ID is set, a PD can never
+    // make a new ADS from this EP
+    rde_type_t ads_rde_type = {.type = GPICAP_TYPE_ADS};
+    error = pd_add_rde(pd, ads_rde_type, get_gpi_server()->ads_manager_id, pd->ads_obj_id, get_ads_component()->server_ep_obj.cptr);
+    ZF_LOGE_IFERR(error, "Failed to add ADS RDE to PD");
+    pd->init_data->binded_ads_ns_id = pd->ads_obj_id;
 
     // Send CPU cap as a resource
     uint32_t cpu_obj_id;
     error = forge_cpu_cap_from_tcb(&pd->proc, pd->vka, pd->pd_obj_id, &pd->cpu_cap_in_RT, &cpu_obj_id);
-    badge = gpi_new_badge(GPICAP_TYPE_CPU, 0x00, pd->pd_obj_id, cpu_obj_id);
+    badge = gpi_new_badge(GPICAP_TYPE_CPU, 0x00, pd->pd_obj_id, 0x00, cpu_obj_id);
     pd_send_cap(pd, pd->cpu_cap_in_RT, badge, &pd->init_data->cpu_cap);
     ZF_LOGF_IFERR(error, "Failed to send CPU cap to PD");
 
@@ -491,6 +532,7 @@ int pd_send_cap(pd_t *to_pd,
             new_badge = gpi_new_badge(cap_type,
                                       get_perms_from_badge(badge),
                                       to_pd->pd_obj_id, /* Client ID */
+                                      get_ns_id_from_badge(badge),
                                       get_object_id_from_badge(badge));
 
             vka_cspace_make_path(server_vka, server_src_cap, &src);
@@ -509,10 +551,7 @@ int pd_send_cap(pd_t *to_pd,
             }
 
             cap = dest_cptr;
-            res = pd_add_resource(to_pd, cap_type, res_id);
-            res->slot_in_PD_Debug = cap;
-            res->slot_in_RT_Debug = src.capPtr;
-            res->slot_in_ServerPD_Debug = src.capPtr;
+            pd_add_resource(to_pd, cap_type, res_id, src.capPtr, cap, src.capPtr);
         }
         // do the same copy as above
     }
@@ -572,9 +611,10 @@ int pd_start(pd_t *pd,
     char string_args[argc][WORD_STRING_SIZE];
     char *argv[argc];
 
-    for (int i = 0; i < argc; i++) {
+    for (int i = 0; i < argc; i++)
+    {
         argv[i] = string_args[i];
-        snprintf(argv[i], WORD_STRING_SIZE, "%"PRIuPTR"", args[i]);
+        snprintf(argv[i], WORD_STRING_SIZE, "%" PRIuPTR "", args[i]);
     }
 
     OSDB_PRINTF("Starting PD with string args: [", argc);
@@ -814,9 +854,12 @@ int pd_dump(pd_t *pd)
 
             break;
         case GPICAP_TYPE_PD:
-            pd_component_registry_entry_t *pd_data = pd_component_registry_get_entry_by_id(current_cap->res_id);
-            assert(pd_data != NULL);
-            pd_dump(&pd_data->pd);
+            if (current_cap->res_id != pd->pd_obj_id)
+            {
+                pd_component_registry_entry_t *pd_data = pd_component_registry_get_entry_by_id(current_cap->res_id);
+                assert(pd_data != NULL);
+                pd_dump(&pd_data->pd);
+            }
             // add_has_access_to(ms, pd_id, res_id, false);
             break;
         default:

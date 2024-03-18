@@ -228,21 +228,27 @@ out:
     return error;
 }
 
-void handle_untyped_request(seL4_MessageInfo_t tag,
-                            seL4_Word sender_badge,
-                            cspacepath_t *received_cap_path,
-                            seL4_MessageInfo_t *reply_tag)
+/**
+ * @brief deals with all requests that require allocating resources
+ * if NS ID = 0, we want to allocate an entirely new resource not belonging to any NS
+ * else we're allocating a resource for a specific NS
+ */
+void handle_allocation_request(seL4_MessageInfo_t tag,
+                               seL4_Word sender_badge,
+                               cspacepath_t *received_cap_path,
+                               seL4_MessageInfo_t *reply_tag)
 {
-
-    gpi_cap_t req_cap_type = seL4_GetMR(0);
-    OSDB_PRINTF(GPISERVS "handle_untyped_request: Got request for cap type %s\n",
+    gpi_cap_t req_cap_type = get_ns_id_from_badge(sender_badge) == 0 ? seL4_GetMR(0) : get_cap_type_from_badge(sender_badge);
+    OSDB_PRINTF(GPISERVS "handle_allocation_request: Got request for cap type %s\n",
                 cap_type_to_str(req_cap_type));
 
     switch (req_cap_type)
     {
     case GPICAP_TYPE_ADS:
         ads_handle_allocation_request(
+            tag,
             sender_badge,
+            received_cap_path,
             reply_tag); /*unused*/
         break;
     case GPICAP_TYPE_MO:
@@ -261,7 +267,7 @@ void handle_untyped_request(seL4_MessageInfo_t tag,
             reply_tag); /*unused*/
         break;
     default:
-        gpi_panic(GPISERVS "handle_untyped_request: Unknown request type.\n", req_cap_type);
+        gpi_panic(GPISERVS "handle_allocation_request: Unknown request type.\n", req_cap_type);
         break;
     }
 }
@@ -324,10 +330,10 @@ void gpi_server_main()
         {
             // PDs will have badged GPI caps with null object ID
             OSDB_PRINTF(GPISERVS "Got an allocation request\n");
-            handle_untyped_request(tag,
-                                   sender_badge,
-                                   &received_cap_path,
-                                   &reply_tag); /*unused*/
+            handle_allocation_request(tag,
+                                      sender_badge,
+                                      &received_cap_path,
+                                      &reply_tag); /*unused*/
         }
         else
         { /* Handle Typed Request */

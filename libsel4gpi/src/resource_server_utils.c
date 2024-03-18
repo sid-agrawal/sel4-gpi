@@ -147,7 +147,7 @@ int resource_server_start(resource_server_context_t *context,
     context->resource_type = server_type;
     context->request_handler = request_handler;
     context->mo_ep = sel4gpi_get_rde(GPICAP_TYPE_MO);
-    context->ads_conn.badged_server_ep_cspath.capPtr = sel4gpi_get_ads_cap();
+    context->ads_conn.badged_server_ep_cspath.capPtr = sel4gpi_get_rde_by_ns_id(sel4gpi_get_binded_ads_id(), GPICAP_TYPE_ADS);
     context->pd_conn.badged_server_ep_cspath.capPtr = sel4gpi_get_pd_cap();
     context->parent_ep = parent_ep;
     context->init_fn = init_fn;

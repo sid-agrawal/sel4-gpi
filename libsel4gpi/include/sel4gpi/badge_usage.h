@@ -38,9 +38,11 @@ typedef enum GPICAP_TYPE
  How we are using the badge.
  There are a total of 64 bits.
 63:56  8 bits for the type of cap.
-55:40 16 bits for permissions, as a bit mask.
+55:48 8 bits for permissions, as a bit mask.
+47:40 8 bits for the namespace ID
 39:20 20 bits for client ID
-19:0  20 bits for object ID
+16:19 4 bits for server ID
+16:0  16 bits for object ID
 */
 
 // Bits: 63:56 are for the cap type. Total of 8 bits, so 255 types.
@@ -54,6 +56,12 @@ uint64_t get_perms_from_badge(seL4_Word badge);
 
 // Bits: 55:40 are for the permisions. Total of 16 bits, as a bit-mask so 16 permissions.
 uint64_t set_perms_to_badge(seL4_Word badge, uint64_t perms);
+
+// Bits: 55:40 are for the permisions. Total of 16 bits, as a bit-mask so 16 permissions.
+uint64_t get_ns_id_from_badge(seL4_Word badge);
+
+// Bits: 55:40 are for the permisions. Total of 16 bits, as a bit-mask so 16 permissions.
+uint64_t set_ns_id_to_badge(seL4_Word badge, uint64_t ns_id);
 
 // Bits: 39:20 are for the client id. Total of 20 bits, so 2^20 clients.
 uint64_t get_client_id_from_badge(seL4_Word badge);
@@ -87,6 +95,7 @@ uint64_t get_global_object_id_from_local(uint64_t server_id, uint64_t object_id)
 uint64_t gpi_new_badge(gpi_cap_t cap_type,
                        uint64_t perms,
                        uint64_t client_id,
+                       uint64_t ns_id,
                        uint64_t object_id);
 
 // Badges an endpoint for a resource server, with server id
@@ -94,6 +103,7 @@ uint64_t gpi_new_badge_server(gpi_cap_t cap_type,
                               uint64_t perms,
                               uint64_t client_id,
                               uint64_t server_id,
+                              uint64_t ns_id,
                               uint64_t object_id);
 
 void badge_print(seL4_Word badge);

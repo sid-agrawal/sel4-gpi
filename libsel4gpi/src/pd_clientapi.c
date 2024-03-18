@@ -91,8 +91,9 @@ int pd_client_dump(pd_client_context_t *conn,
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0,
                                                   PDMSGREG_DUMP_REQ_END);
 
-    OSDB_PRINTF(ADSSERVC "Sending dump RR request to PD via EP: %lu.\n",
+    OSDB_PRINTF(PDSERVC "Sending dump RR request to PD via EP: %lu.\n",
                 conn->badged_server_ep_cspath.capPtr);
+    // (XXX) Linh: for some reason, this doesn't block if we try to dump a test PD's state and causes issues
     tag = seL4_Call(conn->badged_server_ep_cspath.capPtr, tag);
     return 0;
 }

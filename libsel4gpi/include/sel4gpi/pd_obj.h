@@ -24,7 +24,8 @@
 
 #define MAX_PD_NAME 64
 #define MAX_PD_OSM_CAPS 512
-#define MAX_PD_OSM_RDE 20
+#define MAX_PD_OSM_RDE (GPICAP_TYPE_MAX + (MAX_NS_PER_RDE * (GPICAP_TYPE_MAX - 1)))
+#define MAX_NS_PER_RDE 8
 
 #define MAX_PD_INIT_CAPS 8
 
@@ -63,9 +64,15 @@ typedef struct osmosis_rde
     /* OSmosis generated resource manager ID for RDE */
     uint32_t pd_obj_id;
     uint32_t manager_id;
+    uint32_t ns_id;
 
     /* Info about what the RDE is for ?*/
     rde_type_t type;
+
+    // This is indexed like so:
+    //   0:GPICAP_TYPE_MAX - 1 = RDEs in their default namespaces, e.g. ns_id = 0
+    //   GPICAP_TYPE_MAX: GPICAP_TYPE_MAX + (MAX_NS_PER_RDE - 1) = namespaces for the first RDE type
+    //   ... continues in the same order as labeled in the gpi_cap_t enum
 } osmosis_rde_t;
 
 typedef struct osmosis_pd_cap
@@ -96,12 +103,14 @@ typedef struct osmosis_pd_cap
  */
 typedef struct _osm_pd_init_data
 {
-    // PD's own PD resource and ADS resource
+    // PD's own core resources
     seL4_CPtr pd_cap;
     seL4_CPtr ads_cap;
     seL4_CPtr cpu_cap;
 
     // Resource directory
+    // ADS ID of the PD's current binded ADS
+    uint32_t binded_ads_ns_id;
     osmosis_rde_t rde[MAX_PD_OSM_RDE];
     uint64_t rde_count;
 } osm_pd_init_data_t;
@@ -329,7 +338,12 @@ int pd_bootstrap_allocator(pd_t *pd,
 void print_pd_osm_cap_info(osmosis_pd_cap_t *o);
 void print_pd_osm_rde_info(osmosis_rde_t *o);
 
-osmosis_pd_cap_t *pd_add_resource(pd_t *pd, gpi_cap_t type, uint32_t res_id);
+osmosis_pd_cap_t *pd_add_resource(pd_t *pd,
+                                  gpi_cap_t type,
+                                  uint32_t res_id,
+                                  seL4_CPtr slot_in_RT,
+                                  seL4_CPtr slot_in_PD,
+                                  seL4_CPtr slot_in_serverPD);
 
 /**
  * @brief Add an RDE to a PD
@@ -344,6 +358,7 @@ osmosis_pd_cap_t *pd_add_resource(pd_t *pd, gpi_cap_t type, uint32_t res_id);
 int pd_add_rde(pd_t *pd,
                rde_type_t type,
                uint32_t manager_id,
+               uint32_t ns_id,
                seL4_CPtr server_ep);
 
 /**

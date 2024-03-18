@@ -38,6 +38,7 @@ uint64_t mo_assign_new_badge_and_objectID(mo_component_registry_entry_t *reg)
     seL4_Word badge_val = gpi_new_badge(GPICAP_TYPE_MO,
                                         0x00,
                                         0x00,
+                                        0x00,
                                         get_mo_component()->registry_n_entries);
 
     assert(badge_val != 0);
@@ -197,10 +198,11 @@ void mo_handle_allocation_request(seL4_Word sender_badge, seL4_MessageInfo_t *re
     // Add the latest ID to the obj and to the badlge.
     seL4_Word badge = mo_assign_new_badge_and_objectID(client_reg_ptr);
     uint32_t client_id = get_client_id_from_badge(sender_badge);
-    
+
     // (XXX) Linh: this is not very nice as we're coupling the PD and MO components
     osmosis_pd_cap_t *res = pd_add_resource_by_id(client_id, GPICAP_TYPE_MO, get_object_id_from_badge(badge));
-    if (res) {
+    if (res)
+    {
         res->slot_in_RT_Debug = dest_cptr;
         badge = set_client_id_to_badge(badge, client_id);
     }

@@ -41,6 +41,7 @@ uint64_t pd_assign_new_badge_and_objectID(pd_component_registry_entry_t *reg)
     seL4_Word badge_val = gpi_new_badge(GPICAP_TYPE_PD,
                                         0x00,
                                         0x00, /* (XXX) This needs to be changed  to the PD*/
+                                        0x00,
                                         get_pd_component()->registry_n_entries);
 
     assert(badge_val != 0);
@@ -303,29 +304,43 @@ void update_forged_pd_cap_from_init_data(test_init_data_t *init_data, sel4utils_
 
     // Forge ADS cap
     seL4_CPtr child_as_cap_in_parent;
-    error = forge_ads_cap_from_vspace(&test_process->vspace, get_pd_component()->server_vka, pd->pd_obj_id, &child_as_cap_in_parent, NULL);
+    uint32_t ads_id;
+    error = forge_ads_cap_from_vspace(&test_process->vspace, get_pd_component()->server_vka, pd->pd_obj_id, &child_as_cap_in_parent, &ads_id);
     ZF_LOGF_IFERR(error, "Failed to forge child's as cap");
 
     // Forge CPU cap
     seL4_CPtr child_cpu_cap_in_parent;
-    error = forge_cpu_cap_from_tcb(test_process, get_pd_component()->server_vka, pd->pd_obj_id, &child_cpu_cap_in_parent, NULL);
+    uint32_t cpu_id;
+    error = forge_cpu_cap_from_tcb(test_process, get_pd_component()->server_vka, pd->pd_obj_id, &child_cpu_cap_in_parent, &cpu_id);
     ZF_LOGF_IFERR(error, "Failed to forge child's CPU cap");
 
     // Setup the test process' init data
     error = copy_cap_to_pd(pd, child_as_cap_in_parent, &pd->init_data->ads_cap);
     assert(error == 0);
+    pd_add_resource(pd, GPICAP_TYPE_ADS, ads_id, child_as_cap_in_parent, pd->init_data->ads_cap, child_as_cap_in_parent);
+
+    // not using pd_send_cap bc this is already badged
     error = copy_cap_to_pd(pd, reg_ptr->raw_cap_in_root, &pd->init_data->pd_cap);
     assert(error == 0);
+    pd_add_resource(pd, GPICAP_TYPE_PD, pd->pd_obj_id, reg_ptr->raw_cap_in_root, pd->init_data->pd_cap, reg_ptr->raw_cap_in_root);
+
     error = copy_cap_to_pd(pd, child_cpu_cap_in_parent, &pd->init_data->cpu_cap);
     assert(error == 0);
+    pd_add_resource(pd, GPICAP_TYPE_CPU, cpu_id, child_cpu_cap_in_parent, pd->init_data->cpu_cap, child_cpu_cap_in_parent);
+
     rde_type_t ads_type = {.type = GPICAP_TYPE_ADS};
-    pd_add_rde(pd, ads_type, get_gpi_server()->ads_manager_id, get_gpi_server()->server_ep_obj.cptr);
+    pd_add_rde(pd, ads_type, get_gpi_server()->ads_manager_id, 0x00, get_gpi_server()->server_ep_obj.cptr);
+    pd_add_rde(pd, ads_type, get_gpi_server()->ads_manager_id, ads_id, get_gpi_server()->server_ep_obj.cptr);
+    pd->init_data->binded_ads_ns_id = ads_id;
+
     rde_type_t cpu_type = {.type = GPICAP_TYPE_CPU};
-    pd_add_rde(pd, cpu_type, get_gpi_server()->cpu_manager_id, get_gpi_server()->server_ep_obj.cptr);
+    pd_add_rde(pd, cpu_type, get_gpi_server()->cpu_manager_id, 0x00, get_gpi_server()->server_ep_obj.cptr);
+
     rde_type_t mo_type = {.type = GPICAP_TYPE_MO};
-    pd_add_rde(pd, mo_type, get_gpi_server()->mo_manager_id, get_gpi_server()->server_ep_obj.cptr);
+    pd_add_rde(pd, mo_type, get_gpi_server()->mo_manager_id, 0x00, get_gpi_server()->server_ep_obj.cptr);
+
     rde_type_t pd_type = {.type = GPICAP_TYPE_PD};
-    pd_add_rde(pd, pd_type, get_gpi_server()->pd_manager_id, get_gpi_server()->server_ep_obj.cptr);
+    pd_add_rde(pd, pd_type, get_gpi_server()->pd_manager_id, 0x00, get_gpi_server()->server_ep_obj.cptr);
 
     assert(pd->free_slots.start < pd->free_slots.end);
 }
@@ -383,7 +398,7 @@ osmosis_pd_cap_t *pd_add_resource_by_id(uint32_t client_id, gpi_cap_t cap_type, 
     {
         pd_component_registry_entry_t *client_pd_data = pd_component_registry_get_entry_by_id(client_id);
         ZF_LOGF_IF(client_pd_data == NULL, "Couldn't find PD client data");
-        osmosis_pd_cap_t *res = pd_add_resource(&client_pd_data->pd, cap_type, res_id);
+        osmosis_pd_cap_t *res = pd_add_resource(&client_pd_data->pd, cap_type, res_id, seL4_CapNull, seL4_CapNull, seL4_CapNull);
         return res;
     }
     return NULL;
@@ -812,6 +827,7 @@ static void handle_add_rde_req(seL4_Word sender_badge, seL4_MessageInfo_t old_ta
         error = pd_add_rde(&target_data->pd,
                            rde_type,
                            resource_manager_data->manager_id,
+                           0x00, // (XXX) Linh: replace with NS ID?
                            resource_manager_data->server_ep);
     }
 
@@ -866,6 +882,7 @@ static void handle_share_rde_req(seL4_Word sender_badge, seL4_MessageInfo_t old_
         error = pd_add_rde(&target_data->pd,
                            rde_type,
                            resource_manager_data->manager_id,
+                           0x00,
                            resource_manager_data->server_ep);
     }
 
@@ -947,7 +964,7 @@ static void handle_create_resource_req(seL4_Word sender_badge, seL4_MessageInfo_
         if (osm_cap == NULL)
         {
             // Resource is not already in the hash
-            osm_cap = pd_add_resource(&server_data->pd, resource_type, resource_id);
+            osm_cap = pd_add_resource(&server_data->pd, resource_type, resource_id, seL4_CapNull, seL4_CapNull, seL4_CapNull);
         }
         else
         {
@@ -1015,12 +1032,13 @@ static void handle_give_resource_req(seL4_Word sender_badge, seL4_MessageInfo_t 
         if (osm_cap == NULL)
         {
             // Resource is not already in the recipient's hash table
-            osm_cap = pd_add_resource(&recipient_data->pd, resource_manager_data->resource_type, resource_id);
+            osm_cap = pd_add_resource(&recipient_data->pd, resource_manager_data->resource_type, resource_id, seL4_CapNull, seL4_CapNull, seL4_CapNull);
         }
 
         seL4_Word badge = gpi_new_badge(resource_manager_data->resource_type,
                                         0x00,
                                         recipient_id,
+                                        0x00, // (XXX) Linh: replace with NS ID, or maybe 0 is just for default NS?
                                         resource_id);
 
         // (XXX) Arya: How to handle duplicate entries to the same resource?

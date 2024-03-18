@@ -37,6 +37,7 @@ uint64_t ads_assign_new_badge_and_objectID(ads_component_registry_entry_t *reg)
     seL4_Word badge_val = gpi_new_badge(GPICAP_TYPE_ADS,
                                         0x00,
                                         0x00,
+                                        0x00,
                                         get_ads_component()->registry_n_entries);
 
     assert(badge_val != 0);
@@ -137,7 +138,8 @@ ads_component_registry_entry_t *ads_component_registry_get_entry_by_id(seL4_Word
     }
     return current_ctx;
 }
-void ads_handle_allocation_request(seL4_Word sender_badge, seL4_MessageInfo_t *reply_tag)
+
+static void handle_ads_allocation(seL4_Word sender_badge, seL4_MessageInfo_t *reply_tag)
 {
     OSDB_PRINTF(ADSSERVS "main: Got ADS connect request\n");
 
@@ -197,7 +199,6 @@ void ads_handle_allocation_request(seL4_Word sender_badge, seL4_MessageInfo_t *r
     OSDB_PRINTF(ADSSERVS "main: Successfully allocated a new ads %lx.\n", badge);
     return reply(tag);
 }
-
 
 int ads_component_attach(uint64_t ads_id, uint64_t mo_id, void *vaddr, void **ret_vaddr)
 {
@@ -286,7 +287,7 @@ static void handle_attach_req(seL4_Word sender_badge, seL4_MessageInfo_t old_tag
 
     int error;
 
-    uint64_t ads_id = get_object_id_from_badge(sender_badge);
+    uint64_t ads_id = get_ns_id_from_badge(sender_badge);
 
     /*
         The MO will be one of the caps Unwrapped.
@@ -428,6 +429,18 @@ static void handle_shallow_copy_req(seL4_Word sender_badge)
     return reply(tag);
 }
 
+void ads_handle_allocation_request(seL4_MessageInfo_t tag, seL4_Word sender_badge, cspacepath_t *received_cap, seL4_MessageInfo_t *reply_tag)
+{
+    if (get_ns_id_from_badge(sender_badge) == 0)
+    {
+        handle_ads_allocation(sender_badge, reply_tag);
+    }
+    else
+    {
+        handle_attach_req(sender_badge, tag, received_cap->capPtr);
+    }
+}
+
 /**
  * @brief The starting point for the ads server's thread.
  *
@@ -445,10 +458,6 @@ void ads_component_handle(seL4_MessageInfo_t tag,
     {
     case ADS_FUNC_SHALLOW_COPY_REQ:
         handle_shallow_copy_req(sender_badge);
-        break;
-
-    case ADS_FUNC_ATTACH_REQ:
-        handle_attach_req(sender_badge, tag, received_cap->capPtr);
         break;
     case ADS_FUNC_TESTING_REQ:
         handle_testing_req(sender_badge, tag);
@@ -488,6 +497,7 @@ int forge_ads_cap_from_vspace(vspace_t *vspace, vka_t *vka, uint32_t client_pd_i
     /* Update the info in the registry entry. */
     seL4_Word badge = ads_assign_new_badge_and_objectID(client_reg_ptr);
     badge = set_client_id_to_badge(badge, client_pd_id);
+    badge = set_ns_id_to_badge(badge, get_object_id_from_badge(badge));
     ads_component_registry_insert(client_reg_ptr);
     client_reg_ptr->ads.vspace = vspace;
     int error = vka_cnode_mint(&dest,

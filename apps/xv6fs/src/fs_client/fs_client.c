@@ -144,7 +144,7 @@ xv6fs_client_init(void)
   get_xv6fs_client()->fs_ep = sel4gpi_get_rde(GPICAP_TYPE_FILE);
   get_xv6fs_client()->mo_ep = sel4gpi_get_rde(GPICAP_TYPE_MO);
   get_xv6fs_client()->ads_conn = malloc(sizeof(ads_client_context_t));
-  get_xv6fs_client()->ads_conn->badged_server_ep_cspath.capPtr = sel4gpi_get_ads_cap();
+  get_xv6fs_client()->ads_conn->badged_server_ep_cspath.capPtr = sel4gpi_get_rde_by_ns_id(sel4gpi_get_binded_ads_id(), GPICAP_TYPE_ADS);
   get_xv6fs_client()->pd_conn = malloc(sizeof(pd_client_context_t));
   get_xv6fs_client()->pd_conn->badged_server_ep_cspath.capPtr = sel4gpi_get_pd_cap();
 

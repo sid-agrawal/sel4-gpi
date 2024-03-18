@@ -145,7 +145,7 @@ int test_new_process_osmosis_shmem(env_t env)
     test_pd_os_cap.badged_server_ep_cspath.capPtr = sel4gpi_get_pd_cap();
 
     ads_client_context_t test_ads_os_cap;
-    test_ads_os_cap.badged_server_ep_cspath.capPtr = sel4gpi_get_ads_cap();
+    test_ads_os_cap.badged_server_ep_cspath.capPtr = sel4gpi_get_rde_by_ns_id(sel4gpi_get_binded_ads_id(), GPICAP_TYPE_ADS);
 
     seL4_CPtr ads_rde = sel4gpi_get_rde(GPICAP_TYPE_ADS);
     seL4_CPtr pd_rde = sel4gpi_get_rde(GPICAP_TYPE_PD);
@@ -190,7 +190,7 @@ int test_new_process_osmosis_shmem(env_t env)
 
     // Attach it to current AS
     ads_client_context_t test_ads_cap;
-    vka_cspace_make_path(&env->vka, sel4gpi_get_ads_cap(), &test_ads_cap.badged_server_ep_cspath);
+    test_ads_cap.badged_server_ep_cspath.capPtr = sel4gpi_get_rde_by_ns_id(sel4gpi_get_binded_ads_id(), GPICAP_TYPE_ADS);
 
     void *vaddr;
     error = ads_client_attach(&test_ads_cap,
