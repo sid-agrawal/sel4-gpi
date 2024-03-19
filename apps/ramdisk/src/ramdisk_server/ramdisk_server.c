@@ -83,7 +83,7 @@ int ramdisk_init()
 
     /* Allocate the ramdisk's virtual disk */
     int n_pages = RAMDISK_SIZE_BYTES / SIZE_BITS_TO_BYTES(seL4_PageBits);
-    printf("Allocating %d pages\n", n_pages);
+    RAMDISK_PRINTF("Allocating %d pages\n", n_pages);
     server->ramdisk_mo = malloc(sizeof(mo_client_context_t));
     seL4_CPtr free_slot;
     error = resource_server_next_slot(&get_ramdisk_server()->gen, &free_slot);

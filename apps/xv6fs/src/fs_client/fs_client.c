@@ -181,7 +181,8 @@ int xv6fs_client_set_namespace(uint64_t ns_id)
 
   seL4_CPtr ep = sel4gpi_get_rde_by_ns_id(ns_id, GPICAP_TYPE_FILE);
 
-  if (ep == seL4_CapNull) {
+  if (ep == seL4_CapNull)
+  {
     return -1;
   }
 
@@ -206,7 +207,7 @@ int xv6fs_client_get_file(int fd, seL4_CPtr *file_ep)
 // Not used for libc
 int xv6fs_client_link_file(seL4_CPtr file, const char *path)
 {
-  XV6FS_PRINTF("fs_link_file file cptr %d, path %s\n", (int) file, path);
+  XV6FS_PRINTF("fs_link_file file cptr %d, path %s\n", (int)file, path);
 
   int error;
 
@@ -606,6 +607,40 @@ static int xv6fs_libc_unlink(const char *pathname)
   return error;
 }
 
+static int xv6fs_libc_access(const char *pathname, int amode)
+{
+  XV6FS_PRINTF("xv6fs_libc_access pathname %s amode 0x%x\n", pathname, amode);
+
+  int error = 0;
+
+  int flags = 0;
+  if (amode & R_OK)
+  {
+    if (amode & W_OK)
+    {
+      flags |= O_RDWR;
+    }
+    else
+    {
+      flags |= O_RDONLY;
+    }
+  }
+
+  int fd = xv6fs_libc_open(pathname, flags, 0);
+  error = xv6fs_libc_close(fd);
+
+  if (fd != -1)
+  {
+    error = xv6fs_libc_close(fd);
+    if (error)
+    {
+      XV6FS_PRINTF("xv6fs_libc_access failed to close FD %d\n", fd);
+    }
+  }
+
+  return fd != -1;
+}
+
 static void init_global_libc_fs_ops(void)
 {
   libc_fs_ops.open = xv6fs_libc_open;
@@ -620,4 +655,5 @@ static void init_global_libc_fs_ops(void)
   libc_fs_ops.fcntl = xv6fs_libc_fcntl;
   libc_fs_ops.unlink = xv6fs_libc_unlink;
   libc_fs_ops.fcntl = xv6fs_libc_fcntl;
+  libc_fs_ops.access = xv6fs_libc_access;
 }

@@ -232,29 +232,29 @@ int forge_mo_caps_from_vspace(vspace_t *child_vspace,
                               seL4_CPtr *cap_ret)
 {
     /* Walk every reservation */
-    printf("%s: %d\n", __FUNCTION__, __LINE__);
+    OSDB_PRINTF("%s: %d\n", __FUNCTION__, __LINE__);
 
     sel4utils_alloc_data_t *child_data = get_alloc_data(child_vspace);
-    printf("%s: %d\n", __FUNCTION__, __LINE__);
+    OSDB_PRINTF("%s: %d\n", __FUNCTION__, __LINE__);
     sel4utils_res_t *res = child_data->reservation_head;
-    printf("%s: %d\n", __FUNCTION__, __LINE__);
+    OSDB_PRINTF("%s: %d\n", __FUNCTION__, __LINE__);
 
-    printf("forge_mo_caps_from_vspace: %d\n", __LINE__);
+    OSDB_PRINTF("forge_mo_caps_from_vspace: %d\n", __LINE__);
     while (res != NULL)
     {
         *num_ret_caps = *num_ret_caps + 1;
-        printf("forge_mo_caps_from_vspace: %d\n", __LINE__);
+        OSDB_PRINTF("forge_mo_caps_from_vspace: %d\n", __LINE__);
         res = res->next;
     }
 
     /* For each reservation, forge an MO */
     int j = 0;
     res = child_data->reservation_head;
-    printf("forge_mo_caps_from_vspace: %d\n", __LINE__);
+    OSDB_PRINTF("forge_mo_caps_from_vspace: %d\n", __LINE__);
     while (res != NULL)
     {
 
-        printf("forge_mo_caps_from_vspace: %d\n", __LINE__);
+        OSDB_PRINTF("forge_mo_caps_from_vspace: %d\n", __LINE__);
         /* Get the caps in a reservation */
         uint32_t num_frames = (res->end - res->start) / PAGE_SIZE_4K;
         seL4_CPtr *frame_caps = malloc(sizeof(seL4_CPtr) * num_frames);

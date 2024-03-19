@@ -14,7 +14,7 @@ char _cpio_archive[1];
 char _cpio_archive_end[1];
 
 /* Pointer to free space in the morecore area. */
-#define KV_MALLOC_SIZE (PAGE_SIZE_4K * 10)
+#define KV_MALLOC_SIZE (PAGE_SIZE_4K * 100)
 char __attribute__((aligned(PAGE_SIZE_4K))) morecore_area[KV_MALLOC_SIZE];
 size_t morecore_size = KV_MALLOC_SIZE;
 static uintptr_t morecore_base = (uintptr_t)&morecore_area;

@@ -2,13 +2,15 @@
  * @file The kvstore server functionality
  */
 
+#include <stdlib.h>
 #include <utils/uthash.h>
 
 #include <sqlite3/sqlite3.h>
 #include <fs_client.h>
 #include <kvstore_server.h>
 
-#define KVSTORE_DB_FILE "/kvstore.db"
+#define KVSTORE_DB_FILE_FORMAT "/kvstore_%d.db"
+#define MAX_KVSTORE_DBS_IN_FS 10 // Maximum number of kvstores in one file system
 
 static const char *kvstore_db_file = "/kvstore.db";
 static const char *create_table_cmd = "create table kvstore (key bigint unsigned not null primary key, val bigint unsigned);";
@@ -18,6 +20,7 @@ static const char *select_format = "select val from kvstore where key == %ld;";
 static sqlite3 *kvstore_db;
 static int cmdlen = 128;
 static char sql_cmd[128];
+static char db_filename[128];
 static char *errmsg = NULL;
 
 #define CHECK_ERROR(check, msg)        \
@@ -57,7 +60,7 @@ static void print_error(int error, char *errmsg, sqlite3 *db)
 {
     if (error != SQLITE_OK)
     {
-        printf("SQL error: %s\n", errmsg);
+        printf("SQL error in DB [%s]: %s\n", db_filename, errmsg);
         sqlite3_free(errmsg);
         printf("sqlite3_exec error, extended errcode: %d\n", sqlite3_extended_errcode(db));
     }
@@ -82,7 +85,28 @@ int kvstore_server_init()
     error = xv6fs_client_init();
 
     /* setup the sqlite db/table */
-    error = sqlite3_open(KVSTORE_DB_FILE, &kvstore_db);
+
+    /* Try a few filenames in case there is already a kvstore db */
+    for (int i = 0; i < MAX_KVSTORE_DBS_IN_FS; i++)
+    {
+        error = snprintf(db_filename, cmdlen, KVSTORE_DB_FILE_FORMAT, i);
+        assert(error != -1);
+
+        // Check if the file exists
+        if (access(db_filename, F_OK))
+        {
+            KVSTORE_PRINTF("DB %s already exists, trying another name\n", db_filename);
+        }
+        else
+        {
+            break;
+        }
+    }
+
+    error = sqlite3_open(db_filename, &kvstore_db);
+
+    KVSTORE_PRINTF("Created DB %s\n", db_filename);
+
     CHECK_ERROR(error, "failed to open kvstore db");
     assert(kvstore_db != NULL);
 
@@ -94,7 +118,7 @@ int kvstore_server_init()
 
 int kvstore_server_set(seL4_Word key, seL4_Word value)
 {
-    KVSTORE_PRINTF("kvstore_server_set: key (%ld), value (%ld)\n", key, value);
+    KVSTORE_PRINTF("kvstore_server_set: key (%ld), value (%ld), %s\n", key, value, db_filename);
 
     int error = seL4_NoError;
     SQL_EXEC(kvstore_db, insert_format, key, value);

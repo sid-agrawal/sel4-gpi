@@ -412,6 +412,7 @@ seL4_MessageInfo_t xv6fs_request_handler(seL4_MessageInfo_t tag, seL4_Word sende
 
       // Open (or create) the file
       XV6FS_PRINTF("Server opening file %s, flags 0x%x\n", pathname, open_flags);
+
       struct file *file = xv6fs_sys_open(pathname, open_flags);
       error = file == NULL ? FS_SERVER_ERROR_UNKNOWN : FS_SERVER_NOERROR;
       if (error != 0)

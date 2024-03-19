@@ -458,10 +458,10 @@ int pd_load_image(pd_t *pd,
     /* set up free slot range */
     pd->cspace_size_bits = pd->proc.cspace_size;
 
-    printf("%s: %d\n", __FUNCTION__, __LINE__);
+    OSDB_PRINTF("%s: %d\n", __FUNCTION__, __LINE__);
     uint32_t num_mo_caps = 0;
     seL4_CPtr mo_caps[MAX_MO_CHILD];
-    printf("%s: %d\n", __FUNCTION__, __LINE__);
+    OSDB_PRINTF("%s: %d\n", __FUNCTION__, __LINE__);
     error = forge_mo_caps_from_vspace(target_vspace,
                                       pd->vka,
                                       pd->pd_obj_id,
@@ -489,7 +489,7 @@ int pd_send_cap(pd_t *to_pd,
         (XXX): Need to handle how sending OSM caps would leand to additional data tracking.
     */
     assert(cap != 0);
-    ZF_LOGE("pd_send_cap: Sending cap %ld(badge:%lx) to pd %p\n", cap, badge, to_pd);
+    OSDB_PRINTF("pd_send_cap: Sending cap %ld(badge:%lx) to pd %p\n", cap, badge, to_pd);
 
     seL4_Word new_badge;
     int error = 0;
