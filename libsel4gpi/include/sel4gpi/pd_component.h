@@ -196,6 +196,7 @@ enum pd_component_msgregs
 
     /* Register Namespace */
     PDMSGREG_REGISTER_NS_REQ_MANAGER_ID = PDMSGREG_LABEL0,
+    PDMSGREG_REGISTER_NS_REQ_CLIENT_ID,
     PDMSGREG_REGISTER_NS_REQ_END,
 
     PDMSGREG_REGISTER_NS_ACK_NSID = PDMSGREG_LABEL0,
@@ -299,6 +300,14 @@ void *get_osmosis_pd_init_data(vspace_t *test_vspace);
  * @param new_node
  */
 int pd_component_resource_manager_insert(pd_component_resource_manager_entry_t *new_node);
+
+/**
+ * @brief Lookup the client registry entry for the given badge.
+ *
+ * @param badge
+ * @return pd_component_registry_entry_t*
+ */
+pd_component_registry_entry_t *pd_component_registry_get_entry_by_badge(seL4_Word badge);
 
 /**
  * @brief Lookup the resource server registry entry for the given object id.

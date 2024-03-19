@@ -17,8 +17,11 @@
 
 #define TEST_STR_1 "Fuzzy Wuzzy was a bear"
 #define TEST_STR_2 "Fuzzy Wuzzy had no hair"
+#define TEST_STR_3 "I don't know the next line"
 #define TEST_FNAME "somefile"
 #define TEST_FNAME_2 "longfile"
+#define TEST_FNAME_3 "somefile2"
+#define TEST_FNAME_IN_NS "ns2/somefile"
 #define RR_MO_N_PAGES 2
 
 int test_fs(env_t env)
@@ -193,8 +196,64 @@ int test_fs(env_t env)
     test_assert(error == 0);
     test_assert(ns_id != 0);
 
+    seL4_CPtr fs_client_ep_ns1 = sel4gpi_get_rde_by_ns_id(ns_id, GPICAP_TYPE_FILE);
+    assert(fs_client_ep_ns1 != seL4_CapNull);
+
+    // Test a file within namespace
+    error = xv6fs_client_set_namespace(ns_id);
+    test_assert(error == 0);
+
+    f = open(TEST_FNAME, O_CREAT | O_RDWR);
+    test_assert(f > 0);
+
+    nbytes = write(f, TEST_STR_3, strlen(TEST_STR_3) + 1);
+    test_assert(nbytes == strlen(TEST_STR_3) + 1);
+
+    nbytes = lseek(f, 0, 0);
+    test_assert(nbytes == 0);
+
+    nbytes = read(f, buf, strlen(TEST_STR_3) + 1);
+    test_assert(nbytes == strlen(TEST_STR_3) + 1);
+    test_assert(strcmp(buf, TEST_STR_3) == 0);
+
+    error = close(f);
+    test_assert(error == 0);
+
+    // Check the file exists in global NS
+    error = xv6fs_client_set_namespace(NSID_DEFAULT);
+    test_assert(error == 0);
+
+    f = open(TEST_FNAME_IN_NS, O_RDWR);
+    test_assert(f > 0);
+
+    nbytes = read(f, buf, strlen(TEST_STR_3) + 1);
+    test_assert(nbytes == strlen(TEST_STR_3) + 1);
+    test_assert(strcmp(buf, TEST_STR_3) == 0);
+
+    // Link file in another new NS
+    error = resource_server_client_new_ns(fs_client_ep, &ns_id);
+    test_assert(error == 0);
+    test_assert(ns_id != 0);
+    error = xv6fs_client_set_namespace(ns_id);
+    test_assert(error == 0);
+
+    seL4_CPtr file;
+    error = xv6fs_client_get_file(f, &file);
+    test_assert(error == 0);
+
+    error = xv6fs_client_link_file(file, TEST_FNAME_3);
+    error = close(f);
+    test_assert(error == 0); // (XXX) Arya: Note we cannot close the original file until it is linked
+
+    f = open(TEST_FNAME_3, O_RDWR);
+    test_assert(f > 0);
+
+    nbytes = read(f, buf, strlen(TEST_STR_3) + 1);
+    test_assert(nbytes == strlen(TEST_STR_3) + 1);
+    test_assert(strcmp(buf, TEST_STR_3) == 0);
+ 
     // Print whole-pd model state
-    error = pd_client_dump(&pd_conn, NULL, 0);
+    // error = pd_client_dump(&pd_conn, NULL, 0);
 
     printf("------------------ENDING: %s------------------\n", __func__);
     return sel4test_get_result();

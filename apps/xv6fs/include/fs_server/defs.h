@@ -111,6 +111,7 @@ int xv6fs_sys_mkdir(char *path);
 int xv6fs_sys_mksock(char *path);
 int xv6fs_sys_unlink(char *path);
 int xv6fs_sys_dolink(char *old, char *new);
+int xv6fs_sys_dolink2(struct file *old, char *new);
 int xv6fs_sys_rename(char *path1, char *path2);
 int xv6fs_sys_utime(char *path, int time);
 int xv6fs_sys_stat(struct file *f, struct stat *st);

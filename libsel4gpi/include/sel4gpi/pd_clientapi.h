@@ -187,10 +187,12 @@ int pd_client_register_resource_manager(pd_client_context_t *conn,
  *
  * @param conn the resource server's pd connection
  * @param manager_id manager ID
+ * @param client_id PD ID of the client who requested the namespace
  * @param ns_id returns the namespace ID
  */
 int pd_client_register_namespace(pd_client_context_t *conn,
                                  seL4_Word manager_id,
+                                 seL4_Word client_id,
                                  seL4_Word *ns_id);
 
 /**

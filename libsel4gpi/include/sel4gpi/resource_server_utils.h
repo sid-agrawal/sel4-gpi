@@ -22,6 +22,7 @@ enum rs_errors
     /* No future collisions with seL4_Error.*/
     RS_ERROR_RR_SIZE = seL4_NumErrors, // RR request shared memory is too small
     RS_ERROR_DNE,                      // RR request resource no longer exists
+    RS_ERROR_NS,                       // Namespace does not exist
     RS_NUM_ERRORS
 };
 
@@ -208,9 +209,11 @@ int resource_server_give_resource(resource_server_context_t *context,
 /**
  * Creates a new namespace ID for this resource server
  *
+ * @param client_id Client ID of the client that requested the new NS
  * @param ns_id returns the newly allocated NS ID
  */
 int resource_server_new_ns(resource_server_context_t *context,
+                           uint64_t client_id,
                            uint64_t *ns_id);
 
 /**

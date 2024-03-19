@@ -126,7 +126,7 @@ pd_component_registry_entry_t *pd_component_registry_get_entry_by_id(seL4_Word o
  * @param badge
  * @return pd_component_registry_entry_t*
  */
-static pd_component_registry_entry_t *pd_component_registry_get_entry_by_badge(seL4_Word badge)
+pd_component_registry_entry_t *pd_component_registry_get_entry_by_badge(seL4_Word badge)
 {
 
     uint64_t objectID = get_object_id_from_badge(badge);
@@ -945,15 +945,23 @@ static void handle_register_namespace_req(seL4_Word sender_badge, seL4_MessageIn
     OSDB_PRINTF(PDSERVS "Got register namespace request from client badge %lx.\n",
                 sender_badge);
 
-    seL4_Word manager_id = seL4_GetMR(PDMSGREG_CREATE_RES_REQ_MANAGER_ID);
+    seL4_Word manager_id = seL4_GetMR(PDMSGREG_REGISTER_NS_REQ_MANAGER_ID);
+    seL4_Word target_id = seL4_GetMR(PDMSGREG_REGISTER_NS_REQ_CLIENT_ID);
 
     pd_component_registry_entry_t *client_data = pd_component_registry_get_entry_by_badge(sender_badge);
+    pd_component_registry_entry_t *target_data = pd_component_registry_get_entry_by_id(target_id);
     pd_component_resource_manager_entry_t *resource_manager_data = pd_component_resource_manager_get_entry_by_id(manager_id);
 
     if (client_data == NULL)
     {
-        OSDB_PRINTF(PDSERVS "handle_register_namespace_req: Failed to find PD with ID %ld.\n",
+        OSDB_PRINTF(PDSERVS "handle_register_namespace_req: Failed to find client PD with ID %ld.\n",
                     get_client_id_from_badge(sender_badge));
+        error = -1;
+    }
+    else if (target_data == NULL)
+    {
+        OSDB_PRINTF(PDSERVS "handle_register_namespace_req: Failed to find taret PD with ID %ld.\n",
+                    target_data);
         error = -1;
     }
     else if (resource_manager_data == NULL)
@@ -971,13 +979,18 @@ static void handle_register_namespace_req(seL4_Word sender_badge, seL4_MessageIn
     else
     {
         resource_manager_data->ns_index++;
+        uint64_t ns_id = resource_manager_data->ns_index;
 
-        OSDB_PRINTF(PDSERVS "Registered namespace, ID is %ld.\n", resource_manager_data->ns_index);
+        // Add the RDE for the NS to the target PD
+        rde_type_t rde_type = {.type = resource_manager_data->resource_type};
+        pd_add_rde(&target_data->pd, rde_type, manager_id,
+                   ns_id, resource_manager_data->server_ep);
 
-        seL4_SetMR(PDMSGREG_REGISTER_NS_ACK_NSID, resource_manager_data->ns_index);
+        OSDB_PRINTF(PDSERVS "Registered namespace, ID is %ld.\n", ns_id);
+        seL4_SetMR(PDMSGREG_REGISTER_NS_ACK_NSID, ns_id);
     }
 
-    seL4_SetMR(PDMSGREG_FUNC, PD_FUNC_REGISTER_SERV_ACK);
+    seL4_SetMR(PDMSGREG_FUNC, PD_FUNC_REGISTER_NS_ACK);
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(error, 0, 0,
                                                   PDMSGREG_REGISTER_NS_ACK_END);
     return reply(tag);

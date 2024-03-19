@@ -74,6 +74,49 @@ __attribute__((noreturn)) void xv6fs_panic(char *s)
 }
 
 /**
+ * Make the path prefix for a namespace
+ */
+static void make_ns_prefix(char *prefix, uint64_t nsid)
+{
+  snprintf(prefix, PATH_MAX, "/ns%ld", nsid);
+}
+
+/**
+ * Add the prefix to a path, overwriting path
+ */
+static void apply_prefix(char *prefix, char *path)
+{
+  char temp[PATH_MAX];
+  snprintf(temp, PATH_MAX, "%s/%s", prefix, path);
+  strcpy(path, temp);
+}
+
+/**
+ * Insert the data for a namespace
+ */
+static void insert_ns(fs_namespace_t *ns)
+{
+  ns->next = get_xv6fs_server()->namespaces;
+  get_xv6fs_server()->namespaces = ns;
+}
+
+/**
+ * Find the data for a namespace
+ */
+static fs_namespace_t *find_ns(uint64_t nsid)
+{
+  for (fs_namespace_t *curr = get_xv6fs_server()->namespaces; curr != NULL; curr = curr->next)
+  {
+    if (curr->id == nsid)
+    {
+      return curr;
+    }
+  }
+
+  return NULL;
+}
+
+/**
  * @brief Insert a new client into the client registry Linked List.
  *
  * @param new_node
@@ -308,14 +351,6 @@ seL4_MessageInfo_t xv6fs_request_handler(seL4_MessageInfo_t tag, seL4_Word sende
 
       seL4_SetMR(RDMSGREG_FUNC, RS_FUNC_GET_RR_ACK);
       break;
-    case RS_FUNC_NEW_NS_REQ:
-      uint64_t ns_id;
-      error = resource_server_new_ns(&get_xv6fs_server()->gen, &ns_id);
-
-      seL4_MessageInfo_ptr_set_length(&reply_tag, RSMSGREG_NEW_NS_ACK_END);
-      seL4_SetMR(RDMSGREG_FUNC, RS_FUNC_NEW_NS_ACK);
-      seL4_SetMR(RSMSGREG_NEW_NS_ACK_ID, RS_FUNC_NEW_NS_ACK);
-      break;
     default:
       XV6FS_PRINTF("Op is %d\n", op);
       CHECK_ERROR_GOTO(1, "got invalid op on unbadged ep", error, done);
@@ -325,17 +360,57 @@ seL4_MessageInfo_t xv6fs_request_handler(seL4_MessageInfo_t tag, seL4_Word sende
   { /* Handle Request Not Associated to Object */
     XV6FS_PRINTF("Received badged request with no object id\n");
 
+    char *pathname;
+
     switch (op)
     {
+    case RS_FUNC_NEW_NS_REQ:
+      XV6FS_PRINTF("Got request for new namespace\n");
+
+      uint64_t ns_id;
+
+      // Register NS and get new ID
+      error = resource_server_new_ns(&get_xv6fs_server()->gen, get_client_id_from_badge(sender_badge), &ns_id);
+      XV6FS_PRINTF("Registered new namespace with ID %ld\n", ns_id);
+
+      // Bookkeeping the NS
+      fs_namespace_t *ns_entry = malloc(sizeof(fs_namespace_t));
+      ns_entry->id = ns_id;
+      make_ns_prefix(ns_entry->ns_prefix, ns_id);
+      insert_ns(ns_entry);
+
+      // Create directory in global FS
+      error = xv6fs_sys_mkdir(ns_entry->ns_prefix);
+      CHECK_ERROR_GOTO(error, "Failed to make new directory for namespace\n", FS_SERVER_ERROR_UNKNOWN, done);
+
+      seL4_MessageInfo_ptr_set_length(&reply_tag, RSMSGREG_NEW_NS_ACK_END);
+      seL4_SetMR(RDMSGREG_FUNC, RS_FUNC_NEW_NS_ACK);
+      seL4_SetMR(RSMSGREG_NEW_NS_ACK_ID, ns_id);
+      break;
     case FS_FUNC_CREATE_REQ:
       int open_flags = seL4_GetMR(FSMSGREG_CREATE_REQ_FLAGS);
 
       /* Attach memory object to server ADS (contains pathname) */
       error = resource_server_attach_mo(&get_xv6fs_server()->gen, cap, &mo_vaddr);
       CHECK_ERROR_GOTO(error, "Failed to attach MO", error, done);
+      pathname = (char *)mo_vaddr;
+
+      /* Update pathname if within a namespace */
+      ns_id = get_ns_id_from_badge(sender_badge);
+      if (ns_id != NSID_DEFAULT)
+      {
+        fs_namespace_t *ns = find_ns(ns_id);
+        if (ns == NULL)
+        {
+          XV6FS_PRINTF("Namespace did not exist\n");
+          error = RS_ERROR_NS;
+          goto done;
+        }
+
+        apply_prefix(ns->ns_prefix, pathname);
+      }
 
       // Open (or create) the file
-      char *pathname = (char *)mo_vaddr;
       XV6FS_PRINTF("Server opening file %s, flags 0x%x\n", pathname, open_flags);
       struct file *file = xv6fs_sys_open(pathname, open_flags);
       error = file == NULL ? FS_SERVER_ERROR_UNKNOWN : FS_SERVER_NOERROR;
@@ -383,6 +458,46 @@ seL4_MessageInfo_t xv6fs_request_handler(seL4_MessageInfo_t tag, seL4_Word sende
       seL4_MessageInfo_ptr_set_length(&reply_tag, FSMSGREG_CREATE_ACK_END);
       seL4_SetMR(FSMSGREG_CREATE_ACK_DEST, dest);
       seL4_SetMR(RSMSGREG_FUNC, FS_FUNC_CREATE_ACK);
+      break;
+    case FS_FUNC_LINK_REQ:
+      /* Attach memory object to server ADS (contains pathname) */
+      error = resource_server_attach_mo(&get_xv6fs_server()->gen, cap, &mo_vaddr);
+      CHECK_ERROR_GOTO(error, "Failed to attach MO", error, done);
+      pathname = (char *)mo_vaddr;
+
+      /* Update pathname if within a namespace */
+      ns_id = get_ns_id_from_badge(sender_badge);
+      if (ns_id != NSID_DEFAULT)
+      {
+        fs_namespace_t *ns = find_ns(ns_id);
+        if (ns == NULL)
+        {
+          XV6FS_PRINTF("Namespace did not exist\n");
+          error = RS_ERROR_NS;
+          goto done;
+        }
+
+        apply_prefix(ns->ns_prefix, pathname);
+      }
+
+      /* Find the file to link */
+      seL4_Word file_badge = seL4_GetBadge(1);
+
+      reg_entry = fs_registry_get_entry_by_badge(file_badge);
+      if (reg_entry == NULL)
+      {
+        XV6FS_PRINTF("Received invalid file to link\n");
+        error = FS_SERVER_ERROR_BADGE;
+        goto done;
+      }
+
+      XV6FS_PRINTF("File to link has id %ld, linking to path %s\n", reg_entry->file->id, pathname);
+
+      /* Do the link */
+      error = xv6fs_sys_dolink2(reg_entry->file, pathname);
+
+      seL4_MessageInfo_ptr_set_length(&reply_tag, FSMSGREG_LINK_ACK_END);
+      seL4_SetMR(RDMSGREG_FUNC, FS_FUNC_LINK_ACK);
       break;
     case FS_FUNC_UNLINK_REQ:
       /* Attach memory object to server ADS (contains pathname) */
@@ -455,8 +570,8 @@ seL4_MessageInfo_t xv6fs_request_handler(seL4_MessageInfo_t tag, seL4_Word sende
       reg_entry->count--;
       if (reg_entry->count <= 0)
       {
-        // XV6FS_PRINTF("Removing registry entry for file with 0 refcount\n");
-        // fs_registry_remove(reg_entry);
+        XV6FS_PRINTF("Removing registry entry for file with 0 refcount\n");
+        fs_registry_remove(reg_entry);
 
         // (XXX) Arya: Do we actually want to remove the registry entry?
       }

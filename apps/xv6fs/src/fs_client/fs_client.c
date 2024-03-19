@@ -175,18 +175,53 @@ xv6fs_client_init(void)
   return error;
 }
 
+int xv6fs_client_set_namespace(uint64_t ns_id)
+{
+  XV6FS_PRINTF("Client of FS server will use namespace %ld\n", ns_id);
+
+  seL4_CPtr ep = sel4gpi_get_rde_by_ns_id(ns_id, GPICAP_TYPE_FILE);
+
+  if (ep == seL4_CapNull) {
+    return -1;
+  }
+
+  get_xv6fs_client()->fs_ep = ep;
+  return 0;
+}
+
 int xv6fs_client_get_file(int fd, seL4_CPtr *file_ep)
 {
   // Find the file by fd
   xv6fs_client_context_t *file = fd_get(fd);
   if (file == NULL)
   {
-    XV6FS_PRINTF("Invalid FD provided\n");
+    XV6FS_PRINTF("xv6fs_client_get_file: Invalid FD provided\n");
     return -1;
   }
 
   *file_ep = file->badged_server_ep_cspath.capPtr;
   return 0;
+}
+
+// Not used for libc
+int xv6fs_client_link_file(seL4_CPtr file, const char *path)
+{
+  XV6FS_PRINTF("fs_link_file file cptr %d, path %s\n", (int) file, path);
+
+  int error;
+
+  // Copy pathname from buf to shared mem
+  strcpy(get_xv6fs_client()->shared_mem_vaddr, path);
+
+  // Send IPC to fs server
+  seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 2, FSMSGREG_LINK_REQ_END);
+  seL4_SetMR(FSMSGREG_FUNC, FS_FUNC_LINK_REQ);
+  seL4_SetCap(0, get_xv6fs_client()->shared_mem->badged_server_ep_cspath.capPtr);
+  seL4_SetCap(1, file);
+
+  tag = seL4_Call(get_xv6fs_client()->fs_ep, tag);
+
+  return seL4_MessageInfo_get_label(tag);
 }
 
 /* Remote fs access functions to override libc fs ops */
@@ -256,7 +291,7 @@ static int xv6fs_libc_pread(int fd, void *buf, int count, int offset)
   xv6fs_client_context_t *file = fd_get(fd);
   if (file == NULL)
   {
-    XV6FS_PRINTF("Invalid FD provided\n");
+    XV6FS_PRINTF("xv6fs_libc_pread: Invalid FD provided\n");
     return -1;
   }
 
@@ -289,7 +324,7 @@ static int xv6fs_libc_read(int fd, void *buf, int count)
   xv6fs_client_context_t *file = fd_get(fd);
   if (file == NULL)
   {
-    XV6FS_PRINTF("Invalid FD provided\n");
+    XV6FS_PRINTF("xv6fs_libc_read: Invalid FD provided\n");
     return -1;
   }
 
@@ -326,7 +361,7 @@ static int xv6fs_libc_write(int fd, const void *buf, int count)
   xv6fs_client_context_t *file = fd_get(fd);
   if (file == NULL)
   {
-    XV6FS_PRINTF("Invalid FD provided\n");
+    XV6FS_PRINTF("xv6fs_libc_write: Invalid FD provided\n");
     return -1;
   }
 
@@ -375,7 +410,7 @@ static int xv6fs_libc_close(int fd)
   xv6fs_client_context_t *file = fd_get(fd);
   if (file == NULL)
   {
-    XV6FS_PRINTF("Invalid FD provided\n");
+    XV6FS_PRINTF("xv6fs_libc_close: Invalid FD provided\n");
     return -1;
   }
 
@@ -406,7 +441,7 @@ static int xv6fs_libc_lseek(int fd, off_t offset, int whence)
   xv6fs_client_context_t *file = fd_get(fd);
   if (file == NULL)
   {
-    XV6FS_PRINTF("Invalid FD provided\n");
+    XV6FS_PRINTF("xv6fs_libc_lseek: Invalid FD provided\n");
     return -1;
   }
 
@@ -444,7 +479,7 @@ int xv6fs_libc_fstat(int fd, struct stat *buf)
   xv6fs_client_context_t *file = fd_get(fd);
   if (file == NULL)
   {
-    XV6FS_PRINTF("Invalid FD provided\n");
+    XV6FS_PRINTF("xv6fs_libc_fstat: Invalid FD provided\n");
     return -1;
   }
 
@@ -499,7 +534,7 @@ static int xv6fs_libc_fcntl(int fd, int cmd, ...)
   xv6fs_client_context_t *file = fd_get(fd);
   if (file == NULL)
   {
-    XV6FS_PRINTF("Invalid FD provided\n");
+    XV6FS_PRINTF("xv6fs_libc_fcntl: Invalid FD provided\n");
     return -1;
   }
 

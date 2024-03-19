@@ -41,11 +41,29 @@ seL4_Error
 xv6fs_client_init(void);
 
 /**
+ * Changes the namespace used for requests to the FS server
+ * 
+ * @param ns_id ID of an existing FS namespace
+ * @return 0 on success, 
+ *         -1 if the namespace was not found in the resource directory
+*/
+int xv6fs_client_set_namespace(uint64_t ns_id);
+
+/**
  * Get the file resource for a given file descriptor
  * @param fd fd returned by libc open in a xv6fs client process
  * @param file_ep returns the badged endpoint to the file server
 */
 int xv6fs_client_get_file(int fd, seL4_CPtr *file_ep);
+
+/**
+ * Links a file resource to a particular filepath
+ * 
+ * @param file file resource created by this filesystem, 
+ *             potentially in a different namespace
+ * @param path path to link the file at
+*/
+int xv6fs_client_link_file(seL4_CPtr file, const char *path);
 
 /*
 Context of the client for a single file

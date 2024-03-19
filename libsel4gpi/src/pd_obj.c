@@ -89,8 +89,6 @@ static int pd_rde_find_idx(pd_t *pd,
 {
     int idx = -1;
 
-    printf("TEMPA pd_rde_find_idx for type %d with ns_id %d\n", type, ns_id);
-
     for (int i = 0; i < MAX_NS_PER_RDE; i++)
     {
         if (pd->init_data->rde[type][i].type.type == GPICAP_TYPE_NONE)
@@ -499,6 +497,7 @@ int pd_send_cap(pd_t *to_pd,
     seL4_CPtr dest_cptr;
     osmosis_pd_cap_t *res;
     bool should_mint = true;
+
     /*
         Find out if the cap is an OSmosis cap or not.
     */
@@ -540,7 +539,13 @@ int pd_send_cap(pd_t *to_pd,
             res_id = cpu_reg->cpu.cpu_obj_id;
             break;
         case GPICAP_TYPE_PD:
-            ZF_LOGF("Sending PD cap is not supported yet");
+            server_vka = get_pd_component()->server_vka;
+            server_src_cap = get_pd_component()->server_ep_obj.cptr;
+
+            pd_component_registry_entry_t *pd_reg = pd_component_registry_get_entry_by_badge(badge);
+            assert(pd_reg != NULL);
+
+            res_id = pd_reg->pd.pd_obj_id;
             break;
         default:
             // ZF_LOGF("Unknown cap type in %s", __FUNCTION__);
@@ -618,12 +623,15 @@ int pd_start(pd_t *pd,
     assert(&pd->proc != NULL);
     assert(&pd->proc.vspace != NULL);
 
-    // Send the PD's PD resource (XXX) Arya: replace with pd_send_cap
-    error = copy_cap_to_pd(pd, pd_endpoint_in_root, &pd->init_data->pd_cap);
-    if (error)
-    {
-        ZF_LOGF("Failed to send PD cap to child");
-    }
+    // Send the PD's PD resource
+    seL4_Word badge = gpi_new_badge(GPICAP_TYPE_PD, 0x00, pd->pd_obj_id, NSID_DEFAULT, pd->pd_obj_id);
+    pd_send_cap(pd, pd_endpoint_in_root, badge, &pd->init_data->pd_cap);
+
+    //error = copy_cap_to_pd(pd, pd_endpoint_in_root, &pd->init_data->pd_cap);
+    //if (error)
+    //{
+    //    ZF_LOGF("Failed to send PD cap to child");
+    //}
 
     // Map init data to the PD
     error = ads_component_attach(pd->ads_obj_id, pd->init_data_mo_id, NULL, (void **)&pd->init_data_in_PD);

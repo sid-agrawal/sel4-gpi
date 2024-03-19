@@ -34,6 +34,17 @@ typedef struct _fs_registry_entry
 
 } fs_registry_entry_t;
 
+/**
+ * State maintained for namespaces
+ */
+typedef struct _fs_namespace
+{
+    uint64_t id;             // ID of the namespace
+    char ns_prefix[MAXPATH]; // prefix of this namespace in the default ns
+
+    struct _fs_namespace *next;
+} fs_namespace_t;
+
 /*
 Context of the server
 */
@@ -48,8 +59,9 @@ typedef struct _xv6fs_server_context
     // Internal data
     int registry_n_entries;
     fs_registry_entry_t *client_registry;
+    fs_namespace_t *namespaces;
 
-    // Temporary fields for naive implementation
+    // Fields for naive block implementation
     mo_client_context_t *shared_mem;
     void *shared_mem_vaddr;
     ramdisk_client_context_t naive_blocks[FS_SIZE];
@@ -62,7 +74,7 @@ int xv6fs_init();
 
 /**
  * To handle client requests to the fs server
-*/
+ */
 seL4_MessageInfo_t xv6fs_request_handler(seL4_MessageInfo_t tag, seL4_Word sender_badge, seL4_CPtr cap);
 
 xv6fs_server_context_t *get_xv6fs_server(void);

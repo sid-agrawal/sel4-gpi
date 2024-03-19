@@ -308,6 +308,46 @@ bad:
 }
 
 // Create the path new as a link to the same inode as old.
+int xv6fs_sys_dolink2(struct file *old, char *new)
+{
+  struct inode *dp, *ip;
+  char name[DIRSIZ];
+
+  ip = old->ip;
+
+  ilock(ip);
+  if (ip->type == T_DIR)
+  {
+    iunlockput(ip);
+    return -1;
+  }
+
+  ip->nlink++;
+  iupdate(ip);
+  iunlock(ip);
+
+  if ((dp = nameiparent(new, name)) == 0)
+    goto bad;
+  ilock(dp);
+  if (dp->dev != ip->dev || dirlink(dp, name, ip->inum) < 0)
+  {
+    iunlockput(dp);
+    goto bad;
+  }
+  iunlockput(dp);
+  iput(ip);
+
+  return 0;
+
+bad:
+  ilock(ip);
+  ip->nlink--;
+  iupdate(ip);
+  iunlockput(ip);
+  return -1;
+}
+
+// Create the path new as a link to the same inode as old.
 int xv6fs_sys_dolink(char *old, char *new)
 {
   struct inode *dp, *ip;

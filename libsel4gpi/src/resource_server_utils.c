@@ -345,7 +345,7 @@ int resource_server_get_rr(seL4_CPtr server_ep,
 int resource_server_client_new_ns(seL4_CPtr server_ep,
                                   uint64_t *ns_id)
 {
-    RESOURCE_SERVER_PRINTF("Requesting new namespace from server ep (%d)\n", (int) server_ep);
+    RESOURCE_SERVER_PRINTF("Requesting new namespace from server ep (%d)\n", (int)server_ep);
 
     // Send IPC to resource server
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0, RSMSGREG_NEW_NS_REQ_END);
@@ -396,13 +396,14 @@ int resource_server_give_resource(resource_server_context_t *context,
 }
 
 int resource_server_new_ns(resource_server_context_t *context,
+                           uint64_t client_id,
                            uint64_t *ns_id)
 {
     int error;
 
-    RESOURCE_SERVER_PRINTF("Creating new NSx\n");
+    RESOURCE_SERVER_PRINTF("Creating new NS\n");
 
-    error = pd_client_register_namespace(&context->pd_conn, context->server_id, ns_id);
+    error = pd_client_register_namespace(&context->pd_conn, context->server_id, client_id, ns_id);
 
     return error;
 }

@@ -274,22 +274,16 @@ int pd_client_register_resource_manager(pd_client_context_t *conn,
     return 0;
 }
 
-/**
- * To be called by a resource manager to allocate a new namespace
- * It will use the given ns_id to refer to the ns in the future
- *
- * @param conn the resource server's pd connection
- * @param manager_id manager ID
- * @param ns_id returns the namespace ID
- */
 int pd_client_register_namespace(pd_client_context_t *conn,
                                  seL4_Word manager_id,
+                                 seL4_Word client_id,
                                  seL4_Word *ns_id)
 {
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0,
                                                   PDMSGREG_REGISTER_NS_REQ_END);
     seL4_SetMR(PDMSGREG_FUNC, PD_FUNC_REGISTER_NS_REQ);
     seL4_SetMR(PDMSGREG_REGISTER_NS_REQ_MANAGER_ID, manager_id);
+    seL4_SetMR(PDMSGREG_REGISTER_NS_REQ_CLIENT_ID, client_id);
     tag = seL4_Call(conn->badged_server_ep_cspath.capPtr, tag);
     assert(seL4_MessageInfo_ptr_get_label(&tag) == 0);
     *ns_id = seL4_GetMR(PDMSGREG_REGISTER_NS_ACK_NSID);
