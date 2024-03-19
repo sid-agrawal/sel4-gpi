@@ -83,6 +83,9 @@ enum pd_component_funcs
     PD_FUNC_REGISTER_SERV_REQ,
     PD_FUNC_REGISTER_SERV_ACK,
 
+    PD_FUNC_REGISTER_NS_REQ,
+    PD_FUNC_REGISTER_NS_ACK,
+
     PD_FUNC_CREATE_RES_REQ,
     PD_FUNC_CREATE_RES_ACK,
 
@@ -172,12 +175,14 @@ enum pd_component_msgregs
 
     /* Share RDE */
     PDMSGREG_SHARE_RDE_REQ_TYPE = PDMSGREG_LABEL0,
+    PDMSGREG_SHARE_RDE_REQ_NS,
     PDMSGREG_SHARE_RDE_REQ_END,
 
     PDMSGREG_SHARE_RDE_ACK_END = PDMSGREG_LABEL0,
 
     /* Add RDE */
-    PDMSGREG_ADD_RDE_REQ_ID = PDMSGREG_LABEL0,
+    PDMSGREG_ADD_RDE_REQ_MANAGER_ID = PDMSGREG_LABEL0,
+    PDMSGREG_ADD_RDE_REQ_NSID,
     PDMSGREG_ADD_RDE_REQ_END,
 
     PDMSGREG_ADD_RDE_ACK_END = PDMSGREG_LABEL0,
@@ -189,6 +194,13 @@ enum pd_component_msgregs
     PDMSGREG_REGISTER_SERV_ACK_ID = PDMSGREG_LABEL0,
     PDMSGREG_REGISTER_SERV_ACK_END,
 
+    /* Register Namespace */
+    PDMSGREG_REGISTER_NS_REQ_MANAGER_ID = PDMSGREG_LABEL0,
+    PDMSGREG_REGISTER_NS_REQ_END,
+
+    PDMSGREG_REGISTER_NS_ACK_NSID = PDMSGREG_LABEL0,
+    PDMSGREG_REGISTER_NS_ACK_END,
+
     /* Create Resource */
     PDMSGREG_CREATE_RES_REQ_MANAGER_ID = PDMSGREG_LABEL0,
     PDMSGREG_CREATE_RES_REQ_RES_ID,
@@ -199,6 +211,7 @@ enum pd_component_msgregs
 
     /* Give Resource */
     PDMSGREG_GIVE_RES_REQ_MANAGER_ID = PDMSGREG_LABEL0,
+    PDMSGREG_GIVE_RES_REQ_NS_ID,
     PDMSGREG_GIVE_RES_REQ_CLIENT_ID,
     PDMSGREG_GIVE_RES_REQ_RES_ID,
     PDMSGREG_GIVE_RES_REQ_END,
@@ -225,6 +238,7 @@ typedef struct _pd_component_resource_manager_entry
     gpi_cap_t resource_type;
     seL4_CPtr server_ep;
     pd_t *pd;
+    uint64_t ns_index; // Tracks the last allocated namespace ID
 
     struct _pd_component_resource_manager_entry *next;
 } pd_component_resource_manager_entry_t;

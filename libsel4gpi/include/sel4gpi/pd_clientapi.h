@@ -137,10 +137,12 @@ int pd_client_start(pd_client_context_t *conn, int argc, seL4_Word *args);
  *
  * @param conn client connection object
  * @param server_type key of the RDE to share
+ * @param ns_id namespace to share (optional, set to 0 for default namespace)
  * @return int 0 on success, -1 on failure.
  */
 int pd_client_share_rde(pd_client_context_t *conn,
-                        gpi_cap_t cap_type);
+                        gpi_cap_t cap_type,
+                        uint64_t ns_id);
 
 /**
  * @brief Add a new RDE to the PD
@@ -154,11 +156,13 @@ int pd_client_share_rde(pd_client_context_t *conn,
  * @param conn client connection object
  * @param server_pd PD resource for the resource manager PD
  * @param manager_id Resource manager ID
+ * @param ns_id Namespace ID, or NSID_DEFAULT
  * @return int 0 on success, -1 on failure.
  */
 int pd_client_add_rde(pd_client_context_t *conn,
                       seL4_CPtr server_pd,
-                      uint64_t manager_id);
+                      uint64_t manager_id,
+                      uint64_t ns_id);
 
 /* -- Resource Manager Functions -- */
 // (XXX) Arya: Should these be part of a different component?
@@ -178,6 +182,18 @@ int pd_client_register_resource_manager(pd_client_context_t *conn,
                                         seL4_Word *manager_id);
 
 /**
+ * To be called by a resource manager to allocate a new namespace
+ * It will use the given ns_id to refer to the ns in the future
+ *
+ * @param conn the resource server's pd connection
+ * @param manager_id manager ID
+ * @param ns_id returns the namespace ID
+ */
+int pd_client_register_namespace(pd_client_context_t *conn,
+                                 seL4_Word manager_id,
+                                 seL4_Word *ns_id);
+
+/**
  * To be called by a resource manager when it creates a new resource
  *
  * @param conn the resource server's pd connection
@@ -194,12 +210,14 @@ int pd_client_create_resource(pd_client_context_t *conn,
  *
  * @param conn the resource server's pd connection
  * @param manager_id the resource manager id, given by pd_client_register_resource_manager
+ * @param ns_id the namespace ID being allocated from, given by pd_client_register_namespace
  * @param recipient_id the recipient PD's ID
  * @param resource_id id of the resource (local id to the resource manager)
  * @param dest returns the destination slot in the recipient PD
  */
 int pd_client_give_resource(pd_client_context_t *conn,
                             seL4_Word manager_id,
+                            seL4_Word ns_id,
                             seL4_Word recipient_id,
                             seL4_Word resource_id,
                             seL4_CPtr *dest);

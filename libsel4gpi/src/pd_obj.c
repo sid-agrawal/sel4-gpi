@@ -83,47 +83,74 @@ osmosis_pd_cap_t *pd_add_resource(pd_t *pd, gpi_cap_t type, uint32_t res_id,
     return new;
 }
 
+static int pd_rde_find_idx(pd_t *pd,
+                           gpi_cap_t type,
+                           uint32_t ns_id)
+{
+    int idx = -1;
+
+    printf("TEMPA pd_rde_find_idx for type %d with ns_id %d\n", type, ns_id);
+
+    for (int i = 0; i < MAX_NS_PER_RDE; i++)
+    {
+        if (pd->init_data->rde[type][i].type.type == GPICAP_TYPE_NONE)
+        {
+            break;
+        }
+        else if (pd->init_data->rde[type][i].ns_id == ns_id)
+        {
+            idx = i;
+            break;
+        }
+    }
+
+    return idx;
+}
+
+osmosis_rde_t *pd_rde_get(pd_t *pd,
+                          gpi_cap_t type,
+                          uint32_t ns_id)
+{
+    int idx = pd_rde_find_idx(pd, type, ns_id);
+
+    if (idx == -1)
+    {
+        return NULL;
+    }
+    else
+    {
+        return &pd->init_data->rde[type][idx];
+    }
+}
+
 int pd_add_rde(pd_t *pd,
                rde_type_t type,
                uint32_t manager_id,
                uint32_t ns_id,
                seL4_CPtr server_ep)
 {
-    int idx;
+    int idx = -1;
 
-    if (ns_id == 0)
+    for (int i = 0; i < MAX_NS_PER_RDE; i++)
     {
-        idx = type.type;
-    }
-    else
-    {
-        int start = GPICAP_TYPE_MAX + (MAX_NS_PER_RDE * (type.type - 1)); // -1 since we don't have ns's for the none type
-
-        assert(start > 0 && start < MAX_PD_OSM_RDE);
-        int i;
-        for (i = start; i < start + MAX_NS_PER_RDE; i++)
+        if (pd->init_data->rde[type.type][i].type.type == GPICAP_TYPE_NONE)
         {
-            if (pd->init_data->rde[i].type.type == GPICAP_TYPE_NONE)
-            {
-                idx = i;
-                break;
-            }
-        }
-
-        if (i >= start + MAX_NS_PER_RDE)
-        {
-            OSDB_PRINTF("No more RDE NS slots available for type %d\n", type.type);
-            return 1;
+            idx = i;
+            break;
         }
     }
 
-    assert(idx > 0 && idx < MAX_PD_OSM_RDE);
+    if (idx == -1)
+    {
+        OSDB_PRINTF("No more RDE NS slots available for type %d\n", type.type);
+        return 1;
+    }
 
-    pd->init_data->rde[idx].manager_id = manager_id;
+    pd->init_data->rde[type.type][idx].manager_id = manager_id;
     /* we don't really need to keep this if we index by type, but let's just keep it around for now */
-    pd->init_data->rde[idx].type = type;
-    pd->init_data->rde[idx].slot_in_RT = server_ep;
-    pd->init_data->rde[idx].ns_id = ns_id;
+    pd->init_data->rde[type.type][idx].type = type;
+    pd->init_data->rde[type.type][idx].slot_in_RT = server_ep;
+    pd->init_data->rde[type.type][idx].ns_id = ns_id;
     uint32_t client_id = pd->pd_obj_id;
 
     // Badge the raw endpoint for the client PD
@@ -142,6 +169,8 @@ int pd_add_rde(pd_t *pd,
                                         ns_id,
                                         BADGE_OBJ_ID_NULL);
 
+
+
     error = vka_cnode_mint(&dest,
                            &src,
                            seL4_AllRights,
@@ -151,9 +180,9 @@ int pd_add_rde(pd_t *pd,
         return error;
     }
 
-    pd->init_data->rde[idx].slot_in_PD = dest.capPtr;
+    pd->init_data->rde[type.type][idx].slot_in_PD = dest.capPtr;
 
-    OSDB_PRINTF("Added new RDE of type %d to PD %d, in slot %d\n", type.type, client_id, (int)dest.capPtr);
+    OSDB_PRINTF("Added new RDE of type %d to PD %d, in slot %d, with badge %lx\n", type.type, client_id, (int)dest.capPtr, badge_val);
 
     pd->init_data->rde_count++;
     return 0;
@@ -424,7 +453,7 @@ int pd_load_image(pd_t *pd,
     // Send CPU cap as a resource
     uint32_t cpu_obj_id;
     error = forge_cpu_cap_from_tcb(&pd->proc, pd->vka, pd->pd_obj_id, &pd->cpu_cap_in_RT, &cpu_obj_id);
-    badge = gpi_new_badge(GPICAP_TYPE_CPU, 0x00, pd->pd_obj_id, 0x00, cpu_obj_id);
+    badge = gpi_new_badge(GPICAP_TYPE_CPU, 0x00, pd->pd_obj_id, NSID_DEFAULT, cpu_obj_id);
     pd_send_cap(pd, pd->cpu_cap_in_RT, badge, &pd->init_data->cpu_cap);
     ZF_LOGF_IFERR(error, "Failed to send CPU cap to PD");
 
@@ -702,23 +731,26 @@ int pd_dump(pd_t *pd)
     // uint32_t added_pd_rr[MAX_PD_OSM_RDE] = {0};
     // memset(added_pd_rr, -1, sizeof(uint32_t) * MAX_PD_OSM_RDE);
 
-    for (int i = 0; i < MAX_PD_OSM_RDE; i++)
+    for (int i = 0; i < GPICAP_TYPE_MAX; i++)
     {
-        osmosis_rde_t rde = pd->init_data->rde[i];
-
-        if (rde.type.type != GPICAP_TYPE_NONE)
+        for (int j = 0; j < MAX_NS_PER_RDE; j++)
         {
-            pd_component_resource_manager_entry_t *rm = pd_component_resource_manager_get_entry_by_id(rde.manager_id);
+            osmosis_rde_t rde = pd->init_data->rde[i][j];
 
-            if (rm == NULL)
+            if (rde.type.type != GPICAP_TYPE_NONE)
             {
-                ZF_LOGF("Couldn't find resource manager with ID %d\n", rde.manager_id);
-            }
+                pd_component_resource_manager_entry_t *rm = pd_component_resource_manager_get_entry_by_id(rde.manager_id);
 
-            snprintf(rm_id, CSV_MAX_STRING_SIZE, "RM_%d", rm->manager_id);
-            snprintf(rde_name, CSV_MAX_STRING_SIZE, "%s_Server", cap_type_to_str(rde.type.type));
-            add_pd(ms, rde_name, rm_id);       // (XXX) Linh: placeholder before we implement dumping of RDE PDs
-            add_pd_requests(ms, pd_id, rm_id); // rm_id should always be unique
+                if (rm == NULL)
+                {
+                    ZF_LOGF("Couldn't find resource manager with ID %d\n", rde.manager_id);
+                }
+
+                snprintf(rm_id, CSV_MAX_STRING_SIZE, "RM_%d", rm->manager_id);
+                snprintf(rde_name, CSV_MAX_STRING_SIZE, "%s_Server", cap_type_to_str(rde.type.type));
+                add_pd(ms, rde_name, rm_id);       // (XXX) Linh: placeholder before we implement dumping of RDE PDs
+                add_pd_requests(ms, pd_id, rm_id); // rm_id should always be unique
+            }
         }
     }
 
@@ -875,9 +907,12 @@ int pd_dump(pd_t *pd)
     print_model_state(ms);
     free(ms);
     /* Print RDE Info*/
-    for (int idx = 0; idx < MAX_PD_OSM_RDE; idx++)
+    for (int i = 0; i < GPICAP_TYPE_MAX; i++)
     {
-        print_pd_osm_rde_info(&pd->init_data->rde[idx]);
+        for (int j = 0; j < MAX_NS_PER_RDE; j++)
+        {
+            print_pd_osm_rde_info(&pd->init_data->rde[i][j]);
+        }
     }
 
     return 0;

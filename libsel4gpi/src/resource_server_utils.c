@@ -97,14 +97,14 @@ int start_resource_server_pd(uint64_t rde_id,
     CHECK_ERROR(error, "failed to send parent's ep cap to pd");
 
     // Share the MO RDE (requires that the current process has one)
-    error = pd_client_share_rde(&new_pd, GPICAP_TYPE_MO);
+    error = pd_client_share_rde(&new_pd, GPICAP_TYPE_MO, NSID_DEFAULT);
     CHECK_ERROR(error, "failed to share parent's MO RDE with pd");
 
     // Copy the RDE to the new PD
     if (rde_pd_cap > 0)
     {
         RESOURCE_SERVER_PRINTF("SENDING RDE\n");
-        error = pd_client_add_rde(&new_pd, rde_pd_cap, rde_id);
+        error = pd_client_add_rde(&new_pd, rde_pd_cap, rde_id, NSID_DEFAULT);
         CHECK_ERROR(error, "failed to send rde to pd");
     }
 
@@ -342,6 +342,25 @@ int resource_server_get_rr(seL4_CPtr server_ep,
     return result;
 }
 
+int resource_server_client_new_ns(seL4_CPtr server_ep,
+                                  uint64_t *ns_id)
+{
+    RESOURCE_SERVER_PRINTF("Requesting new namespace from server ep (%d)\n", (int) server_ep);
+
+    // Send IPC to resource server
+    seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0, RSMSGREG_NEW_NS_REQ_END);
+    seL4_SetMR(RSMSGREG_FUNC, RS_FUNC_NEW_NS_REQ);
+    tag = seL4_Call(server_ep, tag);
+
+    int result = seL4_MessageInfo_get_label(tag);
+    if (result == seL4_NoError)
+    {
+        *ns_id = seL4_GetMR(RSMSGREG_NEW_NS_ACK_ID);
+    }
+
+    return result;
+}
+
 int resource_server_create_resource(resource_server_context_t *context,
                                     uint64_t resource_id)
 {
@@ -357,6 +376,7 @@ int resource_server_create_resource(resource_server_context_t *context,
 }
 
 int resource_server_give_resource(resource_server_context_t *context,
+                                  uint64_t ns_id,
                                   uint64_t resource_id,
                                   uint64_t client_id,
                                   seL4_CPtr *dest)
@@ -367,9 +387,22 @@ int resource_server_give_resource(resource_server_context_t *context,
 
     error = pd_client_give_resource(&context->pd_conn,
                                     context->server_id,
+                                    ns_id,
                                     client_id,
                                     resource_id,
                                     dest);
+
+    return error;
+}
+
+int resource_server_new_ns(resource_server_context_t *context,
+                           uint64_t *ns_id)
+{
+    int error;
+
+    RESOURCE_SERVER_PRINTF("Creating new NSx\n");
+
+    error = pd_client_register_namespace(&context->pd_conn, context->server_id, ns_id);
 
     return error;
 }

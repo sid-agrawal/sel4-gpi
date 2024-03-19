@@ -59,7 +59,7 @@ int test_new_process_osmosis(env_t env)
     error = ads_component_client_connect(ads_rde, slot, &ads_os_cap);
     assert(error == 0);
 
-    error = pd_client_share_rde(&pd_os_cap, GPICAP_TYPE_MO);
+    error = pd_client_share_rde(&pd_os_cap, GPICAP_TYPE_MO, NSID_DEFAULT);
     assert(error == 0);
 
     // Make a new AS, loads an image
@@ -99,7 +99,7 @@ int test_new_process_osmosis(env_t env)
     error = ads_component_client_connect(ads_rde, slot, &ads_os_cap2);
     assert(error == 0);
 
-    error = pd_client_share_rde(&pd_os_cap2, GPICAP_TYPE_MO);
+    error = pd_client_share_rde(&pd_os_cap2, GPICAP_TYPE_MO, NSID_DEFAULT);
     assert(error == 0);
 
     // Make a new AS, loads an image
@@ -173,7 +173,7 @@ int test_new_process_osmosis_shmem(env_t env)
     assert(error == 0);
     printf("Loaded hello\n");
 
-    error = pd_client_share_rde(&pd_os_cap, GPICAP_TYPE_MO);
+    error = pd_client_share_rde(&pd_os_cap, GPICAP_TYPE_MO, NSID_DEFAULT);
     assert(error == 0);
 
     // Make a new MO cap

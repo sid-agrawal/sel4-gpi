@@ -308,6 +308,14 @@ seL4_MessageInfo_t xv6fs_request_handler(seL4_MessageInfo_t tag, seL4_Word sende
 
       seL4_SetMR(RDMSGREG_FUNC, RS_FUNC_GET_RR_ACK);
       break;
+    case RS_FUNC_NEW_NS_REQ:
+      uint64_t ns_id;
+      error = resource_server_new_ns(&get_xv6fs_server()->gen, &ns_id);
+
+      seL4_MessageInfo_ptr_set_length(&reply_tag, RSMSGREG_NEW_NS_ACK_END);
+      seL4_SetMR(RDMSGREG_FUNC, RS_FUNC_NEW_NS_ACK);
+      seL4_SetMR(RSMSGREG_NEW_NS_ACK_ID, RS_FUNC_NEW_NS_ACK);
+      break;
     default:
       XV6FS_PRINTF("Op is %d\n", op);
       CHECK_ERROR_GOTO(1, "got invalid op on unbadged ep", error, done);
@@ -365,6 +373,7 @@ seL4_MessageInfo_t xv6fs_request_handler(seL4_MessageInfo_t tag, seL4_Word sende
       // Create the resource endpoint
       seL4_CPtr dest;
       error = resource_server_give_resource(&get_xv6fs_server()->gen,
+                                            get_ns_id_from_badge(sender_badge),
                                             file->id,
                                             get_client_id_from_badge(sender_badge),
                                             &dest);

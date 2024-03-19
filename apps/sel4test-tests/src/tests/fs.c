@@ -61,7 +61,7 @@ int test_fs(env_t env)
     test_assert(error == 0);
 
     // Add FS ep to RDE
-    error = pd_client_add_rde(&pd_conn, fs_pd_cap, fs_id);
+    error = pd_client_add_rde(&pd_conn, fs_pd_cap, fs_id, NSID_DEFAULT);
     test_assert(error == 0);
     seL4_CPtr fs_client_ep = sel4gpi_get_rde(GPICAP_TYPE_FILE);
 
@@ -176,11 +176,6 @@ int test_fs(env_t env)
     f = open(TEST_FNAME, O_RDONLY);
     test_assert(f == -1); // File should no longer exist
 
-    /* Dump RR for a file */
-    model_state_t *model_state = malloc(sizeof(model_state_t));
-    init_model_state(model_state);
-    rr_state_t *file_rr_state;
-
     // Write a large file
     int file_n_blocks = 5;
     void *write_buf = malloc(RAMDISK_BLOCK_SIZE);
@@ -191,6 +186,12 @@ int test_fs(env_t env)
         write(f, write_buf, RAMDISK_BLOCK_SIZE);
     }
     free(write_buf);
+
+    // Create a namespace
+    uint64_t ns_id;
+    error = resource_server_client_new_ns(fs_client_ep, &ns_id);
+    test_assert(error == 0);
+    test_assert(ns_id != 0);
 
     // Print whole-pd model state
     error = pd_client_dump(&pd_conn, NULL, 0);

@@ -194,7 +194,7 @@ int test_sqlite(env_t env)
     test_assert(error == 0);
 
     // Add FS ep to RDE
-    error = pd_client_add_rde(&pd_conn, fs_pd_cap, fs_id);
+    error = pd_client_add_rde(&pd_conn, fs_pd_cap, fs_id, NSID_DEFAULT);
     test_assert(error == 0);
     seL4_CPtr fs_client_ep = sel4gpi_get_rde(GPICAP_TYPE_FILE);
 

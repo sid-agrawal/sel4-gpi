@@ -41,7 +41,7 @@ uint64_t pd_assign_new_badge_and_objectID(pd_component_registry_entry_t *reg)
     seL4_Word badge_val = gpi_new_badge(GPICAP_TYPE_PD,
                                         0x00,
                                         0x00, /* (XXX) This needs to be changed  to the PD*/
-                                        0x00,
+                                        NSID_DEFAULT,
                                         get_pd_component()->registry_n_entries);
 
     assert(badge_val != 0);
@@ -329,18 +329,18 @@ void update_forged_pd_cap_from_init_data(test_init_data_t *init_data, sel4utils_
     pd_add_resource(pd, GPICAP_TYPE_CPU, cpu_id, child_cpu_cap_in_parent, pd->init_data->cpu_cap, child_cpu_cap_in_parent);
 
     rde_type_t ads_type = {.type = GPICAP_TYPE_ADS};
-    pd_add_rde(pd, ads_type, get_gpi_server()->ads_manager_id, 0x00, get_gpi_server()->server_ep_obj.cptr);
+    pd_add_rde(pd, ads_type, get_gpi_server()->ads_manager_id, NSID_DEFAULT, get_gpi_server()->server_ep_obj.cptr);
     pd_add_rde(pd, ads_type, get_gpi_server()->ads_manager_id, ads_id, get_gpi_server()->server_ep_obj.cptr);
     pd->init_data->binded_ads_ns_id = ads_id;
 
     rde_type_t cpu_type = {.type = GPICAP_TYPE_CPU};
-    pd_add_rde(pd, cpu_type, get_gpi_server()->cpu_manager_id, 0x00, get_gpi_server()->server_ep_obj.cptr);
+    pd_add_rde(pd, cpu_type, get_gpi_server()->cpu_manager_id, NSID_DEFAULT, get_gpi_server()->server_ep_obj.cptr);
 
     rde_type_t mo_type = {.type = GPICAP_TYPE_MO};
-    pd_add_rde(pd, mo_type, get_gpi_server()->mo_manager_id, 0x00, get_gpi_server()->server_ep_obj.cptr);
+    pd_add_rde(pd, mo_type, get_gpi_server()->mo_manager_id, NSID_DEFAULT, get_gpi_server()->server_ep_obj.cptr);
 
     rde_type_t pd_type = {.type = GPICAP_TYPE_PD};
-    pd_add_rde(pd, pd_type, get_gpi_server()->pd_manager_id, 0x00, get_gpi_server()->server_ep_obj.cptr);
+    pd_add_rde(pd, pd_type, get_gpi_server()->pd_manager_id, NSID_DEFAULT, get_gpi_server()->server_ep_obj.cptr);
 
     assert(pd->free_slots.start < pd->free_slots.end);
 }
@@ -785,7 +785,8 @@ static void handle_add_rde_req(seL4_Word sender_badge, seL4_MessageInfo_t old_ta
                 sender_badge);
 
     seL4_Word server_badge = seL4_GetBadge(0);
-    seL4_Word manager_id = seL4_GetMR(PDMSGREG_ADD_RDE_REQ_ID);
+    seL4_Word manager_id = seL4_GetMR(PDMSGREG_ADD_RDE_REQ_MANAGER_ID);
+    seL4_Word ns_id = seL4_GetMR(PDMSGREG_ADD_RDE_REQ_NSID);
     pd_component_registry_entry_t *target_data = pd_component_registry_get_entry_by_badge(sender_badge);
     pd_component_registry_entry_t *server_data = pd_component_registry_get_entry_by_badge(server_badge);
     pd_component_resource_manager_entry_t *resource_manager_data = pd_component_resource_manager_get_entry_by_id(manager_id);
@@ -827,7 +828,7 @@ static void handle_add_rde_req(seL4_Word sender_badge, seL4_MessageInfo_t old_ta
         error = pd_add_rde(&target_data->pd,
                            rde_type,
                            resource_manager_data->manager_id,
-                           0x00, // (XXX) Linh: replace with NS ID?
+                           ns_id,
                            resource_manager_data->server_ep);
     }
 
@@ -841,9 +842,11 @@ static void handle_share_rde_req(seL4_Word sender_badge, seL4_MessageInfo_t old_
 {
     int error;
 
-    seL4_Word rde_key = seL4_GetMR(PDMSGREG_SHARE_RDE_REQ_TYPE);
-    OSDB_PRINTF(PDSERVS "share_rde_req: Got request from client badge %lx for RDE key %d.\n",
-                sender_badge, rde_key);
+    seL4_Word type = seL4_GetMR(PDMSGREG_SHARE_RDE_REQ_TYPE);
+    seL4_Word ns_id = seL4_GetMR(PDMSGREG_SHARE_RDE_REQ_NS);
+
+    OSDB_PRINTF(PDSERVS "share_rde_req: Got request from client badge %lx for RDE type %d with NS %d.\n",
+                sender_badge, type, ns_id);
 
     seL4_Word client_id = get_client_id_from_badge(sender_badge);
     pd_component_registry_entry_t *target_data = pd_component_registry_get_entry_by_badge(sender_badge);
@@ -862,13 +865,20 @@ static void handle_share_rde_req(seL4_Word sender_badge, seL4_MessageInfo_t old_
         error = -1;
     }
 
-    uint64_t manager_id = client_data->pd.init_data->rde[rde_key].manager_id;
-    pd_component_resource_manager_entry_t *resource_manager_data = pd_component_resource_manager_get_entry_by_id(manager_id);
+    osmosis_rde_t *rde = pd_rde_get(&client_data->pd, type, ns_id);
+    if (rde == NULL)
+    {
+        OSDB_PRINTF(PDSERVS "share_rde_req: Failed to find RDE for type %d and NS_ID %ld.\n",
+                    type, ns_id);
+        error = -1;
+    }
+
+    pd_component_resource_manager_entry_t *resource_manager_data = pd_component_resource_manager_get_entry_by_id(rde->manager_id);
 
     if (resource_manager_data == NULL)
     {
         OSDB_PRINTF(PDSERVS "share_rde_req: Failed to find resource manager ID %ld.\n",
-                    manager_id);
+                    rde->manager_id);
         error = -1;
     }
     else if (target_data->pd.pd_started)
@@ -878,11 +888,11 @@ static void handle_share_rde_req(seL4_Word sender_badge, seL4_MessageInfo_t old_
     }
     else
     {
-        rde_type_t rde_type = {.type = rde_key};
+        rde_type_t rde_type = {.type = type};
         error = pd_add_rde(&target_data->pd,
                            rde_type,
                            resource_manager_data->manager_id,
-                           0x00,
+                           ns_id,
                            resource_manager_data->server_ep);
     }
 
@@ -914,6 +924,7 @@ static void handle_register_resource_manager_req(seL4_Word sender_badge, seL4_Me
         rs_entry->pd = &client_data->pd;
         rs_entry->server_ep = received_cap;
         rs_entry->resource_type = seL4_GetMR(PDMSGREG_REGISTER_SERV_REQ_TYPE);
+        rs_entry->ns_index = NSID_DEFAULT;
 
         int manager_id = pd_component_resource_manager_insert(rs_entry);
         OSDB_PRINTF(PDSERVS "Registered server, cap is at %ld.\n", rs_entry->server_ep);
@@ -924,6 +935,51 @@ static void handle_register_resource_manager_req(seL4_Word sender_badge, seL4_Me
     seL4_SetMR(PDMSGREG_FUNC, PD_FUNC_REGISTER_SERV_ACK);
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(error, 0, 0,
                                                   PDMSGREG_REGISTER_SERV_ACK_END);
+    return reply(tag);
+}
+
+static void handle_register_namespace_req(seL4_Word sender_badge, seL4_MessageInfo_t old_tag, seL4_CPtr received_cap)
+{
+    int error = 0;
+
+    OSDB_PRINTF(PDSERVS "Got register namespace request from client badge %lx.\n",
+                sender_badge);
+
+    seL4_Word manager_id = seL4_GetMR(PDMSGREG_CREATE_RES_REQ_MANAGER_ID);
+
+    pd_component_registry_entry_t *client_data = pd_component_registry_get_entry_by_badge(sender_badge);
+    pd_component_resource_manager_entry_t *resource_manager_data = pd_component_resource_manager_get_entry_by_id(manager_id);
+
+    if (client_data == NULL)
+    {
+        OSDB_PRINTF(PDSERVS "handle_register_namespace_req: Failed to find PD with ID %ld.\n",
+                    get_client_id_from_badge(sender_badge));
+        error = -1;
+    }
+    else if (resource_manager_data == NULL)
+    {
+        OSDB_PRINTF(PDSERVS "handle_register_namespace_req: Failed to find resource manager with ID %ld.\n",
+                    manager_id);
+        error = -1;
+    }
+    else if (resource_manager_data->pd->pd_obj_id != get_client_id_from_badge(sender_badge))
+    {
+        OSDB_PRINTF(PDSERVS "handle_register_namespace_req: resource manager PD (%ld) and client PD (%ld) do not match.\n",
+                    resource_manager_data->pd->pd_obj_id, get_client_id_from_badge(sender_badge));
+        error = -1;
+    }
+    else
+    {
+        resource_manager_data->ns_index++;
+
+        OSDB_PRINTF(PDSERVS "Registered namespace, ID is %ld.\n", resource_manager_data->ns_index);
+
+        seL4_SetMR(PDMSGREG_REGISTER_NS_ACK_NSID, resource_manager_data->ns_index);
+    }
+
+    seL4_SetMR(PDMSGREG_FUNC, PD_FUNC_REGISTER_SERV_ACK);
+    seL4_MessageInfo_t tag = seL4_MessageInfo_new(error, 0, 0,
+                                                  PDMSGREG_REGISTER_NS_ACK_END);
     return reply(tag);
 }
 
@@ -989,6 +1045,7 @@ static void handle_give_resource_req(seL4_Word sender_badge, seL4_MessageInfo_t 
     seL4_Word server_id = get_object_id_from_badge(sender_badge);
     seL4_Word recipient_id = seL4_GetMR(PDMSGREG_GIVE_RES_REQ_CLIENT_ID);
     seL4_Word manager_id = seL4_GetMR(PDMSGREG_GIVE_RES_REQ_MANAGER_ID);
+    seL4_Word ns_id = seL4_GetMR(PDMSGREG_GIVE_RES_REQ_NS_ID);
     seL4_Word resource_id = get_global_object_id_from_local(manager_id, seL4_GetMR(PDMSGREG_GIVE_RES_REQ_RES_ID));
     pd_component_registry_entry_t *server_data = pd_component_registry_get_entry_by_id(server_id);
     pd_component_registry_entry_t *recipient_data = pd_component_registry_get_entry_by_id(recipient_id);
@@ -1038,7 +1095,7 @@ static void handle_give_resource_req(seL4_Word sender_badge, seL4_MessageInfo_t 
         seL4_Word badge = gpi_new_badge(resource_manager_data->resource_type,
                                         0x00,
                                         recipient_id,
-                                        0x00, // (XXX) Linh: replace with NS ID, or maybe 0 is just for default NS?
+                                        ns_id,
                                         resource_id);
 
         // (XXX) Arya: How to handle duplicate entries to the same resource?
@@ -1106,6 +1163,9 @@ void pd_component_handle(seL4_MessageInfo_t tag,
         break;
     case PD_FUNC_REGISTER_SERV_REQ:
         handle_register_resource_manager_req(sender_badge, tag, received_cap->capPtr);
+        break;
+    case PD_FUNC_REGISTER_NS_REQ:
+        handle_register_namespace_req(sender_badge, tag, received_cap->capPtr);
         break;
     case PD_FUNC_CREATE_RES_REQ:
         handle_create_resource_req(sender_badge, tag, received_cap->capPtr);

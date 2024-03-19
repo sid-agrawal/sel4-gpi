@@ -31,6 +31,9 @@ enum rs_funcs
     RS_FUNC_GET_RR_REQ = 0,
     RS_FUNC_GET_RR_ACK,
 
+    RS_FUNC_NEW_NS_REQ,
+    RS_FUNC_NEW_NS_ACK,
+
     RS_FUNC_END,
 };
 
@@ -49,6 +52,11 @@ enum rs_msgregs
     RSMSGREG_EXTRACT_RR_REQ_ID,
     RSMSGREG_EXTRACT_RR_REQ_END,
     RSMSGREG_EXTRACT_RR_ACK_END = RSMSGREG_LABEL0,
+
+    /* New NS */
+    RSMSGREG_NEW_NS_REQ_END = RSMSGREG_LABEL0,
+    RSMSGREG_NEW_NS_ACK_ID = RSMSGREG_LABEL0,
+    RSMSGREG_NEW_NS_ACK_END,
 };
 
 /**
@@ -186,11 +194,30 @@ int resource_server_create_resource(resource_server_context_t *context,
  * Notifies the PD component to create a badged copy of the server's endpoint
  * as a new resource in the recipient's cspace
  *
+ * @param ns_id ID of the namespace being allocated from
  * @param resource_id ID of the resource, needs to be unique within this server
  * @param client_id ID of the client PD
  * @param dest Returns the slot of the badged copy in the recipient's cspace
  */
 int resource_server_give_resource(resource_server_context_t *context,
+                                  uint64_t ns_id,
                                   uint64_t resource_id,
                                   uint64_t client_id,
                                   seL4_CPtr *dest);
+
+/**
+ * Creates a new namespace ID for this resource server
+ *
+ * @param ns_id returns the newly allocated NS ID
+ */
+int resource_server_new_ns(resource_server_context_t *context,
+                           uint64_t *ns_id);
+
+/**
+ * Request a new namespace ID from a resource server
+ *
+ * @param server_ep the EP of the resource server
+ * @param ns_id returns the newly allocated NS ID
+ */
+int resource_server_client_new_ns(seL4_CPtr server_ep,
+                                  uint64_t *ns_id);

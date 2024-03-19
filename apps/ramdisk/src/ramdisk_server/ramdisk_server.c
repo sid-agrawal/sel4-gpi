@@ -211,6 +211,7 @@ seL4_MessageInfo_t ramdisk_request_handler(seL4_MessageInfo_t tag, seL4_Word sen
             // Create the resource endpoint
             seL4_CPtr dest;
             error = resource_server_give_resource(&get_ramdisk_server()->gen,
+                                                  get_ns_id_from_badge(sender_badge),
                                                   blockno,
                                                   get_client_id_from_badge(sender_badge),
                                                   &dest);

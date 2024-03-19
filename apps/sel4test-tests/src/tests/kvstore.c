@@ -46,7 +46,7 @@ static int setup(env_t env)
     test_assert(error == 0);
 
     /* Add FS ep to RDE */
-    error = pd_client_add_rde(&pd_conn, fs_pd_cap, fs_id);
+    error = pd_client_add_rde(&pd_conn, fs_pd_cap, fs_id, NSID_DEFAULT);
     test_assert(error == 0);
     seL4_CPtr fs_client_ep = sel4gpi_get_rde(GPICAP_TYPE_FILE);
 
@@ -95,11 +95,11 @@ static int start_kvstore_server(seL4_CPtr *kvstore_ep)
     test_assert(error == 0);
 
     // Give the FS RDE
-    error = pd_client_share_rde(&new_pd, GPICAP_TYPE_FILE);
+    error = pd_client_share_rde(&new_pd, GPICAP_TYPE_FILE, NSID_DEFAULT);
     test_assert(error == 0);
 
     // Also need to give the MO rde since FS clients need some MO for requests
-    error = pd_client_share_rde(&new_pd, GPICAP_TYPE_MO);
+    error = pd_client_share_rde(&new_pd, GPICAP_TYPE_MO, NSID_DEFAULT);
     test_assert(error == 0);
 
     // Start it
@@ -177,11 +177,11 @@ static int start_hello_kvstore(bool use_remote_kvstore, seL4_CPtr kvstore_ep, pd
     // Give the FS RDE, if not using remote kvstore
     if (!use_remote_kvstore)
     {
-        error = pd_client_share_rde(&new_pd, GPICAP_TYPE_FILE);
+        error = pd_client_share_rde(&new_pd, GPICAP_TYPE_FILE, NSID_DEFAULT);
         test_assert(error == 0);
 
         // Also need to give the MO rde since FS clients need some MO for requests
-        error = pd_client_share_rde(&new_pd, GPICAP_TYPE_MO);
+        error = pd_client_share_rde(&new_pd, GPICAP_TYPE_MO, NSID_DEFAULT);
         test_assert(error == 0);
     }
 

@@ -230,10 +230,12 @@ int pd_client_start(pd_client_context_t *conn, int argc, seL4_Word *args)
 
 int pd_client_add_rde(pd_client_context_t *conn,
                       seL4_CPtr server_pd,
-                      uint64_t manager_id)
+                      uint64_t manager_id,
+                      uint64_t ns_id)
 {
     seL4_SetMR(PDMSGREG_FUNC, PD_FUNC_ADD_RDE_REQ);
-    seL4_SetMR(PDMSGREG_ADD_RDE_REQ_ID, manager_id);
+    seL4_SetMR(PDMSGREG_ADD_RDE_REQ_MANAGER_ID, manager_id);
+    seL4_SetMR(PDMSGREG_ADD_RDE_REQ_NSID, ns_id);
     seL4_SetCap(0, server_pd);
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 1,
                                                   PDMSGREG_ADD_RDE_REQ_END);
@@ -243,10 +245,12 @@ int pd_client_add_rde(pd_client_context_t *conn,
 }
 
 int pd_client_share_rde(pd_client_context_t *conn,
-                        gpi_cap_t cap_type)
+                        gpi_cap_t cap_type,
+                        uint64_t ns_id)
 {
     seL4_SetMR(PDMSGREG_FUNC, PD_FUNC_SHARE_RDE_REQ);
     seL4_SetMR(PDMSGREG_SHARE_RDE_REQ_TYPE, cap_type);
+    seL4_SetMR(PDMSGREG_SHARE_RDE_REQ_NS, ns_id);
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 1,
                                                   PDMSGREG_SHARE_RDE_REQ_END);
     tag = seL4_Call(conn->badged_server_ep_cspath.capPtr, tag);
@@ -270,6 +274,28 @@ int pd_client_register_resource_manager(pd_client_context_t *conn,
     return 0;
 }
 
+/**
+ * To be called by a resource manager to allocate a new namespace
+ * It will use the given ns_id to refer to the ns in the future
+ *
+ * @param conn the resource server's pd connection
+ * @param manager_id manager ID
+ * @param ns_id returns the namespace ID
+ */
+int pd_client_register_namespace(pd_client_context_t *conn,
+                                 seL4_Word manager_id,
+                                 seL4_Word *ns_id)
+{
+    seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0,
+                                                  PDMSGREG_REGISTER_NS_REQ_END);
+    seL4_SetMR(PDMSGREG_FUNC, PD_FUNC_REGISTER_NS_REQ);
+    seL4_SetMR(PDMSGREG_REGISTER_NS_REQ_MANAGER_ID, manager_id);
+    tag = seL4_Call(conn->badged_server_ep_cspath.capPtr, tag);
+    assert(seL4_MessageInfo_ptr_get_label(&tag) == 0);
+    *ns_id = seL4_GetMR(PDMSGREG_REGISTER_NS_ACK_NSID);
+    return 0;
+}
+
 int pd_client_create_resource(pd_client_context_t *conn,
                               gpi_cap_t manager_id,
                               seL4_Word resource_id)
@@ -286,12 +312,14 @@ int pd_client_create_resource(pd_client_context_t *conn,
 
 int pd_client_give_resource(pd_client_context_t *conn,
                             seL4_Word manager_id,
+                            seL4_Word ns_id,
                             seL4_Word recipient_id,
                             seL4_Word resource_id,
                             seL4_CPtr *dest)
 {
     seL4_SetMR(PDMSGREG_FUNC, PD_FUNC_GIVE_RES_REQ);
     seL4_SetMR(PDMSGREG_GIVE_RES_REQ_MANAGER_ID, manager_id);
+    seL4_SetMR(PDMSGREG_GIVE_RES_REQ_NS_ID, ns_id);
     seL4_SetMR(PDMSGREG_GIVE_RES_REQ_CLIENT_ID, recipient_id);
     seL4_SetMR(PDMSGREG_GIVE_RES_REQ_RES_ID, resource_id);
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0,

@@ -24,12 +24,14 @@
 
 #define MAX_PD_NAME 64
 #define MAX_PD_OSM_CAPS 512
-#define MAX_PD_OSM_RDE (GPICAP_TYPE_MAX + (MAX_NS_PER_RDE * (GPICAP_TYPE_MAX - 1)))
+#define MAX_PD_OSM_RDE GPICAP_TYPE_MAX *MAX_NS_PER_RDE
 #define MAX_NS_PER_RDE 8
 
 #define MAX_PD_INIT_CAPS 8
 
 #define PD_ALLOCATOR_STATIC_POOL_SIZE ((1 << seL4_PageBits) * 20)
+
+#define NSID_DEFAULT 1 // Default namespace ID
 
 // (XXX) This is not yet used anywher.
 typedef struct pd_name
@@ -111,7 +113,7 @@ typedef struct _osm_pd_init_data
     // Resource directory
     // ADS ID of the PD's current binded ADS
     uint32_t binded_ads_ns_id;
-    osmosis_rde_t rde[MAX_PD_OSM_RDE];
+    osmosis_rde_t rde[GPICAP_TYPE_MAX][MAX_NS_PER_RDE];
     uint64_t rde_count;
 } osm_pd_init_data_t;
 
@@ -371,3 +373,17 @@ int pd_add_rde(pd_t *pd,
 int copy_cap_to_pd(pd_t *to_pd,
                    seL4_CPtr cap,
                    seL4_Word *slot);
+
+/**
+ * Gets the entry of the PD's RDE corresponding
+ * to the type and namespace id
+ * (XXX) Arya: Maybe poor design that we need this at all
+ *
+ * @param type The RDE type
+ * @param ns_id The namespace id, or NS_DEFAULT for the default
+ * @return The seL4_CPtr of the RDE in the current cspace,
+ *         or seL4_CapNull if not found
+ */
+osmosis_rde_t *pd_rde_get(pd_t *pd,
+                          gpi_cap_t type,
+                          uint32_t ns_id);

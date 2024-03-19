@@ -33,15 +33,17 @@
 uint64_t ads_assign_new_badge_and_objectID(ads_component_registry_entry_t *reg)
 {
     get_ads_component()->registry_n_entries++;
+    uint64_t new_id = NSID_DEFAULT + get_ads_component()->registry_n_entries;
+
     // Add the latest ID to the obj and to the badlge.
     seL4_Word badge_val = gpi_new_badge(GPICAP_TYPE_ADS,
                                         0x00,
                                         0x00,
-                                        0x00,
-                                        get_ads_component()->registry_n_entries);
+                                        NSID_DEFAULT,
+                                        new_id);
 
     assert(badge_val != 0);
-    reg->ads.ads_obj_id = get_ads_component()->registry_n_entries;
+    reg->ads.ads_obj_id = new_id;
     OSDB_PRINTF(ADSSERVS "ads_assign_new_badge_and_objectID: new badge: %lx\n", badge_val);
     return badge_val;
 }
@@ -431,7 +433,7 @@ static void handle_shallow_copy_req(seL4_Word sender_badge)
 
 void ads_handle_allocation_request(seL4_MessageInfo_t tag, seL4_Word sender_badge, cspacepath_t *received_cap, seL4_MessageInfo_t *reply_tag)
 {
-    if (get_ns_id_from_badge(sender_badge) == 0)
+    if (get_ns_id_from_badge(sender_badge) == NSID_DEFAULT)
     {
         handle_ads_allocation(sender_badge, reply_tag);
     }

@@ -28,9 +28,6 @@ int ads_component_client_connect(seL4_CPtr server_ep_cap,
                            /* This works coz we have a single level cnode with no guard.*/
                            seL4_WordBits); /* Depth i.e. how many bits of free_slot to interpret*/
 
-    OSDB_PRINTF(ADSSERVC "gpi endpoint is %lu:", server_ep_cap);
-    // debug_cap_identify(ADSSERVC, server_ep_cap);
-
     OSDB_PRINTF(ADSSERVC "Set a receive path for the badged ep: %d\n", (int) free_slot);
 
     /* Set request type */

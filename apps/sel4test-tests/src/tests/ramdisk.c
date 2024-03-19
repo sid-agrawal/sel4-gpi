@@ -63,7 +63,7 @@ int test_ramdisk(env_t env)
     test_assert(error == 0);
 
     /* Add the ramdisk to local RD */
-    error = pd_client_add_rde(&pd_conn, ramdisk_pd_cap, ramdisk_id);
+    error = pd_client_add_rde(&pd_conn, ramdisk_pd_cap, ramdisk_id, NSID_DEFAULT);
     test_assert(error == 0);
     seL4_CPtr ramdisk_client_ep = sel4gpi_get_rde(GPICAP_TYPE_BLOCK);
 

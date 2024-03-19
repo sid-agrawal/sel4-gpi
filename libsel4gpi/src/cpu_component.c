@@ -39,7 +39,7 @@ uint64_t cpu_assign_new_badge_and_objectID(cpu_component_registry_entry_t *reg)
     seL4_Word badge_val = gpi_new_badge(GPICAP_TYPE_CPU,
                                         0x00,
                                         0x00,
-                                        0x00,
+                                        NSID_DEFAULT,
                                         get_cpu_component()->registry_n_entries);
 
     assert(badge_val != 0);
