@@ -44,11 +44,27 @@ int cpu_start(cpu_t *cpu,
  * @param vspace vspace i.e. root PT cap
  * @return int 0 on success, -1 on failure.
  */
+
+/**
+ * @brief
+ *
+ * @param cpu cpu opject
+ * @param vka
+ * @param vspace
+ * @param cspace
+ * @param fault_ep endpoint for fault handling
+ * @param ipc_buffer true if we want to create an IPC buffer for the TCB
+ * @return int
+ */
 int cpu_config_vspace(cpu_t *cpu,
                       vka_t *vka,
                       vspace_t *vspace,
-                      seL4_CNode cspace,
-                      seL4_CPtr fault_ep);
+                      seL4_CNode root_cnode,
+                      seL4_Word cnode_guard,
+                      seL4_CPtr fault_ep,
+                      seL4_CPtr ipc_buffer_frame,
+                      seL4_Word ipc_buf_addr,
+                      void *stack_top);
 
 /**
  * @brief Change the vspace of the CPU object

@@ -108,7 +108,6 @@ int ads_attach(ads_t *ads,
     /* Reserver the range in the vspace */
     seL4_CapRights_t rights = seL4_AllRights;
     reservation_t res;
-
     if (vaddr == NULL)
     {
         res = sel4utils_reserve_range_aligned(target,

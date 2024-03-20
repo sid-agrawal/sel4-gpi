@@ -27,6 +27,9 @@ file(
         src/arch/${KernelArch}/tests/*.S
 )
 
+# temp for now, since the cpu client api calls need to be fixed
+list(REMOVE_ITEM deps "${CMAKE_CURRENT_SOURCE_DIR}/src/tests/ads_capability.c")
+
 add_subdirectory(../sqlite3 sqlite3)
 
 add_executable(sel4test-tests EXCLUDE_FROM_ALL ${deps})

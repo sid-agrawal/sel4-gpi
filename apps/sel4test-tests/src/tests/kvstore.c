@@ -88,8 +88,15 @@ static int start_kvstore_server(seL4_CPtr *kvstore_ep, uint64_t fs_nsid, uint64_
     error = ads_component_client_connect(sel4gpi_get_rde(GPICAP_TYPE_ADS), free_slot, &new_ads);
     test_assert(error == 0);
 
+    error = pd_client_next_slot(&pd_conn, &free_slot);
+    test_assert(error == 0);
+
+    cpu_client_context_t new_cpu;
+    error = cpu_component_client_connect(sel4gpi_get_rde(GPICAP_TYPE_CPU), free_slot, &new_cpu);
+    assert(error == 0);
+
     // Make a new AS, loads an image
-    error = pd_client_load(&new_pd, &new_ads, KVSTORE_SERVER_APP);
+    error = pd_client_load(&new_pd, &new_ads, &new_cpu, KVSTORE_SERVER_APP);
     test_assert(error == 0);
 
     // Setup the hello PD's args
@@ -167,8 +174,15 @@ static int start_hello_kvstore(bool use_remote_kvstore, seL4_CPtr kvstore_ep, pd
     error = ads_component_client_connect(sel4gpi_get_rde(GPICAP_TYPE_ADS), free_slot, &new_ads);
     test_assert(error == 0);
 
+    error = pd_client_next_slot(&pd_conn, &free_slot);
+    test_assert(error == 0);
+
+    cpu_client_context_t new_cpu;
+    error = cpu_component_client_connect(sel4gpi_get_rde(GPICAP_TYPE_CPU), free_slot, &new_cpu);
+    assert(error == 0);
+
     // Make a new AS, loads an image
-    error = pd_client_load(&new_pd, &new_ads, HELLO_KVSTORE_APP);
+    error = pd_client_load(&new_pd, &new_ads, &new_cpu, HELLO_KVSTORE_APP);
     test_assert(error == 0);
 
     // Setup the hello PD's args

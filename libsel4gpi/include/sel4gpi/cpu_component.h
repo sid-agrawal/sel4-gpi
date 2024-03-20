@@ -81,6 +81,8 @@ enum cpu_component_msgregs
     /* Config */
     /* Its the fault EP in the cspace of the CPU */
     CPUMSGREG_CONFIG_FAULT_EP = CPUMSGREG_LABEL0,
+    CPUMSGREG_CONFIG_IPC_BUF_ADDR,
+    CPUMSGREG_CONFIG_STACK_ADDR,
     CPUMSGREG_CONFIG_REQ_END,
 
     CPUMSGREG_CONFIG_ACK_END = CPUMSGREG_LABEL0,

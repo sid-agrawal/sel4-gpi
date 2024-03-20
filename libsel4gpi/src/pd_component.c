@@ -237,40 +237,6 @@ int forge_pd_cap_from_init_data(
         return 1;
     }
 
-    // (XXX) A lot more will go here.
-    pd->vka = vka;
-    pd->stack_pages = init_data->stack_pages;
-    pd->stack = init_data->stack;
-    pd->page_directory_in_pd = init_data->page_directory;
-    pd->root_cnode_in_pd = init_data->root_cnode;
-    pd->tcb_in_pd = init_data->tcb;
-    pd->domain_in_pd = init_data->domain;
-    pd->asid_pool_in_pd = init_data->asid_pool;
-    pd->asid_ctrl_in_pd = init_data->asid_ctrl;
-
-    // Look at device frame caps and anyother relevant caps
-
-#ifdef CONFIG_IOMMU
-    client_reg_ptr - pd.io_space = init_data->io_space;
-#endif /* CONFIG_IOMMU */
-
-#ifdef CONFIG_TK1_SMMU
-    pd->io_space_caps = init_data->io_space_caps;
-#endif
-
-    pd->cores = init_data->cores;
-    /* copy the sched ctrl caps to the remote process */
-    if (config_set(CONFIG_KERNEL_MCS))
-    {
-        pd->sched_ctrl_in_pd = init_data->sched_ctrl;
-    }
-
-    pd->untypeds = init_data->untypeds;
-    memcpy(
-        pd->untyped_size_bits_list,
-        init_data->untyped_size_bits_list,
-        sizeof(uint8_t) * CONFIG_MAX_NUM_BOOTINFO_UNTYPED_CAPS);
-
     OSDB_PRINTF(PDSERVS "main: Forged a new PD cap(EP: %lx) with badge value: %lx \n",
                 dest.capPtr, badge);
 
@@ -289,8 +255,6 @@ void update_forged_pd_cap_from_init_data(test_init_data_t *init_data, sel4utils_
     pd_t *pd = &reg_ptr->pd;
     assert(pd != NULL);
     assert(pd->pd_obj_id == 0x1);
-    pd->free_slots = init_data->free_slots;
-    pd->cspace_size_bits = init_data->cspace_size_bits;
 
     // Split the test process' cspace and initialize a vka with half
     seL4_CPtr mid_slot = DIV_ROUND_UP(init_data->free_slots.start + init_data->free_slots.end, 2);
@@ -341,8 +305,6 @@ void update_forged_pd_cap_from_init_data(test_init_data_t *init_data, sel4utils_
 
     rde_type_t pd_type = {.type = GPICAP_TYPE_PD};
     pd_add_rde(pd, pd_type, get_gpi_server()->pd_manager_id, NSID_DEFAULT, get_gpi_server()->server_ep_obj.cptr);
-
-    assert(pd->free_slots.start < pd->free_slots.end);
 }
 
 void *get_osmosis_pd_init_data(vspace_t *test_vspace)
@@ -494,6 +456,10 @@ static void handle_load_req(seL4_Word sender_badge,
     ads_component_registry_entry_t *ads_data = ads_component_registry_get_entry_by_badge(badge);
     assert(ads_data != NULL);
 
+    badge = seL4_GetBadge(1);
+    cpu_component_registry_entry_t *cpu_data = cpu_component_registry_get_entry_by_badge(badge);
+    assert(cpu_data != NULL);
+
     const char *image_path = pd_images[seL4_GetMR(PDMSGREG_LOAD_FUNC_IMAGE)];
 
     seL4_CNode cspace_root = received_cap;
@@ -502,8 +468,8 @@ static void handle_load_req(seL4_Word sender_badge,
                           get_pd_component()->server_simple,
                           image_path,
                           get_pd_component()->server_vspace,
-                          ads_data->ads.vspace,
-                          ads_data->ads.root_page_dir);
+                          &ads_data->ads,
+                          &cpu_data->cpu);
     if (error)
     {
         OSDB_PRINTF(PDSERVS "main: Failed to config from client badge:");

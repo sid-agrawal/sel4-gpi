@@ -87,8 +87,14 @@ int start_resource_server_pd(uint64_t rde_id,
     error = ads_component_client_connect(sel4gpi_get_rde(GPICAP_TYPE_ADS), free_slot, &new_ads);
     CHECK_ERROR(error, "failed to create new ads");
 
+    error = pd_client_next_slot(&current_pd, &free_slot);
+    CHECK_ERROR(error, "failed to allocate slot");
+    cpu_client_context_t new_cpu;
+    error = cpu_component_client_connect(sel4gpi_get_rde(GPICAP_TYPE_CPU), free_slot, &new_cpu);
+    CHECK_ERROR(error, "failed to create new cpu");
+
     // Make a new AS, loads an image
-    error = pd_client_load(&new_pd, &new_ads, image_name);
+    error = pd_client_load(&new_pd, &new_ads, &new_cpu, image_name);
     CHECK_ERROR(error, "failed to load pd image");
 
     // Copy the parent ep to the new PD

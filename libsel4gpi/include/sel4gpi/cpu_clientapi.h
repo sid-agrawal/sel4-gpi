@@ -29,7 +29,7 @@ typedef struct _cpu_client_context
  * @return int 0 on success, -1 on failure.
  */
 int cpu_component_client_connect(seL4_CPtr server_ep_cap,
-                                 vka_t *client_vka,
+                                 seL4_CPtr free_slot,
                                  cpu_client_context_t *ret_conn);
 
 /**
@@ -59,10 +59,26 @@ int cpu_client_start(cpu_client_context_t *conn,
  * @param fault_ep W.r.t of the CPU's cspace, the fault endpoint.
  * @return int 0 on success, -1 on failure.
  */
+
+/**
+ * @brief Configure the cpu oject.
+ *
+ * @param conn client connection object
+ * @param ads_conn ads connection object
+ * @param ipc_buf_mo MO of the the ipc buf for the cpu (OPTIONAL)
+ * @param cspace_root cspace root for the cpu object.
+ * @param fault_ep_position W.r.t of the CPU's cspace, the fault endpoint.
+ * @param ipc_buf_addr address to IPC buf (in CPU's vspace)
+ * @param stack_addr address to stack (in CPU's vspace)
+ * @return int
+ */
 int cpu_client_config(cpu_client_context_t *conn,
                       ads_client_context_t *ads_conn,
+                      mo_client_context_t *ipc_buf_mo,
                       seL4_CPtr cspace_root,
-                      seL4_CPtr fault_ep);
+                      seL4_CPtr fault_ep_position,
+                      seL4_Word ipc_buf_addr,
+                      seL4_Word stack_addr);
 
 /**
  * @brief Change just the vspace of the CPU object

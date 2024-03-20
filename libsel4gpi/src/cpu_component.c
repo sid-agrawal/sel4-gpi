@@ -223,8 +223,8 @@ static void handle_config_req(seL4_Word sender_badge,
     OSDB_PRINTF(CPUSERVS " received_cap: ");
     // debug_cap_identify("", received_cap);
 
-    assert(seL4_MessageInfo_get_extraCaps(old_tag) == 2);
-    assert(seL4_MessageInfo_ptr_get_capsUnwrapped(&old_tag) == 1);
+    assert(seL4_MessageInfo_get_extraCaps(old_tag) >= 2);
+    assert(seL4_MessageInfo_ptr_get_capsUnwrapped(&old_tag) >= 1);
     assert(seL4_MessageInfo_get_label(old_tag) == 0);
 
     int error = 0;
@@ -249,9 +249,14 @@ static void handle_config_req(seL4_Word sender_badge,
     /* Get Fault EP */
     seL4_CPtr fault_ep = seL4_GetMR(CPUMSGREG_CONFIG_FAULT_EP);
 
+    /*Get IPC buf addr */
+    seL4_Word ipc_buf_addr = seL4_GetMR(CPUMSGREG_CONFIG_IPC_BUF_ADDR);
+
+    /* Get stack addr*/
+    seL4_Word stack = seL4_GetMR(CPUMSGREG_CONFIG_STACK_ADDR);
+
     /* Get the vspace for the ads */
-    seL4_Word ads_cap_badge = seL4_GetBadge(0);
-    ads_t ads;
+    seL4_Word ads_cap_badge = seL4_GetBadge(1);
     ads_component_registry_entry_t *asre = ads_component_registry_get_entry_by_badge(ads_cap_badge);
     if (asre == NULL)
     {
@@ -264,12 +269,21 @@ static void handle_config_req(seL4_Word sender_badge,
     // /* Get the vspace for the ads */
     vspace_t *ads_vspace = asre->ads.vspace;
 
+    seL4_Word ipc_buf_mo_badge = seL4_GetBadge(2);
+    // it's ok if this doesn't exist
+    mo_component_registry_entry_t *ipc_mo_data = mo_component_registry_get_entry_by_badge(ipc_buf_mo_badge);
+    seL4_CPtr ipc_buf_frame = ipc_mo_data == NULL ? seL4_CapNull : ipc_mo_data->mo.frame_caps_in_root_task[0].cap;
+
     seL4_CNode cspace_root = received_cap;
     error = cpu_config_vspace(&client_data->cpu,
                               get_cpu_component()->server_vka,
                               ads_vspace,
                               cspace_root,
-                              fault_ep);
+                              0,
+                              fault_ep,
+                              ipc_buf_frame,
+                              ipc_buf_addr,
+                              stack);
     if (error)
     {
         OSDB_PRINTF(CPUSERVS "main: Failed to config from client badge:");

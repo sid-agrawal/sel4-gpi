@@ -47,42 +47,40 @@ int cpu_config_vspace(cpu_t *cpu,
                       vka_t *vka,
                       vspace_t *vspace,
                       seL4_CNode root_cnode,
-                      seL4_CPtr fault_ep)
+                      seL4_Word cnode_guard,
+                      seL4_CPtr fault_ep,
+                      seL4_CPtr ipc_buffer_frame,
+                      seL4_Word ipc_buf_addr,
+                      void *stack_top)
 {
     OSDB_PRINTF(CPUSERVS "cpu_config_vspace: Configuring CPU\n");
 
     seL4_CPtr vspace_root = vspace->get_root(vspace); // root page table
     assert(vspace_root != 0);
 
-    cpu->ipc_buffer_addr = vspace_new_ipc_buffer(vspace, &cpu->ipc_buffer_frame);
-    assert(cpu->ipc_buffer_addr != NULL);
-    OSDB_PRINTF(CPUSERVS "%s: line %d\n", __func__, __LINE__);
-
-    OSDB_PRINTF(CPUSERVS "%s: %d\n", __func__, __LINE__);
-    cpu->stack_top = vspace_new_sized_stack(vspace, 8);
-    assert(cpu->stack_top != NULL);
-
-    cpu->tls_base = cpu->stack_top;
-    cpu->stack_top -= 0x100;
     cpu->cspace = root_cnode;
 
     int error = seL4_TCB_Configure(cpu->tcb->cptr,
-                                   seL4_CapNull, // fault endpoint
-                                   root_cnode,   // root cnode
-                                   0,            // root cnode size
+                                   fault_ep,   // fault endpoint
+                                   root_cnode, // root cnode
+                                   cnode_guard,
                                    vspace_root,
                                    0, // domain
-                                   (seL4_Word)cpu->ipc_buffer_addr,
-                                   cpu->ipc_buffer_frame);
+                                   ipc_buf_addr,
+                                   ipc_buffer_frame);
     assert(error == 0);
 
     error = seL4_TCB_SetPriority(cpu->tcb->cptr, seL4_CapInitThreadTCB, 254);
     assert(error == 0);
 
-    error = seL4_TCB_SetTLSBase(cpu->tcb->cptr, (seL4_Word)cpu->stack_top);
-    assert(error == 0);
-
-    cpu->stack_top -= 0x100;
+    if (stack_top != NULL)
+    {
+        cpu->tls_base = stack_top;
+        cpu->stack_top -= 0x100;
+        error = seL4_TCB_SetTLSBase(cpu->tcb->cptr, (seL4_Word)cpu->stack_top);
+        assert(error == 0);
+        cpu->stack_top -= 0x100;
+    }
 
     return 0;
 }

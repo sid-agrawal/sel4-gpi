@@ -41,6 +41,7 @@ int test_new_process_osmosis(env_t env)
 
     seL4_CPtr ads_rde = sel4gpi_get_rde(GPICAP_TYPE_ADS);
     seL4_CPtr pd_rde = sel4gpi_get_rde(GPICAP_TYPE_PD);
+    seL4_CPtr cpu_rde = sel4gpi_get_rde(GPICAP_TYPE_CPU);
 
     seL4_CPtr slot;
     error = vka_cspace_alloc(&env->vka, &slot);
@@ -59,11 +60,18 @@ int test_new_process_osmosis(env_t env)
     error = ads_component_client_connect(ads_rde, slot, &ads_os_cap);
     assert(error == 0);
 
+    error = vka_cspace_alloc(&env->vka, &slot);
+    assert(error == 0);
+
+    cpu_client_context_t cpu_os_cap;
+    error = cpu_component_client_connect(cpu_rde, slot, &cpu_os_cap);
+    assert(error == 0);
+
     error = pd_client_share_rde(&pd_os_cap, GPICAP_TYPE_MO, NSID_DEFAULT);
     assert(error == 0);
 
     // Make a new AS, loads an image
-    error = pd_client_load(&pd_os_cap, &ads_os_cap, "hello");
+    error = pd_client_load(&pd_os_cap, &ads_os_cap, &cpu_os_cap, "hello");
     assert(error == 0);
 
     // Copy the ep_object to the new PD
@@ -75,10 +83,7 @@ int test_new_process_osmosis(env_t env)
     */
 
     // Start the CPU.
-    error = pd_client_start(&pd_os_cap,
-                            /* The (ADS, CPU) tuple to use */
-                            1,
-                            &slot); // with this arg.
+    error = pd_client_start(&pd_os_cap, 0, 0); // with this arg.
     assert(error == 0);
 
     /*********************************************/
@@ -99,18 +104,22 @@ int test_new_process_osmosis(env_t env)
     error = ads_component_client_connect(ads_rde, slot, &ads_os_cap2);
     assert(error == 0);
 
+    error = vka_cspace_alloc(&env->vka, &slot);
+    assert(error == 0);
+
+    cpu_client_context_t cpu_os_cap2;
+    error = cpu_component_client_connect(cpu_rde, slot, &cpu_os_cap2);
+    assert(error == 0);
+
     error = pd_client_share_rde(&pd_os_cap2, GPICAP_TYPE_MO, NSID_DEFAULT);
     assert(error == 0);
 
     // Make a new AS, loads an image
-    error = pd_client_load(&pd_os_cap2, &ads_os_cap2, "hello");
+    error = pd_client_load(&pd_os_cap2, &ads_os_cap2, &cpu_os_cap2, "hello");
     assert(error == 0);
 
     // Start the CPU.
-    error = pd_client_start(&pd_os_cap2,
-                            /* The (ADS, CPU) tuple to use */
-                            1,
-                            &slot); // with this arg.
+    error = pd_client_start(&pd_os_cap2, 0, 0); // with this arg.
     assert(error == 0);
 
     error = pd_client_dump(&pd_os_cap2, NULL, 0);
@@ -150,6 +159,7 @@ int test_new_process_osmosis_shmem(env_t env)
     seL4_CPtr ads_rde = sel4gpi_get_rde(GPICAP_TYPE_ADS);
     seL4_CPtr pd_rde = sel4gpi_get_rde(GPICAP_TYPE_PD);
     seL4_CPtr mo_rde = sel4gpi_get_rde(GPICAP_TYPE_MO);
+    seL4_CPtr cpu_rde = sel4gpi_get_rde(GPICAP_TYPE_CPU);
 
     /* Create a new PD */
     seL4_CPtr slot;
@@ -168,8 +178,15 @@ int test_new_process_osmosis_shmem(env_t env)
     error = ads_component_client_connect(ads_rde, slot, &ads_os_cap);
     assert(error == 0);
 
+    error = vka_cspace_alloc(&env->vka, &slot);
+    assert(error == 0);
+
+    cpu_client_context_t cpu_os_cap;
+    error = cpu_component_client_connect(cpu_rde, slot, &cpu_os_cap);
+    assert(error == 0);
+
     // Make a new AS, loads an image
-    error = pd_client_load(&pd_os_cap, &ads_os_cap, "hello");
+    error = pd_client_load(&pd_os_cap, &ads_os_cap, &cpu_os_cap, "hello");
     assert(error == 0);
     printf("Loaded hello\n");
 
@@ -207,7 +224,6 @@ int test_new_process_osmosis_shmem(env_t env)
     test_error_eq(error, 0);
     // Start the CPU.
     error = pd_client_start(&pd_os_cap,
-                            /* The (ADS, CPU) tuple to use */
                             1,
                             &slot); // with this arg.
     test_error_eq(error, 0);

@@ -16,6 +16,7 @@
 #include <sel4gpi/badge_usage.h>
 #include <sel4gpi/cap_tracking.h>
 #include <sel4gpi/ads_clientapi.h>
+#include <sel4gpi/cpu_obj.h>
 #include <utils/uthash.h>
 
 #define TEST_NAME_MAX (64 - 4 * sizeof(seL4_Word))
@@ -119,100 +120,17 @@ typedef struct _osm_pd_init_data
 
 typedef struct _pd
 {
-    // seL4_CPtr cspace_root;
-    seL4_CPtr fault_endpoint_in_pd;
-
     /* One of these we will keep */
     uint32_t pd_obj_id;
-
+    /* Keeping this, since there's no point in duplicating fields from it in here*/
     sel4utils_process_t proc;
 
-    // CPU_CAP
-    simple_t *simple;
-    vka_t *vka;
-    vspace_t *vspace;
-
-    /* page directory of the test process */
-    seL4_CPtr page_directory_in_pd;
-    /* root cnode of the test process */
-    seL4_CPtr root_cnode_in_pd;
-    /* tcb of the test process */
-    seL4_CPtr tcb_in_pd;
-    /* the domain cap */
-    seL4_CPtr domain_in_pd;
-    /* asid pool cap for the test process to use when creating new processes */
-    seL4_CPtr asid_pool_in_pd;
-    seL4_CPtr asid_ctrl_in_pd;
-#ifdef CONFIG_IOMMU
-    seL4_CPtr io_space;
-#endif /* CONFIG_IOMMU */
-#ifdef CONFIG_TK1_SMMU
-    seL4_SlotRegion io_space_caps;
-#endif
-
-    /* copied (by sel4test-driver) notification cap that tests can wait
-     * on when requesting a time service from sel4test-driver (e.g. sleep),
-     * and expecting a signal and/or notification.
-     */
-    seL4_CPtr timer_ntfn_in_pd;
-
-    /* size of the test processes cspace */
-    seL4_Word cspace_size_bits;
-    /* range of free slots in the cspace */
-    seL4_SlotRegion free_slots;
-
-    /* range of untyped memory in the cspace */
-    seL4_SlotRegion untypeds;
-    /* size of untyped that each untyped cap corresponds to
-     * (size of the cap at untypeds.start is untyped_size_bits_lits[0]) */
-    uint8_t untyped_size_bits_list[CONFIG_MAX_NUM_BOOTINFO_UNTYPED_CAPS];
-    /* name of the test to run */
-    char name[TEST_NAME_MAX];
-    /* priority the test process is running at */
-    int priority;
-
-    /* sched control cap */
-    seL4_CPtr sched_ctrl_in_pd;
-
-    /* device frame cap */
-    seL4_CPtr device_frame_cap;
-
-    /* List of elf regions in the test process image, this
-     * is provided so the test process can launch copies of itself.
-     *
-     * Note: copies should not rely on state from the current process
-     * or the image. Only use copies to run code functions, pass all
-     * required state as arguments. */
-    sel4utils_elf_region_t elf_regions[20];
-
-    /* the number of elf regions */
-    int num_elf_regions;
-
-    /* the number of pages in the stack */
-    int stack_pages;
-
-    /* address of the stack */
-    void *stack;
-
-    /* freq of the tsc (for x86) */
-    uint32_t tsc_freq;
-
-    /* number of available cores */
-    seL4_Word cores;
+    /* cnode guard for this PD's cspace */
+    seL4_Word cnode_guard;
 
     /* allocator for the pd's cspace */
     char allocator_mem_pool[PD_ALLOCATOR_STATIC_POOL_SIZE];
     vka_t pd_vka;
-
-    /*
-        There are the resources and RDE which we are explicitly tracking for a PD.
-        They should be updated when the PD get's a new cap via pd_send_cap
-        or a new RDE is added at PD creation time.
-
-        (XXX): This is not yet fully the case yet.
-
-        (XXX) Convert both of there to linked lists
-    */
 
     // PD start state
     int pd_started; // whether or not the pd has been started
@@ -260,8 +178,8 @@ int pd_load_image(pd_t *pd,
                   simple_t *simple,
                   const char *image_path,
                   vspace_t *server_vspace,
-                  vspace_t *target_vspace,
-                  vka_object_t *target_vspace_root_page_dir);
+                  ads_t *target_ads,
+                  cpu_t *target_cpu);
 
 int pd_dump(pd_t *pd);
 

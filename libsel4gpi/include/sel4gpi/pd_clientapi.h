@@ -13,6 +13,7 @@
 
 #include <sel4gpi/pd_component.h>
 #include <sel4gpi/ads_clientapi.h>
+#include <sel4gpi/cpu_clientapi.h>
 
 // Default cap root and depth for pd cspace
 #define PD_CAP_ROOT SEL4UTILS_CNODE_SLOT
@@ -53,6 +54,7 @@ int pd_component_client_disconnect(pd_client_context_t *conn);
  */
 int pd_client_load(pd_client_context_t *pd_os_cap,
                    ads_client_context_t *ads_os_cap,
+                   cpu_client_context_t *cpu_os_cap,
                    const char *image);
 
 /**

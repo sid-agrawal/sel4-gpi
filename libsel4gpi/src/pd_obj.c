@@ -33,8 +33,13 @@
 #include <allocman/vka.h>
 #include <simple/simple_helpers.h>
 #include <utils/uthash.h>
+#include <cpio/cpio.h>
 
 #define CSPACE_SIZE_BITS 17
+
+/* This is doesn't belong here but we need it */
+extern char _cpio_archive[];
+extern char _cpio_archive_end[];
 
 int copy_cap_to_pd(pd_t *to_pd,
                    seL4_CPtr cap,
@@ -51,7 +56,7 @@ int copy_cap_to_pd(pd_t *to_pd,
     }
 
     cspacepath_t src, dest;
-    vka_cspace_make_path(to_pd->vka, cap, &src);
+    vka_cspace_make_path(get_gpi_server()->server_vka, cap, &src);
     vka_cspace_make_path(&to_pd->pd_vka, free_slot, &dest);
 
     error = vka_cnode_copy(&dest, &src, seL4_AllRights);
@@ -153,7 +158,7 @@ int pd_add_rde(pd_t *pd,
 
     // Badge the raw endpoint for the client PD
     cspacepath_t src, dest;
-    vka_cspace_make_path(pd->vka, server_ep, &src);
+    vka_cspace_make_path(get_gpi_server()->server_vka, server_ep, &src);
 
     int error = vka_cspace_alloc_path(&pd->pd_vka, &dest);
     if (error)
@@ -166,8 +171,6 @@ int pd_add_rde(pd_t *pd,
                                         client_id,
                                         ns_id,
                                         BADGE_OBJ_ID_NULL);
-
-
 
     error = vka_cnode_mint(&dest,
                            &src,
@@ -197,8 +200,6 @@ int pd_new(pd_t *pd,
     pd->has_access_to_count = 0;
     pd->has_access_to = NULL; // required for uthash initialization
     pd->pd_started = false;
-    pd->vka = server_vka;
-    pd->vspace = server_vspace;
 
     // Create the MO for the PD's init data
     vka_object_t frame;
@@ -345,95 +346,190 @@ int pd_bootstrap_allocator(pd_t *pd,
     return 0;
 }
 
+static int pd_setup_proc(pd_t *pd, vka_t *server_vka, vspace_t *server_vspace, ads_t *target_ads, const char *image_name)
+{
+    int error;
+
+    unsigned long size;
+    unsigned long cpio_len = _cpio_archive_end - _cpio_archive;
+    char const *file = cpio_get_file(_cpio_archive, cpio_len, image_name, &size);
+    elf_t elf;
+    elf_newFile(file, size, &elf);
+
+    // (XXX) Linh: Do we need to add the ELF regions to the PD as resources?
+    pd->proc.entry_point = sel4utils_elf_load(target_ads->vspace, server_vspace, server_vka, server_vka, &elf);
+    if (pd->proc.entry_point == NULL)
+    {
+        ZF_LOGE("Failed to load elf file\n");
+        goto error;
+    }
+
+    pd->proc.sysinfo = sel4utils_elf_get_vsyscall(&elf);
+
+    /* Retrieve the ELF phdrs */
+    pd->proc.num_elf_phdrs = sel4utils_elf_num_phdrs(&elf);
+    pd->proc.elf_phdrs = calloc(pd->proc.num_elf_phdrs, sizeof(Elf_Phdr));
+    if (!pd->proc.elf_phdrs)
+    {
+        ZF_LOGE("Failed to allocate memory for elf phdr information");
+        goto error;
+    }
+    sel4utils_elf_read_phdrs(&elf, pd->proc.num_elf_phdrs, pd->proc.elf_phdrs);
+
+    /* select the default page size of machine this process is running on */
+    pd->proc.pagesz = PAGE_SIZE_4K;
+
+    /* set up IPC buffer */
+    pd->proc.thread.ipc_buffer_addr = (seL4_Word)vspace_new_ipc_buffer(target_ads->vspace, &pd->proc.thread.ipc_buffer);
+    if (pd->proc.thread.ipc_buffer_addr == 0)
+    {
+        ZF_LOGE("Failed to allocate PD's IPC buffer");
+        goto error;
+    }
+
+    /* set up stack */
+    pd->proc.thread.stack_size = BYTES_TO_4K_PAGES(CONFIG_SEL4UTILS_STACK_SIZE);
+    pd->proc.thread.stack_top = vspace_new_sized_stack(target_ads->vspace, pd->proc.thread.stack_size);
+    if (pd->proc.thread.stack_top == NULL)
+    {
+        ZF_LOGE("Failed to allocate PD's stack");
+        goto error;
+    }
+    return 0;
+error:
+    if (pd->proc.elf_regions)
+    {
+        free(pd->proc.elf_regions);
+    }
+
+    if (pd->proc.elf_phdrs)
+    {
+        free(pd->proc.elf_phdrs);
+    }
+
+    if (pd->proc.thread.ipc_buffer_addr)
+    {
+        vspace_free_ipc_buffer(target_ads->vspace, (void *)pd->proc.thread.ipc_buffer_addr);
+    }
+
+    if (pd->proc.thread.stack_top)
+    {
+        vspace_free_sized_stack(target_ads->vspace, pd->proc.thread.stack_top, pd->proc.thread.stack_size);
+    }
+
+    return -1;
+}
+
+static int pd_setup_common(pd_t *pd, vka_t *vka, vspace_t *server_vspace, ads_t *target_ads)
+{
+    int error;
+    int size_bits = CSPACE_SIZE_BITS;
+    pd->cnode_guard = api_make_guard_skip_word(seL4_WordBits - size_bits);
+    memcpy(&pd->proc.pd, target_ads->root_page_dir, sizeof(vka_object_t));
+
+    error = vka_alloc_endpoint(vka, &pd->proc.fault_endpoint);
+    ZF_LOGE_IFERR(error, "Failed to create PD's fault endpoint");
+
+    error = vka_alloc_cnode_object(vka, size_bits, &pd->proc.cspace);
+    ZF_LOGE_IFERR(error, "Failed to create cspace");
+    if (error)
+    {
+        goto error;
+    }
+    pd->proc.cspace_size = size_bits;
+    /* first slot is always 1, never allocate 0 as a cslot */
+    pd->proc.cspace_next_free = 1;
+
+    /*  mint the cnode cap into the process cspace */
+    cspacepath_t src;
+    vka_cspace_make_path(vka, pd->proc.cspace.cptr, &src);
+    cspacepath_t dest = {.capPtr = pd->proc.cspace_next_free, .root = src.capPtr, .capDepth = pd->proc.cspace_size};
+    error = vka_cnode_mint(&dest, &src, seL4_AllRights, pd->cnode_guard);
+    ZF_LOGE_IFERR(error, "Failed to mint PD's cnode into its cspace");
+    pd->proc.cspace_next_free++;
+
+    /* copy over initial caps to PD (XXX) Linh: disabling for now bc unclear if we need this */
+#if 0
+    /* copy fault endpoint cap into process cspace */
+    vka_cspace_make_path(vka, fault_ep.cptr, &src);
+    error = vka_cnode_copy(&dest, &src, seL4_AllRights);
+    ZF_LOGE_IFERR("Failed to copy PD's fault EP to its cspace");
+    cspace_next_free++;
+
+    /* copy page directory cap into process cspace */
+    vka_cspace_make_path(vka, process->pd.cptr, &src);
+    error = vka_cnode_copy(&dest, &src, seL4_AllRights);
+    ZF_LOGE_IFERR(error, "Failed to copy PD's page directory cap to its cspace");
+    cspace_next_free++;
+
+    if (!config_set(CONFIG_X86_64))
+    {
+        vka_cspace_make_path(vka, seL4_CapInitThreadASIDPool, &src);
+        error = vka_cnode_copy(&dest, &src, seL4_AllRights);
+        ZF_LOGE_IFERR(error, "Failed to copy ASID pool cap to PD");
+    }
+    cspace_next_free++;
+#endif
+    return 0;
+
+error:
+    /* try to clean up */
+    if (pd->proc.fault_endpoint.cptr != 0)
+    {
+        vka_free_object(vka, &pd->proc.fault_endpoint);
+    }
+
+    if (pd->proc.cspace.cptr != 0)
+    {
+        vka_free_object(vka, &pd->proc.cspace);
+    }
+
+    if (pd->proc.pd.cptr != 0)
+    {
+        vka_free_object(vka, &pd->proc.pd);
+        if (pd->proc.vspace.data != 0)
+        {
+            ZF_LOGE("Could not clean up vspace\n");
+        }
+    }
+
+    return -1;
+}
+
 int pd_load_image(pd_t *pd,
                   vka_t *vka,
                   simple_t *simple,
                   const char *image_path,
                   vspace_t *server_vspace,
-                  vspace_t *target_vspace,
-                  vka_object_t *target_vspace_root_page_dir)
+                  ads_t *target_ads,
+                  cpu_t *target_cpu)
 {
-
     int error = 0;
     OSDB_PRINTF(PDSERVS "load_image: loading image %s for pd %p\n", image_path, pd);
-
-    /* There are just setting up the config */
-    pd->config = process_config_default_simple(simple, image_path, 255);
-    pd->config = process_config_mcp(pd->config, seL4_MaxPrio);
-    pd->config = process_config_auth(pd->config, simple_get_tcb(simple));
-    pd->config = process_config_create_cnode(pd->config, CSPACE_SIZE_BITS);
-
-    sel4utils_process_config_t config = pd->config;
-    /* This is doing actual works of setting up the PD's address space */
-    error = sel4utils_osm_configure_process_custom(&(pd->proc),
-                                                   // get_pd_component()->server_vka,
-                                                   pd->vka,
-                                                   server_vspace,
-                                                   target_vspace,
-                                                   target_vspace_root_page_dir,
-                                                   config);
+    error = pd_setup_common(pd, vka, server_vspace, target_ads);
     assert(error == 0);
 
-#if CONFIG_MAX_NUM_NODES > 1
-    seL4_Error syserr = seL4_TCB_SetAffinity(pd->proc.thread.tcb.cptr, 1);
-    ZF_LOGE_IFERR(syserr, "Failed to set TCB Affinity");
-#endif // CONFIG_MAX_NUM_NODES > 1
+    // (XXX) Linh: we may not always setup the PD as a proc
+    error = pd_setup_proc(pd, vka, server_vspace, target_ads, image_path);
+    assert(error == 0);
+
+    error = cpu_config_vspace(target_cpu, vka, target_ads->vspace,
+                              pd->proc.cspace.cptr,
+                              pd->cnode_guard,
+                              pd->proc.fault_endpoint.cptr,
+                              pd->proc.thread.ipc_buffer,
+                              pd->proc.thread.ipc_buffer_addr,
+                              pd->proc.thread.stack_top);
+
+    pd->proc.thread.tcb = *(target_cpu->tcb);
 
     /* Initialize a vka for the PD's cspace */
     error = pd_bootstrap_allocator(pd, pd->proc.cspace.cptr, pd->proc.cspace_next_free,
                                    BIT(CSPACE_SIZE_BITS), CSPACE_SIZE_BITS, 0);
     assert(error == 0);
 
-    /* Add the forged MOs*/
-
-    /* set up caps about the process */
-    pd->stack_pages = CONFIG_SEL4UTILS_STACK_SIZE / PAGE_SIZE_4K;
-    pd->stack = pd->proc.thread.stack_top - CONFIG_SEL4UTILS_STACK_SIZE;
-    copy_cap_to_pd(pd, pd->proc.pd.cptr, &pd->page_directory_in_pd);
-    pd->root_cnode_in_pd = SEL4UTILS_CNODE_SLOT;
-    copy_cap_to_pd(pd, pd->proc.thread.tcb.cptr, &pd->tcb_in_pd);
-    // if (config_set(CONFIG_HAVE_TIMER)) {
-    //     pd->timer_ntfn = sel4utils_copy_cap_to_process(&(pd->proc), pd->vka, env->timer_notify_test.cptr);
-    // }
-
-    /* NOTE:
-       The return from sel4utils_copy_cap_to_process is the slot in the cnode where the cap was placed
-       in the child process' cspace
-    */
-    copy_cap_to_pd(pd, simple_get_init_cap(simple, seL4_CapDomain), &pd->domain_in_pd);
-    copy_cap_to_pd(pd, simple_get_init_cap(simple, seL4_CapInitThreadASIDPool), &pd->asid_pool_in_pd);
-    copy_cap_to_pd(pd, simple_get_init_cap(simple, seL4_CapASIDControl), &pd->asid_ctrl_in_pd);
-#ifdef CONFIG_IOMMU
-    pd->io_space = sel4utils_copy_cap_to_process(&(pd->proc), pd->vka, simple_get_init_cap(simple, seL4_CapIOSpace));
-#endif /* CONFIG_IOMMU */
-#ifdef CONFIG_TK1_SMMU
-    env->init->io_space_caps = arch_copy_iospace_caps_to_process(&(pd->proc), &env);
-#endif
-    pd->cores = simple_get_core_count(simple);
-    /* copy the sched ctrl caps to the remote process */
-    if (config_set(CONFIG_KERNEL_MCS))
-    {
-        seL4_CPtr sched_ctrl = simple_get_sched_ctrl(simple, 0);
-        copy_cap_to_pd(pd, sched_ctrl, &pd->sched_ctrl_in_pd);
-
-        for (int i = 1; i < pd->cores; i++)
-        {
-            sched_ctrl = simple_get_sched_ctrl(simple, i);
-            copy_cap_to_pd(pd, sched_ctrl, NULL);
-        }
-    }
-    /* setup data about untypeds */
-    // pd->untypeds = copy_untypeds_to_process(&(pd->proc),
-    //                                                env->untypeds,
-    //                                                env->num_untypeds,
-    //                                                env);
-    /* copy the fault endpoint - we wait on the endpoint for a message
-     * or a fault to see when the test finishes */
-    copy_cap_to_pd(pd, pd->proc.fault_endpoint.cptr, &pd->fault_endpoint_in_pd);
-
     // the ADS cap is both a resource manager and a resource
-    // (XXX) Arya: Pending re-design, the ADS component serves virtual mem to an ADS
-    error = forge_ads_cap_from_vspace(&pd->proc.vspace, pd->vka, pd->pd_obj_id, &pd->ads_cap_in_RT, &pd->ads_obj_id);
+    error = forge_ads_cap_from_vspace(&pd->proc.vspace, get_gpi_server()->server_vka, pd->pd_obj_id, &pd->ads_cap_in_RT, &pd->ads_obj_id);
     ZF_LOGF_IFERR(error, "Failed to forge child's as cap");
 
     // Send the ADS cap as a resource
@@ -450,32 +546,14 @@ int pd_load_image(pd_t *pd,
 
     // Send CPU cap as a resource
     uint32_t cpu_obj_id;
-    error = forge_cpu_cap_from_tcb(&pd->proc, pd->vka, pd->pd_obj_id, &pd->cpu_cap_in_RT, &cpu_obj_id);
+    error = forge_cpu_cap_from_tcb(&pd->proc, get_gpi_server()->server_vka, pd->pd_obj_id, &pd->cpu_cap_in_RT, &cpu_obj_id);
     badge = gpi_new_badge(GPICAP_TYPE_CPU, 0x00, pd->pd_obj_id, NSID_DEFAULT, cpu_obj_id);
     pd_send_cap(pd, pd->cpu_cap_in_RT, badge, &pd->init_data->cpu_cap);
     ZF_LOGF_IFERR(error, "Failed to send CPU cap to PD");
 
-    /* set up free slot range */
-    pd->cspace_size_bits = pd->proc.cspace_size;
+    memcpy(&pd->proc.vspace, target_ads->vspace, sizeof(vspace_t));
 
-    OSDB_PRINTF("%s: %d\n", __FUNCTION__, __LINE__);
-    uint32_t num_mo_caps = 0;
-    seL4_CPtr mo_caps[MAX_MO_CHILD];
-    OSDB_PRINTF("%s: %d\n", __FUNCTION__, __LINE__);
-    error = forge_mo_caps_from_vspace(target_vspace,
-                                      pd->vka,
-                                      pd->pd_obj_id,
-                                      &num_mo_caps,
-                                      mo_caps);
-    assert(error == 0);
-
-    memcpy(&pd->proc.vspace, target_vspace, sizeof(vspace_t));
-
-    pd->free_slots.start = pd->proc.cspace_next_free;
-    OSDB_PRINTF("%s:%d: free_slot.start %ld\n", __FUNCTION__, __LINE__, pd->free_slots.start);
-
-    pd->free_slots.end = (1u << pd->cspace_size_bits);
-    assert(pd->free_slots.start < pd->free_slots.end);
+    OSDB_PRINTF(PDSERVS "PD%d free_slot.start %ld\n", pd->pd_obj_id, pd->proc.cspace_next_free);
     return 0;
 }
 
@@ -484,7 +562,6 @@ int pd_send_cap(pd_t *to_pd,
                 seL4_Word badge,
                 seL4_Word *slot)
 {
-
     /*
         (XXX): Need to handle how sending OSM caps would leand to additional data tracking.
     */
@@ -595,7 +672,6 @@ int pd_send_cap(pd_t *to_pd,
         // Just copy it to the child.
     }
 
-    OSDB_PRINTF(PDSERVS "pd_send_cap: copying cap to child: %lu\n", *slot);
     error = copy_cap_to_pd(to_pd, cap, slot);
     if (error != 0)
     {
@@ -626,12 +702,6 @@ int pd_start(pd_t *pd,
     // Send the PD's PD resource
     seL4_Word badge = gpi_new_badge(GPICAP_TYPE_PD, 0x00, pd->pd_obj_id, NSID_DEFAULT, pd->pd_obj_id);
     pd_send_cap(pd, pd_endpoint_in_root, badge, &pd->init_data->pd_cap);
-
-    //error = copy_cap_to_pd(pd, pd_endpoint_in_root, &pd->init_data->pd_cap);
-    //if (error)
-    //{
-    //    ZF_LOGF("Failed to send PD cap to child");
-    //}
 
     // Map init data to the PD
     error = ads_component_attach(pd->ads_obj_id, pd->init_data_mo_id, NULL, (void **)&pd->init_data_in_PD);
@@ -665,7 +735,7 @@ int pd_start(pd_t *pd,
     OSDB_PRINTF(PDSERVS "pd_start: starting PD\n");
     error = sel4utils_osm_spawn_process_v(&(pd->proc),
                                           (void *)pd->init_data_in_PD,
-                                          pd->vka,
+                                          get_gpi_server()->server_vka,
                                           server_vspace,
                                           argc,
                                           argv,
@@ -705,14 +775,14 @@ int pd_dump(pd_t *pd)
 
     /* Allocate memory for remote rr requests */
     vka_object_t rr_frame_obj;
-    error = vka_alloc_frame(pd->vka, seL4_PageBits, &rr_frame_obj);
+    error = vka_alloc_frame(get_gpi_server()->server_vka, seL4_PageBits, &rr_frame_obj);
     if (error != seL4_NoError)
     {
         return error;
     }
 
     cspacepath_t rr_frame_path;
-    vka_cspace_make_path(pd->vka, rr_frame_obj.cptr, &rr_frame_path);
+    vka_cspace_make_path(get_gpi_server()->server_vka, rr_frame_obj.cptr, &rr_frame_path);
 
     void *rr_local_vaddr = vspace_map_pages(get_pd_component()->server_vspace, &rr_frame_obj.cptr, NULL,
                                             seL4_AllRights, 1, seL4_PageBits, 1);
@@ -834,7 +904,7 @@ int pd_dump(pd_t *pd)
 
             // Pre-map the memory so resource server does not need to call root task
             cspacepath_t rr_frame_copy_path;
-            int error = vka_cspace_alloc_path(pd->vka, &rr_frame_copy_path);
+            int error = vka_cspace_alloc_path(get_gpi_server()->server_vka, &rr_frame_copy_path);
             if (error != seL4_NoError)
             {
                 OSDB_PRINTF(PDSERVS "Failed to allocate path for RR frame copy %d", error);

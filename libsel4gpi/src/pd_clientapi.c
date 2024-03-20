@@ -47,6 +47,7 @@ int pd_component_client_connect(seL4_CPtr server_ep_cap,
 
 int pd_client_load(pd_client_context_t *pd_os_cap,
                    ads_client_context_t *ads_os_cap,
+                   cpu_client_context_t *cpu_os_cap,
                    const char *image)
 {
     seL4_SetMR(PDMSGREG_FUNC, PD_FUNC_LOAD_REQ);
@@ -71,8 +72,9 @@ int pd_client_load(pd_client_context_t *pd_os_cap,
 
     seL4_SetMR(PDMSGREG_LOAD_FUNC_IMAGE, image_id);
     seL4_SetCap(0, ads_os_cap->badged_server_ep_cspath.capPtr);
+    seL4_SetCap(1, cpu_os_cap->badged_server_ep_cspath.capPtr);
 
-    seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 1,
+    seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 2,
                                                   PDMSGREG_LOAD_REQ_END);
 
     tag = seL4_Call(pd_os_cap->badged_server_ep_cspath.capPtr, tag);
@@ -118,6 +120,7 @@ int pd_client_next_slot(pd_client_context_t *conn,
     seL4_SetMR(PDMSGREG_FUNC, PD_FUNC_NEXT_SLOT_REQ);
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0,
                                                   PDMSGREG_NEXT_SLOT_REQ_END);
+    OSDB_PRINTF("pd_client_next_slot call\n");
     tag = seL4_Call(conn->badged_server_ep_cspath.capPtr, tag);
     *slot = seL4_GetMR(PDMSGREG_NEXT_SLOT_PD_SLOT);
     assert(seL4_MessageInfo_ptr_get_label(&tag) == 0);
