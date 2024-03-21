@@ -9,7 +9,7 @@
 #include <fs_client.h>
 #include <kvstore_server.h>
 
-#define KVSTORE_DB_FILE_FORMAT "/kvstore_%d.db"
+#define KVSTORE_DB_FILE_FORMAT "kvstore_%d.db"
 #define MAX_KVSTORE_DBS_IN_FS 10 // Maximum number of kvstores in one file system
 
 static const char *kvstore_db_file = "/kvstore.db";

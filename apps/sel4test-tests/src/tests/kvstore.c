@@ -64,10 +64,11 @@ static int setup(env_t env)
  * Starts the kvstore server process
  *
  * @param kvstore_ep returns the kvstore server's ep
+ * @param fs_nsid namespace ID of fs to share
  * @param fs_manager_id set to a special fs manager id that is not in the current RD (optional)
  * @param fs_pd_cap set to a special fs_ep that is not in the current RD (optional)
  */
-static int start_kvstore_server(seL4_CPtr *kvstore_ep, uint64_t fs_manager_id, seL4_CPtr fs_pd_cap)
+static int start_kvstore_server(seL4_CPtr *kvstore_ep, uint64_t fs_nsid, uint64_t fs_manager_id, seL4_CPtr fs_pd_cap)
 {
     int error;
 
@@ -103,13 +104,13 @@ static int start_kvstore_server(seL4_CPtr *kvstore_ep, uint64_t fs_manager_id, s
     if (fs_pd_cap)
     {
         // Share a new FS RDE
-        error = pd_client_add_rde(&new_pd, fs_pd_cap, fs_manager_id, NSID_DEFAULT);
+        error = pd_client_add_rde(&new_pd, fs_pd_cap, fs_manager_id, fs_nsid);
         test_assert(error == 0);
     }
     else
     {
         // Share our own FS RDE
-        error = pd_client_share_rde(&new_pd, GPICAP_TYPE_FILE, NSID_DEFAULT);
+        error = pd_client_share_rde(&new_pd, GPICAP_TYPE_FILE, fs_nsid);
         test_assert(error == 0);
     }
 
@@ -219,6 +220,7 @@ int test_kvstore_lib_in_same_pd(env_t env)
     /* Start the combined app/lib PD */
     pd_client_context_t hello_pd;
     error = start_hello_kvstore(false, 0, &hello_pd);
+    test_assert(error == 0);
 
     /* Wait for test result */
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0, 0);
@@ -245,11 +247,13 @@ int test_kvstore_lib_in_diff_pd(env_t env)
 
     /* Start the kvstore PD */
     seL4_CPtr kvstore_ep;
-    error = start_kvstore_server(&kvstore_ep, 0, 0);
+    error = start_kvstore_server(&kvstore_ep, NSID_DEFAULT, 0, 0);
+    test_assert(error == 0);
 
     /* Start the app PD */
     pd_client_context_t hello_pd;
     error = start_hello_kvstore(true, kvstore_ep, &hello_pd);
+    test_assert(error == 0);
 
     /* Wait for test result */
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0, 0);
@@ -276,11 +280,13 @@ int test_2_kvstore_same_fs(env_t env)
 
     /* Start the kvstore PD 1 */
     seL4_CPtr kvstore_ep_1;
-    error = start_kvstore_server(&kvstore_ep_1, 0, 0);
+    error = start_kvstore_server(&kvstore_ep_1, NSID_DEFAULT, 0, 0);
+    test_assert(error == 0);
 
     /* Start the app PD 1 */
     pd_client_context_t hello_pd_1;
     error = start_hello_kvstore(true, kvstore_ep_1, &hello_pd_1);
+    test_assert(error == 0);
 
     /* Wait for test result 1 */
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0, 0);
@@ -294,11 +300,13 @@ int test_2_kvstore_same_fs(env_t env)
     Some concurrency issue with the file system causes a sqlite issue
     */
     seL4_CPtr kvstore_ep_2;
-    error = start_kvstore_server(&kvstore_ep_2, 0, 0);
+    error = start_kvstore_server(&kvstore_ep_2, NSID_DEFAULT, 0, 0);
+    test_assert(error == 0);
 
     /* Start the app PD 2 */
     pd_client_context_t hello_pd_2;
     error = start_hello_kvstore(true, kvstore_ep_2, &hello_pd_2);
+    test_assert(error == 0);
 
     /* Wait for test result 2 */
     tag = seL4_Recv(self_ep, NULL);
@@ -313,6 +321,69 @@ int test_2_kvstore_same_fs(env_t env)
     return sel4test_get_result();
 }
 DEFINE_TEST(GPIKV003, "Test two kvstore with the same FS", test_2_kvstore_same_fs, true)
+
+int test_2_kvstore_diff_namespace(env_t env)
+{
+    int error;
+
+    printf("------------------STARTING TEST: %s------------------\n", __func__);
+
+    error = setup(env);
+    test_assert(error == 0);
+
+    /* Create the FS namespaces */
+    seL4_CPtr fs_ep = sel4gpi_get_rde(GPICAP_TYPE_FILE);
+    uint64_t nsid_1, nsid_2;
+
+    error = resource_server_client_new_ns(fs_ep, &nsid_1);
+    test_assert(error == 0);
+
+    error = resource_server_client_new_ns(fs_ep, &nsid_2);
+    test_assert(error == 0);
+
+    /* Start the kvstore PD 1 */
+    seL4_CPtr kvstore_ep_1;
+    error = start_kvstore_server(&kvstore_ep_1, nsid_1, 0, 0);
+    test_assert(error == 0);
+
+    /* Start the app PD 1 */
+    pd_client_context_t hello_pd_1;
+    error = start_hello_kvstore(true, kvstore_ep_1, &hello_pd_1);
+    test_assert(error == 0);
+
+    /* Wait for test result 1 */
+    seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0, 0);
+    tag = seL4_Recv(self_ep, NULL);
+    error = seL4_MessageInfo_get_label(tag);
+    test_assert(error == 0);
+
+    /* Start the kvstore PD 2 */
+    /*
+    (XXX) Arya: This does not work if done in parallel with the first kvstore!!
+    Some concurrency issue with the file system causes a sqlite issue
+    */
+    seL4_CPtr kvstore_ep_2;
+    error = start_kvstore_server(&kvstore_ep_2, nsid_2, 0, 0);
+    test_assert(error == 0);
+
+    /* Start the app PD 2 */
+    pd_client_context_t hello_pd_2;
+    error = start_hello_kvstore(true, kvstore_ep_2, &hello_pd_2);
+    test_assert(error == 0);
+
+    /* Wait for test result 2 */
+    tag = seL4_Recv(self_ep, NULL);
+    error = seL4_MessageInfo_get_label(tag);
+    test_assert(error == 0);
+
+    /* Print hello model state */
+    // error = pd_client_dump(&hello_pd_1, NULL, 0);
+    // error = pd_client_dump(&hello_pd_2, NULL, 0);
+
+    printf("------------------ENDING: %s------------------\n", __func__);
+    return sel4test_get_result();
+}
+DEFINE_TEST(GPIKV004, "Test two kvstore with the same FS, different namespace", test_2_kvstore_diff_namespace, true)
 
 int test_2_kvstore_different_fs(env_t env)
 {
@@ -329,11 +400,13 @@ int test_2_kvstore_different_fs(env_t env)
 
     /* Start the kvstore PD 1 */
     seL4_CPtr kvstore_ep_1;
-    error = start_kvstore_server(&kvstore_ep_1, 0, 0);
+    error = start_kvstore_server(&kvstore_ep_1, NSID_DEFAULT, 0, 0);
+    test_assert(error == 0);
 
     /* Start the app PD 1 */
     pd_client_context_t hello_pd_1;
     error = start_hello_kvstore(true, kvstore_ep_1, &hello_pd_1);
+    test_assert(error == 0);
 
     /* Wait for test result 1 */
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0, 0);
@@ -343,11 +416,13 @@ int test_2_kvstore_different_fs(env_t env)
 
     /* Start the kvstore PD 2 */
     seL4_CPtr kvstore_ep_2;
-    error = start_kvstore_server(&kvstore_ep_2, fs_2_id, fs_2_pd_cap);
+    error = start_kvstore_server(&kvstore_ep_2, NSID_DEFAULT, fs_2_id, fs_2_pd_cap);
+    test_assert(error == 0);
 
     /* Start the app PD 2 */
     pd_client_context_t hello_pd_2;
     error = start_hello_kvstore(true, kvstore_ep_2, &hello_pd_2);
+    test_assert(error == 0);
 
     /* Wait for test result 2 */
     tag = seL4_Recv(self_ep, NULL);
@@ -361,4 +436,4 @@ int test_2_kvstore_different_fs(env_t env)
     printf("------------------ENDING: %s------------------\n", __func__);
     return sel4test_get_result();
 }
-DEFINE_TEST(GPIKV004, "Test two kvstore with different FS", test_2_kvstore_different_fs, true)
+DEFINE_TEST(GPIKV005, "Test two kvstore with different FS", test_2_kvstore_different_fs, true)

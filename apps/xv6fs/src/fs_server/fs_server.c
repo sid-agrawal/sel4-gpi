@@ -87,7 +87,14 @@ static void make_ns_prefix(char *prefix, uint64_t nsid)
 static void apply_prefix(char *prefix, char *path)
 {
   char temp[PATH_MAX];
-  snprintf(temp, PATH_MAX, "%s/%s", prefix, path);
+
+  if (strlen(path) > 0 && path[0] == '/') {
+    // Don't need to add path separator
+    snprintf(temp, PATH_MAX, "%s%s", prefix, path);
+  } else {
+    snprintf(temp, PATH_MAX, "%s/%s", prefix, path);
+  }
+
   strcpy(path, temp);
 }
 
@@ -504,8 +511,23 @@ seL4_MessageInfo_t xv6fs_request_handler(seL4_MessageInfo_t tag, seL4_Word sende
       /* Attach memory object to server ADS (contains pathname) */
       error = resource_server_attach_mo(&get_xv6fs_server()->gen, cap, &mo_vaddr);
       CHECK_ERROR_GOTO(error, "Failed to attach MO", error, done);
-
       pathname = (char *)mo_vaddr;
+
+      /* Update pathname if within a namespace */
+      ns_id = get_ns_id_from_badge(sender_badge);
+      if (ns_id != NSID_DEFAULT)
+      {
+        fs_namespace_t *ns = find_ns(ns_id);
+        if (ns == NULL)
+        {
+          XV6FS_PRINTF("Namespace did not exist\n");
+          error = RS_ERROR_NS;
+          goto done;
+        }
+
+        apply_prefix(ns->ns_prefix, pathname);
+      }
+      
       XV6FS_PRINTF("Unlink pathname %s\n", pathname);
       error = xv6fs_sys_unlink(pathname);
 
