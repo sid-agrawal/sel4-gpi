@@ -75,6 +75,7 @@ void init_model_state(model_state_t *model_state)
     snprintf(new_row->pd_to, CSV_MAX_STRING_SIZE, "%s", "PD_TO");
     snprintf(new_row->pd_id, CSV_MAX_STRING_SIZE, "%s", "PD_ID");
     snprintf(new_row->is_mapped, CSV_MAX_STRING_SIZE, "%s", "IS_MAPPED");
+    snprintf(new_row->constraints, CSV_MAX_STRING_SIZE, "%s", "CONSTRAINTS");
 
     new_row->next = NULL;
     model_state->csv_rows = new_row;
@@ -157,7 +158,7 @@ void print_model_state(model_state_t *model_state)
 
     while (current_row != NULL)
     {
-        printf("%-*s,%-*s,%-*s,%-*s,%-*s,%-*s,%-*s,%-*s,%-*s\n",
+        printf("%-*s,%-*s,%-*s,%-*s,%-*s,%-*s,%-*s,%-*s,%-*s,%-*s\n",
                width,
                current_row->resource_from,
                width,
@@ -175,7 +176,9 @@ void print_model_state(model_state_t *model_state)
                width,
                current_row->pd_id,
                width,
-               current_row->is_mapped);
+               current_row->is_mapped,
+               width,
+               current_row->constraints);
 
         current_row = current_row->next;
     }
@@ -337,11 +340,15 @@ void add_resource_depends_on_rr(rr_state_t *model_state, char *resource_from, ch
 }
 
 // Function add a PD to PD relationship to the model state
-void add_pd_requests(model_state_t *model_state, char *pd_from, char *pd_to)
+void add_pd_requests(model_state_t *model_state, char *pd_from, char *pd_to, gpi_cap_t type, char *constraints)
 {
 
     assert(strlen(pd_from) != 0 && strlen(pd_to) != 0);
     assert(strlen(pd_from) < CSV_MAX_STRING_SIZE && strlen(pd_to) < CSV_MAX_STRING_SIZE);
+    char *resource_type_str = cap_type_to_str(type);
+    assert(strlen(resource_type_str) != 0);
+    assert(strlen(resource_type_str) < CSV_MAX_STRING_SIZE);
+    assert(strlen(constraints) < CSV_MAX_STRING_SIZE);
 
     csv_row_t *new_row = (csv_row_t *)malloc(sizeof(csv_row_t));
     assert(new_row != NULL);
@@ -350,6 +357,8 @@ void add_pd_requests(model_state_t *model_state, char *pd_from, char *pd_to)
     // Set the resource type and ID
     snprintf(new_row->pd_from, CSV_MAX_STRING_SIZE, "%s", pd_from);
     snprintf(new_row->pd_to, CSV_MAX_STRING_SIZE, "%s", pd_to);
+    snprintf(new_row->resource_type, CSV_MAX_STRING_SIZE, "%s", resource_type_str);
+    snprintf(new_row->constraints, CSV_MAX_STRING_SIZE, "%s", constraints);
 
     // Add node to the front of the list after the heading row
     insert_row(model_state, new_row);

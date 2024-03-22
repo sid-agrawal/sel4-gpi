@@ -19,6 +19,7 @@ typedef struct csv_row
     char pd_to[CSV_MAX_STRING_SIZE];
     char pd_id[CSV_MAX_STRING_SIZE];
     char is_mapped[CSV_MAX_STRING_SIZE];
+    char constraints[CSV_MAX_STRING_SIZE];
 
     struct csv_row *next;
 } csv_row_t;
@@ -102,4 +103,4 @@ void add_resource_rr(rr_state_t *model_state, gpi_cap_t resource_type, char *res
 void add_resource_depends_on_rr(rr_state_t *model_state, char *resource_from, char *resource_to, csv_rr_row_t *new_row);
 
 // Function add a PD to PD relationship to the model state
-void add_pd_requests(model_state_t *model_state, char *pd_from, char *pd_to);
+void add_pd_requests(model_state_t *model_state, char *pd_from, char *pd_to, gpi_cap_t type, char *constraints);

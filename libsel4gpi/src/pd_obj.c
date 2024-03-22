@@ -733,8 +733,7 @@ int pd_dump(pd_t *pd)
     }
     */
 
-    // char rde_id[CSV_MAX_STRING_SIZE];
-    char rde_name[CSV_MAX_STRING_SIZE];
+    char ns_id[CSV_MAX_STRING_SIZE];
     char rm_id[CSV_MAX_STRING_SIZE];
     // uint32_t added_pd_rr[MAX_PD_OSM_RDE] = {0};
     // memset(added_pd_rr, -1, sizeof(uint32_t) * MAX_PD_OSM_RDE);
@@ -754,10 +753,16 @@ int pd_dump(pd_t *pd)
                     ZF_LOGF("Couldn't find resource manager with ID %d\n", rde.manager_id);
                 }
 
-                snprintf(rm_id, CSV_MAX_STRING_SIZE, "RM_%d", rm->manager_id);
-                snprintf(rde_name, CSV_MAX_STRING_SIZE, "%s_Server", cap_type_to_str(rde.type.type));
-                add_pd(ms, rde_name, rm_id);       // (XXX) Linh: placeholder before we implement dumping of RDE PDs
-                add_pd_requests(ms, pd_id, rm_id); // rm_id should always be unique
+                if (rde.ns_id != NSID_DEFAULT) {
+                    snprintf(ns_id, CSV_MAX_STRING_SIZE, "NS%d", rde.ns_id);
+                } else {
+                    snprintf(ns_id, CSV_MAX_STRING_SIZE, "GLOBAL");
+                }
+
+                int server_pd_id = rm->pd? rm->pd->pd_obj_id : 0;
+                snprintf(rm_id, CSV_MAX_STRING_SIZE, "PD_%d", server_pd_id);
+
+                add_pd_requests(ms, pd_id, rm_id, rde.type.type, ns_id);
             }
         }
     }
@@ -772,11 +777,8 @@ int pd_dump(pd_t *pd)
     char res_id[CSV_MAX_STRING_SIZE];
     for (osmosis_pd_cap_t *current_cap = pd->has_access_to; current_cap != NULL; current_cap = current_cap->hh.next)
     {
-        print_pd_osm_cap_info(current_cap);
-        // if type seL4 cap
-        //  print_pd_osm_cap_info(&current_cap);
-        //  else if type osmosis cap
-        //  get the RR for that cap
+        //print_pd_osm_cap_info(current_cap);
+
         make_res_id(res_id, current_cap->type, current_cap->res_id);
         switch (current_cap->type)
         {
@@ -919,7 +921,7 @@ int pd_dump(pd_t *pd)
     {
         for (int j = 0; j < MAX_NS_PER_RDE; j++)
         {
-            print_pd_osm_rde_info(&pd->init_data->rde[i][j]);
+            //print_pd_osm_rde_info(&pd->init_data->rde[i][j]);
         }
     }
 
