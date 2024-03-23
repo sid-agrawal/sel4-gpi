@@ -44,7 +44,7 @@ uint64_t cpu_assign_new_badge_and_objectID(cpu_component_registry_entry_t *reg)
 
     assert(badge_val != 0);
     reg->cpu.cpu_obj_id = get_cpu_component()->registry_n_entries;
-    OSDB_PRINTF("cpu_assign_new_badge_and_objectID: new badge: %lx\n", badge_val);
+    OSDB_PRINTF(CPU_DEBUG, "cpu_assign_new_badge_and_objectID: new badge: %lx\n", badge_val);
     return badge_val;
 }
 cpu_component_context_t *get_cpu_component(void)
@@ -121,13 +121,13 @@ cpu_component_registry_entry_t *cpu_component_registry_get_entry_by_badge(seL4_W
 // (XXX): Somwehere here we should call cpu_new
 void cpu_handle_allocation_request(seL4_Word sender_badge, seL4_MessageInfo_t *reply_tag)
 {
-    OSDB_PRINTF(CPUSERVS "main: Got connect request\n");
+    OSDB_PRINTF(CPU_DEBUG, CPUSERVS "main: Got connect request\n");
 
     /* Allocate a new registry entry for the client. */
     cpu_component_registry_entry_t *client_reg_ptr = malloc(sizeof(cpu_component_registry_entry_t));
     if (client_reg_ptr == 0)
     {
-        OSDB_PRINTF(CPUSERVS "main: Failed to allocate new badge for client.\n");
+        OSDB_PRINTF(CPU_DEBUG, CPUSERVS "main: Failed to allocate new badge for client.\n");
         return;
     }
     memset((void *)client_reg_ptr, 0, sizeof(cpu_component_registry_entry_t));
@@ -139,7 +139,7 @@ void cpu_handle_allocation_request(seL4_Word sender_badge, seL4_MessageInfo_t *r
                         get_cpu_component()->server_vka);
     if (error)
     {
-        OSDB_PRINTF(CPUSERVS "main: Failed to create new CPU object\n");
+        OSDB_PRINTF(CPU_DEBUG, CPUSERVS "main: Failed to create new CPU object\n");
         return;
     }
 
@@ -170,7 +170,7 @@ void cpu_handle_allocation_request(seL4_Word sender_badge, seL4_MessageInfo_t *r
                            badge);
     if (error)
     {
-        OSDB_PRINTF(CPUSERVS "main: Failed to mint client badge %lx.\n", badge);
+        OSDB_PRINTF(CPU_DEBUG, CPUSERVS "main: Failed to mint client badge %lx.\n", badge);
         return;
     }
     /* Return this badged end point in the return message. */
@@ -181,7 +181,7 @@ void cpu_handle_allocation_request(seL4_Word sender_badge, seL4_MessageInfo_t *r
 
 static void handle_start_req(seL4_Word sender_badge, seL4_MessageInfo_t old_tag, seL4_CPtr received_cap)
 {
-    OSDB_PRINTF(CPUSERVS "main: Got start request from client badge %lx.\n",
+    OSDB_PRINTF(CPU_DEBUG, CPUSERVS "main: Got start request from client badge %lx.\n",
                 sender_badge);
 
     int error;
@@ -189,13 +189,13 @@ static void handle_start_req(seL4_Word sender_badge, seL4_MessageInfo_t old_tag,
     cpu_component_registry_entry_t *client_data = cpu_component_registry_get_entry_by_badge(sender_badge);
     if (client_data == NULL)
     {
-        OSDB_PRINTF(CPUSERVS "main: Failed to find client badge %lx.\n", sender_badge);
+        OSDB_PRINTF(CPU_DEBUG, CPUSERVS "main: Failed to find client badge %lx.\n", sender_badge);
         return;
     }
-    OSDB_PRINTF(CPUSERVS "main: found client_data %p.\n", client_data);
+    OSDB_PRINTF(CPU_DEBUG, CPUSERVS "main: found client_data %p.\n", client_data);
     // for (int i = 0; i < 5; i++)
     // {
-    //     OSDB_PRINTF(CPUSERVS "MR[%d] = %lx\n", i, seL4_GetMR(i));
+    //     OSDB_PRINTF(CPU_DEBUG, CPUSERVS "MR[%d] = %lx\n", i, seL4_GetMR(i));
     // }
 
     error = cpu_start(&client_data->cpu,
@@ -203,7 +203,7 @@ static void handle_start_req(seL4_Word sender_badge, seL4_MessageInfo_t old_tag,
                       0);
     if (error)
     {
-        OSDB_PRINTF(CPUSERVS "main: Failed to start CPU.\n");
+        OSDB_PRINTF(CPU_DEBUG, CPUSERVS "main: Failed to start CPU.\n");
         return;
     }
 
@@ -217,10 +217,10 @@ static void handle_config_req(seL4_Word sender_badge,
                               seL4_CPtr received_cap)
 {
     // Find the client - like start
-    OSDB_PRINTF(CPUSERVS "-----main: Got config  request from:");
+    OSDB_PRINTF(CPU_DEBUG, CPUSERVS "-----main: Got config  request from:");
     badge_print(sender_badge);
 
-    OSDB_PRINTF(CPUSERVS " received_cap: ");
+    OSDB_PRINTF(CPU_DEBUG, CPUSERVS " received_cap: ");
     // debug_cap_identify("", received_cap);
 
     assert(seL4_MessageInfo_get_extraCaps(old_tag) >= 2);
@@ -229,18 +229,18 @@ static void handle_config_req(seL4_Word sender_badge,
 
     int error = 0;
 
-    // OSDB_PRINTF(CPUSERVS "capsUnwrapped: %lu\n", seL4_MessageInfo_get_capsUnwrapped(old_tag));
-    // OSDB_PRINTF(CPUSERVS "extraCap: %lu\n", seL4_MessageInfo_ptr_get_extraCaps(&old_tag));
+    // OSDB_PRINTF(CPU_DEBUG, CPUSERVS "capsUnwrapped: %lu\n", seL4_MessageInfo_get_capsUnwrapped(old_tag));
+    // OSDB_PRINTF(CPU_DEBUG, CPUSERVS "extraCap: %lu\n", seL4_MessageInfo_ptr_get_extraCaps(&old_tag));
     // for (int i = 0; i < 5; i++)
     // {
-    //     OSDB_PRINTF(CPUSERVS "MR[%d] = %lx\n", i, seL4_GetBadge(i));
+    //     OSDB_PRINTF(CPU_DEBUG, CPUSERVS "MR[%d] = %lx\n", i, seL4_GetBadge(i));
     // }
 
     /* Find the client */
     cpu_component_registry_entry_t *client_data = cpu_component_registry_get_entry_by_badge(sender_badge);
     if (client_data == NULL)
     {
-        OSDB_PRINTF(CPUSERVS "main: Failed to find client badge %lx.\n",
+        OSDB_PRINTF(CPU_DEBUG, CPUSERVS "main: Failed to find client badge %lx.\n",
                     sender_badge);
         assert(0);
         return;
@@ -260,12 +260,12 @@ static void handle_config_req(seL4_Word sender_badge,
     ads_component_registry_entry_t *asre = ads_component_registry_get_entry_by_badge(ads_cap_badge);
     if (asre == NULL)
     {
-        OSDB_PRINTF(CPUSERVS "main: Failed to find ads badge %lx.\n", ads_cap_badge);
+        OSDB_PRINTF(CPU_DEBUG, CPUSERVS "main: Failed to find ads badge %lx.\n", ads_cap_badge);
         assert(0);
         return;
     }
 
-    OSDB_PRINTF(CPUSERVS "Found ads_data with object ID: %u.\n", asre->ads.ads_obj_id);
+    OSDB_PRINTF(CPU_DEBUG, CPUSERVS "Found ads_data with object ID: %u.\n", asre->ads.ads_obj_id);
     // /* Get the vspace for the ads */
     vspace_t *ads_vspace = asre->ads.vspace;
 
@@ -286,12 +286,12 @@ static void handle_config_req(seL4_Word sender_badge,
                               (void *)stack);
     if (error)
     {
-        OSDB_PRINTF(CPUSERVS "main: Failed to config from client badge:");
+        OSDB_PRINTF(CPU_DEBUG, CPUSERVS "main: Failed to config from client badge:");
         badge_print(sender_badge);
         assert(0);
         return;
     }
-    OSDB_PRINTF(CPUSERVS "main: config done.\n");
+    OSDB_PRINTF(CPU_DEBUG, CPUSERVS "main: config done.\n");
 
     seL4_SetMR(CPUMSGREG_FUNC, CPU_FUNC_CONFIG_ACK);
     seL4_SetMR(1, 0xdead);
@@ -304,10 +304,10 @@ static void handle_change_vspace_req(seL4_Word sender_badge,
                                      seL4_CPtr received_cap)
 {
     // Find the client - like start
-    OSDB_PRINTF(CPUSERVS "-----main: Got change vsspace  request from:");
+    OSDB_PRINTF(CPU_DEBUG, CPUSERVS "-----main: Got change vsspace  request from:");
     badge_print(sender_badge);
 
-    OSDB_PRINTF(CPUSERVS " received_cap: ");
+    OSDB_PRINTF(CPU_DEBUG, CPUSERVS " received_cap: ");
     // debug_cap_identify("", received_cap);
 
     assert(seL4_MessageInfo_get_extraCaps(old_tag) == 1);
@@ -316,18 +316,18 @@ static void handle_change_vspace_req(seL4_Word sender_badge,
 
     int error = 0;
 
-    OSDB_PRINTF(CPUSERVS "capsUnwrapped: %lu\n", seL4_MessageInfo_get_capsUnwrapped(old_tag));
-    OSDB_PRINTF(CPUSERVS "extraCap: %lu\n", seL4_MessageInfo_ptr_get_extraCaps(&old_tag));
+    OSDB_PRINTF(CPU_DEBUG, CPUSERVS "capsUnwrapped: %lu\n", seL4_MessageInfo_get_capsUnwrapped(old_tag));
+    OSDB_PRINTF(CPU_DEBUG, CPUSERVS "extraCap: %lu\n", seL4_MessageInfo_ptr_get_extraCaps(&old_tag));
     // for (int i = 0; i < 5; i++)
     // {
-    //     OSDB_PRINTF(CPUSERVS "MR[%d] = %lx\n", i, seL4_GetBadge(i));
+    //     OSDB_PRINTF(CPU_DEBUG, CPUSERVS "MR[%d] = %lx\n", i, seL4_GetBadge(i));
     // }
 
     /* Find the client */
     cpu_component_registry_entry_t *client_data = cpu_component_registry_get_entry_by_badge(sender_badge);
     if (client_data == NULL)
     {
-        OSDB_PRINTF(CPUSERVS "main: Failed to find client badge %lx.\n",
+        OSDB_PRINTF(CPU_DEBUG, CPUSERVS "main: Failed to find client badge %lx.\n",
                     sender_badge);
         assert(0);
         return;
@@ -338,12 +338,12 @@ static void handle_change_vspace_req(seL4_Word sender_badge,
     ads_component_registry_entry_t *ads_data = ads_component_registry_get_entry_by_badge(ads_cap_badge);
     if (ads_data == NULL)
     {
-        OSDB_PRINTF(CPUSERVS "main: Failed to find ads badge %lx.\n", ads_cap_badge);
+        OSDB_PRINTF(CPU_DEBUG, CPUSERVS "main: Failed to find ads badge %lx.\n", ads_cap_badge);
         assert(0);
         return;
     }
 
-    OSDB_PRINTF(CPUSERVS "Found ads_data with object ID: %u.\n", ads_data->ads.ads_obj_id);
+    OSDB_PRINTF(CPU_DEBUG, CPUSERVS "Found ads_data with object ID: %u.\n", ads_data->ads.ads_obj_id);
     // /* Get the vspace for the ads */
     vspace_t *ads_vspace = ads_data->ads.vspace;
 
@@ -352,12 +352,12 @@ static void handle_change_vspace_req(seL4_Word sender_badge,
                               ads_vspace);
     if (error)
     {
-        OSDB_PRINTF(CPUSERVS "main: Failed to config from client badge:");
+        OSDB_PRINTF(CPU_DEBUG, CPUSERVS "main: Failed to config from client badge:");
         badge_print(sender_badge);
         assert(0);
         return;
     }
-    OSDB_PRINTF(CPUSERVS "main: config done.\n");
+    OSDB_PRINTF(CPU_DEBUG, CPUSERVS "main: config done.\n");
 
     pd_component_registry_entry_t *pd_data = pd_component_registry_get_entry_by_id(get_client_id_from_badge(sender_badge));
     pd_data->pd.init_data->binded_ads_ns_id = ads_data->ads.ads_obj_id;
@@ -399,7 +399,7 @@ int forge_cpu_cap_from_tcb(sel4utils_process_t *process, // Change this to the s
     cpu_component_registry_entry_t *client_reg_ptr = malloc(sizeof(cpu_component_registry_entry_t));
     if (client_reg_ptr == 0)
     {
-        OSDB_PRINTF(CPUSERVS "main: Failed to allocate new badge for client.\n");
+        OSDB_PRINTF(CPU_DEBUG, CPUSERVS "main: Failed to allocate new badge for client.\n");
         return 1;
     }
     memset((void *)client_reg_ptr, 0, sizeof(cpu_component_registry_entry_t));
@@ -433,10 +433,10 @@ int forge_cpu_cap_from_tcb(sel4utils_process_t *process, // Change this to the s
                                badge);
     if (error)
     {
-        OSDB_PRINTF(CPUSERVS "main: Failed to mint client badge %lx.\n", badge);
+        OSDB_PRINTF(CPU_DEBUG, CPUSERVS "main: Failed to mint client badge %lx.\n", badge);
         return 1;
     }
-    OSDB_PRINTF(CPUSERVS "main: Forged a new CPU cap(EP: %lx) with badge value: %lx IPC_Buff %p stack %p\n",
+    OSDB_PRINTF(CPU_DEBUG, CPUSERVS "main: Forged a new CPU cap(EP: %lx) with badge value: %lx IPC_Buff %p stack %p\n",
                 dest.capPtr, badge, client_reg_ptr->cpu.ipc_buffer_addr, client_reg_ptr->cpu.stack_top);
 
     *cap_ret = dest_cptr;
