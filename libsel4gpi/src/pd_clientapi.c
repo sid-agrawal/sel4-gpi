@@ -26,10 +26,10 @@ int pd_component_client_connect(seL4_CPtr server_ep_cap,
                            /* This works coz we have a single level cnode with no guard.*/
                            seL4_WordBits); /* Depth i.e. how many bits of free_slot to interpret*/
 
-    OSDB_PRINTF(PDSERVC "%s %d pd_endpoint is %lu:__ \n", __FUNCTION__, __LINE__, server_ep_cap);
+    OSDB_PRINTF(PD_DEBUG, PDSERVC "%s %d pd_endpoint is %lu:__ \n", __FUNCTION__, __LINE__, server_ep_cap);
     // debug_cap_identify(PDSERVC, server_ep_cap);
 
-    OSDB_PRINTF(PDSERVC "Set a receive path for the badged ep: %d\n", (int)free_slot);
+    OSDB_PRINTF(PD_DEBUG, PDSERVC "Set a receive path for the badged ep: %d\n", (int)free_slot);
 
     /* Set request type */
     seL4_SetMR(0, GPICAP_TYPE_PD);
@@ -40,7 +40,7 @@ int pd_component_client_connect(seL4_CPtr server_ep_cap,
 
     ret_conn->badged_server_ep_cspath.capPtr = free_slot;
 
-    OSDB_PRINTF(PDSERVC "received badged endpoint and it was kept in %d:__\n", (int)free_slot);
+    OSDB_PRINTF(PD_DEBUG, PDSERVC "received badged endpoint and it was kept in %d:__\n", (int)free_slot);
     // debug_cap_identify(PDSERVC, path.capPtr);
     return 0;
 }
@@ -58,7 +58,7 @@ int pd_client_load(pd_client_context_t *pd_os_cap,
     {
         if (strcmp(image, pd_images[i]) == 0)
         {
-            OSDB_PRINTF(PDSERVC "image id is %d\n", i);
+            OSDB_PRINTF(PD_DEBUG, PDSERVC "image id is %d\n", i);
             image_id = i;
             break;
         }
@@ -66,7 +66,7 @@ int pd_client_load(pd_client_context_t *pd_os_cap,
 
     if (image_id == -1)
     {
-        OSDB_PRINTF(PDSERVC "invalid image name received %s\n", image);
+        OSDB_PRINTF(PD_DEBUG, PDSERVC "invalid image name received %s\n", image);
         return -1;
     }
 
@@ -93,7 +93,7 @@ int pd_client_dump(pd_client_context_t *conn,
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0,
                                                   PDMSGREG_DUMP_REQ_END);
 
-    OSDB_PRINTF(PDSERVC "Sending dump RR request to PD via EP: %lu.\n",
+    OSDB_PRINTF(PD_DEBUG, PDSERVC "Sending dump RR request to PD via EP: %lu.\n",
                 conn->badged_server_ep_cspath.capPtr);
     // (XXX) Linh: for some reason, this doesn't block if we try to dump a test PD's state and causes issues
     tag = seL4_Call(conn->badged_server_ep_cspath.capPtr, tag);
@@ -120,7 +120,7 @@ int pd_client_next_slot(pd_client_context_t *conn,
     seL4_SetMR(PDMSGREG_FUNC, PD_FUNC_NEXT_SLOT_REQ);
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0,
                                                   PDMSGREG_NEXT_SLOT_REQ_END);
-    OSDB_PRINTF("pd_client_next_slot call\n");
+    OSDB_PRINTF(PD_DEBUG, "pd_client_next_slot call\n");
     tag = seL4_Call(conn->badged_server_ep_cspath.capPtr, tag);
     *slot = seL4_GetMR(PDMSGREG_NEXT_SLOT_PD_SLOT);
     assert(seL4_MessageInfo_ptr_get_label(&tag) == 0);
@@ -198,13 +198,13 @@ int pd_client_start(pd_client_context_t *conn, int argc, seL4_Word *args)
     seL4_SetMR(PDMSGREG_FUNC, PD_FUNC_START_REQ);
 
     // Setup the arguments
-    OSDB_PRINTF(PDSERVC "Starting PD with %d args: [", argc);
+    OSDB_PRINTF(PD_DEBUG, PDSERVC "Starting PD with %d args: [", argc);
 
     seL4_SetMR(PDMSGREG_START_ARGC, argc);
 
     for (int i = 0; i < argc; i++)
     {
-        OSDB_PRINTF("%ld, ", args[i]);
+        OSDB_PRINTF(PD_DEBUG, "%ld, ", args[i]);
 
         switch (i)
         {
@@ -222,7 +222,7 @@ int pd_client_start(pd_client_context_t *conn, int argc, seL4_Word *args)
             break;
         }
     }
-    OSDB_PRINTF("]\n");
+    OSDB_PRINTF(PD_DEBUG, "]\n");
 
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0,
                                                   PDMSGREG_START_REQ_END);

@@ -226,7 +226,7 @@ int test_ads_stack_isolated_stack_die(env_t env)
     error = cpu_client_start(&cpu_conn, (sel4utils_thread_entry_fn)test_func_die);
     test_error_eq(error, 0);
 
-    OSDB_PRINTF("%d: main_thread: shared_var(%p) = %ld\n", __LINE__, &shared_var_stack, shared_var_stack);
+    OSDB_PRINTF(ADS_DEBUG, "%d: main_thread: shared_var(%p) = %ld\n", __LINE__, &shared_var_stack, shared_var_stack);
     shared_var_stack = 4;
 
     //  uint64_t *other_thread_stack = (uintptr_t*)0x10022fb8;
@@ -242,7 +242,7 @@ int test_ads_stack_isolated_stack_die(env_t env)
     tag = seL4_Recv(ep_for_thread.cptr, NULL);
     assert(seL4_MessageInfo_get_length(tag) == 1);
     uint64_t *other_thread_stack = (uintptr_t *)seL4_GetMR(0);
-    OSDB_PRINTF("root-task: \t Writing to Other thread's stack: %p\n", other_thread_stack);
+    OSDB_PRINTF(ADS_DEBUG, "root-task: \t Writing to Other thread's stack: %p\n", other_thread_stack);
 
     /* Comment the line below for the test to pass*/
     //*other_thread_stack = 5;

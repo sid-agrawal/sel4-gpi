@@ -46,7 +46,7 @@ uint64_t pd_assign_new_badge_and_objectID(pd_component_registry_entry_t *reg)
 
     assert(badge_val != 0);
     reg->pd.pd_obj_id = get_pd_component()->registry_n_entries;
-    OSDB_PRINTF("pd_assign_new_badge_and_objectID: new badge: %lx\n", badge_val);
+    OSDB_PRINTF(PD_DEBUG, "pd_assign_new_badge_and_objectID: new badge: %lx\n", badge_val);
     return badge_val;
 }
 
@@ -198,7 +198,7 @@ int forge_pd_cap_from_init_data(
     pd_component_registry_entry_t *client_reg_ptr = malloc(sizeof(pd_component_registry_entry_t));
     if (client_reg_ptr == 0)
     {
-        OSDB_PRINTF(PDSERVS "main: Failed to allocate new badge for client.\n");
+        OSDB_PRINTF(PD_DEBUG, PDSERVS "main: Failed to allocate new badge for client.\n");
         return 1;
     }
     memset((void *)client_reg_ptr, 0, sizeof(pd_component_registry_entry_t));
@@ -233,11 +233,11 @@ int forge_pd_cap_from_init_data(
                                badge);
     if (error)
     {
-        OSDB_PRINTF(CPUSERVS "main: Failed to mint client badge %lx.\n", badge);
+        OSDB_PRINTF(PD_DEBUG, CPUSERVS "main: Failed to mint client badge %lx.\n", badge);
         return 1;
     }
 
-    OSDB_PRINTF(PDSERVS "main: Forged a new PD cap(EP: %lx) with badge value: %lx \n",
+    OSDB_PRINTF(PD_DEBUG, PDSERVS "main: Forged a new PD cap(EP: %lx) with badge value: %lx \n",
                 dest.capPtr, badge);
 
     client_reg_ptr->raw_cap_in_root = dest_cptr;
@@ -349,7 +349,7 @@ void *get_osmosis_pd_init_data(vspace_t *test_vspace)
     }
 
     pd->init_data_in_PD = init_data_vaddr;
-    OSDB_PRINTF(PDSERVS "Test process init data is at %p\n", pd->init_data_in_PD);
+    OSDB_PRINTF(PD_DEBUG, PDSERVS "Test process init data is at %p\n", pd->init_data_in_PD);
 
     return pd->init_data_in_PD;
 }
@@ -368,14 +368,14 @@ osmosis_pd_cap_t *pd_add_resource_by_id(uint32_t client_id, gpi_cap_t cap_type, 
 
 void pd_handle_allocation_request(seL4_Word sender_badge, seL4_MessageInfo_t *reply_tag)
 {
-    OSDB_PRINTF(PDSERVS "main: Got connect request from badge %lx\n", sender_badge);
+    OSDB_PRINTF(PD_DEBUG, PDSERVS "main: Got connect request from badge %lx\n", sender_badge);
 
     /* Allocate a new registry entry for the client. */
     pd_component_registry_entry_t *client_reg_ptr =
         malloc(sizeof(pd_component_registry_entry_t));
     if (client_reg_ptr == 0)
     {
-        OSDB_PRINTF(PDSERVS "main: Failed to allocate new badge for client.\n");
+        OSDB_PRINTF(PD_DEBUG, PDSERVS "main: Failed to allocate new badge for client.\n");
         return;
     }
     memset((void *)client_reg_ptr, 0, sizeof(pd_component_registry_entry_t));
@@ -415,7 +415,7 @@ void pd_handle_allocation_request(seL4_Word sender_badge, seL4_MessageInfo_t *re
                            badge);
     if (error)
     {
-        OSDB_PRINTF(PDSERVS "main: Failed to mint client badge %lx.\n", badge);
+        OSDB_PRINTF(PD_DEBUG, PDSERVS "main: Failed to mint client badge %lx.\n", badge);
         return;
     }
     client_reg_ptr->raw_cap_in_root = dest_cptr;
@@ -430,11 +430,11 @@ static void handle_load_req(seL4_Word sender_badge,
                             seL4_CPtr received_cap)
 {
     // Find the client - like start
-    OSDB_PRINTF(PDSERVS "-----main: Got pd-load request\n");
+    OSDB_PRINTF(PD_DEBUG, PDSERVS "-----main: Got pd-load request\n");
     badge_print(sender_badge);
     assert(GPICAP_TYPE_PD == get_cap_type_from_badge(sender_badge));
 
-    // OSDB_PRINTF(PDSERVS " received_cap: ");
+    // OSDB_PRINTF(PD_DEBUG, PDSERVS " received_cap: ");
     //  debug_cap_identify("", received_cap);
 
     assert(seL4_MessageInfo_get_label(old_tag) == 0);
@@ -445,7 +445,7 @@ static void handle_load_req(seL4_Word sender_badge,
     pd_component_registry_entry_t *client_data = pd_component_registry_get_entry_by_badge(sender_badge);
     if (client_data == NULL)
     {
-        OSDB_PRINTF(PDSERVS "main: Failed to find client badge %lx.\n",
+        OSDB_PRINTF(PD_DEBUG, PDSERVS "main: Failed to find client badge %lx.\n",
                     sender_badge);
         assert(0);
         return;
@@ -472,12 +472,12 @@ static void handle_load_req(seL4_Word sender_badge,
                           &cpu_data->cpu);
     if (error)
     {
-        OSDB_PRINTF(PDSERVS "main: Failed to config from client badge:");
+        OSDB_PRINTF(PD_DEBUG, PDSERVS "main: Failed to config from client badge:");
         badge_print(sender_badge);
         assert(0);
         return;
     }
-    OSDB_PRINTF(PDSERVS "main: config done.\n");
+    OSDB_PRINTF(PD_DEBUG, PDSERVS "main: config done.\n");
 
     seL4_SetMR(PDMSGREG_FUNC, PD_FUNC_LOAD_ACK);
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(error, 0, 0, PDMSGREG_LOAD_ACK_END);
@@ -489,13 +489,13 @@ static void handle_next_slot_req(seL4_Word sender_badge,
                                  seL4_CPtr received_cap)
 {
 
-    OSDB_PRINTF(PDSERVS "Got next slot request from client badge %lx.\n",
+    OSDB_PRINTF(PD_DEBUG, PDSERVS "Got next slot request from client badge %lx.\n",
                 sender_badge);
 
     pd_component_registry_entry_t *client_data = pd_component_registry_get_entry_by_badge(sender_badge);
     if (client_data == NULL)
     {
-        OSDB_PRINTF(PDSERVS "Failed to find client badge %lx.\n",
+        OSDB_PRINTF(PD_DEBUG, PDSERVS "Failed to find client badge %lx.\n",
                     sender_badge);
         return;
     }
@@ -516,18 +516,18 @@ static void handle_free_slot_req(seL4_Word sender_badge,
                                  seL4_CPtr received_cap)
 {
 
-    OSDB_PRINTF(PDSERVS "Got free slot request from client badge %lx, id %ld.\n",
+    OSDB_PRINTF(PD_DEBUG, PDSERVS "Got free slot request from client badge %lx, id %ld.\n",
                 sender_badge, get_client_id_from_badge(sender_badge));
 
     pd_component_registry_entry_t *client_data = pd_component_registry_get_entry_by_badge(sender_badge);
     if (client_data == NULL)
     {
-        OSDB_PRINTF(PDSERVS "Failed to find client badge %lx.\n",
+        OSDB_PRINTF(PD_DEBUG, PDSERVS "Failed to find client badge %lx.\n",
                     sender_badge);
         return;
     }
     seL4_Word slot = seL4_GetMR(PDMSGREG_FREE_SLOT_REQ_SLOT);
-    OSDB_PRINTF(PDSERVS "Freeing PD's slot %d.\n", (int)slot);
+    OSDB_PRINTF(PD_DEBUG, PDSERVS "Freeing PD's slot %d.\n", (int)slot);
 
     int error = pd_free_slot(&client_data->pd,
                              slot);
@@ -544,13 +544,13 @@ static void handle_alloc_ep_req(seL4_Word sender_badge,
                                 seL4_CPtr received_cap)
 {
 
-    OSDB_PRINTF(PDSERVS "Got alloc ep request from client badge %lx.\n",
+    OSDB_PRINTF(PD_DEBUG, PDSERVS "Got alloc ep request from client badge %lx.\n",
                 sender_badge);
 
     pd_component_registry_entry_t *client_data = pd_component_registry_get_entry_by_badge(sender_badge);
     if (client_data == NULL)
     {
-        OSDB_PRINTF(PDSERVS "Failed to find client badge %lx.\n",
+        OSDB_PRINTF(PD_DEBUG, PDSERVS "Failed to find client badge %lx.\n",
                     sender_badge);
         return;
     }
@@ -561,7 +561,7 @@ static void handle_alloc_ep_req(seL4_Word sender_badge,
 
     seL4_SetMR(PDMSGREG_FUNC, PD_FUNC_ALLOC_EP_ACK);
     seL4_SetMR(PDMSGREG_ALLOC_EP_PD_SLOT, slot);
-    OSDB_PRINTF(PDSERVS "Allocated ep in slot %d\n", (int)slot);
+    OSDB_PRINTF(PD_DEBUG, PDSERVS "Allocated ep in slot %d\n", (int)slot);
 
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(error, 0, 0,
                                                   PDMSGREG_ALLOC_EP_ACK_END);
@@ -573,13 +573,13 @@ static void handle_badge_ep_req(seL4_Word sender_badge,
                                 seL4_CPtr received_cap)
 {
 
-    OSDB_PRINTF(PDSERVS "Got badge ep request from client badge %lx.\n",
+    OSDB_PRINTF(PD_DEBUG, PDSERVS "Got badge ep request from client badge %lx.\n",
                 sender_badge);
 
     pd_component_registry_entry_t *client_data = pd_component_registry_get_entry_by_badge(sender_badge);
     if (client_data == NULL)
     {
-        OSDB_PRINTF(PDSERVS "Failed to find client badge %lx.\n",
+        OSDB_PRINTF(PD_DEBUG, PDSERVS "Failed to find client badge %lx.\n",
                     sender_badge);
         return;
     }
@@ -605,7 +605,7 @@ static void handle_send_cap_req(seL4_Word sender_badge,
                                 seL4_MessageInfo_t old_tag,
                                 seL4_CPtr received_cap)
 {
-    OSDB_PRINTF(PDSERVS "main: Got send-cap request from client badge %lx.\n",
+    OSDB_PRINTF(PD_DEBUG, PDSERVS "main: Got send-cap request from client badge %lx.\n",
                 sender_badge);
 
     /*
@@ -613,9 +613,9 @@ static void handle_send_cap_req(seL4_Word sender_badge,
     client is sending the cap.
 
     */
-    OSDB_PRINTF(PDSERVS " received_cap: %lu (badge: %lx)\n",
+    OSDB_PRINTF(PD_DEBUG, PDSERVS " received_cap: %lu (badge: %lx)\n",
                 received_cap, seL4_GetBadge(0));
-    OSDB_PRINTF(PDSERVS " Unwrapped: %s\n",
+    OSDB_PRINTF(PD_DEBUG, PDSERVS " Unwrapped: %s\n",
                 seL4_MessageInfo_get_capsUnwrapped(old_tag) ? "true" : "false");
     // debug_cap_identify("", received_cap);
 
@@ -628,7 +628,7 @@ static void handle_send_cap_req(seL4_Word sender_badge,
     pd_component_registry_entry_t *client_data = pd_component_registry_get_entry_by_badge(sender_badge);
     if (client_data == NULL)
     {
-        OSDB_PRINTF(PDSERVS "main: Failed to find client badge %lx.\n",
+        OSDB_PRINTF(PD_DEBUG, PDSERVS "main: Failed to find client badge %lx.\n",
                     sender_badge);
         return;
     }
@@ -654,7 +654,7 @@ static void handle_send_cap_req(seL4_Word sender_badge,
 
 static void handle_dump_cap_req(seL4_Word sender_badge, seL4_MessageInfo_t old_tag, seL4_CPtr received_cap)
 {
-    OSDB_PRINTF(PDSERVS "main: Got dump-cap request from client badge %lx.\n",
+    OSDB_PRINTF(PD_DEBUG, PDSERVS "main: Got dump-cap request from client badge %lx.\n",
                 sender_badge);
 
     assert(seL4_MessageInfo_get_extraCaps(old_tag) == 0);
@@ -664,7 +664,7 @@ static void handle_dump_cap_req(seL4_Word sender_badge, seL4_MessageInfo_t old_t
     pd_component_registry_entry_t *client_data = pd_component_registry_get_entry_by_badge(sender_badge);
     if (client_data == NULL)
     {
-        OSDB_PRINTF(PDSERVS "main: Failed to find client badge %lx.\n",
+        OSDB_PRINTF(PD_DEBUG, PDSERVS "main: Failed to find client badge %lx.\n",
                     sender_badge);
         return;
     }
@@ -683,7 +683,7 @@ static void handle_dump_cap_req(seL4_Word sender_badge, seL4_MessageInfo_t old_t
 
 static void handle_start_req(seL4_Word sender_badge, seL4_MessageInfo_t old_tag, seL4_CPtr received_cap)
 {
-    OSDB_PRINTF(PDSERVS "main: Got start request from client badge %lx.\n",
+    OSDB_PRINTF(PD_DEBUG, PDSERVS "main: Got start request from client badge %lx.\n",
                 sender_badge);
 
     int error;
@@ -715,14 +715,14 @@ static void handle_start_req(seL4_Word sender_badge, seL4_MessageInfo_t old_tag,
     pd_component_registry_entry_t *client_data = pd_component_registry_get_entry_by_badge(sender_badge);
     if (client_data == NULL)
     {
-        OSDB_PRINTF(PDSERVS "main: Failed to find client badge %lx.\n",
+        OSDB_PRINTF(PD_DEBUG, PDSERVS "main: Failed to find client badge %lx.\n",
                     sender_badge);
         return;
     }
-    OSDB_PRINTF(PDSERVS "main: found client_data %p.\n", client_data);
+    OSDB_PRINTF(PD_DEBUG, PDSERVS "main: found client_data %p.\n", client_data);
     for (int i = 0; i < 5; i++)
     {
-        OSDB_PRINTF(PDSERVS "MR[%d] = %lx\n", i, seL4_GetMR(i));
+        OSDB_PRINTF(PD_DEBUG, PDSERVS "MR[%d] = %lx\n", i, seL4_GetMR(i));
     }
 
     error = pd_start(&client_data->pd,
@@ -734,7 +734,7 @@ static void handle_start_req(seL4_Word sender_badge, seL4_MessageInfo_t old_tag,
 
     if (error)
     {
-        OSDB_PRINTF(PDSERVS "main: Failed to start PD.\n");
+        OSDB_PRINTF(PD_DEBUG, PDSERVS "main: Failed to start PD.\n");
         return;
     }
 
@@ -747,7 +747,7 @@ static void handle_add_rde_req(seL4_Word sender_badge, seL4_MessageInfo_t old_ta
 {
     int error;
 
-    OSDB_PRINTF(PDSERVS "add_rde_req: Got request from client badge %lx.\n",
+    OSDB_PRINTF(PD_DEBUG, PDSERVS "add_rde_req: Got request from client badge %lx.\n",
                 sender_badge);
 
     seL4_Word server_badge = seL4_GetBadge(0);
@@ -759,31 +759,31 @@ static void handle_add_rde_req(seL4_Word sender_badge, seL4_MessageInfo_t old_ta
 
     if (target_data == NULL)
     {
-        OSDB_PRINTF(PDSERVS "add_rde_req: Failed to find target badge %lx.\n",
+        OSDB_PRINTF(PD_DEBUG, PDSERVS "add_rde_req: Failed to find target badge %lx.\n",
                     sender_badge);
         error = -1;
     }
     else if (server_data == NULL)
     {
-        OSDB_PRINTF(PDSERVS "add_rde_req: Failed to find server badge %lx.\n",
+        OSDB_PRINTF(PD_DEBUG, PDSERVS "add_rde_req: Failed to find server badge %lx.\n",
                     server_badge);
         error = -1;
     }
     else if (resource_manager_data == NULL)
     {
-        OSDB_PRINTF(PDSERVS "add_rde_req: Failed to find resource manager ID %ld.\n",
+        OSDB_PRINTF(PD_DEBUG, PDSERVS "add_rde_req: Failed to find resource manager ID %ld.\n",
                     manager_id);
         error = -1;
     }
     else if (get_client_id_from_badge(sender_badge) != target_data->pd.pd_obj_id && target_data->pd.pd_started)
     {
         // (XXX) Arya: Allow a PD to update its own RDE mid-flight, but not another PD's
-        OSDB_PRINTF(PDSERVS "add_rde_req: cannot add new RDEs to another PD after it has been started\n");
+        OSDB_PRINTF(PD_DEBUG, PDSERVS "add_rde_req: cannot add new RDEs to another PD after it has been started\n");
         error = -1;
     }
     else if (server_data->pd.pd_obj_id != resource_manager_data->pd->pd_obj_id)
     {
-        OSDB_PRINTF(PDSERVS "add_rde_req: wrong server PD provided (%d) for resource manager in PD %d\n",
+        OSDB_PRINTF(PD_DEBUG, PDSERVS "add_rde_req: wrong server PD provided (%d) for resource manager in PD %d\n",
                     server_data->pd.pd_obj_id,
                     resource_manager_data->pd->pd_obj_id);
         error = -1;
@@ -811,7 +811,7 @@ static void handle_share_rde_req(seL4_Word sender_badge, seL4_MessageInfo_t old_
     seL4_Word type = seL4_GetMR(PDMSGREG_SHARE_RDE_REQ_TYPE);
     seL4_Word ns_id = seL4_GetMR(PDMSGREG_SHARE_RDE_REQ_NS);
 
-    OSDB_PRINTF(PDSERVS "share_rde_req: Got request from client badge %lx for RDE type %d with NS %d.\n",
+    OSDB_PRINTF(PD_DEBUG, PDSERVS "share_rde_req: Got request from client badge %lx for RDE type %d with NS %d.\n",
                 sender_badge, type, ns_id);
 
     seL4_Word client_id = get_client_id_from_badge(sender_badge);
@@ -820,13 +820,13 @@ static void handle_share_rde_req(seL4_Word sender_badge, seL4_MessageInfo_t old_
 
     if (target_data == NULL)
     {
-        OSDB_PRINTF(PDSERVS "share_rde_req: Failed to find target badge %lx.\n",
+        OSDB_PRINTF(PD_DEBUG, PDSERVS "share_rde_req: Failed to find target badge %lx.\n",
                     sender_badge);
         error = -1;
     }
     else if (client_data == NULL)
     {
-        OSDB_PRINTF(PDSERVS "share_rde_req: Failed to find client ID %d.\n",
+        OSDB_PRINTF(PD_DEBUG, PDSERVS "share_rde_req: Failed to find client ID %d.\n",
                     client_id);
         error = -1;
     }
@@ -834,7 +834,7 @@ static void handle_share_rde_req(seL4_Word sender_badge, seL4_MessageInfo_t old_
     osmosis_rde_t *rde = pd_rde_get(&client_data->pd, type, ns_id);
     if (rde == NULL)
     {
-        OSDB_PRINTF(PDSERVS "share_rde_req: Failed to find RDE for type %d and NS_ID %ld.\n",
+        OSDB_PRINTF(PD_DEBUG, PDSERVS "share_rde_req: Failed to find RDE for type %d and NS_ID %ld.\n",
                     type, ns_id);
         error = -1;
     }
@@ -843,13 +843,13 @@ static void handle_share_rde_req(seL4_Word sender_badge, seL4_MessageInfo_t old_
 
     if (resource_manager_data == NULL)
     {
-        OSDB_PRINTF(PDSERVS "share_rde_req: Failed to find resource manager ID %ld.\n",
+        OSDB_PRINTF(PD_DEBUG, PDSERVS "share_rde_req: Failed to find resource manager ID %ld.\n",
                     rde->manager_id);
         error = -1;
     }
     else if (target_data->pd.pd_started)
     {
-        OSDB_PRINTF(PDSERVS "share_rde_req: cannot add new RDEs after PD has been started\n");
+        OSDB_PRINTF(PD_DEBUG, PDSERVS "share_rde_req: cannot add new RDEs after PD has been started\n");
         error = -1;
     }
     else
@@ -872,13 +872,13 @@ static void handle_register_resource_manager_req(seL4_Word sender_badge, seL4_Me
 {
     int error = 0;
 
-    OSDB_PRINTF(PDSERVS "Got register server request from client badge %lx.\n",
+    OSDB_PRINTF(PD_DEBUG, PDSERVS "Got register server request from client badge %lx.\n",
                 sender_badge);
 
     pd_component_registry_entry_t *client_data = pd_component_registry_get_entry_by_badge(sender_badge);
     if (client_data == NULL)
     {
-        OSDB_PRINTF(PDSERVS "register_resource_manager: Failed to find client badge %lx.\n",
+        OSDB_PRINTF(PD_DEBUG, PDSERVS "register_resource_manager: Failed to find client badge %lx.\n",
                     sender_badge);
         error = -1;
     }
@@ -893,7 +893,7 @@ static void handle_register_resource_manager_req(seL4_Word sender_badge, seL4_Me
         rs_entry->ns_index = NSID_DEFAULT;
 
         int manager_id = pd_component_resource_manager_insert(rs_entry);
-        OSDB_PRINTF(PDSERVS "Registered server, cap is at %ld.\n", rs_entry->server_ep);
+        OSDB_PRINTF(PD_DEBUG, PDSERVS "Registered server, cap is at %ld.\n", rs_entry->server_ep);
 
         seL4_SetMR(PDMSGREG_REGISTER_SERV_ACK_ID, manager_id);
     }
@@ -908,7 +908,7 @@ static void handle_register_namespace_req(seL4_Word sender_badge, seL4_MessageIn
 {
     int error = 0;
 
-    OSDB_PRINTF(PDSERVS "Got register namespace request from client badge %lx.\n",
+    OSDB_PRINTF(PD_DEBUG, PDSERVS "Got register namespace request from client badge %lx.\n",
                 sender_badge);
 
     seL4_Word manager_id = seL4_GetMR(PDMSGREG_REGISTER_NS_REQ_MANAGER_ID);
@@ -920,25 +920,25 @@ static void handle_register_namespace_req(seL4_Word sender_badge, seL4_MessageIn
 
     if (client_data == NULL)
     {
-        OSDB_PRINTF(PDSERVS "handle_register_namespace_req: Failed to find client PD with ID %ld.\n",
+        OSDB_PRINTF(PD_DEBUG, PDSERVS "handle_register_namespace_req: Failed to find client PD with ID %ld.\n",
                     get_client_id_from_badge(sender_badge));
         error = -1;
     }
     else if (target_data == NULL)
     {
-        OSDB_PRINTF(PDSERVS "handle_register_namespace_req: Failed to find taret PD with ID %ld.\n",
+        OSDB_PRINTF(PD_DEBUG, PDSERVS "handle_register_namespace_req: Failed to find taret PD with ID %ld.\n",
                     target_data);
         error = -1;
     }
     else if (resource_manager_data == NULL)
     {
-        OSDB_PRINTF(PDSERVS "handle_register_namespace_req: Failed to find resource manager with ID %ld.\n",
+        OSDB_PRINTF(PD_DEBUG, PDSERVS "handle_register_namespace_req: Failed to find resource manager with ID %ld.\n",
                     manager_id);
         error = -1;
     }
     else if (resource_manager_data->pd->pd_obj_id != get_client_id_from_badge(sender_badge))
     {
-        OSDB_PRINTF(PDSERVS "handle_register_namespace_req: resource manager PD (%ld) and client PD (%ld) do not match.\n",
+        OSDB_PRINTF(PD_DEBUG, PDSERVS "handle_register_namespace_req: resource manager PD (%ld) and client PD (%ld) do not match.\n",
                     resource_manager_data->pd->pd_obj_id, get_client_id_from_badge(sender_badge));
         error = -1;
     }
@@ -952,7 +952,7 @@ static void handle_register_namespace_req(seL4_Word sender_badge, seL4_MessageIn
         pd_add_rde(&target_data->pd, rde_type, manager_id,
                    ns_id, resource_manager_data->server_ep);
 
-        OSDB_PRINTF(PDSERVS "Registered namespace, ID is %ld.\n", ns_id);
+        OSDB_PRINTF(PD_DEBUG, PDSERVS "Registered namespace, ID is %ld.\n", ns_id);
         seL4_SetMR(PDMSGREG_REGISTER_NS_ACK_NSID, ns_id);
     }
 
@@ -966,7 +966,7 @@ static void handle_create_resource_req(seL4_Word sender_badge, seL4_MessageInfo_
 {
     int error = 0;
 
-    OSDB_PRINTF(PDSERVS "Got create resource request from client badge %lx.\n",
+    OSDB_PRINTF(PD_DEBUG, PDSERVS "Got create resource request from client badge %lx.\n",
                 sender_badge);
 
     seL4_Word server_id = get_object_id_from_badge(sender_badge);
@@ -977,13 +977,13 @@ static void handle_create_resource_req(seL4_Word sender_badge, seL4_MessageInfo_
     pd_component_resource_manager_entry_t *resource_manager_data = pd_component_resource_manager_get_entry_by_id(manager_id);
     if (server_data == NULL)
     {
-        OSDB_PRINTF(PDSERVS "handle_create_resource_req: Failed to find resource server with ID %ld.\n",
+        OSDB_PRINTF(PD_DEBUG, PDSERVS "handle_create_resource_req: Failed to find resource server with ID %ld.\n",
                     server_id);
         error = -1;
     }
     else if (resource_manager_data == NULL)
     {
-        OSDB_PRINTF(PDSERVS "handle_create_resource_req: Failed to find resource manager with ID %ld.\n",
+        OSDB_PRINTF(PD_DEBUG, PDSERVS "handle_create_resource_req: Failed to find resource manager with ID %ld.\n",
                     manager_id);
         error = -1;
     }
@@ -991,7 +991,7 @@ static void handle_create_resource_req(seL4_Word sender_badge, seL4_MessageInfo_
     {
         gpi_cap_t resource_type = resource_manager_data->resource_type;
 
-        OSDB_PRINTF(PDSERVS "resource manager %ld creates resource with ID %ld\n",
+        OSDB_PRINTF(PD_DEBUG, PDSERVS "resource manager %ld creates resource with ID %ld\n",
                     manager_id, resource_id);
 
         osmosis_pd_cap_t *osm_cap;
@@ -1003,7 +1003,7 @@ static void handle_create_resource_req(seL4_Word sender_badge, seL4_MessageInfo_
         }
         else
         {
-            OSDB_PRINTF(PDSERVS "handle_create_resource_req: Resource already exists %ld.\n",
+            OSDB_PRINTF(PD_DEBUG, PDSERVS "handle_create_resource_req: Resource already exists %ld.\n",
                         resource_id);
         }
     }
@@ -1018,7 +1018,7 @@ static void handle_give_resource_req(seL4_Word sender_badge, seL4_MessageInfo_t 
 {
     int error = 0;
 
-    OSDB_PRINTF(PDSERVS "Got give resource request from client badge %lx, resource ID %ld.\n",
+    OSDB_PRINTF(PD_DEBUG, PDSERVS "Got give resource request from client badge %lx, resource ID %ld.\n",
                 sender_badge, seL4_GetMR(PDMSGREG_GIVE_RES_REQ_RES_ID));
 
     seL4_Word server_id = get_object_id_from_badge(sender_badge);
@@ -1032,19 +1032,19 @@ static void handle_give_resource_req(seL4_Word sender_badge, seL4_MessageInfo_t 
 
     if (server_data == NULL)
     {
-        OSDB_PRINTF(PDSERVS "handle_give_resource_req: Failed to find resource server with ID %ld.\n",
+        OSDB_PRINTF(PD_DEBUG, PDSERVS "handle_give_resource_req: Failed to find resource server with ID %ld.\n",
                     server_id);
         error = -1;
     }
     else if (resource_manager_data == NULL)
     {
-        OSDB_PRINTF(PDSERVS "handle_give_resource_req: Failed to find resource manager with ID %ld.\n",
+        OSDB_PRINTF(PD_DEBUG, PDSERVS "handle_give_resource_req: Failed to find resource manager with ID %ld.\n",
                     manager_id);
         error = -1;
     }
     else if (recipient_data == NULL)
     {
-        OSDB_PRINTF(PDSERVS "handle_give_resource_req: Failed to find recipient id %ld.\n",
+        OSDB_PRINTF(PD_DEBUG, PDSERVS "handle_give_resource_req: Failed to find recipient id %ld.\n",
                     recipient_id);
         error = -1;
     }
@@ -1054,13 +1054,13 @@ static void handle_give_resource_req(seL4_Word sender_badge, seL4_MessageInfo_t 
 
     if (resource_data == NULL)
     {
-        OSDB_PRINTF(PDSERVS "handle_give_resource_req: Failed to find resource with id %ld.\n",
+        OSDB_PRINTF(PD_DEBUG, PDSERVS "handle_give_resource_req: Failed to find resource with id %ld.\n",
                     resource_id);
         error = -1;
     }
     else
     {
-        OSDB_PRINTF(PDSERVS "resource manager %ld gives resource ID %ld to client %ld\n",
+        OSDB_PRINTF(PD_DEBUG, PDSERVS "resource manager %ld gives resource ID %ld to client %ld\n",
                     manager_id, resource_id, recipient_id);
 
         osmosis_pd_cap_t *osm_cap;

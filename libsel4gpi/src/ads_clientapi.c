@@ -28,7 +28,7 @@ int ads_component_client_connect(seL4_CPtr server_ep_cap,
                            /* This works coz we have a single level cnode with no guard.*/
                            seL4_WordBits); /* Depth i.e. how many bits of free_slot to interpret*/
 
-    OSDB_PRINTF(ADSSERVC "Set a receive path for the badged ep: %d\n", (int) free_slot);
+    OSDB_PRINTF(ADS_DEBUG, ADSSERVC "Set a receive path for the badged ep: %d\n", (int)free_slot);
 
     /* Set request type */
     seL4_SetMR(0, GPICAP_TYPE_ADS);
@@ -38,7 +38,7 @@ int ads_component_client_connect(seL4_CPtr server_ep_cap,
     assert(seL4_MessageInfo_get_extraCaps(tag) == 1);
 
     ret_conn->badged_server_ep_cspath.capPtr = free_slot;
-    // OSDB_PRINTF(ADSSERVC"Received badged endpoint and it was kept in:");
+    // OSDB_PRINTF(ADS_DEBUG, ADSSERVC"Received badged endpoint and it was kept in:");
     // debug_cap_identify(ADSSERVC, ret_conn->badged_server_ep_cspath.capPtr);
     return 0;
 }
@@ -56,7 +56,7 @@ int ads_client_attach(ads_client_context_t *conn,
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 1,
                                                   ADSMSGREG_ATTACH_REQ_END);
 
-    OSDB_PRINTF(ADSSERVC "Sending attach request to server via EP: %lu.\n",
+    OSDB_PRINTF(ADS_DEBUG, ADSSERVC "Sending attach request to server via EP: %lu.\n",
                 conn->badged_server_ep_cspath.capPtr);
     tag = seL4_Call(conn->badged_server_ep_cspath.capPtr, tag);
     *ret_vaddr = (void *)seL4_GetMR(ADSMSGREG_ATTACH_REQ_VA);
@@ -74,14 +74,14 @@ int ads_client_shallow_copy(ads_client_context_t *conn, seL4_CPtr free_slot, voi
                            /* This works coz we have a single level cnode with no guard.*/
                            seL4_WordBits); /* Depth i.e. how many bits of free_slot to interpret*/
 
-    OSDB_PRINTF(ADSSERVC "Set a receive path for the badged ep: %d\n", (int)free_slot);
+    OSDB_PRINTF(ADS_DEBUG, ADSSERVC "Set a receive path for the badged ep: %d\n", (int)free_slot);
 
     seL4_SetMR(ADSMSGREG_FUNC, ADS_FUNC_SHALLOW_COPY_REQ);
     seL4_SetMR(ADSMSGREG_SHALLOW_COPY_REQ_OMIT_VA, omit_vaddr != NULL ? (seL4_Word)omit_vaddr : 0);
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0,
                                                   ADSMSGREG_SHALLOW_COPY_REQ_END);
 
-    OSDB_PRINTF(ADSSERVC "Sending clone request to server via EP: %lu.\n",
+    OSDB_PRINTF(ADS_DEBUG, ADSSERVC "Sending clone request to server via EP: %lu.\n",
                 conn->badged_server_ep_cspath.capPtr);
     tag = seL4_Call(conn->badged_server_ep_cspath.capPtr, tag);
     assert(seL4_MessageInfo_get_extraCaps(tag) == 1);
@@ -109,7 +109,7 @@ int ads_client_dump_rr(ads_client_context_t *conn, char *ads_rr, size_t size)
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0,
                                                   ADSMSGREG_GET_RR_REQ_END);
 
-    OSDB_PRINTF(ADSSERVC "Sending dump RR request to server via EP: %lu.\n",
+    OSDB_PRINTF(ADS_DEBUG, ADSSERVC "Sending dump RR request to server via EP: %lu.\n",
                 conn->badged_server_ep_cspath.capPtr);
     tag = seL4_Call(conn->badged_server_ep_cspath.capPtr, tag);
     return 0;

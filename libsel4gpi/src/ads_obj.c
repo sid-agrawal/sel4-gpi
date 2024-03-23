@@ -146,7 +146,7 @@ int ads_attach(ads_t *ads,
         return 1;
     }
     *ret_vaddr = vaddr;
-    OSDB_PRINTF(ADSSERVS "attached %u pages at %p\n", num_pages, *ret_vaddr);
+    OSDB_PRINTF(ADS_DEBUG, ADSSERVS "attached %u pages at %p\n", num_pages, *ret_vaddr);
 
     return 0;
 }
@@ -188,7 +188,7 @@ void ads_dump_rr(ads_t *ads, model_state_t *ms)
     vka_t *vka = get_alloc_data(ads_vspace)->vka;
 
     assert(vka != NULL);
-    OSDB_PRINTF(ADSSERVS "vka address: %p\n", vka);
+    OSDB_PRINTF(ADS_DEBUG, ADSSERVS "vka address: %p\n", vka);
 
     while (from_sel4_res != NULL)
     {
@@ -210,7 +210,7 @@ void ads_dump_rr(ads_t *ads, model_state_t *ms)
             seL4_CPtr cap = vspace_get_cap(ads_vspace, start);
             if (cap == 0)
             {
-                OSDB_PRINTF(ADSSERVS "No cap for %p\n", start);
+                OSDB_PRINTF(ADS_DEBUG, ADSSERVS "No cap for %p\n", start);
             }
             else
             {
@@ -285,7 +285,7 @@ int ads_shallow_copy(vspace_t *loader,
     assert(from != NULL);
     vspace_t *to = ret_ads->vspace;
 
-    // OSDB_PRINTF("Cloning vspace\n");
+    // OSDB_PRINTF(ADS_DEBUG, "Cloning vspace\n");
     // printf("Old vspace details:\n");
     // sel4utils_walk_vspace(from, NULL);
 
@@ -342,7 +342,7 @@ int ads_shallow_copy(vspace_t *loader,
     int num_pages;
     while (from_sel4_res != NULL)
     {
-        OSDB_PRINTF("Reservation: %p\n", (void *)from_sel4_res->start);
+        OSDB_PRINTF(ADS_DEBUG, "Reservation: %p\n", (void *)from_sel4_res->start);
         // Reserver
         reservation_t new_res = sel4utils_reserve_range_at(to,
                                                            (void *)from_sel4_res->start,
@@ -356,7 +356,7 @@ int ads_shallow_copy(vspace_t *loader,
         num_pages = (from_sel4_res->end - from_sel4_res->start) / PAGE_SIZE_4K;
         if (from_sel4_res->start == (uintptr_t)omit_vaddr)
         {
-            OSDB_PRINTF("Skipping the region, with start vaddr of %p\n", omit_vaddr);
+            OSDB_PRINTF(ADS_DEBUG, "Skipping the region, with start vaddr of %p\n", omit_vaddr);
             from_sel4_res = from_sel4_res->next;
             continue;
         }
@@ -368,7 +368,7 @@ int ads_shallow_copy(vspace_t *loader,
             if (shallow_copy || from_sel4_res->type == SEL4UTILS_RES_TYPE_STACK ||
                 from_sel4_res->start == (uintptr_t)pd_osm_data)
             {
-                OSDB_PRINTF("======================Shallow copying [%s] %p to %p [%s]\n",
+                OSDB_PRINTF(ADS_DEBUG, "======================Shallow copying [%s] %p to %p [%s]\n",
                             human_readable_va_res_type(from_sel4_res->type),
                             (void *)from_sel4_res->start, (void *)from_sel4_res->end,
                             human_readable_size(from_sel4_res->end - from_sel4_res->start));
@@ -386,7 +386,7 @@ int ads_shallow_copy(vspace_t *loader,
             }
             else
             {
-                OSDB_PRINTF("======================Deep copying [%s] %p to %p [%s]\n",
+                OSDB_PRINTF(ADS_DEBUG, "======================Deep copying [%s] %p to %p [%s]\n",
                             human_readable_va_res_type(from_sel4_res->type),
                             (void *)from_sel4_res->start, (void *)from_sel4_res->end,
                             human_readable_size(from_sel4_res->end - from_sel4_res->start));
@@ -409,7 +409,7 @@ int ads_shallow_copy(vspace_t *loader,
         // Move to next node.
         from_sel4_res = from_sel4_res->next;
     }
-    OSDB_PRINTF("New vspace details:\n");
+    OSDB_PRINTF(ADS_DEBUG, "New vspace details:\n");
     // sel4utils_walk_vspace(to, NULL);
     // For each reservation: call share_mem_at_vaddr
     return 0;

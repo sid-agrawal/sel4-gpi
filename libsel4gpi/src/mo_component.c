@@ -43,7 +43,7 @@ uint64_t mo_assign_new_badge_and_objectID(mo_component_registry_entry_t *reg)
 
     assert(badge_val != 0);
     reg->mo.mo_obj_id = get_mo_component()->registry_n_entries;
-    OSDB_PRINTF("mo_assign_new_badge_and_objectID: new badge: %lx\n", badge_val);
+    OSDB_PRINTF(MO_DEBUG, "mo_assign_new_badge_and_objectID: new badge: %lx\n", badge_val);
     return badge_val;
 }
 mo_component_context_t *get_mo_component(void)
@@ -142,7 +142,7 @@ mo_component_registry_entry_t *mo_component_registry_get_entry_by_id(seL4_Word o
 void mo_handle_allocation_request(seL4_Word sender_badge, seL4_MessageInfo_t *reply_tag)
 {
     seL4_Word num_pages = seL4_GetMR(MOMSGREG_CONNECT_REQ_NUM_PAGES);
-    OSDB_PRINTF(MOSERVS "Got connect request for %ld pages\n", num_pages);
+    OSDB_PRINTF(MO_DEBUG, MOSERVS "Got connect request for %ld pages\n", num_pages);
 
     /* Allocator numm_pages frame */
     mo_frame_t *frame_caps = malloc(sizeof(mo_frame_t) * num_pages);
@@ -158,14 +158,14 @@ void mo_handle_allocation_request(seL4_Word sender_badge, seL4_MessageInfo_t *re
         assert(error == 0);
         frame_caps[i].cap = frame_obj.cptr;
         frame_caps[i].paddr = vka_object_paddr(get_mo_component()->server_vka, &frame_obj);
-        // OSDB_PRINTF(MOSERVS "%s %d: Allocated frame %lu\n", __FUNCTION__, __LINE__, frame_caps[i]);
+        // OSDB_PRINTF(MO_DEBUG, MOSERVS "%s %d: Allocated frame %lu\n", __FUNCTION__, __LINE__, frame_caps[i]);
     }
 
     /* Allocate a new registry entry for the client. */
     mo_component_registry_entry_t *client_reg_ptr = malloc(sizeof(mo_component_registry_entry_t));
     if (client_reg_ptr == 0)
     {
-        OSDB_PRINTF(MOSERVS "main: Failed to allocate new badge for client.\n");
+        OSDB_PRINTF(MO_DEBUG, MOSERVS "main: Failed to allocate new badge for client.\n");
         return;
     }
     memset((void *)client_reg_ptr, 0, sizeof(mo_component_registry_entry_t));
@@ -180,7 +180,7 @@ void mo_handle_allocation_request(seL4_Word sender_badge, seL4_MessageInfo_t *re
                        get_mo_component()->server_vka);
     if (error)
     {
-        OSDB_PRINTF(MOSERVS "main: Failed to create new MO object\n");
+        OSDB_PRINTF(MO_DEBUG, MOSERVS "main: Failed to create new MO object\n");
         return;
     }
     free(frame_caps);
@@ -213,10 +213,10 @@ void mo_handle_allocation_request(seL4_Word sender_badge, seL4_MessageInfo_t *re
                            badge);
     if (error)
     {
-        OSDB_PRINTF(MOSERVS "main: Failed to mint client badge %lx.\n", badge);
+        OSDB_PRINTF(MO_DEBUG, MOSERVS "main: Failed to mint client badge %lx.\n", badge);
         return;
     }
-    OSDB_PRINTF(MOSERVS "Minted MO with new badge: %lx\n", badge);
+    OSDB_PRINTF(MO_DEBUG, MOSERVS "Minted MO with new badge: %lx\n", badge);
     /* Return this badged end point in the return message. */
     seL4_SetCap(0, dest.capPtr);
     seL4_SetMR(MOMSGREG_FUNC, MO_FUNC_CONNECT_ACK);
@@ -232,29 +232,29 @@ int forge_mo_caps_from_vspace(vspace_t *child_vspace,
                               seL4_CPtr *cap_ret)
 {
     /* Walk every reservation */
-    OSDB_PRINTF("%s: %d\n", __FUNCTION__, __LINE__);
+    OSDB_PRINTF(MO_DEBUG, "%s: %d\n", __FUNCTION__, __LINE__);
 
     sel4utils_alloc_data_t *child_data = get_alloc_data(child_vspace);
-    OSDB_PRINTF("%s: %d\n", __FUNCTION__, __LINE__);
+    OSDB_PRINTF(MO_DEBUG, "%s: %d\n", __FUNCTION__, __LINE__);
     sel4utils_res_t *res = child_data->reservation_head;
-    OSDB_PRINTF("%s: %d\n", __FUNCTION__, __LINE__);
+    OSDB_PRINTF(MO_DEBUG, "%s: %d\n", __FUNCTION__, __LINE__);
 
-    OSDB_PRINTF("forge_mo_caps_from_vspace: %d\n", __LINE__);
+    OSDB_PRINTF(MO_DEBUG, "forge_mo_caps_from_vspace: %d\n", __LINE__);
     while (res != NULL)
     {
         *num_ret_caps = *num_ret_caps + 1;
-        OSDB_PRINTF("forge_mo_caps_from_vspace: %d\n", __LINE__);
+        OSDB_PRINTF(MO_DEBUG, "forge_mo_caps_from_vspace: %d\n", __LINE__);
         res = res->next;
     }
 
     /* For each reservation, forge an MO */
     int j = 0;
     res = child_data->reservation_head;
-    OSDB_PRINTF("forge_mo_caps_from_vspace: %d\n", __LINE__);
+    OSDB_PRINTF(MO_DEBUG, "forge_mo_caps_from_vspace: %d\n", __LINE__);
     while (res != NULL)
     {
 
-        OSDB_PRINTF("forge_mo_caps_from_vspace: %d\n", __LINE__);
+        OSDB_PRINTF(MO_DEBUG, "forge_mo_caps_from_vspace: %d\n", __LINE__);
         /* Get the caps in a reservation */
         uint32_t num_frames = (res->end - res->start) / PAGE_SIZE_4K;
         seL4_CPtr *frame_caps = malloc(sizeof(seL4_CPtr) * num_frames);
@@ -304,7 +304,7 @@ int forge_mo_cap_from_frames(seL4_CPtr *frame_caps,
     mo_component_registry_entry_t *client_reg_ptr = malloc(sizeof(mo_component_registry_entry_t));
     if (client_reg_ptr == NULL)
     {
-        OSDB_PRINTF(MOSERVS "main: Failed to allocate new badge for client.\n");
+        OSDB_PRINTF(MO_DEBUG, MOSERVS "main: Failed to allocate new badge for client.\n");
         return 1;
     }
     memset((void *)client_reg_ptr, 0, sizeof(mo_component_registry_entry_t));
@@ -341,10 +341,10 @@ int forge_mo_cap_from_frames(seL4_CPtr *frame_caps,
                                badge);
     if (error)
     {
-        OSDB_PRINTF(MOSERVS "main: Failed to mint client badge %lx.\n", badge);
+        OSDB_PRINTF(MO_DEBUG, MOSERVS "main: Failed to mint client badge %lx.\n", badge);
         return 1;
     }
-    OSDB_PRINTF(MOSERVS "main: Forged a new MO cap(EP: %lx) with badge value: %lx and %u pages.\n",
+    OSDB_PRINTF(MO_DEBUG, MOSERVS "main: Forged a new MO cap(EP: %lx) with badge value: %lx and %u pages.\n",
                 dest.capPtr, badge, client_reg_ptr->mo.num_pages);
 
     *cap_ret = dest_cptr;

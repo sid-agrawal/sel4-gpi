@@ -25,10 +25,10 @@ int cpu_component_client_connect(seL4_CPtr server_ep_cap,
                            /* This works coz we have a single level cnode with no guard.*/
                            seL4_WordBits); /* Depth i.e. how many bits of free_slot to interpret*/
 
-    OSDB_PRINTF(CPUSERVC "%s %d cpu_endpoint is %lu:__ \n", __FUNCTION__, __LINE__, server_ep_cap);
+    OSDB_PRINTF(CPU_DEBUG, CPUSERVC "%s %d cpu_endpoint is %lu:__ \n", __FUNCTION__, __LINE__, server_ep_cap);
     // debug_cap_identify(CPUSERVC, server_ep_cap);
 
-    OSDB_PRINTF(CPUSERVC "Set a receive path for the badged ep: %lu\n", free_slot);
+    OSDB_PRINTF(CPU_DEBUG, CPUSERVC "Set a receive path for the badged ep: %lu\n", free_slot);
     /* Set request type */
     seL4_SetMR(0, GPICAP_TYPE_CPU);
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0, 1);
@@ -38,7 +38,7 @@ int cpu_component_client_connect(seL4_CPtr server_ep_cap,
 
     ret_conn->badged_server_ep_cspath.capPtr = free_slot;
 
-    OSDB_PRINTF(CPUSERVC "received badged endpoint and it was kept in %lu:__\n", free_slot);
+    OSDB_PRINTF(CPU_DEBUG, CPUSERVC "received badged endpoint and it was kept in %lu:__\n", free_slot);
     // debug_cap_identify(CPUSERVC, path.capPtr);
     return 0;
 }
@@ -85,7 +85,7 @@ int cpu_client_change_vspace(cpu_client_context_t *conn,
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 2,
                                                   CPUMSGREG_CHANGE_VSPACE_REQ_END);
 
-    OSDB_PRINTF(CPUSERVC "INVOKING CAP %lu\n", conn->badged_server_ep_cspath.capPtr);
+    OSDB_PRINTF(CPU_DEBUG, CPUSERVC "INVOKING CAP %lu\n", conn->badged_server_ep_cspath.capPtr);
     tag = seL4_Call(conn->badged_server_ep_cspath.capPtr, tag);
     assert(seL4_MessageInfo_ptr_get_label(&tag) == 0);
     return 0;

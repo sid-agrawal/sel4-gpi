@@ -23,7 +23,7 @@
 int cpu_start(cpu_t *cpu, sel4utils_thread_entry_fn entry_point, seL4_Word arg0)
 {
 
-    OSDB_PRINTF(CPUSERVS "cpu_start: starting CPU at entry point %p and arg0 %lx\n", entry_point, arg0);
+    OSDB_PRINTF(CPU_DEBUG, CPUSERVS "cpu_start: starting CPU at entry point %p and arg0 %lx\n", entry_point, arg0);
 
     UNUSED seL4_UserContext regs = {0};
     int error = seL4_TCB_ReadRegisters(cpu->tcb->cptr,
@@ -52,7 +52,7 @@ int cpu_config_vspace(cpu_t *cpu,
                       seL4_Word ipc_buf_addr,
                       void *stack_top)
 {
-    OSDB_PRINTF(CPUSERVS "cpu_config_vspace: Configuring CPU\n");
+    OSDB_PRINTF(CPU_DEBUG, CPUSERVS "cpu_config_vspace: Configuring CPU\n");
 
     seL4_CPtr vspace_root = vspace->get_root(vspace); // root page table
     assert(vspace_root != 0);
@@ -91,7 +91,7 @@ int cpu_change_vspace(cpu_t *cpu,
                       vka_t *vka,
                       vspace_t *vspace)
 {
-    OSDB_PRINTF(CPUSERVS "cpu_change_vspace: Configuring CPU\n");
+    OSDB_PRINTF(CPU_DEBUG, CPUSERVS "cpu_change_vspace: Configuring CPU\n");
 
     seL4_CPtr vspace_root = vspace->get_root(vspace); // root page table
     assert(vspace_root != 0);
