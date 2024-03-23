@@ -24,6 +24,22 @@ file(GLOB server_deps src/server/*.c)
 list(SORT server_deps)
 add_executable(kvstore_server EXCLUDE_FROM_ALL ${server_deps})
 
+# Add custom linker script
+set(linkerScript "${CMAKE_CURRENT_LIST_DIR}/linker.lds")
+
+set_target_properties(
+    kvstore_server
+   PROPERTIES LINK_DEPENDS ${linkerScript}
+)
+add_dependencies(elfloader elfloader_linker)
+set_property(
+   TARGET kvstore_server
+   APPEND_STRING
+   PROPERTY
+       LINK_FLAGS
+       " -Wl,-T ${linkerScript} -static -Wl,--build-id=none"
+)
+
 target_include_directories(kvstore_server PRIVATE include/shared include/server)
 target_link_libraries(
     kvstore_server

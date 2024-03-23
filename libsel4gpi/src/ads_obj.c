@@ -264,6 +264,7 @@ int ads_shallow_copy(vspace_t *loader,
                      ads_t *ads,
                      vka_t *vka,
                      void *omit_vaddr,
+                     void *pd_osm_data,
                      bool shallow_copy,
                      ads_t *ret_ads)
 {
@@ -335,7 +336,7 @@ int ads_shallow_copy(vspace_t *loader,
     sel4utils_alloc_data_t *from_data = get_alloc_data(from);
     sel4utils_res_t *from_sel4_res = from_data->reservation_head;
 
-    OSDB_PRINTF("===========Start of interesting output================\n");
+    ZF_LOGE("===========Start of interesting output================\n");
 
     /* walk all the reservations */
     int num_pages;
@@ -359,48 +360,52 @@ int ads_shallow_copy(vspace_t *loader,
             from_sel4_res = from_sel4_res->next;
             continue;
         }
-        // map
-        if (shallow_copy || from_sel4_res->type == SEL4UTILS_RES_TYPE_STACK)
+        // only copy over ELF and IPC buffer
+        if (from_sel4_res->type == SEL4UTILS_RES_TYPE_ELF || from_sel4_res->type == SEL4UTILS_RES_TYPE_IPC_BUF || from_sel4_res->type == SEL4UTILS_RES_TYPE_STACK ||
+            from_sel4_res->start == (uintptr_t)pd_osm_data)
         {
-            error = sel4utils_share_mem_at_vaddr(from, to,
-                                                 (void *)from_sel4_res->start,
-                                                 num_pages,
-                                                 PAGE_BITS_4K,
-                                                 (void *)from_sel4_res->start,
-                                                 new_res);
-            if (error)
+            // we must shallow copy the RD table
+            if (shallow_copy || from_sel4_res->type == SEL4UTILS_RES_TYPE_STACK ||
+                from_sel4_res->start == (uintptr_t)pd_osm_data)
             {
-                ZF_LOGE("Failed to map memory while sharing copy: %d\n", error);
-                goto error_exit;
+                OSDB_PRINTF("======================Shallow copying [%s] %p to %p [%s]\n",
+                            human_readable_va_res_type(from_sel4_res->type),
+                            (void *)from_sel4_res->start, (void *)from_sel4_res->end,
+                            human_readable_size(from_sel4_res->end - from_sel4_res->start));
+                error = sel4utils_share_mem_at_vaddr(from, to,
+                                                     (void *)from_sel4_res->start,
+                                                     num_pages,
+                                                     PAGE_BITS_4K,
+                                                     (void *)from_sel4_res->start,
+                                                     new_res);
+                if (error)
+                {
+                    ZF_LOGE("Failed to map memory while sharing copy: %d\n", error);
+                    goto error_exit;
+                }
+            }
+            else
+            {
+                OSDB_PRINTF("======================Deep copying [%s] %p to %p [%s]\n",
+                            human_readable_va_res_type(from_sel4_res->type),
+                            (void *)from_sel4_res->start, (void *)from_sel4_res->end,
+                            human_readable_size(from_sel4_res->end - from_sel4_res->start));
+
+                error = sel4utils_copy_mem_at_vaddr(
+                    loader,
+                    from, to,
+                    (void *)from_sel4_res->start,
+                    num_pages,
+                    PAGE_BITS_4K,
+                    (void *)from_sel4_res->start,
+                    new_res);
+                if (error)
+                {
+                    ZF_LOGE("Failed to map memory while making copy: %d\n", error);
+                    goto error_exit;
+                }
             }
         }
-        else
-        {
-            OSDB_PRINTF("======================Deep copying [%s] %p to %p [%s]\n",
-                        human_readable_va_res_type(from_sel4_res->type),
-                        (void *)from_sel4_res->start, (void *)from_sel4_res->end,
-                        human_readable_size(from_sel4_res->end - from_sel4_res->start));
-
-            error = sel4utils_copy_mem_at_vaddr(
-                loader,
-                from, to,
-                (void *)from_sel4_res->start,
-                num_pages,
-                PAGE_BITS_4K,
-                (void *)from_sel4_res->start,
-                new_res);
-            if (error)
-            {
-                ZF_LOGE("Failed to map memory while making copy: %d\n", error);
-                goto error_exit;
-            }
-        }
-
-        /*
-
-
-        */
-
         // Move to next node.
         from_sel4_res = from_sel4_res->next;
     }

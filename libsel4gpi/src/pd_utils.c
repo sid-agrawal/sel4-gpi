@@ -15,6 +15,12 @@ seL4_CPtr sel4gpi_get_ads_cap(void)
     return slot;
 }
 
+seL4_CPtr sel4gpi_get_cpu_cap(void)
+{
+    seL4_CPtr slot = ((osm_pd_init_data_t *)sel4runtime_get_osm_init_data())->cpu_cap;
+    return slot;
+}
+
 seL4_CPtr sel4gpi_get_rde(int type)
 {
     seL4_CPtr slot = ((osm_pd_init_data_t *)sel4runtime_get_osm_init_data())->rde[type][0].slot_in_PD;

@@ -13,13 +13,16 @@
 
 /**
  * Configure the kvstore client
- * 
+ *
  * @param use_remote_server if true, forwards kvstore requests to the kvstore server
  *                          if false, uses a process-local kvstore
+ * @param separate_ads      only takes effect when use_remote_server = false
+ *                          if true, compartmentalizes kvstore server data into a separate ADS
+ *                          else, kvstore server data lives in the same ADS as the client's
  * @param ep endpoint of the kvstore server (optional)
  * @return 0 on success, seL4 error otherwise
-*/
-int kvstore_client_configure(bool use_remote_server, seL4_CPtr ep);
+ */
+int kvstore_client_configure(bool use_remote_server, bool separate_ads, seL4_CPtr ep);
 
 /**
  * KV store supports simple set and get functions

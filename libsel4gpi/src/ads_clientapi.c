@@ -65,20 +65,19 @@ int ads_client_attach(ads_client_context_t *conn,
     return 0;
 }
 
-int ads_client_shallow_copy(ads_client_context_t *conn, vka_t *vka, void *omit_vaddr, ads_client_context_t *ret_conn)
+int ads_client_shallow_copy(ads_client_context_t *conn, seL4_CPtr free_slot, void *omit_vaddr, ads_client_context_t *ret_conn)
 {
     // Alloc a slot for the incoming cap.
-    seL4_CPtr dest_cptr;
-    vka_cspace_alloc(vka, &dest_cptr);
-    cspacepath_t path;
-    vka_cspace_make_path(vka, dest_cptr, &ret_conn->badged_server_ep_cspath);
-    seL4_SetCapReceivePath(
-        /* _service */ ret_conn->badged_server_ep_cspath.root,
-        /* index */ ret_conn->badged_server_ep_cspath.capPtr,
-        /* depth */ ret_conn->badged_server_ep_cspath.capDepth);
+    /* Send a REQ message to the server on its public EP */
+    seL4_SetCapReceivePath(SEL4UTILS_CNODE_SLOT, /* Position of the cap to the CNODE */
+                           free_slot,            /* CPTR in this CSPACE */
+                           /* This works coz we have a single level cnode with no guard.*/
+                           seL4_WordBits); /* Depth i.e. how many bits of free_slot to interpret*/
+
+    OSDB_PRINTF(ADSSERVC "Set a receive path for the badged ep: %d\n", (int)free_slot);
 
     seL4_SetMR(ADSMSGREG_FUNC, ADS_FUNC_SHALLOW_COPY_REQ);
-    seL4_SetMR(ADSMSGREG_SHALLOW_COPY_REQ_OMIT_VA, (uintptr_t)omit_vaddr);
+    seL4_SetMR(ADSMSGREG_SHALLOW_COPY_REQ_OMIT_VA, omit_vaddr != NULL ? (seL4_Word)omit_vaddr : 0);
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0,
                                                   ADSMSGREG_SHALLOW_COPY_REQ_END);
 
@@ -86,6 +85,7 @@ int ads_client_shallow_copy(ads_client_context_t *conn, vka_t *vka, void *omit_v
                 conn->badged_server_ep_cspath.capPtr);
     tag = seL4_Call(conn->badged_server_ep_cspath.capPtr, tag);
     assert(seL4_MessageInfo_get_extraCaps(tag) == 1);
+    ret_conn->badged_server_ep_cspath.capPtr = free_slot;
     return 0;
 }
 

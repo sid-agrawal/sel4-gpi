@@ -95,12 +95,13 @@ int ads_bind(ads_t *ads, vka_t *vka, seL4_CPtr *cpu_cap);
  * @param ads ads object to clone
  * @param vka vka object to allocate cspace slots and PT from
  * @param omit_vaddr start vaddr of the segment to omit
+ * @param pd_osm_data vaddr of a PDs osm data (e.g. RD table) - we need to shallow copy this
  * @param shallow_copy if true, only copy the page table entries, do not copy the frames
  * @param ret_ads return ads of the cloned ads
  * @return int
  */
 int ads_shallow_copy(vspace_t *loader, ads_t *ads, vka_t *vka, void *omit_vaddr,
-                     bool shallow_copy, ads_t *ret_ads);
+                     void *pd_osm_data, bool shallow_copy, ads_t *ret_ads);
 
 /**
  * @brief
