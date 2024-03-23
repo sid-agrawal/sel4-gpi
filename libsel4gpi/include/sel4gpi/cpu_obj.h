@@ -22,9 +22,11 @@ typedef struct _cpu
     vka_object_t *tcb;
     void *stack_top;
     void *tls_base;
-    void *ipc_buffer_addr;
+    seL4_Word ipc_buffer_addr;
     seL4_CPtr ipc_buffer_frame;
     seL4_CPtr cspace;
+    seL4_Word cspace_guard;
+    seL4_CPtr fault_ep;
 } cpu_t;
 
 /**

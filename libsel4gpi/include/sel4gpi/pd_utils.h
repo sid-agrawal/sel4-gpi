@@ -2,6 +2,8 @@
  * Defines some utility functions for osmosis PDs
  */
 
+#include <sel4gpi/badge_usage.h>
+#include <stdint.h>
 #include <sel4/types.h>
 
 /*
@@ -13,6 +15,11 @@ seL4_CPtr sel4gpi_get_pd_cap(void);
  * Get the osmosis ads cap from the env
  */
 seL4_CPtr sel4gpi_get_ads_cap(void);
+
+/*
+ * Get the osmosis cpu cap from the env
+ */
+seL4_CPtr sel4gpi_get_cpu_cap(void);
 
 /*
  * Get an osmosis RDE from the env

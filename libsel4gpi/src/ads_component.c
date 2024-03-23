@@ -39,7 +39,7 @@ uint64_t ads_assign_new_badge_and_objectID(ads_component_registry_entry_t *reg)
     seL4_Word badge_val = gpi_new_badge(GPICAP_TYPE_ADS,
                                         0x00,
                                         0x00,
-                                        NSID_DEFAULT,
+                                        new_id,
                                         new_id);
 
     assert(badge_val != 0);
@@ -143,7 +143,8 @@ ads_component_registry_entry_t *ads_component_registry_get_entry_by_id(seL4_Word
 
 static void handle_ads_allocation(seL4_Word sender_badge, seL4_MessageInfo_t *reply_tag)
 {
-    OSDB_PRINTF(ADSSERVS "main: Got ADS connect request\n");
+    OSDB_PRINTF(ADSSERVS "main: Got ADS connect request from %lx\n", sender_badge);
+    badge_print(sender_badge);
 
     /* Allocate a new registry entry for the client. */
     ads_component_registry_entry_t *client_reg_ptr = malloc(sizeof(ads_component_registry_entry_t));
@@ -179,11 +180,16 @@ static void handle_ads_allocation(seL4_Word sender_badge, seL4_MessageInfo_t *re
     uint32_t client_id = get_client_id_from_badge(sender_badge);
 
     // (XXX) Linh: this is not very nice as we're coupling the PD and ADS components
-    osmosis_pd_cap_t *res = pd_add_resource_by_id(client_id, GPICAP_TYPE_ADS, get_object_id_from_badge(badge));
-    if (res)
+    pd_component_registry_entry_t *client_pd_data = pd_component_registry_get_entry_by_id(client_id);
+    ZF_LOGF_IF(client_pd_data == NULL, "Couldn't find PD client data");
+    pd_add_resource(&client_pd_data->pd, GPICAP_TYPE_ADS, get_object_id_from_badge(badge), dest_cptr, seL4_CapNull, seL4_CapNull);
+    badge = set_client_id_to_badge(badge, client_id);
+
+    rde_type_t type = {.type = GPICAP_TYPE_ADS};
+    error = pd_add_rde(&client_pd_data->pd, type, get_gpi_server()->ads_manager_id, get_ns_id_from_badge(badge), get_ads_component()->server_ep_obj.cptr);
+    if (error)
     {
-        res->slot_in_RT_Debug = dest_cptr;
-        badge = set_client_id_to_badge(badge, client_id);
+        OSDB_PRINTF(ADSSERVS "main: Failed to add ADS to PD's RDE\n");
     }
 
     error = vka_cnode_mint(&dest,
@@ -227,7 +233,7 @@ int ads_component_attach(uint64_t ads_id, uint64_t mo_id, void *vaddr, void **re
     uint32_t num_pages = mo_reg->mo.num_pages;
     mo_frame_t *root_frame_caps = mo_reg->mo.frame_caps_in_root_task;
 
-    OSDB_PRINTF(ADSSERVS "attaching mo with id %lu\n", mo_reg->mo.mo_obj_id);
+    OSDB_PRINTF(ADSSERVS "attaching mo with id %lu, num pages: %d\n", mo_reg->mo.mo_obj_id, num_pages);
 
     /* Make a copy of the frame caps for this new mapping */
     attach_node_t *attach_node = malloc(sizeof(attach_node_t));
@@ -284,8 +290,8 @@ int ads_component_attach(uint64_t ads_id, uint64_t mo_id, void *vaddr, void **re
 
 static void handle_attach_req(seL4_Word sender_badge, seL4_MessageInfo_t old_tag, seL4_CPtr mo_cap)
 {
-    OSDB_PRINTF(ADSSERVS "main: Got attach request from client badge %lx.\n",
-                sender_badge);
+    OSDB_PRINTF(ADSSERVS "main: Got attach request from client badge %lx.\n", sender_badge);
+    badge_print(sender_badge);
 
     int error;
 
@@ -386,10 +392,19 @@ static void handle_shallow_copy_req(seL4_Word sender_badge)
     void *omit_vaddr = (void *)seL4_GetMR(ADSMSGREG_SHALLOW_COPY_REQ_OMIT_VA);
     ads_t *src_ads = &client_data->ads;
     ads_t *dst_ads = &client_reg_ptr->ads;
+
+    pd_component_registry_entry_t *pd_data = pd_component_registry_get_entry_by_id(get_client_id_from_badge(sender_badge));
+    if (pd_data == NULL)
+    {
+        OSDB_PRINTF(ADSSERVS "main: Couldn't find sender's PD data\n");
+        return;
+    }
+
     int error = ads_shallow_copy(get_ads_component()->server_vspace,
                                  src_ads,
                                  get_ads_component()->server_vka,
                                  omit_vaddr,
+                                 (void *)pd_data->pd.init_data_in_PD,
                                  false, // true,
                                  dst_ads);
     if (error)
@@ -413,6 +428,20 @@ static void handle_shallow_copy_req(seL4_Word sender_badge)
     vka_cspace_make_path(get_ads_component()->server_vka, dest_cptr, &dest_path);
 
     seL4_Word badge = ads_assign_new_badge_and_objectID(client_reg_ptr);
+
+    seL4_Word client_id = get_client_id_from_badge(sender_badge);
+    pd_component_registry_entry_t *client_pd_data = pd_component_registry_get_entry_by_id(client_id);
+    ZF_LOGF_IF(client_pd_data == NULL, "Couldn't find PD client data");
+    pd_add_resource(&client_pd_data->pd, GPICAP_TYPE_ADS, get_object_id_from_badge(badge), dest_cptr, seL4_CapNull, seL4_CapNull);
+    badge = set_client_id_to_badge(badge, client_id);
+
+    rde_type_t type = {.type = GPICAP_TYPE_ADS};
+    error = pd_add_rde(&client_pd_data->pd, type, get_gpi_server()->ads_manager_id, get_ns_id_from_badge(badge), get_ads_component()->server_ep_obj.cptr);
+    if (error)
+    {
+        OSDB_PRINTF(ADSSERVS "main: Failed to add ADS to PD's RDE\n");
+    }
+
     error = vka_cnode_mint(&dest_path,
                            &src_path,
                            seL4_AllRights,

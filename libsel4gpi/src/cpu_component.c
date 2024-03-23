@@ -283,7 +283,7 @@ static void handle_config_req(seL4_Word sender_badge,
                               fault_ep,
                               ipc_buf_frame,
                               ipc_buf_addr,
-                              stack);
+                              (void *)stack);
     if (error)
     {
         OSDB_PRINTF(CPUSERVS "main: Failed to config from client badge:");
@@ -335,18 +335,17 @@ static void handle_change_vspace_req(seL4_Word sender_badge,
 
     /* Get the vspace for the ads */
     seL4_Word ads_cap_badge = seL4_GetBadge(0);
-    ads_t ads;
-    ads_component_registry_entry_t *asre = ads_component_registry_get_entry_by_badge(ads_cap_badge);
-    if (asre == NULL)
+    ads_component_registry_entry_t *ads_data = ads_component_registry_get_entry_by_badge(ads_cap_badge);
+    if (ads_data == NULL)
     {
         OSDB_PRINTF(CPUSERVS "main: Failed to find ads badge %lx.\n", ads_cap_badge);
         assert(0);
         return;
     }
 
-    OSDB_PRINTF(CPUSERVS "Found ads_data with object ID: %u.\n", asre->ads.ads_obj_id);
+    OSDB_PRINTF(CPUSERVS "Found ads_data with object ID: %u.\n", ads_data->ads.ads_obj_id);
     // /* Get the vspace for the ads */
-    vspace_t *ads_vspace = asre->ads.vspace;
+    vspace_t *ads_vspace = ads_data->ads.vspace;
 
     error = cpu_change_vspace(&client_data->cpu,
                               get_cpu_component()->server_vka,
@@ -360,9 +359,12 @@ static void handle_change_vspace_req(seL4_Word sender_badge,
     }
     OSDB_PRINTF(CPUSERVS "main: config done.\n");
 
+    pd_component_registry_entry_t *pd_data = pd_component_registry_get_entry_by_id(get_client_id_from_badge(sender_badge));
+    pd_data->pd.init_data->binded_ads_ns_id = ads_data->ads.ads_obj_id;
+
     seL4_SetMR(CPUMSGREG_FUNC, CPU_FUNC_CONFIG_ACK);
-    seL4_SetMR(1, 0xdead);
-    seL4_MessageInfo_t tag = seL4_MessageInfo_new(error, 0, 0, 1 + CPUMSGREG_CONFIG_ACK_END);
+    seL4_MessageInfo_t tag = seL4_MessageInfo_new(error, 0, 0, CPUMSGREG_CHANGE_VSPACE_ACK_END);
+
     return reply(tag);
 }
 

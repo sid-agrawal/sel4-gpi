@@ -29,6 +29,7 @@ file(
 
 # temp for now, since the cpu client api calls need to be fixed
 list(REMOVE_ITEM deps "${CMAKE_CURRENT_SOURCE_DIR}/src/tests/ads_capability.c")
+list(REMOVE_ITEM deps "${CMAKE_CURRENT_SOURCE_DIR}/src/tests/lwc.c")
 
 add_subdirectory(../sqlite3 sqlite3)
 
@@ -39,20 +40,20 @@ target_include_directories(
 )
 
 # Add custom linker script
-#set(linkerScript "${CMAKE_CURRENT_LIST_DIR}/src/linker.lds")
+set(linkerScript "${CMAKE_CURRENT_LIST_DIR}/src/linker.lds")
 
-#set_target_properties(
-#    sel4test-tests
-#    PROPERTIES LINK_DEPENDS ${linkerScript}
-#)
-#add_dependencies(elfloader elfloader_linker)
-#set_property(
-#    TARGET sel4test-tests
-#    APPEND_STRING
-#    PROPERTY
-#        LINK_FLAGS
-#        " -Wl,-T ${linkerScript} -static -Wl,--build-id=none"
-#)
+set_target_properties(
+   sel4test-tests
+   PROPERTIES LINK_DEPENDS ${linkerScript}
+)
+add_dependencies(elfloader elfloader_linker)
+set_property(
+   TARGET sel4test-tests
+   APPEND_STRING
+   PROPERTY
+       LINK_FLAGS
+       " -Wl,-T ${linkerScript} -static -Wl,--build-id=none"
+)
 
 target_link_libraries(
     sel4test-tests

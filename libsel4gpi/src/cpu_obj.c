@@ -29,7 +29,7 @@ int cpu_start(cpu_t *cpu, sel4utils_thread_entry_fn entry_point, seL4_Word arg0)
     int error = seL4_TCB_ReadRegisters(cpu->tcb->cptr,
                                        0, 0, sizeof(regs) / sizeof(seL4_Word), &regs);
     assert(error == 0);
-    sel4utils_arch_init_local_context((void *)entry_point, cpu->ipc_buffer_addr,
+    sel4utils_arch_init_local_context((void *)entry_point, (void *)cpu->ipc_buffer_addr,
                                       NULL, NULL, cpu->stack_top, &regs);
     assert(error == 0);
 
@@ -42,7 +42,6 @@ int cpu_start(cpu_t *cpu, sel4utils_thread_entry_fn entry_point, seL4_Word arg0)
     return 0;
 }
 
-// (XXX) This does the allocation which is weird.
 int cpu_config_vspace(cpu_t *cpu,
                       vka_t *vka,
                       vspace_t *vspace,
@@ -59,6 +58,10 @@ int cpu_config_vspace(cpu_t *cpu,
     assert(vspace_root != 0);
 
     cpu->cspace = root_cnode;
+    cpu->cspace_guard = cnode_guard;
+    cpu->fault_ep = fault_ep;
+    cpu->ipc_buffer_addr = ipc_buf_addr;
+    cpu->ipc_buffer_frame = ipc_buffer_frame;
 
     int error = seL4_TCB_Configure(cpu->tcb->cptr,
                                    fault_ep,   // fault endpoint
@@ -90,22 +93,21 @@ int cpu_change_vspace(cpu_t *cpu,
 {
     OSDB_PRINTF(CPUSERVS "cpu_change_vspace: Configuring CPU\n");
 
-    /* Wheres is the cspace?*/
-
     seL4_CPtr vspace_root = vspace->get_root(vspace); // root page table
     assert(vspace_root != 0);
 
     int error = seL4_TCB_Configure(cpu->tcb->cptr,
-                                   seL4_CapNull,                                 // fault endpoint
-                                   cpu->cspace,                                  // root cnode
-                                   api_make_guard_skip_word(seL4_WordBits - 17), // root cnode size bits
+                                   cpu->fault_ep, // fault endpoint
+                                   cpu->cspace,   // root cnode
+                                   cpu->cspace_guard,
                                    vspace_root,
                                    0, // domain
-                                   (seL4_Word)cpu->ipc_buffer_addr,
+                                   cpu->ipc_buffer_addr,
                                    cpu->ipc_buffer_frame);
-    assert(error == 0);
-    return 0;
+
+    return error;
 }
+
 int cpu_new(cpu_t *cpu,
             vka_t *vka)
 {

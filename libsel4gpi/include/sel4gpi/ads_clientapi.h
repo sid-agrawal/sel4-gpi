@@ -80,7 +80,7 @@ int ads_client_bind_cpu(ads_client_context_t *conn, seL4_CPtr cpu_cap);
  * @param ads_cap_ret return cap
  * @return int 0 on success, -1 on failure.
  */
-int ads_client_shallow_copy(ads_client_context_t *conn, vka_t *vka, void *omit_vaddr,
+int ads_client_shallow_copy(ads_client_context_t *conn, seL4_CPtr free_slot, void *omit_vaddr,
                             ads_client_context_t *conn_ret);
 
 /**

@@ -529,26 +529,21 @@ int pd_load_image(pd_t *pd,
     assert(error == 0);
 
     // the ADS cap is both a resource manager and a resource
-    error = forge_ads_cap_from_vspace(&pd->proc.vspace, get_gpi_server()->server_vka, pd->pd_obj_id, &pd->ads_cap_in_RT, &pd->ads_obj_id);
-    ZF_LOGF_IFERR(error, "Failed to forge child's as cap");
-
-    // Send the ADS cap as a resource
-    seL4_Word badge = gpi_new_badge(GPICAP_TYPE_ADS, 0x00, pd->pd_obj_id, pd->ads_obj_id, pd->ads_obj_id);
-    error = pd_send_cap(pd, pd->ads_cap_in_RT, badge, &pd->init_data->ads_cap);
+    pd->ads_obj_id = target_ads->ads_obj_id;
+    seL4_Word badge = gpi_new_badge(GPICAP_TYPE_ADS, 0x00, pd->pd_obj_id, target_ads->ads_obj_id, target_ads->ads_obj_id);
+    error = pd_send_cap(pd, get_ads_component()->server_ep_obj.cptr, badge, &pd->init_data->ads_cap);
     ZF_LOGF_IFERR(error, "Failed to send ADS resource cap to PD");
 
     // the ADS cap also acts an as RDE, however since its object ID is set, a PD can never
     // make a new ADS from this EP
     rde_type_t ads_rde_type = {.type = GPICAP_TYPE_ADS};
-    error = pd_add_rde(pd, ads_rde_type, get_gpi_server()->ads_manager_id, pd->ads_obj_id, get_ads_component()->server_ep_obj.cptr);
+    error = pd_add_rde(pd, ads_rde_type, get_gpi_server()->ads_manager_id, target_ads->ads_obj_id, get_ads_component()->server_ep_obj.cptr);
     ZF_LOGE_IFERR(error, "Failed to add ADS RDE to PD");
-    pd->init_data->binded_ads_ns_id = pd->ads_obj_id;
+    pd->init_data->binded_ads_ns_id = target_ads->ads_obj_id;
 
     // Send CPU cap as a resource
-    uint32_t cpu_obj_id;
-    error = forge_cpu_cap_from_tcb(&pd->proc, get_gpi_server()->server_vka, pd->pd_obj_id, &pd->cpu_cap_in_RT, &cpu_obj_id);
-    badge = gpi_new_badge(GPICAP_TYPE_CPU, 0x00, pd->pd_obj_id, NSID_DEFAULT, cpu_obj_id);
-    pd_send_cap(pd, pd->cpu_cap_in_RT, badge, &pd->init_data->cpu_cap);
+    badge = gpi_new_badge(GPICAP_TYPE_CPU, 0x00, pd->pd_obj_id, NSID_DEFAULT, target_cpu->cpu_obj_id);
+    pd_send_cap(pd, get_cpu_component()->server_ep_obj.cptr, badge, &pd->init_data->cpu_cap);
     ZF_LOGF_IFERR(error, "Failed to send CPU cap to PD");
 
     memcpy(&pd->proc.vspace, target_ads->vspace, sizeof(vspace_t));
@@ -1010,9 +1005,12 @@ inline void print_pd_osm_cap_info(osmosis_pd_cap_t *o)
 
 inline void print_pd_osm_rde_info(osmosis_rde_t *o)
 {
-    printf("RDE: PD_ID: %u\t Slot_RT:%lu\t Slot_PD: %lu\t T: %s\n",
-           o->pd_obj_id,
-           o->slot_in_RT,
-           o->slot_in_PD,
-           cap_type_to_str(o->type.type));
+    if (o)
+    {
+        printf("RDE: PD_ID: %u\t Slot_RT:%lu\t Slot_PD: %lu\t T: %s\n",
+               o->pd_obj_id,
+               o->slot_in_RT,
+               o->slot_in_PD,
+               cap_type_to_str(o->type.type));
+    }
 }

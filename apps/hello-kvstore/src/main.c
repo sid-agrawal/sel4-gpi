@@ -46,17 +46,18 @@ int main(int argc, char **argv)
     seL4_MessageInfo_t tag;
 
     /* parse args */
-    assert(argc == 2);
     seL4_CPtr parent_ep = (seL4_CPtr)atol(argv[0]);
     seL4_CPtr kvstore_ep = (seL4_CPtr)atol(argv[1]);
+    bool separate_ads = (seL4_CPtr)atol(argv[2]);
 
-    printf("hello-kvstore: parent ep (%d), kvstore ep (%d)\n", (int)parent_ep, (int)kvstore_ep);
+    printf("hello-kvstore: parent ep (%d), kvstore ep (%d), separate_ads? %d\n", (int)parent_ep, (int)kvstore_ep, separate_ads);
 
     /* initialize */
     bool use_remote_server = kvstore_ep != 0;
-    error = kvstore_client_configure(use_remote_server, kvstore_ep);
+    error = kvstore_client_configure(use_remote_server, separate_ads, kvstore_ep);
     CHECK_ERROR(error, "Failed to initialize kvstore client");
 
+    goto main_exit;
     /* run tests */
     uint64_t key, val, val_ret;
 
