@@ -488,7 +488,8 @@ int test_kvstore_lib_same_pd_diff_ads(env_t env)
     test_assert(error == 0);
 
     // /* Print hello model state */
-    // error = pd_client_dump(&hello_pd, NULL, 0);
+    pd_client_context_t self_pd_conn = {.badged_server_ep_cspath.capPtr = sel4gpi_get_pd_cap()};
+    error = pd_client_dump(&self_pd_conn, NULL, 0);
 
     printf("------------------ENDING: %s------------------\n", __func__);
     return sel4test_get_result();

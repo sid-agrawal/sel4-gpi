@@ -57,7 +57,6 @@ int main(int argc, char **argv)
     error = kvstore_client_configure(use_remote_server, separate_ads, kvstore_ep);
     CHECK_ERROR(error, "Failed to initialize kvstore client");
 
-    goto main_exit;
     /* run tests */
     uint64_t key, val, val_ret;
 
