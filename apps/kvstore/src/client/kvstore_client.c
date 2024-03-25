@@ -58,7 +58,7 @@ int kvstore_client_configure(bool n_use_remote_server, bool separate_ads, seL4_C
         error = kvstore_server_init();
         ZF_LOGE_IF(error, "Failed to initialize kvstore");
 
-        client_ads_conn.badged_server_ep_cspath.capPtr = sel4gpi_get_rde(GPICAP_TYPE_ADS);
+        client_ads_conn.badged_server_ep_cspath.capPtr = sel4gpi_get_ads_cap();
         // need to set this variable twice since we're in a different vspace
         self_cpu_conn.badged_server_ep_cspath.capPtr = sel4gpi_get_cpu_cap();
         swap_err = cpu_client_change_vspace(&self_cpu_conn, &client_ads_conn);

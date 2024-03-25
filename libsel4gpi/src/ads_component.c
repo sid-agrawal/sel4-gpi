@@ -239,6 +239,7 @@ int ads_component_attach(uint64_t ads_id, uint64_t mo_id, void *vaddr, void **re
     attach_node_t *attach_node = malloc(sizeof(attach_node_t));
     attach_node->mo_id = mo_id;
     attach_node->frame_caps = malloc(sizeof(seL4_CPtr) * num_pages);
+    attach_node->type = SEL4UTILS_RES_TYPE_OTHER;
     attach_node->next = client_data->ads.attach_nodes;
     client_data->ads.attach_nodes = attach_node;
 

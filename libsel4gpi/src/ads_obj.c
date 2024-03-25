@@ -163,6 +163,27 @@ int ads_bind(ads_t *ads, vka_t *vka, seL4_CPtr *cpu_cap)
     return 0;
 }
 
+static char *ads_res_type_to_str(sel4utils_reservation_type_t type)
+{
+    switch (type)
+    {
+    case SEL4UTILS_RES_TYPE_ELF:
+        return "ELF";
+    case SEL4UTILS_RES_TYPE_STACK:
+        return "STACK";
+    case SEL4UTILS_RES_TYPE_IPC_BUF:
+        return "IPC_BUFFER";
+    case SEL4UTILS_RES_TYPE_HEAP:
+        return "HEAP";
+    case SEL4UTILS_RES_TYPE_SHARED_FRAMES:
+        return "SHARED_FRAMES";
+    case SEL4UTILS_RES_TYPE_OTHER:
+        return "OTHER";
+    default:
+        return "UNKNOWN";
+    }
+}
+
 void ads_dump_rr(ads_t *ads, model_state_t *ms)
 {
     char ads_res_id[CSV_MAX_STRING_SIZE];
@@ -191,8 +212,8 @@ void ads_dump_rr(ads_t *ads, model_state_t *ms)
         added_mo_rrs[num_added_mo_rrs] = res->mo_id;
         num_added_mo_rrs++;
         char res_id[CSV_MAX_STRING_SIZE];
-        make_virtual_res_id(res_id, ads->ads_obj_id, (uint64_t)res->vaddr, "VMR");
-        add_resource(ms, "VirtualRegion", res_id);
+        make_virtual_res_id(res_id, ads->ads_obj_id, (uint64_t)res->vaddr, ads_res_type_to_str(res->type));
+        add_resource(ms, ads_res_type_to_str(res->type), res_id);
         add_resource_depends_on(ms, ads_res_id, res_id);
 
         char mo_res_id[CSV_MAX_STRING_SIZE];
@@ -423,6 +444,21 @@ int ads_shallow_copy(vspace_t *loader,
                 {
                     ZF_LOGE("Failed to map memory while sharing copy: %d\n", error);
                     goto error_exit;
+                }
+
+                for (attach_node_t *res = ads->attach_nodes; res != NULL; res = res->next)
+                {
+                    if (res->vaddr == (void *)from_sel4_res->start)
+                    {
+                        // (XXX) Linh: We don't store the MOs frame caps here... do we even need to?
+                        attach_node_t *new_attach_node = malloc(sizeof(attach_node_t));
+                        new_attach_node->vaddr = (void *)from_sel4_res->start;
+                        new_attach_node->mo_id = res->mo_id;
+                        new_attach_node->type = from_sel4_res->type;
+                        new_attach_node->next = ret_ads->attach_nodes;
+                        ret_ads->attach_nodes = new_attach_node;
+                        break;
+                    }
                 }
             }
         }

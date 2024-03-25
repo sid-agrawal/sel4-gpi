@@ -23,7 +23,8 @@
  * */
 typedef struct _attach_node
 {
-    seL4_Word mo_id; // keeping mo ID so we can get other info from the MO
+    seL4_Word mo_id;
+    sel4utils_reservation_type_t type;
     void *vaddr;
     seL4_CPtr *frame_caps;
     struct _attach_node *next;

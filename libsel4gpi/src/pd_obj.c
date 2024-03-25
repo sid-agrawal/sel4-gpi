@@ -220,6 +220,7 @@ int pd_new(pd_t *pd,
     {
         ZF_LOGE("Couldn't forge an MO for PD's init data\n");
     }
+    pd_add_resource(pd, GPICAP_TYPE_MO, rde_mo_obj->mo_obj_id, pd->init_data_mo.badged_server_ep_cspath.capPtr, seL4_CapNull, pd->init_data_mo.badged_server_ep_cspath.capPtr);
 
     // Setup init data
     pd->init_data->rde_count = 0;
@@ -387,6 +388,19 @@ static int pd_setup_proc(pd_t *pd, vka_t *server_vka, vspace_t *server_vspace, a
         goto error;
     }
 
+    seL4_CPtr mo_cap;
+    mo_t *mo_obj;
+    error = forge_mo_cap_from_frames(&pd->proc.thread.ipc_buffer, 1, server_vka, pd->pd_obj_id, &mo_cap, &mo_obj);
+    ZF_LOGE_IF(error, "Failed to forge MO cap for PD's IPC buffer");
+    pd_add_resource(pd, GPICAP_TYPE_MO, mo_obj->mo_obj_id, mo_cap, seL4_CapNull, mo_cap);
+
+    attach_node_t *ipc_attach_node = malloc(sizeof(attach_node_t));
+    ipc_attach_node->mo_id = mo_obj->mo_obj_id;
+    ipc_attach_node->vaddr = pd->proc.thread.ipc_buffer_addr;
+    ipc_attach_node->type = SEL4UTILS_RES_TYPE_IPC_BUF;
+    ipc_attach_node->next = target_ads->attach_nodes;
+    target_ads->attach_nodes = ipc_attach_node;
+
     /* set up stack */
     pd->proc.thread.stack_size = BYTES_TO_4K_PAGES(CONFIG_SEL4UTILS_STACK_SIZE);
     pd->proc.thread.stack_top = vspace_new_sized_stack(target_ads->vspace, pd->proc.thread.stack_size);
@@ -395,7 +409,29 @@ static int pd_setup_proc(pd_t *pd, vka_t *server_vka, vspace_t *server_vspace, a
         ZF_LOGE("Failed to allocate PD's stack");
         goto error;
     }
+
+    seL4_CPtr *stack_caps = calloc(pd->proc.thread.stack_size, sizeof(seL4_CPtr));
+    void *stack_bottom = pd->proc.thread.stack_top - (pd->proc.thread.stack_size * PAGE_SIZE_4K);
+    for (int i = 0; i < pd->proc.thread.stack_size; i++)
+    {
+        stack_caps[i] = sel4utils_get_cap(target_ads->vspace, stack_bottom);
+        stack_bottom += PAGE_SIZE_4K;
+    }
+
+    error = forge_mo_cap_from_frames(stack_caps, pd->proc.thread.stack_size, server_vka, pd->pd_obj_id, &mo_cap, &mo_obj);
+    ZF_LOGE_IF(error, "Failed to forge MO cap for PD's stack");
+    pd_add_resource(pd, GPICAP_TYPE_MO, mo_obj->mo_obj_id, mo_cap, seL4_CapNull, mo_cap);
+
+    attach_node_t *stack_attach_node = malloc(sizeof(attach_node_t));
+    stack_attach_node->mo_id = mo_obj->mo_obj_id;
+    stack_attach_node->vaddr = pd->proc.thread.stack_top - (pd->proc.thread.stack_size * PAGE_SIZE_4K);
+    stack_attach_node->type = SEL4UTILS_RES_TYPE_STACK;
+    stack_attach_node->next = target_ads->attach_nodes;
+    target_ads->attach_nodes = stack_attach_node;
+    free(stack_caps);
+
     return 0;
+
 error:
     if (pd->proc.elf_regions)
     {
@@ -505,6 +541,7 @@ int pd_load_image(pd_t *pd,
                   cpu_t *target_cpu)
 {
     int error = 0;
+    pd->image_name = image_path;
     OSDB_PRINTF(PD_DEBUG, PDSERVS "load_image: loading image %s for pd %p\n", image_path, pd);
     error = pd_setup_common(pd, vka, server_vspace, target_ads);
     assert(error == 0);
@@ -540,6 +577,7 @@ int pd_load_image(pd_t *pd,
     error = pd_add_rde(pd, ads_rde_type, get_gpi_server()->ads_manager_id, target_ads->ads_obj_id, get_ads_component()->server_ep_obj.cptr);
     ZF_LOGE_IFERR(error, "Failed to add ADS RDE to PD");
     pd->init_data->binded_ads_ns_id = target_ads->ads_obj_id;
+    target_cpu->binded_ads_id = target_ads->ads_obj_id;
 
     // Send CPU cap as a resource
     badge = gpi_new_badge(GPICAP_TYPE_CPU, 0x00, pd->pd_obj_id, NSID_DEFAULT, target_cpu->cpu_obj_id);
@@ -763,7 +801,7 @@ int pd_dump(pd_t *pd)
 
     /* These two do not belong here*/
     char pd_name[CSV_MAX_STRING_SIZE];
-    snprintf(pd_name, CSV_MAX_STRING_SIZE, "Proc_%u", pd->pd_obj_id);
+    snprintf(pd_name, CSV_MAX_STRING_SIZE, "%s", pd->image_name);
     char pd_id[CSV_MAX_STRING_SIZE];
     make_res_id(pd_id, GPICAP_TYPE_PD, pd->pd_obj_id);
     add_pd(ms, pd_name, pd_id);
