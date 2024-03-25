@@ -144,4 +144,9 @@ void cpu_dump_rr(cpu_t *cpu, model_state_t *ms)
     make_phys_res_id(core_res_id, cpu->cpu_obj_id, affinity, "Core");
     add_resource(ms, "CpuCore", core_res_id);
     add_resource_depends_on(ms, cpu_res_id, core_res_id);
+
+    // this isn't really an RR, but will be changed in the interp layer
+    char ads_res_id[CSV_MAX_STRING_SIZE];
+    make_res_id(ads_res_id, GPICAP_TYPE_ADS, cpu->binded_ads_id);
+    add_resource_depends_on(ms, cpu_res_id, ads_res_id);
 }

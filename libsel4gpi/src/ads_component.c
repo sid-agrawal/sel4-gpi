@@ -303,7 +303,16 @@ static void handle_attach_req(seL4_Word sender_badge, seL4_MessageInfo_t old_tag
         where ads cap is passed.
         Get frame cap from the MO cap.
     */
-    uint64_t mo_id = get_object_id_from_badge(seL4_GetBadge(0));
+    seL4_Word mo_badge = seL4_GetBadge(0);
+    uint64_t mo_id = get_object_id_from_badge(mo_badge);
+    if (get_cap_type_from_badge(mo_badge) != GPICAP_TYPE_MO)
+    {
+        OSDB_PRINTF(ADS_DEBUG, ADSSERVS "Bad attach request, given MO EP is not an MO\n");
+        badge_print(mo_badge);
+
+        return;
+    }
+
     void *vaddr = (void *)seL4_GetMR(ADSMSGREG_ATTACH_REQ_VA);
 
     error = ads_component_attach(ads_id, mo_id, vaddr, &vaddr);

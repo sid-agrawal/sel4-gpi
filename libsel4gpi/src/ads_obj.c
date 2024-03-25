@@ -20,6 +20,8 @@
 #include <sel4gpi/gpi_server.h>
 #include <sel4gpi/model_exporting.h>
 
+#define MAX_MO_RR 100
+
 int ads_new(vspace_t *loader,
             vka_t *vka,
             ads_t *ret_ads)
@@ -167,8 +169,27 @@ void ads_dump_rr(ads_t *ads, model_state_t *ms)
     make_res_id(ads_res_id, GPICAP_TYPE_ADS, ads->ads_obj_id);
     add_resource(ms, cap_type_to_str(GPICAP_TYPE_ADS), ads_res_id);
 
+    uint32_t added_mo_rrs[MAX_MO_RR];
+    int num_added_mo_rrs = 0;
+    bool skip = false;
     for (attach_node_t *res = ads->attach_nodes; res != NULL; res = res->next)
     {
+        for (int i = 0; i < num_added_mo_rrs; i++)
+        {
+            if (added_mo_rrs[i] == res->mo_id)
+            {
+                skip = true;
+                break;
+            }
+        }
+
+        if (skip)
+        {
+            continue;
+        }
+
+        added_mo_rrs[num_added_mo_rrs] = res->mo_id;
+        num_added_mo_rrs++;
         char res_id[CSV_MAX_STRING_SIZE];
         make_virtual_res_id(res_id, ads->ads_obj_id, (uint64_t)res->vaddr, "VMR");
         add_resource(ms, "VirtualRegion", res_id);
@@ -364,27 +385,8 @@ int ads_shallow_copy(vspace_t *loader,
         if (from_sel4_res->type == SEL4UTILS_RES_TYPE_ELF || from_sel4_res->type == SEL4UTILS_RES_TYPE_IPC_BUF || from_sel4_res->type == SEL4UTILS_RES_TYPE_STACK ||
             from_sel4_res->start == (uintptr_t)pd_osm_data)
         {
-            // we must shallow copy the RD table
-            if (shallow_copy || from_sel4_res->type == SEL4UTILS_RES_TYPE_STACK ||
-                from_sel4_res->start == (uintptr_t)pd_osm_data)
-            {
-                OSDB_PRINTF(ADS_DEBUG, "======================Shallow copying [%s] %p to %p [%s]\n",
-                            human_readable_va_res_type(from_sel4_res->type),
-                            (void *)from_sel4_res->start, (void *)from_sel4_res->end,
-                            human_readable_size(from_sel4_res->end - from_sel4_res->start));
-                error = sel4utils_share_mem_at_vaddr(from, to,
-                                                     (void *)from_sel4_res->start,
-                                                     num_pages,
-                                                     PAGE_BITS_4K,
-                                                     (void *)from_sel4_res->start,
-                                                     new_res);
-                if (error)
-                {
-                    ZF_LOGE("Failed to map memory while sharing copy: %d\n", error);
-                    goto error_exit;
-                }
-            }
-            else
+            // only deep copy ELF, unless shallow copy is specified
+            if (from_sel4_res->type == SEL4UTILS_RES_TYPE_ELF && !shallow_copy)
             {
                 OSDB_PRINTF(ADS_DEBUG, "======================Deep copying [%s] %p to %p [%s]\n",
                             human_readable_va_res_type(from_sel4_res->type),
@@ -402,6 +404,24 @@ int ads_shallow_copy(vspace_t *loader,
                 if (error)
                 {
                     ZF_LOGE("Failed to map memory while making copy: %d\n", error);
+                    goto error_exit;
+                }
+            }
+            else
+            {
+                OSDB_PRINTF(ADS_DEBUG, "======================Shallow copying [%s] %p to %p [%s]\n",
+                            human_readable_va_res_type(from_sel4_res->type),
+                            (void *)from_sel4_res->start, (void *)from_sel4_res->end,
+                            human_readable_size(from_sel4_res->end - from_sel4_res->start));
+                error = sel4utils_share_mem_at_vaddr(from, to,
+                                                     (void *)from_sel4_res->start,
+                                                     num_pages,
+                                                     PAGE_BITS_4K,
+                                                     (void *)from_sel4_res->start,
+                                                     new_res);
+                if (error)
+                {
+                    ZF_LOGE("Failed to map memory while sharing copy: %d\n", error);
                     goto error_exit;
                 }
             }

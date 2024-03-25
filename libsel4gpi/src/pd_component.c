@@ -255,6 +255,7 @@ void update_forged_pd_cap_from_init_data(test_init_data_t *init_data, sel4utils_
     pd_t *pd = &reg_ptr->pd;
     assert(pd != NULL);
     assert(pd->pd_obj_id == 0x1);
+    pd->image_name = "TEST_PD";
 
     // Split the test process' cspace and initialize a vka with half
     seL4_CPtr mid_slot = DIV_ROUND_UP(init_data->free_slots.start + init_data->free_slots.end, 2);

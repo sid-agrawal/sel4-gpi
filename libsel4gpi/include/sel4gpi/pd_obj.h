@@ -120,8 +120,9 @@ typedef struct _osm_pd_init_data
 
 typedef struct _pd
 {
-    /* One of these we will keep */
     uint32_t pd_obj_id;
+    /* This is only for model extraction purposes */
+    char *image_name;
     /* Keeping this, since there's no point in duplicating fields from it in here*/
     sel4utils_process_t proc;
 
@@ -151,14 +152,6 @@ typedef struct _pd
     seL4_CPtr ads_cap_in_RT;
     seL4_CPtr cpu_cap_in_RT;
     uint32_t ads_obj_id;
-
-    /**
-     * =========================================================================
-     *       Field which should ideadlly not be here.
-     * =========================================================================
-     */
-    sel4utils_process_config_t config;
-
 } pd_t;
 
 /*

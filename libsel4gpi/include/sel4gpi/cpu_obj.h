@@ -19,6 +19,7 @@ typedef struct _cpu
     // sel4utils_thread_config_t thread_config;
     // sel4utils_thread_t thread_obj;
     uint64_t cpu_obj_id;
+    uint64_t binded_ads_id;
     vka_object_t *tcb;
     void *stack_top;
     void *tls_base;

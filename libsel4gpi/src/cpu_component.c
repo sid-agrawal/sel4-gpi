@@ -291,6 +291,7 @@ static void handle_config_req(seL4_Word sender_badge,
         assert(0);
         return;
     }
+    client_data->cpu.binded_ads_id = asre->ads.ads_obj_id;
     OSDB_PRINTF(CPU_DEBUG, CPUSERVS "main: config done.\n");
 
     seL4_SetMR(CPUMSGREG_FUNC, CPU_FUNC_CONFIG_ACK);
@@ -361,6 +362,7 @@ static void handle_change_vspace_req(seL4_Word sender_badge,
 
     pd_component_registry_entry_t *pd_data = pd_component_registry_get_entry_by_id(get_client_id_from_badge(sender_badge));
     pd_data->pd.init_data->binded_ads_ns_id = ads_data->ads.ads_obj_id;
+    client_data->cpu.binded_ads_id = ads_data->ads.ads_obj_id;
 
     seL4_SetMR(CPUMSGREG_FUNC, CPU_FUNC_CONFIG_ACK);
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(error, 0, 0, CPUMSGREG_CHANGE_VSPACE_ACK_END);
