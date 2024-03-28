@@ -22,22 +22,6 @@ file(
 
 add_executable(hello_kvstore EXCLUDE_FROM_ALL ${deps})
 
-# Add custom linker script
-set(linkerScript "${CMAKE_CURRENT_LIST_DIR}/linker.lds")
-
-set_target_properties(
-   hello_kvstore
-   PROPERTIES LINK_DEPENDS ${linkerScript}
-)
-add_dependencies(elfloader elfloader_linker)
-set_property(
-   TARGET hello_kvstore
-   APPEND_STRING
-   PROPERTY
-       LINK_FLAGS
-       " -Wl,-T ${linkerScript} -static -Wl,--build-id=none"
-)
-
 target_link_libraries(
     hello_kvstore
     PUBLIC
