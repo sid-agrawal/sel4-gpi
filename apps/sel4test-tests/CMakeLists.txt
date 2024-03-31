@@ -33,7 +33,13 @@ list(REMOVE_ITEM deps "${CMAKE_CURRENT_SOURCE_DIR}/src/tests/lwc.c")
 
 add_subdirectory(../sqlite3 sqlite3)
 
-add_executable(sel4test-tests EXCLUDE_FROM_ALL ${deps})
+include(cpio)
+set(cpio_files "")
+# New binaries in the CPIO go here.
+list(APPEND cpio_files "$<TARGET_FILE:hello-native>")
+MakeCPIO(archive.o "${cpio_files}")
+
+add_executable(sel4test-tests EXCLUDE_FROM_ALL ${deps} archive.o)
 target_include_directories(
     sel4test-tests
     PRIVATE include arch/${KernelArch} sel4_arch/${KernelSel4Arch}

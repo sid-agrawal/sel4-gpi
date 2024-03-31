@@ -40,9 +40,9 @@ size_t morecore_size = 2 * 1024 * 1024;
 uintptr_t morecore_top = (uintptr_t)&morecore_area[TP_MALLOC_SIZE];
 // int *shared_addr_between_threads;
 
-/* dummy global for libsel4muslcsys */
-char _cpio_archive[1];
-char _cpio_archive_end[1];
+/* we use this in native benchmarking */
+extern char _cpio_archive[];
+extern char _cpio_archive_end[];
 
 /* endpoint to call back to the test driver on */
 static seL4_CPtr endpoint;

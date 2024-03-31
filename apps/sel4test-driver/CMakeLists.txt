@@ -66,6 +66,7 @@ add_subdirectory(../xv6fs xv6fs)
 add_subdirectory(../kvstore kvstore)
 add_subdirectory(../hello hello)
 add_subdirectory(../hello-kvstore hello-kvstore)
+add_subdirectory(../hello-native hello-native)
 
 include(cpio)
 set(cpio_files "")

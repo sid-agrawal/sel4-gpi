@@ -11,6 +11,10 @@ if(KernelPlatform STREQUAL "qemu-arm-virt")
     set(KernelPlatVMM "qemu_arm_virt")
 endif()
 
+if(KernelPlatform STREQUAL "odroidc4")
+    set(KernelPlatVMM "${KernelPlatform}")
+endif()
+
 find_program(DTC_TOOL dtc)
     if("${DTC_TOOL}" STREQUAL "DTC_TOOL-NOTFOUND")
         message(FATAL_ERROR "Cannot find 'dtc' program.")
@@ -22,9 +26,8 @@ find_program(LD_LINKER ld)
     endif()
 
 set(
-    VmDTSPath "${CMAKE_CURRENT_SOURCE_DIR}/board/${KernelPlatVMM}/linux.dts" # TODO: don't hardcode this
-    CACHE INTERNAL "Location of VM DTS file"
-    )
+    VmDTSPath "${CMAKE_CURRENT_SOURCE_DIR}/board/${KernelPlatVMM}/linux.dts"
+)
 
 set(
     VmDTBPath "${CMAKE_CURRENT_BINARY_DIR}/linux.dtb"

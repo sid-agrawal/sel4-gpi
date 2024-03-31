@@ -197,14 +197,16 @@ vmm_env_t *vm_setup(seL4_IRQHandler irq_handler, vka_t *vka, vspace_t *vspace, s
     serr = seL4_IRQHandler_SetNotification(irq_handler, path.capPtr);
     ZF_LOGF_IFERR(serr, "Failed to set IRQ notification");
 
+    reservation_t res;
+
 #ifdef BOARD_qemu_arm_virt
     /* map in serial device region */
     error = vka_alloc_frame_at(vka, seL4_PageBits, (uintptr_t)SERIAL_PADDR, &vmm_e->serial_dev_frame[0]);
     ZF_LOGF_IF(error, "Failed to allocate serial device frame");
 
-    reservation_t res = vspace_reserve_range_at(&vmm_e->vm_vspace, (void *)SERIAL_PADDR, BIT(seL4_PageBits), seL4_AllRights, 0);
-    seL4_CPtr caps[1] = {vmm_e->serial_dev_frame[0].cptr};
-    error = vspace_map_pages_at_vaddr(&vmm_e->vm_vspace, caps, NULL, (void *)SERIAL_PADDR, 1, seL4_PageBits, res);
+    res = vspace_reserve_range_at(&vmm_e->vm_vspace, (void *)SERIAL_PADDR, BIT(seL4_PageBits), seL4_AllRights, 0);
+    seL4_CPtr caps = vmm_e->serial_dev_frame[0].cptr;
+    error = vspace_map_pages_at_vaddr(&vmm_e->vm_vspace, &caps, NULL, (void *)SERIAL_PADDR, 1, seL4_PageBits, res);
     ZF_LOGF_IF(error, "Failed to map serial device to VM");
 
     /* GIC vCPU interface region */
@@ -212,8 +214,8 @@ vmm_env_t *vm_setup(seL4_IRQHandler irq_handler, vka_t *vka, vspace_t *vspace, s
     ZF_LOGF_IF(error, "Failed to allocate GIC vCPU frame");
 
     res = vspace_reserve_range_at(&vmm_e->vm_vspace, (void *)LINUX_GIC_PADDR, BIT(seL4_PageBits), seL4_AllRights, 0);
-    caps[0] = vmm_e->gic_vcpu_frame.cptr;
-    error = vspace_map_pages_at_vaddr(&vmm_e->vm_vspace, caps, NULL, (void *)LINUX_GIC_PADDR, 1, seL4_PageBits, res);
+    caps = vmm_e->gic_vcpu_frame.cptr;
+    error = vspace_map_pages_at_vaddr(&vmm_e->vm_vspace, &caps, NULL, (void *)LINUX_GIC_PADDR, 1, seL4_PageBits, res);
     ZF_LOGF_IF(error, "Failed to map GIC vCPU region to VM");
 #endif
 
@@ -228,18 +230,18 @@ vmm_env_t *vm_setup(seL4_IRQHandler irq_handler, vka_t *vka, vspace_t *vspace, s
     ZF_LOGF_IF(error, "Failed to allocate odroid bus 3 frame");
 
     res = vspace_reserve_range_at(&vmm_e->vm_vspace, (void *)ODROID_BUS1, BIT(seL4_PageBits), seL4_AllRights, 0);
-    caps[0] = vmm_e->serial_dev_frame[0].cptr;
-    error = vspace_map_pages_at_vaddr(&vmm_e->vm_vspace, caps, NULL, (void *)ODROID_BUS1, 1, seL4_PageBits, res);
+    seL4_CPtr caps = vmm_e->serial_dev_frame[0].cptr;
+    error = vspace_map_pages_at_vaddr(&vmm_e->vm_vspace, &caps, NULL, (void *)ODROID_BUS1, 1, seL4_PageBits, res);
     ZF_LOGF_IF(error, "Failed to map odroid bus 1 region to VM");
 
     res = vspace_reserve_range_at(&vmm_e->vm_vspace, (void *)ODROID_BUS2, BIT(seL4_PageBits), seL4_AllRights, 0);
-    caps[0] = vmm_e->serial_dev_frame[1].cptr;
-    error = vspace_map_pages_at_vaddr(&vmm_e->vm_vspace, caps, NULL, (void *)ODROID_BUS2, 1, seL4_PageBits, res);
+    caps = vmm_e->serial_dev_frame[1].cptr;
+    error = vspace_map_pages_at_vaddr(&vmm_e->vm_vspace, &caps, NULL, (void *)ODROID_BUS2, 1, seL4_PageBits, res);
     ZF_LOGF_IF(error, "Failed to map odroid bus 2 region to VM");
 
     res = vspace_reserve_range_at(&vmm_e->vm_vspace, (void *)ODROID_BUS3, BIT(seL4_PageBits), seL4_AllRights, 0);
-    caps[0] = vmm_e->serial_dev_frame[2].cptr;
-    error = vspace_map_pages_at_vaddr(&vmm_e->vm_vspace, caps, NULL, (void *)ODROID_BUS3, 1, seL4_PageBits, res);
+    caps = vmm_e->serial_dev_frame[2].cptr;
+    error = vspace_map_pages_at_vaddr(&vmm_e->vm_vspace, &caps, NULL, (void *)ODROID_BUS3, 1, seL4_PageBits, res);
     ZF_LOGF_IF(error, "Failed to map odroid bus 3 region to VM");
 #endif
 
