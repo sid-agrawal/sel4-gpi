@@ -8,7 +8,7 @@
 /* Ramdisk configuration */
 #define RAMDISK_DEBUG 0
 #define RAMDISK_BLOCK_SIZE (1u << seL4_PageBits) // Block size for the ramdisk
-#define RAMDISK_SIZE_BITS 21                     // Size of total ramdisk
+#define RAMDISK_SIZE_BITS 22                     // Size of total ramdisk
 #define RAMDISK_SIZE_BYTES (1u << RAMDISK_SIZE_BITS)
 
 /* API of the ramdisk server */

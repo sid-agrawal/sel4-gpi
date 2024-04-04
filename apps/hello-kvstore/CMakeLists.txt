@@ -21,6 +21,10 @@ file(
 )
 
 add_executable(hello_kvstore EXCLUDE_FROM_ALL ${deps})
+target_include_directories(
+    hello_kvstore
+    PRIVATE include 
+)
 
 target_link_libraries(
     hello_kvstore

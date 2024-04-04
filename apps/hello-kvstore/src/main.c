@@ -14,7 +14,10 @@
 #include <sel4/sel4.h>
 #include <sel4utils/process.h>
 
+#include <sel4gpi/pd_utils.h>
+#include <fs_client.h>
 #include <kvstore_client.h>
+#include <sqlite_test.h>
 
 /* dummy global for libsel4muslcsys */
 char _cpio_archive[1];
@@ -39,25 +42,10 @@ uintptr_t morecore_top = (uintptr_t)&morecore_area[APP_MALLOC_SIZE];
         }                                      \
     } while (0);
 
-int main(int argc, char **argv)
+int kvstore_tests(void)
 {
-    printf("hello-kvstore main!\n");
     int error;
-    seL4_MessageInfo_t tag;
 
-    /* parse args */
-    seL4_CPtr parent_ep = (seL4_CPtr)atol(argv[0]);
-    seL4_CPtr kvstore_ep = (seL4_CPtr)atol(argv[1]);
-    bool separate_ads = (seL4_CPtr)atol(argv[2]);
-
-    printf("hello-kvstore: parent ep (%d), kvstore ep (%d), separate_ads? %d\n", (int)parent_ep, (int)kvstore_ep, separate_ads);
-
-    /* initialize */
-    bool use_remote_server = kvstore_ep != 0;
-    error = kvstore_client_configure(use_remote_server, separate_ads, kvstore_ep);
-    CHECK_ERROR(error, "Failed to initialize kvstore client");
-
-    /* run tests */
     uint64_t key, val, val_ret;
 
     // Set and get one value
@@ -95,6 +83,43 @@ int main(int argc, char **argv)
         CHECK_ERROR(error, "Failed to get a value");
         CHECK_ERROR(val != val_ret, "Get value is different from set");
     }
+
+main_exit:
+    return error;
+}
+
+int main(int argc, char **argv)
+{
+    printf("hello-kvstore main!\n");
+    int error;
+    seL4_MessageInfo_t tag;
+
+    /* parse args */
+    seL4_CPtr parent_ep = (seL4_CPtr)atol(argv[0]);
+    seL4_CPtr kvstore_ep = (seL4_CPtr)atol(argv[1]);
+    bool separate_ads = (seL4_CPtr)atol(argv[2]);
+    seL4_CPtr fs_ep = sel4gpi_get_rde(GPICAP_TYPE_FILE);
+    seL4_CPtr mo_ep = sel4gpi_get_rde(GPICAP_TYPE_MO);
+
+    printf("hello-kvstore: parent ep (%d), kvstore ep (%d), separate_ads? %d, fs ep(%d), mo ep(%d) \n", (int)parent_ep, (int)kvstore_ep, separate_ads, (int)fs_ep, (int)mo_ep);
+
+    /* initialize */
+    error = xv6fs_client_init();
+    CHECK_ERROR(error, "Failed to initialize file system");
+    printf("hello-kvstore: Initialized file system client\n");
+
+    /* run kvstore tests */
+    bool use_remote_server = kvstore_ep != 0;
+    error = kvstore_client_configure(use_remote_server, separate_ads, kvstore_ep);
+    CHECK_ERROR(error, "Failed to initialize kvstore client");
+    error = kvstore_tests();
+    CHECK_ERROR(error, "Failed kvstore tests");
+    printf("hello-kvstore: Completed kvstore tests\n");
+
+    /* use the file system a bit */
+    //error = sqlite_tests();
+    CHECK_ERROR(error, "Failed sqlite tests");
+    printf("hello-kvstore: Completed sqlite tests\n");
 
 main_exit:
     /* notify parent of test result */

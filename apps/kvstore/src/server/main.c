@@ -71,6 +71,9 @@ int main(int argc, char **argv)
     /* parse args */
     assert(argc == 1);
     seL4_CPtr parent_ep = (seL4_CPtr)atol(argv[0]);
+    seL4_CPtr fs_ep = sel4gpi_get_rde(GPICAP_TYPE_FILE);
+    
+    printf("kvstore-server: parent ep (%d), fs ep(%d) \n", (int)parent_ep, (int)fs_ep);
 
     pd_client_context_t pd_conn;
     pd_conn.badged_server_ep_cspath.capPtr = sel4gpi_get_pd_cap();

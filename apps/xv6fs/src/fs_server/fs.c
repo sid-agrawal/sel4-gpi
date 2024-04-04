@@ -223,7 +223,7 @@ ialloc(uint32_t dev, short type)
     }
     brelse(bp);
   }
-  printf("ialloc: no inodes\n");
+  printf("ialloc: no inodes, max is %d\n", sb.ninodes);
   return 0;
 }
 

@@ -107,6 +107,10 @@ static int start_kvstore_server(seL4_CPtr *kvstore_ep, uint64_t fs_nsid, uint64_
     error = pd_client_send_cap(&new_pd, self_ep, &args[0]);
     test_assert(error == 0);
 
+    // Give the MO RDE
+    error = pd_client_share_rde(&new_pd, GPICAP_TYPE_MO, NSID_DEFAULT);
+    test_assert(error == 0);
+
     // Give the FS RDE
     if (fs_pd_cap)
     {
@@ -120,10 +124,6 @@ static int start_kvstore_server(seL4_CPtr *kvstore_ep, uint64_t fs_nsid, uint64_
         error = pd_client_share_rde(&new_pd, GPICAP_TYPE_FILE, fs_nsid);
         test_assert(error == 0);
     }
-
-    // Also need to give the MO rde since FS clients need some MO for requests
-    error = pd_client_share_rde(&new_pd, GPICAP_TYPE_MO, NSID_DEFAULT);
-    test_assert(error == 0);
 
     // Start it
     error = pd_client_start(&new_pd, argc, args);
@@ -152,11 +152,17 @@ static int start_kvstore_server(seL4_CPtr *kvstore_ep, uint64_t fs_nsid, uint64_
  *                           to remote kvstore server PD
  * @param kvstore_ep ep to use for remote kvstore (optional)
  * @param hello_pd returns the pd resource for the hello process
+ * @param fs_nsid namespace ID of fs to share
+ * @param fs_manager_id set to a special fs manager id that is not in the current RD (optional)
+ * @param fs_pd_cap set to a special fs_ep that is not in the current RD (optional)
  */
 static int start_hello_kvstore(bool use_remote_kvstore,
                                bool separate_ads,
                                seL4_CPtr kvstore_ep,
-                               pd_client_context_t *hello_pd)
+                               pd_client_context_t *hello_pd,
+                               uint64_t fs_nsid,
+                               uint64_t fs_manager_id,
+                               seL4_CPtr fs_pd_cap)
 {
     int error;
 
@@ -209,6 +215,24 @@ static int start_hello_kvstore(bool use_remote_kvstore,
         args[1] = 0;
     }
 
+    // Give the MO RDE
+    error = pd_client_share_rde(&new_pd, GPICAP_TYPE_MO, NSID_DEFAULT);
+    test_assert(error == 0);
+
+    // Give the FS RDE
+    if (fs_pd_cap)
+    {
+        // Share a new FS RDE
+        error = pd_client_add_rde(&new_pd, fs_pd_cap, fs_manager_id, fs_nsid);
+        test_assert(error == 0);
+    }
+    else
+    {
+        // Share our own FS RDE
+        error = pd_client_share_rde(&new_pd, GPICAP_TYPE_FILE, fs_nsid);
+        test_assert(error == 0);
+    }
+
     // separate ADS arg only makes sense if KVserver is not remote
     if (separate_ads && !use_remote_kvstore)
     {
@@ -220,17 +244,6 @@ static int start_hello_kvstore(bool use_remote_kvstore,
         // test_assert(error == 0);
 
         error = pd_client_share_rde(&new_pd, GPICAP_TYPE_ADS, NSID_DEFAULT);
-    }
-
-    // Give the FS RDE, if not using remote kvstore
-    if (!use_remote_kvstore)
-    {
-        error = pd_client_share_rde(&new_pd, GPICAP_TYPE_FILE, NSID_DEFAULT);
-        test_assert(error == 0);
-
-        // Also need to give the MO rde since FS clients need some MO for requests
-        error = pd_client_share_rde(&new_pd, GPICAP_TYPE_MO, NSID_DEFAULT);
-        test_assert(error == 0);
     }
 
     // Start it
@@ -251,7 +264,7 @@ int test_kvstore_lib_in_same_pd(env_t env)
 
     /* Start the combined app/lib PD */
     pd_client_context_t hello_pd;
-    error = start_hello_kvstore(false, false, 0, &hello_pd);
+    error = start_hello_kvstore(false, false, 0, &hello_pd, NSID_DEFAULT, 0, 0);
 
     /* Wait for test result */
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0, 0);
@@ -259,8 +272,9 @@ int test_kvstore_lib_in_same_pd(env_t env)
     error = seL4_MessageInfo_get_label(tag);
     test_assert(error == 0);
 
-    /* Print hello model state */
-    error = pd_client_dump(&hello_pd, NULL, 0);
+    /* Print model state */
+    error = pd_client_dump(&pd_conn, NULL, 0);
+    test_assert(error == 0);
 
     printf("------------------ENDING: %s------------------\n", __func__);
     return sel4test_get_result();
@@ -283,7 +297,7 @@ int test_kvstore_lib_in_diff_pd(env_t env)
 
     /* Start the app PD */
     pd_client_context_t hello_pd;
-    error = start_hello_kvstore(true, false, kvstore_ep, &hello_pd);
+    error = start_hello_kvstore(true, false, kvstore_ep, &hello_pd, NSID_DEFAULT, 0, 0);
 
     /* Wait for test result */
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0, 0);
@@ -291,68 +305,16 @@ int test_kvstore_lib_in_diff_pd(env_t env)
     error = seL4_MessageInfo_get_label(tag);
     test_assert(error == 0);
 
-    /* Print hello model state */
-    error = pd_client_dump(&hello_pd, NULL, 0);
+    /* Print model state */
+    error = pd_client_dump(&pd_conn, NULL, 0);
+    test_assert(error == 0);
 
     printf("------------------ENDING: %s------------------\n", __func__);
     return sel4test_get_result();
 }
-DEFINE_TEST(GPIKV002, "Test kvstore with app and lib in different PDs", test_kvstore_lib_in_diff_pd, true)
+DEFINE_TEST(GPIKV002, "Test kvstore with app and lib in different PDs, same FS, same NS", test_kvstore_lib_in_diff_pd, true)
 
-int test_2_kvstore_same_fs(env_t env)
-{
-    int error;
-
-    printf("------------------STARTING TEST: %s------------------\n", __func__);
-
-    error = setup(env);
-    test_assert(error == 0);
-
-    /* Start the kvstore PD 1 */
-    seL4_CPtr kvstore_ep_1;
-    error = start_kvstore_server(&kvstore_ep_1, NSID_DEFAULT, 0, 0);
-    test_assert(error == 0);
-
-    /* Start the app PD 1 */
-    pd_client_context_t hello_pd_1;
-    error = start_hello_kvstore(true, false, kvstore_ep_1, &hello_pd_1);
-    test_assert(error == 0);
-
-    /* Wait for test result 1 */
-    seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0, 0);
-    tag = seL4_Recv(self_ep, NULL);
-    error = seL4_MessageInfo_get_label(tag);
-    test_assert(error == 0);
-
-    /* Start the kvstore PD 2 */
-    /*
-    (XXX) Arya: This does not work if done in parallel with the first kvstore!!
-    Some concurrency issue with the file system causes a sqlite issue
-    */
-    seL4_CPtr kvstore_ep_2;
-    error = start_kvstore_server(&kvstore_ep_2, NSID_DEFAULT, 0, 0);
-    test_assert(error == 0);
-
-    /* Start the app PD 2 */
-    pd_client_context_t hello_pd_2;
-    error = start_hello_kvstore(true, false, kvstore_ep_2, &hello_pd_2);
-    test_assert(error == 0);
-
-    /* Wait for test result 2 */
-    tag = seL4_Recv(self_ep, NULL);
-    error = seL4_MessageInfo_get_label(tag);
-    test_assert(error == 0);
-
-    /* Print hello model state */
-    // error = pd_client_dump(&hello_pd_1, NULL, 0);
-    // error = pd_client_dump(&hello_pd_2, NULL, 0);
-
-    printf("------------------ENDING: %s------------------\n", __func__);
-    return sel4test_get_result();
-}
-DEFINE_TEST(GPIKV003, "Test two kvstore with the same FS", test_2_kvstore_same_fs, true)
-
-int test_2_kvstore_diff_namespace(env_t env)
+int test_kvstore_diff_namespace(env_t env)
 {
     int error;
 
@@ -371,51 +333,32 @@ int test_2_kvstore_diff_namespace(env_t env)
     error = resource_server_client_new_ns(fs_ep, &nsid_2);
     test_assert(error == 0);
 
-    /* Start the kvstore PD 1 */
+    /* Start the kvstore PD */
     seL4_CPtr kvstore_ep_1;
     error = start_kvstore_server(&kvstore_ep_1, nsid_1, 0, 0);
     test_assert(error == 0);
 
-    /* Start the app PD 1 */
+    /* Start the app PD */
     pd_client_context_t hello_pd_1;
-    error = start_hello_kvstore(true, false, kvstore_ep_1, &hello_pd_1);
+    error = start_hello_kvstore(true, false, kvstore_ep_1, &hello_pd_1, nsid_2, 0, 0);
     test_assert(error == 0);
 
-    /* Wait for test result 1 */
+    /* Wait for test result */
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0, 0);
     tag = seL4_Recv(self_ep, NULL);
     error = seL4_MessageInfo_get_label(tag);
     test_assert(error == 0);
 
-    /* Start the kvstore PD 2 */
-    /*
-    (XXX) Arya: This does not work if done in parallel with the first kvstore!!
-    Some concurrency issue with the file system causes a sqlite issue
-    */
-    seL4_CPtr kvstore_ep_2;
-    error = start_kvstore_server(&kvstore_ep_2, nsid_2, 0, 0);
+    /* Print model state */
+    error = pd_client_dump(&pd_conn, NULL, 0);
     test_assert(error == 0);
-
-    /* Start the app PD 2 */
-    pd_client_context_t hello_pd_2;
-    error = start_hello_kvstore(true, false, kvstore_ep_2, &hello_pd_2);
-    test_assert(error == 0);
-
-    /* Wait for test result 2 */
-    tag = seL4_Recv(self_ep, NULL);
-    error = seL4_MessageInfo_get_label(tag);
-    test_assert(error == 0);
-
-    /* Print hello model state */
-    // error = pd_client_dump(&hello_pd_1, NULL, 0);
-    // error = pd_client_dump(&hello_pd_2, NULL, 0);
 
     printf("------------------ENDING: %s------------------\n", __func__);
     return sel4test_get_result();
 }
-DEFINE_TEST(GPIKV004, "Test two kvstore with the same FS, different namespace", test_2_kvstore_diff_namespace, true)
+DEFINE_TEST(GPIKV003, "Test app and lib with same FS, different namespace", test_kvstore_diff_namespace, true)
 
-int test_2_kvstore_different_fs(env_t env)
+int test_kvstore_diff_fs(env_t env)
 {
     int error;
 
@@ -428,45 +371,30 @@ int test_2_kvstore_different_fs(env_t env)
     error = start_xv6fs_pd(ramdisk_id, ramdisk_pd_cap, &fs_2_pd_cap, &fs_2_id);
     test_assert(error == 0);
 
-    /* Start the kvstore PD 1 */
+    /* Start the kvstore PD */
     seL4_CPtr kvstore_ep_1;
     error = start_kvstore_server(&kvstore_ep_1, NSID_DEFAULT, 0, 0);
     test_assert(error == 0);
 
-    /* Start the app PD 1 */
+    /* Start the app PD */
     pd_client_context_t hello_pd_1;
-    error = start_hello_kvstore(true, false, kvstore_ep_1, &hello_pd_1);
+    error = start_hello_kvstore(true, false, kvstore_ep_1, &hello_pd_1, NSID_DEFAULT, fs_2_id, fs_2_pd_cap);
     test_assert(error == 0);
 
-    /* Wait for test result 1 */
+    /* Wait for test result */
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0, 0);
     tag = seL4_Recv(self_ep, NULL);
     error = seL4_MessageInfo_get_label(tag);
     test_assert(error == 0);
 
-    /* Start the kvstore PD 2 */
-    seL4_CPtr kvstore_ep_2;
-    error = start_kvstore_server(&kvstore_ep_2, NSID_DEFAULT, fs_2_id, fs_2_pd_cap);
+    /* Print model state */
+    error = pd_client_dump(&pd_conn, NULL, 0);
     test_assert(error == 0);
-
-    /* Start the app PD 2 */
-    pd_client_context_t hello_pd_2;
-    error = start_hello_kvstore(true, false, kvstore_ep_2, &hello_pd_2);
-    test_assert(error == 0);
-
-    /* Wait for test result 2 */
-    tag = seL4_Recv(self_ep, NULL);
-    error = seL4_MessageInfo_get_label(tag);
-    test_assert(error == 0);
-
-    /* Print hello model state */
-    // error = pd_client_dump(&hello_pd_1, NULL, 0);
-    // error = pd_client_dump(&hello_pd_2, NULL, 0);
 
     printf("------------------ENDING: %s------------------\n", __func__);
     return sel4test_get_result();
 }
-DEFINE_TEST(GPIKV005, "Test two kvstore with different FS", test_2_kvstore_different_fs, true)
+DEFINE_TEST(GPIKV004, "Test app and lib with different", test_kvstore_diff_fs, true)
 
 int test_kvstore_lib_same_pd_diff_ads(env_t env)
 {
@@ -479,7 +407,7 @@ int test_kvstore_lib_same_pd_diff_ads(env_t env)
 
     // /* Start the combined app/lib PD */
     pd_client_context_t hello_pd;
-    error = start_hello_kvstore(false, true, 0, &hello_pd);
+    error = start_hello_kvstore(false, true, 0, &hello_pd, NSID_DEFAULT, 0, 0);
 
     /* Wait for test result */
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0, 0);
@@ -487,11 +415,11 @@ int test_kvstore_lib_same_pd_diff_ads(env_t env)
     error = seL4_MessageInfo_get_label(tag);
     test_assert(error == 0);
 
-    // /* Print hello model state */
-    pd_client_context_t self_pd_conn = {.badged_server_ep_cspath.capPtr = sel4gpi_get_pd_cap()};
-    error = pd_client_dump(&self_pd_conn, NULL, 0);
+    /* Print model state */
+    error = pd_client_dump(&pd_conn, NULL, 0);
+    test_assert(error == 0);
 
     printf("------------------ENDING: %s------------------\n", __func__);
     return sel4test_get_result();
 }
-DEFINE_TEST(GPIKV006, "Test kvstore with app and lib in the same PD, different ADS", test_kvstore_lib_same_pd_diff_ads, true)
+DEFINE_TEST(GPIKV005, "Test kvstore with app and lib in the same PD, different ADS", test_kvstore_lib_same_pd_diff_ads, true)

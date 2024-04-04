@@ -139,6 +139,11 @@ xv6fs_client_init(void)
 {
   XV6FS_PRINTF("Initializing client of FS server\n");
 
+  // Do not re-initialize
+  if (get_xv6fs_client()->shared_mem_vaddr != NULL) {
+    return 0;
+  }
+
   int error;
 
   get_xv6fs_client()->fs_ep = sel4gpi_get_rde(GPICAP_TYPE_FILE);
