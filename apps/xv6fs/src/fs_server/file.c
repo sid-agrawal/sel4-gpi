@@ -13,14 +13,19 @@ struct devsw devsw[NDEV];
 struct file *
 filealloc(void)
 {
+  printf("TEMPA huh\n");
   struct file *f = malloc(sizeof(struct file));
+  printf("TEMPA huh 1\n");
 
   if (f == NULL)
   {
+    printf("TEMPA huh 2\n");
     return NULL;
   }
 
+  printf("TEMPA huh 3\n");
   f->ref = 1;
+  printf("TEMPA huh 4\n");
   return f;
 }
 

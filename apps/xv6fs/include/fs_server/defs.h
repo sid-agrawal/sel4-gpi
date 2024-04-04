@@ -30,6 +30,7 @@ struct superblock;
 #define T_FILE 2   // File
 #define T_DEVICE 3 // Device
 #define T_SOCK 4   // Unix-domain socket
+#define T_NULL 5   // Placeholder type for filepaths without file
 
 // other constants
 #define NO_OFFSET -1
@@ -54,7 +55,11 @@ int file_blocknos(struct file *f, int *buf, int buf_size, int *result_size);
 // fs.c
 void fsinit(int);
 void readsb(int dev, struct superblock *sb);
+int isdirempty(struct inode *dp);
 int dirlink(struct inode *, char *, uint32_t);
+int dirunlink(struct inode *dp, char *name);
+int create_filepath(char *path);
+struct inode *create(char *path, short type, short major, short minor);
 struct inode *dirlookup(struct inode *, char *, uint32_t *);
 struct inode *ialloc(uint32_t, short);
 struct inode *idup(struct inode *);
@@ -117,4 +122,5 @@ int xv6fs_sys_utime(char *path, int time);
 int xv6fs_sys_stat(struct file *f, struct stat *st);
 int xv6fs_sys_seek(void *fh, uint64_t off, int whence);
 int xv6fs_sys_fcntl(void *fh, int cmd, unsigned long arg);
-int xv6fs_sys_blocknos(struct file *f, int *buf, int buf_size, int* result_size);
+int xv6fs_sys_blocknos(struct file *f, int *buf, int buf_size, int *result_size);
+int xv6fs_sys_pathcreate(char *path);

@@ -65,9 +65,6 @@ enum rs_msgregs
  */
 typedef struct _resource_server_context
 {
-    gpi_cap_t resource_type;
-    uint64_t server_id;
-
     // Run to serve requests
     seL4_MessageInfo_t (*request_handler)(seL4_MessageInfo_t, seL4_Word, seL4_CPtr);
 
@@ -93,19 +90,20 @@ typedef struct _resource_server_context
  * @param rde_pd_cap PD resource for RDE to add, optional
  * @param image_name name of the resource server's image
  * @param server_pd_cap returns the PD resource of the started server
- * @param resource_manager_id returns the resource manager ID of the started server
+ * @param n_manager_ids number of manager IDs we expect to receive from the server
+ * @param manager_ids array to return manager IDs
  */
 int start_resource_server_pd(uint64_t rde_id,
                              seL4_CPtr rde_pd_cap,
                              char *image_name,
                              seL4_CPtr *server_pd_cap,
-                             uint64_t *resource_manager_id);
+                             uint64_t n_manager_ids,
+                             uint64_t *manager_ids);
 
 /**
  * Starts the resource server in the current
  * thread of the current PD
  *
- * @param server_type The type of resource this server will serve
  * @param request_handler Function to handle client requests
  *                  param: seL4_MessageInfo_t tag, the request tag
  *                  param: seL4_Word badge, the request's badge
@@ -116,7 +114,6 @@ int start_resource_server_pd(uint64_t rde_id,
  * @return 0 on successful exit, nonzero otherwise
  */
 int resource_server_start(resource_server_context_t *context,
-                          gpi_cap_t server_type,
                           seL4_MessageInfo_t (*request_handler)(seL4_MessageInfo_t, seL4_Word, seL4_CPtr),
                           seL4_CPtr parent_ep,
                           int (*init_fn)());
@@ -146,9 +143,21 @@ int resource_server_free_slot(resource_server_context_t *context,
                               seL4_CPtr slot);
 
 /**
- * Main function for a resource server, receives requests
+ * Register a new resource manager in this resource server
+ * @param resource_type the type of resource the manager will provide
+ * @param manager_id new ID for the manager
  */
-int resource_server_main(void *context_v);
+int resource_server_register_manager(resource_server_context_t *context, gpi_cap_t resource_type, uint64_t *manager_id);
+
+/**
+ * Notify the parent process that this resource server has successfully started
+ * Provide it with the ID(s) of the server's resource manager(s)
+ *
+ * @param manager_ids ID(s) to send
+ * @param n_manager_ids number of IDs to send
+ * @return 0 on success, error otherwise
+ */
+int resource_server_notify_parent(resource_server_context_t *context, uint64_t *manager_ids, int n_manager_ids);
 
 /**
  * Attach a MO from a client request to the server's ADS
@@ -185,22 +194,27 @@ int resource_server_get_rr(seL4_CPtr server_ep,
  * Notifies the PD component of a resource that is created, but not yet
  * given to a client PD
  *
+ * @param manager_id ID of the manager creating resource
  * @param resource_id ID of the resource, needs to be unique within this server
  * @param dest Returns the slot of the badged copy in the recipient's cspace
+ * @return 0 on success, error otherwise
  */
 int resource_server_create_resource(resource_server_context_t *context,
+                                    uint64_t manager_id,
                                     uint64_t resource_id);
 
 /**
  * Notifies the PD component to create a badged copy of the server's endpoint
  * as a new resource in the recipient's cspace
  *
+ * @param manager_id ID of the manager providing resource
  * @param ns_id ID of the namespace being allocated from
  * @param resource_id ID of the resource, needs to be unique within this server
  * @param client_id ID of the client PD
  * @param dest Returns the slot of the badged copy in the recipient's cspace
  */
 int resource_server_give_resource(resource_server_context_t *context,
+                                  uint64_t manager_id,
                                   uint64_t ns_id,
                                   uint64_t resource_id,
                                   uint64_t client_id,
@@ -209,10 +223,12 @@ int resource_server_give_resource(resource_server_context_t *context,
 /**
  * Creates a new namespace ID for this resource server
  *
+ * @param manager_id ID of the manager creating namespace
  * @param client_id Client ID of the client that requested the new NS
  * @param ns_id returns the newly allocated NS ID
  */
 int resource_server_new_ns(resource_server_context_t *context,
+                           uint64_t manager_id,
                            uint64_t client_id,
                            uint64_t *ns_id);
 

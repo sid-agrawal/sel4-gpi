@@ -48,7 +48,8 @@ int start_ramdisk_pd(seL4_CPtr *ramdisk_pd_cap,
 {
     int error;
     error = start_resource_server_pd(0, 0, RAMDISK_APP,
-                                     ramdisk_pd_cap, ramdisk_id);
+                                     ramdisk_pd_cap, 
+                                     1, ramdisk_id);
     CHECK_ERROR(error, "failed to start ramdisk server\n");
     RAMDISK_PRINTF("Successfully started ramdisk server, resource manager ID is %d\n",
                    (int)*ramdisk_id);

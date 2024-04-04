@@ -5,7 +5,7 @@
 #include <ramdisk_shared.h>
 
 /* General file system configuration */
-#define FS_DEBUG 0
+#define FS_DEBUG 1
 /* (XXX) Arya: Make size configurable, currently just allows 2 FS per ramdisk */
 #define FS_SIZE (RAMDISK_SIZE_BYTES / RAMDISK_BLOCK_SIZE) / 2 // Size of file system in blocks
 #define BSIZE RAMDISK_BLOCK_SIZE                              // Block size in bytes
@@ -33,8 +33,14 @@ enum fs_errors
 /* IPC Message register values for FSMSGREG_FUNC */
 enum fs_server_funcs
 {
-    FS_FUNC_CREATE_REQ = RS_FUNC_END,
-    FS_FUNC_CREATE_ACK,
+    FS_FUNC_CREATE_FILE_REQ = RS_FUNC_END,
+    FS_FUNC_CREATE_FILE_ACK,
+
+    FS_FUNC_CREATE_PATH_REQ,
+    FS_FUNC_CREATE_PATH_ACK,
+
+    FS_FUNC_IS_LINKED_REQ,
+    FS_FUNC_IS_LINKED_ACK,
 
     FS_FUNC_LINK_REQ,
     FS_FUNC_LINK_ACK,
@@ -64,13 +70,23 @@ enum fs_msgregs
     /* This is a convenience label for IPC MessageInfo length. */
     FSMSGREG_LABEL0,
 
-    /* Create */
-    FSMSGREG_CREATE_REQ_FLAGS = FSMSGREG_LABEL0,
-    FSMSGREG_CREATE_REQ_END,
-    FSMSGREG_CREATE_ACK_DEST = FSMSGREG_LABEL0,
-    FSMSGREG_CREATE_ACK_END,
+    /* Create Path */
+    FSMSGREG_CREATE_PATH_REQ_END = FSMSGREG_LABEL0,
+    FSMSGREG_CREATE_PATH_ACK_DEST = FSMSGREG_LABEL0,
+    FSMSGREG_CREATE_PATH_ACK_END,
 
-    /* LINK */
+    /* Create File */
+    FSMSGREG_CREATE_FILE_REQ_FLAGS = FSMSGREG_LABEL0,
+    FSMSGREG_CREATE_FILE_REQ_END,
+    FSMSGREG_CREATE_FILE_ACK_DEST = FSMSGREG_LABEL0,
+    FSMSGREG_CREATE_FILE_ACK_END,
+
+    /* Is Path Linked */
+    FSMSGREG_IS_LINKED_REQ_END = FSMSGREG_LABEL0,
+    FSMSGREG_IS_LINKED_ACK_RES = FSMSGREG_LABEL0,
+    FSMSGREG_IS_LINKED_ACK_END,
+
+    /* Link */
     FSMSGREG_LINK_REQ_END = FSMSGREG_LABEL0,
     FSMSGREG_LINK_ACK_END = FSMSGREG_LABEL0,
 

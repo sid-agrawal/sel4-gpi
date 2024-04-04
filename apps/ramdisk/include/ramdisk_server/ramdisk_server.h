@@ -33,6 +33,9 @@ typedef struct _ramdisk_server_context
     // Generic resource server context
     resource_server_context_t gen;
 
+    // Manager ID
+    uint64_t block_manager_id;
+
     // Memory for ramdisk
     void *ramdisk_buf;
     mo_client_context_t *ramdisk_mo;

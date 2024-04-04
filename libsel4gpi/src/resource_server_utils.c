@@ -50,11 +50,14 @@
         }                                 \
     } while (0);
 
+static int resource_server_main(void *context_v);
+
 int start_resource_server_pd(uint64_t rde_id,
                              seL4_CPtr rde_pd_cap,
                              char *image_name,
                              seL4_CPtr *server_pd_cap,
-                             uint64_t *resource_manager_id)
+                             uint64_t n_manager_ids,
+                             uint64_t *manager_ids)
 {
     int error;
 
@@ -130,9 +133,11 @@ int start_resource_server_pd(uint64_t rde_id,
     error = seL4_MessageInfo_get_label(tag);
     CHECK_ERROR(error, "message from server is a failure");
 
-    if (resource_manager_id)
+    if (manager_ids)
     {
-        *resource_manager_id = seL4_GetMR(0);
+        for (int i = 0; i < n_manager_ids; i++){
+            manager_ids[i] = seL4_GetMR(i);
+        }
     }
 
     // Cleanup temporary endpoint
@@ -143,14 +148,12 @@ int start_resource_server_pd(uint64_t rde_id,
 }
 
 int resource_server_start(resource_server_context_t *context,
-                          gpi_cap_t server_type,
                           seL4_MessageInfo_t (*request_handler)(seL4_MessageInfo_t, seL4_Word, seL4_CPtr),
                           seL4_CPtr parent_ep,
                           int (*init_fn)())
 {
     seL4_Error error;
 
-    context->resource_type = server_type;
     context->request_handler = request_handler;
     context->mo_ep = sel4gpi_get_rde(GPICAP_TYPE_MO);
     context->ads_conn.badged_server_ep_cspath.capPtr = sel4gpi_get_rde_by_ns_id(sel4gpi_get_binded_ads_id(), GPICAP_TYPE_ADS);
@@ -202,7 +205,37 @@ int resource_server_free_slot(resource_server_context_t *context,
     return pd_client_free_slot(&context->pd_conn, slot);
 }
 
-int resource_server_main(void *context_v)
+int resource_server_register_manager(resource_server_context_t *context, gpi_cap_t resource_type, uint64_t *manager_id)
+{
+    int error;
+
+    RESOURCE_SERVER_PRINTF("Registering the resource server with the PD component\n");
+    error = pd_client_register_resource_manager(&context->pd_conn, resource_type, context->server_ep, manager_id);
+    CHECK_ERROR(error, "failed to register resource server");
+    RESOURCE_SERVER_PRINTF("Registered resource server, ID is 0x%lx\n", *manager_id);
+
+    return 0;
+}
+
+int resource_server_notify_parent(resource_server_context_t *context, uint64_t *manager_ids, int n_manager_ids) {
+    seL4_MessageInfo_t tag;
+
+    // Send our manager ID to the parent process
+    RESOURCE_SERVER_PRINTF("Messaging parent process at slot %d, sending %d manager ID(s)\n", (int)context->parent_ep, n_manager_ids);
+    tag = seL4_MessageInfo_new(0, 0, 0, n_manager_ids);
+
+    for (int i = 0; i < n_manager_ids; i++) {
+        seL4_SetMR(i, manager_ids[i]);
+    }
+    seL4_Send(context->parent_ep, tag);
+
+    return 0;
+}
+
+/**
+ * Main function for a resource server, receives requests
+ */
+static int resource_server_main(void *context_v)
 {
     resource_server_context_t *context = (resource_server_context_t *)context_v;
     seL4_MessageInfo_t tag;
@@ -211,12 +244,6 @@ int resource_server_main(void *context_v)
     cspacepath_t received_cap_path;
     received_cap_path.root = PD_CAP_ROOT;
     received_cap_path.capDepth = PD_CAP_DEPTH;
-
-    // Register the resource server with the PD component
-    RESOURCE_SERVER_PRINTF("Registering the resource server with the PD component\n");
-    error = pd_client_register_resource_manager(&context->pd_conn, context->resource_type, context->server_ep, &context->server_id);
-    CHECK_ERROR_GOTO(error, "failed to register resource server", exit_main);
-    RESOURCE_SERVER_PRINTF("Registered resource server, ID is 0x%lx\n", context->server_id);
 
     // Perform any server-specific initialization
     if (context->init_fn != NULL)
@@ -235,12 +262,6 @@ int resource_server_main(void *context_v)
         received_cap_path.root,
         received_cap_path.capPtr,
         received_cap_path.capDepth);
-
-    // Send our ep to the parent process
-    RESOURCE_SERVER_PRINTF("Messaging parent process at slot %d, sending ID %d\n", (int)context->parent_ep, context->server_id);
-    tag = seL4_MessageInfo_new(0, 0, 0, 1);
-    seL4_SetMR(0, context->server_id);
-    seL4_Send(context->parent_ep, tag);
 
     while (1)
     {
@@ -368,6 +389,7 @@ int resource_server_client_new_ns(seL4_CPtr server_ep,
 }
 
 int resource_server_create_resource(resource_server_context_t *context,
+                                    uint64_t manager_id,
                                     uint64_t resource_id)
 {
     int error;
@@ -375,13 +397,14 @@ int resource_server_create_resource(resource_server_context_t *context,
     RESOURCE_SERVER_PRINTF("Creating resource with ID 0x%lx\n", resource_id);
 
     error = pd_client_create_resource(&context->pd_conn,
-                                      context->server_id,
+                                      manager_id,
                                       resource_id);
 
     return error;
 }
 
 int resource_server_give_resource(resource_server_context_t *context,
+                                  uint64_t manager_id,
                                   uint64_t ns_id,
                                   uint64_t resource_id,
                                   uint64_t client_id,
@@ -392,7 +415,7 @@ int resource_server_give_resource(resource_server_context_t *context,
     RESOURCE_SERVER_PRINTF("Giving resource to client, resource ID 0x%lx, client ID 0x%lx\n", resource_id, client_id);
 
     error = pd_client_give_resource(&context->pd_conn,
-                                    context->server_id,
+                                    manager_id,
                                     ns_id,
                                     client_id,
                                     resource_id,
@@ -402,6 +425,7 @@ int resource_server_give_resource(resource_server_context_t *context,
 }
 
 int resource_server_new_ns(resource_server_context_t *context,
+                           uint64_t manager_id,
                            uint64_t client_id,
                            uint64_t *ns_id)
 {
@@ -409,7 +433,7 @@ int resource_server_new_ns(resource_server_context_t *context,
 
     RESOURCE_SERVER_PRINTF("Creating new NS\n");
 
-    error = pd_client_register_namespace(&context->pd_conn, context->server_id, client_id, ns_id);
+    error = pd_client_register_namespace(&context->pd_conn, manager_id, client_id, ns_id);
 
     return error;
 }

@@ -88,10 +88,13 @@ static void apply_prefix(char *prefix, char *path)
 {
   char temp[PATH_MAX];
 
-  if (strlen(path) > 0 && path[0] == '/') {
+  if (strlen(path) > 0 && path[0] == '/')
+  {
     // Don't need to add path separator
     snprintf(temp, PATH_MAX, "%s%s", prefix, path);
-  } else {
+  }
+  else
+  {
     snprintf(temp, PATH_MAX, "%s/%s", prefix, path);
   }
 
@@ -123,39 +126,34 @@ static fs_namespace_t *find_ns(uint64_t nsid)
   return NULL;
 }
 
+/* FILE REGISTRY DS */
+// (XXX) Arya: Replace this with more generic DS?
+
 /**
  * @brief Insert a new client into the client registry Linked List.
  *
  * @param new_node
  */
-static void fs_registry_insert(fs_registry_entry_t *new_node)
+static void file_registry_insert(file_registry_entry_t *new_node)
 {
-  fs_registry_entry_t *head = get_xv6fs_server()->client_registry;
+  file_registry_entry_t *head = get_xv6fs_server()->file_registry;
 
-  if (head == NULL)
-  {
-    get_xv6fs_server()->client_registry = new_node;
-    new_node->next = NULL;
-    return;
-  }
+  new_node->next = head;
+  get_xv6fs_server()->file_registry = new_node;
+  get_xv6fs_server()->n_files++;
 
-  while (head->next != NULL)
-  {
-    head = head->next;
-  }
-  head->next = new_node;
-  new_node->next = NULL;
+  return;
 }
 
 /**
- * @brief Lookup the client registry entry for the given id.
+ * @brief Lookup the file registry entry for the given id.
  *
  * @param object_id
- * @return fs_registry_entry_t*
+ * @return file_registry_entry_t*
  */
-static fs_registry_entry_t *fs_registry_get_entry_by_id(uint64_t object_id)
+static file_registry_entry_t *file_registry_get_entry_by_id(uint64_t object_id)
 {
-  fs_registry_entry_t *current_ctx = get_xv6fs_server()->client_registry;
+  file_registry_entry_t *current_ctx = get_xv6fs_server()->file_registry;
   uint64_t file_id = get_local_object_id_from_badge(object_id);
 
   while (current_ctx != NULL)
@@ -173,29 +171,160 @@ static fs_registry_entry_t *fs_registry_get_entry_by_id(uint64_t object_id)
  * @brief Lookup the client registry entry for the given badge.
  *
  * @param badge
- * @return fs_registry_entry_t*
+ * @return file_registry_entry_t*
  */
-static fs_registry_entry_t *fs_registry_get_entry_by_badge(seL4_Word badge)
+static file_registry_entry_t *file_registry_get_entry_by_badge(seL4_Word badge)
 {
 
   uint64_t object_id = get_object_id_from_badge(badge);
-  return fs_registry_get_entry_by_id(object_id);
+  return file_registry_get_entry_by_id(object_id);
+}
+
+/**
+ * @brief Remove the file registry entry
+ *
+ * @param badge
+ * @return file_registry_entry_t*
+ */
+static void file_registry_remove(file_registry_entry_t *entry)
+{
+  file_registry_entry_t *current_ctx = get_xv6fs_server()->file_registry;
+
+  // Check if entry to remove is head of list
+  if (current_ctx == entry)
+  {
+    get_xv6fs_server()->file_registry = entry->next;
+    free(entry->file);
+    free(entry);
+    get_xv6fs_server()->n_files--;
+    return;
+  }
+
+  // Otherwise remove from list
+  while (current_ctx != NULL)
+  {
+    if (current_ctx->next == entry)
+    {
+      current_ctx->next = entry->next;
+      free(entry->file);
+      free(entry);
+      get_xv6fs_server()->n_files--;
+      return;
+    }
+    current_ctx = current_ctx->next;
+  }
+}
+
+/* FILEPATH REGISTRY DS */
+
+// Returns the filepath in the global namespace
+static char *filepath_get_global_path(filepath_registry_entry_t *path_entry)
+{
+  if (path_entry->nsid == NSID_DEFAULT)
+  {
+    return path_entry->path;
+  }
+  else
+  {
+    return path_entry->global_path->path;
+  }
+}
+
+// Returns the file linked to the filepath
+static file_registry_entry_t *filepath_get_file(filepath_registry_entry_t *path_entry)
+{
+  if (path_entry->nsid == NSID_DEFAULT)
+  {
+    return path_entry->file;
+  }
+  else
+  {
+    return path_entry->global_path->file;
+  }
+}
+
+/**
+ * @brief Insert a new client into the filepath registry
+ *
+ * @param new_node
+ */
+static void filepath_registry_insert(filepath_registry_entry_t *new_node)
+{
+  filepath_registry_entry_t *head = get_xv6fs_server()->filepath_registry;
+
+  new_node->next = head;
+  get_xv6fs_server()->filepath_registry = new_node;
+  get_xv6fs_server()->n_filepaths++;
+}
+
+/**
+ * @brief Lookup the filepath registry entry for the given id.
+ *
+ * @param object_id
+ * @return filepath_registry_entry_t*
+ */
+static filepath_registry_entry_t *filepath_registry_get_entry_by_id(uint64_t object_id)
+{
+  filepath_registry_entry_t *current_ctx = get_xv6fs_server()->filepath_registry;
+  uint64_t filepath_id = get_local_object_id_from_badge(object_id);
+
+  while (current_ctx != NULL)
+  {
+    if ((seL4_Word)current_ctx->id == filepath_id)
+    {
+      break;
+    }
+    current_ctx = current_ctx->next;
+  }
+  return current_ctx;
 }
 
 /**
  * @brief Lookup the client registry entry for the given badge.
  *
  * @param badge
- * @return fs_registry_entry_t*
+ * @return file_registry_entry_t*
  */
-static void fs_registry_remove(fs_registry_entry_t *entry)
+static filepath_registry_entry_t *filepath_registry_get_entry_by_badge(seL4_Word badge)
 {
-  fs_registry_entry_t *current_ctx = get_xv6fs_server()->client_registry;
+  uint64_t object_id = get_object_id_from_badge(badge);
+  return filepath_registry_get_entry_by_id(object_id);
+}
+
+/**
+ * @brief Lookup the filepath registry entry for the given namespace and path
+
+ * @return filepath_registry_entry_t*
+ */
+static filepath_registry_entry_t *filepath_registry_get_entry_by_path(uint64_t nsid, char *path)
+{
+  filepath_registry_entry_t *current_ctx = get_xv6fs_server()->filepath_registry;
+
+  while (current_ctx != NULL)
+  {
+    if ((seL4_Word)current_ctx->nsid == nsid && strcmp(current_ctx->path, path) == 0)
+    {
+      break;
+    }
+    current_ctx = current_ctx->next;
+  }
+  return current_ctx;
+}
+
+/**
+ * @brief Remove the filepath registry entry
+ *
+ * @param badge
+ * @return file_registry_entry_t*
+ */
+static void filepath_registry_remove(filepath_registry_entry_t *entry)
+{
+  filepath_registry_entry_t *current_ctx = get_xv6fs_server()->filepath_registry;
 
   // Check if entry to remove is head of list
   if (current_ctx == entry)
   {
-    get_xv6fs_server()->client_registry = entry->next;
+    get_xv6fs_server()->filepath_registry = entry->next;
     free(entry->file);
     free(entry);
     return;
@@ -250,6 +379,12 @@ int xv6fs_init()
   xv6fs_server_context_t *server = get_xv6fs_server();
   int error;
 
+  /* Register self as file and filepath manager */
+  error = resource_server_register_manager(&get_xv6fs_server()->gen, GPICAP_TYPE_FILE, &server->file_manager_id);
+  CHECK_ERROR(error, "failed to register file manager");
+  error = resource_server_register_manager(&get_xv6fs_server()->gen, GPICAP_TYPE_FILEPATH, &server->path_manager_id);
+  CHECK_ERROR(error, "failed to register file manager");
+
   /* Initialize the blocks */
   error = init_naive_blocks();
   CHECK_ERROR(error, "failed to initialize the blocks");
@@ -278,32 +413,45 @@ int xv6fs_init()
   CHECK_ERROR(error, "failed to initialize disk file");
   binit();
   fsinit(ROOTDEV);
+  get_xv6fs_server()->n_files = 0;
+  get_xv6fs_server()->n_filepaths = 0;
+
+  /* Initialize the global namespace */
+  fs_namespace_t *ns_entry = malloc(sizeof(fs_namespace_t));
+  ns_entry->id = NSID_DEFAULT;
+  strcpy(ns_entry->ns_prefix, "");
+  insert_ns(ns_entry);
+
+  /* Notify parent */
+  uint64_t manager_ids[2] = {server->file_manager_id, server->path_manager_id};
+  error = resource_server_notify_parent(&get_xv6fs_server()->gen, manager_ids, 2);
+  CHECK_ERROR(error, "failed to notify parent that ramdisk started");
 
   XV6FS_PRINTF("Initialized file system\n");
 
   return error;
 }
 
-seL4_MessageInfo_t xv6fs_request_handler(seL4_MessageInfo_t tag, seL4_Word sender_badge, seL4_CPtr cap)
+static seL4_MessageInfo_t xv6fs_untyped_request_handler(seL4_MessageInfo_t tag, seL4_Word sender_badge, seL4_CPtr cap)
 {
   int error;
-  void *mo_vaddr;
-
   unsigned int op = seL4_GetMR(FSMSGREG_FUNC);
-  uint64_t obj_id = get_object_id_from_badge(sender_badge);
-
   seL4_MessageInfo_t reply_tag = seL4_MessageInfo_new(0, 0, 0, 0);
 
-  if (sender_badge == 0)
-  { /* Handle Unbadged Request */
-    XV6FS_PRINTF("Received unbadged request\n");
+  if (op == RS_FUNC_GET_RR_REQ)
+  {
+    uint64_t resource_id = seL4_GetMR(RSMSGREG_EXTRACT_RR_REQ_ID);
+    size_t mem_size = seL4_GetMR(RSMSGREG_EXTRACT_RR_REQ_SIZE);
+    void *mem_vaddr = (void *)seL4_GetMR(RSMSGREG_EXTRACT_RR_REQ_VADDR);
+    uint64_t manager_id = get_server_id_from_badge(resource_id);
 
-    switch (op)
+    if (manager_id == get_xv6fs_server()->path_manager_id)
     {
-    case RS_FUNC_GET_RR_REQ:
-      uint64_t resource_id = seL4_GetMR(RSMSGREG_EXTRACT_RR_REQ_ID);
-      size_t mem_size = seL4_GetMR(RSMSGREG_EXTRACT_RR_REQ_SIZE);
-      void *mem_vaddr = (void *)seL4_GetMR(RSMSGREG_EXTRACT_RR_REQ_VADDR);
+      // This is a request to extract RR for a filepath
+
+      // Check memory size
+      CHECK_ERROR_GOTO(mem_size < (sizeof(rr_state_t) + 2 * sizeof(csv_rr_row_t)),
+                       "Shared memory for RR is too small", RS_ERROR_RR_SIZE, done1);
 
       // Initialize the model state
       rr_state_t *rr_state = (rr_state_t *)mem_vaddr;
@@ -311,7 +459,7 @@ seL4_MessageInfo_t xv6fs_request_handler(seL4_MessageInfo_t tag, seL4_Word sende
       csv_rr_row_t *row_ptr = mem_vaddr + sizeof(rr_state_t);
 
       // Find the resource
-      fs_registry_entry_t *reg_entry = fs_registry_get_entry_by_id(resource_id);
+      filepath_registry_entry_t *reg_entry = filepath_registry_get_entry_by_id(resource_id);
       if (reg_entry == NULL)
       {
         XV6FS_PRINTF("Received invalid resource for RR request, ID is 0x%lx, local ID is 0x%lx\n",
@@ -320,7 +468,51 @@ seL4_MessageInfo_t xv6fs_request_handler(seL4_MessageInfo_t tag, seL4_Word sende
 
         // (XXX) Arya: Ideally, we should have let the PD component know tha this file was deleted
         // For now, just return RS_ERROR_DNE
-        goto done;
+        goto done1;
+      }
+
+      // Add the entry for the resource
+      char path_res_id[CSV_MAX_STRING_SIZE];
+      make_res_id(path_res_id, GPICAP_TYPE_FILEPATH, resource_id);
+      add_resource_rr(rr_state, GPICAP_TYPE_FILEPATH, path_res_id, row_ptr);
+      row_ptr++;
+
+      if (reg_entry->nsid != NSID_DEFAULT)
+      {
+        // Add relation to global filepath
+        char global_path_res_id[CSV_MAX_STRING_SIZE];
+        make_res_id(global_path_res_id, GPICAP_TYPE_FILEPATH, reg_entry->global_path->id);
+        add_resource_depends_on_rr(rr_state, path_res_id, global_path_res_id, row_ptr);
+        row_ptr++;
+      }
+      else
+      {
+        // Add relation to the underlying file
+        char file_res_id[CSV_MAX_STRING_SIZE];
+        make_res_id(file_res_id, GPICAP_TYPE_FILEPATH, reg_entry->file->file->id);
+        add_resource_depends_on_rr(rr_state, path_res_id, file_res_id, row_ptr);
+        row_ptr++;
+      }
+    }
+    else if (manager_id == get_xv6fs_server()->file_manager_id)
+    {
+      // This is a request to extract RR for a file
+      // Initialize the model state
+      rr_state_t *rr_state = (rr_state_t *)mem_vaddr;
+      init_rr_state(rr_state);
+      csv_rr_row_t *row_ptr = mem_vaddr + sizeof(rr_state_t);
+
+      // Find the resource
+      file_registry_entry_t *reg_entry = file_registry_get_entry_by_id(resource_id);
+      if (reg_entry == NULL)
+      {
+        XV6FS_PRINTF("Received invalid resource for RR request, ID is 0x%lx, local ID is 0x%lx\n",
+                     resource_id, get_local_object_id_from_badge(resource_id));
+        error = RS_ERROR_DNE;
+
+        // (XXX) Arya: Ideally, we should have let the PD component know tha this file was deleted
+        // For now, just return RS_ERROR_DNE
+        goto done1;
       }
 
       XV6FS_PRINTF("Get RR for fileno %ld\n", reg_entry->file->id);
@@ -355,15 +547,42 @@ seL4_MessageInfo_t xv6fs_request_handler(seL4_MessageInfo_t tag, seL4_Word sende
         row_ptr++;
       }
       free(blocknos);
-
-      seL4_SetMR(RDMSGREG_FUNC, RS_FUNC_GET_RR_ACK);
-      break;
-    default:
-      XV6FS_PRINTF("Op is %d\n", op);
-      CHECK_ERROR_GOTO(1, "got invalid op on unbadged ep", error, done);
     }
+    else
+    {
+      CHECK_ERROR_GOTO(1, "got invalid manager ID", error, done1);
+    }
+
+    seL4_SetMR(RDMSGREG_FUNC, RS_FUNC_GET_RR_ACK);
   }
-  else if (obj_id == BADGE_OBJ_ID_NULL)
+  else
+  {
+    XV6FS_PRINTF("Op is %d\n", op);
+    CHECK_ERROR_GOTO(1, "got invalid op on unbadged ep", error, done1);
+  }
+
+done1:
+  seL4_MessageInfo_ptr_set_label(&reply_tag, error);
+  return reply_tag;
+}
+
+static seL4_MessageInfo_t xv6fs_filepath_request_handler(seL4_MessageInfo_t tag, seL4_Word sender_badge, seL4_CPtr cap)
+{
+  int error;
+  void *mo_vaddr;
+  uint64_t path_id;
+  char *path;
+  fs_namespace_t *ns;
+  file_registry_entry_t *file_entry;
+  filepath_registry_entry_t *reg_entry;
+  seL4_CPtr dest;
+
+  unsigned int op = seL4_GetMR(FSMSGREG_FUNC);
+  uint64_t obj_id = get_object_id_from_badge(sender_badge);
+
+  seL4_MessageInfo_t reply_tag = seL4_MessageInfo_new(0, 0, 0, 0);
+
+  if (obj_id == BADGE_OBJ_ID_NULL)
   { /* Handle Request Not Associated to Object */
     XV6FS_PRINTF("Received badged request with no object id\n");
 
@@ -372,200 +591,192 @@ seL4_MessageInfo_t xv6fs_request_handler(seL4_MessageInfo_t tag, seL4_Word sende
     switch (op)
     {
     case RS_FUNC_NEW_NS_REQ:
-      XV6FS_PRINTF("Got request for new namespace\n");
+      XV6FS_PRINTF("Got request for new filepath namespace\n");
 
       uint64_t ns_id;
 
       // Register NS and get new ID
-      error = resource_server_new_ns(&get_xv6fs_server()->gen, get_client_id_from_badge(sender_badge), &ns_id);
+      error = resource_server_new_ns(&get_xv6fs_server()->gen,
+                                     get_xv6fs_server()->path_manager_id,
+                                     get_client_id_from_badge(sender_badge),
+                                     &ns_id);
       XV6FS_PRINTF("Registered new namespace with ID %ld\n", ns_id);
 
       // Bookkeeping the NS
-      fs_namespace_t *ns_entry = malloc(sizeof(fs_namespace_t));
-      ns_entry->id = ns_id;
-      make_ns_prefix(ns_entry->ns_prefix, ns_id);
-      insert_ns(ns_entry);
+      ns = malloc(sizeof(fs_namespace_t));
+      ns->id = ns_id;
+      make_ns_prefix(ns->ns_prefix, ns_id);
+      insert_ns(ns);
 
       // Create directory in global FS
-      error = xv6fs_sys_mkdir(ns_entry->ns_prefix);
-      CHECK_ERROR_GOTO(error, "Failed to make new directory for namespace\n", FS_SERVER_ERROR_UNKNOWN, done);
+      error = xv6fs_sys_mkdir(ns->ns_prefix);
+      CHECK_ERROR_GOTO(error, "Failed to make new directory for namespace\n", FS_SERVER_ERROR_UNKNOWN, done2);
 
       seL4_MessageInfo_ptr_set_length(&reply_tag, RSMSGREG_NEW_NS_ACK_END);
       seL4_SetMR(RDMSGREG_FUNC, RS_FUNC_NEW_NS_ACK);
       seL4_SetMR(RSMSGREG_NEW_NS_ACK_ID, ns_id);
       break;
-    case FS_FUNC_CREATE_REQ:
-      int open_flags = seL4_GetMR(FSMSGREG_CREATE_REQ_FLAGS);
-
+    case FS_FUNC_CREATE_PATH_REQ:
       /* Attach memory object to server ADS (contains pathname) */
       error = resource_server_attach_mo(&get_xv6fs_server()->gen, cap, &mo_vaddr);
-      CHECK_ERROR_GOTO(error, "Failed to attach MO", error, done);
-      pathname = (char *)mo_vaddr;
+      CHECK_ERROR_GOTO(error, "Failed to attach MO", error, done2);
+      path = (char *)mo_vaddr;
 
-      /* Update pathname if within a namespace */
+      /* Update pathname for namespace */
       ns_id = get_ns_id_from_badge(sender_badge);
-      if (ns_id != NSID_DEFAULT)
-      {
-        fs_namespace_t *ns = find_ns(ns_id);
-        if (ns == NULL)
-        {
-          XV6FS_PRINTF("Namespace did not exist\n");
-          error = RS_ERROR_NS;
-          goto done;
-        }
+      char global_pathname[PATH_MAX];
+      strncpy(global_pathname, path, PATH_MAX);
 
-        apply_prefix(ns->ns_prefix, pathname);
+      ns = find_ns(ns_id);
+      if (ns == NULL)
+      {
+        XV6FS_PRINTF("Namespace did not exist\n");
+        error = RS_ERROR_NS;
+        goto done2;
       }
 
-      // Open (or create) the file
-      XV6FS_PRINTF("Server opening file %s, flags 0x%x\n", pathname, open_flags);
+      apply_prefix(ns->ns_prefix, global_pathname);
 
-      struct file *file = xv6fs_sys_open(pathname, open_flags);
-      error = file == NULL ? FS_SERVER_ERROR_UNKNOWN : FS_SERVER_NOERROR;
+      XV6FS_PRINTF("Got request to create the path %s\n", global_pathname);
+
+      /* Create the path in FS */
+      error = xv6fs_sys_pathcreate(global_pathname);
       if (error != 0)
       {
-        // Don't announce failed to open files as error, not usually an error
-        XV6FS_PRINTF("File did not exist\n");
-        error = FS_SERVER_ERROR_NOFILE;
-        goto done;
+        // This may happen if the filepath already exists
+        XV6FS_PRINTF("Failed to create the path %s\n", global_pathname);
+        error = FS_SERVER_ERROR_UNKNOWN;
+        goto done2;
       }
 
-      // Add to registry if not already present
-      fs_registry_entry_t *reg_entry = fs_registry_get_entry_by_id(file->id);
+      /* Bookkeep the path */
 
-      if (reg_entry == NULL)
-      {
-        XV6FS_PRINTF("File not previously open, make new registry entry\n");
-        reg_entry = malloc(sizeof(fs_registry_entry_t));
-        reg_entry->count = 1;
-        reg_entry->file = file;
-        fs_registry_insert(reg_entry);
+      // In global NS
+      path_id = get_xv6fs_server()->n_filepaths + 1;
+      reg_entry = malloc(sizeof(filepath_registry_entry_t));
+      reg_entry->nsid = NSID_DEFAULT;
+      reg_entry->id = path_id;
+      strncpy(reg_entry->path, global_pathname, PATH_MAX);
+      filepath_registry_insert(reg_entry);
 
-        // Notify the PD component about the new reousrce
-        error = resource_server_create_resource(&get_xv6fs_server()->gen, file->id);
-        CHECK_ERROR_GOTO(error, "Failed to create the resource", error, done);
-      }
-      else
+      filepath_registry_entry_t *global_path_entry = reg_entry;
+
+      if (ns_id != NSID_DEFAULT)
       {
-        XV6FS_PRINTF("File was already open, use previous registry entry\n");
-        reg_entry->count++;
-        free(file); // We don't need another copy of the structure
-        file = reg_entry->file;
+        // And in local NS
+        path_id = get_xv6fs_server()->n_filepaths;
+        reg_entry = malloc(sizeof(filepath_registry_entry_t));
+        reg_entry->nsid = ns_id;
+        reg_entry->id = path_id;
+        strncpy(reg_entry->path, pathname, PATH_MAX);
+        reg_entry->global_path = global_path_entry;
+        filepath_registry_insert(reg_entry);
       }
 
       // Create the resource endpoint
-      seL4_CPtr dest;
+      error = resource_server_create_resource(&get_xv6fs_server()->gen,
+                                              get_xv6fs_server()->path_manager_id,
+                                              path_id);
+      CHECK_ERROR_GOTO(error, "Failed to create the resource", error, done2);
+
       error = resource_server_give_resource(&get_xv6fs_server()->gen,
+                                            get_xv6fs_server()->path_manager_id,
                                             get_ns_id_from_badge(sender_badge),
-                                            file->id,
+                                            path_id,
                                             get_client_id_from_badge(sender_badge),
                                             &dest);
-      CHECK_ERROR_GOTO(error, "Failed to give the resource", error, done);
+      CHECK_ERROR_GOTO(error, "Failed to give the resource", error, done2);
 
       // Send the reply
-      seL4_MessageInfo_ptr_set_length(&reply_tag, FSMSGREG_CREATE_ACK_END);
-      seL4_SetMR(FSMSGREG_CREATE_ACK_DEST, dest);
-      seL4_SetMR(RSMSGREG_FUNC, FS_FUNC_CREATE_ACK);
-      break;
-    case FS_FUNC_LINK_REQ:
-      /* Attach memory object to server ADS (contains pathname) */
-      error = resource_server_attach_mo(&get_xv6fs_server()->gen, cap, &mo_vaddr);
-      CHECK_ERROR_GOTO(error, "Failed to attach MO", error, done);
-      pathname = (char *)mo_vaddr;
-
-      /* Update pathname if within a namespace */
-      ns_id = get_ns_id_from_badge(sender_badge);
-      if (ns_id != NSID_DEFAULT)
-      {
-        fs_namespace_t *ns = find_ns(ns_id);
-        if (ns == NULL)
-        {
-          XV6FS_PRINTF("Namespace did not exist\n");
-          error = RS_ERROR_NS;
-          goto done;
-        }
-
-        apply_prefix(ns->ns_prefix, pathname);
-      }
-
-      /* Find the file to link */
-      seL4_Word file_badge = seL4_GetBadge(1);
-
-      reg_entry = fs_registry_get_entry_by_badge(file_badge);
-      if (reg_entry == NULL)
-      {
-        XV6FS_PRINTF("Received invalid file to link\n");
-        error = FS_SERVER_ERROR_BADGE;
-        goto done;
-      }
-
-      XV6FS_PRINTF("File to link has id %ld, linking to path %s\n", reg_entry->file->id, pathname);
-
-      /* Do the link */
-      error = xv6fs_sys_dolink2(reg_entry->file, pathname);
-
-      seL4_MessageInfo_ptr_set_length(&reply_tag, FSMSGREG_LINK_ACK_END);
-      seL4_SetMR(RDMSGREG_FUNC, FS_FUNC_LINK_ACK);
-      break;
-    case FS_FUNC_UNLINK_REQ:
-      /* Attach memory object to server ADS (contains pathname) */
-      error = resource_server_attach_mo(&get_xv6fs_server()->gen, cap, &mo_vaddr);
-      CHECK_ERROR_GOTO(error, "Failed to attach MO", error, done);
-      pathname = (char *)mo_vaddr;
-
-      /* Update pathname if within a namespace */
-      ns_id = get_ns_id_from_badge(sender_badge);
-      if (ns_id != NSID_DEFAULT)
-      {
-        fs_namespace_t *ns = find_ns(ns_id);
-        if (ns == NULL)
-        {
-          XV6FS_PRINTF("Namespace did not exist\n");
-          error = RS_ERROR_NS;
-          goto done;
-        }
-
-        apply_prefix(ns->ns_prefix, pathname);
-      }
-      
-      XV6FS_PRINTF("Unlink pathname %s\n", pathname);
-      error = xv6fs_sys_unlink(pathname);
-
-      seL4_MessageInfo_ptr_set_length(&reply_tag, FSMSGREG_UNLINK_ACK_END);
-      seL4_SetMR(RDMSGREG_FUNC, FS_FUNC_UNLINK_ACK);
+      seL4_MessageInfo_ptr_set_length(&reply_tag, FSMSGREG_CREATE_PATH_ACK_END);
+      seL4_SetMR(FSMSGREG_CREATE_PATH_ACK_DEST, dest);
+      seL4_SetMR(RSMSGREG_FUNC, FS_FUNC_CREATE_PATH_ACK);
       break;
     default:
-      CHECK_ERROR_GOTO(1, "got invalid op on badged ep without obj id", error, done);
+      CHECK_ERROR_GOTO(1, "got invalid filepath op on badged ep without obj id", error, done2);
     }
   }
   else
   {
     /* Handle Request On Specific Resource */
-    XV6FS_PRINTF("Received badged request with object id\n");
+    XV6FS_PRINTF("Received badged filepath request with object id\n");
 
-    int ret;
-    fs_registry_entry_t *reg_entry = fs_registry_get_entry_by_badge(sender_badge);
+    path_id = get_object_id_from_badge(sender_badge);
+
+    // Find the resource
+    filepath_registry_entry_t *reg_entry = filepath_registry_get_entry_by_id(path_id);
     if (reg_entry == NULL)
     {
-      XV6FS_PRINTF("Received invalid badge\n");
-      error = FS_SERVER_ERROR_BADGE;
-      goto done;
+      XV6FS_PRINTF("Received invalid resource for RR request, ID is 0x%lx, local ID is 0x%lx\n",
+                   path_id, get_local_object_id_from_badge(path_id));
+      error = RS_ERROR_DNE;
+      goto done2;
     }
 
-    XV6FS_PRINTF("Got request for file with id %ld\n", reg_entry->file->id);
+    char *global_pathname = filepath_get_global_path(reg_entry);
+
+    XV6FS_PRINTF("Got request for filepath %s from ns %ld\n", global_pathname, get_ns_id_from_badge(sender_badge));
 
     switch (op)
     {
+    case FS_FUNC_IS_LINKED_REQ:
+      // Check if this pathname is linked to a physical file
+      bool result = filepath_get_file(reg_entry) != NULL;
+
+      // Send the reply
+      seL4_MessageInfo_ptr_set_length(&reply_tag, FSMSGREG_IS_LINKED_ACK_END);
+      seL4_SetMR(FSMSGREG_IS_LINKED_ACK_RES, result);
+      seL4_SetMR(RSMSGREG_FUNC, FS_FUNC_IS_LINKED_ACK);
+      break;
+    case FS_FUNC_LINK_REQ:
+      /* Find the file to link */
+      seL4_Word file_badge = seL4_GetBadge(0);
+
+      file_entry = file_registry_get_entry_by_badge(file_badge);
+      if (file_entry == NULL)
+      {
+        XV6FS_PRINTF("Received invalid file to link\n");
+        error = FS_SERVER_ERROR_BADGE;
+        goto done2;
+      }
+
+      XV6FS_PRINTF("File to link has id %ld, linking to path %s\n", file_entry->file->id, global_pathname);
+
+      /* Do the link */
+      error = xv6fs_sys_dolink2(file_entry->file, global_pathname);
+
+      /* Bookkeep */
+      if (reg_entry->nsid == NSID_DEFAULT)
+      {
+        reg_entry->file = file_entry;
+      }
+      else
+      {
+        reg_entry->global_path->file = file_entry;
+      }
+
+      seL4_MessageInfo_ptr_set_length(&reply_tag, FSMSGREG_LINK_ACK_END);
+      seL4_SetMR(RDMSGREG_FUNC, FS_FUNC_LINK_ACK);
+      break;
+    case FS_FUNC_UNLINK_REQ:
+      XV6FS_PRINTF("Unlink pathname %s\n", global_pathname);
+      error = xv6fs_sys_unlink(global_pathname);
+
+      // (XXX) Arya: Cleanup resources, bookkeep
+
+      seL4_MessageInfo_ptr_set_length(&reply_tag, FSMSGREG_UNLINK_ACK_END);
+      seL4_SetMR(RDMSGREG_FUNC, FS_FUNC_UNLINK_ACK);
+      break;
     case FS_FUNC_READ_REQ:
       int n_bytes_to_read = seL4_GetMR(FSMSGREG_READ_REQ_N);
       int offset = seL4_GetMR(FSMSGREG_READ_REQ_OFFSET);
 
       /* Attach memory object to server ADS */
       error = resource_server_attach_mo(&get_xv6fs_server()->gen, cap, &mo_vaddr);
-      CHECK_ERROR_GOTO(error, "Failed to attach MO", error, done);
+      CHECK_ERROR_GOTO(error, "Failed to attach MO", error, done2);
 
       // Perform file read
-      int n_bytes_ret = xv6fs_sys_read(reg_entry->file, mo_vaddr, n_bytes_to_read, offset);
+      int n_bytes_ret = xv6fs_sys_read(filepath_get_file(reg_entry)->file, mo_vaddr, n_bytes_to_read, offset);
       XV6FS_PRINTF("Read %d bytes from file\n", n_bytes_ret);
 
       seL4_MessageInfo_ptr_set_length(&reply_tag, FSMSGREG_READ_ACK_END);
@@ -578,10 +789,10 @@ seL4_MessageInfo_t xv6fs_request_handler(seL4_MessageInfo_t tag, seL4_Word sende
 
       /* Attach memory object to server ADS */
       error = resource_server_attach_mo(&get_xv6fs_server()->gen, cap, &mo_vaddr);
-      CHECK_ERROR_GOTO(error, "Failed to attach MO", error, done);
+      CHECK_ERROR_GOTO(error, "Failed to attach MO", error, done2);
 
       // Perform file write
-      n_bytes_ret = xv6fs_sys_write(reg_entry->file, mo_vaddr, n_bytes_to_read, offset);
+      n_bytes_ret = xv6fs_sys_write(filepath_get_file(reg_entry)->file, mo_vaddr, n_bytes_to_read, offset);
       XV6FS_PRINTF("Wrote %d bytes to file\n", n_bytes_ret);
 
       seL4_MessageInfo_ptr_set_length(&reply_tag, FSMSGREG_WRITE_ACK_END);
@@ -590,11 +801,12 @@ seL4_MessageInfo_t xv6fs_request_handler(seL4_MessageInfo_t tag, seL4_Word sende
       break;
     case FS_FUNC_CLOSE_REQ:
         /* Cleanup resources associated with the file */;
-      reg_entry->count--;
-      if (reg_entry->count <= 0)
+      file_entry = filepath_get_file(reg_entry);
+      file_entry->count--;
+      if (file_entry->count <= 0)
       {
         XV6FS_PRINTF("Removing registry entry for file with 0 refcount\n");
-        fs_registry_remove(reg_entry);
+        file_registry_remove(file_entry);
 
         // (XXX) Arya: Do we actually want to remove the registry entry?
       }
@@ -605,22 +817,184 @@ seL4_MessageInfo_t xv6fs_request_handler(seL4_MessageInfo_t tag, seL4_Word sende
     case FS_FUNC_STAT_REQ:
       /* Attach memory object to server ADS */
       error = resource_server_attach_mo(&get_xv6fs_server()->gen, cap, &mo_vaddr);
-      CHECK_ERROR_GOTO(error, "Failed to attach MO", error, done);
+      CHECK_ERROR_GOTO(error, "Failed to attach MO", error, done2);
 
       /* Call function stat */
-      error = xv6fs_sys_stat(reg_entry->file, (struct stat *)mo_vaddr);
+      error = xv6fs_sys_stat(filepath_get_file(reg_entry)->file, (struct stat *)mo_vaddr);
 
       seL4_MessageInfo_ptr_set_length(&reply_tag, FSMSGREG_STAT_ACK_END);
       seL4_SetMR(RDMSGREG_FUNC, FS_FUNC_STAT_ACK);
       break;
     default:
-      CHECK_ERROR_GOTO(1, "got invalid op on badged ep with obj id", FS_SERVER_ERROR_UNKNOWN, done);
+      CHECK_ERROR_GOTO(1, "got invalid filepath op on badged ep with obj id", FS_SERVER_ERROR_UNKNOWN, done2);
     }
   }
 
-done:
+done2:
   seL4_MessageInfo_ptr_set_label(&reply_tag, error);
   return reply_tag;
+}
+
+static seL4_MessageInfo_t xv6fs_file_request_handler(seL4_MessageInfo_t tag, seL4_Word sender_badge, seL4_CPtr cap)
+{
+  int error = seL4_NoError;
+  void *mo_vaddr;
+  fs_namespace_t *ns;
+  file_registry_entry_t *reg_entry;
+  filepath_registry_entry_t *path_entry;
+  seL4_CPtr dest;
+
+  unsigned int op = seL4_GetMR(FSMSGREG_FUNC);
+  uint64_t obj_id = get_object_id_from_badge(sender_badge);
+
+  seL4_MessageInfo_t reply_tag = seL4_MessageInfo_new(0, 0, 0, 0);
+
+  if (obj_id == BADGE_OBJ_ID_NULL)
+  { /* Handle Request Not Associated to Object */
+    XV6FS_PRINTF("Received badged request with no object id\n");
+
+    char *pathname;
+
+    switch (op)
+    {
+    case FS_FUNC_CREATE_FILE_REQ:
+      int open_flags = seL4_GetMR(FSMSGREG_CREATE_FILE_REQ_FLAGS);
+
+      // Cap contains the pathname to link to
+      seL4_Word path_badge = seL4_GetBadge(0);
+
+      XV6FS_PRINTF("Got request to create file with path badge %lx\n", path_badge)
+      path_entry = filepath_registry_get_entry_by_badge(path_badge);
+      if (path_entry == NULL)
+      {
+        XV6FS_PRINTF("Received invalid resource for RR request, ID is 0x%lx, local ID is 0x%lx\n",
+                     get_object_id_from_badge(path_badge), get_local_object_id_from_badge(path_badge));
+        error = RS_ERROR_DNE;
+        goto done3;
+      }
+
+      pathname = filepath_get_global_path(path_entry);
+
+      // Create the file
+      XV6FS_PRINTF("Server opening file %s, flags 0x%x\n", pathname, open_flags);
+
+      struct file *file = xv6fs_sys_open(pathname, open_flags);
+      error = file == NULL ? FS_SERVER_ERROR_UNKNOWN : FS_SERVER_NOERROR;
+      if (error != 0)
+      {
+        // Don't announce failed to open files as error, not usually an error
+        // (XXX) Arya: This may no longer be true, caught at the client level?
+        XV6FS_PRINTF("File did not exist\n");
+        error = FS_SERVER_ERROR_NOFILE;
+        goto done3;
+      }
+
+      XV6FS_PRINTF("Opened file\n");
+
+      // Add to registry if not already present
+      file_registry_entry_t *reg_entry = file_registry_get_entry_by_id(file->id);
+
+      if (reg_entry == NULL)
+      {
+        XV6FS_PRINTF("File not previously open, make new registry entry\n");
+        reg_entry = malloc(sizeof(file_registry_entry_t));
+        reg_entry->count = 1;
+        reg_entry->file = file;
+        file_registry_insert(reg_entry);
+
+        // Notify the PD component about the new reousrce
+        error = resource_server_create_resource(&get_xv6fs_server()->gen, get_xv6fs_server()->file_manager_id, file->id);
+        CHECK_ERROR_GOTO(error, "Failed to create the resource", error, done3);
+      }
+      else
+      {
+        XV6FS_PRINTF("File was already open, use previous registry entry\n");
+        reg_entry->count++;
+        free(file); // We don't need another copy of the structure
+        file = reg_entry->file;
+      }
+
+      // Create the resource endpoint
+      error = resource_server_give_resource(&get_xv6fs_server()->gen,
+                                            get_xv6fs_server()->file_manager_id,
+                                            get_ns_id_from_badge(sender_badge),
+                                            file->id,
+                                            get_client_id_from_badge(sender_badge),
+                                            &dest);
+      CHECK_ERROR_GOTO(error, "Failed to give the resource", error, done3);
+
+      // Link path to file
+      if (path_entry->nsid == NSID_DEFAULT)
+      {
+        path_entry->file = reg_entry;
+      }
+      else
+      {
+        path_entry->global_path->file = reg_entry;
+      }
+
+      // Send the reply
+      seL4_MessageInfo_ptr_set_length(&reply_tag, FSMSGREG_CREATE_FILE_ACK_END);
+      seL4_SetMR(FSMSGREG_CREATE_FILE_ACK_DEST, dest);
+      seL4_SetMR(RSMSGREG_FUNC, FS_FUNC_CREATE_FILE_ACK);
+      break;
+    default:
+      CHECK_ERROR_GOTO(1, "got invalid file op on badged ep without obj id", error, done3);
+    }
+  }
+  else
+  {
+    /* Handle Request On Specific Resource */
+    XV6FS_PRINTF("Received badged request with object id\n");
+
+    int ret;
+    file_registry_entry_t *reg_entry = file_registry_get_entry_by_badge(sender_badge);
+    if (reg_entry == NULL)
+    {
+      XV6FS_PRINTF("Received invalid badge\n");
+      error = FS_SERVER_ERROR_BADGE;
+      goto done3;
+    }
+
+    XV6FS_PRINTF("Got request for file with id %ld\n", reg_entry->file->id);
+
+    switch (op)
+    {
+    default:
+      CHECK_ERROR_GOTO(1, "got invalid file op on badged ep with obj id", FS_SERVER_ERROR_UNKNOWN, done3);
+    }
+  }
+
+done3:
+  seL4_MessageInfo_ptr_set_label(&reply_tag, error);
+  return reply_tag;
+}
+
+seL4_MessageInfo_t xv6fs_request_handler(seL4_MessageInfo_t tag, seL4_Word sender_badge, seL4_CPtr cap)
+{
+  if (sender_badge == 0)
+  {
+    return xv6fs_untyped_request_handler(tag, sender_badge, cap);
+  }
+  else
+  {
+    gpi_cap_t resource_type = get_cap_type_from_badge(sender_badge);
+
+    if (resource_type == GPICAP_TYPE_FILEPATH)
+    {
+      return xv6fs_filepath_request_handler(tag, sender_badge, cap);
+    }
+    else if (resource_type == GPICAP_TYPE_FILE)
+    {
+      return xv6fs_file_request_handler(tag, sender_badge, cap);
+    }
+    else
+    {
+      XV6FS_PRINTF("Received message on endpoint with invalid resource type %d\n", resource_type);
+      seL4_MessageInfo_t reply_tag = seL4_MessageInfo_new(FS_SERVER_ERROR_BADGE, 0, 0, 0);
+      return reply_tag;
+    }
+  }
 }
 
 static int block_read(uint32_t blockno, void *buf)

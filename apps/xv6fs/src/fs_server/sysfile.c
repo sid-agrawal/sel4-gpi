@@ -15,88 +15,7 @@
 
 #define NO_OFFSET -1
 
-// Is the directory dp empty except for "." and ".." ?
-static int
-isdirempty(struct inode *dp)
-{
-  int off;
-  struct dirent de;
-
-  for (off = 2 * sizeof(de); off < dp->size; off += sizeof(de))
-  {
-    if (readi(dp, 0, (uint64_t)&de, off, sizeof(de)) != sizeof(de))
-      xv6fs_panic("isdirempty: readi");
-    if (de.inum != 0)
-      return 0;
-  }
-  return 1;
-}
-
-static struct inode *
-create(char *path, short type, short major, short minor)
-{
-  struct inode *ip, *dp;
-  char name[DIRSIZ];
-
-  if ((dp = nameiparent(path, name)) == 0)
-    return 0;
-
-  ilock(dp);
-
-  if ((ip = dirlookup(dp, name, 0)) != 0)
-  {
-    iunlockput(dp);
-    ilock(ip);
-    if (type == T_FILE && (ip->type == T_FILE || ip->type == T_DEVICE))
-      return ip;
-    iunlockput(ip);
-    return 0;
-  }
-
-  if ((ip = ialloc(dp->dev, type)) == 0)
-  {
-    iunlockput(dp);
-    return 0;
-  }
-
-  ilock(ip);
-  ip->major = major;
-  ip->minor = minor;
-  ip->nlink = 1;
-  iupdate(ip);
-
-  if (type == T_DIR)
-  { // Create . and .. entries.
-    // No ip->nlink++ for ".": avoid cyclic ref count.
-    if (dirlink(ip, ".", ip->inum) < 0 || dirlink(ip, "..", dp->inum) < 0)
-      goto fail;
-  }
-
-  if (dirlink(dp, name, ip->inum) < 0)
-    goto fail;
-
-  if (type == T_DIR)
-  {
-    // now that success is guaranteed:
-    dp->nlink++; // for ".."
-    iupdate(dp);
-  }
-
-  iunlockput(dp);
-
-  return ip;
-
-fail:
-  // something went wrong. de-allocate ip.
-  ip->nlink = 0;
-  iupdate(ip);
-  iunlockput(ip);
-  iunlockput(dp);
-  return 0;
-}
-
 /* xv6 "system call" functions */
-
 uint32_t xv6fs_file_ino(void *file)
 {
   struct file *f = (struct file *)file;
@@ -133,15 +52,20 @@ xv6fs_sys_open(char *path, int omode)
     }
   }
 
+  printf("TEMPA 1\n");
   if ((f = filealloc()) == 0)
   {
+    printf("TEMPA 1.1\n");
     fprintf(stderr, "%s filealloc error!\n", __func__);
     if (f)
       fileclose(f);
     iunlockput(ip);
     return 0;
   }
+  printf("TEMPA 1.2\n");
   iunlock(ip);
+
+  printf("TEMPA 2\n");
 
   f->type = FD_INODE;
   f->ip = ip;
@@ -151,6 +75,12 @@ xv6fs_sys_open(char *path, int omode)
   f->writable = (omode & O_WRONLY) || (omode & O_RDWR);
   f->flags = omode;
   return f;
+}
+
+// Create a path dirent that temporarily points to a NULL inode
+int xv6fs_sys_pathcreate(char *path)
+{
+  return create_filepath(path);
 }
 
 int xv6fs_sys_fileclose(void *fh)
@@ -172,8 +102,8 @@ int xv6fs_sys_read(struct file *f, char *buf, size_t sz, uint32_t off)
 
 // Writes all blocknos for file f in the buf
 // If the buf runs out of size, stops writing and returns -1
-int xv6fs_sys_blocknos(struct file *f, int *buf, int buf_size, int* result_size)
-{ 
+int xv6fs_sys_blocknos(struct file *f, int *buf, int buf_size, int *result_size)
+{
   if (f == 0)
     return -1;
 
@@ -262,58 +192,19 @@ int xv6fs_sys_unlink(char *path)
     return -1;
   }
 
-  ilock(dp);
-
-  // Cannot unlink "." or "..".
-  if (namecmp(name, ".") == 0 || namecmp(name, "..") == 0)
-    goto bad;
-
-  if ((ip = dirlookup(dp, name, &off)) == 0)
-  {
-    r = ENOENT;
-    goto bad;
-  }
-
-  ilock(ip);
-
-  if (ip->nlink < 1)
-    xv6fs_panic("unlink: nlink < 1");
-
-  if (ip->type == T_DIR && !isdirempty(ip))
-  {
-    iunlockput(ip);
-    goto bad;
-  }
-
-  memset(&de, 0, sizeof(de));
-  if (writei(dp, 1, (uint64_t)&de, off, sizeof(de)) != sizeof(de))
-    xv6fs_panic("unlink: writei");
-  if (ip->type == T_DIR)
-  {
-    dp->nlink--;
-    iupdate(dp);
-  }
-  iunlockput(dp);
-
-  ip->nlink--;
-  // fprintf(stderr,"%s name:%s, updated ip->nlink:%d\n",__func__, path, ip->nlink);
-  iupdate(ip);
-  iunlockput(ip);
-
-  return 0;
-
-bad:
-  iunlockput(dp);
-  return r;
+  return dirunlink(dp, name);
 }
 
 // Create the path new as a link to the same inode as old.
-int xv6fs_sys_dolink2(struct file *old, char *new)
+int xv6fs_sys_dolink(char *old, char *new)
 {
   struct inode *dp, *ip;
   char name[DIRSIZ];
 
-  ip = old->ip;
+  if ((ip = namei(old)) == 0)
+  {
+    return -1;
+  }
 
   ilock(ip);
   if (ip->type == T_DIR)
@@ -348,15 +239,12 @@ bad:
 }
 
 // Create the path new as a link to the same inode as old.
-int xv6fs_sys_dolink(char *old, char *new)
+int xv6fs_sys_dolink2(struct file *old, char *new)
 {
   struct inode *dp, *ip;
   char name[DIRSIZ];
 
-  if ((ip = namei(old)) == 0)
-  {
-    return -1;
-  }
+  ip = old->ip;
 
   ilock(ip);
   if (ip->type == T_DIR)

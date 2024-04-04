@@ -188,15 +188,17 @@ int test_sqlite(env_t env)
     test_assert(error == 0);
 
     /* Start fs server process */
-    uint64_t fs_id;
+    uint64_t file_manager_id;
+    uint64_t filepath_manager_id;
     seL4_CPtr fs_pd_cap;
-    error = start_xv6fs_pd(ramdisk_id, ramdisk_pd_cap, &fs_pd_cap, &fs_id);
+    error = start_xv6fs_pd(ramdisk_id, ramdisk_pd_cap, &fs_pd_cap, &file_manager_id, &filepath_manager_id);
     test_assert(error == 0);
 
-    // Add FS ep to RDE
-    error = pd_client_add_rde(&pd_conn, fs_pd_cap, fs_id, NSID_DEFAULT);
+    // Add FS managers to resource directory
+    error = pd_client_add_rde(&pd_conn, fs_pd_cap, file_manager_id, NSID_DEFAULT);
     test_assert(error == 0);
-    seL4_CPtr fs_client_ep = sel4gpi_get_rde(GPICAP_TYPE_FILE);
+    error = pd_client_add_rde(&pd_conn, fs_pd_cap, filepath_manager_id, NSID_DEFAULT);
+    test_assert(error == 0);
 
     printf("------------------STARTING TESTS: %s------------------\n", __func__);
 

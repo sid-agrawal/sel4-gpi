@@ -23,6 +23,7 @@ struct superblock
   uint32_t logstart;   // Block number of first log block
   uint32_t inodestart; // Block number of first inode block
   uint32_t bmapstart;  // Block number of first free map block
+  uint32_t nullinode;  // inode number of the null inode
 };
 
 #define FSMAGIC 0x10203040

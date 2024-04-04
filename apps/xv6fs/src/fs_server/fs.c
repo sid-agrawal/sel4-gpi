@@ -21,9 +21,13 @@
 #include <file.h>
 
 #define min(a, b) ((a) < (b) ? (a) : (b))
+
 // there should be one superblock per disk device, but we run with
 // only one device
 struct superblock sb;
+
+// Keep a single null inode for filepaths without a file
+static struct inode *null_inode; 
 
 // Read the super block.
 void readsb(int dev, struct superblock *sb)
@@ -40,7 +44,13 @@ void fsinit(int dev)
 {
   readsb(dev, &sb);
   if (sb.magic != FSMAGIC)
-    xv6fs_panic("invalid file system");
+    xv6fs_panic("fsinit: invalid file system");
+
+  // Allocate a single null inode
+  null_inode = create("/null", T_NULL, dev, 0);
+  if (null_inode == NULL) {
+    xv6fs_panic("fsinit: couldn't create null inode");
+  }
 
   myproc()->cwd = namei("/");
 }
@@ -618,8 +628,9 @@ dirlookup(struct inode *dp, char *name, uint32_t *poff)
   uint32_t off, inum;
   struct dirent de;
 
-  if (dp->type != T_DIR)
+  if (dp->type != T_DIR) {
     xv6fs_panic("dirlookup not DIR");
+  }
 
   for (off = 0; off < dp->size; off += sizeof(de))
   {
@@ -640,6 +651,22 @@ dirlookup(struct inode *dp, char *name, uint32_t *poff)
   return 0;
 }
 
+// Is the directory dp empty except for "." and ".." ?
+int isdirempty(struct inode *dp)
+{
+  int off;
+  struct dirent de;
+
+  for (off = 2 * sizeof(de); off < dp->size; off += sizeof(de))
+  {
+    if (readi(dp, 0, (uint64_t)&de, off, sizeof(de)) != sizeof(de))
+      xv6fs_panic("isdirempty: readi");
+    if (de.inum != 0)
+      return 0;
+  }
+  return 1;
+}
+
 // Write a new directory entry (name, inum) into the directory dp.
 // Returns 0 on success, -1 on failure (e.g. out of disk blocks).
 int dirlink(struct inode *dp, char *name, uint32_t inum)
@@ -649,7 +676,7 @@ int dirlink(struct inode *dp, char *name, uint32_t inum)
   struct inode *ip;
 
   // Check that name is not present.
-  if ((ip = dirlookup(dp, name, 0)) != 0)
+  if ((ip = dirlookup(dp, name, 0)) != 0 && (ip->type != T_NULL))
   {
     iput(ip);
     return -1;
@@ -670,6 +697,60 @@ int dirlink(struct inode *dp, char *name, uint32_t inum)
     return -1;
 
   return 0;
+}
+
+// Remove a directory entry (name, X) from the directory dp
+// Returns 0 on success, -1 on failure (e.g. name did not exist).
+int dirunlink(struct inode *dp, char *name) {
+  struct inode *ip;
+  struct dirent de;
+  uint32_t off;
+  int r = -1;
+
+  ilock(dp);
+
+  // Cannot unlink "." or "..".
+  if (namecmp(name, ".") == 0 || namecmp(name, "..") == 0)
+    goto bad;
+
+  if ((ip = dirlookup(dp, name, &off)) == 0)
+  {
+    r = ENOENT;
+    goto bad;
+  }
+
+  ilock(ip);
+
+  if (ip->nlink < 1)
+    xv6fs_panic("unlink: nlink < 1");
+
+  if (ip->type == T_DIR && !isdirempty(ip))
+  {
+    iunlockput(ip);
+    goto bad;
+  }
+
+  memset(&de, 0, sizeof(de));
+  if (writei(dp, 1, (uint64_t)&de, off, sizeof(de)) != sizeof(de))
+    xv6fs_panic("unlink: writei");
+
+  if (ip->type == T_DIR)
+  {
+    dp->nlink--;
+    iupdate(dp);
+  }
+  iunlockput(dp);
+
+  ip->nlink--;
+  // fprintf(stderr,"%s name:%s, updated ip->nlink:%d\n",__func__, path, ip->nlink);
+  iupdate(ip);
+  iunlockput(ip);
+
+  return 0;
+
+bad:
+  iunlockput(dp);
+  return r;
 }
 
 // Paths
@@ -767,4 +848,119 @@ struct inode *
 nameiparent(char *path, char *name)
 {
   return namex(path, 1, name);
+}
+
+// Create filepath and file
+struct inode *
+create(char *path, short type, short major, short minor)
+{
+  struct inode *ip, *dp;
+  char name[DIRSIZ];
+
+  if ((dp = nameiparent(path, name)) == 0)
+    return 0;
+
+  ilock(dp);
+
+  if ((ip = dirlookup(dp, name, 0)) != 0)
+  {
+    ilock(ip);
+    if (type == T_FILE && (ip->type == T_FILE || ip->type == T_DEVICE)) {
+      iunlockput(dp);
+      return ip;
+    } else if (ip->type == T_NULL) {
+      // This was a temporary path to a null inode, remove the link now
+      if (dirunlink(dp, name) != 0) {
+        // Failed to unlink the null inode
+        return 0;
+      }
+    } else {
+      // Failure
+      iunlockput(dp);
+      iunlockput(ip);
+      return 0;
+    }
+
+    iunlockput(ip);
+  }
+
+  if ((ip = ialloc(dp->dev, type)) == 0)
+  {
+    iunlockput(dp);
+    return 0;
+  }
+
+  ilock(ip);
+  ip->major = major;
+  ip->minor = minor;
+  ip->nlink = 1;
+  iupdate(ip);
+
+  if (type == T_DIR)
+  { // Create . and .. entries.
+    // No ip->nlink++ for ".": avoid cyclic ref count.
+    if (dirlink(ip, ".", ip->inum) < 0 || dirlink(ip, "..", dp->inum) < 0)
+      goto fail;
+  }
+
+  if (dirlink(dp, name, ip->inum) < 0)
+    goto fail;
+
+  if (type == T_DIR)
+  {
+    // now that success is guaranteed:
+    dp->nlink++; // for ".."
+    iupdate(dp);
+  }
+
+  iunlockput(dp);
+
+  return ip;
+
+fail:
+  // something went wrong. de-allocate ip.
+  ip->nlink = 0;
+  iupdate(ip);
+  iunlockput(ip);
+  iunlockput(dp);
+  return 0;
+}
+
+// Create a filepath with no associated file
+// Returns 0 on success, -1 otherwise
+int create_filepath(char *path) {
+  struct inode *ip, *dp;
+  char name[DIRSIZ];
+  int type = T_FILE;
+
+  if ((dp = nameiparent(path, name)) == 0)
+    return 0;
+
+  ilock(dp);
+
+  if ((ip = dirlookup(dp, name, 0)) != 0)
+  {
+    // The path already exists
+    return -1;
+  }
+
+  // Link the new path to the null inode
+  ip = null_inode;
+  if (dirlink(dp, name, ip->inum) < 0) {
+    iunlockput(dp);
+    return -1;
+  }
+
+  iunlockput(dp);
+
+  ilock(ip);
+  ip->nlink++;
+  iupdate(ip);
+  iunlockput(ip);
+
+  return 0;
+}
+
+struct inode *get_null_inode() {
+  return null_inode;
 }

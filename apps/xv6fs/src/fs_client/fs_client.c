@@ -63,6 +63,40 @@ static int dev_null_fd;
     }                                \
   } while (0);
 
+/* Filepath resource DS */
+typedef struct _filepath_resource_entry
+{
+  char path[FS_CLIENT_PATH_MAX];
+  seL4_CPtr cap;
+  struct _filepath_resource_entry *next;
+} filepath_resource_entry_t;
+
+filepath_resource_entry_t *filepaths;
+
+static void insert_filepath_resource(char *path, seL4_CPtr cap)
+{
+  filepath_resource_entry_t *entry = malloc(sizeof(filepath_resource_entry_t));
+  entry->cap = cap;
+  strncpy(entry->path, path, FS_CLIENT_PATH_MAX);
+  entry->next = filepaths;
+  filepaths = entry;
+}
+
+static seL4_CPtr get_filepath_resource(char *path)
+{
+  filepath_resource_entry_t *curr;
+
+  for (filepath_resource_entry_t *curr = filepaths; curr != NULL; curr = curr->next)
+  {
+    if (strcmp(path, curr->path) == 0)
+    {
+      return curr->cap;
+    }
+  }
+
+  return 0;
+}
+
 /* Simple FD functions */
 xv6fs_client_context_t fd_table[FD_TABLE_SIZE];
 xv6fs_client_context_t xv6fs_null_client_context;
@@ -125,11 +159,24 @@ global_xv6fs_client_context_t *get_xv6fs_client(void)
 int start_xv6fs_pd(uint64_t rd_id,
                    seL4_CPtr rd_pd_cap,
                    seL4_CPtr *fs_pd_cap,
-                   uint64_t *fs_id)
+                   uint64_t *file_manager_id,
+                   uint64_t *path_manager_id)
 {
+  uint64_t manager_ids[2];
   int error = start_resource_server_pd(rd_id, rd_pd_cap,
-                                       FS_APP, fs_pd_cap, fs_id);
+                                       FS_APP, fs_pd_cap,
+                                       2, manager_ids);
   CHECK_ERROR(error, "failed to start file resource server\n");
+
+  if (file_manager_id)
+  {
+    *file_manager_id = manager_ids[0];
+  }
+  if (path_manager_id)
+  {
+    *path_manager_id = manager_ids[1];
+  }
+
   XV6FS_PRINTF("Successfully started file system server\n");
   return 0;
 }
@@ -141,7 +188,8 @@ xv6fs_client_init(void)
 
   int error;
 
-  get_xv6fs_client()->fs_ep = sel4gpi_get_rde(GPICAP_TYPE_FILE);
+  get_xv6fs_client()->file_ep = sel4gpi_get_rde(GPICAP_TYPE_FILE);
+  get_xv6fs_client()->filepath_ep = sel4gpi_get_rde(GPICAP_TYPE_FILEPATH);
   get_xv6fs_client()->mo_ep = sel4gpi_get_rde(GPICAP_TYPE_MO);
   get_xv6fs_client()->ads_conn = malloc(sizeof(ads_client_context_t));
   get_xv6fs_client()->ads_conn->badged_server_ep_cspath.capPtr = sel4gpi_get_rde_by_ns_id(sel4gpi_get_binded_ads_id(), GPICAP_TYPE_ADS);
@@ -177,16 +225,16 @@ xv6fs_client_init(void)
 
 int xv6fs_client_set_namespace(uint64_t ns_id)
 {
-  XV6FS_PRINTF("Client of FS server will use namespace %ld\n", ns_id);
+  XV6FS_PRINTF("Client of FS server will use filepath namespace %ld\n", ns_id);
 
-  seL4_CPtr ep = sel4gpi_get_rde_by_ns_id(ns_id, GPICAP_TYPE_FILE);
+  seL4_CPtr ep = sel4gpi_get_rde_by_ns_id(ns_id, GPICAP_TYPE_FILEPATH);
 
   if (ep == seL4_CapNull)
   {
     return -1;
   }
 
-  get_xv6fs_client()->fs_ep = ep;
+  get_xv6fs_client()->filepath_ep = ep;
   return 0;
 }
 
@@ -215,14 +263,58 @@ int xv6fs_client_link_file(seL4_CPtr file, const char *path)
   strcpy(get_xv6fs_client()->shared_mem_vaddr, path);
 
   // Send IPC to fs server
-  seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 2, FSMSGREG_LINK_REQ_END);
+  seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 1, FSMSGREG_LINK_REQ_END);
   seL4_SetMR(FSMSGREG_FUNC, FS_FUNC_LINK_REQ);
-  seL4_SetCap(0, get_xv6fs_client()->shared_mem->badged_server_ep_cspath.capPtr);
-  seL4_SetCap(1, file);
+  seL4_SetCap(0, file);
 
-  tag = seL4_Call(get_xv6fs_client()->fs_ep, tag);
+  tag = seL4_Call(get_xv6fs_client()->filepath_ep, tag);
 
   return seL4_MessageInfo_get_label(tag);
+}
+
+/**
+ * Allocate a path within the file system, does not allocate a file
+ **/
+static int alloc_path(const char *pathname, seL4_CPtr *dest)
+{
+  // Copy pathname from buf to shared mem
+  strcpy(get_xv6fs_client()->shared_mem_vaddr, pathname);
+
+  // Send IPC to fs server
+  seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 1, FSMSGREG_CREATE_PATH_REQ_END);
+  seL4_SetMR(FSMSGREG_FUNC, FS_FUNC_CREATE_PATH_REQ);
+  seL4_SetCap(0, get_xv6fs_client()->shared_mem->badged_server_ep_cspath.capPtr);
+  tag = seL4_Call(get_xv6fs_client()->filepath_ep, tag);
+
+  if (seL4_MessageInfo_get_label(tag) != seL4_NoError)
+  {
+    return -1;
+  }
+
+  // Successfully allocated path
+  *dest = seL4_GetMR(FSMSGREG_CREATE_FILE_ACK_DEST);
+  insert_filepath_resource(pathname, *dest);
+
+  return 0;
+}
+
+/**
+ * Checks if a path in the file system is already linked to a file
+ **/
+static int is_path_linked(seL4_CPtr path_cap)
+{
+  // Send IPC to fs server
+  seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0, FSMSGREG_IS_LINKED_REQ_END);
+  seL4_SetMR(FSMSGREG_FUNC, FS_FUNC_IS_LINKED_REQ);
+  tag = seL4_Call(path_cap, tag);
+
+  if (seL4_MessageInfo_get_label(tag) != seL4_NoError)
+  {
+    return -1;
+  }
+
+  // Successfully allocated path
+  return seL4_GetMR(FSMSGREG_IS_LINKED_ACK_RES);
 }
 
 /* Remote fs access functions to override libc fs ops */
@@ -238,27 +330,52 @@ static int xv6fs_libc_open(const char *pathname, int flags, int modes)
     return dev_null_fd;
   }
 
-  // Copy pathname from buf to shared mem
-  strcpy(get_xv6fs_client()->shared_mem_vaddr, pathname);
+  // Check if we have this path resource already
+  seL4_CPtr path_res = get_filepath_resource(pathname);
 
-  // Send IPC to fs server
-  seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 1, FSMSGREG_CREATE_REQ_END);
-  seL4_SetMR(FSMSGREG_FUNC, FS_FUNC_CREATE_REQ);
-  seL4_SetMR(FSMSGREG_CREATE_REQ_FLAGS, flags);
-  seL4_SetCap(0, get_xv6fs_client()->shared_mem->badged_server_ep_cspath.capPtr);
-  // (XXX) Currently ignore modes
-
-  // Alloc received cap ep
-  tag = seL4_Call(get_xv6fs_client()->fs_ep, tag);
-
-  if (seL4_MessageInfo_get_label(tag) != seL4_NoError)
+  if (path_res == 0)
   {
-    return -1;
+    if (flags & O_CREAT)
+    {
+      XV6FS_PRINTF("Don't already have path resource, try to allocate\n");
+
+      // Allocate the path
+      error = alloc_path(pathname, &path_res);
+      CHECK_ERROR(error, "Failed to allocate path");
+
+      // (XXX) Arya: Assumption is that only when we allocate the path do we need to allocate
+      // the file as well. This will be true when using the file server through libc functions
+
+      // Allocate & link the file
+      seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 1, FSMSGREG_CREATE_FILE_REQ_END);
+      seL4_SetMR(FSMSGREG_FUNC, FS_FUNC_CREATE_FILE_REQ);
+      seL4_SetMR(FSMSGREG_CREATE_FILE_REQ_FLAGS, flags);
+      seL4_SetCap(0, path_res);
+      // (XXX) Currently ignore modes
+      tag = seL4_Call(get_xv6fs_client()->file_ep, tag);
+
+      if (seL4_MessageInfo_get_label(tag) != seL4_NoError)
+      {
+        return -1;
+      }
+
+      // (XXX) Arya: Ignoring the file resource for now, all operations go through the filepath
+      // seL4_CPtr dest = seL4_GetMR(FSMSGREG_CREATE_FILE_ACK_DEST);
+    }
+    else
+    {
+      XV6FS_PRINTF("Don't already have path resource, no O_CREAT, failure\n");
+
+      // The filepath doesn't exist yet and mode is not create
+      errno = ENOENT;
+      return -1;
+    }
+  } else {
+    XV6FS_PRINTF("Already have path resource\n");
   }
 
   // Add file to FD table
-  seL4_CPtr dest = seL4_GetMR(FSMSGREG_CREATE_ACK_DEST);
-  int fd = fd_bind(dest);
+  int fd = fd_bind(path_res);
 
   if (fd == -1)
   {
@@ -597,7 +714,7 @@ static int xv6fs_libc_unlink(const char *pathname)
   // Send IPC to fs server
   seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 1, FSMSGREG_UNLINK_REQ_END);
   seL4_SetMR(FSMSGREG_FUNC, FS_FUNC_UNLINK_REQ);
-  tag = seL4_Call(get_xv6fs_client()->fs_ep, tag);
+  tag = seL4_Call(get_xv6fs_client()->filepath_ep, tag);
 
   if (seL4_MessageInfo_get_label(tag) != seL4_NoError)
   {

@@ -26,6 +26,7 @@ typedef enum GPICAP_TYPE
 
     // Non-core cap types
     GPICAP_TYPE_BLOCK,
+    GPICAP_TYPE_FILEPATH,
     GPICAP_TYPE_FILE,
 
     GPICAP_TYPE_MAX,

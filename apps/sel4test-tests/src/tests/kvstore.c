@@ -24,10 +24,14 @@ static seL4_CPtr self_ep;
 
 static uint64_t ramdisk_id;
 static seL4_CPtr ramdisk_pd_cap;
-static uint64_t fs_id;
+
 static seL4_CPtr fs_pd_cap;
-static uint64_t fs_2_id;
+uint64_t file_manager_id;
+uint64_t filepath_manager_id;
+
 static seL4_CPtr fs_2_pd_cap;
+uint64_t file_manager_id_2;
+uint64_t filepath_manager_id_2;
 
 // Setup before all tests
 static int setup(env_t env)
@@ -45,13 +49,14 @@ static int setup(env_t env)
     test_assert(error == 0);
 
     /* Start fs server process */
-    error = start_xv6fs_pd(ramdisk_id, ramdisk_pd_cap, &fs_pd_cap, &fs_id);
+    error = start_xv6fs_pd(ramdisk_id, ramdisk_pd_cap, &fs_pd_cap, &file_manager_id, &filepath_manager_id);
     test_assert(error == 0);
 
-    /* Add FS ep to RDE */
-    error = pd_client_add_rde(&pd_conn, fs_pd_cap, fs_id, NSID_DEFAULT);
+    // Add FS managers to resource directory
+    error = pd_client_add_rde(&pd_conn, fs_pd_cap, file_manager_id, NSID_DEFAULT);
     test_assert(error == 0);
-    seL4_CPtr fs_client_ep = sel4gpi_get_rde(GPICAP_TYPE_FILE);
+    error = pd_client_add_rde(&pd_conn, fs_pd_cap, filepath_manager_id, NSID_DEFAULT);
+    test_assert(error == 0);
 
     /* Create EP to listen for test results */
     error = pd_client_alloc_ep(&pd_conn, &self_ep);
@@ -65,10 +70,11 @@ static int setup(env_t env)
  *
  * @param kvstore_ep returns the kvstore server's ep
  * @param fs_nsid namespace ID of fs to share
- * @param fs_manager_id set to a special fs manager id that is not in the current RD (optional)
+ * @param file_manager_id set to a special file manager id that is not in the current RD (optional)
+ * @param filepath_manager_id set to a special filepath manager id that is not in the current RD (optional)
  * @param fs_pd_cap set to a special fs_ep that is not in the current RD (optional)
  */
-static int start_kvstore_server(seL4_CPtr *kvstore_ep, uint64_t fs_nsid, uint64_t fs_manager_id, seL4_CPtr fs_pd_cap)
+static int start_kvstore_server(seL4_CPtr *kvstore_ep, uint64_t fs_nsid, uint64_t file_manager_id, uint64_t filepath_manager_id, seL4_CPtr fs_pd_cap)
 {
     int error;
 
@@ -111,13 +117,17 @@ static int start_kvstore_server(seL4_CPtr *kvstore_ep, uint64_t fs_nsid, uint64_
     if (fs_pd_cap)
     {
         // Share a new FS RDE
-        error = pd_client_add_rde(&new_pd, fs_pd_cap, fs_manager_id, fs_nsid);
+        error = pd_client_add_rde(&new_pd, fs_pd_cap, file_manager_id, fs_nsid);
+        test_assert(error == 0);
+        error = pd_client_add_rde(&new_pd, fs_pd_cap, filepath_manager_id, fs_nsid);
         test_assert(error == 0);
     }
     else
     {
         // Share our own FS RDE
         error = pd_client_share_rde(&new_pd, GPICAP_TYPE_FILE, fs_nsid);
+        test_assert(error == 0);
+        error = pd_client_share_rde(&new_pd, GPICAP_TYPE_FILEPATH, fs_nsid);
         test_assert(error == 0);
     }
 
@@ -278,7 +288,7 @@ int test_kvstore_lib_in_diff_pd(env_t env)
 
     /* Start the kvstore PD */
     seL4_CPtr kvstore_ep;
-    error = start_kvstore_server(&kvstore_ep, NSID_DEFAULT, 0, 0);
+    error = start_kvstore_server(&kvstore_ep, NSID_DEFAULT, 0, 0, 0);
     test_assert(error == 0);
 
     /* Start the app PD */
@@ -310,7 +320,7 @@ int test_2_kvstore_same_fs(env_t env)
 
     /* Start the kvstore PD 1 */
     seL4_CPtr kvstore_ep_1;
-    error = start_kvstore_server(&kvstore_ep_1, NSID_DEFAULT, 0, 0);
+    error = start_kvstore_server(&kvstore_ep_1, NSID_DEFAULT, 0, 0, 0);
     test_assert(error == 0);
 
     /* Start the app PD 1 */
@@ -330,7 +340,7 @@ int test_2_kvstore_same_fs(env_t env)
     Some concurrency issue with the file system causes a sqlite issue
     */
     seL4_CPtr kvstore_ep_2;
-    error = start_kvstore_server(&kvstore_ep_2, NSID_DEFAULT, 0, 0);
+    error = start_kvstore_server(&kvstore_ep_2, NSID_DEFAULT, 0, 0, 0);
     test_assert(error == 0);
 
     /* Start the app PD 2 */
@@ -373,7 +383,7 @@ int test_2_kvstore_diff_namespace(env_t env)
 
     /* Start the kvstore PD 1 */
     seL4_CPtr kvstore_ep_1;
-    error = start_kvstore_server(&kvstore_ep_1, nsid_1, 0, 0);
+    error = start_kvstore_server(&kvstore_ep_1, nsid_1, 0, 0, 0);
     test_assert(error == 0);
 
     /* Start the app PD 1 */
@@ -393,7 +403,7 @@ int test_2_kvstore_diff_namespace(env_t env)
     Some concurrency issue with the file system causes a sqlite issue
     */
     seL4_CPtr kvstore_ep_2;
-    error = start_kvstore_server(&kvstore_ep_2, nsid_2, 0, 0);
+    error = start_kvstore_server(&kvstore_ep_2, nsid_2, 0, 0, 0);
     test_assert(error == 0);
 
     /* Start the app PD 2 */
@@ -424,13 +434,13 @@ int test_2_kvstore_different_fs(env_t env)
     error = setup(env);
     test_assert(error == 0);
 
-    /* Start second fs server process */
-    error = start_xv6fs_pd(ramdisk_id, ramdisk_pd_cap, &fs_2_pd_cap, &fs_2_id);
+    /* Start fs server process */
+    error = start_xv6fs_pd(ramdisk_id, ramdisk_pd_cap, &fs_2_pd_cap, &file_manager_id_2, &filepath_manager_id_2);
     test_assert(error == 0);
 
     /* Start the kvstore PD 1 */
     seL4_CPtr kvstore_ep_1;
-    error = start_kvstore_server(&kvstore_ep_1, NSID_DEFAULT, 0, 0);
+    error = start_kvstore_server(&kvstore_ep_1, NSID_DEFAULT, 0, 0, 0);
     test_assert(error == 0);
 
     /* Start the app PD 1 */
@@ -446,7 +456,7 @@ int test_2_kvstore_different_fs(env_t env)
 
     /* Start the kvstore PD 2 */
     seL4_CPtr kvstore_ep_2;
-    error = start_kvstore_server(&kvstore_ep_2, NSID_DEFAULT, fs_2_id, fs_2_pd_cap);
+    error = start_kvstore_server(&kvstore_ep_2, NSID_DEFAULT, file_manager_id_2, filepath_manager_id_2, fs_2_pd_cap);
     test_assert(error == 0);
 
     /* Start the app PD 2 */

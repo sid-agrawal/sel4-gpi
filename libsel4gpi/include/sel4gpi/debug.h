@@ -10,7 +10,8 @@
 #define ADS_DEBUG 4
 #define MO_DEBUG 8
 #define GPI_DEBUG 16
-#define OSMOSIS_DEBUG 0 // selectively enable component debug e.g. (PD_DEBUG | ADS_DEBUG)
+#define ALL_DEBUG (PD_DEBUG | CPU_DEBUG | ADS_DEBUG | MO_DEBUG | GPI_DEBUG)
+#define OSMOSIS_DEBUG ALL_DEBUG // selectively enable component debug e.g. (PD_DEBUG | ADS_DEBUG)
 
 #if OSMOSIS_DEBUG
 #define OSDB_PRINTF(component, ...)                     \

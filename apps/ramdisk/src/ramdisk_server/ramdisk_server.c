@@ -81,6 +81,10 @@ int ramdisk_init()
     ramdisk_server_context_t *server = get_ramdisk_server();
     int error;
 
+    /* Register self as block manager */
+    error = resource_server_register_manager(&get_ramdisk_server()->gen, GPICAP_TYPE_BLOCK, &server->block_manager_id);
+    CHECK_ERROR(error, "failed to register block manager");
+
     /* Allocate the ramdisk's virtual disk */
     int n_pages = RAMDISK_SIZE_BYTES / SIZE_BITS_TO_BYTES(seL4_PageBits);
     RAMDISK_PRINTF("Allocating %d pages\n", n_pages);
@@ -114,8 +118,13 @@ int ramdisk_init()
     for (int i = 0; i < server->free_blocks->n_blocks; i++)
     {
         // Local resource ID is the block ID
-        resource_server_create_resource(&server->gen, i);
+        error = resource_server_create_resource(&server->gen, server->block_manager_id, i);
+        CHECK_ERROR(error, "failed to create block resource");
     }
+
+    /* Notify parent */
+    error = resource_server_notify_parent(&get_ramdisk_server()->gen, &server->block_manager_id, 1);
+    CHECK_ERROR(error, "failed to notify parent that ramdisk started");
 
     return error;
 }
@@ -211,6 +220,7 @@ seL4_MessageInfo_t ramdisk_request_handler(seL4_MessageInfo_t tag, seL4_Word sen
             // Create the resource endpoint
             seL4_CPtr dest;
             error = resource_server_give_resource(&get_ramdisk_server()->gen,
+                                                  get_ramdisk_server()->block_manager_id,
                                                   get_ns_id_from_badge(sender_badge),
                                                   blockno,
                                                   get_client_id_from_badge(sender_badge),
@@ -220,7 +230,7 @@ seL4_MessageInfo_t ramdisk_request_handler(seL4_MessageInfo_t tag, seL4_Word sen
             // Send the reply
             seL4_MessageInfo_ptr_set_length(&reply_tag, RDMSGREG_CREATE_ACK_END);
             seL4_SetMR(RDMSGREG_CREATE_ACK_DEST, dest);
-            seL4_SetMR(RDMSGREG_CREATE_ACK_ID, get_global_object_id_from_local(get_ramdisk_server()->gen.server_id, blockno));
+            seL4_SetMR(RDMSGREG_CREATE_ACK_ID, get_global_object_id_from_local(get_ramdisk_server()->block_manager_id, blockno));
             seL4_SetMR(RDMSGREG_FUNC, RD_FUNC_CREATE_ACK);
 
             RAMDISK_PRINTF("Resource is in dest slot %d\n", (int)dest);

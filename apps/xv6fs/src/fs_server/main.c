@@ -15,11 +15,12 @@
 char _cpio_archive[1];
 char _cpio_archive_end[1];
 
-#define FS_MALLOC_SIZE 2 * 1024 * 1024
-char __attribute__((aligned(PAGE_SIZE_4K))) morecore_area[FS_MALLOC_SIZE];
-size_t morecore_size = FS_MALLOC_SIZE;
 /* Pointer to free space in the morecore area. */
-uintptr_t morecore_top = (uintptr_t)&morecore_area[FS_MALLOC_SIZE];
+#define APP_MALLOC_SIZE (PAGE_SIZE_4K * 100)
+char __attribute__((aligned(PAGE_SIZE_4K))) morecore_area[APP_MALLOC_SIZE];
+size_t morecore_size = APP_MALLOC_SIZE;
+static uintptr_t morecore_base = (uintptr_t)&morecore_area;
+uintptr_t morecore_top = (uintptr_t)&morecore_area[APP_MALLOC_SIZE];
 #endif
 
 #include <sel4gpi/mo_clientapi.h>
@@ -45,7 +46,6 @@ int main(int argc, char **argv)
 
     return resource_server_start(
         &get_xv6fs_server()->gen,
-        GPICAP_TYPE_FILE,
         xv6fs_request_handler,
         parent_ep,
         xv6fs_init);
