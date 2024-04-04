@@ -6,7 +6,7 @@
 
 cmake_minimum_required(VERSION 3.7.2)
 
-project(hello-native C CXX)
+project(hello_benchmark C CXX)
 
 # Use arm arch source files on RISCV
 set(arch ${KernelArch})
@@ -20,14 +20,14 @@ file(
         src/*.c
 )
 
-add_executable(hello-native EXCLUDE_FROM_ALL ${deps})
+add_executable(hello_benchmark EXCLUDE_FROM_ALL ${deps})
 target_include_directories(
-    hello-native
+    hello_benchmark
     PRIVATE include 
 )
 
 target_link_libraries(
-    hello-native
+    hello_benchmark
     PUBLIC
         sel4_autoconf
         muslc

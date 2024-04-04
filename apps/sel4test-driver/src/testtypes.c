@@ -233,12 +233,13 @@ void basic_set_up(uintptr_t e)
     }
 
     /* Get an IRQ Handler for serial device */
-    cspacepath_t path;
-    error = vka_cspace_alloc_path(&env->vka, &path);
-    ZF_LOGF_IFERR(error, "Failed to allocate path for IRQ handler\n");
+    // TODO Linh: move this somewhere else, disabling for now so we can run multiple tests
+    // cspacepath_t path;
+    // error = vka_cspace_alloc_path(&env->vka, &path);
+    // ZF_LOGF_IFERR(error, "Failed to allocate path for IRQ handler\n");
 
-    error = simple_get_IRQ_handler(&env->simple, QEMU_SERIAL_IRQ, path);
-    ZF_LOGF_IFERR(error, "Failed to make QEMU UART IRQ Handler\n");
+    // error = simple_get_IRQ_handler(&env->simple, QEMU_SERIAL_IRQ, path);
+    // ZF_LOGF_IFERR(error, "Failed to make QEMU UART IRQ Handler\n");
 
     /* NOTE:
        The return from sel4utils_copy_cap_to_process is the slot in the cnode where the cap was placed
@@ -247,7 +248,7 @@ void basic_set_up(uintptr_t e)
     env->init->domain = sel4utils_copy_cap_to_process(&(env->test_process), &env->vka, simple_get_init_cap(&env->simple, seL4_CapDomain));
     env->init->asid_pool = sel4utils_copy_cap_to_process(&(env->test_process), &env->vka, simple_get_init_cap(&env->simple, seL4_CapInitThreadASIDPool));
     env->init->asid_ctrl = sel4utils_copy_cap_to_process(&(env->test_process), &env->vka, simple_get_init_cap(&env->simple, seL4_CapASIDControl));
-    env->init->irq_handler = sel4utils_copy_cap_to_process(&(env->test_process), &env->vka, path.capPtr);
+    // env->init->irq_handler = sel4utils_copy_cap_to_process(&(env->test_process), &env->vka, path.capPtr);
 #ifdef CONFIG_IOMMU
     env->init->io_space = sel4utils_copy_cap_to_process(&(env->test_process), &env->vka, simple_get_init_cap(&env->simple, seL4_CapIOSpace));
 #endif /* CONFIG_IOMMU */

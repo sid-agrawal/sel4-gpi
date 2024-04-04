@@ -30,8 +30,8 @@
 #define PD_SERVER_BADGE_PARENT_VALUE (0xDEADBEEF)
 
 /* Temp definition of supported images */
-#define PD_N_IMAGES 5
-static const char *pd_images[PD_N_IMAGES] = {"hello", "hello_kvstore", "ramdisk_server", "fs_server", "kvstore_server"};
+#define PD_N_IMAGES 6
+static const char *pd_images[PD_N_IMAGES] = {"hello", "hello_kvstore", "ramdisk_server", "fs_server", "kvstore_server", "hello_benchmark"};
 
 #define PD_MAX_ARGC 4
 

@@ -36,7 +36,7 @@ add_subdirectory(../sqlite3 sqlite3)
 include(cpio)
 set(cpio_files "")
 # New binaries in the CPIO go here.
-list(APPEND cpio_files "$<TARGET_FILE:hello-native>")
+list(APPEND cpio_files "$<TARGET_FILE:hello_benchmark>")
 MakeCPIO(archive.o "${cpio_files}")
 
 add_executable(sel4test-tests EXCLUDE_FROM_ALL ${deps} archive.o)
