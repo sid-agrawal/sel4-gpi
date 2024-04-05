@@ -49,17 +49,24 @@ int main(int argc, char **argv)
     ccnt_t ipc_round_start;
     ccnt_t ipc_round_end;
     SEL4BENCH_READ_CCNT(ipc_round_start);
-    printf("%s: IPC benchmark: start %ld\n", get_bench_type_name(native), ipc_round_start);
     seL4_SetMR(0, BM_IPC);
     seL4_SetMR(1, ipc_round_start);
-    printf("hello_benchmark! seL4Call\n");
     seL4_Call(ep, tag);
 
     seL4_Word bench_type = seL4_GetMR(0);
     assert(bench_type == BM_IPC);
     SEL4BENCH_READ_CCNT(ipc_round_end);
+
+    tag = seL4_MessageInfo_new(0, 0, 0, 1);
+    seL4_SetMR(0, BM_PRINT);
+    seL4_Send(ep, tag);
+
+    // printf("%s: IPC benchmark: start %ld\n", get_bench_type_name(native), ipc_round_start);
     printf("%s: IPC roundtrip end: %ld, round trip total: %ld\n", get_bench_type_name(native), ipc_round_end, ipc_round_end - ipc_round_start);
 
+    tag = seL4_MessageInfo_new(0, 0, 0, 1);
+    seL4_SetMR(0, BM_DONE);
+    seL4_Send(ep, tag);
     printf("%s: Goodbye cruel world!\n", get_bench_type_name(native));
     return 0;
 }

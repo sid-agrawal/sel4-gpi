@@ -12,6 +12,7 @@
 #include <kvstore_shared.h>
 #include <kvstore_client.h>
 #include <kvstore_server.h>
+#include <fs_client.h>
 
 static bool use_remote_server;
 static bool swap_ads;
@@ -19,6 +20,7 @@ static seL4_CPtr server_ep;
 static ads_client_context_t kvserv_ads;
 static ads_client_context_t client_ads_conn;
 static cpu_client_context_t self_cpu_conn;
+extern global_xv6fs_client_context_t xv6fs_client;
 
 int kvstore_client_configure(bool n_use_remote_server, bool separate_ads, seL4_CPtr ep)
 {
@@ -55,6 +57,9 @@ int kvstore_client_configure(bool n_use_remote_server, bool separate_ads, seL4_C
             ZF_LOGE("failed to swap ADS to kvstore server");
             return swap_err;
         }
+
+        // we need to clear the FS client instance, so the lib starts with a fresh one
+        memset(&xv6fs_client, 0, sizeof(global_xv6fs_client_context_t));
         error = kvstore_server_init();
         ZF_LOGE_IF(error, "Failed to initialize kvstore");
 

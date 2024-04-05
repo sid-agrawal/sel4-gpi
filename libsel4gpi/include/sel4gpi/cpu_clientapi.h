@@ -67,9 +67,9 @@ int cpu_client_start(cpu_client_context_t *conn,
  * @param ads_conn ads connection object
  * @param ipc_buf_mo MO of the the ipc buf for the cpu (OPTIONAL)
  * @param cspace_root cspace root for the cpu object.
- * @param fault_ep_position W.r.t of the CPU's cspace, the fault endpoint.
- * @param ipc_buf_addr address to IPC buf (in CPU's vspace)
- * @param stack_addr address to stack (in CPU's vspace)
+ * @param fault_ep_position W.r.t of the CPU's cspace, the fault endpoint (OPTIONAL)
+ * @param ipc_buf_addr address to IPC buf (in CPU's vspace, OPTIONAL)
+ * @param stack_addr address to stack (in CPU's vspace, OPTIONAL)
  * @return int
  */
 int cpu_client_config(cpu_client_context_t *conn,

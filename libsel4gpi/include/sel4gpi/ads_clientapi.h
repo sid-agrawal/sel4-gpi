@@ -26,11 +26,13 @@ typedef struct _ads_client_context
  * @param server_ep_cap Well known server endpoint cap.
  * @param free_slot a slot to receive a cap in
  * @param ret_conn client's connection object
+ * @param ret_ads_ns the NS ID of the ADS resource, for access to its RDE, can be NULL
  * @return int 0 on success, -1 on failure.
  */
 int ads_component_client_connect(seL4_CPtr server_ep_cap,
                                  seL4_CPtr free_slot,
-                                 ads_client_context_t *ret_conn);
+                                 ads_client_context_t *ret_conn,
+                                 seL4_Word *ret_ads_ns);
 
 /**
  * @brief   Disconnect the ads client.

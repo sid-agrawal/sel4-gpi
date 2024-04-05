@@ -19,7 +19,8 @@
 
 int ads_component_client_connect(seL4_CPtr server_ep_cap,
                                  seL4_CPtr free_slot,
-                                 ads_client_context_t *ret_conn)
+                                 ads_client_context_t *ret_conn,
+                                 seL4_Word *ret_ads_ns)
 {
 
     /* Send a REQ message to the server on its public EP */
@@ -38,6 +39,10 @@ int ads_component_client_connect(seL4_CPtr server_ep_cap,
     assert(seL4_MessageInfo_get_extraCaps(tag) == 1);
 
     ret_conn->badged_server_ep_cspath.capPtr = free_slot;
+    if (ret_ads_ns)
+    {
+        *ret_ads_ns = seL4_GetMR(ADSMSGREG_CONNECT_ACK_ADS_NS);
+    }
     // OSDB_PRINTF(ADS_DEBUG, ADSSERVC"Received badged endpoint and it was kept in:");
     // debug_cap_identify(ADSSERVC, ret_conn->badged_server_ep_cspath.capPtr);
     return 0;

@@ -84,7 +84,7 @@ int start_resource_server_pd(uint64_t rde_id,
     ads_client_context_t new_ads;
     error = pd_client_next_slot(&current_pd, &free_slot);
     CHECK_ERROR(error, "failed to allocate slot");
-    error = ads_component_client_connect(sel4gpi_get_rde(GPICAP_TYPE_ADS), free_slot, &new_ads);
+    error = ads_component_client_connect(sel4gpi_get_rde(GPICAP_TYPE_ADS), free_slot, &new_ads, NULL);
     CHECK_ERROR(error, "failed to create new ads");
 
     error = pd_client_next_slot(&current_pd, &free_slot);

@@ -203,7 +203,8 @@ static void handle_ads_allocation(seL4_Word sender_badge, seL4_MessageInfo_t *re
     }
     /* Return this badged end point in the return message. */
     seL4_SetCap(0, dest.capPtr);
-    seL4_MessageInfo_t tag = seL4_MessageInfo_new(error, 0, 1, 1);
+    seL4_SetMR(ADSMSGREG_CONNECT_ACK_ADS_NS, get_ns_id_from_badge(badge));
+    seL4_MessageInfo_t tag = seL4_MessageInfo_new(error, 0, 1, ADSMSGREG_CONNECT_ACK_END);
     OSDB_PRINTF(ADS_DEBUG, ADSSERVS "main: Successfully allocated a new ads %lx.\n", badge);
     return reply(tag);
 }

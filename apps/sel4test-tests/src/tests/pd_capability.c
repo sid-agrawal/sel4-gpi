@@ -57,7 +57,7 @@ int test_new_process_osmosis(env_t env)
     assert(error == 0);
 
     ads_client_context_t ads_os_cap;
-    error = ads_component_client_connect(ads_rde, slot, &ads_os_cap);
+    error = ads_component_client_connect(ads_rde, slot, &ads_os_cap, NULL);
     assert(error == 0);
 
     error = vka_cspace_alloc(&env->vka, &slot);
@@ -101,7 +101,7 @@ int test_new_process_osmosis(env_t env)
     assert(error == 0);
 
     ads_client_context_t ads_os_cap2;
-    error = ads_component_client_connect(ads_rde, slot, &ads_os_cap2);
+    error = ads_component_client_connect(ads_rde, slot, &ads_os_cap2, NULL);
     assert(error == 0);
 
     error = vka_cspace_alloc(&env->vka, &slot);
@@ -175,7 +175,7 @@ int test_new_process_osmosis_shmem(env_t env)
     assert(error == 0);
 
     ads_client_context_t ads_os_cap;
-    error = ads_component_client_connect(ads_rde, slot, &ads_os_cap);
+    error = ads_component_client_connect(ads_rde, slot, &ads_os_cap, NULL);
     assert(error == 0);
 
     error = vka_cspace_alloc(&env->vka, &slot);

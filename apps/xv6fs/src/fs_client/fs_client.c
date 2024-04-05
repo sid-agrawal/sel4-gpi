@@ -115,7 +115,8 @@ void fd_close(int fd)
 /* FS Client */
 static void init_global_libc_fs_ops(void);
 
-static global_xv6fs_client_context_t xv6fs_client;
+/* This must be publically accessible, for SpaceJMP example */
+global_xv6fs_client_context_t xv6fs_client;
 
 global_xv6fs_client_context_t *get_xv6fs_client(void)
 {

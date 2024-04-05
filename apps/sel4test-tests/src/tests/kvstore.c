@@ -85,7 +85,7 @@ static int start_kvstore_server(seL4_CPtr *kvstore_ep, uint64_t fs_nsid, uint64_
     error = pd_client_next_slot(&pd_conn, &free_slot);
     test_assert(error == 0);
 
-    error = ads_component_client_connect(sel4gpi_get_rde(GPICAP_TYPE_ADS), free_slot, &new_ads);
+    error = ads_component_client_connect(sel4gpi_get_rde(GPICAP_TYPE_ADS), free_slot, &new_ads, NULL);
     test_assert(error == 0);
 
     error = pd_client_next_slot(&pd_conn, &free_slot);
@@ -180,7 +180,7 @@ static int start_hello_kvstore(bool use_remote_kvstore,
     error = pd_client_next_slot(&pd_conn, &free_slot);
     test_assert(error == 0);
 
-    error = ads_component_client_connect(sel4gpi_get_rde(GPICAP_TYPE_ADS), free_slot, &new_ads);
+    error = ads_component_client_connect(sel4gpi_get_rde(GPICAP_TYPE_ADS), free_slot, &new_ads, NULL);
     test_assert(error == 0);
 
     error = pd_client_next_slot(&pd_conn, &free_slot);
