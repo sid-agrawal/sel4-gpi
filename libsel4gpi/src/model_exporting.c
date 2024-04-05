@@ -212,8 +212,14 @@ void make_res_id(char *res_id, gpi_cap_t cap_type, uint64_t res_id_int)
 // Function to add a resource to the model state
 void add_resource(model_state_t *model_state, char *resource_type, char *resource_id)
 {
+    add_resource_2(model_state, resource_type, resource_id, "N/A");
+}
+
+// Function to add a resource to the model state with a comment
+void add_resource_2(model_state_t *model_state, char *resource_type, char *resource_id, char *comment)
+{
     assert(strlen(resource_type) != 0 && strlen(resource_id) != 0);
-    assert(strlen(resource_type) < CSV_MAX_STRING_SIZE && strlen(resource_id) < CSV_MAX_STRING_SIZE);
+    assert(strlen(resource_type) < CSV_MAX_STRING_SIZE && strlen(resource_id) < CSV_MAX_STRING_SIZE && strlen(comment) < CSV_MAX_STRING_SIZE);
 
     csv_row_t *new_row = (csv_row_t *)malloc(sizeof(csv_row_t));
     assert(new_row != NULL);
@@ -222,6 +228,7 @@ void add_resource(model_state_t *model_state, char *resource_type, char *resourc
     // Set the resource type and ID
     snprintf(new_row->resource_type, CSV_MAX_STRING_SIZE, "%s", resource_type);
     snprintf(new_row->resource_id, CSV_MAX_STRING_SIZE, "%s", resource_id);
+    snprintf(new_row->constraints, CSV_MAX_STRING_SIZE, "%s", comment);
 
     // Add node to the front of the list after the heading row
     insert_row(model_state, new_row);

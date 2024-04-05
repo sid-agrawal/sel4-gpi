@@ -16,7 +16,6 @@
 
 #define PRINT_CALLBACK 0
 #define DB_NAME "/test-db.db"
-#define DB_2_NAME "/test-db2.db"
 #define T1_NAME "t1"
 #define T2_NAME "t2"
 #define N_INSERT 50
@@ -226,29 +225,15 @@ int sqlite_tests(void)
     assert(strcmp(list_head->next->vals[0], "string-20") == 0);
     free_sqlite_row_list();
 
-    // Try opening a second db
-    sqlite3 *db2;
-    error = sqlite3_open(DB_2_NAME, &db2);
-    assert(error == SQLITE_OK);
-    assert(db2 != NULL);
-
-    SQL_EXEC(db2, sql_create_format, T1_NAME);
-    SQL_EXEC(db2, sql_insert_format, T1_NAME, 100, 100);
-    SQL_EXEC_SELECT(db2, sql_select_all_format, T1_NAME);
-    assert(list_head->nvals == 1);
-    assert(strcmp(list_head->next->vals[0], "string-100") == 0);
-    free_sqlite_row_list();
+    /* Don't close so we can see the files in model state */
 
     // Close the dbs
-    error = sqlite3_close(db);
-    assert(error == SQLITE_OK);
-
-    error = sqlite3_close(db2);
-    assert(error == SQLITE_OK);
+    //error = sqlite3_close(db);
+    //assert(error == SQLITE_OK);
 
     // Shut down sqlite
-    error = sqlite3_shutdown();
-    assert(error == SQLITE_OK);
+    //error = sqlite3_shutdown();
+    //assert(error == SQLITE_OK);
 
     printf("---- SQLite tests pass ----\n");
 

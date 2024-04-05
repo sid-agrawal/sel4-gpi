@@ -87,6 +87,9 @@ void make_phys_res_id(char *res_id, uint32_t obj_id, uint64_t res_id_int, char *
 // Function to add a resource to the model state
 void add_resource(model_state_t *model_state, char *resource_type, char *resource_id);
 
+// Function to add a resource to the model state with a comment
+void add_resource_2(model_state_t *model_state, char *resource_type, char *resource_id, char *comment);
+
 // Function to add a PD to the model state
 void add_pd(model_state_t *model_state, char *pd_name, char *pd_id);
 

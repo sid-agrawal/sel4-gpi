@@ -161,9 +161,10 @@ seL4_MessageInfo_t ramdisk_request_handler(seL4_MessageInfo_t tag, seL4_Word sen
             row_ptr++;
 
             // Add RR from block to MO
-            char mo_res_id[CSV_MAX_STRING_SIZE];
-            make_res_id(mo_res_id, GPICAP_TYPE_MO, get_ramdisk_server()->ramdisk_mo->id);
-            add_resource_depends_on_rr(rr_state, block_res_id, mo_res_id, row_ptr);
+            // (XXX) Arya: Actually don't show this, we are pretending these are real blocks?
+            //char mo_res_id[CSV_MAX_STRING_SIZE];
+            //make_res_id(mo_res_id, GPICAP_TYPE_MO, get_ramdisk_server()->ramdisk_mo->id);
+            //add_resource_depends_on_rr(rr_state, block_res_id, mo_res_id, row_ptr);
 
             seL4_SetMR(RDMSGREG_FUNC, RS_FUNC_GET_RR_ACK);
             RAMDISK_PRINTF("Returning RR\n");

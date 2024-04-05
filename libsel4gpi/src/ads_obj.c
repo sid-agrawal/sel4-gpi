@@ -212,8 +212,8 @@ void ads_dump_rr(ads_t *ads, model_state_t *ms)
         added_mo_rrs[num_added_mo_rrs] = res->mo_id;
         num_added_mo_rrs++;
         char res_id[CSV_MAX_STRING_SIZE];
-        make_virtual_res_id(res_id, ads->ads_obj_id, (uint64_t)res->vaddr, ads_res_type_to_str(res->type));
-        add_resource(ms, ads_res_type_to_str(res->type), res_id);
+        make_virtual_res_id(res_id, ads->ads_obj_id, (uint64_t)res->vaddr, "VMR");
+        add_resource_2(ms, "VirtualRes", res_id, ads_res_type_to_str(res->type));
         add_resource_depends_on(ms, ads_res_id, res_id);
 
         char mo_res_id[CSV_MAX_STRING_SIZE];

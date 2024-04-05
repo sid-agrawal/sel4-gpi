@@ -117,7 +117,7 @@ int main(int argc, char **argv)
     printf("hello-kvstore: Completed kvstore tests\n");
 
     /* use the file system a bit */
-    //error = sqlite_tests();
+    error = sqlite_tests();
     CHECK_ERROR(error, "Failed sqlite tests");
     printf("hello-kvstore: Completed sqlite tests\n");
 
