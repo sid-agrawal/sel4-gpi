@@ -14,6 +14,7 @@
 #include <sel4gpi/pd_clientapi.h>
 #include <sel4gpi/resource_server_utils.h>
 #include <sel4gpi/pd_utils.h>
+#include <sel4bench/arch/sel4bench.h>
 
 #include <libc_fs_helpers.h>
 #include <fs_shared.h>
@@ -255,8 +256,13 @@ static int xv6fs_libc_open(const char *pathname, int flags, int modes)
   // (XXX) Currently ignore modes
 
   // Alloc received cap ep
+  ccnt_t call_start;
+  ccnt_t call_end;
+  // SEL4BENCH_READ_CCNT(call_start);
   tag = seL4_Call(get_xv6fs_client()->fs_ep, tag);
+  // SEL4BENCH_READ_CCNT(call_end);
 
+  // printf("xv6fs RT IPC: %ld\n", call_end - call_start);
   if (seL4_MessageInfo_get_label(tag) != seL4_NoError)
   {
     return -1;

@@ -9,6 +9,7 @@
 #include <sel4/sel4.h>
 #include <sel4utils/process.h>
 #include <sel4runtime.h>
+#include <sel4bench/arch/sel4bench.h>
 
 #ifdef FS_EXECUTABLE
 /* dummy global for libsel4muslcsys */
@@ -32,7 +33,7 @@ uintptr_t morecore_top = (uintptr_t)&morecore_area[FS_MALLOC_SIZE];
 int main(int argc, char **argv)
 {
     printf("FS main!\n");
-
+    sel4bench_init();
     seL4_CPtr ramdisk_ep = sel4gpi_get_rde(GPICAP_TYPE_BLOCK);
 
     printf("FS: RAMDISK EP: %ld\n", (seL4_Word)ramdisk_ep);

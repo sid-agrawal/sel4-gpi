@@ -55,7 +55,7 @@ static seL4_CPtr self_pd_cap;
 static sel4utils_alloc_data_t alloc_data;
 
 /* dimensions of virtual memory for the allocator to use */
-#define ALLOCATOR_VIRTUAL_POOL_SIZE ((1 << seL4_PageBits) * 4000)
+#define ALLOCATOR_VIRTUAL_POOL_SIZE ((1 << seL4_PageBits) * 262144)
 
 /* allocator static pool */
 #define ALLOCATOR_STATIC_POOL_SIZE ((1 << seL4_PageBits) * 20)

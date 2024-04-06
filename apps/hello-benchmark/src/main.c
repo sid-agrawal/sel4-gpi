@@ -15,6 +15,8 @@
 #include <sel4runtime.h>
 #include <sel4test/test.h>
 #include <sel4gpi/bench_utils.h>
+#include <sel4gpi/pd_utils.h>
+#include <sel4gpi/pd_clientapi.h>
 
 /* dummy global for libsel4muslcsys */
 char _cpio_archive[1];
@@ -37,36 +39,40 @@ int main(int argc, char **argv)
     assert(argc > 0);
     seL4_CPtr ep = atol(argv[0]);
     bool native = (bool)atol(argv[1]);
+    bool should_bench = (bool)atol(argv[2]);
 
-    printf("hello_benchmark %s! argv[0] = %lx, creation end time: %ld\n",
-           get_bench_type_name(native), ep, creation_end);
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0, 2);
     seL4_SetMR(0, BM_PD_CREATE); // send a message saying we've started
     seL4_SetMR(1, creation_end);
     seL4_Send(ep, tag);
 
-    tag = seL4_MessageInfo_new(0, 0, 0, 2);
-    ccnt_t ipc_round_start;
-    ccnt_t ipc_round_end;
-    SEL4BENCH_READ_CCNT(ipc_round_start);
-    seL4_SetMR(0, BM_IPC);
-    seL4_SetMR(1, ipc_round_start);
-    seL4_Call(ep, tag);
+    if (should_bench)
+    {
+        printf("hello_benchmark %s! argv[0] = %lx, creation end time: %ld\n",
+               get_bench_type_name(native), ep, creation_end);
+        tag = seL4_MessageInfo_new(0, 0, 0, 2);
+        ccnt_t ipc_round_start;
+        ccnt_t ipc_round_end;
+        SEL4BENCH_READ_CCNT(ipc_round_start);
+        seL4_SetMR(0, BM_IPC);
+        seL4_SetMR(1, ipc_round_start);
+        seL4_Call(ep, tag);
 
-    seL4_Word bench_type = seL4_GetMR(0);
-    assert(bench_type == BM_IPC);
-    SEL4BENCH_READ_CCNT(ipc_round_end);
+        seL4_Word bench_type = seL4_GetMR(0);
+        assert(bench_type == BM_IPC);
+        SEL4BENCH_READ_CCNT(ipc_round_end);
 
-    tag = seL4_MessageInfo_new(0, 0, 0, 1);
-    seL4_SetMR(0, BM_PRINT);
-    seL4_Send(ep, tag);
+        tag = seL4_MessageInfo_new(0, 0, 0, 1);
+        seL4_SetMR(0, BM_PRINT);
+        seL4_Send(ep, tag);
 
-    // printf("%s: IPC benchmark: start %ld\n", get_bench_type_name(native), ipc_round_start);
-    printf("%s: IPC roundtrip end: %ld, round trip total: %ld\n", get_bench_type_name(native), ipc_round_end, ipc_round_end - ipc_round_start);
+        // printf("%s: IPC benchmark: start %ld\n", get_bench_type_name(native), ipc_round_start);
+        printf("%s: round trip total: %ld\n", get_bench_type_name(native), ipc_round_end - ipc_round_start);
 
-    tag = seL4_MessageInfo_new(0, 0, 0, 1);
-    seL4_SetMR(0, BM_DONE);
-    seL4_Send(ep, tag);
-    printf("%s: Goodbye cruel world!\n", get_bench_type_name(native));
+        tag = seL4_MessageInfo_new(0, 0, 0, 1);
+        seL4_SetMR(0, BM_DONE);
+        seL4_Send(ep, tag);
+        printf("%s: Goodbye cruel world!\n", get_bench_type_name(native));
+    }
     return 0;
 }

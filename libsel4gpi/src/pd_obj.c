@@ -35,11 +35,12 @@
 #include <utils/uthash.h>
 #include <cpio/cpio.h>
 
-#define CSPACE_SIZE_BITS 17
+#define CSPACE_SIZE_BITS 10
 
 /* This is doesn't belong here but we need it */
 extern char _cpio_archive[];
 extern char _cpio_archive_end[];
+static int pd_setup_cspace(pd_t *pd, vka_t *vka);
 
 int copy_cap_to_pd(pd_t *to_pd,
                    seL4_CPtr cap,
@@ -225,6 +226,11 @@ int pd_new(pd_t *pd,
     // Setup init data
     pd->init_data->rde_count = 0;
     memset(pd->init_data->rde, 0, sizeof(osmosis_rde_t) * MAX_PD_OSM_RDE);
+
+    error = pd_setup_cspace(pd, get_pd_component()->server_vka);
+    assert(error == 0);
+
+    return 0;
 }
 
 int pd_next_slot(pd_t *pd,
@@ -456,12 +462,11 @@ error:
     return -1;
 }
 
-static int pd_setup_common(pd_t *pd, vka_t *vka, vspace_t *server_vspace, ads_t *target_ads)
+static int pd_setup_cspace(pd_t *pd, vka_t *vka)
 {
     int error;
     int size_bits = CSPACE_SIZE_BITS;
     pd->cnode_guard = api_make_guard_skip_word(seL4_WordBits - size_bits);
-    memcpy(&pd->proc.pd, target_ads->root_page_dir, sizeof(vka_object_t));
 
     error = vka_alloc_endpoint(vka, &pd->proc.fault_endpoint);
     ZF_LOGE_IFERR(error, "Failed to create PD's fault endpoint");
@@ -484,14 +489,15 @@ static int pd_setup_common(pd_t *pd, vka_t *vka, vspace_t *server_vspace, ads_t 
     ZF_LOGE_IFERR(error, "Failed to mint PD's cnode into its cspace");
     pd->proc.cspace_next_free++;
 
+    /* copy fault endpoint cap into process cspace */
+    vka_cspace_make_path(vka, pd->proc.fault_endpoint.cptr, &src);
+    dest.capPtr = pd->proc.cspace_next_free;
+    error = vka_cnode_copy(&dest, &src, seL4_AllRights);
+    ZF_LOGE_IFERR(error, "Failed to copy PD's fault EP to its cspace");
+    pd->proc.cspace_next_free++;
+
     /* copy over initial caps to PD (XXX) Linh: disabling for now bc unclear if we need this */
 #if 0
-    /* copy fault endpoint cap into process cspace */
-    vka_cspace_make_path(vka, fault_ep.cptr, &src);
-    error = vka_cnode_copy(&dest, &src, seL4_AllRights);
-    ZF_LOGE_IFERR("Failed to copy PD's fault EP to its cspace");
-    cspace_next_free++;
-
     /* copy page directory cap into process cspace */
     vka_cspace_make_path(vka, process->pd.cptr, &src);
     error = vka_cnode_copy(&dest, &src, seL4_AllRights);
@@ -543,8 +549,7 @@ int pd_load_image(pd_t *pd,
     int error = 0;
     pd->image_name = image_path;
     OSDB_PRINTF(PD_DEBUG, PDSERVS "load_image: loading image %s for pd %p\n", image_path, pd);
-    error = pd_setup_common(pd, vka, server_vspace, target_ads);
-    assert(error == 0);
+    memcpy(&pd->proc.pd, target_ads->root_page_dir, sizeof(vka_object_t));
 
     // (XXX) Linh: we may not always setup the PD as a proc
     error = pd_setup_proc(pd, vka, server_vspace, target_ads, image_path);

@@ -18,7 +18,7 @@ file(GLOB client_deps src/fs_client/*.c)
 list(SORT client_deps)
 add_library(fs_client STATIC EXCLUDE_FROM_ALL ${client_deps})
 target_include_directories(fs_client PUBLIC include/fs_client include/shared)
-target_link_libraries(fs_client muslc sel4 utils sel4test sel4gpi ramdisk_client)
+target_link_libraries(fs_client muslc sel4 utils sel4test sel4gpi sel4bench ramdisk_client)
 
 file(GLOB server_deps src/fs_server/*.c)
 list(SORT server_deps)

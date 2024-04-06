@@ -326,3 +326,11 @@ int pd_client_give_resource(pd_client_context_t *conn,
     *dest = seL4_GetMR(PDMSGREG_GIVE_RES_ACK_DEST);
     return 0;
 }
+
+void pd_client_bench_ipc(pd_client_context_t *conn)
+{
+    seL4_SetMR(PDMSGREG_FUNC, PD_FUNC_BENCH_IPC_REQ);
+    seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0, 1);
+    tag = seL4_Call(conn->badged_server_ep_cspath.capPtr, tag);
+    assert(seL4_MessageInfo_ptr_get_label(&tag) == 0);
+}

@@ -17,6 +17,7 @@
 #include <sel4gpi/pd_clientapi.h>
 #include <sel4gpi/resource_server_utils.h>
 #include <ramdisk_client.h>
+#include <sel4bench/arch/sel4bench.h>
 
 #include <libc_fs_helpers.h>
 #include <fs_shared.h>
@@ -626,9 +627,13 @@ done:
 static int block_read(uint32_t blockno, void *buf)
 {
   XV6FS_PRINTF("Reading blockno %d\n", blockno);
+  ccnt_t block_read_start;
+  ccnt_t block_read_end;
+  // SEL4BENCH_READ_CCNT(block_read_start)
   int error = ramdisk_client_read(&get_xv6fs_server()->naive_blocks[blockno],
                                   get_xv6fs_server()->shared_mem);
-
+  // SEL4BENCH_READ_CCNT(block_read_end);
+  // printf("BLOCK READ: %ld\n", block_read_end - block_read_start);
   if (error == 0)
   {
     memcpy(buf, get_xv6fs_server()->shared_mem_vaddr, RAMDISK_BLOCK_SIZE);
