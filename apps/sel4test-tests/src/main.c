@@ -34,10 +34,12 @@
 #include <rpc.pb.h>
 
 #define TP_MALLOC_SIZE 2 * 1024 * 1024
-char __attribute__((aligned(PAGE_SIZE_4K))) morecore_area[TP_MALLOC_SIZE];
+char __attribute__((aligned(PAGE_SIZE_4K))) morecore_arr[TP_MALLOC_SIZE];
 size_t morecore_size = 2 * 1024 * 1024;
 /* Pointer to free space in the morecore area. */
-uintptr_t morecore_top = (uintptr_t)&morecore_area[TP_MALLOC_SIZE];
+char *morecore_area = morecore_arr;
+uintptr_t morecore_base = (uintptr_t)&morecore_arr[0];
+uintptr_t morecore_top = (uintptr_t)&morecore_arr[TP_MALLOC_SIZE];
 // int *shared_addr_between_threads;
 
 /* we use this in native benchmarking */

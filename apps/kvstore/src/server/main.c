@@ -8,20 +8,20 @@
 
 #include <sel4/sel4.h>
 #include <sel4utils/process.h>
+#include <sel4gpi/pd_utils.h>
 
 /* dummy global for libsel4muslcsys */
 char _cpio_archive[1];
 char _cpio_archive_end[1];
 
-/* Pointer to free space in the morecore area. */
-#define KV_MALLOC_SIZE (PAGE_SIZE_4K * 100)
-char __attribute__((aligned(PAGE_SIZE_4K))) morecore_area[KV_MALLOC_SIZE];
-size_t morecore_size = KV_MALLOC_SIZE;
-static uintptr_t morecore_base = (uintptr_t)&morecore_area;
-uintptr_t morecore_top = (uintptr_t)&morecore_area[KV_MALLOC_SIZE];
+/* Initialization for static morecore */
+#define APP_MALLOC_SIZE (PAGE_SIZE_4K * 100)
+char *morecore_area = (char *) PD_HEAP_LOC;
+size_t morecore_size = APP_MALLOC_SIZE;
+uintptr_t morecore_base = (uintptr_t) PD_HEAP_LOC;
+uintptr_t morecore_top = (uintptr_t) (PD_HEAP_LOC + APP_MALLOC_SIZE);
 
 #include <sel4gpi/pd_clientapi.h>
-#include <sel4gpi/pd_utils.h>
 #include <fs_client.h>
 #include <kvstore_shared.h>
 #include <kvstore_server.h>

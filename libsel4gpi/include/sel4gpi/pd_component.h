@@ -29,9 +29,10 @@
 #define PD_SERVER_BADGE_VALUE_EMPTY (0)
 #define PD_SERVER_BADGE_PARENT_VALUE (0xDEADBEEF)
 
-/* Temp definition of supported images */
+/* (XXX) Arya: temp definition of supported images */
 #define PD_N_IMAGES 6
 static const char *pd_images[PD_N_IMAGES] = {"hello", "hello_kvstore", "ramdisk_server", "fs_server", "kvstore_server", "hello_benchmark"};
+static const uint64_t pd_image_heap_size[PD_N_IMAGES] = {PAGE_SIZE_4K, 100 * PAGE_SIZE_4K, 100 * PAGE_SIZE_4K, 100 * PAGE_SIZE_4K, 100 * PAGE_SIZE_4K, PAGE_SIZE_4K};
 
 #define PD_MAX_ARGC 4
 
@@ -256,10 +257,14 @@ typedef struct _pd_component_context
     // The server listens on this endpoint.
     vka_object_t server_ep_obj;
 
+    // Registry data
     int registry_n_entries;
     pd_component_registry_entry_t *client_registry;
     int resource_manager_n_entries;
     pd_component_resource_manager_entry_t *server_registry;
+
+    // Root task's PD
+    pd_t rt_pd;
 } pd_component_context_t;
 
 /**

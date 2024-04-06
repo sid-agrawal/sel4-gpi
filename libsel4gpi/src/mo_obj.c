@@ -50,7 +50,7 @@ void mo_dump_rr(mo_t *mo, model_state_t *ms)
     {
         char page_res_id[CSV_MAX_STRING_SIZE];
         make_phys_res_id(page_res_id, mo->mo_obj_id, mo->frame_caps_in_root_task[i].paddr, "PMR");
-        add_resource(ms, "PhysicalPage", page_res_id);
-        add_resource_depends_on(ms, mo_res_id, page_res_id);
+        add_resource(ms, "PMR", page_res_id);
+        add_resource_depends_on(ms, mo_res_id, page_res_id, REL_TYPE_MAP);
     }
 }

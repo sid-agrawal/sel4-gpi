@@ -111,9 +111,11 @@ typedef struct _osm_pd_init_data
     seL4_CPtr ads_cap;
     seL4_CPtr cpu_cap;
 
-    // Resource directory
+
     // ADS ID of the PD's current binded ADS
     uint32_t binded_ads_ns_id;
+
+    // Resource directory
     osmosis_rde_t rde[GPICAP_TYPE_MAX][MAX_NS_PER_RDE];
     uint64_t rde_count;
 } osm_pd_init_data_t;
@@ -172,7 +174,8 @@ int pd_load_image(pd_t *pd,
                   const char *image_path,
                   vspace_t *server_vspace,
                   ads_t *target_ads,
-                  cpu_t *target_cpu);
+                  cpu_t *target_cpu,
+                  uint64_t heap_size);
 
 int pd_dump(pd_t *pd);
 

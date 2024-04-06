@@ -17,6 +17,19 @@
 #include <sel4gpi/debug.h>
 #include <sel4gpi/model_exporting.h>
 
+static char *rel_type_to_str(relation_type_t rel_type)
+{
+    switch (rel_type)
+    {
+    case REL_TYPE_MAP:
+        return "MAP";
+    case REL_TYPE_SUBSET:
+        return "SUBSET";
+    default:
+        return "UNKNOWN";
+    }
+}
+
 static void insert_row(model_state_t *model_state, csv_row_t *new_row)
 {
 
@@ -44,6 +57,8 @@ static void init_row(csv_row_t *row)
     snprintf(row->pd_to, CSV_MAX_STRING_SIZE, "%s", "");
     snprintf(row->pd_id, CSV_MAX_STRING_SIZE, "%s", "");
     snprintf(row->is_mapped, CSV_MAX_STRING_SIZE, "%s", "");
+    snprintf(row->constraints, CSV_MAX_STRING_SIZE, "%s", "");
+    snprintf(row->rel_type, CSV_MAX_STRING_SIZE, "%s", "");
 }
 
 static void init_rr_row(csv_rr_row_t *row)
@@ -52,6 +67,7 @@ static void init_rr_row(csv_rr_row_t *row)
     snprintf(row->resource_to, CSV_MAX_STRING_SIZE, "%s", "");
     snprintf(row->resource_type, CSV_MAX_STRING_SIZE, "%s", "");
     snprintf(row->resource_id, CSV_MAX_STRING_SIZE, "%s", "");
+    snprintf(row->rel_type, CSV_MAX_STRING_SIZE, "%s", "");
 }
 
 // Copy a resource relation row into a full model state row
@@ -70,6 +86,7 @@ void init_model_state(model_state_t *model_state)
     snprintf(new_row->resource_to, CSV_MAX_STRING_SIZE, "%s", "RESOURCE_TO");
     snprintf(new_row->resource_type, CSV_MAX_STRING_SIZE, "%s", "RES_TYPE");
     snprintf(new_row->resource_id, CSV_MAX_STRING_SIZE, "%s", "RES_ID");
+    snprintf(new_row->rel_type, CSV_MAX_STRING_SIZE, "%s", "REL_TYPE");
     snprintf(new_row->pd_name, CSV_MAX_STRING_SIZE, "%s", "PD_NAME");
     snprintf(new_row->pd_from, CSV_MAX_STRING_SIZE, "%s", "PD_FROM");
     snprintf(new_row->pd_to, CSV_MAX_STRING_SIZE, "%s", "PD_TO");
@@ -112,7 +129,7 @@ void export_model_state(model_state_t *model_state, char *buffer, size_t buf_len
     while (current_row != NULL)
     {
         size_t buf_written = snprintf(buffer, buf_len - buf_written_total,
-                                      "%-*s,%-*s,%-*s,%-*s,%-*s,%-*s,%-*s,%-*s,%-*s\n",
+                                      "%-*s,%-*s,%-*s,%-*s,%-*s,%-*s,%-*s,%-*s,%-*s,%-*s\n",
                                       width,
                                       current_row->resource_from,
                                       width,
@@ -121,6 +138,8 @@ void export_model_state(model_state_t *model_state, char *buffer, size_t buf_len
                                       current_row->resource_type,
                                       width,
                                       current_row->resource_id,
+                                      width,
+                                      current_row->rel_type,
                                       width,
                                       current_row->pd_name,
                                       width,
@@ -158,7 +177,7 @@ void print_model_state(model_state_t *model_state)
 
     while (current_row != NULL)
     {
-        printf("%-*s,%-*s,%-*s,%-*s,%-*s,%-*s,%-*s,%-*s,%-*s,%-*s\n",
+        printf("%-*s,%-*s,%-*s,%-*s,%-*s,%-*s,%-*s,%-*s,%-*s,%-*s,%-*s\n",
                width,
                current_row->resource_from,
                width,
@@ -167,6 +186,8 @@ void print_model_state(model_state_t *model_state)
                current_row->resource_type,
                width,
                current_row->resource_id,
+               width,
+               current_row->rel_type,
                width,
                current_row->pd_name,
                width,
@@ -279,7 +300,7 @@ void add_has_access_to(model_state_t *model_state,
 }
 
 // Function to add a resource relationship to the model state
-void add_resource_depends_on(model_state_t *model_state, char *resource_from, char *resource_to)
+void add_resource_depends_on(model_state_t *model_state, char *resource_from, char *resource_to, relation_type_t rel_type)
 {
     assert(strlen(resource_from) != 0 && strlen(resource_to) != 0);
     assert(strlen(resource_from) < CSV_MAX_STRING_SIZE && strlen(resource_to) < CSV_MAX_STRING_SIZE);
@@ -291,6 +312,7 @@ void add_resource_depends_on(model_state_t *model_state, char *resource_from, ch
     // Set the resource type and ID
     snprintf(new_row->resource_from, CSV_MAX_STRING_SIZE, "%s", resource_from);
     snprintf(new_row->resource_to, CSV_MAX_STRING_SIZE, "%s", resource_to);
+    snprintf(new_row->rel_type, CSV_MAX_STRING_SIZE, "%s", rel_type_to_str(rel_type));
 
     // Add node to the front of the list after the heading row
     insert_row(model_state, new_row);
@@ -325,7 +347,7 @@ void add_resource_rr(rr_state_t *model_state, gpi_cap_t resource_type, char *res
 }
 
 // Function to add a resource relationship to the rr state
-void add_resource_depends_on_rr(rr_state_t *model_state, char *resource_from, char *resource_to, csv_rr_row_t *new_row)
+void add_resource_depends_on_rr(rr_state_t *model_state, char *resource_from, char *resource_to, relation_type_t rel_type, csv_rr_row_t *new_row)
 {
     assert(strlen(resource_from) != 0 && strlen(resource_to) != 0);
     assert(strlen(resource_from) < CSV_MAX_STRING_SIZE && strlen(resource_to) < CSV_MAX_STRING_SIZE);
@@ -336,6 +358,7 @@ void add_resource_depends_on_rr(rr_state_t *model_state, char *resource_from, ch
     // Set the resource type and ID
     snprintf(new_row->resource_from, CSV_MAX_STRING_SIZE, "%s", resource_from);
     snprintf(new_row->resource_to, CSV_MAX_STRING_SIZE, "%s", resource_to);
+    snprintf(new_row->rel_type, CSV_MAX_STRING_SIZE, "%s", rel_type_to_str(rel_type));
     model_state->num_depends_on++;
 
     // Set list pointer if this is the first row

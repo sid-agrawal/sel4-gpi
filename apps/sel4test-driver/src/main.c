@@ -50,11 +50,12 @@
 #include <sel4gpi/gpi_server.h>
 
 #define RT_MALLOC_SIZE 16 * 1024 * 1024
-char __attribute__((aligned(PAGE_SIZE_4K))) morecore_area[RT_MALLOC_SIZE];
+char __attribute__((aligned(PAGE_SIZE_4K))) morecore_arr[RT_MALLOC_SIZE];
 size_t morecore_size = RT_MALLOC_SIZE;
 /* Pointer to free space in the morecore area. */
-static uintptr_t morecore_base = (uintptr_t)&morecore_area;
-uintptr_t morecore_top = (uintptr_t)&morecore_area[RT_MALLOC_SIZE];
+char *morecore_area = morecore_arr;
+uintptr_t morecore_base = (uintptr_t)&morecore_arr[0];
+uintptr_t morecore_top = (uintptr_t)&morecore_arr[RT_MALLOC_SIZE];
 
 /* ammount of untyped memory to reserve for the driver (32mb) */
 #define DRIVER_UNTYPED_MEMORY (1 << 28)

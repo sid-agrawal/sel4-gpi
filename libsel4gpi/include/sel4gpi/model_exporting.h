@@ -7,6 +7,12 @@
 
 #define CSV_MAX_STRING_SIZE (size_t)100 // Define a suitable size for your strings
 
+typedef enum _relation_type
+{
+    REL_TYPE_SUBSET,
+    REL_TYPE_MAP,
+} relation_type_t;
+
 // Struct to represent a row in the CSV
 typedef struct csv_row
 {
@@ -14,6 +20,7 @@ typedef struct csv_row
     char resource_to[CSV_MAX_STRING_SIZE];
     char resource_type[CSV_MAX_STRING_SIZE];
     char resource_id[CSV_MAX_STRING_SIZE];
+    char rel_type[CSV_MAX_STRING_SIZE];
     char pd_name[CSV_MAX_STRING_SIZE];
     char pd_from[CSV_MAX_STRING_SIZE];
     char pd_to[CSV_MAX_STRING_SIZE];
@@ -46,6 +53,7 @@ typedef struct csv_rr_row
     char resource_to[CSV_MAX_STRING_SIZE];
     char resource_type[CSV_MAX_STRING_SIZE];
     char resource_id[CSV_MAX_STRING_SIZE];
+    char rel_type[CSV_MAX_STRING_SIZE];
 } csv_rr_row_t;
 
 // Resource Relation State
@@ -97,13 +105,13 @@ void add_pd(model_state_t *model_state, char *pd_name, char *pd_id);
 void add_has_access_to(model_state_t *model_state, char *pd_from, char *resource_to, bool is_mapped);
 
 // Function to add a resource relationship to the model state
-void add_resource_depends_on(model_state_t *model_state, char *resource_from, char *resource_to);
+void add_resource_depends_on(model_state_t *model_state, char *resource_from, char *resource_to, relation_type_t rel_type);
 
 // Function to add a resource to the rr state
 void add_resource_rr(rr_state_t *model_state, gpi_cap_t resource_type, char *resource_id, csv_rr_row_t *new_row);
 
 // Function to add a resource relationship to the rr state
-void add_resource_depends_on_rr(rr_state_t *model_state, char *resource_from, char *resource_to, csv_rr_row_t *new_row);
+void add_resource_depends_on_rr(rr_state_t *model_state, char *resource_from, char *resource_to, relation_type_t rel_type, csv_rr_row_t *new_row);
 
 // Function add a PD to PD relationship to the model state
 void add_pd_requests(model_state_t *model_state, char *pd_from, char *pd_to, gpi_cap_t type, char *constraints);

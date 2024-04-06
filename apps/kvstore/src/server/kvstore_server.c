@@ -103,6 +103,8 @@ int kvstore_server_init()
         }
     }
 
+    KVSTORE_PRINTF("Creating DB %s\n", db_filename);
+
     error = sqlite3_open(db_filename, &kvstore_db);
 
     KVSTORE_PRINTF("Created DB %s\n", db_filename);

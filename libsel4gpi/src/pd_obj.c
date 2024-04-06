@@ -26,6 +26,7 @@
 #include <sel4gpi/cpu_obj.h>
 #include <sel4gpi/debug.h>
 #include <sel4gpi/resource_server_utils.h>
+#include <sel4gpi/pd_utils.h>
 // #include <sel4gpi/gpi_rde.h>
 
 #include <vka/capops.h>
@@ -220,7 +221,10 @@ int pd_new(pd_t *pd,
     {
         ZF_LOGE("Couldn't forge an MO for PD's init data\n");
     }
-    pd_add_resource(pd, GPICAP_TYPE_MO, rde_mo_obj->mo_obj_id, pd->init_data_mo.badged_server_ep_cspath.capPtr, seL4_CapNull, pd->init_data_mo.badged_server_ep_cspath.capPtr);
+
+    // Track the init data MO in RT only
+    pd_add_resource(&get_pd_component()->rt_pd, GPICAP_TYPE_MO, rde_mo_obj->mo_obj_id, pd->init_data_mo.badged_server_ep_cspath.capPtr, 0, 0);
+    // pd_add_resource(pd, GPICAP_TYPE_MO, rde_mo_obj->mo_obj_id, pd->init_data_mo.badged_server_ep_cspath.capPtr, seL4_CapNull, pd->init_data_mo.badged_server_ep_cspath.capPtr);
 
     // Setup init data
     pd->init_data->rde_count = 0;
@@ -347,7 +351,7 @@ int pd_bootstrap_allocator(pd_t *pd,
     return 0;
 }
 
-static int pd_setup_proc(pd_t *pd, vka_t *server_vka, vspace_t *server_vspace, ads_t *target_ads, const char *image_name)
+static int pd_setup_proc(pd_t *pd, vka_t *server_vka, vspace_t *server_vspace, ads_t *target_ads, const char *image_name, uint64_t heap_size)
 {
     int error;
 
@@ -392,11 +396,14 @@ static int pd_setup_proc(pd_t *pd, vka_t *server_vka, vspace_t *server_vspace, a
     mo_t *mo_obj;
     error = forge_mo_cap_from_frames(&pd->proc.thread.ipc_buffer, 1, server_vka, pd->pd_obj_id, &mo_cap, &mo_obj);
     ZF_LOGE_IF(error, "Failed to forge MO cap for PD's IPC buffer");
-    pd_add_resource(pd, GPICAP_TYPE_MO, mo_obj->mo_obj_id, mo_cap, seL4_CapNull, mo_cap);
+
+    // (XXX) Arya: don't give a PD its own IPC frame MO
+    pd_add_resource(&get_pd_component()->rt_pd, GPICAP_TYPE_MO, mo_obj->mo_obj_id, mo_cap, 0, 0);
+    // pd_add_resource(pd, GPICAP_TYPE_MO, mo_obj->mo_obj_id, mo_cap, seL4_CapNull, mo_cap);
 
     attach_node_t *ipc_attach_node = malloc(sizeof(attach_node_t));
     ipc_attach_node->mo_id = mo_obj->mo_obj_id;
-    ipc_attach_node->vaddr = pd->proc.thread.ipc_buffer_addr;
+    ipc_attach_node->vaddr = (void *) pd->proc.thread.ipc_buffer_addr;
     ipc_attach_node->type = SEL4UTILS_RES_TYPE_IPC_BUF;
     ipc_attach_node->next = target_ads->attach_nodes;
     target_ads->attach_nodes = ipc_attach_node;
@@ -411,24 +418,65 @@ static int pd_setup_proc(pd_t *pd, vka_t *server_vka, vspace_t *server_vspace, a
     }
 
     seL4_CPtr *stack_caps = calloc(pd->proc.thread.stack_size, sizeof(seL4_CPtr));
-    void *stack_bottom = pd->proc.thread.stack_top - (pd->proc.thread.stack_size * PAGE_SIZE_4K);
+    // Stack has a guard page, so subtract an additional page to get to the bottom
+    void *stack_bottom = pd->proc.thread.stack_top - (pd->proc.thread.stack_size * PAGE_SIZE_4K) - PAGE_SIZE_4K;
+
     for (int i = 0; i < pd->proc.thread.stack_size; i++)
     {
+        void *p = stack_bottom + BIT(seL4_PageBits) * i;
         stack_caps[i] = sel4utils_get_cap(target_ads->vspace, stack_bottom);
-        stack_bottom += PAGE_SIZE_4K;
     }
 
     error = forge_mo_cap_from_frames(stack_caps, pd->proc.thread.stack_size, server_vka, pd->pd_obj_id, &mo_cap, &mo_obj);
     ZF_LOGE_IF(error, "Failed to forge MO cap for PD's stack");
-    pd_add_resource(pd, GPICAP_TYPE_MO, mo_obj->mo_obj_id, mo_cap, seL4_CapNull, mo_cap);
+
+    // (XXX) Arya: don't give a PD its own Stack MO
+    pd_add_resource(&get_pd_component()->rt_pd, GPICAP_TYPE_MO, mo_obj->mo_obj_id, mo_cap, 0, 0);
+    // pd_add_resource(pd, GPICAP_TYPE_MO, mo_obj->mo_obj_id, mo_cap, seL4_CapNull, mo_cap);
 
     attach_node_t *stack_attach_node = malloc(sizeof(attach_node_t));
     stack_attach_node->mo_id = mo_obj->mo_obj_id;
-    stack_attach_node->vaddr = pd->proc.thread.stack_top - (pd->proc.thread.stack_size * PAGE_SIZE_4K);
+    stack_attach_node->vaddr = stack_bottom;
     stack_attach_node->type = SEL4UTILS_RES_TYPE_STACK;
     stack_attach_node->next = target_ads->attach_nodes;
     target_ads->attach_nodes = stack_attach_node;
     free(stack_caps);
+
+    /* set up heap */
+    // (XXX) Arya: Use predefined location, and predefined size per image
+    // Workaround so we can still use the static malloc
+    if (heap_size > 0)
+    {
+        int n_pages = DIV_ROUND_UP(heap_size, BIT(seL4_PageBits));
+
+        reservation_t heap_res = vspace_reserve_range_at(target_ads->vspace, (void *)PD_HEAP_LOC, heap_size, seL4_AllRights, 0);
+        sel4utils_res_t *sel4utils_res = reservation_to_res(heap_res);
+        sel4utils_res->type = SEL4UTILS_RES_TYPE_HEAP;
+
+        error = vspace_new_pages_at_vaddr(target_ads->vspace, (void *)PD_HEAP_LOC, n_pages, seL4_PageBits, heap_res);
+        ZF_LOGF_IF(error, "Failed to allocate PD's heap");
+        printf("TEMPA allocated heap at %p, size 0x%lx, pages %d\n", (void *)PD_HEAP_LOC, heap_size, n_pages);
+
+        seL4_CPtr *heap_caps = calloc(n_pages, sizeof(seL4_CPtr));
+
+        for (int i = 0; i < n_pages; i++)
+        {
+            void *p = (void *) PD_HEAP_LOC + BIT(seL4_PageBits) * i;
+            heap_caps[i] = sel4utils_get_cap(target_ads->vspace, p);
+        }
+
+        error = forge_mo_cap_from_frames(heap_caps, n_pages, server_vka, pd->pd_obj_id, &mo_cap, &mo_obj);
+        ZF_LOGE_IF(error, "Failed to forge MO cap for PD's heap");
+
+        attach_node_t *heap_attach_node = malloc(sizeof(attach_node_t));
+        heap_attach_node->mo_id = mo_obj->mo_obj_id;
+        heap_attach_node->vaddr = (void *) PD_HEAP_LOC;
+        heap_attach_node->type = SEL4UTILS_RES_TYPE_HEAP;
+        heap_attach_node->next = target_ads->attach_nodes;
+        target_ads->attach_nodes = heap_attach_node;
+
+        free(heap_caps);
+    }
 
     return 0;
 
@@ -538,16 +586,17 @@ int pd_load_image(pd_t *pd,
                   const char *image_path,
                   vspace_t *server_vspace,
                   ads_t *target_ads,
-                  cpu_t *target_cpu)
+                  cpu_t *target_cpu,
+                  uint64_t heap_size)
 {
     int error = 0;
-    pd->image_name = image_path;
+    pd->image_name = (char *)image_path;
     OSDB_PRINTF(PD_DEBUG, PDSERVS "load_image: loading image %s for pd %p\n", image_path, pd);
     error = pd_setup_common(pd, vka, server_vspace, target_ads);
     assert(error == 0);
 
     // (XXX) Linh: we may not always setup the PD as a proc
-    error = pd_setup_proc(pd, vka, server_vspace, target_ads, image_path);
+    error = pd_setup_proc(pd, vka, server_vspace, target_ads, image_path, heap_size);
     assert(error == 0);
 
     error = cpu_config_vspace(target_cpu, vka, target_ads->vspace,
@@ -780,6 +829,144 @@ int pd_start(pd_t *pd,
     return 0;
 }
 
+// Add rows to model state for one resource
+static int res_dump(pd_t *pd, model_state_t *ms, osmosis_pd_cap_t *current_cap,
+                    char *pd_id, cspacepath_t rr_frame_path, void *rr_local_vaddr)
+{
+    char res_id[CSV_MAX_STRING_SIZE];
+    make_res_id(res_id, current_cap->type, current_cap->res_id);
+    switch (current_cap->type)
+    {
+    case GPICAP_TYPE_NONE:
+        break;
+    case GPICAP_TYPE_ADS:
+        ads_component_registry_entry_t *ads_data =
+            ads_component_registry_get_entry_by_id(current_cap->res_id);
+        assert(ads_data != NULL);
+        ads_dump_rr(&ads_data->ads, ms);
+        add_has_access_to(ms,
+                          pd_id,
+                          res_id,
+                          // (XXX): We need to find out which ads is active and print true only those ADSs
+                          // When TRUE it shows that this ads is in use by some TCB.
+                          // We specifically add this to handle the scenario where a PD can have mutliple ads, but only one of them is in use.
+                          // Think LWC.
+                          true);
+        break;
+    case GPICAP_TYPE_MO:
+        mo_component_registry_entry_t *mo_data = mo_component_registry_get_entry_by_id(current_cap->res_id);
+        assert(mo_data != NULL);
+        mo_dump_rr(&mo_data->mo, ms);
+        add_has_access_to(ms, pd_id, res_id, false);
+        break;
+    case GPICAP_TYPE_CPU:
+        cpu_component_registry_entry_t *cpu_data = cpu_component_registry_get_entry_by_id(current_cap->res_id);
+        assert(cpu_data != NULL);
+        cpu_dump_rr(&cpu_data->cpu, ms);
+        add_has_access_to(ms, pd_id, res_id, false);
+        break;
+    case GPICAP_TYPE_seL4:
+        // Use some other method to get the cap details
+        break;
+    case GPICAP_TYPE_FILE:
+    case GPICAP_TYPE_BLOCK:
+        OSDB_PRINTF(PD_DEBUG, PDSERVS "Calling another PD to get the info for resource with ID 0x%x\n", current_cap->res_id);
+
+        // Find the server that created this resource based on the resource id
+        uint64_t obj_id = current_cap->res_id;
+        uint64_t server_id = get_server_id_from_badge(obj_id);
+        pd_component_resource_manager_entry_t *server_entry = pd_component_resource_manager_get_entry_by_id(server_id);
+
+        if (server_entry == NULL)
+        {
+            OSDB_PRINTF(PD_DEBUG, PDSERVS "Failed to find resource server with ID 0x%lx\n", server_id);
+            return -1;
+        }
+        seL4_CPtr server_cap = server_entry->server_ep;
+        rr_state_t *rs;
+
+        OSDB_PRINTF(PD_DEBUG, PDSERVS "Resource ID 0x%lx, server ID 0x%lx, server EP at %d\n", obj_id, server_id, (int)server_cap);
+
+        // Pre-map the memory so resource server does not need to call root task
+        cspacepath_t rr_frame_copy_path;
+        int error = vka_cspace_alloc_path(get_gpi_server()->server_vka, &rr_frame_copy_path);
+        if (error != seL4_NoError)
+        {
+            OSDB_PRINTF(PD_DEBUG, PDSERVS "Failed to allocate path for RR frame copy %d", error);
+            return -1;
+        }
+
+        error = vka_cnode_copy(&rr_frame_copy_path, &rr_frame_path, seL4_AllRights);
+        if (error != seL4_NoError)
+        {
+            OSDB_PRINTF(PD_DEBUG, ADSSERVS "Failed to copy RR frame cap cap, error: %d", error);
+            return -1;
+        }
+
+        void *rr_remote_vaddr = vspace_map_pages(&server_entry->pd->proc.vspace, &rr_frame_copy_path.capPtr, NULL,
+                                                 seL4_AllRights, 1, seL4_PageBits, 1);
+        if (rr_remote_vaddr == NULL)
+        {
+            OSDB_PRINTF(PD_DEBUG, PDSERVS "Failed to map RR frame to resource server, %d", error);
+            return -1;
+        }
+
+        // Get RR from remote resource server
+        error = resource_server_get_rr(server_cap, obj_id,
+                                       rr_remote_vaddr, rr_local_vaddr,
+                                       SIZE_BITS_TO_BYTES(seL4_PageBits), &rs);
+        if (error == RS_ERROR_DNE)
+        {
+            // The resource was deleted and the PD component didn't know
+            // (XXX) Arya: Eventually, the PD component should be told
+            // For now, just omit deleted resources from the model state
+
+            // Remove remotely-mapped memory
+            vspace_unmap_pages(&server_entry->pd->proc.vspace, rr_remote_vaddr, 1, seL4_PageBits, NULL);
+            vka_cnode_delete(&rr_frame_copy_path);
+
+            return 0;
+        }
+        if (error == RS_ERROR_RR_SIZE)
+        {
+            // (XXX) Arya: Need to allocate a bigger shared memory if this fails
+            return error;
+        }
+        else if (error != seL4_NoError)
+        {
+            return error;
+        }
+
+        combine_model_states(ms, rs);
+
+        // Add the has_access_to row
+        add_has_access_to(ms,
+                          pd_id,
+                          res_id,
+                          false); // (XXX) Arya: how to determine is_mapped
+
+        // Remove remotely-mapped memory
+        vspace_unmap_pages(&server_entry->pd->proc.vspace, rr_remote_vaddr, 1, seL4_PageBits, NULL);
+        vka_cnode_delete(&rr_frame_copy_path);
+
+        break;
+    case GPICAP_TYPE_PD:
+        if (current_cap->res_id != pd->pd_obj_id)
+        {
+            pd_component_registry_entry_t *pd_data = pd_component_registry_get_entry_by_id(current_cap->res_id);
+            assert(pd_data != NULL);
+            pd_dump(&pd_data->pd);
+        }
+        // add_has_access_to(ms, pd_id, res_id, false);
+        break;
+    default:
+        ZF_LOGE("Invalid has_access_to cap type 0x%x", current_cap->type);
+        break;
+    }
+
+    return 0;
+}
+
 int pd_dump(pd_t *pd)
 {
     int error;
@@ -856,13 +1043,16 @@ int pd_dump(pd_t *pd)
                     ZF_LOGF("Couldn't find resource manager with ID %d\n", rde.manager_id);
                 }
 
-                if (rde.ns_id != NSID_DEFAULT) {
+                if (rde.ns_id != NSID_DEFAULT)
+                {
                     snprintf(ns_id, CSV_MAX_STRING_SIZE, "NS%d", rde.ns_id);
-                } else {
+                }
+                else
+                {
                     snprintf(ns_id, CSV_MAX_STRING_SIZE, "GLOBAL");
                 }
 
-                int server_pd_id = rm->pd? rm->pd->pd_obj_id : 0;
+                int server_pd_id = rm->pd ? rm->pd->pd_obj_id : 0;
                 snprintf(rm_id, CSV_MAX_STRING_SIZE, "PD_%d", server_pd_id);
 
                 add_pd_requests(ms, pd_id, rm_id, rde.type.type, ns_id);
@@ -877,139 +1067,23 @@ int pd_dump(pd_t *pd)
     add_has_access_to(ms, root_task_id, "RT_ALL", true);
     add_pd(ms, "ROOT TASK", root_task_id);
 
-    char res_id[CSV_MAX_STRING_SIZE];
+    /* add caps from RT (not all caps, just specially tracked ones) */
+    for (osmosis_pd_cap_t *current_cap = get_pd_component()->rt_pd.has_access_to; current_cap != NULL; current_cap = current_cap->hh.next)
+    {
+        // print_pd_osm_cap_info(current_cap);
+        if (res_dump(&get_pd_component()->rt_pd, ms, current_cap, root_task_id, rr_frame_path, rr_local_vaddr) != 0)
+        {
+            return -1;
+        }
+    }
+
+    /* add caps that this PD has access to */
     for (osmosis_pd_cap_t *current_cap = pd->has_access_to; current_cap != NULL; current_cap = current_cap->hh.next)
     {
-        //print_pd_osm_cap_info(current_cap);
-
-        make_res_id(res_id, current_cap->type, current_cap->res_id);
-        switch (current_cap->type)
+        // print_pd_osm_cap_info(current_cap);
+        if (res_dump(pd, ms, current_cap, pd_id, rr_frame_path, rr_local_vaddr) != 0)
         {
-        case GPICAP_TYPE_NONE:
-            break;
-        case GPICAP_TYPE_ADS:
-            ads_component_registry_entry_t *ads_data =
-                ads_component_registry_get_entry_by_id(current_cap->res_id);
-            assert(ads_data != NULL);
-            ads_dump_rr(&ads_data->ads, ms);
-            add_has_access_to(ms,
-                              pd_id,
-                              res_id,
-                              // (XXX): We need to find out which ads is active and print true only those ADSs
-                              // When TRUE it shows that this ads is in use by some TCB.
-                              // We specifically add this to handle the scenario where a PD can have mutliple ads, but only one of them is in use.
-                              // Think LWC.
-                              true);
-            break;
-        case GPICAP_TYPE_MO:
-            mo_component_registry_entry_t *mo_data = mo_component_registry_get_entry_by_id(current_cap->res_id);
-            assert(mo_data != NULL);
-            mo_dump_rr(&mo_data->mo, ms);
-            add_has_access_to(ms, pd_id, res_id, false);
-            break;
-        case GPICAP_TYPE_CPU:
-            cpu_component_registry_entry_t *cpu_data = cpu_component_registry_get_entry_by_id(current_cap->res_id);
-            assert(cpu_data != NULL);
-            cpu_dump_rr(&cpu_data->cpu, ms);
-            add_has_access_to(ms, pd_id, res_id, false);
-            break;
-        case GPICAP_TYPE_seL4:
-            // Use some other method to get the cap details
-            break;
-        case GPICAP_TYPE_FILE:
-        case GPICAP_TYPE_BLOCK:
-            OSDB_PRINTF(PD_DEBUG, PDSERVS "Calling another PD to get the info for resource with ID 0x%x\n", current_cap->res_id);
-
-            // Find the server that created this resource based on the resource id
-            uint64_t obj_id = current_cap->res_id;
-            uint64_t server_id = get_server_id_from_badge(obj_id);
-            pd_component_resource_manager_entry_t *server_entry = pd_component_resource_manager_get_entry_by_id(server_id);
-
-            if (server_entry == NULL)
-            {
-                OSDB_PRINTF(PD_DEBUG, PDSERVS "Failed to find resource server with ID 0x%lx\n", server_id);
-                return -1;
-            }
-            seL4_CPtr server_cap = server_entry->server_ep;
-            rr_state_t *rs;
-
-            OSDB_PRINTF(PD_DEBUG, PDSERVS "Resource ID 0x%lx, server ID 0x%lx, server EP at %d\n", obj_id, server_id, (int)server_cap);
-
-            // Pre-map the memory so resource server does not need to call root task
-            cspacepath_t rr_frame_copy_path;
-            int error = vka_cspace_alloc_path(get_gpi_server()->server_vka, &rr_frame_copy_path);
-            if (error != seL4_NoError)
-            {
-                OSDB_PRINTF(PD_DEBUG, PDSERVS "Failed to allocate path for RR frame copy %d", error);
-                return -1;
-            }
-
-            error = vka_cnode_copy(&rr_frame_copy_path, &rr_frame_path, seL4_AllRights);
-            if (error != seL4_NoError)
-            {
-                OSDB_PRINTF(PD_DEBUG, ADSSERVS "Failed to copy RR frame cap cap, error: %d", error);
-                return -1;
-            }
-
-            void *rr_remote_vaddr = vspace_map_pages(&server_entry->pd->proc.vspace, &rr_frame_copy_path.capPtr, NULL,
-                                                     seL4_AllRights, 1, seL4_PageBits, 1);
-            if (rr_remote_vaddr == NULL)
-            {
-                OSDB_PRINTF(PD_DEBUG, PDSERVS "Failed to map RR frame to resource server, %d", error);
-                return -1;
-            }
-
-            // Get RR from remote resource server
-            error = resource_server_get_rr(server_cap, obj_id,
-                                           rr_remote_vaddr, rr_local_vaddr,
-                                           SIZE_BITS_TO_BYTES(seL4_PageBits), &rs);
-            if (error == RS_ERROR_DNE)
-            {
-                // The resource was deleted and the PD component didn't know
-                // (XXX) Arya: Eventually, the PD component should be told
-                // For now, just omit deleted resources from the model state
-
-                // Remove remotely-mapped memory
-                vspace_unmap_pages(&server_entry->pd->proc.vspace, rr_remote_vaddr, 1, seL4_PageBits, NULL);
-                vka_cnode_delete(&rr_frame_copy_path);
-
-                continue;
-            }
-            if (error == RS_ERROR_RR_SIZE)
-            {
-                // (XXX) Arya: Need to allocate a bigger shared memory if this fails
-                return error;
-            }
-            else if (error != seL4_NoError)
-            {
-                return error;
-            }
-
-            combine_model_states(ms, rs);
-
-            // Add the has_access_to row
-            add_has_access_to(ms,
-                              pd_id,
-                              res_id,
-                              false); // (XXX) Arya: how to determine is_mapped
-
-            // Remove remotely-mapped memory
-            vspace_unmap_pages(&server_entry->pd->proc.vspace, rr_remote_vaddr, 1, seL4_PageBits, NULL);
-            vka_cnode_delete(&rr_frame_copy_path);
-
-            break;
-        case GPICAP_TYPE_PD:
-            if (current_cap->res_id != pd->pd_obj_id)
-            {
-                pd_component_registry_entry_t *pd_data = pd_component_registry_get_entry_by_id(current_cap->res_id);
-                assert(pd_data != NULL);
-                pd_dump(&pd_data->pd);
-            }
-            // add_has_access_to(ms, pd_id, res_id, false);
-            break;
-        default:
-            ZF_LOGE("Invalid has_access_to cap type 0x%x", current_cap->type);
-            break;
+            return -1;
         }
     }
 
@@ -1024,7 +1098,7 @@ int pd_dump(pd_t *pd)
     {
         for (int j = 0; j < MAX_NS_PER_RDE; j++)
         {
-            //print_pd_osm_rde_info(&pd->init_data->rde[i][j]);
+            // print_pd_osm_rde_info(&pd->init_data->rde[i][j]);
         }
     }
 

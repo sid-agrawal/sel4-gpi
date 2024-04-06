@@ -8,18 +8,18 @@
 
 #include <sel4/sel4.h>
 #include <sel4utils/process.h>
+#include <sel4gpi/pd_utils.h>
 
-#ifdef RAMDISK_EXECUTABLE
 /* dummy global for libsel4muslcsys */
 char _cpio_archive[1];
 char _cpio_archive_end[1];
 
-#define RD_MALLOC_SIZE 2 * 1024 * 1024
-char __attribute__((aligned(PAGE_SIZE_4K))) morecore_area[RD_MALLOC_SIZE];
-size_t morecore_size = RD_MALLOC_SIZE;
-/* Pointer to free space in the morecore area. */
-uintptr_t morecore_top = (uintptr_t)&morecore_area[RD_MALLOC_SIZE];
-#endif
+/* Initialization for static morecore */
+#define APP_MALLOC_SIZE (PAGE_SIZE_4K * 100)
+char *morecore_area = (char *) PD_HEAP_LOC;
+size_t morecore_size = APP_MALLOC_SIZE;
+uintptr_t morecore_base = (uintptr_t) PD_HEAP_LOC;
+uintptr_t morecore_top = (uintptr_t) (PD_HEAP_LOC + APP_MALLOC_SIZE);
 
 #include <sel4gpi/mo_clientapi.h>
 #include <sel4gpi/ads_clientapi.h>
@@ -30,8 +30,6 @@ uintptr_t morecore_top = (uintptr_t)&morecore_area[RD_MALLOC_SIZE];
 
 int main(int argc, char **argv)
 {
-    printf("Ramdisk main!\n");
-
     /* parse args */
     assert(argc == 1);
     seL4_CPtr parent_ep = (seL4_CPtr)atol(argv[0]);

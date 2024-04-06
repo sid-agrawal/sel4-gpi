@@ -46,8 +46,8 @@ int test_model_state_export(env_t env)
     add_pd(&model_state, "Proc1", "PD.1.0");
     add_pd(&model_state, "Proc2", "PD.2.0");
 
-    add_resource_depends_on(&model_state, "V.2", "P.2");
-    add_resource_depends_on(&model_state, "V.1", "P.1");
+    add_resource_depends_on(&model_state, "V.2", "P.2", REL_TYPE_MAP);
+    add_resource_depends_on(&model_state, "V.1", "P.1", REL_TYPE_MAP);
 
     add_pd_requests(&model_state, "PD.2.0", "PD.0.0", GPICAP_TYPE_MO, "");
     add_pd_requests(&model_state, "PD.1.0", "PD.0.0", GPICAP_TYPE_MO, "");

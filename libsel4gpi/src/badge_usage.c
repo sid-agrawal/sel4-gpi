@@ -167,7 +167,7 @@ char *cap_type_to_str(gpi_cap_t cap_type)
         return "MO";
         break;
     case GPICAP_TYPE_CPU:
-        return "CPU";
+        return "VCPU";
         break;
     case GPICAP_TYPE_PD:
         return "PD";

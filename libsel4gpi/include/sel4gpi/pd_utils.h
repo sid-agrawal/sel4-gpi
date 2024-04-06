@@ -6,6 +6,8 @@
 #include <stdint.h>
 #include <sel4/types.h>
 
+#define PD_HEAP_LOC 0x5000000000
+
 /*
  * Get the osmosis pd cap from the env
  */

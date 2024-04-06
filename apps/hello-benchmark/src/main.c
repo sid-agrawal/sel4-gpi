@@ -15,17 +15,18 @@
 #include <sel4runtime.h>
 #include <sel4test/test.h>
 #include <sel4gpi/bench_utils.h>
+#include <sel4gpi/pd_utils.h>
 
 /* dummy global for libsel4muslcsys */
 char _cpio_archive[1];
 char _cpio_archive_end[1];
 
-#define APP_MALLOC_SIZE PAGE_SIZE_4K
-
-char __attribute__((aligned(PAGE_SIZE_4K))) morecore_area[APP_MALLOC_SIZE];
+/* Initialization for static morecore */
+#define APP_MALLOC_SIZE (PAGE_SIZE_4K)
+char *morecore_area = (char *) PD_HEAP_LOC;
 size_t morecore_size = APP_MALLOC_SIZE;
-/* Pointer to free space in the morecore area. */
-uintptr_t morecore_top = (uintptr_t)&morecore_area[APP_MALLOC_SIZE];
+uintptr_t morecore_base = (uintptr_t) PD_HEAP_LOC;
+uintptr_t morecore_top = (uintptr_t) (PD_HEAP_LOC + APP_MALLOC_SIZE);
 
 int main(int argc, char **argv)
 {

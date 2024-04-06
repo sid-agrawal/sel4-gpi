@@ -461,7 +461,9 @@ static void handle_load_req(seL4_Word sender_badge,
     cpu_component_registry_entry_t *cpu_data = cpu_component_registry_get_entry_by_badge(badge);
     assert(cpu_data != NULL);
 
-    const char *image_path = pd_images[seL4_GetMR(PDMSGREG_LOAD_FUNC_IMAGE)];
+    int image_id = seL4_GetMR(PDMSGREG_LOAD_FUNC_IMAGE);
+    const char *image_path = pd_images[image_id];
+    uint64_t heap_size = pd_image_heap_size[image_id];
 
     seL4_CNode cspace_root = received_cap;
     error = pd_load_image(&client_data->pd,
@@ -470,7 +472,8 @@ static void handle_load_req(seL4_Word sender_badge,
                           image_path,
                           get_pd_component()->server_vspace,
                           &ads_data->ads,
-                          &cpu_data->cpu);
+                          &cpu_data->cpu,
+                          heap_size);
     if (error)
     {
         OSDB_PRINTF(PD_DEBUG, PDSERVS "main: Failed to config from client badge:");

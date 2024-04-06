@@ -351,7 +351,7 @@ seL4_MessageInfo_t xv6fs_request_handler(seL4_MessageInfo_t tag, seL4_Word sende
 
         uint64_t block_id = get_xv6fs_server()->naive_blocks[blocknos[i]].id;
         make_res_id(block_res_id, GPICAP_TYPE_BLOCK, block_id);
-        add_resource_depends_on_rr(rr_state, file_res_id, block_res_id, row_ptr);
+        add_resource_depends_on_rr(rr_state, file_res_id, block_res_id, REL_TYPE_MAP, row_ptr);
         row_ptr++;
       }
       free(blocknos);

@@ -211,14 +211,14 @@ void ads_dump_rr(ads_t *ads, model_state_t *ms)
 
         added_mo_rrs[num_added_mo_rrs] = res->mo_id;
         num_added_mo_rrs++;
-        char res_id[CSV_MAX_STRING_SIZE];
-        make_virtual_res_id(res_id, ads->ads_obj_id, (uint64_t)res->vaddr, "VMR");
-        add_resource_2(ms, "VirtualRes", res_id, ads_res_type_to_str(res->type));
-        add_resource_depends_on(ms, ads_res_id, res_id);
+        char vmr_res_id[CSV_MAX_STRING_SIZE];
+        make_virtual_res_id(vmr_res_id, ads->ads_obj_id, (uint64_t)res->vaddr, "VMR");
+        add_resource_2(ms, "VMR", vmr_res_id, ads_res_type_to_str(res->type));
+        add_resource_depends_on(ms, vmr_res_id, ads_res_id, REL_TYPE_SUBSET);
 
         char mo_res_id[CSV_MAX_STRING_SIZE];
         make_res_id(mo_res_id, GPICAP_TYPE_MO, res->mo_id);
-        add_resource_depends_on(ms, res_id, mo_res_id);
+        add_resource_depends_on(ms, vmr_res_id, mo_res_id, REL_TYPE_MAP);
     }
 #if 0
     vspace_t *ads_vspace = ads->vspace;
@@ -395,6 +395,8 @@ int ads_shallow_copy(vspace_t *loader,
         assert(to_sel4_res != NULL);
         to_sel4_res->type = from_sel4_res->type;
 
+        printf("TEMPA got res type %s, vaddr %p\n", ads_res_type_to_str(from_sel4_res->type), from_sel4_res->start);
+
         num_pages = (from_sel4_res->end - from_sel4_res->start) / PAGE_SIZE_4K;
         if (from_sel4_res->start == (uintptr_t)omit_vaddr)
         {
@@ -402,66 +404,78 @@ int ads_shallow_copy(vspace_t *loader,
             from_sel4_res = from_sel4_res->next;
             continue;
         }
-        // only copy over ELF and IPC buffer
-        if (from_sel4_res->type == SEL4UTILS_RES_TYPE_ELF || from_sel4_res->type == SEL4UTILS_RES_TYPE_IPC_BUF || from_sel4_res->type == SEL4UTILS_RES_TYPE_STACK ||
+
+        // Shallow copy IPC buffer, stack, init data
+        if (from_sel4_res->type == SEL4UTILS_RES_TYPE_IPC_BUF ||
+            from_sel4_res->type == SEL4UTILS_RES_TYPE_STACK ||
+            from_sel4_res->start == (uintptr_t)pd_osm_data ||
+            (from_sel4_res->type == SEL4UTILS_RES_TYPE_ELF && shallow_copy))
+        {
+            OSDB_PRINTF(ADS_DEBUG, "======================Shallow copying [%s] %p to %p [%s]\n",
+                        human_readable_va_res_type(from_sel4_res->type),
+                        (void *)from_sel4_res->start, (void *)from_sel4_res->end,
+                        human_readable_size(from_sel4_res->end - from_sel4_res->start));
+            error = sel4utils_share_mem_at_vaddr(from, to,
+                                                 (void *)from_sel4_res->start,
+                                                 num_pages,
+                                                 PAGE_BITS_4K,
+                                                 (void *)from_sel4_res->start,
+                                                 new_res);
+            if (error)
+            {
+                ZF_LOGE("Failed to map memory while sharing copy: %d\n", error);
+                goto error_exit;
+            }
+        }
+        else if (from_sel4_res->type == SEL4UTILS_RES_TYPE_HEAP || from_sel4_res->type == SEL4UTILS_RES_TYPE_ELF)
+        {
+            // Deep copy ELF and HEAP
+            OSDB_PRINTF(ADS_DEBUG, "======================Deep copying [%s] %p to %p [%s]\n",
+                        human_readable_va_res_type(from_sel4_res->type),
+                        (void *)from_sel4_res->start, (void *)from_sel4_res->end,
+                        human_readable_size(from_sel4_res->end - from_sel4_res->start));
+
+            error = sel4utils_copy_mem_at_vaddr(
+                loader,
+                from, to,
+                (void *)from_sel4_res->start,
+                num_pages,
+                PAGE_BITS_4K,
+                (void *)from_sel4_res->start,
+                new_res);
+            if (error)
+            {
+                ZF_LOGE("Failed to map memory while making copy: %d\n", error);
+                goto error_exit;
+            }
+        }
+
+        // Add the attach node for copied regions (except ELF regions, which we ignore)
+        if (from_sel4_res->type == SEL4UTILS_RES_TYPE_IPC_BUF ||
+            from_sel4_res->type == SEL4UTILS_RES_TYPE_STACK ||
+            from_sel4_res->type == SEL4UTILS_RES_TYPE_HEAP ||
             from_sel4_res->start == (uintptr_t)pd_osm_data)
         {
-            // only deep copy ELF, unless shallow copy is specified
-            if (from_sel4_res->type == SEL4UTILS_RES_TYPE_ELF && !shallow_copy)
+            for (attach_node_t *res = ads->attach_nodes; res != NULL; res = res->next)
             {
-                OSDB_PRINTF(ADS_DEBUG, "======================Deep copying [%s] %p to %p [%s]\n",
-                            human_readable_va_res_type(from_sel4_res->type),
-                            (void *)from_sel4_res->start, (void *)from_sel4_res->end,
-                            human_readable_size(from_sel4_res->end - from_sel4_res->start));
+                printf("TEMPA checking attach node type %s vaddr %p, want %p\n", ads_res_type_to_str(res->type), res->vaddr, (void *)from_sel4_res->start);
 
-                error = sel4utils_copy_mem_at_vaddr(
-                    loader,
-                    from, to,
-                    (void *)from_sel4_res->start,
-                    num_pages,
-                    PAGE_BITS_4K,
-                    (void *)from_sel4_res->start,
-                    new_res);
-                if (error)
+                if (res->vaddr == (void *)from_sel4_res->start)
                 {
-                    ZF_LOGE("Failed to map memory while making copy: %d\n", error);
-                    goto error_exit;
-                }
-            }
-            else
-            {
-                OSDB_PRINTF(ADS_DEBUG, "======================Shallow copying [%s] %p to %p [%s]\n",
-                            human_readable_va_res_type(from_sel4_res->type),
-                            (void *)from_sel4_res->start, (void *)from_sel4_res->end,
-                            human_readable_size(from_sel4_res->end - from_sel4_res->start));
-                error = sel4utils_share_mem_at_vaddr(from, to,
-                                                     (void *)from_sel4_res->start,
-                                                     num_pages,
-                                                     PAGE_BITS_4K,
-                                                     (void *)from_sel4_res->start,
-                                                     new_res);
-                if (error)
-                {
-                    ZF_LOGE("Failed to map memory while sharing copy: %d\n", error);
-                    goto error_exit;
-                }
+                    printf("TEMPA got attach node type %s\n", ads_res_type_to_str(from_sel4_res->type));
 
-                for (attach_node_t *res = ads->attach_nodes; res != NULL; res = res->next)
-                {
-                    if (res->vaddr == (void *)from_sel4_res->start)
-                    {
-                        // (XXX) Linh: We don't store the MOs frame caps here... do we even need to?
-                        attach_node_t *new_attach_node = malloc(sizeof(attach_node_t));
-                        new_attach_node->vaddr = (void *)from_sel4_res->start;
-                        new_attach_node->mo_id = res->mo_id;
-                        new_attach_node->type = from_sel4_res->type;
-                        new_attach_node->next = ret_ads->attach_nodes;
-                        ret_ads->attach_nodes = new_attach_node;
-                        break;
-                    }
+                    // (XXX) Linh: We don't store the MOs frame caps here... do we even need to?
+                    attach_node_t *new_attach_node = malloc(sizeof(attach_node_t));
+                    new_attach_node->vaddr = (void *)from_sel4_res->start;
+                    new_attach_node->mo_id = res->mo_id;
+                    new_attach_node->type = from_sel4_res->type;
+                    new_attach_node->next = ret_ads->attach_nodes;
+                    ret_ads->attach_nodes = new_attach_node;
+                    break;
                 }
             }
         }
+
         // Move to next node.
         from_sel4_res = from_sel4_res->next;
     }
