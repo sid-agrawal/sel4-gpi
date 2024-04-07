@@ -49,3 +49,6 @@ int kvstore_client_set(seL4_Word key, seL4_Word value);
  *         seL4 error otherwise
  */
 int kvstore_client_get(seL4_Word key, seL4_Word *value);
+
+int kvstore_client_swap_ads_lib(void);
+int kvstore_client_swap_ads_app(void);

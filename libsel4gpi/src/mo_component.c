@@ -226,10 +226,12 @@ void mo_handle_allocation_request(seL4_Word sender_badge, seL4_MessageInfo_t *re
 }
 
 int forge_mo_caps_from_vspace(vspace_t *child_vspace,
+                              ads_t *target_ads,
                               vka_t *vka,
                               uint32_t client_pd_id,
                               uint32_t *num_ret_caps,
-                              seL4_CPtr *cap_ret)
+                              seL4_CPtr *cap_ret,
+                              uint64_t *id_ret)
 {
     /* Walk every reservation */
     OSDB_PRINTF(MO_DEBUG, "%s: %d\n", __FUNCTION__, __LINE__);
@@ -279,6 +281,21 @@ int forge_mo_caps_from_vspace(vspace_t *child_vspace,
                                                  &cap_ret[j],
                                                  (mo_t **)&res->mo_ref);
             assert(error == 0);
+
+            if (id_ret) {
+                id_ret[j] = ((mo_t *)res->mo_ref)->mo_obj_id;
+            }
+
+            // Add the attach node for this region
+            if (target_ads != NULL)
+            {
+                attach_node_t *attach_node = malloc(sizeof(attach_node_t));
+                attach_node->mo_id = ((mo_t *)res->mo_ref)->mo_obj_id;;
+                attach_node->vaddr = (void *)(void *)res->start;
+                attach_node->type = res->type;
+                attach_node->next = target_ads->attach_nodes;
+                target_ads->attach_nodes = attach_node;
+            }
         }
 
         res = res->next;

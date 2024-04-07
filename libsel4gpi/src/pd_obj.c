@@ -37,6 +37,8 @@
 #include <cpio/cpio.h>
 
 #define CSPACE_SIZE_BITS 17
+#define ELF_LIB_DATA_SECTION ".lib_data"
+#define ELF_APP_DATA_SECTION ".data"
 
 /* This is doesn't belong here but we need it */
 extern char _cpio_archive[];
@@ -380,6 +382,14 @@ static int pd_setup_proc(pd_t *pd, vka_t *server_vka, vspace_t *server_vspace, a
         goto error;
     }
     sel4utils_elf_read_phdrs(&elf, pd->proc.num_elf_phdrs, pd->proc.elf_phdrs);
+    
+    /**
+     * By default, all ELF sections will be shared during ads_shallow_copy
+     * If we want to separate data sections, will need to identify them here and check for 
+     * their vaddr when copying
+    */
+    //uint64_t section_size;
+    //uintptr_t lib_data_section = sel4utils_elf_get_section(&elf, ELF_LIB_DATA_SECTION, &section_size);
 
     /* select the default page size of machine this process is running on */
     pd->proc.pagesz = PAGE_SIZE_4K;
@@ -392,22 +402,6 @@ static int pd_setup_proc(pd_t *pd, vka_t *server_vka, vspace_t *server_vspace, a
         goto error;
     }
 
-    seL4_CPtr mo_cap;
-    mo_t *mo_obj;
-    error = forge_mo_cap_from_frames(&pd->proc.thread.ipc_buffer, 1, server_vka, pd->pd_obj_id, &mo_cap, &mo_obj);
-    ZF_LOGE_IF(error, "Failed to forge MO cap for PD's IPC buffer");
-
-    // (XXX) Arya: don't give a PD its own IPC frame MO
-    pd_add_resource(&get_pd_component()->rt_pd, GPICAP_TYPE_MO, mo_obj->mo_obj_id, mo_cap, 0, 0);
-    // pd_add_resource(pd, GPICAP_TYPE_MO, mo_obj->mo_obj_id, mo_cap, seL4_CapNull, mo_cap);
-
-    attach_node_t *ipc_attach_node = malloc(sizeof(attach_node_t));
-    ipc_attach_node->mo_id = mo_obj->mo_obj_id;
-    ipc_attach_node->vaddr = (void *) pd->proc.thread.ipc_buffer_addr;
-    ipc_attach_node->type = SEL4UTILS_RES_TYPE_IPC_BUF;
-    ipc_attach_node->next = target_ads->attach_nodes;
-    target_ads->attach_nodes = ipc_attach_node;
-
     /* set up stack */
     pd->proc.thread.stack_size = BYTES_TO_4K_PAGES(CONFIG_SEL4UTILS_STACK_SIZE);
     pd->proc.thread.stack_top = vspace_new_sized_stack(target_ads->vspace, pd->proc.thread.stack_size);
@@ -416,31 +410,6 @@ static int pd_setup_proc(pd_t *pd, vka_t *server_vka, vspace_t *server_vspace, a
         ZF_LOGE("Failed to allocate PD's stack");
         goto error;
     }
-
-    seL4_CPtr *stack_caps = calloc(pd->proc.thread.stack_size, sizeof(seL4_CPtr));
-    // Stack has a guard page, so subtract an additional page to get to the bottom
-    void *stack_bottom = pd->proc.thread.stack_top - (pd->proc.thread.stack_size * PAGE_SIZE_4K) - PAGE_SIZE_4K;
-
-    for (int i = 0; i < pd->proc.thread.stack_size; i++)
-    {
-        void *p = stack_bottom + BIT(seL4_PageBits) * i;
-        stack_caps[i] = sel4utils_get_cap(target_ads->vspace, stack_bottom);
-    }
-
-    error = forge_mo_cap_from_frames(stack_caps, pd->proc.thread.stack_size, server_vka, pd->pd_obj_id, &mo_cap, &mo_obj);
-    ZF_LOGE_IF(error, "Failed to forge MO cap for PD's stack");
-
-    // (XXX) Arya: don't give a PD its own Stack MO
-    pd_add_resource(&get_pd_component()->rt_pd, GPICAP_TYPE_MO, mo_obj->mo_obj_id, mo_cap, 0, 0);
-    // pd_add_resource(pd, GPICAP_TYPE_MO, mo_obj->mo_obj_id, mo_cap, seL4_CapNull, mo_cap);
-
-    attach_node_t *stack_attach_node = malloc(sizeof(attach_node_t));
-    stack_attach_node->mo_id = mo_obj->mo_obj_id;
-    stack_attach_node->vaddr = stack_bottom;
-    stack_attach_node->type = SEL4UTILS_RES_TYPE_STACK;
-    stack_attach_node->next = target_ads->attach_nodes;
-    target_ads->attach_nodes = stack_attach_node;
-    free(stack_caps);
 
     /* set up heap */
     // (XXX) Arya: Use predefined location, and predefined size per image
@@ -455,28 +424,23 @@ static int pd_setup_proc(pd_t *pd, vka_t *server_vka, vspace_t *server_vspace, a
 
         error = vspace_new_pages_at_vaddr(target_ads->vspace, (void *)PD_HEAP_LOC, n_pages, seL4_PageBits, heap_res);
         ZF_LOGF_IF(error, "Failed to allocate PD's heap");
-        printf("TEMPA allocated heap at %p, size 0x%lx, pages %d\n", (void *)PD_HEAP_LOC, heap_size, n_pages);
-
-        seL4_CPtr *heap_caps = calloc(n_pages, sizeof(seL4_CPtr));
-
-        for (int i = 0; i < n_pages; i++)
-        {
-            void *p = (void *) PD_HEAP_LOC + BIT(seL4_PageBits) * i;
-            heap_caps[i] = sel4utils_get_cap(target_ads->vspace, p);
-        }
-
-        error = forge_mo_cap_from_frames(heap_caps, n_pages, server_vka, pd->pd_obj_id, &mo_cap, &mo_obj);
-        ZF_LOGE_IF(error, "Failed to forge MO cap for PD's heap");
-
-        attach_node_t *heap_attach_node = malloc(sizeof(attach_node_t));
-        heap_attach_node->mo_id = mo_obj->mo_obj_id;
-        heap_attach_node->vaddr = (void *) PD_HEAP_LOC;
-        heap_attach_node->type = SEL4UTILS_RES_TYPE_HEAP;
-        heap_attach_node->next = target_ads->attach_nodes;
-        target_ads->attach_nodes = heap_attach_node;
-
-        free(heap_caps);
     }
+
+    /* Forge MOs for these regions */
+    int max_mo_caps = 10;
+    int n_mo_caps;
+    seL4_CPtr *mo_caps = calloc(max_mo_caps, sizeof(seL4_CPtr));
+    uint64_t *mo_cap_ids = calloc(max_mo_caps, sizeof(uint64_t));
+    error = forge_mo_caps_from_vspace(target_ads->vspace, target_ads, server_vka, 0, &n_mo_caps, mo_caps, mo_cap_ids);
+    ZF_LOGE_IF(error, "Failed to forge MO caps for PD's vspace");
+
+    /* Add MOs to root task since nobody else will have them */
+    for (int i = 0; i < n_mo_caps; i++)
+    {
+        pd_add_resource(&get_pd_component()->rt_pd, GPICAP_TYPE_MO, mo_cap_ids[i], mo_caps[i], 0, 0);
+    }
+    free(mo_caps);
+    free(mo_cap_ids);
 
     return 0;
 

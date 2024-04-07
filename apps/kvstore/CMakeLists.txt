@@ -14,31 +14,21 @@ if(KernelArchRiscV)
     set(arch arm)
 endif()
 
-file(GLOB client_deps src/client/*.c src/server/kvstore_server.c)
-list(SORT client_deps)
-add_library(kvstore_client STATIC EXCLUDE_FROM_ALL ${client_deps})
+file(GLOB server_lib_deps src/server/kvstore_server.c)
+list(SORT server_lib_deps)
+add_library(kvstore_server_lib STATIC EXCLUDE_FROM_ALL ${server_lib_deps})
+target_include_directories(kvstore_server_lib PUBLIC include/server include/shared)
+target_link_libraries(kvstore_server_lib muslc sel4 utils sel4test sel4gpi sqlite3 fs_client)
+
+file(GLOB client_lib_deps src/client/*.c)
+list(SORT client_lib_deps)
+add_library(kvstore_client STATIC EXCLUDE_FROM_ALL ${client_lib_deps})
 target_include_directories(kvstore_client PUBLIC include/client include/shared PRIVATE include/server)
-target_link_libraries(kvstore_client muslc sel4 utils sel4test sel4gpi sqlite3 fs_client)
+target_link_libraries(kvstore_client muslc sel4 utils sel4test sel4gpi sqlite3 fs_client kvstore_server_lib)
 
 file(GLOB server_deps src/server/*.c)
 list(SORT server_deps)
 add_executable(kvstore_server EXCLUDE_FROM_ALL ${server_deps})
-
-# Add custom linker script
-set(linkerScript "${CMAKE_CURRENT_LIST_DIR}/linker.lds")
-
-set_target_properties(
-    kvstore_server
-   PROPERTIES LINK_DEPENDS ${linkerScript}
-)
-add_dependencies(elfloader elfloader_linker)
-set_property(
-   TARGET kvstore_server
-   APPEND_STRING
-   PROPERTY
-       LINK_FLAGS
-       " -Wl,-T ${linkerScript} -static -Wl,--build-id=none"
-)
 
 target_include_directories(kvstore_server PRIVATE include/shared include/server)
 target_link_libraries(

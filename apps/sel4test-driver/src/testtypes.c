@@ -283,10 +283,12 @@ void basic_set_up(uintptr_t e)
 
     error = forge_mo_caps_from_vspace(
         &env->test_process.vspace,
+        NULL,
         &env->vka,
         TEST_PD_ID,
         &ret_num_mo,
-        mo_caps);
+        mo_caps,
+        NULL);
     assert(error == 0);
 
     for (int i = 0; i < ret_num_mo; i++)

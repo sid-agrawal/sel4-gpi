@@ -25,10 +25,10 @@ char _cpio_archive_end[1];
 
 /* Initialization for static morecore */
 #define APP_MALLOC_SIZE (PAGE_SIZE_4K * 100)
-char *morecore_area = (char *) PD_HEAP_LOC;
+char *morecore_area = (char *)PD_HEAP_LOC;
 size_t morecore_size = APP_MALLOC_SIZE;
-uintptr_t morecore_base = (uintptr_t) PD_HEAP_LOC;
-uintptr_t morecore_top = (uintptr_t) (PD_HEAP_LOC + APP_MALLOC_SIZE);
+uintptr_t morecore_base = (uintptr_t)PD_HEAP_LOC;
+uintptr_t morecore_top = (uintptr_t)(PD_HEAP_LOC + APP_MALLOC_SIZE);
 
 #define CHECK_ERROR(check, msg)                \
     do                                         \
@@ -117,9 +117,18 @@ int main(int argc, char **argv)
     printf("hello-kvstore: Completed kvstore tests\n");
 
     /* use the file system a bit */
+    if (separate_ads)
+    {
+        kvstore_client_swap_ads_lib();
+    }
     error = sqlite_tests();
     CHECK_ERROR(error, "Failed sqlite tests");
     printf("hello-kvstore: Completed sqlite tests\n");
+
+    if (separate_ads)
+    {
+        kvstore_client_swap_ads_app();
+    }
 
 main_exit:
     /* notify parent of test result */

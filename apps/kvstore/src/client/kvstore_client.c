@@ -22,6 +22,30 @@ static ads_client_context_t client_ads_conn;
 static cpu_client_context_t self_cpu_conn;
 extern global_xv6fs_client_context_t xv6fs_client;
 
+int kvstore_client_swap_ads_lib(void)
+{
+    int error = 0;
+    error = cpu_client_change_vspace(&self_cpu_conn, &kvserv_ads);
+    if (error)
+    {
+        ZF_LOGE("failed to swap ADS to kvstore server");
+        return error;
+    }
+    return error; 
+}
+
+int kvstore_client_swap_ads_app(void)
+{
+    int error = 0;
+    error = cpu_client_change_vspace(&self_cpu_conn, &client_ads_conn);
+    if (error)
+    {
+        ZF_LOGE("failed to swap ADS to app");
+        return error;
+    }
+    return error; 
+}
+
 int kvstore_client_configure(bool n_use_remote_server, bool separate_ads, seL4_CPtr ep)
 {
     int error = 0;

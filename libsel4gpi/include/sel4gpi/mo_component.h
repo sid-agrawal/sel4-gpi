@@ -12,6 +12,7 @@
 #include <vspace/vspace.h>
 
 #include <sel4gpi/mo_obj.h>
+#include <sel4gpi/ads_obj.h>
 
 /** @file APIs for managing and interacting with the serial server thread.
  *
@@ -114,10 +115,12 @@ int forge_mo_cap_from_frames(seL4_CPtr *frame_caps,
                              mo_t **mo_ref);
 
 int forge_mo_caps_from_vspace(vspace_t *child_vspace,
+                              ads_t *target_ads,
                               vka_t *vka,
                               uint32_t client_pd_id,
                               uint32_t *num_return_caps,
-                              seL4_CPtr *cap_ret);
+                              seL4_CPtr *cap_ret,
+                              uint64_t *id_ret);
 
 mo_component_registry_entry_t *mo_component_registry_get_entry_by_badge(seL4_Word badge);
 

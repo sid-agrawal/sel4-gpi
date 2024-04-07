@@ -49,7 +49,7 @@
 #include <sel4platsupport/io.h>
 #include <sel4gpi/gpi_server.h>
 
-#define RT_MALLOC_SIZE 16 * 1024 * 1024
+#define RT_MALLOC_SIZE 64 * 1024 * 1024
 char __attribute__((aligned(PAGE_SIZE_4K))) morecore_arr[RT_MALLOC_SIZE];
 size_t morecore_size = RT_MALLOC_SIZE;
 /* Pointer to free space in the morecore area. */

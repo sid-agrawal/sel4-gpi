@@ -6,9 +6,10 @@
 
 SECTIONS
 {
-  sqlite3_data :
+  .lib_data :
   {
     apps/sel4test-driver/sel4test-tests/sqlite3/libsqlite3.a(.data)
+    apps/sel4test-driver/kvstore/libkvstore_server_lib.a(.data)
   }
 }
 INSERT AFTER .data;
