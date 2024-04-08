@@ -23,6 +23,9 @@
 #include <utils/uthash.h>
 #include <sel4gpi/pd_utils.h>
 #include <sel4gpi/bench_utils.h>
+#include <fs_client.h>
+#include <ramdisk_client.h>
+#include <fcntl.h>
 
 #define TEST_LOG(msg, ...)                                  \
     do                                                      \
@@ -37,6 +40,46 @@ static pd_client_context_t osm_pd;
 static mo_client_context_t bench_mo;
 static ads_client_context_t osm_pd_ads;
 static seL4_Word osm_pd_ads_ns_id;
+
+static int benchmark_pd_create(env_t env, bool native)
+{
+    ccnt_t pd_create_start;
+    ccnt_t pd_create_end;
+    int error;
+
+    if (native)
+    {
+        size_t size_bits = 17;
+        SEL4BENCH_READ_CCNT(pd_create_start);
+        vka_object_t cnode;
+        error = vka_alloc_cnode_object(&env->vka, size_bits, &cnode);
+        test_error_eq(error, 0);
+
+        cspacepath_t src;
+        vka_cspace_make_path(&env->vka, cnode.cptr, &src);
+
+        seL4_Word cspace_root_data = api_make_guard_skip_word(seL4_WordBits - size_bits);
+        cspacepath_t dest = {.capPtr = 1, .root = cnode.cptr, .capDepth = size_bits};
+        error = vka_cnode_mint(&dest, &src, seL4_AllRights, cspace_root_data);
+        test_error_eq(error, 0);
+        SEL4BENCH_READ_CCNT(pd_create_end);
+    }
+    else
+    {
+        seL4_CPtr slot;
+        error = vka_cspace_alloc(&env->vka, &slot);
+        test_error_eq(error, 0);
+
+        SEL4BENCH_READ_CCNT(pd_create_start);
+        pd_client_context_t pd_conn;
+        error = pd_component_client_connect(sel4gpi_get_rde(GPICAP_TYPE_PD), slot, &pd_conn);
+        test_error_eq(error, 0);
+        SEL4BENCH_READ_CCNT(pd_create_end);
+    }
+    // TEST_LOG("%s: PD CREATE: %ld", get_bench_type_name(true), pd_create_end - pd_create_start);
+    printf("%ld,", pd_create_end - pd_create_start);
+    return error;
+}
 
 static int spawn_pd_native(env_t env)
 {
@@ -62,6 +105,11 @@ static int spawn_pd_native(env_t env)
     error = sel4utils_spawn_process_v(&native_proc, &env->vka, &env->vspace,
                                       argc, argv, 1);
     test_error_eq(error, 0);
+
+#if CONFIG_MAX_NUM_NODES > 1
+    seL4_TCB_GetAffinity_t affinity = seL4_TCB_GetAffinity(native_proc.thread.tcb.cptr);
+    TEST_LOG("affinity: %ld", affinity.affinity);
+#endif
     // seL4_DebugNameThread(proc.thread.tcb.cptr, "bench");
     // seL4_DebugDumpScheduler();
     return 0;
@@ -98,7 +146,7 @@ static int spawn_pd_osm(env_t env)
     // Make a new AS, loads an image
     error = pd_client_load(&osm_pd, &osm_pd_ads, &cpu_os_cap, "hello_benchmark");
     test_error_eq(error, 0);
-    printf("Loaded hello\n");
+    // printf("Loaded hello\n");
 
     error = vka_alloc_endpoint(&env->vka, &hello_ep);
     test_error_eq(error, 0);
@@ -115,7 +163,7 @@ static int spawn_pd_osm(env_t env)
     return 0;
 }
 
-static int benchmark_pd_create(env_t env, bool native)
+static int benchmark_pd_spawn(env_t env, bool native)
 {
     int error;
     ccnt_t pd_create_start_time;
@@ -135,16 +183,28 @@ static int benchmark_pd_create(env_t env, bool native)
     seL4_Word bench_type = seL4_GetMR(0);
     test_assert(bench_type == BM_PD_CREATE);
     seL4_Word pd_create_end_time = seL4_GetMR(1);
-    TEST_LOG("%s PD CREATE TIME: %ld (start: %ld, end: %ld)", get_bench_type_name(native), pd_create_end_time - pd_create_start_time, pd_create_start_time, pd_create_end_time);
+    printf("%ld,", pd_create_end_time - pd_create_start_time);
     return error;
 }
 
-static int benchmark_ipc(bool native)
+static int benchmark_ipc_rt(bool native)
+{
+    ccnt_t ipc_start;
+    ccnt_t ipc_end;
+    SEL4BENCH_READ_CCNT(ipc_start);
+    pd_client_context_t self_pd_conn = {.badged_server_ep_cspath.capPtr = sel4gpi_get_pd_cap()};
+    pd_client_bench_ipc(&self_pd_conn);
+    SEL4BENCH_READ_CCNT(ipc_end);
+    printf("%ld", ipc_end - ipc_start);
+    // TEST_LOG("%s: IPC ROUND TRIP TIME: %ld", get_bench_type_name(native), ipc_end - ipc_start);
+}
+
+static int benchmark_ipc_pd(bool native)
 {
     ccnt_t ipc_recv_end;
     seL4_MessageInfo_t tag = seL4_Recv(hello_ep.cptr, NULL);
     SEL4BENCH_READ_CCNT(ipc_recv_end);
-    TEST_LOG("%s: IPC Recv'd %ld", get_bench_type_name(native), ipc_recv_end);
+    // TEST_LOG("%s: IPC Recv'd %ld", get_bench_type_name(native), ipc_recv_end);
     seL4_Word bench_type = seL4_GetMR(0);
     test_assert(bench_type == BM_IPC);
     seL4_Word pd_ipc_start_time = seL4_GetMR(1);
@@ -190,7 +250,7 @@ static int benchmark_give_resource(env_t env, bool native)
         pd_client_send_cap(&osm_pd, bench_mo.badged_server_ep_cspath.capPtr, &slot);
         SEL4BENCH_READ_CCNT(give_res_end);
     }
-    TEST_LOG("%s: PD GIVE RESOURCE TIME: %ld", get_bench_type_name(native), give_res_end - give_res_start);
+    printf("%ld,", give_res_end - give_res_start);
 
     return error;
 }
@@ -231,7 +291,7 @@ static int benchmark_ads_create(env_t env, bool native)
         SEL4BENCH_READ_CCNT(ads_create_end);
     }
 
-    TEST_LOG("%s: ADS CREATE %ld", get_bench_type_name(native), ads_create_end - ads_create_start);
+    printf("%ld,", ads_create_end - ads_create_start);
 
     return error;
 }
@@ -257,7 +317,7 @@ static int benchmark_ads_attach(env_t env, bool native)
     }
 
     SEL4BENCH_READ_CCNT(ads_attach_end);
-    TEST_LOG("%s: ADS ATTACH %ld", get_bench_type_name(native), ads_attach_end - ads_attach_start);
+    printf("%ld,", ads_attach_end - ads_attach_start);
 
     return error;
 }
@@ -290,7 +350,8 @@ static int benchmark_cpu(env_t env, bool native)
         test_error_eq(error, 0);
 
         SEL4BENCH_READ_CCNT(cpu_bind_start);
-        error = seL4_TCB_SetSpace(tcb.cptr, seL4_CapNull, cspace.cptr, 0, vspace_root.cptr, 0);
+        error = seL4_TCB_Configure(tcb.cptr, seL4_CapNull, cspace.cptr, 0, vspace_root.cptr, 0, 0, seL4_CapNull);
+        // error = seL4_TCB_SetSpace(tcb.cptr, seL4_CapNull, cspace.cptr, 0, vspace_root.cptr, 0);
         test_error_eq(error, 0);
         SEL4BENCH_READ_CCNT(cpu_bind_end);
 
@@ -321,23 +382,74 @@ static int benchmark_cpu(env_t env, bool native)
         SEL4BENCH_READ_CCNT(cpu_bind_end);
     }
 
-    TEST_LOG("%s: CPU CREATE: %ld", get_bench_type_name(native), cpu_create_end - cpu_create_start);
-    TEST_LOG("%s: CPU BIND %ld", get_bench_type_name(native), cpu_bind_end - cpu_bind_start);
+    printf("%ld,", cpu_create_end - cpu_create_start);
+    printf("%ld,", cpu_bind_end - cpu_bind_start);
 
     vka_free_object(&env->vka, &cspace);
 
     return error;
 }
 
+static int benchmark_fs(env_t env)
+{
+    int error;
+
+    /* Initialize the ADS */
+    ads_client_context_t ads_conn;
+    vka_cspace_make_path(&env->vka, sel4gpi_get_rde_by_ns_id(sel4gpi_get_binded_ads_id(), GPICAP_TYPE_ADS), &ads_conn.badged_server_ep_cspath);
+
+    /* Initialize the PD */
+    pd_client_context_t pd_conn;
+    vka_cspace_make_path(&env->vka, sel4gpi_get_pd_cap(), &pd_conn.badged_server_ep_cspath);
+
+    /* Create a memory object for the RR dump */
+    seL4_CPtr slot;
+    vka_cspace_alloc(&env->vka, &slot);
+
+    /* Start ramdisk server process */
+    uint64_t ramdisk_id;
+    seL4_CPtr ramdisk_pd_cap;
+    error = start_ramdisk_pd(&ramdisk_pd_cap, &ramdisk_id);
+    test_assert(error == 0);
+
+    /* Start fs server process */
+    uint64_t fs_id;
+    seL4_CPtr fs_pd_cap;
+    error = start_xv6fs_pd(ramdisk_id, ramdisk_pd_cap, &fs_pd_cap, &fs_id);
+    test_assert(error == 0);
+
+    // Add FS ep to RDE
+    error = pd_client_add_rde(&pd_conn, fs_pd_cap, fs_id, NSID_DEFAULT);
+    test_assert(error == 0);
+    seL4_CPtr fs_client_ep = sel4gpi_get_rde(GPICAP_TYPE_FILE);
+
+    // The libc fs ops should go to the xv6fs server
+    xv6fs_client_init();
+
+    ccnt_t fs_start;
+    ccnt_t fs_end;
+    // Test file open/write
+    SEL4BENCH_READ_CCNT(fs_start);
+    int f = open("somename", O_CREAT | O_RDWR);
+    test_assert(f > 0);
+    SEL4BENCH_READ_CCNT(fs_end);
+
+    printf("%ld,", fs_end - fs_start);
+}
+
 int bench_native(env_t env)
 {
     sel4bench_init();
+    printf(",");
     benchmark_pd_create(env, true);
-    benchmark_ipc(true);
+    benchmark_pd_spawn(env, true);
     benchmark_give_resource(env, true);
     benchmark_ads_create(env, true);
     benchmark_ads_attach(env, true);
     benchmark_cpu(env, true);
+    benchmark_ipc_rt(true);
+    benchmark_ipc_pd(true);
+    printf("\n");
 
     // this is so we don't clobber the prints
     seL4_Recv(hello_ep.cptr, NULL);
@@ -356,13 +468,16 @@ int bench_native(env_t env)
 int bench_osm(env_t env)
 {
     sel4bench_init();
+    benchmark_fs(env);
     benchmark_pd_create(env, false);
-    benchmark_ipc(false);
+    benchmark_pd_spawn(env, false);
     benchmark_give_resource(env, false);
     benchmark_ads_create(env, false);
     benchmark_ads_attach(env, false);
     benchmark_cpu(env, false);
-
+    benchmark_ipc_rt(false);
+    benchmark_ipc_pd(false);
+    printf("\n");
     // this is so we don't clobber the prints
     seL4_Recv(hello_ep.cptr, NULL);
     test_assert(seL4_GetMR(0) == BM_PRINT);

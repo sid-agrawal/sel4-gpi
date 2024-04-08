@@ -92,6 +92,9 @@ enum pd_component_funcs
 
     PD_FUNC_GIVE_RES_REQ,
     PD_FUNC_GIVE_RES_ACK,
+
+    PD_FUNC_BENCH_IPC_REQ,
+    PD_FUNC_BENCH_IPC_ACK,
 };
 
 /* Designated purposes of each message register in the mini-protocol. */

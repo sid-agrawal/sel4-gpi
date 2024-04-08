@@ -39,8 +39,8 @@ int main(int argc, char **argv)
     seL4_CPtr ep = atol(argv[0]);
     bool native = (bool)atol(argv[1]);
 
-    printf("hello_benchmark %s! argv[0] = %lx, creation end time: %ld\n",
-           get_bench_type_name(native), ep, creation_end);
+    // printf("hello_benchmark %s! argv[0] = %lx, creation end time: %ld\n",
+    //        get_bench_type_name(native), ep, creation_end);
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0, 2);
     seL4_SetMR(0, BM_PD_CREATE); // send a message saying we've started
     seL4_SetMR(1, creation_end);

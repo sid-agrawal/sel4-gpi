@@ -1098,6 +1098,13 @@ static void handle_give_resource_req(seL4_Word sender_badge, seL4_MessageInfo_t 
     return reply(tag);
 }
 
+static void handle_ipc_bench_req(void)
+{
+    seL4_SetMR(PDMSGREG_FUNC, PD_FUNC_BENCH_IPC_ACK);
+    seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0, 1);
+    return reply(tag);
+}
+
 /**
  * @brief The starting point for the pd server's thread.
  *
@@ -1155,6 +1162,9 @@ void pd_component_handle(seL4_MessageInfo_t tag,
         break;
     case PD_FUNC_GIVE_RES_REQ:
         handle_give_resource_req(sender_badge, tag, received_cap->capPtr);
+        break;
+    case PD_FUNC_BENCH_IPC_REQ:
+        handle_ipc_bench_req();
         break;
     default:
         gpi_panic(PDSERVS "Unknown func type.", (seL4_Word)func);
