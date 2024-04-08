@@ -225,3 +225,5 @@ int pd_client_give_resource(pd_client_context_t *conn,
                             seL4_Word recipient_id,
                             seL4_Word resource_id,
                             seL4_CPtr *dest);
+
+void pd_client_bench_ipc(pd_client_context_t *conn);
