@@ -39,3 +39,13 @@ uint64_t sel4gpi_get_binded_ads_id(void);
  * @return null cap if the RDE cannot be found
  */
 seL4_CPtr sel4gpi_get_rde_by_ns_id(uint32_t ns_id, gpi_cap_t type);
+
+/**
+ * @brief sets up a TCB's stack so that it can run a thread, specifically the TLS
+ * this is was copied over from libsel4utils
+ *
+ * @param stack_addr top of stack in current vspace
+ * @param stack_pages number of pages for the stack
+ * @return uintptr_t pointer to top of a set up stack
+ */
+uintptr_t sel4gpi_setup_thread_stack(void *stack_addr, size_t stack_pages);

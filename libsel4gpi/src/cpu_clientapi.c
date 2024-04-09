@@ -47,6 +47,7 @@ int cpu_client_config(cpu_client_context_t *conn,
                       ads_client_context_t *ads_conn,
                       mo_client_context_t *ipc_buf_mo,
                       seL4_CPtr cspace_root,
+                      seL4_Word cnode_guard,
                       seL4_CPtr fault_ep_position,
                       seL4_Word ipc_buf_addr,
                       seL4_Word stack_addr)
@@ -55,6 +56,7 @@ int cpu_client_config(cpu_client_context_t *conn,
     seL4_SetMR(CPUMSGREG_CONFIG_IPC_BUF_ADDR, ipc_buf_addr);
     seL4_SetMR(CPUMSGREG_CONFIG_STACK_ADDR, stack_addr);
     seL4_SetMR(CPUMSGREG_CONFIG_FAULT_EP, fault_ep_position);
+    seL4_SetMR(CPUMSGREG_CONFIG_CNODE_GUARD, cnode_guard);
 
     /* Send the badged endpoint cap of the ads client as a cap */
     seL4_Uint64 extraCaps = 2;
@@ -92,10 +94,14 @@ int cpu_client_change_vspace(cpu_client_context_t *conn,
 }
 
 int cpu_client_start(cpu_client_context_t *conn,
-                     sel4utils_thread_entry_fn entry_fn)
+                     sel4utils_thread_entry_fn entry_fn,
+                     seL4_Word initial_stack,
+                     seL4_Word arg0)
 {
     seL4_SetMR(CPUMSGREG_FUNC, CPU_FUNC_START_REQ);
     seL4_SetMR(CPUMSGREG_START_FUNC_VADDR, (seL4_Word)entry_fn);
+    seL4_SetMR(CPUMSGREG_START_INIT_STACK_ADDR, initial_stack);
+    seL4_SetMR(CPUMSGREG_START_ARG0, arg0);
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0,
                                                   CPUMSGREG_START_REQ_END);
     tag = seL4_Call(conn->badged_server_ep_cspath.capPtr, tag);

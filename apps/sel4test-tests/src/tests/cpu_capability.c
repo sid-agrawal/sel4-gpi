@@ -22,6 +22,7 @@
 #include <sel4bench/arch/sel4bench.h>
 #include <utils/uthash.h>
 #include <sel4gpi/pd_utils.h>
+#include <sel4runtime.h>
 
 #define TEST_LOG(msg, ...)                                  \
     do                                                      \
@@ -29,9 +30,9 @@
         printf("%s(): " msg "\n", __func__, ##__VA_ARGS__); \
     } while (0)
 
-static void test_thread(void)
+static void test_thread(void *arg0, void *arg1, void *ipc_buf)
 {
-    printf("In test thread\n");
+    printf("In test thread: arg0: %ld\n", (int64_t)arg0);
 }
 
 int test_separate_threads(env_t env)
@@ -81,13 +82,24 @@ int test_separate_threads(env_t env)
     /* configure cpu */
     ads_client_context_t test_ads_resource;
     test_ads_resource.badged_server_ep_cspath.capPtr = sel4gpi_get_ads_cap();
-    error = cpu_client_config(&new_cpu, &test_ads_resource, NULL, env->cspace_root, 0, 0, (seL4_Word)stack_addr_in_new_cpu);
+    seL4_Word cnode_guard = api_make_guard_skip_word(seL4_WordBits - TEST_PROCESS_CSPACE_SIZE_BITS);
+
+    error = cpu_client_config(&new_cpu, &test_ads_resource, NULL, env->cspace_root, cnode_guard, 0, 0, (seL4_Word)stack_addr_in_new_cpu);
     test_error_eq(error, 0);
 
-    // pd_client_dump(&test_pd_os_cap, NULL, 0);
-    error = cpu_client_start(&new_cpu, (sel4utils_thread_entry_fn)&test_thread);
+    uintptr_t aligned_stack_pointer = sel4gpi_setup_thread_stack(stack_addr_in_new_cpu, 16);
+    error = cpu_client_start(&new_cpu, (sel4utils_thread_entry_fn)&test_thread, (seL4_Word)aligned_stack_pointer, 2);
     test_error_eq(error, 0);
 
+    // terrible sleep mechanism to allow thread to run bc we don't have usleep
+    int i = 0;
+    while (i < 100000)
+    {
+        seL4_Yield();
+        i++;
+    }
+
+    pd_client_dump(&test_pd_os_cap, NULL, 0);
     return sel4test_get_result();
 }
 DEFINE_TEST(GPITH001,

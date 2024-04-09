@@ -377,7 +377,7 @@ static int benchmark_cpu(env_t env, bool native)
         test_error_eq(error, 0);
 
         SEL4BENCH_READ_CCNT(cpu_bind_start);
-        error = cpu_client_config(&new_cpu, &new_ads, NULL, cspace.cptr, seL4_CapNull, 0, 0);
+        error = cpu_client_config(&new_cpu, &new_ads, NULL, cspace.cptr, 0, seL4_CapNull, 0, 0);
         test_error_eq(error, 0);
         SEL4BENCH_READ_CCNT(cpu_bind_end);
     }

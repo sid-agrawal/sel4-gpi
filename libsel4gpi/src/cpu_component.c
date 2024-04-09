@@ -193,14 +193,14 @@ static void handle_start_req(seL4_Word sender_badge, seL4_MessageInfo_t old_tag,
         return;
     }
     OSDB_PRINTF(CPU_DEBUG, CPUSERVS "main: found client_data %p.\n", client_data);
-    // for (int i = 0; i < 5; i++)
-    // {
-    //     OSDB_PRINTF(CPU_DEBUG, CPUSERVS "MR[%d] = %lx\n", i, seL4_GetMR(i));
-    // }
+
+    seL4_Word init_stack = seL4_GetMR(CPUMSGREG_START_INIT_STACK_ADDR);
+    seL4_Word arg0 = seL4_GetMR(CPUMSGREG_START_ARG0);
 
     error = cpu_start(&client_data->cpu,
-                      (sel4utils_thread_entry_fn)seL4_GetMR(1), // entry poin:2ut
-                      0);
+                      (sel4utils_thread_entry_fn)seL4_GetMR(1),
+                      init_stack,
+                      arg0);
     if (error)
     {
         OSDB_PRINTF(CPU_DEBUG, CPUSERVS "main: Failed to start CPU.\n");
@@ -255,6 +255,9 @@ static void handle_config_req(seL4_Word sender_badge,
     /* Get stack addr*/
     seL4_Word stack = seL4_GetMR(CPUMSGREG_CONFIG_STACK_ADDR);
 
+    /* get cnode guard*/
+    seL4_Word cnode_guard = seL4_GetMR(CPUMSGREG_CONFIG_CNODE_GUARD);
+
     /* Get the vspace for the ads */
     seL4_Word ads_cap_badge = seL4_GetBadge(1);
     ads_component_registry_entry_t *asre = ads_component_registry_get_entry_by_badge(ads_cap_badge);
@@ -279,7 +282,7 @@ static void handle_config_req(seL4_Word sender_badge,
                               get_cpu_component()->server_vka,
                               ads_vspace,
                               cspace_root,
-                              0,
+                              cnode_guard,
                               fault_ep,
                               ipc_buf_frame,
                               ipc_buf_addr,

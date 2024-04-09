@@ -20,18 +20,15 @@
 #include <sel4gpi/model_exporting.h>
 #include <sel4/sel4.h>
 
-int cpu_start(cpu_t *cpu, sel4utils_thread_entry_fn entry_point, seL4_Word arg0)
+int cpu_start(cpu_t *cpu, sel4utils_thread_entry_fn entry_point, seL4_Word init_stack, seL4_Word arg0)
 {
-
     OSDB_PRINTF(CPU_DEBUG, CPUSERVS "cpu_start: starting CPU at entry point %p and arg0 %lx\n", entry_point, arg0);
-
-    UNUSED seL4_UserContext regs = {0};
-    int error = seL4_TCB_ReadRegisters(cpu->tcb->cptr,
-                                       0, 0, sizeof(regs) / sizeof(seL4_Word), &regs);
-    assert(error == 0);
-    sel4utils_arch_init_local_context((void *)entry_point, (void *)cpu->ipc_buffer_addr,
-                                      NULL, NULL, cpu->stack_top, &regs);
-    assert(error == 0);
+    int error;
+    seL4_UserContext regs = {0};
+    void *stack_top = init_stack == 0 ? cpu->stack_top : init_stack;
+    OSDB_PRINTF(CPU_DEBUG, "init_stack %lx\n", stack_top);
+    sel4utils_arch_init_local_context((void *)entry_point, (void *)arg0,
+                                      NULL, (void *)cpu->ipc_buffer_addr, stack_top, &regs);
 
     error = seL4_TCB_WriteRegisters(cpu->tcb->cptr, 0, 0, sizeof(regs) / sizeof(seL4_Word), &regs);
     assert(error == 0);

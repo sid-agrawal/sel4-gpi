@@ -45,10 +45,14 @@ int cpu_component_client_disconnect(cpu_client_context_t *conn);
  *
  * @param conn client connection object
  * @param entry_fn the address of the function to be called when the thread starts.
+ * @param initial_stack address to the top of the stack wrt CPU's vspace (OPTIONAL)
+ * @param arg0 arg0 to entry function
  * @return int 0 on success, -1 on failure.
  */
 int cpu_client_start(cpu_client_context_t *conn,
-                     sel4utils_thread_entry_fn entry_fn);
+                     sel4utils_thread_entry_fn entry_fn,
+                     seL4_Word initial_stack,
+                     seL4_Word arg0);
 
 /**
  * @brief Configure the cpu oject.
@@ -67,6 +71,7 @@ int cpu_client_start(cpu_client_context_t *conn,
  * @param ads_conn ads connection object
  * @param ipc_buf_mo MO of the the ipc buf for the cpu (OPTIONAL)
  * @param cspace_root cspace root for the cpu object.
+ * @param cnode_guard guard configured for the cspace root
  * @param fault_ep_position W.r.t of the CPU's cspace, the fault endpoint (OPTIONAL)
  * @param ipc_buf_addr address to IPC buf (in CPU's vspace, OPTIONAL)
  * @param stack_addr address to stack (in CPU's vspace, OPTIONAL)
@@ -76,6 +81,7 @@ int cpu_client_config(cpu_client_context_t *conn,
                       ads_client_context_t *ads_conn,
                       mo_client_context_t *ipc_buf_mo,
                       seL4_CPtr cspace_root,
+                      seL4_Word cnode_guard,
                       seL4_CPtr fault_ep_position,
                       seL4_Word ipc_buf_addr,
                       seL4_Word stack_addr);
