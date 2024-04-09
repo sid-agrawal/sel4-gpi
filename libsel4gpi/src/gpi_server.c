@@ -25,6 +25,7 @@
 #include <sel4gpi/cpu_component.h>
 #include <sel4gpi/badge_usage.h>
 #include <sel4gpi/debug.h>
+#include <sel4bench/arch/sel4bench.h>
 
 static gpi_server_context_t gpi_server;
 
@@ -281,6 +282,7 @@ void gpi_server_main()
     seL4_MessageInfo_t tag;
     seL4_Error error = 0;
 
+    sel4bench_init();
     /* The Parent will seL4_Call() to us, the Server, right after spawning us.
      * It will expect us to seL4_Reply() with an error status code - we will
      * send this Reply.

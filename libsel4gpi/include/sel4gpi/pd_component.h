@@ -222,6 +222,12 @@ enum pd_component_msgregs
 
     PDMSGREG_GIVE_RES_ACK_DEST = PDMSGREG_LABEL0,
     PDMSGREG_GIVE_RES_ACK_END,
+
+    /* Benchmark IPC */
+    PDMSGREG_BENCH_IPC_REQ_CAP_TRANSFER = PDMSGREG_LABEL0,
+    PDMSGREG_BENCH_IPC_REQ_END,
+
+    PDMSGREG_BENCH_IPC_ACK_END = PDMSGREG_LABEL0
 };
 
 /* Per-client context maintained by the server. */

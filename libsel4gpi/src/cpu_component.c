@@ -31,6 +31,7 @@
 #include <sel4gpi/gpi_server.h>
 #include <sel4gpi/badge_usage.h>
 #include <sel4gpi/debug.h>
+#include <sel4bench/arch/sel4bench.h>
 
 uint64_t cpu_assign_new_badge_and_objectID(cpu_component_registry_entry_t *reg)
 {
@@ -124,6 +125,10 @@ void cpu_handle_allocation_request(seL4_Word sender_badge, seL4_MessageInfo_t *r
     OSDB_PRINTF(CPU_DEBUG, CPUSERVS "main: Got connect request\n");
 
     /* Allocate a new registry entry for the client. */
+    ccnt_t start;
+    ccnt_t end;
+
+    // SEL4BENCH_READ_CCNT(start);
     cpu_component_registry_entry_t *client_reg_ptr = malloc(sizeof(cpu_component_registry_entry_t));
     if (client_reg_ptr == 0)
     {
@@ -134,14 +139,27 @@ void cpu_handle_allocation_request(seL4_Word sender_badge, seL4_MessageInfo_t *r
     cpu_component_registry_insert(client_reg_ptr);
 
     /* Createa a new CPU object */
+    // SEL4BENCH_READ_CCNT(end);
+    // printf("CPU begin: %ld\n", end - start);
 
+    // SEL4BENCH_READ_CCNT(start);
     int error = cpu_new(&client_reg_ptr->cpu,
                         get_cpu_component()->server_vka);
+    // SEL4BENCH_READ_CCNT(end);
+    // printf("CPU new: %ld\n", end - start);
     if (error)
     {
         OSDB_PRINTF(CPU_DEBUG, CPUSERVS "main: Failed to create new CPU object\n");
         return;
     }
+
+    // Add the latest ID to the obj and to the badlge.
+    // SEL4BENCH_READ_CCNT(start);
+    seL4_Word badge = cpu_assign_new_badge_and_objectID(client_reg_ptr);
+    uint32_t client_id = get_client_id_from_badge(sender_badge);
+
+    // (XXX) Linh: this is not very nice as we're coupling the PD and CPU components
+    osmosis_pd_cap_t *res = pd_add_resource_by_id(client_id, GPICAP_TYPE_CPU, get_object_id_from_badge(badge));
 
     /* Create a badged endpoint for the client to send messages to.
      * Use the address of the client_registry_entry as the badge.
@@ -153,26 +171,24 @@ void cpu_handle_allocation_request(seL4_Word sender_badge, seL4_MessageInfo_t *r
     vka_cspace_alloc(get_cpu_component()->server_vka, &dest_cptr);
     vka_cspace_make_path(get_cpu_component()->server_vka, dest_cptr, &dest);
 
-    // Add the latest ID to the obj and to the badlge.
-    seL4_Word badge = cpu_assign_new_badge_and_objectID(client_reg_ptr);
-    uint32_t client_id = get_client_id_from_badge(sender_badge);
+    error = vka_cnode_mint(&dest,
+                           &src,
+                           seL4_AllRights,
+                           badge);
 
-    // (XXX) Linh: this is not very nice as we're coupling the PD and CPU components
-    osmosis_pd_cap_t *res = pd_add_resource_by_id(client_id, GPICAP_TYPE_CPU, get_object_id_from_badge(badge));
     if (res)
     {
         res->slot_in_RT_Debug = dest_cptr;
         badge = set_client_id_to_badge(badge, client_id);
     }
-    error = vka_cnode_mint(&dest,
-                           &src,
-                           seL4_AllRights,
-                           badge);
+
     if (error)
     {
         OSDB_PRINTF(CPU_DEBUG, CPUSERVS "main: Failed to mint client badge %lx.\n", badge);
         return;
     }
+    // SEL4BENCH_READ_CCNT(end);
+    // printf("CPU MINT & others: %ld\n", end - start);
     /* Return this badged end point in the return message. */
     seL4_SetCap(0, dest.capPtr);
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(error, 0, 1, 1);
@@ -228,7 +244,9 @@ static void handle_config_req(seL4_Word sender_badge,
     assert(seL4_MessageInfo_get_label(old_tag) == 0);
 
     int error = 0;
-
+    ccnt_t start;
+    ccnt_t end;
+    // SEL4BENCH_READ_CCNT(start);
     // OSDB_PRINTF(CPU_DEBUG, CPUSERVS "capsUnwrapped: %lu\n", seL4_MessageInfo_get_capsUnwrapped(old_tag));
     // OSDB_PRINTF(CPU_DEBUG, CPUSERVS "extraCap: %lu\n", seL4_MessageInfo_ptr_get_extraCaps(&old_tag));
     // for (int i = 0; i < 5; i++)
@@ -275,6 +293,10 @@ static void handle_config_req(seL4_Word sender_badge,
     seL4_CPtr ipc_buf_frame = ipc_mo_data == NULL ? seL4_CapNull : ipc_mo_data->mo.frame_caps_in_root_task[0].cap;
 
     seL4_CNode cspace_root = received_cap;
+    // SEL4BENCH_READ_CCNT(end);
+    // printf("CPU BIND START: %ld\n", end - start);
+
+    // SEL4BENCH_READ_CCNT(start);
     error = cpu_config_vspace(&client_data->cpu,
                               get_cpu_component()->server_vka,
                               ads_vspace,
@@ -284,6 +306,8 @@ static void handle_config_req(seL4_Word sender_badge,
                               ipc_buf_frame,
                               ipc_buf_addr,
                               (void *)stack);
+    // SEL4BENCH_READ_CCNT(end);
+    // printf("CPU BIND %ld\n", end - start);
     if (error)
     {
         OSDB_PRINTF(CPU_DEBUG, CPUSERVS "main: Failed to config from client badge:");

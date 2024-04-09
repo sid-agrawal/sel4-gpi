@@ -19,6 +19,7 @@
 #include <sel4gpi/cap_tracking.h>
 #include <sel4gpi/gpi_server.h>
 #include <sel4gpi/model_exporting.h>
+#include <sel4bench/arch/sel4bench.h>
 
 #define MAX_MO_RR 100
 
@@ -26,7 +27,10 @@ int ads_new(vspace_t *loader,
             vka_t *vka,
             ads_t *ret_ads)
 {
+    ccnt_t start;
+    ccnt_t end;
 
+    // SEL4BENCH_READ_CCNT(start);
     ret_ads->vspace = malloc(sizeof(vspace_t));
     if (ret_ads->vspace == NULL)
     {
@@ -53,7 +57,11 @@ int ads_new(vspace_t *loader,
         ZF_LOGE("Failed to allocate memory for alloc data\n");
         goto error_exit;
     }
+    // SEL4BENCH_READ_CCNT(end);
 
+    // printf("ADS NEW mallocs %ld\n", end - start);
+
+    // SEL4BENCH_READ_CCNT(start);
     int error = vka_alloc_vspace_root(vka, vspace_root_object);
     if (error)
     {
@@ -61,12 +69,19 @@ int ads_new(vspace_t *loader,
         goto error_exit;
     }
 
-    /* assign an asid pool */
+    // SEL4BENCH_READ_CCNT(end);
+    // printf("vka alloc root: %ld\n", end - start);
+    // /* assign an asid pool */
+    // SEL4BENCH_READ_CCNT(start);
     if (!config_set(CONFIG_X86_64) &&
         assign_asid_pool(seL4_CapInitThreadASIDPool, vspace_root_object->cptr) != seL4_NoError)
     {
         goto error_exit;
     }
+    // SEL4BENCH_READ_CCNT(end);
+    // printf("asid pool: %ld\n", end - start);
+
+    // SEL4BENCH_READ_CCNT(start);
     // Create empty vspace
     error = sel4utils_get_vspace(
         loader,
@@ -87,6 +102,8 @@ int ads_new(vspace_t *loader,
         ZF_LOGE("Failed to get new vspace while making copy: %d\n in %s", error, __FUNCTION__);
         goto error_exit;
     }
+    // SEL4BENCH_READ_CCNT(end);
+    // printf("sel4utils get vspace: %ld\n", end - start);
     ret_ads->root_page_dir = vspace_root_object;
 
     return 0;

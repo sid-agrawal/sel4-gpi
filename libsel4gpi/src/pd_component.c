@@ -33,6 +33,7 @@
 #include <sel4gpi/gpi_server.h>
 #include <sel4gpi/badge_usage.h>
 #include <sel4gpi/debug.h>
+#include <sel4bench/arch/sel4bench.h>
 
 uint64_t pd_assign_new_badge_and_objectID(pd_component_registry_entry_t *reg)
 {
@@ -369,8 +370,13 @@ osmosis_pd_cap_t *pd_add_resource_by_id(uint32_t client_id, gpi_cap_t cap_type, 
 
 void pd_handle_allocation_request(seL4_Word sender_badge, seL4_MessageInfo_t *reply_tag)
 {
+    ccnt_t ipc_end;
+    // SEL4BENCH_READ_CCNT(ipc_end);
+    // printf("PD NEW ipc end: %ld\n", ipc_end);
     OSDB_PRINTF(PD_DEBUG, PDSERVS "main: Got connect request from badge %lx\n", sender_badge);
-
+    ccnt_t start;
+    ccnt_t end;
+    // SEL4BENCH_READ_CCNT(start);
     /* Allocate a new registry entry for the client. */
     pd_component_registry_entry_t *client_reg_ptr =
         malloc(sizeof(pd_component_registry_entry_t));
@@ -382,16 +388,20 @@ void pd_handle_allocation_request(seL4_Word sender_badge, seL4_MessageInfo_t *re
     memset((void *)client_reg_ptr, 0, sizeof(pd_component_registry_entry_t));
     pd_component_registry_insert(client_reg_ptr);
 
-    // Allocate a new cspace
-    // TODO
+    // SEL4BENCH_READ_CCNT(end);
+    // printf("PD NEW START: %ld\n", end - start);
 
     int error = pd_new(&client_reg_ptr->pd,
                        get_pd_component()->server_vka,
                        get_pd_component()->server_vspace);
-
     /* Create a badged endpoint for the client to send messages to.
      * Use the address of the client_registry_entry as the badge.
      */
+    // SEL4BENCH_READ_CCNT(start);
+    seL4_Word badge = pd_assign_new_badge_and_objectID(client_reg_ptr);
+    uint32_t client_id = get_client_id_from_badge(sender_badge);
+    osmosis_pd_cap_t *res = pd_add_resource_by_id(client_id, GPICAP_TYPE_PD, get_object_id_from_badge(badge));
+
     cspacepath_t src, dest;
     vka_cspace_make_path(get_pd_component()->server_vka,
                          get_pd_component()->server_ep_obj.cptr, &src);
@@ -401,25 +411,25 @@ void pd_handle_allocation_request(seL4_Word sender_badge, seL4_MessageInfo_t *re
 
     // Add the latest ID to the obj and to the badlge.
     // (XXX) Arya: replace with pd_send_cap?
-    seL4_Word badge = pd_assign_new_badge_and_objectID(client_reg_ptr);
-    uint32_t client_id = get_client_id_from_badge(sender_badge);
-    osmosis_pd_cap_t *res = pd_add_resource_by_id(client_id, GPICAP_TYPE_PD, get_object_id_from_badge(badge));
-    if (res)
-    {
-        res->slot_in_RT_Debug = dest_cptr;
-        badge = set_client_id_to_badge(badge, client_id);
-    }
 
     error = vka_cnode_mint(&dest,
                            &src,
                            seL4_AllRights,
                            badge);
+
+    if (res)
+    {
+        res->slot_in_RT_Debug = dest_cptr;
+        badge = set_client_id_to_badge(badge, client_id);
+    }
     if (error)
     {
         OSDB_PRINTF(PD_DEBUG, PDSERVS "main: Failed to mint client badge %lx.\n", badge);
         return;
     }
     client_reg_ptr->raw_cap_in_root = dest_cptr;
+    // SEL4BENCH_READ_CCNT(end);
+    // printf("PD NEW MINT & OTHERS %ld\n", end - start);
     /* Return this badged end point in the return message. */
     seL4_SetCap(0, dest.capPtr);
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(error, 0, 1, 1);
@@ -1098,7 +1108,19 @@ static void handle_give_resource_req(seL4_Word sender_badge, seL4_MessageInfo_t 
 static void handle_ipc_bench_req(void)
 {
     seL4_SetMR(PDMSGREG_FUNC, PD_FUNC_BENCH_IPC_ACK);
-    seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0, 1);
+    bool do_cap_transfer = seL4_GetMR(PDMSGREG_BENCH_IPC_REQ_CAP_TRANSFER);
+
+    int num_caps = 0;
+    if (do_cap_transfer)
+    {
+        seL4_CPtr dummy_reply_cap;
+        int error = vka_cspace_alloc(get_pd_component()->server_vka, &dummy_reply_cap);
+        assert(error == 0);
+        seL4_SetCap(0, dummy_reply_cap);
+        num_caps = 1;
+    }
+
+    seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, num_caps, PDMSGREG_BENCH_IPC_ACK_END);
     return reply(tag);
 }
 

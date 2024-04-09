@@ -29,6 +29,7 @@
 #include <sel4gpi/gpi_server.h>
 #include <sel4gpi/badge_usage.h>
 #include <sel4gpi/debug.h>
+#include <sel4bench/arch/sel4bench.h>
 
 uint64_t ads_assign_new_badge_and_objectID(ads_component_registry_entry_t *reg)
 {
@@ -145,7 +146,10 @@ static void handle_ads_allocation(seL4_Word sender_badge, seL4_MessageInfo_t *re
 {
     OSDB_PRINTF(ADS_DEBUG, ADSSERVS "main: Got ADS connect request from %lx\n", sender_badge);
     badge_print(sender_badge);
+    ccnt_t start;
+    ccnt_t end;
 
+    // SEL4BENCH_READ_CCNT(start);
     /* Allocate a new registry entry for the client. */
     ads_component_registry_entry_t *client_reg_ptr = malloc(sizeof(ads_component_registry_entry_t));
     if (client_reg_ptr == 0)
@@ -155,34 +159,33 @@ static void handle_ads_allocation(seL4_Word sender_badge, seL4_MessageInfo_t *re
     }
     memset((void *)client_reg_ptr, 0, sizeof(ads_component_registry_entry_t));
     ads_component_registry_insert(client_reg_ptr);
-
-    // We never created a new vpsace...
+    // SEL4BENCH_READ_CCNT(end);
+    // printf("ADS START: %ld\n", end - start);
+    // // We never created a new vpsace...
+    // SEL4BENCH_READ_CCNT(start);
     int error = ads_new(get_ads_component()->server_vspace,
                         get_ads_component()->server_vka,
                         &client_reg_ptr->ads);
+    // SEL4BENCH_READ_CCNT(end);
+
+    // printf("ADS NEW: %ld\n", end - start);
     if (error)
     {
         OSDB_PRINTF(ADS_DEBUG, ADSSERVS "main: Failed to create new ads object\n");
         return;
     }
 
+    // SEL4BENCH_READ_CCNT(start);
+
     /* Create a badged endpoint for the client to send messages to.
      * Use the address of the client_registry_entry as the badge
      */
-    cspacepath_t src, dest;
-    vka_cspace_make_path(get_ads_component()->server_vka,
-                         get_ads_component()->server_ep_obj.cptr, &src);
-    seL4_CPtr dest_cptr;
-    vka_cspace_alloc(get_ads_component()->server_vka, &dest_cptr);
-    vka_cspace_make_path(get_ads_component()->server_vka, dest_cptr, &dest);
-
     seL4_Word badge = ads_assign_new_badge_and_objectID(client_reg_ptr);
     uint32_t client_id = get_client_id_from_badge(sender_badge);
 
     // (XXX) Linh: this is not very nice as we're coupling the PD and ADS components
     pd_component_registry_entry_t *client_pd_data = pd_component_registry_get_entry_by_id(client_id);
     ZF_LOGF_IF(client_pd_data == NULL, "Couldn't find PD client data");
-    pd_add_resource(&client_pd_data->pd, GPICAP_TYPE_ADS, get_object_id_from_badge(badge), dest_cptr, seL4_CapNull, seL4_CapNull);
     badge = set_client_id_to_badge(badge, client_id);
 
     rde_type_t type = {.type = GPICAP_TYPE_ADS};
@@ -192,10 +195,21 @@ static void handle_ads_allocation(seL4_Word sender_badge, seL4_MessageInfo_t *re
         OSDB_PRINTF(ADS_DEBUG, ADSSERVS "main: Failed to add ADS to PD's RDE\n");
     }
 
+    cspacepath_t src, dest;
+    vka_cspace_make_path(get_ads_component()->server_vka,
+                         get_ads_component()->server_ep_obj.cptr, &src);
+    seL4_CPtr dest_cptr;
+    vka_cspace_alloc(get_ads_component()->server_vka, &dest_cptr);
+    vka_cspace_make_path(get_ads_component()->server_vka, dest_cptr, &dest);
+
     error = vka_cnode_mint(&dest,
                            &src,
                            seL4_AllRights,
                            badge);
+    // SEL4BENCH_READ_CCNT(end);
+    // printf("ADS NEW MINT & OTHERS: %ld\n", end - start);
+    pd_add_resource(&client_pd_data->pd, GPICAP_TYPE_ADS, get_object_id_from_badge(badge), dest_cptr, seL4_CapNull, seL4_CapNull);
+
     if (error)
     {
         OSDB_PRINTF(ADS_DEBUG, ADSSERVS "main: Failed to mint client badge %lx.\n", badge);
@@ -212,7 +226,9 @@ static void handle_ads_allocation(seL4_Word sender_badge, seL4_MessageInfo_t *re
 int ads_component_attach(uint64_t ads_id, uint64_t mo_id, void *vaddr, void **ret_vaddr)
 {
     int error;
-
+    ccnt_t start;
+    ccnt_t end;
+    // SEL4BENCH_READ_CCNT(start);
     /* Find the client */
     ads_component_registry_entry_t *client_data = ads_component_registry_get_entry_by_id(ads_id);
     if (client_data == NULL)
@@ -230,12 +246,14 @@ int ads_component_attach(uint64_t ads_id, uint64_t mo_id, void *vaddr, void **re
                     mo_id);
         return -1;
     }
+    // SEL4BENCH_READ_CCNT(end);
+    // printf("ATTACH start: %ld\n", end - start);
 
     uint32_t num_pages = mo_reg->mo.num_pages;
     mo_frame_t *root_frame_caps = mo_reg->mo.frame_caps_in_root_task;
 
     OSDB_PRINTF(ADS_DEBUG, ADSSERVS "attaching mo with id %lu, num pages: %d\n", mo_reg->mo.mo_obj_id, num_pages);
-
+    // SEL4BENCH_READ_CCNT(start);
     /* Make a copy of the frame caps for this new mapping */
     attach_node_t *attach_node = malloc(sizeof(attach_node_t));
     attach_node->mo_id = mo_id;
@@ -270,7 +288,11 @@ int ads_component_attach(uint64_t ads_id, uint64_t mo_id, void *vaddr, void **re
         // void *frame_paddr = (void *)seL4_DebugCapPaddr(attach_node->frame_caps[i]);
         // OSDB_PRINTF(ADS_DEBUG, ADSSERVS "paddr of frame to map: %p\n", frame_paddr);
     }
+    // SEL4BENCH_READ_CCNT(end);
 
+    // printf("COPY FRAME TO OTHER CSPACE: %ld\n", end - start);
+
+    // SEL4BENCH_READ_CCNT(start);
     error = ads_attach(&client_data->ads,
                        get_ads_component()->server_vka,
                        vaddr,
@@ -278,7 +300,8 @@ int ads_component_attach(uint64_t ads_id, uint64_t mo_id, void *vaddr, void **re
                        attach_node->frame_caps,
                        ret_vaddr,
                        client_data->ads.vspace);
-
+    // SEL4BENCH_READ_CCNT(end);
+    // printf("ATTACH: %ld\n", end - start);
     if (error)
     {
         OSDB_PRINTF(ADS_DEBUG, ADSSERVS "main: Failed to attach at vaddr:%p num_pages: %u to client ID %ld.\n",

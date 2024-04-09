@@ -34,6 +34,7 @@
 #include <simple/simple_helpers.h>
 #include <utils/uthash.h>
 #include <cpio/cpio.h>
+#include <sel4bench/arch/sel4bench.h>
 
 #define CSPACE_SIZE_BITS 17
 
@@ -203,12 +204,19 @@ int pd_new(pd_t *pd,
     pd->pd_started = false;
 
     // Create the MO for the PD's init data
+    ccnt_t start;
+    ccnt_t end;
+    // SEL4BENCH_READ_CCNT(start);
     vka_object_t frame;
     error = vka_alloc_frame(server_vka, seL4_PageBits, &frame);
     if (error)
     {
         ZF_LOGE("Couldn't allocate frame to hold PD's init data\n");
     }
+    // SEL4BENCH_READ_CCNT(end);
+    // printf("alloc frame: %ld\n", end - start);
+
+    // SEL4BENCH_READ_CCNT(start);
     pd->init_data_frame = frame.cptr;
     pd->init_data = (osm_pd_init_data_t *)vspace_map_pages(server_vspace, &frame.cptr, NULL, seL4_AllRights, 1, seL4_PageBits, 1);
 
@@ -226,8 +234,13 @@ int pd_new(pd_t *pd,
     // Setup init data
     pd->init_data->rde_count = 0;
     memset(pd->init_data->rde, 0, sizeof(osmosis_rde_t) * MAX_PD_OSM_RDE);
+    // SEL4BENCH_READ_CCNT(end);
+    // printf("initial data setup: %ld\n", end - start);
 
+    // SEL4BENCH_READ_CCNT(start);
     error = pd_setup_cspace(pd, get_pd_component()->server_vka);
+    // SEL4BENCH_READ_CCNT(end);
+    // printf("cspace new: %ld\n", end - start);
     assert(error == 0);
 
     return 0;
@@ -614,6 +627,8 @@ int pd_send_cap(pd_t *to_pd,
     seL4_CPtr dest_cptr;
     osmosis_pd_cap_t *res;
     bool should_mint = true;
+    ccnt_t start;
+    ccnt_t end;
 
     /*
         Find out if the cap is an OSmosis cap or not.
@@ -625,6 +640,7 @@ int pd_send_cap(pd_t *to_pd,
         vka_t *server_vka;
         seL4_CPtr server_src_cap;
 
+        // SEL4BENCH_READ_CCNT(start);
         switch (cap_type)
         {
         case GPICAP_TYPE_ADS:
@@ -671,7 +687,8 @@ int pd_send_cap(pd_t *to_pd,
             should_mint = false;
             break;
         }
-
+        // SEL4BENCH_READ_CCNT(end);
+        // printf("GIVE RES FIND REG ENTRY: %ld\n", end - start);
         // Find the pd where the cap is going, and basd
         // Create a new badge and then badge the unbadged gpi-server cap with the new badge
         // new badge = (old badge & client id mask) | (new client id << client id offset)
@@ -680,6 +697,7 @@ int pd_send_cap(pd_t *to_pd,
         // Insert it in the appropirate list
         if (should_mint) // (XXX) remove this once we stop sending non-osmosis caps through here
         {
+            // SEL4BENCH_READ_CCNT(start);
             new_badge = gpi_new_badge(cap_type,
                                       get_perms_from_badge(badge),
                                       to_pd->pd_obj_id, /* Client ID */
@@ -700,7 +718,8 @@ int pd_send_cap(pd_t *to_pd,
                             __FUNCTION__, new_badge);
                 return 1;
             }
-
+            // SEL4BENCH_READ_CCNT(end);
+            // printf("BADGING: %ld\n", end - start);
             cap = dest_cptr;
             pd_add_resource(to_pd, cap_type, res_id, src.capPtr, cap, src.capPtr);
         }
@@ -711,13 +730,15 @@ int pd_send_cap(pd_t *to_pd,
         // This is a cap from the kernel.
         // Just copy it to the child.
     }
-
+    // SEL4BENCH_READ_CCNT(start);
     error = copy_cap_to_pd(to_pd, cap, slot);
     if (error != 0)
     {
         ZF_LOGF("Failed to copy cap to process");
         return -1;
     }
+    // SEL4BENCH_READ_CCNT(end);
+    // printf("COPY CAP: %ld\n", end - start);
     OSDB_PRINTF(PD_DEBUG, PDSERVS "pd_send_cap: copied cap at %ld to child\n", *slot);
 
     /* Add to our caps data struct */
