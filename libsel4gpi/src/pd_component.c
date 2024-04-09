@@ -1101,7 +1101,19 @@ static void handle_give_resource_req(seL4_Word sender_badge, seL4_MessageInfo_t 
 static void handle_ipc_bench_req(void)
 {
     seL4_SetMR(PDMSGREG_FUNC, PD_FUNC_BENCH_IPC_ACK);
-    seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0, 1);
+    bool do_cap_transfer = seL4_GetMR(PDMSGREG_BENCH_IPC_REQ_CAP_TRANSFER);
+
+    int num_caps = 0;
+    if (do_cap_transfer)
+    {
+        seL4_CPtr dummy_reply_cap;
+        int error = vka_cspace_alloc(get_pd_component()->server_vka, &dummy_reply_cap);
+        assert(error == 0);
+        seL4_SetCap(0, dummy_reply_cap);
+        num_caps = 1;
+    }
+
+    seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, num_caps, PDMSGREG_BENCH_IPC_ACK_END);
     return reply(tag);
 }
 

@@ -327,10 +327,22 @@ int pd_client_give_resource(pd_client_context_t *conn,
     return 0;
 }
 
-void pd_client_bench_ipc(pd_client_context_t *conn)
+void pd_client_bench_ipc(pd_client_context_t *conn, seL4_CPtr dummy_send_cap, seL4_CPtr dummy_recv_cap, bool cap_transfer)
 {
+    seL4_SetCapReceivePath(SEL4UTILS_CNODE_SLOT, /* Position of the cap to the CNODE */
+                           dummy_recv_cap,       /* CPTR in this CSPACE */
+                           /* This works coz we have a single level cnode with no guard.*/
+                           seL4_WordBits); /* Depth i.e. how many bits of free_slot to interpret*/
     seL4_SetMR(PDMSGREG_FUNC, PD_FUNC_BENCH_IPC_REQ);
-    seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0, 1);
+    seL4_SetMR(PDMSGREG_BENCH_IPC_REQ_CAP_TRANSFER, cap_transfer);
+    int num_caps = 0;
+    if (cap_transfer)
+    {
+        seL4_SetCap(0, dummy_send_cap);
+        num_caps = 1;
+    }
+    seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, num_caps, PDMSGREG_BENCH_IPC_REQ_END);
     tag = seL4_Call(conn->badged_server_ep_cspath.capPtr, tag);
+
     assert(seL4_MessageInfo_ptr_get_label(&tag) == 0);
 }
