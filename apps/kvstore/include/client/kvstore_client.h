@@ -11,18 +11,26 @@
 
 #include <kvstore_shared.h>
 
+typedef enum _kvstore_mode {
+    SAME_THREAD,
+    SEPARATE_ADS,
+    SEPARATE_THREAD,
+    SEPARATE_PROC
+} kvstore_mode_t;
+
 /**
  * Configure the kvstore client
  *
- * @param use_remote_server if true, forwards kvstore requests to the kvstore server
- *                          if false, uses a process-local kvstore
- * @param separate_ads      only takes effect when use_remote_server = false
- *                          if true, compartmentalizes kvstore server data into a separate ADS
- *                          else, kvstore server data lives in the same ADS as the client's
+ * @param kvstore_mode      
+ *  - SAME_THREAD: uses a process-local kvstore in the same thread as the caller
+ *  - SEPARATE_ADS: server uses the same thread as the caller,
+ *                  compartmentalizes client and server heaps in separate ADS
+ *  - SEPARATE_THREAD: uses a process-local kvstore in a different thread from the caller
+ *  - SEPARATE_PROC: uses a kvstore in a remote process (ep argument is required)
  * @param ep endpoint of the kvstore server (optional)
  * @return 0 on success, seL4 error otherwise
  */
-int kvstore_client_configure(bool use_remote_server, bool separate_ads, seL4_CPtr ep);
+int kvstore_client_configure(kvstore_mode_t kvstore_mode, seL4_CPtr ep);
 
 /**
  * KV store supports simple set and get functions

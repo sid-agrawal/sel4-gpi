@@ -74,7 +74,6 @@ int cpu_client_start(cpu_client_context_t *conn,
  * @param cnode_guard guard configured for the cspace root
  * @param fault_ep_position W.r.t of the CPU's cspace, the fault endpoint (OPTIONAL)
  * @param ipc_buf_addr address to IPC buf (in CPU's vspace, OPTIONAL)
- * @param stack_addr address to stack (in CPU's vspace, OPTIONAL)
  * @return int
  */
 int cpu_client_config(cpu_client_context_t *conn,
@@ -83,8 +82,7 @@ int cpu_client_config(cpu_client_context_t *conn,
                       seL4_CPtr cspace_root,
                       seL4_Word cnode_guard,
                       seL4_CPtr fault_ep_position,
-                      seL4_Word ipc_buf_addr,
-                      seL4_Word stack_addr);
+                      seL4_Word ipc_buf_addr);
 
 /**
  * @brief Change just the vspace of the CPU object

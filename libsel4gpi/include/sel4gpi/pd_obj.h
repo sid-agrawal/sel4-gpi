@@ -111,9 +111,11 @@ typedef struct _osm_pd_init_data
     seL4_CPtr ads_cap;
     seL4_CPtr cpu_cap;
 
-
     // ADS ID of the PD's current binded ADS
     uint32_t binded_ads_ns_id;
+
+    // PD's cspace
+    seL4_CPtr cspace_root;
 
     // Resource directory
     osmosis_rde_t rde[GPICAP_TYPE_MAX][MAX_NS_PER_RDE];

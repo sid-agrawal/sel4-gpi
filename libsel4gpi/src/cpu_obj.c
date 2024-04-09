@@ -19,6 +19,7 @@
 #include <sel4gpi/debug.h>
 #include <sel4gpi/model_exporting.h>
 #include <sel4/sel4.h>
+#include <sel4runtime.h>
 
 int cpu_start(cpu_t *cpu, sel4utils_thread_entry_fn entry_point, seL4_Word init_stack, seL4_Word arg0)
 {
@@ -27,8 +28,21 @@ int cpu_start(cpu_t *cpu, sel4utils_thread_entry_fn entry_point, seL4_Word init_
     seL4_UserContext regs = {0};
     void *stack_top = init_stack == 0 ? cpu->stack_top : init_stack;
     OSDB_PRINTF(CPU_DEBUG, "init_stack %lx\n", stack_top);
+
+    /* Initialize the TLS */
+    size_t tls_size = sel4runtime_get_tls_size();
+    uintptr_t tls_base = (uintptr_t)stack_top - tls_size;
+    cpu->tls_base = (uintptr_t)sel4runtime_write_tls_image((void *)tls_base);
+    cpu->stack_top = ALIGN_UP(tls_base, STACK_CALL_ALIGNMENT);
+
+    error = seL4_TCB_SetTLSBase(cpu->tcb->cptr, cpu->tls_base);
+    assert(error == 0);
+
+    /* Write context and registers */
     sel4utils_arch_init_local_context((void *)entry_point, (void *)arg0,
-                                      NULL, (void *)cpu->ipc_buffer_addr, stack_top, &regs);
+                                      (void *)cpu->tls_base, (void *)cpu->ipc_buffer_addr, stack_top, &regs);
+
+    assert(error == 0);
 
     error = seL4_TCB_WriteRegisters(cpu->tcb->cptr, 0, 0, sizeof(regs) / sizeof(seL4_Word), &regs);
     assert(error == 0);
@@ -46,8 +60,7 @@ int cpu_config_vspace(cpu_t *cpu,
                       seL4_Word cnode_guard,
                       seL4_CPtr fault_ep,
                       seL4_CPtr ipc_buffer_frame,
-                      seL4_Word ipc_buf_addr,
-                      void *stack_top)
+                      seL4_Word ipc_buf_addr)
 {
     OSDB_PRINTF(CPU_DEBUG, CPUSERVS "cpu_config_vspace: Configuring CPU\n");
 
@@ -73,17 +86,9 @@ int cpu_config_vspace(cpu_t *cpu,
     error = seL4_TCB_SetPriority(cpu->tcb->cptr, seL4_CapInitThreadTCB, 254);
     assert(error == 0);
 
-    if (stack_top != NULL)
-    {
-        cpu->tls_base = stack_top;
-        cpu->stack_top -= 0x100;
-        error = seL4_TCB_SetTLSBase(cpu->tcb->cptr, (seL4_Word)cpu->stack_top);
-        assert(error == 0);
-        cpu->stack_top -= 0x100;
-    }
-
     return 0;
 }
+
 int cpu_change_vspace(cpu_t *cpu,
                       vka_t *vka,
                       vspace_t *vspace)
@@ -142,7 +147,7 @@ void cpu_dump_rr(cpu_t *cpu, model_state_t *ms)
     add_resource(ms, "PCPU", core_res_id);
     add_resource_depends_on(ms, cpu_res_id, core_res_id, REL_TYPE_MAP);
 
-// (XXX) Arya: Do not actually show CPU->ADS arrow... do we need it?    
+// (XXX) Arya: Do not actually show CPU->ADS arrow... do we need it?
 #if 0
     // this isn't really an RR, but will be changed in the interp layer
     char ads_res_id[CSV_MAX_STRING_SIZE];

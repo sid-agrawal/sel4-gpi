@@ -249,11 +249,8 @@ static void handle_config_req(seL4_Word sender_badge,
     /* Get Fault EP */
     seL4_CPtr fault_ep = seL4_GetMR(CPUMSGREG_CONFIG_FAULT_EP);
 
-    /*Get IPC buf addr */
+    /* Get IPC buf addr */
     seL4_Word ipc_buf_addr = seL4_GetMR(CPUMSGREG_CONFIG_IPC_BUF_ADDR);
-
-    /* Get stack addr*/
-    seL4_Word stack = seL4_GetMR(CPUMSGREG_CONFIG_STACK_ADDR);
 
     /* get cnode guard*/
     seL4_Word cnode_guard = seL4_GetMR(CPUMSGREG_CONFIG_CNODE_GUARD);
@@ -285,8 +282,7 @@ static void handle_config_req(seL4_Word sender_badge,
                               cnode_guard,
                               fault_ep,
                               ipc_buf_frame,
-                              ipc_buf_addr,
-                              (void *)stack);
+                              ipc_buf_addr);
     if (error)
     {
         OSDB_PRINTF(CPU_DEBUG, CPUSERVS "main: Failed to config from client badge:");

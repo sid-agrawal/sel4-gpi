@@ -67,8 +67,7 @@ int cpu_config_vspace(cpu_t *cpu,
                       seL4_Word cnode_guard,
                       seL4_CPtr fault_ep,
                       seL4_CPtr ipc_buffer_frame,
-                      seL4_Word ipc_buf_addr,
-                      void *stack_top);
+                      seL4_Word ipc_buf_addr);
 
 /**
  * @brief Change the vspace of the CPU object

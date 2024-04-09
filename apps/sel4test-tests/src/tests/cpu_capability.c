@@ -84,11 +84,11 @@ int test_separate_threads(env_t env)
     test_ads_resource.badged_server_ep_cspath.capPtr = sel4gpi_get_ads_cap();
     seL4_Word cnode_guard = api_make_guard_skip_word(seL4_WordBits - TEST_PROCESS_CSPACE_SIZE_BITS);
 
-    error = cpu_client_config(&new_cpu, &test_ads_resource, NULL, env->cspace_root, cnode_guard, 0, 0, (seL4_Word)stack_addr_in_new_cpu);
+    error = cpu_client_config(&new_cpu, &test_ads_resource, NULL, env->cspace_root, cnode_guard, 0, 0);
     test_error_eq(error, 0);
 
-    uintptr_t aligned_stack_pointer = sel4gpi_setup_thread_stack(stack_addr_in_new_cpu, 16);
-    error = cpu_client_start(&new_cpu, (sel4utils_thread_entry_fn)&test_thread, (seL4_Word)aligned_stack_pointer, 2);
+    //uintptr_t aligned_stack_pointer = sel4gpi_setup_thread_stack(stack_addr_in_new_cpu, 16);
+    error = cpu_client_start(&new_cpu, (sel4utils_thread_entry_fn)&test_thread, (seL4_Word)stack_addr_in_new_cpu, 2);
     test_error_eq(error, 0);
 
     // terrible sleep mechanism to allow thread to run bc we don't have usleep

@@ -21,6 +21,12 @@ seL4_CPtr sel4gpi_get_cpu_cap(void)
     return slot;
 }
 
+seL4_CPtr sel4gpi_get_cspace_root(void)
+{
+    seL4_CPtr slot = ((osm_pd_init_data_t *)sel4runtime_get_osm_init_data())->cspace_root;
+    return slot;
+}
+
 seL4_CPtr sel4gpi_get_rde(int type)
 {
     seL4_CPtr slot = ((osm_pd_init_data_t *)sel4runtime_get_osm_init_data())->rde[type][0].slot_in_PD;
@@ -52,21 +58,4 @@ seL4_CPtr sel4gpi_get_rde_by_ns_id(uint32_t ns_id, gpi_cap_t type)
     }
 
     return seL4_CapNull;
-}
-
-uintptr_t sel4gpi_setup_thread_stack(void *stack_addr, size_t stack_pages)
-{
-    seL4_UserContext regs = {0};
-    size_t context_size = sizeof(seL4_UserContext) / sizeof(seL4_Word);
-
-    size_t tls_size = sel4runtime_get_tls_size();
-    /* make sure we're not going to use too much of the stack */
-    if (tls_size > stack_pages * PAGE_SIZE_4K / 8)
-    {
-        ZF_LOGE("TLS would use more than 1/8th of the application stack %zu/%zu", tls_size, stack_pages);
-        return -1;
-    }
-    uintptr_t tls_base = (uintptr_t)stack_addr - tls_size;
-    uintptr_t tp = (uintptr_t)sel4runtime_write_tls_image((void *)tls_base);
-    return ALIGN_DOWN(tls_base, STACK_CALL_ALIGNMENT);
 }

@@ -8,6 +8,9 @@
 #include <sqlite3/sqlite3.h>
 #include <fs_client.h>
 #include <kvstore_server.h>
+#include <sel4gpi/pd_utils.h>
+
+#include <sel4runtime.h>
 
 #define KVSTORE_DB_FILE_FORMAT "kvstore_%d.db"
 #define MAX_KVSTORE_DBS_IN_FS 10 // Maximum number of kvstores in one file system
@@ -23,18 +26,19 @@ static char sql_cmd[128];
 static char db_filename[128];
 static char *errmsg = NULL;
 
-#define CHECK_ERROR(check, msg)        \
-    do                                 \
-    {                                  \
-        if ((check) != SQLITE_OK)      \
-        {                              \
-            ZF_LOGE("%s"               \
-                    ", %d.",           \
-                    msg,               \
-                    error);            \
-            error = KVSTORE_ERROR_KEY; \
-            return error;              \
-        }                              \
+static seL4_CPtr mcs_reply;
+
+#define CHECK_ERROR(check, msg, err) \
+    do                               \
+    {                                \
+        if ((check) != SQLITE_OK)    \
+        {                            \
+            ZF_LOGE("%s"             \
+                    ", %d.",         \
+                    msg,             \
+                    error);          \
+            return err;              \
+        }                            \
     } while (0);
 
 #define SQL_MAKE_CMD(format, ...)                               \
@@ -52,6 +56,23 @@ static char *errmsg = NULL;
         error = sqlite3_exec(sql_db, sql_cmd, sqlite_callback, NULL, &errmsg); \
         print_error(error, errmsg, sql_db);                                    \
     } while (0);
+
+static seL4_MessageInfo_t recv(seL4_CPtr ep, seL4_Word *sender_badge_ptr)
+{
+    /** NOTE:
+
+     * the reply param of api_recv(third param) is only used in the MCS kernel.
+     **/
+
+    return api_recv(ep,
+                    sender_badge_ptr,
+                    mcs_reply);
+}
+
+static void reply(seL4_MessageInfo_t tag)
+{
+    api_reply(mcs_reply, tag);
+}
 
 /**
  * If there is an error, display details
@@ -104,17 +125,192 @@ int kvstore_server_init()
     }
 
     KVSTORE_PRINTF("Creating DB %s\n", db_filename);
-
     error = sqlite3_open(db_filename, &kvstore_db);
-
+    CHECK_ERROR(error, "failed to open kvstore db", KVSTORE_ERROR_UNKNOWN);
     KVSTORE_PRINTF("Created DB %s\n", db_filename);
 
-    CHECK_ERROR(error, "failed to open kvstore db");
-    assert(kvstore_db != NULL);
-
+    KVSTORE_PRINTF("Creating table, cmd %s\n");
     SQL_EXEC(kvstore_db, create_table_cmd, NULL);
-    CHECK_ERROR(error, "failed to create kvstore table");
+    CHECK_ERROR(error, "failed to create kvstore table", KVSTORE_ERROR_UNKNOWN);
+    KVSTORE_PRINTF("Created table\n");
 
+    return error;
+}
+
+int kvstore_server_main(seL4_CPtr parent_ep)
+{
+    int error;
+    seL4_MessageInfo_t tag;
+    seL4_CPtr badge;
+
+    seL4_CPtr fs_ep = sel4gpi_get_rde(GPICAP_TYPE_FILE);
+    printf("kvstore-server main: parent ep (%d), fs ep(%d) \n", (int)parent_ep, (int)fs_ep);
+
+    pd_client_context_t pd_conn;
+    pd_conn.badged_server_ep_cspath.capPtr = sel4gpi_get_pd_cap();
+
+    /* initialize server */
+    error = kvstore_server_init();
+    CHECK_ERROR(error, "failed to initialize kvstore server\n", KVSTORE_ERROR_UNKNOWN);
+
+    /* allocate our own endpoint */
+    seL4_CPtr ep;
+    error = pd_client_alloc_ep(&pd_conn, &ep);
+    CHECK_ERROR(error, "failed to allocate endpoint\n", KVSTORE_ERROR_UNKNOWN);
+
+    /* notify parent that we have started */
+    KVSTORE_PRINTF("Messaging parent process at slot %d, sending ep (%d)\n", (int)parent_ep, (int)ep);
+    tag = seL4_MessageInfo_new(0, 0, 1, 0);
+    seL4_SetCap(0, ep);
+    seL4_Send(parent_ep, tag);
+
+    /* start serving requests */
+    while (1)
+    {
+        /* Receive a message */
+        KVSTORE_PRINTF("Ready to receive a message\n");
+        tag = recv(ep, &badge);
+        int op = seL4_GetMR(KVMSGREG_FUNC);
+        KVSTORE_PRINTF("Received message\n");
+
+        if (op == KV_FUNC_SET_REQ)
+        {
+            seL4_Word key = seL4_GetMR(KVMSGREG_SET_REQ_KEY);
+            seL4_Word val = seL4_GetMR(KVMSGREG_SET_REQ_VAL);
+
+            error = kvstore_server_set(key, val);
+
+            // Restore state of message registers for reply
+            seL4_MessageInfo_ptr_set_length(&tag, KVMSGREG_SET_ACK_END);
+            seL4_MessageInfo_ptr_set_label(&tag, error);
+            seL4_SetMR(KVMSGREG_FUNC, KV_FUNC_SET_ACK);
+        }
+        else if (op == KV_FUNC_GET_REQ)
+        {
+            seL4_Word key = seL4_GetMR(KVMSGREG_GET_REQ_KEY);
+            seL4_Word val;
+
+            error = kvstore_server_get(key, &val);
+
+            // Restore state of message registers for reply
+            seL4_MessageInfo_ptr_set_length(&tag, KVMSGREG_GET_ACK_END);
+            seL4_MessageInfo_ptr_set_label(&tag, error);
+            seL4_SetMR(KVMSGREG_GET_ACK_VAL, val);
+            seL4_SetMR(KVMSGREG_FUNC, KV_FUNC_GET_ACK);
+        }
+        else
+        {
+            KVSTORE_PRINTF("Got invalid opcode (%d)\n", op);
+        }
+
+        /* Reply to message */
+        reply(tag);
+    }
+
+main_exit:
+    /* notify parent that we have failed */
+    KVSTORE_PRINTF("Messaging parent process at slot %d, notifying of failure\n", (int)parent_ep);
+    tag = seL4_MessageInfo_new(error, 0, 0, 0);
+    seL4_Send(parent_ep, tag);
+}
+
+static void kvstore_server_main_thread(void *arg0, void *tls_base, void *ipc_buf)
+{
+    seL4_CPtr parent_ep = (seL4_CPtr)arg0;
+    printf("kvstore-server: in thread, parent ep (%d) \n", (int)parent_ep);
+
+    printf("tls_base %p, stack arg0 %p ipc_buf %p\n", tls_base, &arg0, &ipc_buf);
+
+    sel4runtime_set_tls_base((uintptr_t)tls_base);
+    seL4_SetIPCBuffer((seL4_IPCBuffer *)ipc_buf);
+    kvstore_server_main(parent_ep);
+}
+
+int kvstore_server_start_thread(seL4_CPtr *kvstore_ep)
+{
+    int error;
+
+    seL4_CPtr self_pd_cap = sel4gpi_get_pd_cap();
+    pd_client_context_t self_pd_conn = {.badged_server_ep_cspath.capPtr = self_pd_cap};
+
+    seL4_CPtr self_ads_cap = sel4gpi_get_ads_cap();
+    ads_client_context_t self_ads_conn = {.badged_server_ep_cspath.capPtr = self_ads_cap};
+
+    seL4_CPtr ads_rde = sel4gpi_get_rde(GPICAP_TYPE_ADS);
+    seL4_CPtr pd_rde = sel4gpi_get_rde(GPICAP_TYPE_PD);
+    seL4_CPtr mo_rde = sel4gpi_get_rde(GPICAP_TYPE_MO);
+    seL4_CPtr cpu_rde = sel4gpi_get_rde(GPICAP_TYPE_CPU);
+
+    ads_client_context_t ads_rde_conn = {.badged_server_ep_cspath.capPtr = ads_rde};
+
+    /* Create a new CPU obj */
+    seL4_CPtr slot;
+    error = pd_client_next_slot(&self_pd_conn, &slot);
+    CHECK_ERROR(error, "failed to get next slot", KVSTORE_ERROR_UNKNOWN);
+
+    cpu_client_context_t new_cpu;
+    error = cpu_component_client_connect(cpu_rde, slot, &new_cpu);
+    CHECK_ERROR(error, "failed to allocate cpu", KVSTORE_ERROR_UNKNOWN);
+
+    /* allocate stack frame */
+    error = pd_client_next_slot(&self_pd_conn, &slot);
+    CHECK_ERROR(error, "failed to get next slot", KVSTORE_ERROR_UNKNOWN);
+
+    mo_client_context_t stack_mo;
+    int stack_pages = 16;
+    error = mo_component_client_connect(mo_rde, slot, stack_pages, &stack_mo);
+    CHECK_ERROR(error, "failed to allocate stack", KVSTORE_ERROR_UNKNOWN);
+
+    /* attach stack to cpu */
+    void *stack_addr_in_new_cpu;
+    error = ads_client_attach(&ads_rde_conn, NULL, &stack_mo, &stack_addr_in_new_cpu);
+    CHECK_ERROR(error, "failed to attach stack", KVSTORE_ERROR_UNKNOWN);
+
+    /* allocate ipc buf */
+    error = pd_client_next_slot(&self_pd_conn, &slot);
+    CHECK_ERROR(error, "failed to get next slot", KVSTORE_ERROR_UNKNOWN);
+
+    mo_client_context_t ipc_buf_mo;
+    error = mo_component_client_connect(mo_rde, slot, 1, &ipc_buf_mo);
+    CHECK_ERROR(error, "failed to allocate ipc buf", KVSTORE_ERROR_UNKNOWN);
+
+    /* attach ipc buf */
+    void *ipc_buf_addr_in_new_cpu;
+    error = ads_client_attach(&ads_rde_conn, NULL, &ipc_buf_mo, &ipc_buf_addr_in_new_cpu);
+    CHECK_ERROR(error, "failed to attach ipc buf", KVSTORE_ERROR_UNKNOWN);
+
+    /* configure cpu */
+    seL4_Word cnode_guard = api_make_guard_skip_word(seL4_WordBits - TEST_PROCESS_CSPACE_SIZE_BITS);
+
+    error = cpu_client_config(&new_cpu, &self_ads_conn, &ipc_buf_mo, sel4gpi_get_cspace_root(), cnode_guard, 0, (seL4_Word)ipc_buf_addr_in_new_cpu);
+    CHECK_ERROR(error, "failed to configure cpu for thread", KVSTORE_ERROR_UNKNOWN);
+
+    /* allocate temp endpoint */
+    seL4_CPtr temp_ep;
+    error = pd_client_alloc_ep(&self_pd_conn, &temp_ep);
+    CHECK_ERROR(error, "failed to allocate ep", KVSTORE_ERROR_UNKNOWN);
+
+    /* start the thread */
+    // uintptr_t aligned_stack_pointer = sel4gpi_setup_thread_stack(stack_addr_in_new_cpu, 16);
+    void *stack_top = stack_addr_in_new_cpu + stack_pages * SIZE_BITS_TO_BYTES(seL4_PageBits);
+    error = cpu_client_start(&new_cpu, (sel4utils_thread_entry_fn)&kvstore_server_main_thread, (seL4_Word)stack_top, temp_ep);
+    CHECK_ERROR(error, "failed to start cpu for thread", KVSTORE_ERROR_UNKNOWN);
+
+    // Wait for it to finish starting
+    seL4_CPtr receive_slot;
+    error = pd_client_next_slot(&self_pd_conn, &receive_slot);
+    seL4_SetCapReceivePath(PD_CAP_ROOT, receive_slot, PD_CAP_DEPTH);
+
+    seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0, 0);
+    tag = seL4_Recv(temp_ep, NULL);
+    int n_caps = seL4_MessageInfo_get_extraCaps(tag);
+    error = seL4_MessageInfo_get_label(tag);
+    CHECK_ERROR(error, "kvstore thread setup failed", KVSTORE_ERROR_UNKNOWN);
+
+    *kvstore_ep = receive_slot;
+    KVSTORE_PRINTF("Started thread, ep (%d)\n", (int)receive_slot);
+
+    // (XXX) Arya: free the temp ep
     return error;
 }
 
@@ -124,7 +320,7 @@ int kvstore_server_set(seL4_Word key, seL4_Word value)
 
     int error = seL4_NoError;
     SQL_EXEC(kvstore_db, insert_format, key, value);
-    CHECK_ERROR(error, "failed to insert pair to kvstore table");
+    CHECK_ERROR(error, "failed to insert pair to kvstore table", KVSTORE_ERROR_UNKNOWN);
     return error;
 }
 
@@ -137,7 +333,7 @@ int kvstore_server_get(seL4_Word key, seL4_Word *value)
 
     SQL_MAKE_CMD(select_format, key);
     error = sqlite3_prepare_v2(kvstore_db, sql_cmd, -1, &stmt, 0);
-    CHECK_ERROR(error, "failed to prepare sql cmd");
+    CHECK_ERROR(error, "failed to prepare sql cmd", KVSTORE_ERROR_UNKNOWN);
 
     // Execute the statement (gets one row if it exists)
     int res = sqlite3_step(stmt);
@@ -145,17 +341,17 @@ int kvstore_server_get(seL4_Word key, seL4_Word *value)
     {
         // This means there was no data found for the key
         error = sqlite3_finalize(stmt);
-        CHECK_ERROR(error, "failed to finalize sql cmd");
+        CHECK_ERROR(error, "failed to finalize sql cmd", KVSTORE_ERROR_UNKNOWN);
         return KVSTORE_ERROR_KEY;
     }
 
     // Retrieve value
     const char *val_s = (const char *)sqlite3_column_text(stmt, 0);
-    CHECK_ERROR(val_s == NULL, "failed to get value from row");
+    CHECK_ERROR(val_s == NULL, "failed to get value from row", KVSTORE_ERROR_KEY);
 
     *value = atoi(val_s);
     error = sqlite3_finalize(stmt);
-    CHECK_ERROR(error, "failed to finalize sql cmd");
+    CHECK_ERROR(error, "failed to finalize sql cmd", KVSTORE_ERROR_UNKNOWN);
 
     return error;
 }

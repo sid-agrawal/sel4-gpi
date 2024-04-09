@@ -495,6 +495,7 @@ static int pd_setup_cspace(pd_t *pd, vka_t *vka)
     pd->proc.cspace_size = size_bits;
     /* first slot is always 1, never allocate 0 as a cslot */
     pd->proc.cspace_next_free = 1;
+    pd->init_data->cspace_root = PD_CAP_ROOT;
 
     /*  mint the cnode cap into the process cspace */
     cspacepath_t src;
@@ -575,8 +576,7 @@ int pd_load_image(pd_t *pd,
                               pd->cnode_guard,
                               pd->proc.fault_endpoint.cptr,
                               pd->proc.thread.ipc_buffer,
-                              pd->proc.thread.ipc_buffer_addr,
-                              pd->proc.thread.stack_top);
+                              pd->proc.thread.ipc_buffer_addr);
 
     pd->proc.thread.tcb = *(target_cpu->tcb);
 

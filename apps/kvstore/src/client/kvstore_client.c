@@ -14,8 +14,7 @@
 #include <kvstore_server.h>
 #include <fs_client.h>
 
-static bool use_remote_server;
-static bool swap_ads;
+static kvstore_mode_t mode;
 static seL4_CPtr server_ep;
 static ads_client_context_t kvserv_ads;
 static ads_client_context_t client_ads_conn;
@@ -31,7 +30,7 @@ int kvstore_client_swap_ads_lib(void)
         ZF_LOGE("failed to swap ADS to kvstore server");
         return error;
     }
-    return error; 
+    return error;
 }
 
 int kvstore_client_swap_ads_app(void)
@@ -43,60 +42,71 @@ int kvstore_client_swap_ads_app(void)
         ZF_LOGE("failed to swap ADS to app");
         return error;
     }
-    return error; 
+    return error;
 }
 
-int kvstore_client_configure(bool n_use_remote_server, bool separate_ads, seL4_CPtr ep)
+static int configure_separate_ads()
+{
+    int error;
+    int swap_err;
+
+    seL4_CPtr self_pd_cap = sel4gpi_get_pd_cap();
+    pd_client_context_t self_pd_conn = {.badged_server_ep_cspath.capPtr = self_pd_cap};
+    seL4_CPtr slot;
+    pd_client_next_slot(&self_pd_conn, &slot);
+
+    seL4_CPtr ads_rde = sel4gpi_get_rde_by_ns_id(NSID_DEFAULT, GPICAP_TYPE_ADS);
+    ads_client_context_t self_ads_conn = {.badged_server_ep_cspath.capPtr = sel4gpi_get_ads_cap()};
+    swap_err = ads_client_shallow_copy(&self_ads_conn, slot, NULL, &kvserv_ads);
+    if (swap_err)
+    {
+        ZF_LOGE("failed to make a new ADS for kvstore server");
+        return swap_err;
+    }
+
+    self_cpu_conn.badged_server_ep_cspath.capPtr = sel4gpi_get_cpu_cap();
+    swap_err = cpu_client_change_vspace(&self_cpu_conn, &kvserv_ads);
+    if (swap_err)
+    {
+        ZF_LOGE("failed to swap ADS to kvstore server");
+        return swap_err;
+    }
+
+    // we need to clear the FS client instance, so the lib starts with a fresh one
+    memset(&xv6fs_client, 0, sizeof(global_xv6fs_client_context_t));
+    error = kvstore_server_init();
+    ZF_LOGE_IF(error, "Failed to initialize kvstore");
+
+    client_ads_conn.badged_server_ep_cspath.capPtr = sel4gpi_get_ads_cap();
+    // need to set this variable twice since we're in a different vspace
+    self_cpu_conn.badged_server_ep_cspath.capPtr = sel4gpi_get_cpu_cap();
+    swap_err = cpu_client_change_vspace(&self_cpu_conn, &client_ads_conn);
+    ZF_LOGF_IF(swap_err, "Failed to switch back to client ADS"); // fatal because we can't continue in the wrong ADS
+
+    return swap_err;
+}
+
+int kvstore_client_configure(kvstore_mode_t kvstore_mode, seL4_CPtr ep)
 {
     int error = 0;
-    use_remote_server = n_use_remote_server;
-    swap_ads = separate_ads;
+    mode = kvstore_mode;
 
-    if (use_remote_server)
+    switch (kvstore_mode)
     {
-        // This PD will send kvstore requests to another PD
-        server_ep = ep;
-    }
-    else if (separate_ads)
-    {
-        int swap_err;
-        seL4_CPtr self_pd_cap = sel4gpi_get_pd_cap();
-        pd_client_context_t self_pd_conn = {.badged_server_ep_cspath.capPtr = self_pd_cap};
-        seL4_CPtr slot;
-        pd_client_next_slot(&self_pd_conn, &slot);
-
-        seL4_CPtr ads_rde = sel4gpi_get_rde_by_ns_id(NSID_DEFAULT, GPICAP_TYPE_ADS);
-        ads_client_context_t self_ads_conn = {.badged_server_ep_cspath.capPtr = sel4gpi_get_ads_cap()};
-        swap_err = ads_client_shallow_copy(&self_ads_conn, slot, NULL, &kvserv_ads);
-        if (swap_err)
-        {
-            ZF_LOGE("failed to make a new ADS for kvstore server");
-            return swap_err;
-        }
-
-        self_cpu_conn.badged_server_ep_cspath.capPtr = sel4gpi_get_cpu_cap();
-        swap_err = cpu_client_change_vspace(&self_cpu_conn, &kvserv_ads);
-        if (swap_err)
-        {
-            ZF_LOGE("failed to swap ADS to kvstore server");
-            return swap_err;
-        }
-
-        // we need to clear the FS client instance, so the lib starts with a fresh one
-        memset(&xv6fs_client, 0, sizeof(global_xv6fs_client_context_t));
-        error = kvstore_server_init();
-        ZF_LOGE_IF(error, "Failed to initialize kvstore");
-
-        client_ads_conn.badged_server_ep_cspath.capPtr = sel4gpi_get_ads_cap();
-        // need to set this variable twice since we're in a different vspace
-        self_cpu_conn.badged_server_ep_cspath.capPtr = sel4gpi_get_cpu_cap();
-        swap_err = cpu_client_change_vspace(&self_cpu_conn, &client_ads_conn);
-        ZF_LOGF_IF(swap_err, "Failed to switch back to client ADS"); // fatal because we can't continue in the wrong ADS
-    }
-    else
-    {
+    case SAME_THREAD:
         // This PD will be a local kvstore, initialize
         error = kvstore_server_init();
+        break;
+    case SEPARATE_ADS:
+        error = configure_separate_ads();
+        break;
+    case SEPARATE_THREAD:
+        error = kvstore_server_start_thread(&server_ep);
+        break;
+    case SEPARATE_PROC:
+        // This PD will send kvstore requests to another PD
+        server_ep = ep;
+        break;
     }
 
     return error;
@@ -106,7 +116,7 @@ int kvstore_client_set(seL4_Word key, seL4_Word value)
 {
     seL4_Error error;
 
-    if (use_remote_server)
+    if (mode == SEPARATE_PROC || mode == SEPARATE_THREAD)
     {
         /* Send IPC to server */
         seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0, KVMSGREG_SET_REQ_END);
@@ -116,7 +126,7 @@ int kvstore_client_set(seL4_Word key, seL4_Word value)
         tag = seL4_Call(server_ep, tag);
         error = seL4_MessageInfo_get_label(tag);
     }
-    else if (swap_ads)
+    else if (mode == SEPARATE_ADS)
     {
         error = cpu_client_change_vspace(&self_cpu_conn, &kvserv_ads);
         if (error)
@@ -144,7 +154,7 @@ int kvstore_client_get(seL4_Word key, seL4_Word *value)
 {
     seL4_Error error;
 
-    if (use_remote_server)
+    if (mode == SEPARATE_PROC || mode == SEPARATE_THREAD)
     {
         /* Send IPC to server */
         seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0, KVMSGREG_GET_REQ_END);
@@ -158,7 +168,7 @@ int kvstore_client_get(seL4_Word key, seL4_Word *value)
             *value = seL4_GetMR(KVMSGREG_GET_ACK_VAL);
         }
     }
-    else if (swap_ads)
+    else if (mode == SEPARATE_ADS)
     {
         error = cpu_client_change_vspace(&self_cpu_conn, &kvserv_ads);
         if (error)

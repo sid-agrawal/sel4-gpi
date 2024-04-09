@@ -49,12 +49,10 @@ int cpu_client_config(cpu_client_context_t *conn,
                       seL4_CPtr cspace_root,
                       seL4_Word cnode_guard,
                       seL4_CPtr fault_ep_position,
-                      seL4_Word ipc_buf_addr,
-                      seL4_Word stack_addr)
+                      seL4_Word ipc_buf_addr)
 {
     seL4_SetMR(CPUMSGREG_FUNC, CPU_FUNC_CONFIG_REQ);
     seL4_SetMR(CPUMSGREG_CONFIG_IPC_BUF_ADDR, ipc_buf_addr);
-    seL4_SetMR(CPUMSGREG_CONFIG_STACK_ADDR, stack_addr);
     seL4_SetMR(CPUMSGREG_CONFIG_FAULT_EP, fault_ep_position);
     seL4_SetMR(CPUMSGREG_CONFIG_CNODE_GUARD, cnode_guard);
 

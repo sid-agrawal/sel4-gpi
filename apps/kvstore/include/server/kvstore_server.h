@@ -35,6 +35,16 @@
 int kvstore_server_init();
 
 /**
+ * Start the kvstore server as a thread
+*/
+int kvstore_server_start_thread(seL4_CPtr *kvstore_ep);
+
+/**
+ * Main function to serve kvstore requests
+*/
+int kvstore_server_main(seL4_CPtr parent_ep);
+
+/**
  * @brief Put a key-value pair in the kv store
  * Overwrites any previous value stored for the key
  *
