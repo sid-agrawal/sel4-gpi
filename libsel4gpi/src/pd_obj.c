@@ -581,6 +581,9 @@ int pd_load_image(pd_t *pd,
 
     pd->proc.thread.tcb = *(target_cpu->tcb);
 
+    /* The RT manages this ADS */
+    pd_add_resource(&get_pd_component()->rt_pd, GPICAP_TYPE_ADS, target_ads->ads_obj_id, NSID_DEFAULT, 0, 0, 0);
+
     /* Initialize a vka for the PD's cspace */
     error = pd_bootstrap_allocator(pd, pd->proc.cspace.cptr, pd->proc.cspace_next_free,
                                    BIT(CSPACE_SIZE_BITS), CSPACE_SIZE_BITS, 0);
@@ -844,9 +847,9 @@ static int request_remote_rr(pd_t *pd, model_state_t *ms, uint64_t server_id, ui
 
     // Get RR from remote resource server
     error = resource_server_get_rr(server_cap, obj_id, pd->pd_obj_id,
+                                   server_entry->pd->pd_obj_id,
                                    rr_remote_vaddr, rr_local_vaddr,
                                    SIZE_BITS_TO_BYTES(seL4_LargePageBits), &rs);
-
 
     if (error == RS_ERROR_DNE)
     {
@@ -935,6 +938,9 @@ static int res_dump(pd_t *pd, model_state_t *ms, osmosis_pd_cap_t *current_cap,
         }
         // add_has_access_to(ms, pd_id, res_id, false);
         break;
+    case GPICAP_TYPE_FILE:
+        // (XXX) Arya: dump files by NS instead
+        break;
     default:
         ZF_LOGE("Invalid has_access_to cap type 0x%x", current_cap->type);
         break;
@@ -1022,7 +1028,8 @@ int pd_dump(pd_t *pd)
 
                 add_pd_requests(ms, pd_id, rm_id, rde.type.type, ns_id);
 
-                if (rde.type.type == GPICAP_TYPE_FILE) {
+                if (rde.type.type == GPICAP_TYPE_FILE)
+                {
                     // (XXX) Arya: Workaround to get all files in the file system
                     // Find the server that created this resource based on the resource id
                     uint64_t obj_id = rde.ns_id;

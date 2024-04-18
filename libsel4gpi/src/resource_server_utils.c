@@ -322,6 +322,7 @@ int resource_server_attach_mo(resource_server_context_t *context,
 int resource_server_get_rr(seL4_CPtr server_ep,
                            seL4_Word res_id,
                            seL4_Word pd_id,
+                           seL4_Word server_pd_id,
                            void *remote_vaddr,
                            void *local_vaddr,
                            size_t size,
@@ -337,6 +338,7 @@ int resource_server_get_rr(seL4_CPtr server_ep,
     seL4_SetMR(RSMSGREG_EXTRACT_RR_REQ_SIZE, size);
     seL4_SetMR(RSMSGREG_EXTRACT_RR_REQ_ID, res_id);
     seL4_SetMR(RSMSGREG_EXTRACT_RR_REQ_PD_ID, pd_id);
+    seL4_SetMR(RSMSGREG_EXTRACT_RR_REQ_RS_PD_ID, server_pd_id);
     tag = seL4_Call(server_ep, tag);
 
     // Adjust rr state's row pointer if successful

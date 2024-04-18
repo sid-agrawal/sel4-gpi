@@ -137,11 +137,13 @@ seL4_MessageInfo_t ramdisk_request_handler(seL4_MessageInfo_t tag, seL4_Word sen
         {
         case RS_FUNC_GET_RR_REQ:
             *need_new_recv_cap = false;
-            
+
             uint64_t resource_id = seL4_GetMR(RSMSGREG_EXTRACT_RR_REQ_ID);
             uint64_t blockno = get_local_object_id_from_badge(resource_id);
             char pd_id[CSV_MAX_STRING_SIZE];
             make_res_id(pd_id, GPICAP_TYPE_PD, seL4_GetMR(RSMSGREG_EXTRACT_RR_REQ_PD_ID));
+            char rd_pd_id[CSV_MAX_STRING_SIZE];
+            make_res_id(rd_pd_id, GPICAP_TYPE_PD, seL4_GetMR(RSMSGREG_EXTRACT_RR_REQ_RS_PD_ID));
 
             RAMDISK_PRINTF("Get RR for blockno %d\n", blockno);
 
@@ -152,11 +154,26 @@ seL4_MessageInfo_t ramdisk_request_handler(seL4_MessageInfo_t tag, seL4_Word sen
             RAMDISK_PRINTF("Can access shared mem %d\n", *((int *)mem_vaddr));
 
             // Initialize the model state
-            CHECK_ERROR_GOTO(mem_size < (sizeof(rr_state_t) + 3 * sizeof(csv_rr_row_t)),
+            CHECK_ERROR_GOTO(mem_size < (sizeof(rr_state_t) + 6 * sizeof(csv_rr_row_t)),
                              "Shared memory for RR is too small", RS_ERROR_RR_SIZE, done);
             rr_state_t *rr_state = (rr_state_t *)mem_vaddr;
             init_rr_state(rr_state);
             csv_rr_row_t *row_ptr = mem_vaddr + sizeof(rr_state_t);
+
+            /* Add the block resource space */
+            // (XXX) Arya: Assumes there is only one block space, and it is space 1
+            char block_space_res_id[CSV_MAX_STRING_SIZE];
+            snprintf(block_space_res_id, CSV_MAX_STRING_SIZE, "BLOCK_SPACE_%d", 1);
+            add_resource_rr(rr_state, GPICAP_TYPE_BLOCK, block_space_res_id, row_ptr);
+            row_ptr++;
+
+            // Add the has_access_to row for block resource space
+            add_has_access_to_rr(rr_state,
+                                 rd_pd_id,
+                                 block_space_res_id,
+                                 false,
+                                 row_ptr);
+            row_ptr++;
 
             // Add the entry for the resource
             char block_res_id[CSV_MAX_STRING_SIZE];
@@ -170,6 +187,10 @@ seL4_MessageInfo_t ramdisk_request_handler(seL4_MessageInfo_t tag, seL4_Word sen
                                  block_res_id,
                                  false,
                                  row_ptr); // (XXX) Arya: how to determine is_mapped
+            row_ptr++;
+
+            // Add the subset row
+            add_resource_depends_on_rr(rr_state, block_res_id, block_space_res_id, REL_TYPE_SUBSET, row_ptr);
             row_ptr++;
 
             // Add RR from block to MO

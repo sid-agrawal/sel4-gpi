@@ -52,6 +52,7 @@ enum rs_msgregs
     RSMSGREG_EXTRACT_RR_REQ_VADDR,
     RSMSGREG_EXTRACT_RR_REQ_ID,
     RSMSGREG_EXTRACT_RR_REQ_PD_ID,
+    RSMSGREG_EXTRACT_RR_REQ_RS_PD_ID,
     RSMSGREG_EXTRACT_RR_REQ_END,
     RSMSGREG_EXTRACT_RR_ACK_END = RSMSGREG_LABEL0,
 
@@ -166,6 +167,7 @@ int resource_server_attach_mo(resource_server_context_t *context,
  * @param server_ep Unbadged ep of the resource server
  * @param res_id The id of the resource to dump relations for
  * @param pd_id The id of the pd that has the resource (for the has_access_to row)
+ * @param server_pd_id The id of the server pd
  * @param remote_vaddr location of shared memory in the resource server
  * @param local_vaddr location of shared memory in the caller
  * @param size size of shared memory
@@ -179,6 +181,7 @@ int resource_server_attach_mo(resource_server_context_t *context,
 int resource_server_get_rr(seL4_CPtr server_ep,
                            seL4_Word res_id,
                            seL4_Word pd_id,
+                           seL4_Word server_pd_id,
                            void *remote_vaddr,
                            void *local_vaddr,
                            size_t size,

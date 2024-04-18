@@ -161,7 +161,7 @@ xv6fs_sys_open(char *path, int omode)
  */
 int xv6fs_sys_walk(char *path, uint32_t *inums, int *n_files)
 {
-  printf("%s: for path %s\n", __func__, path);
+  // printf("%s: for path %s\n", __func__, path);
 
   struct file *f;
   struct inode *ip;
@@ -178,7 +178,7 @@ int xv6fs_sys_walk(char *path, uint32_t *inums, int *n_files)
     return -1;
   }
 
-  printf("- %s\n", path);
+  // printf("- %s\n", path);
 
   // (XXX) Arya: Assuming only one possible level of directories at this point
   int inum_idx = 0;
@@ -202,13 +202,13 @@ int xv6fs_sys_walk(char *path, uint32_t *inums, int *n_files)
       }
       else if (curr_ip->type == T_FILE)
       {
-        printf("  - %s\n", de_name);
+        // printf("  - %s\n", de_name);
         inums[inum_idx] = curr_ip->inum;
         inum_idx++;
       }
       else if (curr_ip->type == T_DIR)
       {
-        printf("  - %s\n", de_name);
+        // printf("  - %s\n", de_name);
 
         int j = 0;
         struct inode *sub_ip = dirlookup_idx(curr_ip, j, de_name);
@@ -229,7 +229,7 @@ int xv6fs_sys_walk(char *path, uint32_t *inums, int *n_files)
             }
             else if (sub_ip->type == T_FILE)
             {
-              printf("    - %s\n", de_name);
+              // printf("    - %s\n", de_name);
               inums[inum_idx] = sub_ip->inum;
               inum_idx++;
             }

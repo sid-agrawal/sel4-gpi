@@ -656,7 +656,7 @@ dirlookup_idx(struct inode *dp, int idx, char *de_name)
 
   if (off >= dp->size)
   {
-    printf("Finished, dp size 0x%x\n", dp->size);
+    //printf("Finished, dp size 0x%x\n", dp->size);
     return NULL;
   }
 

@@ -88,7 +88,7 @@ int ads_new(vspace_t *loader,
         goto error_exit;
     }
     ret_ads->root_page_dir = vspace_root_object;
-
+    
     return 0;
 
 error_exit:

@@ -311,6 +311,12 @@ seL4_MessageInfo_t xv6fs_request_handler(seL4_MessageInfo_t tag, seL4_Word sende
       void *mem_vaddr = (void *)seL4_GetMR(RSMSGREG_EXTRACT_RR_REQ_VADDR);
       char pd_id[CSV_MAX_STRING_SIZE];
       make_res_id(pd_id, GPICAP_TYPE_PD, seL4_GetMR(RSMSGREG_EXTRACT_RR_REQ_PD_ID));
+      char fs_pd_id[CSV_MAX_STRING_SIZE];
+      make_res_id(fs_pd_id, GPICAP_TYPE_PD, seL4_GetMR(RSMSGREG_EXTRACT_RR_REQ_RS_PD_ID));
+      char block_space_res_id[CSV_MAX_STRING_SIZE];
+      snprintf(block_space_res_id, CSV_MAX_STRING_SIZE, "BLOCK_SPACE_%d", 1);
+      // (XXX) Arya: Temporary measure to get block resource space ID, to fix
+      // Assumes there is only one block space, and it is space 1
 
       // Initialize the model state
       rr_state_t *rr_state = (rr_state_t *)mem_vaddr;
@@ -320,8 +326,6 @@ seL4_MessageInfo_t xv6fs_request_handler(seL4_MessageInfo_t tag, seL4_Word sende
 // (XXX) Arya: Switch from dumping one resource to dumping entire namespace
 #if 1
       uint64_t ns_id = seL4_GetMR(RSMSGREG_EXTRACT_RR_REQ_ID);
-
-      printf("Got request to dump rr for nsid %d\n", ns_id);
 
       /* Update pathname for namespace */
       char path[MAXPATH];
@@ -340,7 +344,34 @@ seL4_MessageInfo_t xv6fs_request_handler(seL4_MessageInfo_t tag, seL4_Word sende
         apply_prefix(ns->ns_prefix, path);
       }
 
-      printf("Listing files in %s\n", path);
+      /* Add the file resource space */
+      if ((void *)(row_ptr + 4) >= mem_vaddr + mem_size)
+      {
+        XV6FS_PRINTF("Ran out of space in the MO to write RR\n");
+        error = RS_ERROR_RR_SIZE;
+        break;
+      }
+
+      char file_space_res_id[CSV_MAX_STRING_SIZE];
+      snprintf(file_space_res_id, CSV_MAX_STRING_SIZE, "FILE_SPACE_%d_%d",
+               get_xv6fs_server()->gen.server_id,
+               ns_id);
+      add_resource_rr(rr_state, GPICAP_TYPE_FILE, file_space_res_id, row_ptr);
+      row_ptr++;
+
+      // Add the has_access_to row
+      add_has_access_to_rr(rr_state,
+                           fs_pd_id,
+                           file_space_res_id,
+                           false,
+                           row_ptr);
+      row_ptr++;
+
+      // (XXX) Add the map to block space
+      // (XXX) Arya: Temporary measure to get block resource space ID, to fix
+      // Assumes there is only one block space, and it is space 1
+      add_resource_depends_on_rr(rr_state, file_space_res_id, block_space_res_id, REL_TYPE_MAP, row_ptr);
+      row_ptr++;
 
       /* List all the files in the NS */
       int n_files;
@@ -348,6 +379,7 @@ seL4_MessageInfo_t xv6fs_request_handler(seL4_MessageInfo_t tag, seL4_Word sende
 
       error = xv6fs_sys_walk(path, inums, &n_files);
       CHECK_ERROR_GOTO(error, "Failed to walk FS", FS_SERVER_ERROR_UNKNOWN, done);
+      // printf("TEMPA got %d files\n", n_files);
 
       char file_res_id[CSV_MAX_STRING_SIZE];
       char block_res_id[CSV_MAX_STRING_SIZE];
@@ -356,7 +388,7 @@ seL4_MessageInfo_t xv6fs_request_handler(seL4_MessageInfo_t tag, seL4_Word sende
 
       for (int i = 0; i < n_files; i++)
       {
-        if ((void *)(row_ptr + 2) >= mem_vaddr + mem_size)
+        if ((void *)(row_ptr + 3) >= mem_vaddr + mem_size)
         {
           XV6FS_PRINTF("Ran out of space in the MO to write RR\n");
           error = RS_ERROR_RR_SIZE;
@@ -382,6 +414,10 @@ seL4_MessageInfo_t xv6fs_request_handler(seL4_MessageInfo_t tag, seL4_Word sende
         uint64_t file_id = get_global_object_id_from_local(get_xv6fs_server()->gen.server_id, inums[i]);
         make_res_id(file_res_id, GPICAP_TYPE_FILE, file_id);
         add_resource_rr(rr_state, GPICAP_TYPE_FILE, file_res_id, row_ptr);
+        row_ptr++;
+
+        // Add the subset row
+        add_resource_depends_on_rr(rr_state, file_res_id, file_space_res_id, REL_TYPE_SUBSET, row_ptr);
         row_ptr++;
 
         // Add the has_access_to row
@@ -556,7 +592,7 @@ seL4_MessageInfo_t xv6fs_request_handler(seL4_MessageInfo_t tag, seL4_Word sende
         int n_files;
         uint32_t inums[16];
 
-        error = xv6fs_sys_walk(ROOT_DIR, inums, &n_files);
+        //error = xv6fs_sys_walk(ROOT_DIR, inums, &n_files);
         CHECK_ERROR_GOTO(error, "Failed to walk FS", FS_SERVER_ERROR_UNKNOWN, done);
       }
       else
