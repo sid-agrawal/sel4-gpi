@@ -51,6 +51,7 @@ enum rs_msgregs
     RSMSGREG_EXTRACT_RR_REQ_SIZE = RSMSGREG_LABEL0,
     RSMSGREG_EXTRACT_RR_REQ_VADDR,
     RSMSGREG_EXTRACT_RR_REQ_ID,
+    RSMSGREG_EXTRACT_RR_REQ_PD_ID,
     RSMSGREG_EXTRACT_RR_REQ_END,
     RSMSGREG_EXTRACT_RR_ACK_END = RSMSGREG_LABEL0,
 
@@ -69,7 +70,7 @@ typedef struct _resource_server_context
     uint64_t server_id;
 
     // Run to serve requests
-    seL4_MessageInfo_t (*request_handler)(seL4_MessageInfo_t, seL4_Word, seL4_CPtr);
+    seL4_MessageInfo_t (*request_handler)(seL4_MessageInfo_t, seL4_Word, seL4_CPtr, bool*);
 
     // Run once when the server is started
     int (*init_fn)();
@@ -117,7 +118,7 @@ int start_resource_server_pd(uint64_t rde_id,
  */
 int resource_server_start(resource_server_context_t *context,
                           gpi_cap_t server_type,
-                          seL4_MessageInfo_t (*request_handler)(seL4_MessageInfo_t, seL4_Word, seL4_CPtr),
+                          seL4_MessageInfo_t (*request_handler)(seL4_MessageInfo_t, seL4_Word, seL4_CPtr, bool*),
                           seL4_CPtr parent_ep,
                           int (*init_fn)());
 
@@ -164,6 +165,7 @@ int resource_server_attach_mo(resource_server_context_t *context,
  *
  * @param server_ep Unbadged ep of the resource server
  * @param res_id The id of the resource to dump relations for
+ * @param pd_id The id of the pd that has the resource (for the has_access_to row)
  * @param remote_vaddr location of shared memory in the resource server
  * @param local_vaddr location of shared memory in the caller
  * @param size size of shared memory
@@ -176,6 +178,7 @@ int resource_server_attach_mo(resource_server_context_t *context,
  */
 int resource_server_get_rr(seL4_CPtr server_ep,
                            seL4_Word res_id,
+                           seL4_Word pd_id,
                            void *remote_vaddr,
                            void *local_vaddr,
                            size_t size,

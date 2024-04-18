@@ -640,6 +640,44 @@ dirlookup(struct inode *dp, char *name, uint32_t *poff)
   return 0;
 }
 
+struct inode null_inode;
+
+// Look for a directory entry in a directory
+struct inode *
+dirlookup_idx(struct inode *dp, int idx, char *de_name)
+{
+  uint32_t off, inum;
+  struct dirent de;
+
+  if (dp->type != T_DIR)
+    xv6fs_panic("dirlookup not DIR");
+
+  off = sizeof(de) * idx;
+
+  if (off >= dp->size)
+  {
+    printf("Finished, dp size 0x%x\n", dp->size);
+    return NULL;
+  }
+
+  if (readi(dp, 0, (uint64_t)&de, off, sizeof(de)) != sizeof(de))
+    xv6fs_panic("dirlookup read");
+
+  //printf("Did dirlookup %d\n", idx);
+
+  if (de.inum != 0) {
+    //printf("Dirlookup '%s'\n", de.name);
+  }
+
+  if (de.inum == 0 || strlen(de_name) == 0) {
+    return &null_inode;
+  }
+
+  strncpy(de_name, de.name, DIRSIZ);
+  inum = de.inum;
+  return iget(dp->dev, inum);
+}
+
 // Write a new directory entry (name, inum) into the directory dp.
 // Returns 0 on success, -1 on failure (e.g. out of disk blocks).
 int dirlink(struct inode *dp, char *name, uint32_t inum)

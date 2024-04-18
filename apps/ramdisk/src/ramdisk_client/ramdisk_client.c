@@ -72,12 +72,13 @@ int ramdisk_client_sanity_test(seL4_CPtr server_ep_cap,
 }
 
 int ramdisk_client_alloc_block(seL4_CPtr server_ep_cap,
-                               ramdisk_client_context_t *ret_conn)
+                               ramdisk_client_context_t *ret_conn,
+                               mo_client_context_t *mo)
 {
     /* Request a new block from server */
+    seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 1, 1);
     seL4_SetMR(RDMSGREG_FUNC, RD_FUNC_CREATE_REQ);
-    seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0, 1);
-
+    seL4_SetCap(0, mo->badged_server_ep_cspath.capPtr);
     tag = seL4_Call(server_ep_cap, tag);
     int error = seL4_MessageInfo_get_label(tag);
     CHECK_ERROR(error, "failed to get block from ramdisk server\n");
@@ -92,9 +93,9 @@ int ramdisk_client_read(ramdisk_client_context_t *conn, mo_client_context_t *mo)
     seL4_Error error;
 
     /* Send IPC to ramdisk server */
-    seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 1, 1);
+    seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0, 1);
     seL4_SetMR(RDMSGREG_FUNC, RD_FUNC_READ_REQ);
-    seL4_SetCap(0, mo->badged_server_ep_cspath.capPtr);
+    //seL4_SetCap(0, mo->badged_server_ep_cspath.capPtr);
     tag = seL4_Call(conn->badged_server_ep_cspath.capPtr, tag);
     error = seL4_MessageInfo_get_label(tag);
 
@@ -106,9 +107,9 @@ int ramdisk_client_write(ramdisk_client_context_t *conn, mo_client_context_t *mo
     seL4_Error error;
 
     /* Send IPC to ramdisk server */
-    seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 1, 1);
+    seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0, 1);
     seL4_SetMR(RDMSGREG_FUNC, RD_FUNC_WRITE_REQ);
-    seL4_SetCap(0, mo->badged_server_ep_cspath.capPtr);
+    //seL4_SetCap(0, mo->badged_server_ep_cspath.capPtr);
     tag = seL4_Call(conn->badged_server_ep_cspath.capPtr, tag);
     error = seL4_MessageInfo_get_label(tag);
 

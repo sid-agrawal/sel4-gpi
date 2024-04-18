@@ -480,7 +480,7 @@ int ads_shallow_copy(vspace_t *loader,
             error = forge_mo_cap_from_frames(caps, num_pages, vka, 0, &mo_cap, &mo_obj);
             ZF_LOGE_IF(error, "Failed to forge MO cap for PD's heap");
 
-            pd_add_resource(&get_pd_component()->rt_pd, GPICAP_TYPE_MO, mo_obj->mo_obj_id, mo_cap, 0, 0);
+            pd_add_resource(&get_pd_component()->rt_pd, GPICAP_TYPE_MO, NSID_DEFAULT, mo_obj->mo_obj_id, mo_cap, 0, 0);
 
             attach_node_t *new_attach_node = malloc(sizeof(attach_node_t));
             new_attach_node->vaddr = (void *)from_sel4_res->start;

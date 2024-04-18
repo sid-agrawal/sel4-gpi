@@ -144,7 +144,7 @@ int start_resource_server_pd(uint64_t rde_id,
 
 int resource_server_start(resource_server_context_t *context,
                           gpi_cap_t server_type,
-                          seL4_MessageInfo_t (*request_handler)(seL4_MessageInfo_t, seL4_Word, seL4_CPtr),
+                          seL4_MessageInfo_t (*request_handler)(seL4_MessageInfo_t, seL4_Word, seL4_CPtr, bool *),
                           seL4_CPtr parent_ep,
                           int (*init_fn)())
 {
@@ -209,6 +209,7 @@ int resource_server_main(void *context_v)
     seL4_Error error = 0;
     seL4_Word sender_badge;
     cspacepath_t received_cap_path;
+    bool need_new_receive_slot;
     received_cap_path.root = PD_CAP_ROOT;
     received_cap_path.capDepth = PD_CAP_DEPTH;
 
@@ -249,13 +250,13 @@ int resource_server_main(void *context_v)
         tag = resource_server_recv(context, &sender_badge);
         int op = seL4_GetMR(RSMSGREG_FUNC);
         RESOURCE_SERVER_PRINTF("Received message, op is %d, passing to request handler\n", op);
-        seL4_MessageInfo_t reply_tag = context->request_handler(tag, sender_badge, received_cap_path.capPtr);
+        seL4_MessageInfo_t reply_tag = context->request_handler(tag, sender_badge, received_cap_path.capPtr, &need_new_receive_slot);
 
         /**
-         * Free slot and reallocate unless if this is an RR request
-         * RR requests come from the root task, so we cannot message it
+         * Free slot and reallocate only if needed
+         * Some requests come from the root task, so we cannot message it
          * */
-        if (op != RS_FUNC_GET_RR_REQ)
+        if (need_new_receive_slot)
         {
             // We need to finish setting up for the next request before responding to this one
             // This is because the next request could be GET_RR, in which case we cannot
@@ -320,6 +321,7 @@ int resource_server_attach_mo(resource_server_context_t *context,
 
 int resource_server_get_rr(seL4_CPtr server_ep,
                            seL4_Word res_id,
+                           seL4_Word pd_id,
                            void *remote_vaddr,
                            void *local_vaddr,
                            size_t size,
@@ -334,6 +336,7 @@ int resource_server_get_rr(seL4_CPtr server_ep,
     seL4_SetMR(RSMSGREG_EXTRACT_RR_REQ_VADDR, (seL4_Word)remote_vaddr);
     seL4_SetMR(RSMSGREG_EXTRACT_RR_REQ_SIZE, size);
     seL4_SetMR(RSMSGREG_EXTRACT_RR_REQ_ID, res_id);
+    seL4_SetMR(RSMSGREG_EXTRACT_RR_REQ_PD_ID, pd_id);
     tag = seL4_Call(server_ep, tag);
 
     // Adjust rr state's row pointer if successful

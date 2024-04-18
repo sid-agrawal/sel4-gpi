@@ -78,12 +78,13 @@ int copy_cap_to_pd(pd_t *to_pd,
     return 0;
 }
 
-osmosis_pd_cap_t *pd_add_resource(pd_t *pd, gpi_cap_t type, uint32_t res_id,
+osmosis_pd_cap_t *pd_add_resource(pd_t *pd, gpi_cap_t type, uint32_t res_id, uint32_t ns_id,
                                   seL4_CPtr slot_in_RT, seL4_CPtr slot_in_PD, seL4_CPtr slot_in_serverPD)
 {
     osmosis_pd_cap_t *new = calloc(1, sizeof(osmosis_pd_cap_t));
     new->type = type;
     new->res_id = res_id;
+    new->ns_id = ns_id;
     new->slot_in_RT_Debug = slot_in_RT;
     new->slot_in_PD_Debug = slot_in_PD;
     new->slot_in_ServerPD_Debug = slot_in_serverPD;
@@ -226,7 +227,7 @@ int pd_new(pd_t *pd,
     }
 
     // Track the init data MO in RT only
-    pd_add_resource(&get_pd_component()->rt_pd, GPICAP_TYPE_MO, rde_mo_obj->mo_obj_id, pd->init_data_mo.badged_server_ep_cspath.capPtr, 0, 0);
+    pd_add_resource(&get_pd_component()->rt_pd, GPICAP_TYPE_MO, rde_mo_obj->mo_obj_id, NSID_DEFAULT, pd->init_data_mo.badged_server_ep_cspath.capPtr, 0, 0);
     // pd_add_resource(pd, GPICAP_TYPE_MO, rde_mo_obj->mo_obj_id, pd->init_data_mo.badged_server_ep_cspath.capPtr, seL4_CapNull, pd->init_data_mo.badged_server_ep_cspath.capPtr);
 
     // Setup init data
@@ -391,14 +392,14 @@ static int pd_setup_proc(pd_t *pd, vka_t *server_vka, vspace_t *server_vspace, a
         goto error;
     }
     sel4utils_elf_read_phdrs(&elf, pd->proc.num_elf_phdrs, pd->proc.elf_phdrs);
-    
+
     /**
      * By default, all ELF sections will be shared during ads_shallow_copy
-     * If we want to separate data sections, will need to identify them here and check for 
+     * If we want to separate data sections, will need to identify them here and check for
      * their vaddr when copying
-    */
-    //uint64_t section_size;
-    //uintptr_t lib_data_section = sel4utils_elf_get_section(&elf, ELF_LIB_DATA_SECTION, &section_size);
+     */
+    // uint64_t section_size;
+    // uintptr_t lib_data_section = sel4utils_elf_get_section(&elf, ELF_LIB_DATA_SECTION, &section_size);
 
     /* select the default page size of machine this process is running on */
     pd->proc.pagesz = PAGE_SIZE_4K;
@@ -446,7 +447,7 @@ static int pd_setup_proc(pd_t *pd, vka_t *server_vka, vspace_t *server_vspace, a
     /* Add MOs to root task since nobody else will have them */
     for (int i = 0; i < n_mo_caps; i++)
     {
-        pd_add_resource(&get_pd_component()->rt_pd, GPICAP_TYPE_MO, mo_cap_ids[i], mo_caps[i], 0, 0);
+        pd_add_resource(&get_pd_component()->rt_pd, GPICAP_TYPE_MO, mo_cap_ids[i], NSID_DEFAULT, mo_caps[i], 0, 0);
     }
     free(mo_caps);
     free(mo_cap_ids);
@@ -715,7 +716,7 @@ int pd_send_cap(pd_t *to_pd,
             }
 
             cap = dest_cptr;
-            pd_add_resource(to_pd, cap_type, res_id, src.capPtr, cap, src.capPtr);
+            pd_add_resource(to_pd, cap_type, res_id, NSID_DEFAULT, src.capPtr, cap, src.capPtr);
         }
         // do the same copy as above
     }
@@ -800,10 +801,84 @@ int pd_start(pd_t *pd,
     return 0;
 }
 
+static int request_remote_rr(pd_t *pd, model_state_t *ms, uint64_t server_id, uint32_t obj_id,
+                             char *pd_id, cspacepath_t rr_frame_path, void *rr_local_vaddr)
+{
+    int error;
+
+    pd_component_resource_manager_entry_t *server_entry = pd_component_resource_manager_get_entry_by_id(server_id);
+
+    if (server_entry == NULL)
+    {
+        OSDB_PRINTF(PD_DEBUG, PDSERVS "Failed to find resource server with ID 0x%lx\n", server_id);
+        return -1;
+    }
+    seL4_CPtr server_cap = server_entry->server_ep;
+    rr_state_t *rs;
+
+    OSDB_PRINTF(PD_DEBUG, PDSERVS "Resource ID 0x%lx, server ID 0x%lx, server EP at %d\n", obj_id, server_id, (int)server_cap);
+
+    // Pre-map the memory so resource server does not need to call root task
+    cspacepath_t rr_frame_copy_path;
+    error = vka_cspace_alloc_path(get_gpi_server()->server_vka, &rr_frame_copy_path);
+    if (error != seL4_NoError)
+    {
+        OSDB_PRINTF(PD_DEBUG, PDSERVS "Failed to allocate path for RR frame copy %d", error);
+        return -1;
+    }
+
+    error = vka_cnode_copy(&rr_frame_copy_path, &rr_frame_path, seL4_AllRights);
+    if (error != seL4_NoError)
+    {
+        OSDB_PRINTF(PD_DEBUG, ADSSERVS "Failed to copy RR frame cap cap, error: %d", error);
+        return -1;
+    }
+
+    void *rr_remote_vaddr = vspace_map_pages(&server_entry->pd->proc.vspace, &rr_frame_copy_path.capPtr, NULL,
+                                             seL4_AllRights, 1, seL4_LargePageBits, 1);
+    if (rr_remote_vaddr == NULL)
+    {
+        OSDB_PRINTF(PD_DEBUG, PDSERVS "Failed to map RR frame to resource server, %d", error);
+        return -1;
+    }
+
+    // Get RR from remote resource server
+    error = resource_server_get_rr(server_cap, obj_id, pd->pd_obj_id,
+                                   rr_remote_vaddr, rr_local_vaddr,
+                                   SIZE_BITS_TO_BYTES(seL4_LargePageBits), &rs);
+
+
+    if (error == RS_ERROR_DNE)
+    {
+        // The resource was deleted and the PD component didn't know
+        // (XXX) Arya: Eventually, the PD component should be told
+        // For now, just omit deleted resources from the model state
+        error = 0;
+    }
+    if (error == RS_ERROR_RR_SIZE)
+    {
+        // (XXX) Arya: Need to allocate a bigger shared memory if this fails
+        printf("RR needs larger memory\n");
+        error = -1;
+    }
+    else if (error != seL4_NoError)
+    {
+        error = -1;
+    }
+
+    combine_model_states(ms, rs);
+
+    // Remove remotely-mapped memory
+    vspace_unmap_pages(&server_entry->pd->proc.vspace, rr_remote_vaddr, 1, seL4_LargePageBits, NULL);
+    vka_cnode_delete(&rr_frame_copy_path);
+}
+
 // Add rows to model state for one resource
 static int res_dump(pd_t *pd, model_state_t *ms, osmosis_pd_cap_t *current_cap,
                     char *pd_id, cspacepath_t rr_frame_path, void *rr_local_vaddr)
 {
+    int error;
+
     char res_id[CSV_MAX_STRING_SIZE];
     make_res_id(res_id, current_cap->type, current_cap->res_id);
     switch (current_cap->type)
@@ -839,86 +914,16 @@ static int res_dump(pd_t *pd, model_state_t *ms, osmosis_pd_cap_t *current_cap,
     case GPICAP_TYPE_seL4:
         // Use some other method to get the cap details
         break;
-    case GPICAP_TYPE_FILE:
+    // case GPICAP_TYPE_FILE: (XXX) Arya: dump files by NS instead
     case GPICAP_TYPE_BLOCK:
         OSDB_PRINTF(PD_DEBUG, PDSERVS "Calling another PD to get the info for resource with ID 0x%x\n", current_cap->res_id);
 
         // Find the server that created this resource based on the resource id
         uint64_t obj_id = current_cap->res_id;
         uint64_t server_id = get_server_id_from_badge(obj_id);
-        pd_component_resource_manager_entry_t *server_entry = pd_component_resource_manager_get_entry_by_id(server_id);
 
-        if (server_entry == NULL)
-        {
-            OSDB_PRINTF(PD_DEBUG, PDSERVS "Failed to find resource server with ID 0x%lx\n", server_id);
-            return -1;
-        }
-        seL4_CPtr server_cap = server_entry->server_ep;
-        rr_state_t *rs;
-
-        OSDB_PRINTF(PD_DEBUG, PDSERVS "Resource ID 0x%lx, server ID 0x%lx, server EP at %d\n", obj_id, server_id, (int)server_cap);
-
-        // Pre-map the memory so resource server does not need to call root task
-        cspacepath_t rr_frame_copy_path;
-        int error = vka_cspace_alloc_path(get_gpi_server()->server_vka, &rr_frame_copy_path);
-        if (error != seL4_NoError)
-        {
-            OSDB_PRINTF(PD_DEBUG, PDSERVS "Failed to allocate path for RR frame copy %d", error);
-            return -1;
-        }
-
-        error = vka_cnode_copy(&rr_frame_copy_path, &rr_frame_path, seL4_AllRights);
-        if (error != seL4_NoError)
-        {
-            OSDB_PRINTF(PD_DEBUG, ADSSERVS "Failed to copy RR frame cap cap, error: %d", error);
-            return -1;
-        }
-
-        void *rr_remote_vaddr = vspace_map_pages(&server_entry->pd->proc.vspace, &rr_frame_copy_path.capPtr, NULL,
-                                                 seL4_AllRights, 1, seL4_PageBits, 1);
-        if (rr_remote_vaddr == NULL)
-        {
-            OSDB_PRINTF(PD_DEBUG, PDSERVS "Failed to map RR frame to resource server, %d", error);
-            return -1;
-        }
-
-        // Get RR from remote resource server
-        error = resource_server_get_rr(server_cap, obj_id,
-                                       rr_remote_vaddr, rr_local_vaddr,
-                                       SIZE_BITS_TO_BYTES(seL4_PageBits), &rs);
-        if (error == RS_ERROR_DNE)
-        {
-            // The resource was deleted and the PD component didn't know
-            // (XXX) Arya: Eventually, the PD component should be told
-            // For now, just omit deleted resources from the model state
-
-            // Remove remotely-mapped memory
-            vspace_unmap_pages(&server_entry->pd->proc.vspace, rr_remote_vaddr, 1, seL4_PageBits, NULL);
-            vka_cnode_delete(&rr_frame_copy_path);
-
-            return 0;
-        }
-        if (error == RS_ERROR_RR_SIZE)
-        {
-            // (XXX) Arya: Need to allocate a bigger shared memory if this fails
-            return error;
-        }
-        else if (error != seL4_NoError)
-        {
-            return error;
-        }
-
-        combine_model_states(ms, rs);
-
-        // Add the has_access_to row
-        add_has_access_to(ms,
-                          pd_id,
-                          res_id,
-                          false); // (XXX) Arya: how to determine is_mapped
-
-        // Remove remotely-mapped memory
-        vspace_unmap_pages(&server_entry->pd->proc.vspace, rr_remote_vaddr, 1, seL4_PageBits, NULL);
-        vka_cnode_delete(&rr_frame_copy_path);
+        error = request_remote_rr(pd, ms, server_id, obj_id, pd_id, rr_frame_path, rr_local_vaddr);
+        assert(error == 0);
 
         break;
     case GPICAP_TYPE_PD:
@@ -965,8 +970,9 @@ int pd_dump(pd_t *pd)
     add_pd(ms, pd_name, pd_id);
 
     /* Allocate memory for remote rr requests */
+    // (XXX) Arya: not able to use MO for remote rr request
     vka_object_t rr_frame_obj;
-    error = vka_alloc_frame(get_gpi_server()->server_vka, seL4_PageBits, &rr_frame_obj);
+    error = vka_alloc_frame(get_gpi_server()->server_vka, seL4_LargePageBits, &rr_frame_obj);
     if (error != seL4_NoError)
     {
         return error;
@@ -976,23 +982,11 @@ int pd_dump(pd_t *pd)
     vka_cspace_make_path(get_gpi_server()->server_vka, rr_frame_obj.cptr, &rr_frame_path);
 
     void *rr_local_vaddr = vspace_map_pages(get_pd_component()->server_vspace, &rr_frame_obj.cptr, NULL,
-                                            seL4_AllRights, 1, seL4_PageBits, 1);
+                                            seL4_AllRights, 1, seL4_LargePageBits, 1);
     if (rr_local_vaddr == NULL)
     {
         return -1;
     }
-
-    /*
-    (XXX) Arya: not able to use MO for remote rr request
-    mo_client_context_t mo_conn;
-    mo_t *mo;
-    error = forge_mo_cap_from_frames(&rr_frame_obj.cptr, 1, pd->vka,
-                                     &mo_conn.badged_server_ep_cspath.capPtr, &mo);
-    if (error != seL4_NoError)
-    {
-        return error;
-    }
-    */
 
     char ns_id[CSV_MAX_STRING_SIZE];
     char rm_id[CSV_MAX_STRING_SIZE];
@@ -1027,6 +1021,16 @@ int pd_dump(pd_t *pd)
                 snprintf(rm_id, CSV_MAX_STRING_SIZE, "PD_%d", server_pd_id);
 
                 add_pd_requests(ms, pd_id, rm_id, rde.type.type, ns_id);
+
+                if (rde.type.type == GPICAP_TYPE_FILE) {
+                    // (XXX) Arya: Workaround to get all files in the file system
+                    // Find the server that created this resource based on the resource id
+                    uint64_t obj_id = rde.ns_id;
+                    uint64_t server_id = rde.manager_id;
+
+                    error = request_remote_rr(pd, ms, server_id, obj_id, pd_id, rr_frame_path, rr_local_vaddr);
+                    assert(error == 0);
+                }
             }
         }
     }

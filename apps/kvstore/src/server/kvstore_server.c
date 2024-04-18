@@ -129,7 +129,6 @@ int kvstore_server_init()
     CHECK_ERROR(error, "failed to open kvstore db", KVSTORE_ERROR_UNKNOWN);
     KVSTORE_PRINTF("Created DB %s\n", db_filename);
 
-    KVSTORE_PRINTF("Creating table, cmd %s\n");
     SQL_EXEC(kvstore_db, create_table_cmd, NULL);
     CHECK_ERROR(error, "failed to create kvstore table", KVSTORE_ERROR_UNKNOWN);
     KVSTORE_PRINTF("Created table\n");

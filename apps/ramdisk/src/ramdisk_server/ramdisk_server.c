@@ -120,11 +120,11 @@ int ramdisk_init()
     return error;
 }
 
-seL4_MessageInfo_t ramdisk_request_handler(seL4_MessageInfo_t tag, seL4_Word sender_badge, seL4_CPtr cap)
+seL4_MessageInfo_t ramdisk_request_handler(seL4_MessageInfo_t tag, seL4_Word sender_badge, seL4_CPtr cap, bool *need_new_recv_cap)
 {
     int error;
     void *mo_vaddr;
-
+    *need_new_recv_cap = true;
     unsigned int op = seL4_GetMR(RDMSGREG_FUNC);
     uint64_t obj_id = get_object_id_from_badge(sender_badge);
 
@@ -136,8 +136,12 @@ seL4_MessageInfo_t ramdisk_request_handler(seL4_MessageInfo_t tag, seL4_Word sen
         switch (op)
         {
         case RS_FUNC_GET_RR_REQ:
+            *need_new_recv_cap = false;
+            
             uint64_t resource_id = seL4_GetMR(RSMSGREG_EXTRACT_RR_REQ_ID);
             uint64_t blockno = get_local_object_id_from_badge(resource_id);
+            char pd_id[CSV_MAX_STRING_SIZE];
+            make_res_id(pd_id, GPICAP_TYPE_PD, seL4_GetMR(RSMSGREG_EXTRACT_RR_REQ_PD_ID));
 
             RAMDISK_PRINTF("Get RR for blockno %d\n", blockno);
 
@@ -148,7 +152,7 @@ seL4_MessageInfo_t ramdisk_request_handler(seL4_MessageInfo_t tag, seL4_Word sen
             RAMDISK_PRINTF("Can access shared mem %d\n", *((int *)mem_vaddr));
 
             // Initialize the model state
-            CHECK_ERROR_GOTO(mem_size < (sizeof(rr_state_t) + 2 * sizeof(csv_rr_row_t)),
+            CHECK_ERROR_GOTO(mem_size < (sizeof(rr_state_t) + 3 * sizeof(csv_rr_row_t)),
                              "Shared memory for RR is too small", RS_ERROR_RR_SIZE, done);
             rr_state_t *rr_state = (rr_state_t *)mem_vaddr;
             init_rr_state(rr_state);
@@ -160,11 +164,19 @@ seL4_MessageInfo_t ramdisk_request_handler(seL4_MessageInfo_t tag, seL4_Word sen
             add_resource_rr(rr_state, GPICAP_TYPE_BLOCK, block_res_id, row_ptr);
             row_ptr++;
 
+            // Add the has_access_to row
+            add_has_access_to_rr(rr_state,
+                                 pd_id,
+                                 block_res_id,
+                                 false,
+                                 row_ptr); // (XXX) Arya: how to determine is_mapped
+            row_ptr++;
+
             // Add RR from block to MO
             // (XXX) Arya: Actually don't show this, we are pretending these are real blocks?
-            //char mo_res_id[CSV_MAX_STRING_SIZE];
-            //make_res_id(mo_res_id, GPICAP_TYPE_MO, get_ramdisk_server()->ramdisk_mo->id);
-            //add_resource_depends_on_rr(rr_state, block_res_id, mo_res_id, row_ptr);
+            // char mo_res_id[CSV_MAX_STRING_SIZE];
+            // make_res_id(mo_res_id, GPICAP_TYPE_MO, get_ramdisk_server()->ramdisk_mo->id);
+            // add_resource_depends_on_rr(rr_state, block_res_id, mo_res_id, row_ptr);
 
             seL4_SetMR(RDMSGREG_FUNC, RS_FUNC_GET_RR_ACK);
             RAMDISK_PRINTF("Returning RR\n");
@@ -178,6 +190,7 @@ seL4_MessageInfo_t ramdisk_request_handler(seL4_MessageInfo_t tag, seL4_Word sen
     else if (obj_id == BADGE_OBJ_ID_NULL)
     { /* Handle Untyped Request */
         RAMDISK_PRINTF("Got message on badged EP with no object id\n");
+        uint64_t client_id = get_client_id_from_badge(sender_badge);
 
         switch (op)
         {
@@ -194,6 +207,17 @@ seL4_MessageInfo_t ramdisk_request_handler(seL4_MessageInfo_t tag, seL4_Word sen
             break;
 
         case RD_FUNC_CREATE_REQ:
+            //* Attach memory object to server ADS */
+            mo_vaddr = get_ramdisk_server()->shared_mem[client_id];
+            if (mo_vaddr == NULL)
+            {
+                error = resource_server_attach_mo(&get_ramdisk_server()->gen, cap, &mo_vaddr);
+                CHECK_ERROR_GOTO(error, "Failed to attach MO", error, done);
+
+                RAMDISK_PRINTF("Attached MO\n");
+                get_ramdisk_server()->shared_mem[client_id] = mo_vaddr;
+            }
+
             // Assign a new block to this ep
             CHECK_ERROR_GOTO(get_ramdisk_server()->free_blocks == NULL, "no more free blocks to assign",
                              RD_SERVER_ERROR_NO_BLOCKS, done);
@@ -241,43 +265,50 @@ seL4_MessageInfo_t ramdisk_request_handler(seL4_MessageInfo_t tag, seL4_Word sen
         CHECK_ERROR_GOTO(cap_type != GPICAP_TYPE_BLOCK, "ramdisk server got invalid captype in badged EP",
                          RD_SERVER_ERROR_UNKNOWN, done);
         uint64_t blockno = get_local_object_id_from_badge(obj_id);
+        uint64_t client_id = get_client_id_from_badge(sender_badge);
         RAMDISK_PRINTF("Got op for blockno %ld\n", blockno);
 
         switch (op)
         {
         case RD_FUNC_READ_REQ:
+            RAMDISK_PRINTF("Op is read\n");
+
             /* Attach memory object to server ADS */
-            error = resource_server_attach_mo(&get_ramdisk_server()->gen, cap, &mo_vaddr);
-            CHECK_ERROR_GOTO(error, "Failed to attach MO", error, done);
+            mo_vaddr = get_ramdisk_server()->shared_mem[client_id];
+            CHECK_ERROR_GOTO(mo_vaddr == NULL, "MO for client did not exist", RD_SERVER_ERROR_UNKNOWN, done);
+            *need_new_recv_cap = false;
 
             /* Read ramdisk */
             void *ramdisk_vaddr = ramdisk_ptr(blockno);
             RAMDISK_PRINTF("Reading from blockno %ld to %p\n", blockno, mo_vaddr);
             memcpy(mo_vaddr, ramdisk_vaddr, RAMDISK_BLOCK_SIZE);
 
-            /* Detach MO from server ADS */
-            // ARYA-TODO what if the MO is not of RAMDISK_BLOCK_SIZE?
-            error = ads_client_rm(&get_ramdisk_server()->gen.ads_conn, mo_vaddr, RAMDISK_BLOCK_SIZE);
+            RAMDISK_PRINTF("Read block\n");
 
-            CHECK_ERROR_GOTO(error, "failed to detach client's MO from ADS", error, done);
+            /* (XXX) Arya: Todo Detach MO from server ADS */
+            // ARYA-TODO what if the MO is not of RAMDISK_BLOCK_SIZE?
+            // error = ads_client_rm(&get_ramdisk_server()->gen.ads_conn, mo_vaddr, RAMDISK_BLOCK_SIZE);
+            // CHECK_ERROR_GOTO(error, "failed to detach client's MO from ADS", error, done);
 
             seL4_SetMR(RDMSGREG_FUNC, RD_FUNC_READ_ACK);
             break;
         case RD_FUNC_WRITE_REQ:
-            /* Attach memory object to server ADS */
-            error = resource_server_attach_mo(&get_ramdisk_server()->gen, cap, &mo_vaddr);
-            CHECK_ERROR_GOTO(error, "Failed to attach MO", error, done);
+            RAMDISK_PRINTF("Op is write\n");
+
+            //* Attach memory object to server ADS */
+            mo_vaddr = get_ramdisk_server()->shared_mem[client_id];
+            CHECK_ERROR_GOTO(mo_vaddr == NULL, "MO for client did not exist", RD_SERVER_ERROR_UNKNOWN, done);
+            *need_new_recv_cap = false;
 
             /* Write ramdisk */
             ramdisk_vaddr = ramdisk_ptr(blockno);
             RAMDISK_PRINTF("Writing from %p to blockno %ld\n", mo_vaddr, blockno);
             memcpy(ramdisk_vaddr, mo_vaddr, RAMDISK_BLOCK_SIZE);
 
-            /* Detach MO from server ADS */
+            /* (XXX) Arya: Todo Detach MO from server ADS */
             // ARYA-TODO what if the MO is not of RAMDISK_BLOCK_SIZE?
-            error = ads_client_rm(&get_ramdisk_server()->gen.ads_conn, mo_vaddr, RAMDISK_BLOCK_SIZE);
-            seL4_SetMR(RDMSGREG_FUNC, RD_FUNC_WRITE_ACK);
-            CHECK_ERROR_GOTO(error, "failed to detach client's MO from ADS", error, done);
+            // error = ads_client_rm(&get_ramdisk_server()->gen.ads_conn, mo_vaddr, RAMDISK_BLOCK_SIZE);
+            // CHECK_ERROR_GOTO(error, "failed to detach client's MO from ADS", error, done);
 
             seL4_SetMR(RDMSGREG_FUNC, RD_FUNC_WRITE_ACK);
             break;

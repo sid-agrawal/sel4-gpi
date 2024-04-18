@@ -182,7 +182,7 @@ static void handle_ads_allocation(seL4_Word sender_badge, seL4_MessageInfo_t *re
     // (XXX) Linh: this is not very nice as we're coupling the PD and ADS components
     pd_component_registry_entry_t *client_pd_data = pd_component_registry_get_entry_by_id(client_id);
     ZF_LOGF_IF(client_pd_data == NULL, "Couldn't find PD client data");
-    pd_add_resource(&client_pd_data->pd, GPICAP_TYPE_ADS, get_object_id_from_badge(badge), dest_cptr, seL4_CapNull, seL4_CapNull);
+    pd_add_resource(&client_pd_data->pd, GPICAP_TYPE_ADS, get_object_id_from_badge(badge), NSID_DEFAULT, dest_cptr, seL4_CapNull, seL4_CapNull);
     badge = set_client_id_to_badge(badge, client_id);
 
     rde_type_t type = {.type = GPICAP_TYPE_ADS};
@@ -443,7 +443,7 @@ static void handle_shallow_copy_req(seL4_Word sender_badge)
     seL4_Word client_id = get_client_id_from_badge(sender_badge);
     pd_component_registry_entry_t *client_pd_data = pd_component_registry_get_entry_by_id(client_id);
     ZF_LOGF_IF(client_pd_data == NULL, "Couldn't find PD client data");
-    pd_add_resource(&client_pd_data->pd, GPICAP_TYPE_ADS, get_object_id_from_badge(badge), dest_cptr, seL4_CapNull, seL4_CapNull);
+    pd_add_resource(&client_pd_data->pd, GPICAP_TYPE_ADS, get_object_id_from_badge(badge), NSID_DEFAULT, dest_cptr, seL4_CapNull, seL4_CapNull);
     badge = set_client_id_to_badge(badge, client_id);
 
     rde_type_t type = {.type = GPICAP_TYPE_ADS};

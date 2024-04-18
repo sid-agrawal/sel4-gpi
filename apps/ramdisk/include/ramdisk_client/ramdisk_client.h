@@ -55,10 +55,12 @@ int ramdisk_client_sanity_test(seL4_CPtr server_ep_cap,
  *
  * @param server_ep_cap Well known server endpoint cap.
  * @param ret_conn client's connection object
+ * @param mo shared memory for future requests
  * @return int 0 on success, -1 on failure.
  */
 int ramdisk_client_alloc_block(seL4_CPtr server_ep_cap,
-                               ramdisk_client_context_t *ret_conn);
+                               ramdisk_client_context_t *ret_conn,
+                               mo_client_context_t *mo);
 
 /**
  * @brief Read an allocated block from ramdisk

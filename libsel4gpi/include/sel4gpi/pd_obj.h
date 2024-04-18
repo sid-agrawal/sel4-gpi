@@ -99,6 +99,11 @@ typedef struct osmosis_pd_cap
     */
     gpi_cap_t type;
     UT_hash_handle hh;
+
+    /**
+     * (XXX) Arya: not sure yet if we need this field
+    */
+    uint64_t ns_id;
 } osmosis_pd_cap_t;
 
 /**
@@ -259,6 +264,7 @@ void print_pd_osm_rde_info(osmosis_rde_t *o);
 osmosis_pd_cap_t *pd_add_resource(pd_t *pd,
                                   gpi_cap_t type,
                                   uint32_t res_id,
+                                  uint32_t ns_id,
                                   seL4_CPtr slot_in_RT,
                                   seL4_CPtr slot_in_PD,
                                   seL4_CPtr slot_in_serverPD);

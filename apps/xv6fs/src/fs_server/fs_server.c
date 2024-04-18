@@ -88,10 +88,13 @@ static void apply_prefix(char *prefix, char *path)
 {
   char temp[PATH_MAX];
 
-  if (strlen(path) > 0 && path[0] == '/') {
+  if (strlen(path) > 0 && path[0] == '/')
+  {
     // Don't need to add path separator
     snprintf(temp, PATH_MAX, "%s%s", prefix, path);
-  } else {
+  }
+  else
+  {
     snprintf(temp, PATH_MAX, "%s/%s", prefix, path);
   }
 
@@ -235,7 +238,8 @@ static int init_naive_blocks()
   for (int i = 0; i < FS_SIZE; i++)
   {
     error = ramdisk_client_alloc_block(ramdisk_ep,
-                                       &get_xv6fs_server()->naive_blocks[i]);
+                                       &get_xv6fs_server()->naive_blocks[i],
+                                       get_xv6fs_server()->shared_mem);
     CHECK_ERROR(error, "failed to alloc a block from ramdisk");
   }
 
@@ -249,10 +253,6 @@ int xv6fs_init()
 {
   xv6fs_server_context_t *server = get_xv6fs_server();
   int error;
-
-  /* Initialize the blocks */
-  error = init_naive_blocks();
-  CHECK_ERROR(error, "failed to initialize the blocks");
 
   /* Allocate the shared memory object used to communicate with the ramdisk*/
   server->shared_mem = malloc(sizeof(mo_client_context_t));
@@ -273,6 +273,10 @@ int xv6fs_init()
                             &server->shared_mem_vaddr);
   CHECK_ERROR(error, "failed to map shared mem page");
 
+  /* Initialize the blocks */
+  error = init_naive_blocks();
+  CHECK_ERROR(error, "failed to initialize the blocks");
+
   /* Initialize the fs */
   error = init_disk_file();
   CHECK_ERROR(error, "failed to initialize disk file");
@@ -284,11 +288,11 @@ int xv6fs_init()
   return error;
 }
 
-seL4_MessageInfo_t xv6fs_request_handler(seL4_MessageInfo_t tag, seL4_Word sender_badge, seL4_CPtr cap)
+seL4_MessageInfo_t xv6fs_request_handler(seL4_MessageInfo_t tag, seL4_Word sender_badge, seL4_CPtr cap, bool *need_new_recv_cap)
 {
   int error;
   void *mo_vaddr;
-
+  *need_new_recv_cap = true; // (XXX) Arya: todo, find the cases when we actually need this
   unsigned int op = seL4_GetMR(FSMSGREG_FUNC);
   uint64_t obj_id = get_object_id_from_badge(sender_badge);
 
@@ -301,14 +305,117 @@ seL4_MessageInfo_t xv6fs_request_handler(seL4_MessageInfo_t tag, seL4_Word sende
     switch (op)
     {
     case RS_FUNC_GET_RR_REQ:
-      uint64_t resource_id = seL4_GetMR(RSMSGREG_EXTRACT_RR_REQ_ID);
+      *need_new_recv_cap = false;
+
       size_t mem_size = seL4_GetMR(RSMSGREG_EXTRACT_RR_REQ_SIZE);
       void *mem_vaddr = (void *)seL4_GetMR(RSMSGREG_EXTRACT_RR_REQ_VADDR);
+      char pd_id[CSV_MAX_STRING_SIZE];
+      make_res_id(pd_id, GPICAP_TYPE_PD, seL4_GetMR(RSMSGREG_EXTRACT_RR_REQ_PD_ID));
 
       // Initialize the model state
       rr_state_t *rr_state = (rr_state_t *)mem_vaddr;
       init_rr_state(rr_state);
       csv_rr_row_t *row_ptr = mem_vaddr + sizeof(rr_state_t);
+
+// (XXX) Arya: Switch from dumping one resource to dumping entire namespace
+#if 1
+      uint64_t ns_id = seL4_GetMR(RSMSGREG_EXTRACT_RR_REQ_ID);
+
+      printf("Got request to dump rr for nsid %d\n", ns_id);
+
+      /* Update pathname for namespace */
+      char path[MAXPATH];
+      strcpy(path, ROOT_DIR);
+
+      if (ns_id != NSID_DEFAULT)
+      {
+        fs_namespace_t *ns = find_ns(ns_id);
+        if (ns == NULL)
+        {
+          XV6FS_PRINTF("Namespace did not exist for dumprr\n");
+          error = RS_ERROR_NS;
+          goto done;
+        }
+
+        apply_prefix(ns->ns_prefix, path);
+      }
+
+      printf("Listing files in %s\n", path);
+
+      /* List all the files in the NS */
+      int n_files;
+      uint32_t inums[16];
+
+      error = xv6fs_sys_walk(path, inums, &n_files);
+      CHECK_ERROR_GOTO(error, "Failed to walk FS", FS_SERVER_ERROR_UNKNOWN, done);
+
+      char file_res_id[CSV_MAX_STRING_SIZE];
+      char block_res_id[CSV_MAX_STRING_SIZE];
+      int n_blocknos = 100; // (XXX) Arya: what if there are more blocks?
+      int *blocknos = malloc(sizeof(int) * n_blocknos);
+
+      for (int i = 0; i < n_files; i++)
+      {
+        if ((void *)(row_ptr + 2) >= mem_vaddr + mem_size)
+        {
+          XV6FS_PRINTF("Ran out of space in the MO to write RR\n");
+          error = RS_ERROR_RR_SIZE;
+          break;
+        }
+
+        // Find file from reg entry
+        fs_registry_entry_t *reg_entry = fs_registry_get_entry_by_id(inums[i]);
+        if (reg_entry == NULL)
+        {
+          XV6FS_PRINTF("Can't find file for RR request, local ID is 0x%lx\n",
+                       inums[i]);
+          error = RS_ERROR_DNE;
+
+          // (XXX) Arya: Ideally, we should have let the PD component know tha this file was deleted
+          // For now, just return RS_ERROR_DNE
+          goto done;
+        }
+
+        XV6FS_PRINTF("Get RR for fileno %ld\n", reg_entry->file->id);
+
+        // Add the entry for the resource
+        uint64_t file_id = get_global_object_id_from_local(get_xv6fs_server()->gen.server_id, inums[i]);
+        make_res_id(file_res_id, GPICAP_TYPE_FILE, file_id);
+        add_resource_rr(rr_state, GPICAP_TYPE_FILE, file_res_id, row_ptr);
+        row_ptr++;
+
+        // Add the has_access_to row
+        add_has_access_to_rr(rr_state,
+                             pd_id,
+                             file_res_id,
+                             false,
+                             row_ptr); // (XXX) Arya: how to determine is_mapped
+        row_ptr++;
+
+        // Add relations for blocks
+        xv6fs_sys_blocknos(reg_entry->file, blocknos, n_blocknos, &n_blocknos);
+        XV6FS_PRINTF("File has %d blocks\n", n_blocknos);
+
+        if ((void *)(row_ptr + n_blocknos) >= mem_vaddr + mem_size)
+        {
+          XV6FS_PRINTF("Ran out of space in the MO to write RR\n");
+          error = RS_ERROR_RR_SIZE;
+          break;
+        }
+
+        for (int j = 0; j < n_blocknos; j++)
+        {
+          uint64_t block_id = get_xv6fs_server()->naive_blocks[blocknos[j]].id;
+          make_res_id(block_res_id, GPICAP_TYPE_BLOCK, block_id);
+          add_resource_depends_on_rr(rr_state, file_res_id, block_res_id, REL_TYPE_MAP, row_ptr);
+          row_ptr++;
+        }
+      }
+
+      free(blocknos);
+
+#else
+      uint64_t resource_id = seL4_GetMR(RSMSGREG_EXTRACT_RR_REQ_ID);
 
       // Find the resource
       fs_registry_entry_t *reg_entry = fs_registry_get_entry_by_id(resource_id);
@@ -355,6 +462,7 @@ seL4_MessageInfo_t xv6fs_request_handler(seL4_MessageInfo_t tag, seL4_Word sende
         row_ptr++;
       }
       free(blocknos);
+#endif
 
       seL4_SetMR(RDMSGREG_FUNC, RS_FUNC_GET_RR_ACK);
       break;
@@ -444,6 +552,12 @@ seL4_MessageInfo_t xv6fs_request_handler(seL4_MessageInfo_t tag, seL4_Word sende
         // Notify the PD component about the new reousrce
         error = resource_server_create_resource(&get_xv6fs_server()->gen, file->id);
         CHECK_ERROR_GOTO(error, "Failed to create the resource", error, done);
+
+        int n_files;
+        uint32_t inums[16];
+
+        error = xv6fs_sys_walk(ROOT_DIR, inums, &n_files);
+        CHECK_ERROR_GOTO(error, "Failed to walk FS", FS_SERVER_ERROR_UNKNOWN, done);
       }
       else
       {
@@ -527,7 +641,7 @@ seL4_MessageInfo_t xv6fs_request_handler(seL4_MessageInfo_t tag, seL4_Word sende
 
         apply_prefix(ns->ns_prefix, pathname);
       }
-      
+
       XV6FS_PRINTF("Unlink pathname %s\n", pathname);
       error = xv6fs_sys_unlink(pathname);
 

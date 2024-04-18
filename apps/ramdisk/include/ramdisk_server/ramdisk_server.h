@@ -17,6 +17,7 @@
 #include <ramdisk_shared.h>
 
 #define RAMDISK_SERVER_DEFAULT_PRIORITY (seL4_MaxPrio - 100)
+#define MAX_CLIENT_ID 32
 
 /* Context of the server */
 
@@ -39,6 +40,9 @@ typedef struct _ramdisk_server_context
 
     // Data structure of ramdisk blocks
     ramdisk_block_node_t *free_blocks;
+
+    // Store per-client page for shared mem
+    void *shared_mem[MAX_CLIENT_ID];
 } ramdisk_server_context_t;
 
 /**
@@ -49,6 +53,6 @@ int ramdisk_init();
 /**
  * To handle client requests to the ramdisk server
 */
-seL4_MessageInfo_t ramdisk_request_handler(seL4_MessageInfo_t tag, seL4_Word sender_badge, seL4_CPtr cap);
+seL4_MessageInfo_t ramdisk_request_handler(seL4_MessageInfo_t tag, seL4_Word sender_badge, seL4_CPtr cap, bool *need_new_recv_cap);
 
 ramdisk_server_context_t *get_ramdisk_server(void);

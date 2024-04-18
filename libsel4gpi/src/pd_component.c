@@ -282,16 +282,16 @@ void update_forged_pd_cap_from_init_data(test_init_data_t *init_data, sel4utils_
     // Setup the test process' init data
     error = copy_cap_to_pd(pd, child_as_cap_in_parent, &pd->init_data->ads_cap);
     assert(error == 0);
-    pd_add_resource(pd, GPICAP_TYPE_ADS, ads_id, child_as_cap_in_parent, pd->init_data->ads_cap, child_as_cap_in_parent);
+    pd_add_resource(pd, GPICAP_TYPE_ADS, ads_id, NSID_DEFAULT, child_as_cap_in_parent, pd->init_data->ads_cap, child_as_cap_in_parent);
 
     // not using pd_send_cap bc this is already badged
     error = copy_cap_to_pd(pd, reg_ptr->raw_cap_in_root, &pd->init_data->pd_cap);
     assert(error == 0);
-    pd_add_resource(pd, GPICAP_TYPE_PD, pd->pd_obj_id, reg_ptr->raw_cap_in_root, pd->init_data->pd_cap, reg_ptr->raw_cap_in_root);
+    pd_add_resource(pd, GPICAP_TYPE_PD, pd->pd_obj_id, NSID_DEFAULT, reg_ptr->raw_cap_in_root, pd->init_data->pd_cap, reg_ptr->raw_cap_in_root);
 
     error = copy_cap_to_pd(pd, child_cpu_cap_in_parent, &pd->init_data->cpu_cap);
     assert(error == 0);
-    pd_add_resource(pd, GPICAP_TYPE_CPU, cpu_id, child_cpu_cap_in_parent, pd->init_data->cpu_cap, child_cpu_cap_in_parent);
+    pd_add_resource(pd, GPICAP_TYPE_CPU, cpu_id, NSID_DEFAULT, child_cpu_cap_in_parent, pd->init_data->cpu_cap, child_cpu_cap_in_parent);
 
     rde_type_t ads_type = {.type = GPICAP_TYPE_ADS};
     pd_add_rde(pd, ads_type, get_gpi_server()->ads_manager_id, NSID_DEFAULT, get_gpi_server()->server_ep_obj.cptr);
@@ -361,7 +361,7 @@ osmosis_pd_cap_t *pd_add_resource_by_id(uint32_t client_id, gpi_cap_t cap_type, 
     {
         pd_component_registry_entry_t *client_pd_data = pd_component_registry_get_entry_by_id(client_id);
         ZF_LOGF_IF(client_pd_data == NULL, "Couldn't find PD client data");
-        osmosis_pd_cap_t *res = pd_add_resource(&client_pd_data->pd, cap_type, res_id, seL4_CapNull, seL4_CapNull, seL4_CapNull);
+        osmosis_pd_cap_t *res = pd_add_resource(&client_pd_data->pd, cap_type, res_id, NSID_DEFAULT, seL4_CapNull, seL4_CapNull, seL4_CapNull);
         return res;
     }
     return NULL;
@@ -1003,7 +1003,7 @@ static void handle_create_resource_req(seL4_Word sender_badge, seL4_MessageInfo_
         if (osm_cap == NULL)
         {
             // Resource is not already in the hash
-            osm_cap = pd_add_resource(&server_data->pd, resource_type, resource_id, seL4_CapNull, seL4_CapNull, seL4_CapNull);
+            osm_cap = pd_add_resource(&server_data->pd, resource_type, resource_id, NSID_DEFAULT, seL4_CapNull, seL4_CapNull, seL4_CapNull);
         }
         else
         {
@@ -1072,7 +1072,7 @@ static void handle_give_resource_req(seL4_Word sender_badge, seL4_MessageInfo_t 
         if (osm_cap == NULL)
         {
             // Resource is not already in the recipient's hash table
-            osm_cap = pd_add_resource(&recipient_data->pd, resource_manager_data->resource_type, resource_id, seL4_CapNull, seL4_CapNull, seL4_CapNull);
+            osm_cap = pd_add_resource(&recipient_data->pd, resource_manager_data->resource_type, resource_id, ns_id, seL4_CapNull, seL4_CapNull, seL4_CapNull);
         }
 
         seL4_Word badge = gpi_new_badge(resource_manager_data->resource_type,
