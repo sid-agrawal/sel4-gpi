@@ -178,7 +178,7 @@ int xv6fs_sys_walk(char *path, uint32_t *inums, int *n_files)
     return -1;
   }
 
-  // printf("- %s\n", path);
+  printf("- %s\n", path);
 
   // (XXX) Arya: Assuming only one possible level of directories at this point
   int inum_idx = 0;
@@ -202,13 +202,13 @@ int xv6fs_sys_walk(char *path, uint32_t *inums, int *n_files)
       }
       else if (curr_ip->type == T_FILE)
       {
-        // printf("  - %s\n", de_name);
+        printf("  - %s (%d)\n", de_name, curr_ip->inum);
         inums[inum_idx] = curr_ip->inum;
         inum_idx++;
       }
       else if (curr_ip->type == T_DIR)
       {
-        // printf("  - %s\n", de_name);
+        printf("  - %s\n", de_name);
 
         int j = 0;
         struct inode *sub_ip = dirlookup_idx(curr_ip, j, de_name);
@@ -225,11 +225,11 @@ int xv6fs_sys_walk(char *path, uint32_t *inums, int *n_files)
             if (strcmp(de_name, ".") == 0 || strcmp(de_name, "..") == 0)
             {
               // Ignore '.' and '..'
-              //printf("Skip '.' or '..'\n");
+              // printf("Skip '.' or '..'\n");
             }
             else if (sub_ip->type == T_FILE)
             {
-              // printf("    - %s\n", de_name);
+              printf("  - %s (%d)\n", de_name, sub_ip->inum);
               inums[inum_idx] = sub_ip->inum;
               inum_idx++;
             }
@@ -282,13 +282,22 @@ int xv6fs_sys_read(struct file *f, char *buf, size_t sz, uint32_t off)
 
 // Writes all blocknos for file f in the buf
 // If the buf runs out of size, stops writing and returns -1
-int xv6fs_sys_blocknos(struct file *f, int *buf, int buf_size, int *result_size)
+int xv6fs_sys_file_blocknos(struct file *f, int *buf, int buf_size, int *result_size)
 {
   if (f == 0)
     return -1;
 
   return file_blocknos(f, buf, buf_size, result_size);
 }
+
+// Writes all blocknos for inode i in the buf
+// If the buf runs out of size, stops writing and returns -1
+int xv6fs_sys_inode_blocknos(int inum, int *buf, int buf_size, int *result_size)
+{
+  // (XXX) Arya: Assumes root device
+  return iblocknos(ROOTDEV, inum, buf, buf_size, result_size);
+}
+
 
 int xv6fs_sys_write(struct file *f, char *buf, size_t sz, uint32_t off)
 {

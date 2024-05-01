@@ -107,24 +107,7 @@ int file_blocknos(struct file *f, int *buf, int buf_size, int *result_size)
 {
   if (f->type == FD_INODE)
   {
-    ilock(f->ip);
-    int i = 0;
-    for (uint32_t block_offset = 0; block_offset < f->ip->size / BSIZE; block_offset += 1) {
-      int blockno = bmap_noalloc(f->ip, block_offset);
-
-      if (blockno != 0) {
-        if (i < buf_size) {
-          buf[i] = blockno;
-          i++;
-        } else {
-          *result_size = i;
-          iunlock(f->ip);
-          return -1;
-        }
-      }
-    }
-    *result_size = i;
-    iunlock(f->ip);
+    return iblocknos(f->major, f->ip->inum, buf, buf_size, result_size);
   }
   else
   {

@@ -379,7 +379,6 @@ seL4_MessageInfo_t xv6fs_request_handler(seL4_MessageInfo_t tag, seL4_Word sende
 
       error = xv6fs_sys_walk(path, inums, &n_files);
       CHECK_ERROR_GOTO(error, "Failed to walk FS", FS_SERVER_ERROR_UNKNOWN, done);
-      // printf("TEMPA got %d files\n", n_files);
 
       char file_res_id[CSV_MAX_STRING_SIZE];
       char block_res_id[CSV_MAX_STRING_SIZE];
@@ -395,18 +394,6 @@ seL4_MessageInfo_t xv6fs_request_handler(seL4_MessageInfo_t tag, seL4_Word sende
           break;
         }
 
-        // Find file from reg entry
-        fs_registry_entry_t *reg_entry = fs_registry_get_entry_by_id(inums[i]);
-        if (reg_entry == NULL)
-        {
-          XV6FS_PRINTF("Can't find file for RR request, local ID is 0x%lx\n",
-                       inums[i]);
-          error = RS_ERROR_DNE;
-
-          // (XXX) Arya: Ideally, we should have let the PD component know tha this file was deleted
-          // For now, just return RS_ERROR_DNE
-          goto done;
-        }
 
         XV6FS_PRINTF("Get RR for fileno %ld\n", reg_entry->file->id);
 
@@ -429,7 +416,8 @@ seL4_MessageInfo_t xv6fs_request_handler(seL4_MessageInfo_t tag, seL4_Word sende
         row_ptr++;
 
         // Add relations for blocks
-        xv6fs_sys_blocknos(reg_entry->file, blocknos, n_blocknos, &n_blocknos);
+        error = xv6fs_sys_inode_blocknos(inums[i], blocknos, n_blocknos, &n_blocknos);
+        CHECK_ERROR_GOTO(error, "Failed to get blocknos for file", FS_SERVER_ERROR_UNKNOWN, done);
         XV6FS_PRINTF("File has %d blocks\n", n_blocknos);
 
         if ((void *)(row_ptr + n_blocknos) >= mem_vaddr + mem_size)

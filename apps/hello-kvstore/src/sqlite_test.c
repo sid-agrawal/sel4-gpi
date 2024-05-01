@@ -180,8 +180,6 @@ int sqlite_tests(void)
     assert(error == SQLITE_OK);
     assert(db != NULL);
 
-    printf("TEMPA made db %s\n", DB_NAME);
-
     // Create some tables
     const char *sql_create_format = "create table %s(one varchar(10), two smallint);";
     SQL_EXEC(db, sql_create_format, T1_NAME);

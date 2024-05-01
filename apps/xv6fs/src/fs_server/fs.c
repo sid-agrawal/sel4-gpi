@@ -656,20 +656,22 @@ dirlookup_idx(struct inode *dp, int idx, char *de_name)
 
   if (off >= dp->size)
   {
-    //printf("Finished, dp size 0x%x\n", dp->size);
+    // printf("Finished, dp size 0x%x\n", dp->size);
     return NULL;
   }
 
   if (readi(dp, 0, (uint64_t)&de, off, sizeof(de)) != sizeof(de))
     xv6fs_panic("dirlookup read");
 
-  //printf("Did dirlookup %d\n", idx);
+  // printf("Did dirlookup %d\n", idx);
 
-  if (de.inum != 0) {
-    //printf("Dirlookup '%s'\n", de.name);
+  if (de.inum != 0)
+  {
+    // printf("Dirlookup '%s'\n", de.name);
   }
 
-  if (de.inum == 0 || strlen(de_name) == 0) {
+  if (de.inum == 0 || strlen(de_name) == 0)
+  {
     return &null_inode;
   }
 
@@ -805,4 +807,37 @@ struct inode *
 nameiparent(char *path, char *name)
 {
   return namex(path, 1, name);
+}
+
+// Writes all blocknos for inode i in the buf
+// If the buf runs out of size, stops writing
+int iblocknos(uint32_t dev, uint32_t inum, int *buf, int buf_size, int *result_size)
+{
+  struct inode *ip = iget(dev, inum);
+
+  ilock(ip);
+  int i = 0;
+  for (uint32_t block_offset = 0; block_offset < ip->size / BSIZE; block_offset += 1)
+  {
+    int blockno = bmap_noalloc(ip, block_offset);
+
+    if (blockno != 0)
+    {
+      if (i < buf_size)
+      {
+        buf[i] = blockno;
+        i++;
+      }
+      else
+      {
+        *result_size = i;
+        iunlock(ip);
+        return -1;
+      }
+    }
+  }
+  *result_size = i;
+  iunlock(ip);
+
+  return 0;
 }

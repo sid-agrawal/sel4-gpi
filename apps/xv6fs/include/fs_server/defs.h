@@ -73,6 +73,7 @@ void stati(struct inode *, struct stat *);
 int writei(struct inode *, int, uint64_t, uint32_t, uint32_t);
 void itrunc(struct inode *);
 static void xv6fs_bzero(int dev, int bno);
+int iblocknos(uint32_t dev, uint32_t inum, int *buf, int buf_size, int *result_size);
 
 // printf.c
 __attribute__((noreturn)) void xv6fs_panic(char *s);
