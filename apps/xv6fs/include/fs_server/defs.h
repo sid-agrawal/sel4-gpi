@@ -119,5 +119,6 @@ int xv6fs_sys_stat(struct file *f, struct stat *st);
 int xv6fs_sys_seek(void *fh, uint64_t off, int whence);
 int xv6fs_sys_fcntl(void *fh, int cmd, unsigned long arg);
 int xv6fs_sys_blocknos(struct file *f, int *buf, int buf_size, int* result_size);
-int xv6fs_sys_walk(char *path, uint32_t *inums, int *n_files);
+int xv6fs_sys_inode_blocknos(int inum, int *buf, int buf_size, int *result_size);
+int xv6fs_sys_walk(char *path, bool print, uint32_t *inums, int *n_files);
 struct inode *dirlookup_idx(struct inode *dp, int idx, char *de_name);

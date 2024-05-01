@@ -186,21 +186,28 @@ static fs_registry_entry_t *fs_registry_get_entry_by_badge(seL4_Word badge)
 }
 
 /**
- * @brief Lookup the client registry entry for the given badge.
+ * @brief Close the registry entry
+ * If the entry has no references, close the corresponding file
  *
- * @param badge
+ * @param entry entry to close
  * @return fs_registry_entry_t*
  */
-static void fs_registry_remove(fs_registry_entry_t *entry)
+static void fs_registry_close(fs_registry_entry_t *entry)
 {
   fs_registry_entry_t *current_ctx = get_xv6fs_server()->client_registry;
 
   // Check if entry to remove is head of list
   if (current_ctx == entry)
   {
-    get_xv6fs_server()->client_registry = entry->next;
-    free(entry->file);
-    free(entry);
+    current_ctx->count--;
+
+    if (current_ctx->count == 0)
+    {
+      get_xv6fs_server()->client_registry = entry->next;
+      xv6fs_sys_fileclose(entry->file);
+      free(entry);
+    }
+
     return;
   }
 
@@ -209,9 +216,15 @@ static void fs_registry_remove(fs_registry_entry_t *entry)
   {
     if (current_ctx->next == entry)
     {
-      current_ctx->next = entry->next;
-      free(entry->file);
-      free(entry);
+      current_ctx->next->count--;
+
+      if (current_ctx->next->count == 0)
+      {
+        current_ctx->next = entry->next;
+        xv6fs_sys_fileclose(entry->file);
+        free(entry);
+      }
+
       return;
     }
     current_ctx = current_ctx->next;
@@ -377,7 +390,7 @@ seL4_MessageInfo_t xv6fs_request_handler(seL4_MessageInfo_t tag, seL4_Word sende
       int n_files;
       uint32_t inums[16];
 
-      error = xv6fs_sys_walk(path, inums, &n_files);
+      error = xv6fs_sys_walk(path, false, inums, &n_files);
       CHECK_ERROR_GOTO(error, "Failed to walk FS", FS_SERVER_ERROR_UNKNOWN, done);
 
       char file_res_id[CSV_MAX_STRING_SIZE];
@@ -394,8 +407,7 @@ seL4_MessageInfo_t xv6fs_request_handler(seL4_MessageInfo_t tag, seL4_Word sende
           break;
         }
 
-
-        XV6FS_PRINTF("Get RR for fileno %ld\n", reg_entry->file->id);
+        XV6FS_PRINTF("Get RR for fileno %ld\n", inums[i]);
 
         // Add the entry for the resource
         uint64_t file_id = get_global_object_id_from_local(get_xv6fs_server()->gen.server_id, inums[i]);
@@ -576,20 +588,24 @@ seL4_MessageInfo_t xv6fs_request_handler(seL4_MessageInfo_t tag, seL4_Word sende
         // Notify the PD component about the new reousrce
         error = resource_server_create_resource(&get_xv6fs_server()->gen, file->id);
         CHECK_ERROR_GOTO(error, "Failed to create the resource", error, done);
-
-        int n_files;
-        uint32_t inums[16];
-
-        //error = xv6fs_sys_walk(ROOT_DIR, inums, &n_files);
-        CHECK_ERROR_GOTO(error, "Failed to walk FS", FS_SERVER_ERROR_UNKNOWN, done);
       }
       else
       {
         XV6FS_PRINTF("File was already open, use previous registry entry\n");
         reg_entry->count++;
-        free(file); // We don't need another copy of the structure
+
+        fileclose(file); // We don't need another copy of the structure
         file = reg_entry->file;
+        filedup(file);
       }
+
+#if FS_DEBUG
+      // Prints the FS contents to console for debug
+      int n_files;
+      uint32_t inums[16];
+      error = xv6fs_sys_walk(ROOT_DIR, true, inums, &n_files);
+      CHECK_ERROR_GOTO(error, "Failed to walk FS", FS_SERVER_ERROR_UNKNOWN, done);
+#endif
 
       // Create the resource endpoint
       seL4_CPtr dest;
@@ -668,6 +684,7 @@ seL4_MessageInfo_t xv6fs_request_handler(seL4_MessageInfo_t tag, seL4_Word sende
 
       XV6FS_PRINTF("Unlink pathname %s\n", pathname);
       error = xv6fs_sys_unlink(pathname);
+      CHECK_ERROR_GOTO(error, "Failed to unlink", FS_SERVER_ERROR_UNKNOWN, done);
 
       seL4_MessageInfo_ptr_set_length(&reply_tag, FSMSGREG_UNLINK_ACK_END);
       seL4_SetMR(RDMSGREG_FUNC, FS_FUNC_UNLINK_ACK);
@@ -679,7 +696,7 @@ seL4_MessageInfo_t xv6fs_request_handler(seL4_MessageInfo_t tag, seL4_Word sende
   else
   {
     /* Handle Request On Specific Resource */
-    XV6FS_PRINTF("Received badged request with object id\n");
+    XV6FS_PRINTF("Received badged request with object id %lx\n", get_object_id_from_badge(sender_badge));
 
     int ret;
     fs_registry_entry_t *reg_entry = fs_registry_get_entry_by_badge(sender_badge);
@@ -727,15 +744,10 @@ seL4_MessageInfo_t xv6fs_request_handler(seL4_MessageInfo_t tag, seL4_Word sende
       seL4_SetMR(FSMSGREG_WRITE_ACK_N, n_bytes_ret);
       break;
     case FS_FUNC_CLOSE_REQ:
-        /* Cleanup resources associated with the file */;
-      reg_entry->count--;
-      if (reg_entry->count <= 0)
-      {
-        XV6FS_PRINTF("Removing registry entry for file with 0 refcount\n");
-        fs_registry_remove(reg_entry);
+      XV6FS_PRINTF("Close file (%d)\n", reg_entry->file->id);
 
-        // (XXX) Arya: Do we actually want to remove the registry entry?
-      }
+      /* Remove the ref in the registry entry */
+      fs_registry_close(reg_entry);
 
       seL4_MessageInfo_ptr_set_length(&reply_tag, FSMSGREG_CLOSE_ACK_END);
       seL4_SetMR(RDMSGREG_FUNC, FS_FUNC_CLOSE_ACK);

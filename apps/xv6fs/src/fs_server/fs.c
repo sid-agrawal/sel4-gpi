@@ -343,7 +343,7 @@ void iunlock(struct inode *ip)
 // case it has to free the inode.
 void iput(struct inode *ip)
 {
-  acquire(&itable.lock);
+  acquire(&itable.lock);\
 
   if (ip->ref == 1 && ip->valid && ip->nlink == 0)
   {
@@ -837,7 +837,7 @@ int iblocknos(uint32_t dev, uint32_t inum, int *buf, int buf_size, int *result_s
     }
   }
   *result_size = i;
-  iunlock(ip);
+  iunlockput(ip);
 
   return 0;
 }

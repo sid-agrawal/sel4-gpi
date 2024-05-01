@@ -38,6 +38,7 @@ filedup(struct file *f)
 void fileclose(struct file *f)
 {
   struct file ff;
+  ff = *f;
 
   if (f->ref < 1)
     xv6fs_panic("fileclose");

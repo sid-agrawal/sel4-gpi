@@ -15,11 +15,13 @@
 #include <sqlite3/sqlite3.h>
 
 #define PRINT_CALLBACK 0
-#define DB_NAME "/test-db.db"
+#define DB_NAME_FORMAT "/test-db-%d.db"
 #define T1_NAME "t1"
 #define T2_NAME "t2"
 #define N_INSERT 50
 #define CMDLEN 128
+
+char db_name[128];
 
 #define SQL_EXEC_SELECT(sql_db, format, ...)                                       \
     do                                                                             \
@@ -27,20 +29,20 @@
         sqlite_row *listptr = list_head;                                           \
         listptr->nvals = 0;                                                        \
         error = snprintf(sql_cmd, CMDLEN, format, __VA_ARGS__);                    \
-        assert(error != -1);                                                  \
+        assert(error != -1);                                                       \
         error = sqlite3_exec(sql_db, sql_cmd, sqlite_callback, &listptr, &errmsg); \
         print_error(error, errmsg, db);                                            \
-        assert(error == SQLITE_OK);                                           \
+        assert(error == SQLITE_OK);                                                \
     } while (0);
 
 #define SQL_EXEC(sql_db, format, ...)                                          \
     do                                                                         \
     {                                                                          \
         error = snprintf(sql_cmd, CMDLEN, format, __VA_ARGS__);                \
-        assert(error != -1);                                              \
+        assert(error != -1);                                                   \
         error = sqlite3_exec(sql_db, sql_cmd, sqlite_callback, NULL, &errmsg); \
         print_error(error, errmsg, db);                                        \
-        assert(error == SQLITE_OK);                                       \
+        assert(error == SQLITE_OK);                                            \
     } while (0);
 
 // Structures store the results of a sql select statement for verification
@@ -176,7 +178,27 @@ int sqlite_tests(void)
 
     // Load an initial db
     sqlite3 *db;
-    error = sqlite3_open(DB_NAME, &db);
+
+    // Generate a random DB name
+
+    /* Try a few filenames in case there is already a test db */
+    for (int i = 0; i < 10; i++)
+    {
+        error = snprintf(db_name, 128, DB_NAME_FORMAT, i);
+        assert(error != -1);
+
+        // Check if the file exists
+        if (access(db_name, F_OK))
+        {
+            printf("sqlite_tests: DB %s already exists, trying another name\n", db_name);
+        }
+        else
+        {
+            break;
+        }
+    }
+
+    error = sqlite3_open(db_name, &db);
     assert(error == SQLITE_OK);
     assert(db != NULL);
 
@@ -228,12 +250,12 @@ int sqlite_tests(void)
     /* Don't close so we can see the files in model state */
 
     // Close the dbs
-    //error = sqlite3_close(db);
-    //assert(error == SQLITE_OK);
+    error = sqlite3_close(db);
+    assert(error == SQLITE_OK);
 
     // Shut down sqlite
-    //error = sqlite3_shutdown();
-    //assert(error == SQLITE_OK);
+    error = sqlite3_shutdown();
+    assert(error == SQLITE_OK);
 
     printf("---- SQLite tests pass ----\n");
 

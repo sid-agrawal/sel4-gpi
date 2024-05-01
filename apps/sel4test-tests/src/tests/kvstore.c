@@ -459,3 +459,48 @@ int test_kvstore_diff_threads(env_t env)
     return sel4test_get_result();
 }
 DEFINE_TEST(GPIKV006, "Test kvstore with app and lib in the same PD, different threads", test_kvstore_diff_threads, true)
+
+int test_kvstore_two_sets(env_t env)
+{
+    int error;
+
+    printf("------------------STARTING TEST: %s------------------\n", __func__);
+
+    error = setup(env);
+    test_assert(error == 0);
+
+    /* Start the kvstore PD 1 */
+    seL4_CPtr kvstore_ep_1;
+    error = start_kvstore_server(&kvstore_ep_1, NSID_DEFAULT, 0, 0);
+    test_assert(error == 0);
+
+    /* Start the kvstore PD 2 */
+    seL4_CPtr kvstore_ep_2;
+    error = start_kvstore_server(&kvstore_ep_2, NSID_DEFAULT, 0, 0);
+    test_assert(error == 0);
+
+    /* Start the app PD 1 */
+    pd_client_context_t hello_pd_1;
+    error = start_hello_kvstore(SEPARATE_PROC, kvstore_ep_1, &hello_pd_1, NSID_DEFAULT, 0, 0);
+
+    /* Start the app PD 2 */
+    pd_client_context_t hello_pd_2;
+    error = start_hello_kvstore(SEPARATE_PROC, kvstore_ep_2, &hello_pd_2, NSID_DEFAULT, 0, 0);
+
+    /* Wait for test result 1 */
+    seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0, 0);
+    tag = seL4_Recv(self_ep, NULL);
+    error = seL4_MessageInfo_get_label(tag);
+    test_assert(error == 0);
+
+    /* Wait for test result 2 */
+    tag = seL4_Recv(self_ep, NULL);
+    error = seL4_MessageInfo_get_label(tag);
+    test_assert(error == 0);
+
+    dump_model();
+
+    printf("------------------ENDING: %s------------------\n", __func__);
+    return sel4test_get_result();
+}
+DEFINE_TEST(GPIKV007, "Test kvstore with app and lib in different PDs, 2 sets of each", test_kvstore_two_sets, true)
