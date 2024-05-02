@@ -155,8 +155,8 @@ seL4_MessageInfo_t ramdisk_request_handler(seL4_MessageInfo_t tag, seL4_Word sen
             // (XXX) Arya: A lot of this should be moved to PD component once we have resource spaces implemented
 
             /* Add the PD nodes */
-            gpi_model_node_t *self_pd_node = add_pd_node(model_state, "RAMDISK_SERVER", rd_pd_id);
-            gpi_model_node_t *client_pd_node = add_pd_node(model_state, "RAMDISK_CLIENT", pd_id);
+            gpi_model_node_t *self_pd_node = add_pd_node(model_state, NULL, rd_pd_id);
+            gpi_model_node_t *client_pd_node = add_pd_node(model_state, NULL, pd_id);
 
             /* Add the block resource space node */
             // (XXX) Arya: Assumes there is only one block space, and it is space 1

@@ -323,24 +323,15 @@ seL4_MessageInfo_t xv6fs_request_handler(seL4_MessageInfo_t tag, seL4_Word sende
       uint64_t pd_id = seL4_GetMR(RSMSGREG_EXTRACT_RR_REQ_PD_ID);
       uint64_t fs_pd_id = seL4_GetMR(RSMSGREG_EXTRACT_RR_REQ_RS_PD_ID);
 
-      XV6FS_PRINTF("Get RR for fileno %d\n", fileno);
       void *mem_vaddr = (void *)seL4_GetMR(RSMSGREG_EXTRACT_RR_REQ_VADDR);
       model_state_t *model_state = (model_state_t *)mem_vaddr;
       void *free_mem = mem_vaddr + sizeof(model_state_t);
       size_t free_size = seL4_GetMR(RSMSGREG_EXTRACT_RR_REQ_SIZE) - sizeof(model_state_t);
 
-      // Initialize the model state
-      init_model_state(model_state, free_mem, free_size);
-
-      // (XXX) Arya: A lot of this should be moved to PD component once we have resource spaces implemented
-
-      /* Add the PD nodes */
-      gpi_model_node_t *self_pd_node = add_pd_node(model_state, "FILE_SERVER", fs_pd_id);
-      gpi_model_node_t *client_pd_node = add_pd_node(model_state, "FILE_CLIENT", pd_id);
-
 // (XXX) Arya: Switch from dumping one resource to dumping entire namespace
 #if 1
       uint64_t ns_id = seL4_GetMR(RSMSGREG_EXTRACT_RR_REQ_ID);
+      XV6FS_PRINTF("Get RR for ns %d\n", ns_id);
 
       /* Update pathname for namespace */
       char path[MAXPATH];
@@ -359,6 +350,22 @@ seL4_MessageInfo_t xv6fs_request_handler(seL4_MessageInfo_t tag, seL4_Word sende
         apply_prefix(ns->ns_prefix, path);
       }
 
+      /* List all the files in the NS */
+      int n_files;
+      uint32_t inums[16];
+
+      error = xv6fs_sys_walk(path, false, inums, &n_files);
+      CHECK_ERROR_GOTO(error, "Failed to walk FS", FS_SERVER_ERROR_UNKNOWN, done);
+
+      /* Initialize the model state */
+      init_model_state(model_state, free_mem, free_size);
+
+      // (XXX) Arya: A lot of this should be moved to PD component once we have resource spaces implemented
+
+      /* Add the PD nodes */
+      gpi_model_node_t *self_pd_node = add_pd_node(model_state, NULL, fs_pd_id);
+      gpi_model_node_t *client_pd_node = add_pd_node(model_state, NULL, pd_id);
+
       /* Add the file resource space node */
       gpi_model_node_t *file_space_node = add_resource_space_node(model_state, GPICAP_TYPE_FILE, get_xv6fs_server()->gen.server_id);
       add_edge(model_state, GPI_EDGE_TYPE_HOLD, self_pd_node, file_space_node);
@@ -369,18 +376,9 @@ seL4_MessageInfo_t xv6fs_request_handler(seL4_MessageInfo_t tag, seL4_Word sende
       gpi_model_node_t *block_space_node = add_resource_space_node(model_state, GPICAP_TYPE_BLOCK, block_space_id);
       add_edge(model_state, GPI_EDGE_TYPE_MAP, file_space_node, block_space_node);
 
-      /* List all the files in the NS */
-      int n_files;
-      uint32_t inums[16];
-
-      error = xv6fs_sys_walk(path, false, inums, &n_files);
-      CHECK_ERROR_GOTO(error, "Failed to walk FS", FS_SERVER_ERROR_UNKNOWN, done);
-
-      char file_res_id[CSV_MAX_STRING_SIZE];
-      char block_res_id[CSV_MAX_STRING_SIZE];
+      /* Add nodes for all files and blocks */
       int n_blocknos = 100; // (XXX) Arya: what if there are more blocks?
       int *blocknos = malloc(sizeof(int) * n_blocknos);
-
       for (int i = 0; i < n_files; i++)
       {
         XV6FS_PRINTF("Get RR for fileno %ld\n", inums[i]);

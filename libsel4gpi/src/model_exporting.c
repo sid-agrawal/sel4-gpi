@@ -43,7 +43,7 @@ static char *node_type_to_str(gpi_node_type_t node_type)
     case GPI_NODE_TYPE_RESOURCE:
         return "RESOURCE";
     case GPI_NODE_TYPE_SPACE:
-        return "RESOURCE SPACE";
+        return "RESOURCE_SPACE";
     default:
         return "UNKNOWN";
     }
@@ -118,17 +118,17 @@ void export_model_state(model_state_t *model_state, char *buffer, size_t buf_len
     size_t buf_written = snprintf(buffer, buf_len - buf_written_total,
                                   "%-*s,%-*s,%-*s,%-*s,%-*s,%-*s\n",
                                   width,
-                                  "NODE TYPE",
+                                  "NODE_TYPE",
                                   width,
-                                  "NODE ID",
+                                  "NODE_ID",
                                   width,
                                   "DATA",
                                   width,
-                                  "EDGE TYPE",
+                                  "EDGE_TYPE",
                                   width,
-                                  "EDGE FROM",
+                                  "EDGE_FROM",
                                   width,
-                                  "EDGE TO");
+                                  "EDGE_TO");
 
     buffer += buf_written;
     buf_written_total += buf_written;
@@ -192,17 +192,17 @@ void print_model_state(model_state_t *model_state)
     // Print the headers
     printf("%-*s,%-*s,%-*s,%-*s,%-*s,%-*s\n",
            width,
-           "NODE TYPE",
+           "NODE_TYPE",
            width,
-           "NODE ID",
+           "NODE_ID",
            width,
            "DATA",
            width,
-           "EDGE TYPE",
+           "EDGE_TYPE",
            width,
-           "EDGE FROM",
+           "EDGE_FROM",
            width,
-           "EDGE TO");
+           "EDGE_TO");
 
     // Print the nodes
     for (gpi_model_node_t *node = model_state->nodes; node != NULL; node = node->hh.next)
@@ -355,7 +355,9 @@ void add_request_edge(model_state_t *model_state, gpi_model_node_t *from, gpi_mo
 
 void get_resource_space_id(gpi_cap_t resource_type, uint64_t res_space_id, char *str_id)
 {
-    make_node_id(str_id, "SPACE", res_space_id);
+    char prefix[CSV_MAX_STRING_SIZE];
+    snprintf(prefix, CSV_MAX_STRING_SIZE, "%s_SPACE", cap_type_to_str(resource_type));
+    make_node_id(str_id, prefix, res_space_id);
 }
 
 void get_resource_id(gpi_cap_t res_type, uint64_t res_space_id, uint64_t res_id, char *str_id)

@@ -17,7 +17,7 @@
 #include <sel4bench/arch/sel4bench.h>
 
 char *csv_buffer =
-    "NODE TYPE,NODE ID,DATA,EDGE TYPE,EDGE FROM,EDGE TO\n"
+    "NODE_TYPE,NODE_ID,DATA,EDGE_TYPE,EDGE_FROM,EDGE_TO\n"
     "PD,PD_0,ROOT_TASK,,,\n"
     "PD,PD_1,Proc1,,,\n"
     "PD,PD_2,Proc2,,,\n"
