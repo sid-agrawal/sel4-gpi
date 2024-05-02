@@ -71,7 +71,7 @@ typedef struct _resource_server_context
     uint64_t server_id;
 
     // Run to serve requests
-    seL4_MessageInfo_t (*request_handler)(seL4_MessageInfo_t, seL4_Word, seL4_CPtr, bool*);
+    seL4_MessageInfo_t (*request_handler)(seL4_MessageInfo_t, seL4_Word, seL4_CPtr, bool *);
 
     // Run once when the server is started
     int (*init_fn)();
@@ -119,7 +119,7 @@ int start_resource_server_pd(uint64_t rde_id,
  */
 int resource_server_start(resource_server_context_t *context,
                           gpi_cap_t server_type,
-                          seL4_MessageInfo_t (*request_handler)(seL4_MessageInfo_t, seL4_Word, seL4_CPtr, bool*),
+                          seL4_MessageInfo_t (*request_handler)(seL4_MessageInfo_t, seL4_Word, seL4_CPtr, bool *),
                           seL4_CPtr parent_ep,
                           int (*init_fn)());
 
@@ -171,7 +171,7 @@ int resource_server_attach_mo(resource_server_context_t *context,
  * @param remote_vaddr location of shared memory in the resource server
  * @param local_vaddr location of shared memory in the caller
  * @param size size of shared memory
- * @param ret_rr_state Location of the resulting rr state
+ * @param model_state_t Location of the resulting model state
  *                     (same as local_vaddr on success)
  * @return
  *      RS_NOERROR if dump completed successfully
@@ -185,7 +185,7 @@ int resource_server_get_rr(seL4_CPtr server_ep,
                            void *remote_vaddr,
                            void *local_vaddr,
                            size_t size,
-                           rr_state_t **ret_rr_state);
+                           model_state_t **ret_state);
 
 /**
  * Notifies the PD component of a resource that is created, but not yet

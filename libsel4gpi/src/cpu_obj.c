@@ -132,20 +132,25 @@ int cpu_new(cpu_t *cpu,
     */
 }
 
-void cpu_dump_rr(cpu_t *cpu, model_state_t *ms)
+void cpu_dump_rr(cpu_t *cpu, model_state_t *ms, gpi_model_node_t *pd_node)
 {
-    char cpu_res_id[CSV_MAX_STRING_SIZE];
-    make_res_id(cpu_res_id, GPICAP_TYPE_CPU, cpu->cpu_obj_id);
-    add_resource(ms, cap_type_to_str(GPICAP_TYPE_CPU), cpu_res_id);
+    gpi_model_node_t *root_node = get_root_node(ms);
+
+    /* Add the Virtual CPU node */
+    // (XXX) Arya: Virtual CPU does not belong to a resource space! To fix
+    gpi_model_node_t *cpu_node = add_resource_node(ms, GPICAP_TYPE_CPU, 1, cpu->cpu_obj_id);
+    add_edge(ms, GPI_EDGE_TYPE_HOLD, pd_node, cpu_node);
+
     seL4_Word affinity = 0;
 #if CONFIG_MAX_NUM_NODES > 1
     seL4_TCB_GetAffinity_t affinity_res = seL4_TCB_GetAffinity(cpu->tcb->cptr);
     affinity = affinity_res.affinity;
 #endif
-    char core_res_id[CSV_MAX_STRING_SIZE];
-    make_phys_res_id(core_res_id, cpu->cpu_obj_id, affinity, "PCPU");
-    add_resource(ms, "PCPU", core_res_id);
-    add_resource_depends_on(ms, cpu_res_id, core_res_id, REL_TYPE_MAP);
+
+    /* Add the Physical CPU (core) node */
+    gpi_model_node_t *cpu_core_node = add_resource_node(ms, GPICAP_TYPE_PCPU, 1, affinity);
+    add_edge(ms, GPI_EDGE_TYPE_MAP, cpu_node, cpu_core_node);
+    add_edge(ms, GPI_EDGE_TYPE_HOLD, root_node, cpu_core_node);
 
 // (XXX) Arya: Do not actually show CPU->ADS arrow... do we need it?
 #if 0

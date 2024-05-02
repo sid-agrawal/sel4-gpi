@@ -15,7 +15,7 @@ char _cpio_archive[1];
 char _cpio_archive_end[1];
 
 /* Initialization for static morecore */
-#define APP_MALLOC_SIZE (PAGE_SIZE_4K * 100)
+#define APP_MALLOC_SIZE (PAGE_SIZE_4K * 200)
 char *morecore_area = (char *) PD_HEAP_LOC;
 size_t morecore_size = APP_MALLOC_SIZE;
 uintptr_t morecore_base = (uintptr_t) PD_HEAP_LOC;

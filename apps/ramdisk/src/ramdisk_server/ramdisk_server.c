@@ -140,64 +140,43 @@ seL4_MessageInfo_t ramdisk_request_handler(seL4_MessageInfo_t tag, seL4_Word sen
 
             uint64_t resource_id = seL4_GetMR(RSMSGREG_EXTRACT_RR_REQ_ID);
             uint64_t blockno = get_local_object_id_from_badge(resource_id);
-            char pd_id[CSV_MAX_STRING_SIZE];
-            make_res_id(pd_id, GPICAP_TYPE_PD, seL4_GetMR(RSMSGREG_EXTRACT_RR_REQ_PD_ID));
-            char rd_pd_id[CSV_MAX_STRING_SIZE];
-            make_res_id(rd_pd_id, GPICAP_TYPE_PD, seL4_GetMR(RSMSGREG_EXTRACT_RR_REQ_RS_PD_ID));
+            uint64_t pd_id = seL4_GetMR(RSMSGREG_EXTRACT_RR_REQ_PD_ID);
+            uint64_t rd_pd_id = seL4_GetMR(RSMSGREG_EXTRACT_RR_REQ_RS_PD_ID);
 
             RAMDISK_PRINTF("Get RR for blockno %d\n", blockno);
-
-            size_t mem_size = seL4_GetMR(RSMSGREG_EXTRACT_RR_REQ_SIZE);
             void *mem_vaddr = (void *)seL4_GetMR(RSMSGREG_EXTRACT_RR_REQ_VADDR);
-
-            RAMDISK_PRINTF("Shared mem at %p\n", mem_vaddr);
-            RAMDISK_PRINTF("Can access shared mem %d\n", *((int *)mem_vaddr));
+            model_state_t *model_state = (model_state_t *) mem_vaddr;
+            void *free_mem = mem_vaddr + sizeof(model_state_t);
+            size_t free_size = seL4_GetMR(RSMSGREG_EXTRACT_RR_REQ_SIZE) - sizeof(model_state_t);
 
             // Initialize the model state
-            CHECK_ERROR_GOTO(mem_size < (sizeof(rr_state_t) + 6 * sizeof(csv_rr_row_t)),
-                             "Shared memory for RR is too small", RS_ERROR_RR_SIZE, done);
-            rr_state_t *rr_state = (rr_state_t *)mem_vaddr;
-            init_rr_state(rr_state);
-            csv_rr_row_t *row_ptr = mem_vaddr + sizeof(rr_state_t);
+            init_model_state(model_state, free_mem, free_size);
 
-            /* Add the block resource space */
+            // (XXX) Arya: A lot of this should be moved to PD component once we have resource spaces implemented
+
+            /* Add the PD nodes */
+            gpi_model_node_t *self_pd_node = add_pd_node(model_state, "RAMDISK_SERVER", rd_pd_id);
+            gpi_model_node_t *client_pd_node = add_pd_node(model_state, "RAMDISK_CLIENT", pd_id);
+
+            /* Add the block resource space node */
             // (XXX) Arya: Assumes there is only one block space, and it is space 1
-            char block_space_res_id[CSV_MAX_STRING_SIZE];
-            snprintf(block_space_res_id, CSV_MAX_STRING_SIZE, "BLOCK_SPACE_%d", 1);
-            add_resource_rr(rr_state, GPICAP_TYPE_BLOCK, block_space_res_id, row_ptr);
-            row_ptr++;
+            gpi_model_node_t *block_space_node = add_resource_space_node(model_state, GPICAP_TYPE_BLOCK, 1);
+            add_edge(model_state, GPI_EDGE_TYPE_HOLD, self_pd_node, block_space_node);
 
-            // Add the has_access_to row for block resource space
-            add_has_access_to_rr(rr_state,
-                                 rd_pd_id,
-                                 block_space_res_id,
-                                 false,
-                                 row_ptr);
-            row_ptr++;
+            /* Add the resource node */
 
-            // Add the entry for the resource
-            char block_res_id[CSV_MAX_STRING_SIZE];
-            make_res_id(block_res_id, GPICAP_TYPE_BLOCK, resource_id);
-            add_resource_rr(rr_state, GPICAP_TYPE_BLOCK, block_res_id, row_ptr);
-            row_ptr++;
-
-            // Add the has_access_to row
-            add_has_access_to_rr(rr_state,
-                                 pd_id,
-                                 block_res_id,
-                                 false,
-                                 row_ptr); // (XXX) Arya: how to determine is_mapped
-            row_ptr++;
-
-            // Add the subset row
-            add_resource_depends_on_rr(rr_state, block_res_id, block_space_res_id, REL_TYPE_SUBSET, row_ptr);
-            row_ptr++;
+            gpi_model_node_t *block_node = add_resource_node(model_state, GPICAP_TYPE_BLOCK, 1, blockno);
+            add_edge(model_state, GPI_EDGE_TYPE_HOLD, self_pd_node, block_node);
+            add_edge(model_state, GPI_EDGE_TYPE_HOLD, client_pd_node, block_node);
+            add_edge(model_state, GPI_EDGE_TYPE_SUBSET, block_node, block_space_node);
 
             // Add RR from block to MO
             // (XXX) Arya: Actually don't show this, we are pretending these are real blocks?
             // char mo_res_id[CSV_MAX_STRING_SIZE];
             // make_res_id(mo_res_id, GPICAP_TYPE_MO, get_ramdisk_server()->ramdisk_mo->id);
             // add_resource_depends_on_rr(rr_state, block_res_id, mo_res_id, row_ptr);
+
+            clean_model_state(model_state);
 
             seL4_SetMR(RDMSGREG_FUNC, RS_FUNC_GET_RR_ACK);
             RAMDISK_PRINTF("Returning RR\n");

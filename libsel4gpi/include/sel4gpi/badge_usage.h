@@ -19,8 +19,11 @@ typedef enum GPICAP_TYPE
     // Core cap types
     GPICAP_TYPE_NONE = 0,
     GPICAP_TYPE_ADS,
+    GPICAP_TYPE_VMR,
     GPICAP_TYPE_MO,
+    GPICAP_TYPE_PMR,
     GPICAP_TYPE_CPU,
+    GPICAP_TYPE_PCPU,
     GPICAP_TYPE_PD,
     GPICAP_TYPE_seL4,
 

@@ -40,20 +40,20 @@ int mo_new(mo_t *mo,
     return 0;
 }
 
-void mo_dump_rr(mo_t *mo, model_state_t *ms)
+void mo_dump_rr(mo_t *mo, model_state_t *ms, gpi_model_node_t *pd_node)
 {
-    char mo_res_id[CSV_MAX_STRING_SIZE];
-    make_res_id(mo_res_id, GPICAP_TYPE_MO, mo->mo_obj_id);
-    add_resource(ms, cap_type_to_str(GPICAP_TYPE_MO), mo_res_id);
+    gpi_model_node_t *root_node = get_root_node(ms);
 
+    /* Add the MO node */
+    // (XXX) Arya: MO does not belong to a resource space! To fix
+    gpi_model_node_t *mo_node = add_resource_node(ms, GPICAP_TYPE_MO, 1, mo->mo_obj_id);
+    add_edge(ms, GPI_EDGE_TYPE_HOLD, pd_node, mo_node);
+
+    /* Add the page nodes and relations */
     for (int i = 0; i < mo->num_pages; i++)
     {
-        char page_res_id[CSV_MAX_STRING_SIZE];
-        // (XXX) Arya: Not all PMR have this paddr, need to fix, for now use another id
-        //make_phys_res_id(page_res_id, mo->mo_obj_id, mo->frame_caps_in_root_task[i].paddr, "PMR");
-        uint64_t page_unique_id = (mo->mo_obj_id << 32) | i;
-        make_phys_res_id(page_res_id, mo->mo_obj_id, page_unique_id, "PMR");
-        add_resource(ms, "PMR", page_res_id);
-        add_resource_depends_on(ms, mo_res_id, page_res_id, REL_TYPE_MAP);
+        gpi_model_node_t *pmr_node = add_resource_node(ms, GPICAP_TYPE_PMR, 1, mo->frame_caps_in_root_task[i].paddr);
+        add_edge(ms, GPI_EDGE_TYPE_MAP, mo_node, pmr_node);
+        add_edge(ms, GPI_EDGE_TYPE_HOLD, root_node, pmr_node);
     }
 }

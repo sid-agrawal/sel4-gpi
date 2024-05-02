@@ -347,8 +347,10 @@ int forge_mo_cap_from_frames(seL4_CPtr *frame_caps,
     // (XXX) A lot more will go here.
     for (int i = 0; i < num_pages; i++)
     {
-        // do we want to invoke a syscall to get the paddr of the frame here?
         client_reg_ptr->mo.frame_caps_in_root_task[i].cap = frame_caps[i];
+
+        // (XXX) Arya: Should we have a non-debug way to get paddr?
+        client_reg_ptr->mo.frame_caps_in_root_task[i].paddr = seL4_DebugCapPaddr(frame_caps[i]);
     }
     client_reg_ptr->mo.num_pages = num_pages;
 

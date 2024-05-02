@@ -105,13 +105,12 @@ int ads_shallow_copy(vspace_t *loader, ads_t *ads, vka_t *vka, void *omit_vaddr,
                      void *pd_osm_data, bool shallow_copy, ads_t *ret_ads);
 
 /**
- * @brief
- *
  * @param ads ads object to dump the RR for
  * @param ms pointer to model state
+ * @param pd_node the existing node for pd that is being dumped
  * @return void
  */
-void ads_dump_rr(ads_t *ads, model_state_t *ms);
+void ads_dump_rr(ads_t *ads, model_state_t *ms, gpi_model_node_t *pd_node);
 
 static seL4_CPtr get_asid_pool(seL4_CPtr asid_pool)
 {

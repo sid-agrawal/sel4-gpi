@@ -13,6 +13,11 @@
 #include <sel4utils/vspace.h>
 
 #include <vka/capops.h>
+#include <allocman/bootstrap.h>
+#include <allocman/vka.h>
+#include <simple/simple_helpers.h>
+#include <utils/uthash.h>
+#include <cpio/cpio.h>
 
 #include <sel4gpi/pd_component.h>
 #include <sel4gpi/gpi_server.h>
@@ -27,14 +32,6 @@
 #include <sel4gpi/debug.h>
 #include <sel4gpi/resource_server_utils.h>
 #include <sel4gpi/pd_utils.h>
-// #include <sel4gpi/gpi_rde.h>
-
-#include <vka/capops.h>
-#include <allocman/bootstrap.h>
-#include <allocman/vka.h>
-#include <simple/simple_helpers.h>
-#include <utils/uthash.h>
-#include <cpio/cpio.h>
 
 #define CSPACE_SIZE_BITS 17
 #define ELF_LIB_DATA_SECTION ".lib_data"
@@ -43,7 +40,9 @@
 /* This is doesn't belong here but we need it */
 extern char _cpio_archive[];
 extern char _cpio_archive_end[];
+
 static int pd_setup_cspace(pd_t *pd, vka_t *vka);
+static int pd_dump_internal(pd_t *pd, model_state_t *ms, cspacepath_t rr_frame_path, void *rr_local_vaddr);
 
 int copy_cap_to_pd(pd_t *to_pd,
                    seL4_CPtr cap,
@@ -805,7 +804,7 @@ int pd_start(pd_t *pd,
 }
 
 static int request_remote_rr(pd_t *pd, model_state_t *ms, uint64_t server_id, uint32_t obj_id,
-                             char *pd_id, cspacepath_t rr_frame_path, void *rr_local_vaddr)
+                             cspacepath_t rr_frame_path, void *rr_local_vaddr)
 {
     int error;
 
@@ -817,7 +816,7 @@ static int request_remote_rr(pd_t *pd, model_state_t *ms, uint64_t server_id, ui
         return -1;
     }
     seL4_CPtr server_cap = server_entry->server_ep;
-    rr_state_t *rs;
+    model_state_t *ms2;
 
     OSDB_PRINTF(PD_DEBUG, PDSERVS "Resource ID 0x%lx, server ID 0x%lx, server EP at %d\n", obj_id, server_id, (int)server_cap);
 
@@ -849,7 +848,7 @@ static int request_remote_rr(pd_t *pd, model_state_t *ms, uint64_t server_id, ui
     error = resource_server_get_rr(server_cap, obj_id, pd->pd_obj_id,
                                    server_entry->pd->pd_obj_id,
                                    rr_remote_vaddr, rr_local_vaddr,
-                                   SIZE_BITS_TO_BYTES(seL4_LargePageBits), &rs);
+                                   SIZE_BITS_TO_BYTES(seL4_LargePageBits), &ms2);
 
     if (error == RS_ERROR_DNE)
     {
@@ -869,7 +868,7 @@ static int request_remote_rr(pd_t *pd, model_state_t *ms, uint64_t server_id, ui
         error = -1;
     }
 
-    combine_model_states(ms, rs);
+    combine_model_states(ms, ms2);
 
     // Remove remotely-mapped memory
     vspace_unmap_pages(&server_entry->pd->proc.vspace, rr_remote_vaddr, 1, seL4_LargePageBits, NULL);
@@ -878,12 +877,10 @@ static int request_remote_rr(pd_t *pd, model_state_t *ms, uint64_t server_id, ui
 
 // Add rows to model state for one resource
 static int res_dump(pd_t *pd, model_state_t *ms, osmosis_pd_cap_t *current_cap,
-                    char *pd_id, cspacepath_t rr_frame_path, void *rr_local_vaddr)
+                    gpi_model_node_t *pd_node, cspacepath_t rr_frame_path, void *rr_local_vaddr)
 {
     int error;
 
-    char res_id[CSV_MAX_STRING_SIZE];
-    make_res_id(res_id, current_cap->type, current_cap->res_id);
     switch (current_cap->type)
     {
     case GPICAP_TYPE_NONE:
@@ -892,32 +889,22 @@ static int res_dump(pd_t *pd, model_state_t *ms, osmosis_pd_cap_t *current_cap,
         ads_component_registry_entry_t *ads_data =
             ads_component_registry_get_entry_by_id(current_cap->res_id);
         assert(ads_data != NULL);
-        ads_dump_rr(&ads_data->ads, ms);
-        add_has_access_to(ms,
-                          pd_id,
-                          res_id,
-                          // (XXX): We need to find out which ads is active and print true only those ADSs
-                          // When TRUE it shows that this ads is in use by some TCB.
-                          // We specifically add this to handle the scenario where a PD can have mutliple ads, but only one of them is in use.
-                          // Think LWC.
-                          true);
+
+        ads_dump_rr(&ads_data->ads, ms, pd_node);
         break;
     case GPICAP_TYPE_MO:
         mo_component_registry_entry_t *mo_data = mo_component_registry_get_entry_by_id(current_cap->res_id);
         assert(mo_data != NULL);
-        mo_dump_rr(&mo_data->mo, ms);
-        add_has_access_to(ms, pd_id, res_id, false);
+        mo_dump_rr(&mo_data->mo, ms, pd_node);
         break;
     case GPICAP_TYPE_CPU:
         cpu_component_registry_entry_t *cpu_data = cpu_component_registry_get_entry_by_id(current_cap->res_id);
         assert(cpu_data != NULL);
-        cpu_dump_rr(&cpu_data->cpu, ms);
-        add_has_access_to(ms, pd_id, res_id, false);
+        cpu_dump_rr(&cpu_data->cpu, ms, pd_node);
         break;
     case GPICAP_TYPE_seL4:
         // Use some other method to get the cap details
         break;
-    // case GPICAP_TYPE_FILE: (XXX) Arya: dump files by NS instead
     case GPICAP_TYPE_BLOCK:
         OSDB_PRINTF(PD_DEBUG, PDSERVS "Calling another PD to get the info for resource with ID 0x%x\n", current_cap->res_id);
 
@@ -925,7 +912,7 @@ static int res_dump(pd_t *pd, model_state_t *ms, osmosis_pd_cap_t *current_cap,
         uint64_t obj_id = current_cap->res_id;
         uint64_t server_id = get_server_id_from_badge(obj_id);
 
-        error = request_remote_rr(pd, ms, server_id, obj_id, pd_id, rr_frame_path, rr_local_vaddr);
+        error = request_remote_rr(pd, ms, server_id, obj_id, rr_frame_path, rr_local_vaddr);
         assert(error == 0);
 
         break;
@@ -934,9 +921,9 @@ static int res_dump(pd_t *pd, model_state_t *ms, osmosis_pd_cap_t *current_cap,
         {
             pd_component_registry_entry_t *pd_data = pd_component_registry_get_entry_by_id(current_cap->res_id);
             assert(pd_data != NULL);
-            pd_dump(&pd_data->pd);
+            //pd_dump(&pd_data->pd);
+            pd_dump_internal(&pd_data->pd, ms, rr_frame_path, rr_local_vaddr);
         }
-        // add_has_access_to(ms, pd_id, res_id, false);
         break;
     case GPICAP_TYPE_FILE:
         // (XXX) Arya: dump files by NS instead
@@ -947,6 +934,80 @@ static int res_dump(pd_t *pd, model_state_t *ms, osmosis_pd_cap_t *current_cap,
     }
 
     return 0;
+}
+
+/**
+ * Dump the given PD to the given model state
+ */
+static int pd_dump_internal(pd_t *pd, model_state_t *ms, cspacepath_t rr_frame_path, void *rr_local_vaddr)
+{
+    int error;
+
+    /* Add the PD node */
+    gpi_model_node_t *pd_node = add_pd_node(ms, pd->image_name, pd->pd_obj_id);
+
+    /* Add request edges for all RDEs from this PD */
+    for (int i = 0; i < GPICAP_TYPE_MAX; i++)
+    {
+        for (int j = 0; j < MAX_NS_PER_RDE; j++)
+        {
+            osmosis_rde_t rde = pd->init_data->rde[i][j];
+
+            if (rde.type.type != GPICAP_TYPE_NONE)
+            {
+                pd_component_resource_manager_entry_t *rm = pd_component_resource_manager_get_entry_by_id(rde.manager_id);
+
+                if (rm == NULL)
+                {
+                    ZF_LOGF("Couldn't find resource manager with ID %d\n", rde.manager_id);
+                }
+
+/* (XXX) Arya: Not capturing NS data temporarily, will be captured again with resource spaces */
+#if 0
+                if (rde.ns_id != NSID_DEFAULT)
+                {
+                    snprintf(ns_id, CSV_MAX_STRING_SIZE, "NS%d", rde.ns_id);
+                }
+                else
+                {
+                    snprintf(ns_id, CSV_MAX_STRING_SIZE, "GLOBAL");
+                }
+#endif
+
+                /* Add the resource server PD node */
+                int server_pd_id = rm->pd ? rm->pd->pd_obj_id : 0;
+                gpi_model_node_t *resource_manager_pd = add_pd_node(ms, NULL, server_pd_id);
+                add_request_edge(ms, pd_node, resource_manager_pd, rde.type.type);
+
+                /**
+                 *  For files, walk the file system now
+                 *  (XXX) Arya: should there be a general pre-fetch stage for all resource managers?
+                 **/
+                if (rde.type.type == GPICAP_TYPE_FILE)
+                {
+                    // (XXX) Arya: Workaround to get all files in the file system
+                    // Find the server that created this resource based on the resource id
+                    uint64_t obj_id = rde.ns_id;
+                    uint64_t server_id = rde.manager_id;
+
+                    error = request_remote_rr(pd, ms, server_id, obj_id, rr_frame_path, rr_local_vaddr);
+                    assert(error == 0);
+                }
+            }
+        }
+    }
+
+    /* add caps that this PD has access to */
+    for (osmosis_pd_cap_t *current_cap = pd->has_access_to; current_cap != NULL; current_cap = current_cap->hh.next)
+    {
+        // print_pd_osm_cap_info(current_cap);
+        if (res_dump(pd, ms, current_cap, pd_node, rr_frame_path, rr_local_vaddr) != 0)
+        {
+            return -1;
+        }
+    }
+
+    return error;
 }
 
 int pd_dump(pd_t *pd)
@@ -964,19 +1025,13 @@ int pd_dump(pd_t *pd)
                     Get the RR for that cap
             }
     */
-    model_state_t *ms = (model_state_t *)malloc(sizeof(model_state_t));
-    assert(ms != NULL);
-    init_model_state(ms);
 
-    /* These two do not belong here*/
-    char pd_name[CSV_MAX_STRING_SIZE];
-    snprintf(pd_name, CSV_MAX_STRING_SIZE, "%s", pd->image_name);
-    char pd_id[CSV_MAX_STRING_SIZE];
-    make_res_id(pd_id, GPICAP_TYPE_PD, pd->pd_obj_id);
-    add_pd(ms, pd_name, pd_id);
+    /* Initialize the model state */
+    model_state_t *ms = (model_state_t *)malloc(sizeof(model_state_t));
+    init_model_state(ms, NULL, 0);
 
     /* Allocate memory for remote rr requests */
-    // (XXX) Arya: not able to use MO for remote rr request
+    // (XXX) Arya: not able to use MO for remote rr request, since it would require calls back to pd component
     vka_object_t rr_frame_obj;
     error = vka_alloc_frame(get_gpi_server()->server_vka, seL4_LargePageBits, &rr_frame_obj);
     if (error != seL4_NoError)
@@ -994,79 +1049,23 @@ int pd_dump(pd_t *pd)
         return -1;
     }
 
-    char ns_id[CSV_MAX_STRING_SIZE];
-    char rm_id[CSV_MAX_STRING_SIZE];
-    // uint32_t added_pd_rr[MAX_PD_OSM_RDE] = {0};
-    // memset(added_pd_rr, -1, sizeof(uint32_t) * MAX_PD_OSM_RDE);
+    /* Add a special node for the RT */
+    gpi_model_node_t *rt_node = get_root_node(ms);
 
-    for (int i = 0; i < GPICAP_TYPE_MAX; i++)
-    {
-        for (int j = 0; j < MAX_NS_PER_RDE; j++)
-        {
-            osmosis_rde_t rde = pd->init_data->rde[i][j];
-
-            if (rde.type.type != GPICAP_TYPE_NONE)
-            {
-                pd_component_resource_manager_entry_t *rm = pd_component_resource_manager_get_entry_by_id(rde.manager_id);
-
-                if (rm == NULL)
-                {
-                    ZF_LOGF("Couldn't find resource manager with ID %d\n", rde.manager_id);
-                }
-
-                if (rde.ns_id != NSID_DEFAULT)
-                {
-                    snprintf(ns_id, CSV_MAX_STRING_SIZE, "NS%d", rde.ns_id);
-                }
-                else
-                {
-                    snprintf(ns_id, CSV_MAX_STRING_SIZE, "GLOBAL");
-                }
-
-                int server_pd_id = rm->pd ? rm->pd->pd_obj_id : 0;
-                snprintf(rm_id, CSV_MAX_STRING_SIZE, "PD_%d", server_pd_id);
-
-                add_pd_requests(ms, pd_id, rm_id, rde.type.type, ns_id);
-
-                if (rde.type.type == GPICAP_TYPE_FILE)
-                {
-                    // (XXX) Arya: Workaround to get all files in the file system
-                    // Find the server that created this resource based on the resource id
-                    uint64_t obj_id = rde.ns_id;
-                    uint64_t server_id = rde.manager_id;
-
-                    error = request_remote_rr(pd, ms, server_id, obj_id, pd_id, rr_frame_path, rr_local_vaddr);
-                    assert(error == 0);
-                }
-            }
-        }
-    }
-
-    /* add a special resource for the RT */
-    char root_task_id[CSV_MAX_STRING_SIZE];
-    make_res_id(root_task_id, GPICAP_TYPE_PD, 0);
-    add_resource(ms, "All", "RT_ALL");
-    add_has_access_to(ms, root_task_id, "RT_ALL", true);
-    add_pd(ms, "ROOT TASK", root_task_id);
-
-    /* add caps from RT (not all caps, just specially tracked ones) */
+    /* Add caps from RT (not all caps, just specially tracked ones) */
     for (osmosis_pd_cap_t *current_cap = get_pd_component()->rt_pd.has_access_to; current_cap != NULL; current_cap = current_cap->hh.next)
     {
         // print_pd_osm_cap_info(current_cap);
-        if (res_dump(&get_pd_component()->rt_pd, ms, current_cap, root_task_id, rr_frame_path, rr_local_vaddr) != 0)
+        if (res_dump(&get_pd_component()->rt_pd, ms, current_cap, rt_node, rr_frame_path, rr_local_vaddr) != 0)
         {
             return -1;
         }
     }
 
-    /* add caps that this PD has access to */
-    for (osmosis_pd_cap_t *current_cap = pd->has_access_to; current_cap != NULL; current_cap = current_cap->hh.next)
-    {
-        // print_pd_osm_cap_info(current_cap);
-        if (res_dump(pd, ms, current_cap, pd_id, rr_frame_path, rr_local_vaddr) != 0)
-        {
-            return -1;
-        }
+    /* Add the PD's data */
+    error = pd_dump_internal(pd, ms, rr_frame_path, rr_local_vaddr);
+    if (error != 0) {
+        return error;
     }
 
     /* Free the frame used for rr requests */
@@ -1074,7 +1073,8 @@ int pd_dump(pd_t *pd)
     // vspace_unmap_pages(get_pd_component()->server_vspace, rr_local_vaddr, 1, seL4_PageBits, pd->vka);
 
     print_model_state(ms);
-    free(ms);
+    destroy_model_state(ms);
+
     /* Print RDE Info*/
     for (int i = 0; i < GPICAP_TYPE_MAX; i++)
     {

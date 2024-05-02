@@ -326,7 +326,7 @@ int resource_server_get_rr(seL4_CPtr server_ep,
                            void *remote_vaddr,
                            void *local_vaddr,
                            size_t size,
-                           rr_state_t **ret_rr_state)
+                           model_state_t **ret_state)
 {
     RESOURCE_SERVER_PRINTF("requesting resource relations for ID 0x%lx\n", res_id);
     RESOURCE_SERVER_PRINTF("Shared mem local addr: %p, remote addr: %p\n", local_vaddr, remote_vaddr);
@@ -341,13 +341,17 @@ int resource_server_get_rr(seL4_CPtr server_ep,
     seL4_SetMR(RSMSGREG_EXTRACT_RR_REQ_RS_PD_ID, server_pd_id);
     tag = seL4_Call(server_ep, tag);
 
-    // Adjust rr state's row pointer if successful
+    // Adjust result state's pointers if successful
     int result = seL4_MessageInfo_get_label(tag);
     if (result == seL4_NoError)
     {
-        rr_state_t *rr_state = (rr_state_t *)local_vaddr;
-        rr_state->csv_rows = (csv_rr_row_t *)(local_vaddr + sizeof(rr_state_t));
-        *ret_rr_state = rr_state;
+        model_state_t *model_state = (model_state_t *)local_vaddr;
+
+        gpi_model_state_component_t *old_mem_start = model_state->mem_start;
+        model_state->mem_start = (gpi_model_state_component_t *)(local_vaddr + sizeof(model_state_t));
+        model_state->mem_ptr = model_state->mem_ptr - old_mem_start + model_state->mem_start;
+
+        *ret_state = model_state;
     }
 
     return result;

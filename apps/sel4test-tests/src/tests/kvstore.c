@@ -17,7 +17,7 @@
 
 #define KVSTORE_SERVER_APP "kvstore_server"
 #define HELLO_KVSTORE_APP "hello_kvstore"
-#define DUMP_MODEL false
+#define DUMP_MODEL true
 
 static ads_client_context_t ads_conn;
 static pd_client_context_t pd_conn;

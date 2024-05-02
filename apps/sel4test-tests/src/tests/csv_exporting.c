@@ -17,45 +17,67 @@
 #include <sel4bench/arch/sel4bench.h>
 
 char *csv_buffer =
-    "RESOURCE_FROM,RESOURCE_TO,RES_TYPE,RES_ID,PD_NAME,PD_FROM,PD_TO,PD_ID,IS_MAPPED\n"
-    ",V.2,,,,PD.2.0,,,FALSE\n"
-    ",V.1,,,,PD.1.0,,,TRUE\n"
-    ",,,,,PD.1.0,PD.0.0,,\n"
-    ",,,,,PD.2.0,PD.0.0,,\n"
-    "V.1,P.1,,,,,,,\n"
-    "V.2,P.2,,,,,,,\n"
-    ",,,,Proc2,,,PD.2.0,\n"
-    ",,,,Proc1,,,PD.1.0,\n"
-    ",,,,OS_0,,,PD.0.0,\n"
-    ",,Virtual,V.2,,,,,\n"
-    ",,Virtual,V.1,,,,,\n";
+    "NODE TYPE,NODE ID,DATA,EDGE TYPE,EDGE FROM,EDGE TO\n"
+    "PD,PD_0,ROOT_TASK,,,\n"
+    "PD,PD_1,Proc1,,,\n"
+    "PD,PD_2,Proc2,,,\n"
+    "RESOURCE,MO_1_1,MO,,,\n"
+    "RESOURCE,MO_1_2,MO,,,\n"
+    "RESOURCE,PMR_1_1,PMR,,,\n"
+    "RESOURCE,PMR_1_2,PMR,,,\n"
+    ",,NONE,HOLD,PD_1,MO_1_1\n"
+    ",,NONE,HOLD,PD_2,MO_1_2\n"
+    ",,NONE,HOLD,PD_0,PMR_1_1\n"
+    ",,NONE,HOLD,PD_0,PMR_1_2\n"
+    ",,NONE,MAP,MO_1_1,PMR_1_1\n"
+    ",,NONE,MAP,MO_1_2,PMR_1_2\n"
+    ",,MO,REQUEST,PD_1,PD_0\n"
+    ",,MO,REQUEST,PD_2,PD_0\n";
 
 int test_model_state_export(env_t env)
 {
-    model_state_t model_state;
-    init_model_state(&model_state);
+    model_state_t model_state_static;
+    model_state_t *model_state = &model_state_static;
+
+    init_model_state(model_state, NULL, 0);
 
     char output_buffer[10000];
 
     // printf("%s\n", output_buffer);
 
-    add_resource(&model_state, "Virtual", "V.1");
-    add_resource(&model_state, "Virtual", "V.2");
+    // Add PD nodes
+    gpi_model_node_t *root_node = get_root_node(model_state);
+    gpi_model_node_t *pd1 = add_pd_node(model_state, "Proc1", 1);
+    gpi_model_node_t *pd2 = add_pd_node(model_state, "Proc2", 2);
 
-    add_pd(&model_state, "OS_0", "PD.0.0");
-    add_pd(&model_state, "Proc1", "PD.1.0");
-    add_pd(&model_state, "Proc2", "PD.2.0");
+    // Add resource nodes
+    int mo_space_id = 1;
+    int pmr_space_id = 1;
+    gpi_model_node_t *mo1 = add_resource_node(model_state, GPICAP_TYPE_MO, mo_space_id, 1);
+    gpi_model_node_t *mo2 = add_resource_node(model_state, GPICAP_TYPE_MO, mo_space_id, 2);
+    gpi_model_node_t *page1 = add_resource_node(model_state, GPICAP_TYPE_PMR, pmr_space_id, 1);
+    gpi_model_node_t *page2 = add_resource_node(model_state, GPICAP_TYPE_PMR, pmr_space_id, 2);
 
-    add_resource_depends_on(&model_state, "V.2", "P.2", REL_TYPE_MAP);
-    add_resource_depends_on(&model_state, "V.1", "P.1", REL_TYPE_MAP);
+    // Add hold edges
+    add_edge(model_state, GPI_EDGE_TYPE_HOLD, pd1, mo1);
+    add_edge(model_state, GPI_EDGE_TYPE_HOLD, pd2, mo2);
+    add_edge(model_state, GPI_EDGE_TYPE_HOLD, root_node, page1);
+    add_edge(model_state, GPI_EDGE_TYPE_HOLD, root_node, page2);
 
-    add_pd_requests(&model_state, "PD.2.0", "PD.0.0", GPICAP_TYPE_MO, "");
-    add_pd_requests(&model_state, "PD.1.0", "PD.0.0", GPICAP_TYPE_MO, "");
+    // Add map edges
+    add_edge(model_state, GPI_EDGE_TYPE_MAP, mo1, page1);
+    add_edge(model_state, GPI_EDGE_TYPE_MAP, mo2, page2);
 
-    add_has_access_to(&model_state, "PD.1.0", "V.1", true);
-    add_has_access_to(&model_state, "PD.2.0", "V.2", false);
+    // Add request edges
+    add_request_edge(model_state, pd1, root_node, GPICAP_TYPE_MO);
+    add_request_edge(model_state, pd2, root_node, GPICAP_TYPE_MO);
 
-    export_model_state(&model_state, output_buffer, sizeof(output_buffer));
+    // Add some duplicate nodes/edges
+    pd1 = add_pd_node(model_state, "Proc1", 1);
+    add_edge(model_state, GPI_EDGE_TYPE_MAP, mo2, page2);
+    add_request_edge(model_state, pd1, root_node, GPICAP_TYPE_MO);
+
+    export_model_state(model_state, output_buffer, sizeof(output_buffer));
     if (strncmp(output_buffer, csv_buffer, sizeof(output_buffer)) != 0)
     {
 

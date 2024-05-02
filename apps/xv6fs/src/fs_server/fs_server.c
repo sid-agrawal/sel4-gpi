@@ -320,21 +320,23 @@ seL4_MessageInfo_t xv6fs_request_handler(seL4_MessageInfo_t tag, seL4_Word sende
     case RS_FUNC_GET_RR_REQ:
       *need_new_recv_cap = false;
 
-      size_t mem_size = seL4_GetMR(RSMSGREG_EXTRACT_RR_REQ_SIZE);
+      uint64_t pd_id = seL4_GetMR(RSMSGREG_EXTRACT_RR_REQ_PD_ID);
+      uint64_t fs_pd_id = seL4_GetMR(RSMSGREG_EXTRACT_RR_REQ_RS_PD_ID);
+
+      XV6FS_PRINTF("Get RR for fileno %d\n", fileno);
       void *mem_vaddr = (void *)seL4_GetMR(RSMSGREG_EXTRACT_RR_REQ_VADDR);
-      char pd_id[CSV_MAX_STRING_SIZE];
-      make_res_id(pd_id, GPICAP_TYPE_PD, seL4_GetMR(RSMSGREG_EXTRACT_RR_REQ_PD_ID));
-      char fs_pd_id[CSV_MAX_STRING_SIZE];
-      make_res_id(fs_pd_id, GPICAP_TYPE_PD, seL4_GetMR(RSMSGREG_EXTRACT_RR_REQ_RS_PD_ID));
-      char block_space_res_id[CSV_MAX_STRING_SIZE];
-      snprintf(block_space_res_id, CSV_MAX_STRING_SIZE, "BLOCK_SPACE_%d", 1);
-      // (XXX) Arya: Temporary measure to get block resource space ID, to fix
-      // Assumes there is only one block space, and it is space 1
+      model_state_t *model_state = (model_state_t *)mem_vaddr;
+      void *free_mem = mem_vaddr + sizeof(model_state_t);
+      size_t free_size = seL4_GetMR(RSMSGREG_EXTRACT_RR_REQ_SIZE) - sizeof(model_state_t);
 
       // Initialize the model state
-      rr_state_t *rr_state = (rr_state_t *)mem_vaddr;
-      init_rr_state(rr_state);
-      csv_rr_row_t *row_ptr = mem_vaddr + sizeof(rr_state_t);
+      init_model_state(model_state, free_mem, free_size);
+
+      // (XXX) Arya: A lot of this should be moved to PD component once we have resource spaces implemented
+
+      /* Add the PD nodes */
+      gpi_model_node_t *self_pd_node = add_pd_node(model_state, "FILE_SERVER", fs_pd_id);
+      gpi_model_node_t *client_pd_node = add_pd_node(model_state, "FILE_CLIENT", pd_id);
 
 // (XXX) Arya: Switch from dumping one resource to dumping entire namespace
 #if 1
@@ -357,34 +359,15 @@ seL4_MessageInfo_t xv6fs_request_handler(seL4_MessageInfo_t tag, seL4_Word sende
         apply_prefix(ns->ns_prefix, path);
       }
 
-      /* Add the file resource space */
-      if ((void *)(row_ptr + 4) >= mem_vaddr + mem_size)
-      {
-        XV6FS_PRINTF("Ran out of space in the MO to write RR\n");
-        error = RS_ERROR_RR_SIZE;
-        break;
-      }
+      /* Add the file resource space node */
+      gpi_model_node_t *file_space_node = add_resource_space_node(model_state, GPICAP_TYPE_FILE, get_xv6fs_server()->gen.server_id);
+      add_edge(model_state, GPI_EDGE_TYPE_HOLD, self_pd_node, file_space_node);
 
-      char file_space_res_id[CSV_MAX_STRING_SIZE];
-      snprintf(file_space_res_id, CSV_MAX_STRING_SIZE, "FILE_SPACE_%d_%d",
-               get_xv6fs_server()->gen.server_id,
-               ns_id);
-      add_resource_rr(rr_state, GPICAP_TYPE_FILE, file_space_res_id, row_ptr);
-      row_ptr++;
-
-      // Add the has_access_to row
-      add_has_access_to_rr(rr_state,
-                           fs_pd_id,
-                           file_space_res_id,
-                           false,
-                           row_ptr);
-      row_ptr++;
-
-      // (XXX) Add the map to block space
-      // (XXX) Arya: Temporary measure to get block resource space ID, to fix
-      // Assumes there is only one block space, and it is space 1
-      add_resource_depends_on_rr(rr_state, file_space_res_id, block_space_res_id, REL_TYPE_MAP, row_ptr);
-      row_ptr++;
+      /* Add the block resource space node */
+      // (XXX) Arya: Assumes there is only one block space, and it is space 1. To fix.
+      int block_space_id = 1;
+      gpi_model_node_t *block_space_node = add_resource_space_node(model_state, GPICAP_TYPE_BLOCK, block_space_id);
+      add_edge(model_state, GPI_EDGE_TYPE_MAP, file_space_node, block_space_node);
 
       /* List all the files in the NS */
       int n_files;
@@ -400,51 +383,25 @@ seL4_MessageInfo_t xv6fs_request_handler(seL4_MessageInfo_t tag, seL4_Word sende
 
       for (int i = 0; i < n_files; i++)
       {
-        if ((void *)(row_ptr + 3) >= mem_vaddr + mem_size)
-        {
-          XV6FS_PRINTF("Ran out of space in the MO to write RR\n");
-          error = RS_ERROR_RR_SIZE;
-          break;
-        }
-
         XV6FS_PRINTF("Get RR for fileno %ld\n", inums[i]);
 
-        // Add the entry for the resource
-        uint64_t file_id = get_global_object_id_from_local(get_xv6fs_server()->gen.server_id, inums[i]);
-        make_res_id(file_res_id, GPICAP_TYPE_FILE, file_id);
-        add_resource_rr(rr_state, GPICAP_TYPE_FILE, file_res_id, row_ptr);
-        row_ptr++;
+        /* Add the file resource node */
+        gpi_model_node_t *file_node = add_resource_node(model_state, GPICAP_TYPE_FILE, get_xv6fs_server()->gen.server_id, inums[i]);
+        add_edge(model_state, GPI_EDGE_TYPE_HOLD, self_pd_node, file_node);
+        add_edge(model_state, GPI_EDGE_TYPE_HOLD, client_pd_node, file_node);
+        add_edge(model_state, GPI_EDGE_TYPE_SUBSET, file_node, file_space_node);
 
-        // Add the subset row
-        add_resource_depends_on_rr(rr_state, file_res_id, file_space_res_id, REL_TYPE_SUBSET, row_ptr);
-        row_ptr++;
-
-        // Add the has_access_to row
-        add_has_access_to_rr(rr_state,
-                             pd_id,
-                             file_res_id,
-                             false,
-                             row_ptr); // (XXX) Arya: how to determine is_mapped
-        row_ptr++;
-
-        // Add relations for blocks
+        /* Add relations for blocks */
         error = xv6fs_sys_inode_blocknos(inums[i], blocknos, n_blocknos, &n_blocknos);
         CHECK_ERROR_GOTO(error, "Failed to get blocknos for file", FS_SERVER_ERROR_UNKNOWN, done);
         XV6FS_PRINTF("File has %d blocks\n", n_blocknos);
 
-        if ((void *)(row_ptr + n_blocknos) >= mem_vaddr + mem_size)
-        {
-          XV6FS_PRINTF("Ran out of space in the MO to write RR\n");
-          error = RS_ERROR_RR_SIZE;
-          break;
-        }
-
         for (int j = 0; j < n_blocknos; j++)
         {
           uint64_t block_id = get_xv6fs_server()->naive_blocks[blocknos[j]].id;
-          make_res_id(block_res_id, GPICAP_TYPE_BLOCK, block_id);
-          add_resource_depends_on_rr(rr_state, file_res_id, block_res_id, REL_TYPE_MAP, row_ptr);
-          row_ptr++;
+
+          gpi_model_node_t *block_node = add_resource_node(model_state, GPICAP_TYPE_BLOCK, block_space_id, block_id);
+          add_edge(model_state, GPI_EDGE_TYPE_MAP, file_node, block_node);
         }
       }
 
@@ -499,6 +456,8 @@ seL4_MessageInfo_t xv6fs_request_handler(seL4_MessageInfo_t tag, seL4_Word sende
       }
       free(blocknos);
 #endif
+
+      clean_model_state(model_state);
 
       seL4_SetMR(RDMSGREG_FUNC, RS_FUNC_GET_RR_ACK);
       break;

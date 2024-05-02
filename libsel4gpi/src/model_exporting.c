@@ -17,101 +17,92 @@
 #include <sel4gpi/debug.h>
 #include <sel4gpi/model_exporting.h>
 
-static char *rel_type_to_str(relation_type_t rel_type)
+static char *edge_type_to_str(gpi_edge_type_t edge_type)
 {
-    switch (rel_type)
+    switch (edge_type)
     {
-    case REL_TYPE_MAP:
+    case GPI_EDGE_TYPE_HOLD:
+        return "HOLD";
+    case GPI_EDGE_TYPE_MAP:
         return "MAP";
-    case REL_TYPE_SUBSET:
+    case GPI_EDGE_TYPE_SUBSET:
         return "SUBSET";
+    case GPI_EDGE_TYPE_REQUEST:
+        return "REQUEST";
     default:
         return "UNKNOWN";
     }
 }
 
-static void insert_row(model_state_t *model_state, csv_row_t *new_row)
+static char *node_type_to_str(gpi_node_type_t node_type)
 {
+    switch (node_type)
+    {
+    case GPI_NODE_TYPE_PD:
+        return "PD";
+    case GPI_NODE_TYPE_RESOURCE:
+        return "RESOURCE";
+    case GPI_NODE_TYPE_SPACE:
+        return "RESOURCE SPACE";
+    default:
+        return "UNKNOWN";
+    }
+}
 
+// Create a string ID for a node
+static void make_node_id(char *str_id, char *prefix, uint64_t id)
+{
+    snprintf(str_id, CSV_MAX_STRING_SIZE, "%s_%lx", prefix, id);
+}
+
+// Create a string ID for a node with two IDs
+static void make_node_id_2(char *str_id, char *prefix, uint64_t id1, uint64_t id2)
+{
+    snprintf(str_id, CSV_MAX_STRING_SIZE, "%s_%lx_%lx", prefix, id1, id2);
+}
+
+void init_model_state(model_state_t *model_state, void *free_ptr, size_t free_size)
+{
     assert(model_state != NULL);
-    assert(new_row != NULL);
 
-    // Add node to the front of the list after the heading row
-    csv_row_t *header_row = model_state->csv_rows;
-    csv_row_t *old_first_row = header_row->next;
+    model_state->nodes = NULL;
+    model_state->edges = NULL;
+    model_state->mem_start = (gpi_model_state_component_t *)free_ptr;
+    model_state->mem_ptr = model_state->mem_start;
+    model_state->mem_end = (gpi_model_state_component_t *)(free_ptr + free_size);
 
-    header_row->next = new_row;
-    model_state->csv_rows->next = new_row;
-    new_row->next = old_first_row;
-    model_state->csv_rows_len++;
+    if (free_ptr != NULL)
+    {
+        memset(free_ptr, 0, free_size);
+    }
 }
 
-static void init_row(csv_row_t *row)
+void clean_model_state(model_state_t *model_state)
 {
-    snprintf(row->resource_from, CSV_MAX_STRING_SIZE, "%s", "");
-    snprintf(row->resource_to, CSV_MAX_STRING_SIZE, "%s", "");
-    snprintf(row->resource_type, CSV_MAX_STRING_SIZE, "%s", "");
-    snprintf(row->resource_id, CSV_MAX_STRING_SIZE, "%s", "");
-    snprintf(row->pd_name, CSV_MAX_STRING_SIZE, "%s", "");
-    snprintf(row->pd_from, CSV_MAX_STRING_SIZE, "%s", "");
-    snprintf(row->pd_to, CSV_MAX_STRING_SIZE, "%s", "");
-    snprintf(row->pd_id, CSV_MAX_STRING_SIZE, "%s", "");
-    snprintf(row->is_mapped, CSV_MAX_STRING_SIZE, "%s", "");
-    snprintf(row->constraints, CSV_MAX_STRING_SIZE, "%s", "");
-    snprintf(row->rel_type, CSV_MAX_STRING_SIZE, "%s", "");
+    HASH_CLEAR(hh, model_state->nodes);
+    HASH_CLEAR(hh, model_state->edges);
 }
 
-static void init_rr_row(csv_rr_row_t *row)
+void destroy_model_state(model_state_t *model_state)
 {
-    snprintf(row->resource_from, CSV_MAX_STRING_SIZE, "%s", "");
-    snprintf(row->resource_to, CSV_MAX_STRING_SIZE, "%s", "");
-    snprintf(row->resource_type, CSV_MAX_STRING_SIZE, "%s", "");
-    snprintf(row->resource_id, CSV_MAX_STRING_SIZE, "%s", "");
-    snprintf(row->rel_type, CSV_MAX_STRING_SIZE, "%s", "");
-}
+    // Delete all nodes
+    gpi_model_node_t *current_node, *tmp;
+    HASH_ITER(hh, model_state->nodes, current_node, tmp)
+    {
+        HASH_DEL(model_state->nodes, current_node);
+        free(current_node);
+    }
 
-// Copy a resource relation row into a full model state row
-static void copy_row(csv_row_t *to, csv_rr_row_t *from)
-{
-    init_row(to);
-    memcpy(to, from, sizeof(csv_rr_row_t));
-}
+    // Delete all edges
+    gpi_model_edge_t *current_edge, *tmp2;
+    HASH_ITER(hh, model_state->edges, current_edge, tmp2)
+    {
+        HASH_DEL(model_state->edges, current_edge);
+        free(current_edge);
+    }
 
-void init_model_state(model_state_t *model_state)
-{
-
-    csv_row_t *new_row = (csv_row_t *)malloc(sizeof(csv_row_t));
-    assert(new_row != NULL);
-    snprintf(new_row->resource_from, CSV_MAX_STRING_SIZE, "%s", "RESOURCE_FROM");
-    snprintf(new_row->resource_to, CSV_MAX_STRING_SIZE, "%s", "RESOURCE_TO");
-    snprintf(new_row->resource_type, CSV_MAX_STRING_SIZE, "%s", "RES_TYPE");
-    snprintf(new_row->resource_id, CSV_MAX_STRING_SIZE, "%s", "RES_ID");
-    snprintf(new_row->rel_type, CSV_MAX_STRING_SIZE, "%s", "REL_TYPE");
-    snprintf(new_row->pd_name, CSV_MAX_STRING_SIZE, "%s", "PD_NAME");
-    snprintf(new_row->pd_from, CSV_MAX_STRING_SIZE, "%s", "PD_FROM");
-    snprintf(new_row->pd_to, CSV_MAX_STRING_SIZE, "%s", "PD_TO");
-    snprintf(new_row->pd_id, CSV_MAX_STRING_SIZE, "%s", "PD_ID");
-    snprintf(new_row->is_mapped, CSV_MAX_STRING_SIZE, "%s", "IS_MAPPED");
-    snprintf(new_row->constraints, CSV_MAX_STRING_SIZE, "%s", "CONSTRAINTS");
-
-    new_row->next = NULL;
-    model_state->csv_rows = new_row;
-
-    model_state->csv_rows_len = 0;
-    model_state->num_resources = 0;
-    model_state->num_pds = 0;
-
-    model_state->num_depends_on = 0;
-    model_state->num_has_access_to = 0;
-    model_state->num_requests = 0;
-}
-
-void init_rr_state(rr_state_t *model_state)
-{
-    model_state->csv_rows = NULL;
-    model_state->csv_rows_len = 0;
-    model_state->num_resources = 0;
-    model_state->num_depends_on = 0;
+    // Free the model state
+    free(model_state);
 }
 
 // Function to export the model state to a buffer with CSV formatting
@@ -119,47 +110,75 @@ void export_model_state(model_state_t *model_state, char *buffer, size_t buf_len
 {
 
     assert(model_state != NULL);
-    assert(model_state->csv_rows != NULL);
-    assert(model_state->csv_rows_len != 0);
 
     size_t buf_written_total = 0;
-    csv_row_t *current_row = model_state->csv_rows;
     uint8_t width = 0;
 
-    while (current_row != NULL)
+    // Print the headers
+    size_t buf_written = snprintf(buffer, buf_len - buf_written_total,
+                                  "%-*s,%-*s,%-*s,%-*s,%-*s,%-*s\n",
+                                  width,
+                                  "NODE TYPE",
+                                  width,
+                                  "NODE ID",
+                                  width,
+                                  "DATA",
+                                  width,
+                                  "EDGE TYPE",
+                                  width,
+                                  "EDGE FROM",
+                                  width,
+                                  "EDGE TO");
+
+    buffer += buf_written;
+    buf_written_total += buf_written;
+
+    // Print the nodes
+    for (gpi_model_node_t *node = model_state->nodes; node != NULL; node = node->hh.next)
     {
         size_t buf_written = snprintf(buffer, buf_len - buf_written_total,
-                                      "%-*s,%-*s,%-*s,%-*s,%-*s,%-*s,%-*s,%-*s,%-*s,%-*s\n",
+                                      "%-*s,%-*s,%-*s,%-*s,%-*s,%-*s\n",
                                       width,
-                                      current_row->resource_from,
+                                      node_type_to_str(node->node_type),
                                       width,
-                                      current_row->resource_to,
+                                      node->id,
                                       width,
-                                      current_row->resource_type,
+                                      node->data,
                                       width,
-                                      current_row->resource_id,
+                                      "",
                                       width,
-                                      current_row->rel_type,
+                                      "",
                                       width,
-                                      current_row->pd_name,
-                                      width,
-                                      current_row->pd_from,
-                                      width,
-                                      current_row->pd_to,
-                                      width,
-                                      current_row->pd_id,
-                                      width,
-                                      current_row->is_mapped);
+                                      "");
 
         buffer += buf_written;
         buf_written_total += buf_written;
 
-        current_row = current_row->next;
+        assert(buf_written_total < buf_len);
+    }
 
-        if (buf_written_total >= buf_len)
-        {
-            ZF_LOGF("Buffer overflow");
-        }
+    // Print the edges
+    for (gpi_model_edge_t *edge = model_state->edges; edge != NULL; edge = edge->hh.next)
+    {
+        size_t buf_written = snprintf(buffer, buf_len - buf_written_total,
+                                      "%-*s,%-*s,%-*s,%-*s,%-*s,%-*s\n",
+                                      width,
+                                      "",
+                                      width,
+                                      "",
+                                      width,
+                                      cap_type_to_str(edge->k.req_type),
+                                      width,
+                                      edge_type_to_str(edge->k.type),
+                                      width,
+                                      edge->k.from,
+                                      width,
+                                      edge->k.to);
+
+        buffer += buf_written;
+        buf_written_total += buf_written;
+
+        assert(buf_written_total < buf_len);
     }
 }
 
@@ -168,265 +187,246 @@ void print_model_state(model_state_t *model_state)
 {
 
     assert(model_state != NULL);
-    assert(model_state->csv_rows != NULL);
-    assert(model_state->csv_rows_len != 0);
-
-    size_t buf_written_total = 0;
-    csv_row_t *current_row = model_state->csv_rows;
     uint8_t width = 0;
 
-    while (current_row != NULL)
-    {
-        printf("%-*s,%-*s,%-*s,%-*s,%-*s,%-*s,%-*s,%-*s,%-*s,%-*s,%-*s\n",
-               width,
-               current_row->resource_from,
-               width,
-               current_row->resource_to,
-               width,
-               current_row->resource_type,
-               width,
-               current_row->resource_id,
-               width,
-               current_row->rel_type,
-               width,
-               current_row->pd_name,
-               width,
-               current_row->pd_from,
-               width,
-               current_row->pd_to,
-               width,
-               current_row->pd_id,
-               width,
-               current_row->is_mapped,
-               width,
-               current_row->constraints);
+    // Print the headers
+    printf("%-*s,%-*s,%-*s,%-*s,%-*s,%-*s\n",
+           width,
+           "NODE TYPE",
+           width,
+           "NODE ID",
+           width,
+           "DATA",
+           width,
+           "EDGE TYPE",
+           width,
+           "EDGE FROM",
+           width,
+           "EDGE TO");
 
-        current_row = current_row->next;
+    // Print the nodes
+    for (gpi_model_node_t *node = model_state->nodes; node != NULL; node = node->hh.next)
+    {
+        printf("%-*s,%-*s,%-*s,%-*s,%-*s,%-*s\n",
+               width,
+               node_type_to_str(node->node_type),
+               width,
+               node->id,
+               width,
+               node->data,
+               width,
+               "",
+               width,
+               "",
+               width,
+               "");
+    }
+
+    // Print the edges
+    for (gpi_model_edge_t *edge = model_state->edges; edge != NULL; edge = edge->hh.next)
+    {
+        printf("%-*s,%-*s,%-*s,%-*s,%-*s,%-*s\n",
+               width,
+               "",
+               width,
+               "",
+               width,
+               cap_type_to_str(edge->k.req_type),
+               width,
+               edge_type_to_str(edge->k.type),
+               width,
+               edge->k.from,
+               width,
+               edge->k.to);
     }
 }
 
-// Add any resource relations from a rr_state_t to the model state
-void combine_model_states(model_state_t *ms, rr_state_t *rs)
+// Add a node to the model state
+static gpi_model_node_t *add_node(model_state_t *model_state, gpi_node_type_t node_type, char *id, char *data)
 {
-    for (int i = 0; i < rs->csv_rows_len; i++)
+    gpi_model_node_t *node;
+
+    // HASH_FIND(hh, model_state->nodes, id, CSV_MAX_STRING_SIZE, node);
+    HASH_FIND_STR(model_state->nodes, id, node);
+
+    if (node != NULL)
     {
-        csv_rr_row_t *from_row = &rs->csv_rows[i];
-        csv_row_t *new_row = (csv_row_t *)malloc(sizeof(csv_row_t));
-        copy_row(new_row, from_row);
-        insert_row(ms, new_row);
+        // This node already exists, don't duplicate it
+
+        // Do overwrite data if it was empty before
+        if ((strlen(node->data) == 0) && (data != NULL))
+        {
+            strncpy(node->data, data, CSV_MAX_STRING_SIZE);
+        }
+
+        return node;
+    }
+    if (model_state->mem_start == NULL)
+    {
+        // No free pointer, allocate a node from heap
+        node = calloc(1, sizeof(gpi_model_node_t));
+    }
+    else
+    {
+        assert(model_state->mem_ptr < model_state->mem_end);
+
+        // Allocate a node from free pointer
+        gpi_model_state_component_t *component = model_state->mem_ptr;
+
+        component->type = GPI_MODEL_NODE;
+        node = &component->node;
+        model_state->mem_ptr++;
     }
 
-    ms->csv_rows_len += rs->csv_rows_len;
-    ms->num_depends_on += rs->num_depends_on;
-    ms->num_resources += rs->num_resources;
-    ms->num_has_access_to += rs->num_has_access_to;
-}
+    assert(node != NULL);
+    node->node_type = node_type;
+    memset(node->id, 0, CSV_MAX_STRING_SIZE);
+    strncpy(node->id, id, CSV_MAX_STRING_SIZE);
 
-void make_res_id(char *res_id, gpi_cap_t cap_type, uint64_t res_id_int)
-{
-    char *resource_type_str = cap_type_to_str(cap_type);
-    assert(strlen(resource_type_str) != 0);
-    assert(strlen(resource_type_str) < CSV_MAX_STRING_SIZE);
-
-    snprintf(res_id, CSV_MAX_STRING_SIZE, "%s_%ld", resource_type_str, res_id_int);
-}
-
-// Function to add a resource to the model state
-void add_resource(model_state_t *model_state, char *resource_type, char *resource_id)
-{
-    add_resource_2(model_state, resource_type, resource_id, "N/A");
-}
-
-// Function to add a resource to the model state with a comment
-void add_resource_2(model_state_t *model_state, char *resource_type, char *resource_id, char *comment)
-{
-    assert(strlen(resource_type) != 0 && strlen(resource_id) != 0);
-    assert(strlen(resource_type) < CSV_MAX_STRING_SIZE && strlen(resource_id) < CSV_MAX_STRING_SIZE && strlen(comment) < CSV_MAX_STRING_SIZE);
-
-    csv_row_t *new_row = (csv_row_t *)malloc(sizeof(csv_row_t));
-    assert(new_row != NULL);
-    init_row(new_row);
-
-    // Set the resource type and ID
-    snprintf(new_row->resource_type, CSV_MAX_STRING_SIZE, "%s", resource_type);
-    snprintf(new_row->resource_id, CSV_MAX_STRING_SIZE, "%s", resource_id);
-    snprintf(new_row->constraints, CSV_MAX_STRING_SIZE, "%s", comment);
-
-    // Add node to the front of the list after the heading row
-    insert_row(model_state, new_row);
-    model_state->num_resources++;
-}
-
-// Function to add a PD to the model state
-void add_pd(model_state_t *model_state, char *pd_name, char *pd_id)
-{
-
-    assert(strlen(pd_name) != 0 && strlen(pd_id) != 0);
-    assert(strlen(pd_name) < CSV_MAX_STRING_SIZE && strlen(pd_id) < CSV_MAX_STRING_SIZE);
-
-    csv_row_t *new_row = (csv_row_t *)malloc(sizeof(csv_row_t));
-    assert(new_row != NULL);
-    init_row(new_row);
-
-    // Set the resource type and ID
-    snprintf(new_row->pd_name, CSV_MAX_STRING_SIZE, "%s", pd_name);
-    snprintf(new_row->pd_id, CSV_MAX_STRING_SIZE, "%s", pd_id);
-
-    // Add node to the front of the list after the heading row
-    insert_row(model_state, new_row);
-    model_state->num_pds++;
-}
-
-// Function to add a mapping between a PD and a resource to the model state
-void add_has_access_to(model_state_t *model_state,
-                       char *pd_from,
-                       char *resource_to,
-                       bool is_mapped)
-{
-    assert(strlen(pd_from) != 0 && strlen(resource_to) != 0);
-    assert(strlen(pd_from) < CSV_MAX_STRING_SIZE && strlen(resource_to) < CSV_MAX_STRING_SIZE);
-
-    csv_row_t *new_row = (csv_row_t *)malloc(sizeof(csv_row_t));
-    assert(new_row != NULL);
-    init_row(new_row);
-
-    // Set the resource type and ID
-    snprintf(new_row->pd_from, CSV_MAX_STRING_SIZE, "%s", pd_from);
-    snprintf(new_row->resource_to, CSV_MAX_STRING_SIZE, "%s", resource_to);
-    snprintf(new_row->is_mapped, CSV_MAX_STRING_SIZE, "%s", is_mapped ? "TRUE" : "FALSE");
-
-    // Add node to the front of the list after the heading row
-    insert_row(model_state, new_row);
-    model_state->num_has_access_to++;
-}
-
-// Function to add a mapping between a PD and a resource to the model state
-void add_has_access_to_rr(rr_state_t *model_state,
-                       char *pd_from,
-                       char *resource_to,
-                       bool is_mapped, 
-                       csv_rr_row_t *new_row)
-{
-    assert(strlen(pd_from) != 0 && strlen(resource_to) != 0);
-    assert(strlen(pd_from) < CSV_MAX_STRING_SIZE && strlen(resource_to) < CSV_MAX_STRING_SIZE);
-
-    assert(new_row != NULL);
-    init_rr_row(new_row);
-
-    // Set the resource type and ID
-    snprintf(new_row->pd_from, CSV_MAX_STRING_SIZE, "%s", pd_from);
-    snprintf(new_row->resource_to, CSV_MAX_STRING_SIZE, "%s", resource_to);
-
-    // Set list pointer if this is the first row
-    if (model_state->csv_rows == NULL)
+    if (data != NULL)
     {
-        model_state->csv_rows = new_row;
+        strncpy(node->data, data, CSV_MAX_STRING_SIZE);
     }
-    model_state->csv_rows_len++;
+
+    // HASH_ADD_KEYPTR(hh, model_state->nodes, &node->id, CSV_MAX_STRING_SIZE, node);
+    HASH_ADD_STR(model_state->nodes, id, node);
+
+    return node;
 }
 
-// Function to add a resource relationship to the model state
-void add_resource_depends_on(model_state_t *model_state, char *resource_from, char *resource_to, relation_type_t rel_type)
+static void add_edge_by_id(model_state_t *model_state, gpi_edge_type_t type, char *from_id,
+                           char *to_id, gpi_cap_t req_type)
 {
-    assert(strlen(resource_from) != 0 && strlen(resource_to) != 0);
-    assert(strlen(resource_from) < CSV_MAX_STRING_SIZE && strlen(resource_to) < CSV_MAX_STRING_SIZE);
+    gpi_model_edge_t edge_static;
+    memset(&edge_static, 0, sizeof(gpi_model_edge_t));
+    edge_static.k.type = type;
+    edge_static.k.req_type = req_type;
+    strcpy(edge_static.k.from, from_id);
+    strcpy(edge_static.k.to, to_id);
 
-    csv_row_t *new_row = (csv_row_t *)malloc(sizeof(csv_row_t));
-    assert(new_row != NULL);
-    init_row(new_row);
+    gpi_model_edge_t *edge;
+    HASH_FIND(hh, model_state->edges, &edge_static.k, sizeof(gpi_model_edge_key_t), edge);
 
-    // Set the resource type and ID
-    snprintf(new_row->resource_from, CSV_MAX_STRING_SIZE, "%s", resource_from);
-    snprintf(new_row->resource_to, CSV_MAX_STRING_SIZE, "%s", resource_to);
-    snprintf(new_row->rel_type, CSV_MAX_STRING_SIZE, "%s", rel_type_to_str(rel_type));
-
-    // Add node to the front of the list after the heading row
-    insert_row(model_state, new_row);
-    model_state->num_depends_on++;
-}
-
-// Function to add a resource to the rr state
-void add_resource_rr(rr_state_t *model_state, gpi_cap_t resource_type, char *resource_id, csv_rr_row_t *new_row)
-{
-    char *resource_type_str = cap_type_to_str(resource_type);
-    assert(strlen(resource_type_str) != 0 && strlen(resource_id) != 0);
-    assert(strlen(resource_type_str) < CSV_MAX_STRING_SIZE && strlen(resource_id) < CSV_MAX_STRING_SIZE);
-
-    // (XXX) Arya: something goes wrong with the new_row->resource_id snprintf below
-    // Without this local variable, the model_state arg gets overwritten
-    rr_state_t *model_state_ptr = model_state;
-
-    assert(new_row != NULL);
-    init_rr_row(new_row);
-
-    // Set the resource type and ID
-    snprintf(new_row->resource_type, CSV_MAX_STRING_SIZE, "%s", resource_type_str);
-    snprintf(new_row->resource_id, CSV_MAX_STRING_SIZE, "%s", resource_id);
-    model_state->num_resources++;
-
-    // Set list pointer if this is the first row
-    if (model_state->csv_rows == NULL)
+    if (edge != NULL)
     {
-        model_state->csv_rows = new_row;
+        // This edge already exists, don't duplicate it
+        return;
     }
-    model_state->csv_rows_len++;
-}
 
-// Function to add a resource relationship to the rr state
-void add_resource_depends_on_rr(rr_state_t *model_state, char *resource_from, char *resource_to, relation_type_t rel_type, csv_rr_row_t *new_row)
-{
-    assert(strlen(resource_from) != 0 && strlen(resource_to) != 0);
-    assert(strlen(resource_from) < CSV_MAX_STRING_SIZE && strlen(resource_to) < CSV_MAX_STRING_SIZE);
-
-    assert(new_row != NULL);
-    init_rr_row(new_row);
-
-    // Set the resource type and ID
-    snprintf(new_row->resource_from, CSV_MAX_STRING_SIZE, "%s", resource_from);
-    snprintf(new_row->resource_to, CSV_MAX_STRING_SIZE, "%s", resource_to);
-    snprintf(new_row->rel_type, CSV_MAX_STRING_SIZE, "%s", rel_type_to_str(rel_type));
-    model_state->num_depends_on++;
-
-    // Set list pointer if this is the first row
-    if (model_state->csv_rows == NULL)
+    if (model_state->mem_start == NULL)
     {
-        model_state->csv_rows = new_row;
+        // No free pointer, allocate an edge from heap
+        edge = calloc(1, sizeof(gpi_model_edge_t));
     }
-    model_state->csv_rows_len++;
+    else
+    {
+        assert(model_state->mem_ptr < model_state->mem_end);
+
+        // Allocate a node from free pointer
+        gpi_model_state_component_t *component = model_state->mem_ptr;
+
+        component->type = GPI_MODEL_EDGE;
+        edge = &component->edge;
+        model_state->mem_ptr++;
+    }
+
+    assert(edge != NULL);
+    *edge = edge_static;
+
+    HASH_ADD_KEYPTR(hh, model_state->edges, &edge->k, sizeof(gpi_model_edge_key_t), edge);
 }
 
-// Function add a PD to PD relationship to the model state
-void add_pd_requests(model_state_t *model_state, char *pd_from, char *pd_to, gpi_cap_t type, char *constraints)
+// Generic edge function
+static void add_edge_private(model_state_t *model_state, gpi_edge_type_t type, gpi_model_node_t *from,
+                             gpi_model_node_t *to, gpi_cap_t req_type)
 {
-
-    assert(strlen(pd_from) != 0 && strlen(pd_to) != 0);
-    assert(strlen(pd_from) < CSV_MAX_STRING_SIZE && strlen(pd_to) < CSV_MAX_STRING_SIZE);
-    char *resource_type_str = cap_type_to_str(type);
-    assert(strlen(resource_type_str) != 0);
-    assert(strlen(resource_type_str) < CSV_MAX_STRING_SIZE);
-    assert(strlen(constraints) < CSV_MAX_STRING_SIZE);
-
-    csv_row_t *new_row = (csv_row_t *)malloc(sizeof(csv_row_t));
-    assert(new_row != NULL);
-    init_row(new_row);
-
-    // Set the resource type and ID
-    snprintf(new_row->pd_from, CSV_MAX_STRING_SIZE, "%s", pd_from);
-    snprintf(new_row->pd_to, CSV_MAX_STRING_SIZE, "%s", pd_to);
-    snprintf(new_row->resource_type, CSV_MAX_STRING_SIZE, "%s", resource_type_str);
-    snprintf(new_row->constraints, CSV_MAX_STRING_SIZE, "%s", constraints);
-
-    // Add node to the front of the list after the heading row
-    insert_row(model_state, new_row);
-    model_state->num_requests++;
+    add_edge_by_id(model_state, type, from->id, to->id, req_type);
 }
 
-void make_virtual_res_id(char *res_id, uint32_t obj_id, uint64_t res_id_int, char *prefix)
+void add_edge(model_state_t *model_state, gpi_edge_type_t type, gpi_model_node_t *from, gpi_model_node_t *to)
 {
-    snprintf(res_id, CSV_MAX_STRING_SIZE, "%s_%u_0x%lx", prefix, obj_id, res_id_int);
+    add_edge_private(model_state, type, from, to, GPICAP_TYPE_NONE);
 }
 
-void make_phys_res_id(char *res_id, uint32_t obj_id, uint64_t res_id_int, char *prefix)
+void add_request_edge(model_state_t *model_state, gpi_model_node_t *from, gpi_model_node_t *to, gpi_cap_t req_type)
 {
-    snprintf(res_id, CSV_MAX_STRING_SIZE, "%s_%u_0x%lx", prefix, obj_id, res_id_int);
+    add_edge_private(model_state, GPI_EDGE_TYPE_REQUEST, from, to, req_type);
+}
+
+void get_resource_space_id(gpi_cap_t resource_type, uint64_t res_space_id, char *str_id)
+{
+    make_node_id(str_id, "SPACE", res_space_id);
+}
+
+void get_resource_id(gpi_cap_t res_type, uint64_t res_space_id, uint64_t res_id, char *str_id)
+{
+    make_node_id_2(str_id, cap_type_to_str(res_type), res_space_id, res_id);
+}
+
+void get_pd_id(uint64_t pd_id, char *str_id)
+{
+    make_node_id(str_id, "PD", pd_id);
+}
+
+gpi_model_node_t *add_resource_node(model_state_t *model_state, gpi_cap_t res_type, uint64_t res_space_id, uint64_t res_id)
+{
+    char node_id[CSV_MAX_STRING_SIZE];
+    get_resource_id(res_type, res_space_id, res_id, node_id);
+
+    return add_node(model_state, GPI_NODE_TYPE_RESOURCE, node_id, cap_type_to_str(res_type));
+}
+
+gpi_model_node_t *add_resource_space_node(model_state_t *model_state, gpi_cap_t resource_type, uint64_t res_space_id)
+{
+    char node_id[CSV_MAX_STRING_SIZE];
+    get_resource_space_id(resource_type, res_space_id, node_id);
+
+    return add_node(model_state, GPI_NODE_TYPE_SPACE, node_id, cap_type_to_str(resource_type));
+}
+
+// Add a PD to the model state
+gpi_model_node_t *add_pd_node(model_state_t *model_state, char *pd_name, uint64_t pd_id)
+{
+    char node_id[CSV_MAX_STRING_SIZE];
+    get_pd_id(pd_id, node_id);
+
+    return add_node(model_state, GPI_NODE_TYPE_PD, node_id, pd_name);
+}
+
+gpi_model_node_t *get_root_node(model_state_t *model_state)
+{
+    return add_pd_node(model_state, "ROOT_TASK", 0);
+}
+
+// Add any nodes and edges from source state to dest state
+void combine_model_states(model_state_t *dest, model_state_t *src)
+{
+    if (src->mem_start != NULL)
+    {
+        // Combine a portable source model state with the destination model state
+        for (gpi_model_state_component_t *item = src->mem_start; item < src->mem_ptr; item += 1)
+        {
+            if (item->type == GPI_MODEL_NODE)
+            {
+                add_node(dest, item->node.node_type, item->node.id, item->node.data);
+            }
+            else if (item->type == GPI_MODEL_EDGE)
+            {
+                add_edge_by_id(dest, item->edge.k.type, item->edge.k.from, item->edge.k.to, item->edge.k.req_type);
+            }
+        }
+    }
+    else
+    {
+        // Combine a source model state from the same heap as the destination model state
+        for (gpi_model_node_t *node = src->nodes; node != NULL; node = node->hh.next)
+        {
+            add_node(dest, node->node_type, node->id, node->data);
+        }
+
+        for (gpi_model_edge_t *edge = src->edges; edge != NULL; edge = edge->hh.next)
+        {
+            add_edge_by_id(dest, edge->k.type, edge->k.from, edge->k.to, edge->k.req_type);
+        }
+    }
 }

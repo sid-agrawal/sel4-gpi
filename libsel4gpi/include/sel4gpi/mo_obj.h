@@ -41,4 +41,10 @@ int mo_new(mo_t *mo,
            uint32_t num_caps,
            vka_t *vka);
 
-void mo_dump_rr(mo_t *mo, model_state_t *ms);
+/**
+ * @param mo mo object to dump the RR for
+ * @param ms pointer to model state
+ * @param pd_node the existing node for pd that is being dumped
+ * @return void
+ */
+void mo_dump_rr(mo_t *mo, model_state_t *ms, gpi_model_node_t *pd_node);

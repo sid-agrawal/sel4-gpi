@@ -88,4 +88,11 @@ int cpu_change_vspace(cpu_t *cpu,
 int cpu_new(cpu_t *cpu,
             vka_t *vka);
 
-void cpu_dump_rr(cpu_t *cpu, model_state_t *ms);
+
+/**
+ * @param cpu cpu object to dump the RR for
+ * @param ms pointer to model state
+ * @param pd_node the existing node for pd that is being dumped
+ * @return void
+ */
+void cpu_dump_rr(cpu_t *cpu, model_state_t *ms, gpi_model_node_t *pd_node);

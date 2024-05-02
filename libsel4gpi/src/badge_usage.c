@@ -163,11 +163,20 @@ char *cap_type_to_str(gpi_cap_t cap_type)
     case GPICAP_TYPE_ADS:
         return "ADS";
         break;
+    case GPICAP_TYPE_VMR:
+        return "VMR";
+        break;
+    case GPICAP_TYPE_PMR:
+        return "PMR";
+        break;
     case GPICAP_TYPE_MO:
         return "MO";
         break;
     case GPICAP_TYPE_CPU:
         return "VCPU";
+        break;
+    case GPICAP_TYPE_PCPU:
+        return "PCPU";
         break;
     case GPICAP_TYPE_PD:
         return "PD";

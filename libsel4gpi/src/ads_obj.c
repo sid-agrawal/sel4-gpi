@@ -184,19 +184,20 @@ static char *ads_res_type_to_str(sel4utils_reservation_type_t type)
     }
 }
 
-void ads_dump_rr(ads_t *ads, model_state_t *ms)
+void ads_dump_rr(ads_t *ads, model_state_t *ms, gpi_model_node_t *pd_node)
 {
-    char ads_res_id[CSV_MAX_STRING_SIZE];
-    make_res_id(ads_res_id, GPICAP_TYPE_ADS, ads->ads_obj_id);
-    add_resource(ms, cap_type_to_str(GPICAP_TYPE_ADS), ads_res_id);
+    // (XXX) Arya: ADS does not belong to a resource space! To fix
+    gpi_model_node_t *ads_node = add_resource_node(ms, GPICAP_TYPE_ADS, 1, ads->ads_obj_id);
+
+    // (XXX) Arya: Do we want to only include the currently active ADS? Reintroduce the 'mapped' property?
+    add_edge(ms, GPI_EDGE_TYPE_HOLD, pd_node, ads_node);
 
     uint32_t added_mo_rrs[MAX_MO_RR];
     int num_added_mo_rrs = 0;
     bool skip = false;
     for (attach_node_t *res = ads->attach_nodes; res != NULL; res = res->next)
     {
-        // Enable this to skip extra PMRs on same MO
-        #if 0
+        // Skip extra attaches of the same MO
         for (int i = 0; i < num_added_mo_rrs; i++)
         {
             if (added_mo_rrs[i] == res->mo_id)
@@ -210,19 +211,22 @@ void ads_dump_rr(ads_t *ads, model_state_t *ms)
         {
             continue;
         }
-        #endif
 
+        assert(num_added_mo_rrs < MAX_MO_RR);
         added_mo_rrs[num_added_mo_rrs] = res->mo_id;
         num_added_mo_rrs++;
-        char vmr_res_id[CSV_MAX_STRING_SIZE];
-        make_virtual_res_id(vmr_res_id, ads->ads_obj_id, (uint64_t)res->vaddr, "VMR");
-        add_resource_2(ms, "VMR", vmr_res_id, ads_res_type_to_str(res->type));
-        add_resource_depends_on(ms, vmr_res_id, ads_res_id, REL_TYPE_SUBSET);
+        
+        /* Add the VMR node */
+        // (XXX) Arya: VMR is an implicit resource
+        gpi_model_node_t *vmr_node = add_resource_node(ms, GPICAP_TYPE_VMR, ads->ads_obj_id, (uint64_t)res->vaddr);
+        add_edge(ms, GPI_EDGE_TYPE_SUBSET, vmr_node, ads_node);
+        add_edge(ms, GPI_EDGE_TYPE_HOLD, pd_node, vmr_node);
 
-        char mo_res_id[CSV_MAX_STRING_SIZE];
-        make_res_id(mo_res_id, GPICAP_TYPE_MO, res->mo_id);
-        add_resource_depends_on(ms, vmr_res_id, mo_res_id, REL_TYPE_MAP);
+        /* Add the relation from VMR to MO node */
+        gpi_model_node_t *mo_node = add_resource_node(ms, GPICAP_TYPE_MO, 1, res->mo_id);
+        add_edge(ms, GPI_EDGE_TYPE_MAP, vmr_node, mo_node);
     }
+
 #if 0
     vspace_t *ads_vspace = ads->vspace;
 
