@@ -536,14 +536,14 @@ static void handle_load_req(seL4_Word sender_badge,
     uint64_t heap_size = pd_image_heap_size[image_id];
 
     seL4_CNode cspace_root = received_cap;
-    error = pd_load_image(&client_data->pd,
-                          get_pd_component()->server_vka,
-                          get_pd_component()->server_simple,
-                          image_path,
-                          get_pd_component()->server_vspace,
-                          &ads_data->ads,
-                          &cpu_data->cpu,
-                          heap_size);
+    // error = pd_load_image(&client_data->pd,
+    //                       get_pd_component()->server_vka,
+    //                       get_pd_component()->server_simple,
+    //                       image_path,
+    //                       get_pd_component()->server_vspace,
+    //                       &ads_data->ads,
+    //                       &cpu_data->cpu,
+    //                       heap_size);
     if (error)
     {
         OSDB_PRINTF(PD_DEBUG, PDSERVS "main: Failed to config from client badge:");

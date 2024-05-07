@@ -587,32 +587,15 @@ error:
     return -1;
 }
 
-int pd_load_image(pd_t *pd,
-                  vka_t *vka,
-                  simple_t *simple,
-                  const char *image_path,
-                  vspace_t *server_vspace,
-                  ads_t *target_ads,
-                  cpu_t *target_cpu,
-                  uint64_t heap_size)
+int pd_configure(pd_t *pd,
+                 const char *image_path,
+                 ads_t *target_ads,
+                 cpu_t *target_cpu)
 {
     int error = 0;
     pd->image_name = (char *)image_path;
-    OSDB_PRINTF(PD_DEBUG, PDSERVS "load_image: loading image %s for pd %p\n", image_path, pd);
     memcpy(&pd->proc.pd, target_ads->root_page_dir, sizeof(vka_object_t));
-
-    // (XXX) Linh: we may not always setup the PD as a proc
-    error = pd_setup_proc(pd, vka, server_vspace, target_ads, image_path, heap_size);
-    assert(error == 0);
-
-    error = cpu_config_vspace(target_cpu, vka, target_ads->vspace,
-                              pd->proc.cspace.cptr,
-                              pd->cnode_guard,
-                              pd->proc.fault_endpoint.cptr,
-                              pd->proc.thread.ipc_buffer,
-                              pd->proc.thread.ipc_buffer_addr);
-
-    pd->proc.thread.tcb = *(target_cpu->tcb);
+    pd->proc.thread = target_cpu->thread;
 
     /* The RT manages this ADS */
     pd_add_resource(&get_pd_component()->rt_pd, GPICAP_TYPE_ADS, target_ads->ads_obj_id, NSID_DEFAULT, 0, 0, 0);

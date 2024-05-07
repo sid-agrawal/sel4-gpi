@@ -105,10 +105,7 @@ enum cpu_component_msgregs
 typedef struct _cpu_component_registry_entry
 {
     cpu_t cpu;
-    /* In our model each CPU can have its own cspace. */
-    seL4_CNode cspace_root;
     struct _cpu_component_registry_entry *next;
-
 } cpu_component_registry_entry_t;
 
 /* State maintained by the server. */

@@ -183,14 +183,10 @@ int pd_new(pd_t *pd,
  */
 int pd_destroy(pd_t *pd, vka_t *server_vka, vspace_t *server_vspace);
 
-int pd_load_image(pd_t *pd,
-                  vka_t *vka,
-                  simple_t *simple,
-                  const char *image_path,
-                  vspace_t *server_vspace,
-                  ads_t *target_ads,
-                  cpu_t *target_cpu,
-                  uint64_t heap_size);
+int pd_configure(pd_t *pd,
+                 const char *image_path,
+                 ads_t *target_ads,
+                 cpu_t *target_cpu);
 
 int pd_dump(pd_t *pd);
 

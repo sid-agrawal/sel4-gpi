@@ -19,6 +19,7 @@
 #include <stdio.h>
 
 #include <sel4gpi/pd_clientapi.h>
+#include <sel4gpi/cpu_clientapi.h>
 #include <sel4bench/arch/sel4bench.h>
 #include <utils/uthash.h>
 #include <sel4gpi/pd_utils.h>
@@ -198,7 +199,9 @@ int test_new_process_osmosis_shmem(env_t env)
     void *ipc_buf = sel4gpi_get_vmr(&new_ads_rde, 1, NULL, SEL4UTILS_RES_TYPE_IPC_BUF, &ipc_mo);
     test_assert(ipc_buf != NULL);
 
-    // cpu_client_config(&cpu_os_cap, &ads_os_cap, )
+    seL4_Word cnode_guard = api_make_guard_skip_word(seL4_WordBits - TEST_PROCESS_CSPACE_SIZE_BITS);
+    error = cpu_client_config(&cpu_os_cap, &ads_os_cap, &ipc_mo, &pd_os_cap, cnode_guard, seL4_CapNull, (seL4_Word)ipc_buf);
+    test_error_eq(error, 0);
 
     printf("here\n");
 #if 0

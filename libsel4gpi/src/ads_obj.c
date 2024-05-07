@@ -19,6 +19,7 @@
 #include <sel4gpi/cap_tracking.h>
 #include <sel4gpi/gpi_server.h>
 #include <sel4gpi/model_exporting.h>
+#include <cpio/cpio.h>
 
 #define MAX_MO_RR 10000
 

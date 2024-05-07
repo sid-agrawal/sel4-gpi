@@ -26,29 +26,29 @@ int cpu_start(cpu_t *cpu, sel4utils_thread_entry_fn entry_point, seL4_Word init_
     OSDB_PRINTF(CPU_DEBUG, CPUSERVS "cpu_start: starting CPU at entry point %p and arg0 %lx\n", entry_point, arg0);
     int error;
     seL4_UserContext regs = {0};
-    void *stack_top = init_stack == 0 ? cpu->stack_top : init_stack;
-    OSDB_PRINTF(CPU_DEBUG, "init_stack %lx\n", stack_top);
+    // void *stack_top = init_stack == 0 ? cpu->thread.stack_top : init_stack;
+    // OSDB_PRINTF(CPU_DEBUG, "init_stack %lx\n", stack_top);
 
-    /* Initialize the TLS */
-    size_t tls_size = sel4runtime_get_tls_size();
-    uintptr_t tls_base = (uintptr_t)stack_top - tls_size;
-    cpu->tls_base = (uintptr_t)sel4runtime_write_tls_image((void *)tls_base);
-    cpu->stack_top = ALIGN_UP(tls_base, STACK_CALL_ALIGNMENT);
+    // /* Initialize the TLS */
+    // size_t tls_size = sel4runtime_get_tls_size();
+    // uintptr_t tls_base = (uintptr_t)stack_top - tls_size;
+    // cpu->tls_base = (uintptr_t)sel4runtime_write_tls_image((void *)tls_base);
+    // cpu->thread.stack_top = ALIGN_UP(tls_base, STACK_CALL_ALIGNMENT);
 
-    error = seL4_TCB_SetTLSBase(cpu->tcb->cptr, cpu->tls_base);
-    assert(error == 0);
+    // error = seL4_TCB_SetTLSBase(cpu->thread.tcb.cptr, cpu->tls_base);
+    // assert(error == 0);
 
     /* Write context and registers */
     sel4utils_arch_init_local_context((void *)entry_point, (void *)arg0,
-                                      (void *)cpu->tls_base, (void *)cpu->ipc_buffer_addr, stack_top, &regs);
+                                      (void *)cpu->tls_base, (void *)cpu->thread.ipc_buffer_addr, stack_top, &regs);
 
     assert(error == 0);
 
-    error = seL4_TCB_WriteRegisters(cpu->tcb->cptr, 0, 0, sizeof(regs) / sizeof(seL4_Word), &regs);
+    error = seL4_TCB_WriteRegisters(cpu->thread.tcb.cptr, 0, 0, sizeof(regs) / sizeof(seL4_Word), &regs);
     assert(error == 0);
 
     // resume the new thread
-    error = seL4_TCB_Resume(cpu->tcb->cptr);
+    error = seL4_TCB_Resume(cpu->thread.tcb.cptr);
     assert(error == 0);
     return 0;
 }
@@ -70,10 +70,10 @@ int cpu_config_vspace(cpu_t *cpu,
     cpu->cspace = root_cnode;
     cpu->cspace_guard = cnode_guard;
     cpu->fault_ep = fault_ep;
-    cpu->ipc_buffer_addr = ipc_buf_addr;
-    cpu->ipc_buffer_frame = ipc_buffer_frame;
+    cpu->thread.ipc_buffer_addr = ipc_buf_addr;
+    cpu->thread.ipc_buffer = ipc_buffer_frame;
 
-    int error = seL4_TCB_Configure(cpu->tcb->cptr,
+    int error = seL4_TCB_Configure(cpu->thread.tcb.cptr,
                                    fault_ep,   // fault endpoint
                                    root_cnode, // root cnode
                                    cnode_guard,
@@ -83,7 +83,7 @@ int cpu_config_vspace(cpu_t *cpu,
                                    ipc_buffer_frame);
     assert(error == 0);
 
-    error = seL4_TCB_SetPriority(cpu->tcb->cptr, seL4_CapInitThreadTCB, 254);
+    error = seL4_TCB_SetPriority(cpu->thread.tcb.cptr, seL4_CapInitThreadTCB, seL4_MaxPrio - 1);
     assert(error == 0);
 
     return 0;
@@ -98,14 +98,14 @@ int cpu_change_vspace(cpu_t *cpu,
     seL4_CPtr vspace_root = vspace->get_root(vspace); // root page table
     assert(vspace_root != 0);
 
-    int error = seL4_TCB_Configure(cpu->tcb->cptr,
+    int error = seL4_TCB_Configure(cpu->thread.tcb.cptr,
                                    cpu->fault_ep, // fault endpoint
                                    cpu->cspace,   // root cnode
                                    cpu->cspace_guard,
                                    vspace_root,
                                    0, // domain
-                                   cpu->ipc_buffer_addr,
-                                   cpu->ipc_buffer_frame);
+                                   cpu->thread.ipc_buffer_addr,
+                                   cpu->thread.ipc_buffer);
 
     return error;
 }
@@ -113,11 +113,7 @@ int cpu_change_vspace(cpu_t *cpu,
 int cpu_new(cpu_t *cpu,
             vka_t *vka)
 {
-
-    cpu->tcb = malloc(sizeof(vka_object_t));
-    assert(cpu->tcb != NULL);
-
-    int error = vka_alloc_tcb(vka, cpu->tcb);
+    int error = vka_alloc_tcb(vka, &cpu->thread.tcb);
     assert(error == 0);
 
     /*
@@ -143,7 +139,7 @@ void cpu_dump_rr(cpu_t *cpu, model_state_t *ms, gpi_model_node_t *pd_node)
 
     seL4_Word affinity = 0;
 #if CONFIG_MAX_NUM_NODES > 1
-    seL4_TCB_GetAffinity_t affinity_res = seL4_TCB_GetAffinity(cpu->tcb->cptr);
+    seL4_TCB_GetAffinity_t affinity_res = seL4_TCB_GetAffinity(cpu->thread.tcb.cptr);
     affinity = affinity_res.affinity;
 #endif
 

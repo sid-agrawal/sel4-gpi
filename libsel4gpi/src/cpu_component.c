@@ -220,21 +220,10 @@ static void handle_config_req(seL4_Word sender_badge,
     OSDB_PRINTF(CPU_DEBUG, CPUSERVS "-----main: Got config  request from:");
     badge_print(sender_badge);
 
-    OSDB_PRINTF(CPU_DEBUG, CPUSERVS " received_cap: ");
-    // debug_cap_identify("", received_cap);
-
-    assert(seL4_MessageInfo_get_extraCaps(old_tag) >= 2);
-    assert(seL4_MessageInfo_ptr_get_capsUnwrapped(&old_tag) >= 1);
+    assert(seL4_MessageInfo_ptr_get_capsUnwrapped(&old_tag) >= 2);
     assert(seL4_MessageInfo_get_label(old_tag) == 0);
 
     int error = 0;
-
-    // OSDB_PRINTF(CPU_DEBUG, CPUSERVS "capsUnwrapped: %lu\n", seL4_MessageInfo_get_capsUnwrapped(old_tag));
-    // OSDB_PRINTF(CPU_DEBUG, CPUSERVS "extraCap: %lu\n", seL4_MessageInfo_ptr_get_extraCaps(&old_tag));
-    // for (int i = 0; i < 5; i++)
-    // {
-    //     OSDB_PRINTF(CPU_DEBUG, CPUSERVS "MR[%d] = %lx\n", i, seL4_GetBadge(i));
-    // }
 
     /* Find the client */
     cpu_component_registry_entry_t *client_data = cpu_component_registry_get_entry_by_badge(sender_badge);
@@ -242,7 +231,14 @@ static void handle_config_req(seL4_Word sender_badge,
     {
         OSDB_PRINTF(CPU_DEBUG, CPUSERVS "main: Failed to find client badge %lx.\n",
                     sender_badge);
-        assert(0);
+        return;
+    }
+
+    pd_component_registry_entry_t *pd_data = pd_component_registry_get_entry_by_badge(seL4_GetBadge(0));
+    if (pd_data == NULL)
+    {
+        OSDB_PRINTF(CPU_DEBUG, CPUSERVS "main: Failed to PD data for:\n");
+        badge_print(seL4_GetBadge(0));
         return;
     }
 
@@ -260,12 +256,12 @@ static void handle_config_req(seL4_Word sender_badge,
     ads_component_registry_entry_t *asre = ads_component_registry_get_entry_by_badge(ads_cap_badge);
     if (asre == NULL)
     {
-        OSDB_PRINTF(CPU_DEBUG, CPUSERVS "main: Failed to find ads badge %lx.\n", ads_cap_badge);
-        assert(0);
+        OSDB_PRINTF(CPU_DEBUG, CPUSERVS "main: Failed to find ADS data for:\n");
+        badge_print(ads_cap_badge);
         return;
     }
 
-    OSDB_PRINTF(CPU_DEBUG, CPUSERVS "Found ads_data with object ID: %u.\n", asre->ads.ads_obj_id);
+    // OSDB_PRINTF(CPU_DEBUG, CPUSERVS "Found ads_data with object ID: %u.\n", asre->ads.ads_obj_id);
     // /* Get the vspace for the ads */
     vspace_t *ads_vspace = asre->ads.vspace;
 
@@ -274,7 +270,10 @@ static void handle_config_req(seL4_Word sender_badge,
     mo_component_registry_entry_t *ipc_mo_data = mo_component_registry_get_entry_by_badge(ipc_buf_mo_badge);
     seL4_CPtr ipc_buf_frame = ipc_mo_data == NULL ? seL4_CapNull : ipc_mo_data->mo.frame_caps_in_root_task[0].cap;
 
-    seL4_CNode cspace_root = received_cap;
+    seL4_CNode cspace_root = pd_data->pd.proc.cspace.cptr;
+    seL4_Word type = seL4_DebugCapIdentify(cspace_root);
+    printf("type: %ld\n", type);
+
     error = cpu_config_vspace(&client_data->cpu,
                               get_cpu_component()->server_vka,
                               ads_vspace,
@@ -293,9 +292,10 @@ static void handle_config_req(seL4_Word sender_badge,
     client_data->cpu.binded_ads_id = asre->ads.ads_obj_id;
     OSDB_PRINTF(CPU_DEBUG, CPUSERVS "main: config done.\n");
 
+    pd_configure(&pd_data->pd, "", &asre->ads, &client_data->cpu);
+
     seL4_SetMR(CPUMSGREG_FUNC, CPU_FUNC_CONFIG_ACK);
-    seL4_SetMR(1, 0xdead);
-    seL4_MessageInfo_t tag = seL4_MessageInfo_new(error, 0, 0, 1 + CPUMSGREG_CONFIG_ACK_END);
+    seL4_MessageInfo_t tag = seL4_MessageInfo_new(error, 0, 0, CPUMSGREG_CONFIG_ACK_END);
     return reply(tag);
 }
 
@@ -421,10 +421,7 @@ int forge_cpu_cap_from_tcb(sel4utils_process_t *process, // Change this to the s
     cpu_component_registry_insert(client_reg_ptr);
 
     // (XXX) A lot more will go here.
-    client_reg_ptr->cpu.tcb = &(process->thread.tcb);
-    client_reg_ptr->cpu.ipc_buffer_addr = (void *)process->thread.ipc_buffer_addr;
-    client_reg_ptr->cpu.ipc_buffer_frame = process->thread.ipc_buffer;
-    client_reg_ptr->cpu.stack_top = process->thread.stack_top;
+    client_reg_ptr->cpu.thread = process->thread;
     // client_reg_ptr->cpu.tls_base = &process->thread.tls_base;
     client_reg_ptr->cpu.cspace = process->cspace.cptr;
 
@@ -438,7 +435,7 @@ int forge_cpu_cap_from_tcb(sel4utils_process_t *process, // Change this to the s
         return 1;
     }
     OSDB_PRINTF(CPU_DEBUG, CPUSERVS "main: Forged a new CPU cap(EP: %lx) with badge value: %lx IPC_Buff %p stack %p\n",
-                dest.capPtr, badge, client_reg_ptr->cpu.ipc_buffer_addr, client_reg_ptr->cpu.stack_top);
+                dest.capPtr, badge, client_reg_ptr->cpu.thread.ipc_buffer_addr, client_reg_ptr->cpu.thread.stack_top);
 
     *cap_ret = dest_cptr;
     if (cpu_obj_id_ret)

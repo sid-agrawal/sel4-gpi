@@ -16,15 +16,11 @@
 
 typedef struct _cpu
 {
-    // sel4utils_thread_config_t thread_config;
-    // sel4utils_thread_t thread_obj;
+    sel4utils_thread_t thread; // storage for some commonly used fields
     uint64_t cpu_obj_id;
     uint64_t binded_ads_id;
-    vka_object_t *tcb;
-    void *stack_top;
     void *tls_base;
-    seL4_Word ipc_buffer_addr;
-    seL4_CPtr ipc_buffer_frame;
+    // the currently binded cspace, could potentially change if reconfigured
     seL4_CPtr cspace;
     seL4_Word cspace_guard;
     seL4_CPtr fault_ep;
