@@ -17,66 +17,131 @@
 #include <sel4gpi/mo_clientapi.h>
 #include <sel4gpi/mo_component.h>
 #include <sel4gpi/debug.h>
+#include <sel4gpi/pd_utils.h>
 
 #include <sel4bench/arch/sel4bench.h>
 
+int test_ads_attach(env_t env)
+{
+    // Initialize the ADS
+    ads_client_context_t ads_conn;
+    vka_cspace_make_path(&env->vka, sel4gpi_get_rde_by_ns_id(sel4gpi_get_binded_ads_id(), GPICAP_TYPE_ADS), &ads_conn.badged_server_ep_cspath);
+
+    // allocate a new MO
+    int n_pages = 5;
+    mo_client_context_t mo_conn;
+    seL4_CPtr slot;
+    vka_cspace_alloc(&env->vka, &slot);
+    int error = mo_component_client_connect(env->gpi_endpoint,
+                                            slot,
+                                            n_pages,
+                                            &mo_conn);
+    test_error_eq(error, 0);
+
+    // attacht the MO
+    void *ret_vaddr;
+    error = ads_client_attach(&ads_conn,
+                              0, /*vaddr*/
+                              &mo_conn,
+                              &ret_vaddr);
+    assert(error == 0);
+    assert(ret_vaddr != NULL);
+
+    // access the MO
+    printf("Attached MO at vaddr: %p\n", ret_vaddr);
+
+    for (int i = 0; i < n_pages; i++)
+    {
+        printf("MO[%u]: %u\n", i, ((char *)ret_vaddr)[i * PAGE_SIZE_4K]);
+    }
+    printf("Finished reading the new MO: %p\n", ret_vaddr);
+
+    return sel4test_get_result();
+}
+DEFINE_TEST(GPIADS010, "Ensure the ads attach works", test_ads_attach, true)
+
+int test_ads_rm(env_t env)
+{
+    // Initialize the ADS
+    ads_client_context_t ads_conn;
+    vka_cspace_make_path(&env->vka, sel4gpi_get_rde_by_ns_id(sel4gpi_get_binded_ads_id(), GPICAP_TYPE_ADS), &ads_conn.badged_server_ep_cspath);
+
+    // allocate a new MO
+    int n_pages = 5;
+    mo_client_context_t mo_conn;
+    seL4_CPtr slot;
+    vka_cspace_alloc(&env->vka, &slot);
+    int error = mo_component_client_connect(env->gpi_endpoint,
+                                            slot,
+                                            n_pages,
+                                            &mo_conn);
+    test_error_eq(error, 0);
+
+    // attach the MO
+    void *ret_vaddr;
+    error = ads_client_attach(&ads_conn,
+                              0, /*vaddr*/
+                              &mo_conn,
+                              &ret_vaddr);
+
+    assert(error == 0);
+    assert(ret_vaddr != NULL);
+
+    // remove the MO
+    error = ads_client_rm(&ads_conn,
+                          ret_vaddr);
+
+    assert(error == 0);
+
+    // check that the vaddr is inaccessible
+    // uncomment the following line to check, it should cause a page fault
+    // printf("There should be a page fault after this...");
+    // printf("MO: %u\n", ((char *)ret_vaddr)[0]);
+
+    return sel4test_get_result();
+}
+DEFINE_TEST(GPIADS011, "Ensure the ads remove works", test_ads_rm, true)
+
+// (XXX) Arya: Pending update to new APIs
 #if 0
-#include <time.h>
-typedef uint64_t timestamp_t;
-typedef uint64_t word_t;
-
-#define PMUSERENR_EL0 "PMUSERENR_EL0"
-#define CCNT "PMCCNTR_EL0"
-#define PMCR "PMCR_EL0"
-#define PMCNTENSET "PMCNTENSET_EL0"
-#define PMINTENSET "PMINTENSET_EL1"
-#define PMOVSR "PMOVSCLR_EL0"
-#define CCNT_INDEX 31
-
-#define PMCR_ENABLE 0
-#define PMCR_ECNT_RESET 1
-#define PMCR_CCNT_RESET 2
-
-#define MRS(reg, v) asm volatile("mrs %x0," reg : "=r"(v))
-#define MSR(reg, v)                                \
-    do                                             \
-    {                                              \
-        word_t _v = v;                             \
-        asm volatile("msr " reg ",%x0" ::"r"(_v)); \
-    } while (0)
-
-#define SYSTEM_WRITE_WORD(reg, v) MSR(reg, v)
-#define SYSTEM_READ_WORD(reg, v) MRS(reg, v)
-
-void arm_init_ccnt(void)
+int test_ads_dump_rr(env_t env)
 {
+    int error;
+    cspacepath_t path;
+    vka_cspace_make_path(&env->vka, env->self_ads_cptr, &path);
+    ads_client_context_t conn;
+    conn.badged_server_ep_cspath = path;
 
+    // Using a known EP, get a new ads CAP.
+    ads_client_context_t shallow_copy_conn;
+    error = ads_client_shallow_copy(&conn, &env->vka, (void *)0x10001000, &shallow_copy_conn);
+    test_error_eq(error, 0);
 
+    cpu_client_context_t cpu_conn;
+    error = cpu_component_client_connect(env->gpi_endpoint,
+                                         &env->vka,
+                                         &cpu_conn);
+    test_error_eq(error, 0);
 
-    //SYSTEM_WRITE_WORD(PMUSERENR_EL0, 4);
-    uint32_t val = (BIT(PMCR_ENABLE) | BIT(PMCR_CCNT_RESET) | BIT(PMCR_ECNT_RESET));
-    SYSTEM_WRITE_WORD(PMCR, val);
+    // Config its ads and cspace
+    error = cpu_client_config(&cpu_conn,
+                              &shallow_copy_conn,
+                              env->cspace_root,
+                              env->endpoint);
+    test_error_eq(error, 0);
 
-#ifdef PMCNTENSET
-    /* turn on the cycle counter */
-    SYSTEM_WRITE_WORD(PMCNTENSET, BIT(CCNT_INDEX));
-#endif
+    // Dump the ads rr
+    size_t buf_num_pages = 15;
+    char *ads_rr = malloc(buf_num_pages * 4096);
+    assert(ads_rr != NULL);
 
-#ifdef CONFIG_ARM_ENABLE_PMU_OVERFLOW_INTERRUPT
-    armv_enableOverflowIRQ();
-#endif /* CONFIG_ARM_ENABLE_PMU_OVERFLOW_INTERRUPT */
+    ads_client_dump_rr(&conn, ads_rr, buf_num_pages * 4096);
+    printf("ADS RR: \n%s\n", ads_rr);
+
+    return sel4test_get_result();
 }
+DEFINE_TEST(GPIADS006, "Dump the RR of the ads", test_ads_dump_rr, true)
 
-static inline timestamp_t timestamp_sid(void)
-{
-    timestamp_t ccnt;
-    SYSTEM_READ_WORD(CCNT, ccnt);
-    return ccnt;
-}
-#endif
-
-static char stack_top[4096] __attribute__((aligned(16)));
-static char ipc_buff[4096] __attribute__((aligned(4096)));
 int test_ads_shallow_copy(env_t env)
 {
     int error;
@@ -119,7 +184,6 @@ int test_ads_shallow_copy(env_t env)
 
     return sel4test_get_result();
 }
-
 // DEFINE_TEST(GPIADS001, "Ensure that as shallow_copy works", test_ads_shallow_copy, true)
 
 vka_object_t ep_for_thread;
@@ -176,7 +240,6 @@ void test_func_die(seL4_Word arg0, seL4_Word arg1, seL4_Word arg2)
         ;
 }
 
-// DEFINE_TEST(GPIADS001, "Ensure the ads shallow_copy works", test_ads_shallow_copy, true)
 int test_ads_stack_isolated_stack_die(env_t env)
 {
     printf("------------------- STARTING : %s -------------------\n", __func__);
@@ -268,53 +331,63 @@ int test_ads_stack_isolated_stack_die(env_t env)
     return sel4test_get_result();
 }
 DEFINE_TEST(GPIADS002, "Ensure that thread stack works", test_ads_stack_isolated_stack_die, true)
+#endif
 
-int test_ads_attach(env_t env)
+// (XXX) Arya: This was commented out before, not sure what it is for
+#if 0
+#include <time.h>
+typedef uint64_t timestamp_t;
+typedef uint64_t word_t;
+
+#define PMUSERENR_EL0 "PMUSERENR_EL0"
+#define CCNT "PMCCNTR_EL0"
+#define PMCR "PMCR_EL0"
+#define PMCNTENSET "PMCNTENSET_EL0"
+#define PMINTENSET "PMINTENSET_EL1"
+#define PMOVSR "PMOVSCLR_EL0"
+#define CCNT_INDEX 31
+
+#define PMCR_ENABLE 0
+#define PMCR_ECNT_RESET 1
+#define PMCR_CCNT_RESET 2
+
+#define MRS(reg, v) asm volatile("mrs %x0," reg : "=r"(v))
+#define MSR(reg, v)                                \
+    do                                             \
+    {                                              \
+        word_t _v = v;                             \
+        asm volatile("msr " reg ",%x0" ::"r"(_v)); \
+    } while (0)
+
+#define SYSTEM_WRITE_WORD(reg, v) MSR(reg, v)
+#define SYSTEM_READ_WORD(reg, v) MRS(reg, v)
+
+void arm_init_ccnt(void)
 {
-    cspacepath_t path;
-    /*
-        pd_client_context_t pd_conn;
-        vka_cspace_make_path(&env->vka, env->self_pd_cptr, &path);
-        pd_conn.badged_server_ep_cspath = path;
 
-        seL4_CPtr slot;
-        int error = pd_client_next_slot(&pd_conn, &slot);
-        assert(error == 0);
-        printf("Next free slot is %ld\n", (seL4_Word) slot);
-    */
 
-    seL4_CPtr slot;
-    vka_cspace_alloc(&env->vka, &slot);
-    vka_cspace_make_path(&env->vka, slot, &path);
-    cspacepath_t_print(&path);
 
-    // allocate a new MO
-    mo_client_context_t mo_conn;
-    int error = mo_component_client_connect(env->gpi_endpoint,
-                                            slot,
-                                            5,
-                                            &mo_conn);
-    test_error_eq(error, 0);
+    //SYSTEM_WRITE_WORD(PMUSERENR_EL0, 4);
+    uint32_t val = (BIT(PMCR_ENABLE) | BIT(PMCR_CCNT_RESET) | BIT(PMCR_ECNT_RESET));
+    SYSTEM_WRITE_WORD(PMCR, val);
 
-    ads_client_context_t ads_conn;
-    vka_cspace_make_path(&env->vka, env->self_ads_cptr, &path);
-    ads_conn.badged_server_ep_cspath = path;
-    void *ret_vaddr;
-    error = ads_client_attach(&ads_conn,
-                              0, /*vaddr*/
-                              &mo_conn,
-                              &ret_vaddr);
-    assert(error == 0);
-    assert(ret_vaddr != NULL);
-    printf("Attached MO at vaddr: %p\n", ret_vaddr);
-    // for (int i = 0; i < 5*PAGE_SIZE_4K; i++) {
-    //     printf("MO[%u]: %u\n", i, ((char *)ret_vaddr)[i]);
-    // }
-    printf("Finished reading the new MO: %p\n", ret_vaddr);
+#ifdef PMCNTENSET
+    /* turn on the cycle counter */
+    SYSTEM_WRITE_WORD(PMCNTENSET, BIT(CCNT_INDEX));
+#endif
 
-    return sel4test_get_result();
+#ifdef CONFIG_ARM_ENABLE_PMU_OVERFLOW_INTERRUPT
+    armv_enableOverflowIRQ();
+#endif /* CONFIG_ARM_ENABLE_PMU_OVERFLOW_INTERRUPT */
 }
-DEFINE_TEST(GPIADS010, "Ensure the ads attach works", test_ads_attach, true)
+
+static inline timestamp_t timestamp_sid(void)
+{
+    timestamp_t ccnt;
+    SYSTEM_READ_WORD(CCNT, ccnt);
+    return ccnt;
+}
+#endif
 
 #ifdef WQEAREREADY
 int test_ads_bind_cpu(env_t env)
@@ -379,48 +452,7 @@ int test_ads_stack_isolated(env_t env)
     return sel4test_get_result();
 }
 DEFINE_TEST(GPIADS005, "Ensure the threads with isolated stack works", test_ads_stack_isolated, true)
-
 #endif
-
-int test_ads_dump_rr(env_t env)
-{
-    int error;
-    cspacepath_t path;
-    vka_cspace_make_path(&env->vka, env->self_ads_cptr, &path);
-    ads_client_context_t conn;
-    conn.badged_server_ep_cspath = path;
-
-    // Using a known EP, get a new ads CAP.
-    ads_client_context_t shallow_copy_conn;
-    error = ads_client_shallow_copy(&conn, &env->vka, (void *)0x10001000, &shallow_copy_conn);
-    test_error_eq(error, 0);
-
-    cpu_client_context_t cpu_conn;
-    error = cpu_component_client_connect(env->gpi_endpoint,
-                                         &env->vka,
-                                         &cpu_conn);
-    test_error_eq(error, 0);
-
-    // Config its ads and cspace
-    error = cpu_client_config(&cpu_conn,
-                              &shallow_copy_conn,
-                              env->cspace_root,
-                              env->endpoint);
-    test_error_eq(error, 0);
-
-    // Dump the ads rr
-    size_t buf_num_pages = 15;
-    char *ads_rr = malloc(buf_num_pages * 4096);
-    assert(ads_rr != NULL);
-
-    ads_client_dump_rr(&conn, ads_rr, buf_num_pages * 4096);
-    printf("ADS RR: \n%s\n", ads_rr);
-    // ads_client_dump_rr(&shallow_copy_conn, ads_rr, 4096);
-
-    // pd_dump_rr(&conn, ads_rr, buf_num_pages*4096);
-    return sel4test_get_result();
-}
-DEFINE_TEST(GPIADS006, "Dump the RR of the ads", test_ads_dump_rr, true)
 
 /*
     shallow_copy at a lib level.

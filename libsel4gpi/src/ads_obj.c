@@ -88,7 +88,7 @@ int ads_new(vspace_t *loader,
         goto error_exit;
     }
     ret_ads->root_page_dir = vspace_root_object;
-    
+
     return 0;
 
 error_exit:
@@ -96,6 +96,7 @@ error_exit:
     free(ret_ads->vspace);
     return -1;
 }
+
 int ads_attach(ads_t *ads,
                vka_t *vka,
                void *vaddr,
@@ -135,6 +136,12 @@ int ads_attach(ads_t *ads,
     /* Map the frame cap into the vspace */
 
     size_t size_bits = seL4_PageBits;
+
+// (XXX) Arya: Not sure what the intention was with the process cookie
+// But setting it causes the processes to page fault once exiting
+// Due to vspace tear down, which expects the process cookie to be set
+// only if the vspace is responsible for freeing the pages
+#if 0
     int error = sel4utils_map_pages_at_vaddr(target,
                                              frame_caps,
                                              (uintptr_t *)process_cookie, // TODO: this is a hack
@@ -142,6 +149,16 @@ int ads_attach(ads_t *ads,
                                              num_pages,
                                              size_bits,
                                              res);
+#else
+    int error = sel4utils_map_pages_at_vaddr(target,
+                                             frame_caps,
+                                             NULL,
+                                             vaddr,
+                                             num_pages,
+                                             size_bits,
+                                             res);
+#endif
+
     if (error)
     {
         ZF_LOGE("Failed to map pages\n");
@@ -153,8 +170,24 @@ int ads_attach(ads_t *ads,
     return 0;
 }
 
-int ads_rm(ads_t *ads, vka_t *vka, void *vaddr, size_t size)
+int ads_rm(ads_t *ads, vka_t *vka, void *vaddr, size_t size_bits, uint32_t num_pages)
 {
+    assert(vaddr != NULL);
+
+    int error;
+    vspace_t *target = ads->vspace;
+
+    // Free the reservation made by attach
+    sel4utils_free_reservation_by_vaddr(target, vaddr);
+
+    /* Unmap the pages from the vspace */
+    // (XXX) Arya: I believe we want VSPACE_PRESERVE here
+    // Otherwise, sel4utils will attempt to free the frame caps and their corresponding untyped
+    // Which we do not want, since the MO continues to exist
+    sel4utils_unmap_pages(target, vaddr, num_pages, size_bits, VSPACE_PRESERVE);
+
+    OSDB_PRINTF(ADS_DEBUG, ADSSERVS "removed %u pages from %p\n", num_pages, vaddr);
+
     return 0;
 }
 
@@ -215,7 +248,7 @@ void ads_dump_rr(ads_t *ads, model_state_t *ms, gpi_model_node_t *pd_node)
         assert(num_added_mo_rrs < MAX_MO_RR);
         added_mo_rrs[num_added_mo_rrs] = res->mo_id;
         num_added_mo_rrs++;
-        
+
         /* Add the VMR node */
         // (XXX) Arya: VMR is an implicit resource
         gpi_model_node_t *vmr_node = add_resource_node(ms, GPICAP_TYPE_VMR, ads->ads_obj_id, (uint64_t)res->vaddr);

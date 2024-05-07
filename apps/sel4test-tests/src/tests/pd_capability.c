@@ -277,3 +277,24 @@ DEFINE_TEST(GPIPD002,
             "OSMO: Ensure that as new process works w/ SHMEM",
             test_new_process_osmosis_shmem,
             true)
+
+int test_pd_dump(env_t env)
+{
+    int error;
+    printf("------------------STARTING: %s------------------\n", __func__);
+
+    // Check that PD dump works on self, more than once
+    pd_client_context_t pd_conn;
+    vka_cspace_make_path(&env->vka, sel4gpi_get_pd_cap(), &pd_conn.badged_server_ep_cspath);
+
+    error = pd_client_dump(&pd_conn, NULL, 0);
+    test_assert(error == 0);
+
+    error = pd_client_dump(&pd_conn, NULL, 0);
+    test_assert(error == 0);
+
+    printf("------------------ENDING: %s------------------\n", __func__);
+    return sel4test_get_result();
+}
+
+DEFINE_TEST(GPIPD003, "Test PD dump", test_pd_dump, true)

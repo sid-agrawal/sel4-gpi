@@ -88,5 +88,4 @@ int test_model_state_export(env_t env)
 
     return sel4test_get_result();
 }
-
 DEFINE_TEST(GPIMS001, "Test construction and exporting of model state", test_model_state_export, true)

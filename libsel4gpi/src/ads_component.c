@@ -241,6 +241,7 @@ int ads_component_attach(uint64_t ads_id, uint64_t mo_id, void *vaddr, void **re
     attach_node->mo_id = mo_id;
     attach_node->frame_caps = malloc(sizeof(seL4_CPtr) * num_pages);
     attach_node->type = SEL4UTILS_RES_TYPE_OTHER;
+    attach_node->n_pages = num_pages;
     attach_node->next = client_data->ads.attach_nodes;
     client_data->ads.attach_nodes = attach_node;
 
@@ -323,6 +324,65 @@ static void handle_attach_req(seL4_Word sender_badge, seL4_MessageInfo_t old_tag
     seL4_SetMR(ADSMSGREG_FUNC, ADS_FUNC_ATTACH_ACK);
     seL4_SetMR(ADSMSGREG_ATTACH_ACK_VA, (seL4_Word)vaddr);
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0, ADSMSGREG_ATTACH_ACK_END);
+    return reply(tag);
+}
+
+static void handle_remove_req(seL4_Word sender_badge, seL4_MessageInfo_t old_tag, seL4_CPtr mo_cap)
+{
+    OSDB_PRINTF(ADS_DEBUG, ADSSERVS "main: Got remove request from client badge %lx.\n", sender_badge);
+    badge_print(sender_badge);
+
+    int error = 0;
+
+    uint64_t ads_id = get_ns_id_from_badge(sender_badge);
+    void *vaddr = (void *)seL4_GetMR(ADSMSGREG_RM_REQ_VA);
+
+    /* Find the client */
+    ads_component_registry_entry_t *client_data = ads_component_registry_get_entry_by_id(ads_id);
+    if (client_data == NULL)
+    {
+        OSDB_PRINTF(ADS_DEBUG, ADSSERVS "main: Failed to find ADS with ID %ld.\n",
+                    ads_id);
+        error = -1;
+    }
+    else
+    {
+        // Default error if we do not find the corresponding memory region
+        error = -1;
+
+        // Find the attach node corresponding to this vaddr
+        attach_node_t *prev = NULL;
+        for (attach_node_t *node = client_data->ads.attach_nodes; node != NULL; node = node->next)
+        {
+            if (node->vaddr == vaddr)
+            {
+                // Remove the VMR
+                error = ads_rm(&client_data->ads,
+                               get_ads_component()->server_vka,
+                               vaddr,
+                               seL4_PageBits,
+                               node->n_pages);
+                
+                // Remove the attach node
+                if (prev == NULL)
+                {
+                    client_data->ads.attach_nodes = node->next;
+                }
+                else
+                {
+                    prev->next = node->next;
+                }
+
+                free(node->frame_caps);
+                free(node);
+            }
+
+            prev = node;
+        }
+    }
+
+    seL4_SetMR(ADSMSGREG_FUNC, ADS_FUNC_RM_ACK);
+    seL4_MessageInfo_t tag = seL4_MessageInfo_new(error, 0, 0, ADSMSGREG_RM_ACK_END);
     return reply(tag);
 }
 
@@ -473,13 +533,28 @@ static void handle_shallow_copy_req(seL4_Word sender_badge)
 
 void ads_handle_allocation_request(seL4_MessageInfo_t tag, seL4_Word sender_badge, cspacepath_t *received_cap, seL4_MessageInfo_t *reply_tag)
 {
+    enum ads_component_funcs func = seL4_GetMR(ADSMSGREG_FUNC);
+
     if (get_ns_id_from_badge(sender_badge) == NSID_DEFAULT)
     {
         handle_ads_allocation(sender_badge, reply_tag);
     }
     else
     {
-        handle_attach_req(sender_badge, tag, received_cap->capPtr);
+        switch (func)
+        {
+        case ADS_FUNC_ATTACH_REQ:
+            handle_attach_req(sender_badge, tag, received_cap->capPtr);
+            break;
+        case ADS_FUNC_RM_REQ:
+            // (XXX) Arya: This isn't an allocation request, but workaround due to
+            // not having a VMR endpoint
+            handle_remove_req(sender_badge, tag, received_cap->capPtr);
+            break;
+        default:
+            gpi_panic(ADSSERVS "Unknown func type.", (seL4_Word)func);
+            break;
+        }
     }
 }
 

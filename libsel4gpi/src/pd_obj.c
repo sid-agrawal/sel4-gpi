@@ -1069,8 +1069,7 @@ int pd_dump(pd_t *pd)
     }
 
     /* Free the frame used for rr requests */
-    // (XXX) Arya: Again, unmapping this will cause future failures
-    // vspace_unmap_pages(get_pd_component()->server_vspace, rr_local_vaddr, 1, seL4_PageBits, pd->vka);
+    vspace_unmap_pages(get_pd_component()->server_vspace, rr_local_vaddr, 1, seL4_LargePageBits, get_pd_component()->server_vka);
 
     print_model_state(ms);
     destroy_model_state(ms);

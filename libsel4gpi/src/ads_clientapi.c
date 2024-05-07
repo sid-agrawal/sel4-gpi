@@ -55,7 +55,6 @@ int ads_client_attach(ads_client_context_t *conn,
 {
     seL4_SetMR(ADSMSGREG_FUNC, ADS_FUNC_ATTACH_REQ);
     seL4_SetMR(ADSMSGREG_ATTACH_REQ_VA, (seL4_Word)vaddr);
-    // seL4_SetMR(ADSMSGREG_ATTACH_REQ_SZ, (seL4_Word) size);
     seL4_SetCap(0, mo_cap->badged_server_ep_cspath.capPtr);
 
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 1,
@@ -120,9 +119,19 @@ int ads_client_dump_rr(ads_client_context_t *conn, char *ads_rr, size_t size)
     return 0;
 }
 
-int ads_client_rm(ads_client_context_t *conn, void *vaddr, size_t size)
+int ads_client_rm(ads_client_context_t *conn, void *vaddr)
 {
-    return 0;
+    seL4_SetMR(ADSMSGREG_FUNC, ADS_FUNC_RM_REQ);
+    seL4_SetMR(ADSMSGREG_RM_REQ_VA, (seL4_Word)vaddr);
+
+    seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0,
+                                                  ADSMSGREG_RM_REQ_END);
+
+    OSDB_PRINTF(ADS_DEBUG, ADSSERVC "Sending remove request to server via EP: %lu.\n",
+                conn->badged_server_ep_cspath.capPtr);
+    tag = seL4_Call(conn->badged_server_ep_cspath.capPtr, tag);
+
+    return seL4_MessageInfo_get_label(tag);
 }
 
 int ads_client_bind_cpu(ads_client_context_t *conn, seL4_CPtr cpu_cap)

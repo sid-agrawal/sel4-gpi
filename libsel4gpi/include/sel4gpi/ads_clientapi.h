@@ -57,14 +57,16 @@ int ads_client_attach(ads_client_context_t *conn,
                       void **ret_vaddr);
 
 /**
- * @brief   Remove a memory region from the ads.
+ * @brief   
+ * Remove a memory region from the ads.
+ * Removes the entire reservation starting at the provided vaddr.
+ * (XXX) Arya: This operation is really VMR delete
  *
  * @param conn client connection object
- * @param vaddr virtual address to attach at
- * @param size size of the attached region
+ * @param vaddr virtual address to remove
  * @return int 0 on success, -1 on failure.
  */
-int ads_client_rm(ads_client_context_t *conn, void *vaddr, size_t size);
+int ads_client_rm(ads_client_context_t *conn, void *vaddr);
 
 /**
  * @brief Attach a given ads to to a given CPU cap.

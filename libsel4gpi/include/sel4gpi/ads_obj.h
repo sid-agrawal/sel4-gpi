@@ -26,6 +26,7 @@ typedef struct _attach_node
     seL4_Word mo_id;
     sel4utils_reservation_type_t type;
     void *vaddr;
+    uint32_t n_pages;
     seL4_CPtr *frame_caps;
     struct _attach_node *next;
 } attach_node_t;
@@ -69,15 +70,16 @@ int ads_attach(ads_t *ads,
                /*sel4utils_process_t*/ vspace_t *process_cookie);
 
 /**
- * @brief Remove a frame from the ads.
+ * @brief Remove frame(s) from the ads.
  *
  * @param ads ads object
  * @param vka vka object to allocate cspace slots and PT from
  * @param vaddr virtual address to remove the frame from
- * @param size size of the frame
+ * @param size size of the frame(s), in size bits
+ * @param num_pages number of frames
  * @return int 0 on success, -1 on failure.
  */
-int ads_rm(ads_t *ads, vka_t *vka, void *vaddr, size_t size);
+int ads_rm(ads_t *ads, vka_t *vka, void *vaddr, size_t size_bits, uint32_t num_pages);
 
 /**
  * @brief

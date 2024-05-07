@@ -293,6 +293,7 @@ int forge_mo_caps_from_vspace(vspace_t *child_vspace,
                 attach_node->mo_id = ((mo_t *)res->mo_ref)->mo_obj_id;;
                 attach_node->vaddr = (void *)(void *)res->start;
                 attach_node->type = res->type;
+                attach_node->n_pages = num_frames;
                 attach_node->next = target_ads->attach_nodes;
                 target_ads->attach_nodes = attach_node;
             }
