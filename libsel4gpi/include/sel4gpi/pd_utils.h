@@ -52,3 +52,5 @@ seL4_CPtr sel4gpi_get_rde_by_ns_id(uint32_t ns_id, gpi_cap_t type);
  * Set the exit callback to the default GPI exit handler
  */
 void sel4gpi_set_exit_cb(void);
+
+void *sel4gpi_create_stack(int num_pages);

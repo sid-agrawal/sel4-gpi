@@ -425,7 +425,7 @@ static int pd_setup_proc(pd_t *pd, vka_t *server_vka, vspace_t *server_vspace, a
         goto error;
     }
     sel4utils_elf_read_phdrs(&elf, pd->proc.num_elf_phdrs, pd->proc.elf_phdrs);
-
+    /* ================================================ */
     /**
      * By default, all ELF sections will be shared during ads_shallow_copy
      * If we want to separate data sections, will need to identify them here and check for

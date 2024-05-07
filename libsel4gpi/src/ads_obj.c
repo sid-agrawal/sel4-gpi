@@ -670,6 +670,7 @@ int ads_load_elf(vspace_t *loadee_vspace, sel4utils_process_t *proc, char *image
         goto error;
     }
     sel4utils_elf_read_phdrs(&elf, proc->num_elf_phdrs, proc->elf_phdrs);
+    proc->pagesz = PAGE_SIZE_4K;
 
     return 0;
 error:

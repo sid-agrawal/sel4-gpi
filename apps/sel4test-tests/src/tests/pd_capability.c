@@ -45,38 +45,38 @@ int test_new_process_osmosis(env_t env)
 
     seL4_CPtr slot;
     error = vka_cspace_alloc(&env->vka, &slot);
-    assert(error == 0);
+    test_error_eq(error, 0);
 
     /* Create a new PD */
     pd_client_context_t pd_os_cap;
     error = pd_component_client_connect(pd_rde, slot, &pd_os_cap);
-    assert(error == 0);
+    test_error_eq(error, 0);
 
     /* Create a new ADS Cap, which will be in the context of a PD and image */
     error = vka_cspace_alloc(&env->vka, &slot);
-    assert(error == 0);
+    test_error_eq(error, 0);
 
     ads_client_context_t ads_os_cap;
     error = ads_component_client_connect(ads_rde, slot, &ads_os_cap, NULL);
-    assert(error == 0);
+    test_error_eq(error, 0);
 
     error = vka_cspace_alloc(&env->vka, &slot);
-    assert(error == 0);
+    test_error_eq(error, 0);
 
     cpu_client_context_t cpu_os_cap;
     error = cpu_component_client_connect(cpu_rde, slot, &cpu_os_cap);
-    assert(error == 0);
+    test_error_eq(error, 0);
 
     error = pd_client_share_rde(&pd_os_cap, GPICAP_TYPE_MO, NSID_DEFAULT);
-    assert(error == 0);
+    test_error_eq(error, 0);
 
     // Make a new AS, loads an image
     error = pd_client_load(&pd_os_cap, &ads_os_cap, &cpu_os_cap, "hello");
-    assert(error == 0);
+    test_error_eq(error, 0);
 
     // Copy the ep_object to the new PD
     // error = pd_client_send_cap(&pd_os_cap, ep_object.cptr, &slot);
-    // assert(error == 0);
+    // test_error_eq(error, 0);
 
     /*
         (XXX) Create a new CPU cap, and make that the PD's primary CPU cap.
@@ -84,49 +84,49 @@ int test_new_process_osmosis(env_t env)
 
     // Start the CPU.
     error = pd_client_start(&pd_os_cap, 0, 0); // with this arg.
-    assert(error == 0);
+    test_error_eq(error, 0);
 
     /*********************************************/
 
     /* Create a new PD */
     error = vka_cspace_alloc(&env->vka, &slot);
-    assert(error == 0);
+    test_error_eq(error, 0);
 
     pd_client_context_t pd_os_cap2;
     error = pd_component_client_connect(pd_rde, slot, &pd_os_cap2);
-    assert(error == 0);
+    test_error_eq(error, 0);
 
     /* Create a new ADS Cap, which will be in the context of a PD and image */
     error = vka_cspace_alloc(&env->vka, &slot);
-    assert(error == 0);
+    test_error_eq(error, 0);
 
     ads_client_context_t ads_os_cap2;
     error = ads_component_client_connect(ads_rde, slot, &ads_os_cap2, NULL);
-    assert(error == 0);
+    test_error_eq(error, 0);
 
     error = vka_cspace_alloc(&env->vka, &slot);
-    assert(error == 0);
+    test_error_eq(error, 0);
 
     cpu_client_context_t cpu_os_cap2;
     error = cpu_component_client_connect(cpu_rde, slot, &cpu_os_cap2);
-    assert(error == 0);
+    test_error_eq(error, 0);
 
     error = pd_client_share_rde(&pd_os_cap2, GPICAP_TYPE_MO, NSID_DEFAULT);
-    assert(error == 0);
+    test_error_eq(error, 0);
 
     // Make a new AS, loads an image
     error = pd_client_load(&pd_os_cap2, &ads_os_cap2, &cpu_os_cap2, "hello");
-    assert(error == 0);
+    test_error_eq(error, 0);
 
     // Start the CPU.
     error = pd_client_start(&pd_os_cap2, 0, 0); // with this arg.
-    assert(error == 0);
+    test_error_eq(error, 0);
 
     error = pd_client_dump(&pd_os_cap2, NULL, 0);
-    assert(error == 0);
+    test_error_eq(error, 0);
 
     error = pd_client_dump(&pd_os_cap, NULL, 0);
-    assert(error == 0);
+    test_error_eq(error, 0);
 
     /*********************************************/
     printf("------------------ENDING: %s------------------\n", __func__);
@@ -164,36 +164,40 @@ int test_new_process_osmosis_shmem(env_t env)
     /* new PD */
     seL4_CPtr slot;
     error = vka_cspace_alloc(&env->vka, &slot);
-    assert(error == 0);
+    test_error_eq(error, 0);
     pd_client_context_t pd_os_cap;
     error = pd_component_client_connect(pd_rde, slot, &pd_os_cap);
-    assert(error == 0);
+    test_error_eq(error, 0);
 
     /* new ADS */
     error = vka_cspace_alloc(&env->vka, &slot);
-    assert(error == 0);
+    test_error_eq(error, 0);
     ads_client_context_t ads_os_cap;
     error = ads_component_client_connect(ads_rde, slot, &ads_os_cap, NULL);
-    assert(error == 0);
+    test_error_eq(error, 0);
 
     /* new CPU */
     error = vka_cspace_alloc(&env->vka, &slot);
-    assert(error == 0);
+    test_error_eq(error, 0);
     cpu_client_context_t cpu_os_cap;
     error = cpu_component_client_connect(cpu_rde, slot, &cpu_os_cap);
-    assert(error == 0);
+    test_error_eq(error, 0);
+
+    error = ads_client_load_elf(&ads_os_cap, "hello");
+    test_error_eq(error, 0);
+
+    void *stack = sel4gpi_create_stack(16);
+    test_assert(stack != NULL);
 
     printf("here\n");
-    error = ads_client_load_elf(&ads_os_cap, "hello");
-
 #if 0
     // Make a new AS, loads an image
     error = pd_client_load(&pd_os_cap, &ads_os_cap, &cpu_os_cap, "hello");
-    assert(error == 0);
+    test_error_eq(error, 0);
     printf("Loaded hello\n");
 
     error = pd_client_share_rde(&pd_os_cap, GPICAP_TYPE_MO, NSID_DEFAULT);
-    assert(error == 0);
+    test_error_eq(error, 0);
 
     // Make a new MO cap
     cspacepath_t mo_cap_path;
@@ -260,7 +264,7 @@ int test_new_process_osmosis_shmem(env_t env)
     tag = seL4_Recv(ep_object.cptr, NULL);
 
     error = pd_client_dump(&pd_os_cap, NULL, 0);
-    assert(error == 0);
+    test_error_eq(error, 0);
 
     /* modify the message */
     seL4_SetMR(0, start);
