@@ -77,6 +77,7 @@ int main(int argc, char **argv)
     error = ads_client_attach(&ads_conn,
                               0, /*vaddr*/
                               &mo_conn,
+                              SEL4UTILS_RES_TYPE_GENERIC,
                               &ret_vaddr);
     assert(error == 0);
     printf("Attached to vaddr %p\n", ret_vaddr);
@@ -104,6 +105,7 @@ int main(int argc, char **argv)
         error = ads_client_attach(&ads_conn,
                                   0,
                                   &mo_conn,
+                                  SEL4UTILS_RES_TYPE_GENERIC,
                                   &ret_vaddr);
         printf("Attached given MO to vaddr %p\n", ret_vaddr);
     }

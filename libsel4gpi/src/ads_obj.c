@@ -107,7 +107,8 @@ int ads_attach(ads_t *ads,
                size_t size_bits,
                seL4_CPtr *frame_caps,
                uint32_t mo_id,
-               void **ret_vaddr)
+               void **ret_vaddr,
+               sel4utils_reservation_type_t vmr_type)
 {
     int cacheable = 1;
     vspace_t *target = ads->vspace;
@@ -178,6 +179,8 @@ int ads_attach(ads_t *ads,
     attach_node->vaddr = *ret_vaddr;
     attach_node->next = ads->attach_nodes;
     ads->attach_nodes = attach_node;
+    sel4utils_res_t *sel4utils_res = reservation_to_res(res);
+    sel4utils_res->type = vmr_type;
 
     OSDB_PRINTF(ADS_DEBUG, ADSSERVS "attached %u pages at %p\n", num_pages, *ret_vaddr);
 
@@ -188,14 +191,15 @@ int ads_attach_mo(ads_t *ads,
                   vka_t *vka,
                   void *vaddr,
                   mo_t *mo,
-                  void **ret_vaddr)
+                  void **ret_vaddr,
+                  sel4utils_reservation_type_t vmr_type)
 {
     int error;
 
     uint32_t num_pages = mo->num_pages;
     mo_frame_t *root_frame_caps = mo->frame_caps_in_root_task;
 
-    OSDB_PRINTF(ADS_DEBUG, ADSSERVS "attaching mo with id %lu, num pages: %d\n", mo->mo_obj_id, num_pages);
+    OSDB_PRINTF(ADS_DEBUG, ADSSERVS "attaching mo with id %lu, of type: %s, num pages: %d\n", mo->mo_obj_id, human_readable_va_res_type(vmr_type), num_pages);
 
     /* Make a copy of the frame caps for this new mapping */
     seL4_CPtr frame_caps[num_pages];
@@ -233,7 +237,8 @@ int ads_attach_mo(ads_t *ads,
                        seL4_PageBits,
                        frame_caps,
                        mo->mo_obj_id,
-                       ret_vaddr);
+                       ret_vaddr,
+                       vmr_type);
 
     return error;
 }

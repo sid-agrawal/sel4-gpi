@@ -231,13 +231,14 @@ int ads_component_attach(uint64_t ads_id, uint64_t mo_id, void *vaddr, void **re
                     mo_id);
         return -1;
     }
-
+    sel4utils_reservation_type_t vmr_type = (sel4utils_reservation_type_t)seL4_GetMR(ADSMSGREG_ATTACH_REQ_TYPE);
     /* Attach the MO */
     error = ads_attach_mo(&client_data->ads,
                           get_ads_component()->server_vka,
                           vaddr,
                           &mo_reg->mo,
-                          ret_vaddr);
+                          ret_vaddr,
+                          vmr_type);
 
     if (error)
     {

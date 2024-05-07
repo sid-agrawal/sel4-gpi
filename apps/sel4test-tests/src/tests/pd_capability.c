@@ -188,13 +188,13 @@ int test_new_process_osmosis_shmem(env_t env)
     test_error_eq(error, 0);
 
     ads_client_context_t new_ads_rde = {.badged_server_ep_cspath.capPtr = sel4gpi_get_rde_by_ns_id(new_ads_id, GPICAP_TYPE_ADS)};
-    void *stack = sel4gpi_get_vmr(&new_ads_rde, 16, NULL);
+    void *stack = sel4gpi_get_vmr(&new_ads_rde, 16, NULL, SEL4UTILS_RES_TYPE_STACK);
     test_assert(stack != NULL);
 
-    void *heap = sel4gpi_get_vmr(&new_ads_rde, 100, PD_HEAP_LOC);
+    void *heap = sel4gpi_get_vmr(&new_ads_rde, 100, (void *)PD_HEAP_LOC, SEL4UTILS_RES_TYPE_HEAP);
     test_assert(heap != NULL);
 
-    void *ipc_buf = sel4gpi_get_vmr(&new_ads_rde, 1, NULL);
+    void *ipc_buf = sel4gpi_get_vmr(&new_ads_rde, 1, NULL, SEL4UTILS_RES_TYPE_IPC_BUF);
     test_assert(ipc_buf != NULL);
 
     printf("here\n");
@@ -227,6 +227,7 @@ int test_new_process_osmosis_shmem(env_t env)
     error = ads_client_attach(&test_ads_cap,
                               0, /*vaddr*/
                               &mo_conn_shared,
+                              SEL4UTILS_RES_TYPE_SHARED_FRAMES,
                               &vaddr);
     test_error_eq(error, 0);
 

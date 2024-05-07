@@ -262,7 +262,7 @@ int kvstore_server_start_thread(seL4_CPtr *kvstore_ep)
 
     /* attach stack to cpu */
     void *stack_addr_in_new_cpu;
-    error = ads_client_attach(&ads_rde_conn, NULL, &stack_mo, &stack_addr_in_new_cpu);
+    error = ads_client_attach(&ads_rde_conn, NULL, &stack_mo, SEL4UTILS_RES_TYPE_STACK, &stack_addr_in_new_cpu);
     CHECK_ERROR(error, "failed to attach stack", KVSTORE_ERROR_UNKNOWN);
 
     /* allocate ipc buf */
@@ -275,7 +275,7 @@ int kvstore_server_start_thread(seL4_CPtr *kvstore_ep)
 
     /* attach ipc buf */
     void *ipc_buf_addr_in_new_cpu;
-    error = ads_client_attach(&ads_rde_conn, NULL, &ipc_buf_mo, &ipc_buf_addr_in_new_cpu);
+    error = ads_client_attach(&ads_rde_conn, NULL, &ipc_buf_mo, SEL4UTILS_RES_TYPE_IPC_BUF, &ipc_buf_addr_in_new_cpu);
     CHECK_ERROR(error, "failed to attach ipc buf", KVSTORE_ERROR_UNKNOWN);
 
     /* configure cpu */

@@ -169,6 +169,7 @@ xv6fs_client_init(void)
   error = ads_client_attach(get_xv6fs_client()->ads_conn,
                             NULL,
                             get_xv6fs_client()->shared_mem,
+                            SEL4UTILS_RES_TYPE_SHARED_FRAMES,
                             &get_xv6fs_client()->shared_mem_vaddr);
   CHECK_ERROR(error, "failed to map shared mem page");
 

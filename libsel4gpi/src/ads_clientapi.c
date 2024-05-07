@@ -52,10 +52,13 @@ int ads_component_client_connect(seL4_CPtr server_ep_cap,
 int ads_client_attach(ads_client_context_t *conn,
                       void *vaddr,
                       mo_client_context_t *mo_cap,
+                      sel4utils_reservation_type_t vmr_type,
                       void **ret_vaddr)
 {
     seL4_SetMR(ADSMSGREG_FUNC, ADS_FUNC_ATTACH_REQ);
     seL4_SetMR(ADSMSGREG_ATTACH_REQ_VA, (seL4_Word)vaddr);
+    seL4_SetMR(ADSMSGREG_ATTACH_REQ_TYPE, (seL4_Word)vmr_type);
+    // seL4_SetMR(ADSMSGREG_ATTACH_REQ_SZ, (seL4_Word) size);
     seL4_SetCap(0, mo_cap->badged_server_ep_cspath.capPtr);
 
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 1,

@@ -76,7 +76,7 @@ int test_separate_threads(env_t env)
 
     /* attach stack to cpu */
     void *stack_addr_in_new_cpu;
-    error = ads_client_attach(&test_ads_os_cap, NULL, &stack_mo, &stack_addr_in_new_cpu);
+    error = ads_client_attach(&test_ads_os_cap, NULL, &stack_mo, SEL4UTILS_RES_TYPE_STACK, &stack_addr_in_new_cpu);
     test_error_eq(error, 0);
 
     /* configure cpu */

@@ -75,6 +75,7 @@ int test_fs(env_t env)
     error = ads_client_attach(&ads_conn,
                               NULL,
                               &mo_conn,
+                              SEL4UTILS_RES_TYPE_GENERIC,
                               &mo_vaddr);
     test_assert(error == 0);
 

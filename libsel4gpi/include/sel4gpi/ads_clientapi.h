@@ -48,12 +48,14 @@ int ads_component_client_disconnect(ads_client_context_t *conn);
  * @param conn client connection object
  * @param vaddr virtual address to attach at, can be NULL
  * @param mo_cap MO cap of the memory to attach
+ * @param vmr_type the type of virtual memory (e.g. stack, heap, ipc buffer)
  * @param ret_vaddr virtual address where the MO was attached.
  * @return int 0 on success, -1 on failure.
  */
 int ads_client_attach(ads_client_context_t *conn,
                       void *vaddr,
                       mo_client_context_t *mo_cap,
+                      sel4utils_reservation_type_t vmr_type,
                       void **ret_vaddr);
 
 /**

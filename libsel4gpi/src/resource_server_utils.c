@@ -310,6 +310,7 @@ int resource_server_attach_mo(resource_server_context_t *context,
     error = ads_client_attach(&context->ads_conn,
                               NULL,
                               &mo_conn,
+                              SEL4UTILS_RES_TYPE_GENERIC,
                               vaddr);
     CHECK_ERROR(error, "failed to attach client's MO to ADS");
 

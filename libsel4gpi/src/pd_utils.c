@@ -74,7 +74,7 @@ void sel4gpi_set_exit_cb(void)
     sel4runtime_set_exit(sel4gpi_exit_cb);
 }
 
-void *sel4gpi_get_vmr(ads_client_context_t *ads_rde, int num_pages, void *vaddr)
+void *sel4gpi_get_vmr(ads_client_context_t *ads_rde, int num_pages, void *vaddr, sel4utils_reservation_type_t vmr_type)
 {
     int error;
 
@@ -94,7 +94,7 @@ void *sel4gpi_get_vmr(ads_client_context_t *ads_rde, int num_pages, void *vaddr)
 
     /* attach stack to cpu */
     void *new_vaddr;
-    error = ads_client_attach(ads_rde, vaddr, &mo, &new_vaddr);
+    error = ads_client_attach(ads_rde, vaddr, &mo, vmr_type, &new_vaddr);
     assert(error == 0);
 
     return new_vaddr;

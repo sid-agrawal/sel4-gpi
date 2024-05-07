@@ -54,5 +54,4 @@ seL4_CPtr sel4gpi_get_rde_by_ns_id(uint32_t ns_id, gpi_cap_t type);
  */
 void sel4gpi_set_exit_cb(void);
 
-void *sel4gpi_create_stack(int num_pages);
-void *sel4gpi_get_vmr(ads_client_context_t *ads_rde, int num_pages, void *vaddr);
+void *sel4gpi_get_vmr(ads_client_context_t *ads_rde, int num_pages, void *vaddr, sel4utils_reservation_type_t vmr_type);

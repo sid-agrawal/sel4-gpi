@@ -356,7 +356,7 @@ static int benchmark_ads_attach(env_t env, bool native)
     else
     {
         ads_client_context_t osm_pd_ads_rde = {.badged_server_ep_cspath.capPtr = sel4gpi_get_rde_by_ns_id(osm_pd_ads_ns_id, GPICAP_TYPE_ADS)};
-        error = ads_client_attach(&osm_pd_ads_rde, NULL, &bench_mo, &mapped_vaddr);
+        error = ads_client_attach(&osm_pd_ads_rde, NULL, &bench_mo, SEL4UTILS_RES_TYPE_GENERIC, &mapped_vaddr);
         test_error_eq(error, 0);
     }
 

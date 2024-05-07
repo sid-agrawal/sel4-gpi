@@ -100,6 +100,7 @@ int ramdisk_init()
     error = ads_client_attach(&server->gen.ads_conn,
                               NULL,
                               server->ramdisk_mo,
+                              SEL4UTILS_RES_TYPE_GENERIC,
                               &server->ramdisk_buf);
     CHECK_ERROR(error, "failed to map virtual disk");
     RAMDISK_PRINTF("Mapped ramdisk\n");

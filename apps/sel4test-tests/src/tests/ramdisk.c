@@ -73,6 +73,7 @@ int test_ramdisk(env_t env)
     error = ads_client_attach(&ads_conn,
                               NULL,
                               &mo_conn,
+                              SEL4UTILS_RES_TYPE_SHARED_FRAMES,
                               (void **)&buf);
     test_assert(error == 0);
 

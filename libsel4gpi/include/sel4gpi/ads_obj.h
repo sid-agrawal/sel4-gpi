@@ -63,6 +63,7 @@ int ads_new(vspace_t *loader,
  * @param frame_caps caps to the frames to attach
  * @param mo_id (optional) ID of the MO these frames are from
  * @param ret_vaddr returns vaddr attached at
+ * @param vmr_type the type of VMR, e.g. heap, stack, IPC buffer, etc.
  * @return int 0 on success, -1 on failure.
  */
 int ads_attach(ads_t *ads,
@@ -71,7 +72,8 @@ int ads_attach(ads_t *ads,
                size_t size_bits,
                seL4_CPtr *frame_caps,
                uint32_t mo_id,
-               void **ret_vaddr);
+               void **ret_vaddr,
+               sel4utils_reservation_type_t vmr_type);
 
 /**
  * @brief Attach an MO at a given address to the ads.
@@ -87,7 +89,8 @@ int ads_attach_mo(ads_t *ads,
                   vka_t *vka,
                   void *vaddr,
                   mo_t *mo,
-                  void **ret_vaddr);
+                  void **ret_vaddr,
+                  sel4utils_reservation_type_t vmr_type);
 
 /**
  * @brief Remove a region from the ADS
