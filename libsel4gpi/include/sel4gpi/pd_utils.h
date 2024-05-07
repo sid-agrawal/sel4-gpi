@@ -34,6 +34,9 @@ seL4_CPtr sel4gpi_get_cspace_root(void);
  */
 seL4_CPtr sel4gpi_get_rde(int type);
 
+/**
+ * Get the ID of the currently bound ADS
+*/
 uint64_t sel4gpi_get_binded_ads_id(void);
 
 /**
@@ -44,3 +47,8 @@ uint64_t sel4gpi_get_binded_ads_id(void);
  * @return null cap if the RDE cannot be found
  */
 seL4_CPtr sel4gpi_get_rde_by_ns_id(uint32_t ns_id, gpi_cap_t type);
+
+/**
+ * Set the exit callback to the default GPI exit handler
+*/
+void sel4gpi_set_exit_cb(void);

@@ -33,6 +33,7 @@ void calculateSD(float data[], float *mean, float *sd,
                  int start, int end);
 int main(int argc, char **argv)
 {
+    sel4gpi_set_exit_cb();
     // sel4muslcsys_register_stdio_write_fn(write_buf);
 
     ccnt_t ctx_start, ctx_end;

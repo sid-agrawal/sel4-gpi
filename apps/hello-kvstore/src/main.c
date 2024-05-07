@@ -44,8 +44,9 @@ uintptr_t morecore_top = (uintptr_t)(PD_HEAP_LOC + APP_MALLOC_SIZE);
 
 int kvstore_tests(void)
 {
-    int error;
+    sel4gpi_set_exit_cb();
 
+    int error;
     uint64_t key, val, val_ret;
 
     // Set and get one value

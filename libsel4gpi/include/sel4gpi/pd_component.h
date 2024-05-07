@@ -93,6 +93,8 @@ enum pd_component_funcs
     PD_FUNC_GIVE_RES_REQ,
     PD_FUNC_GIVE_RES_ACK,
 
+    PD_FUNC_EXIT_REQ,
+
     PD_FUNC_BENCH_IPC_REQ,
     PD_FUNC_BENCH_IPC_ACK,
 };
@@ -223,6 +225,9 @@ enum pd_component_msgregs
 
     PDMSGREG_GIVE_RES_ACK_DEST = PDMSGREG_LABEL0,
     PDMSGREG_GIVE_RES_ACK_END,
+
+    /* Exit PD */
+    PDMSGREG_EXIT_REQ_END = PDMSGREG_LABEL0,
 
     /* Benchmark IPC */
     PDMSGREG_BENCH_IPC_REQ_CAP_TRANSFER = PDMSGREG_LABEL0,

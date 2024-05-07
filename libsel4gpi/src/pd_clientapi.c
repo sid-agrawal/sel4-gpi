@@ -327,6 +327,17 @@ int pd_client_give_resource(pd_client_context_t *conn,
     return 0;
 }
 
+void pd_client_exit(pd_client_context_t *conn)
+{
+    seL4_SetMR(PDMSGREG_FUNC, PD_FUNC_EXIT_REQ);
+
+    seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0,
+                                                  PDMSGREG_EXIT_REQ_END);
+    seL4_Call(conn->badged_server_ep_cspath.capPtr, tag);
+
+    return 0;
+}
+
 void pd_client_bench_ipc(pd_client_context_t *conn, seL4_CPtr dummy_send_cap, seL4_CPtr dummy_recv_cap, bool cap_transfer)
 {
     seL4_SetCapReceivePath(SEL4UTILS_CNODE_SLOT, /* Position of the cap to the CNODE */

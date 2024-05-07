@@ -43,6 +43,8 @@ uintptr_t morecore_top = (uintptr_t) (PD_HEAP_LOC + APP_MALLOC_SIZE);
 
 int main(int argc, char **argv)
 {
+    sel4gpi_set_exit_cb();
+    
     printf("kvstore main!\n");
 
     /* parse args */

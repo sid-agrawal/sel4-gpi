@@ -1098,6 +1098,20 @@ static void handle_give_resource_req(seL4_Word sender_badge, seL4_MessageInfo_t 
     return reply(tag);
 }
 
+static void handle_exit_req(seL4_Word sender_badge, seL4_MessageInfo_t old_tag, seL4_CPtr received_cap)
+{
+    int error = 0;
+
+    OSDB_PRINTF(PD_DEBUG, PDSERVS "Got exit request from client badge %lx\n",
+                sender_badge);
+
+    printf("WARNING: PD exit unimplemented, not cleaned up\n");
+
+    // (XXX) Free up the PD's resources
+
+    return;
+}
+
 static void handle_ipc_bench_req(void)
 {
     seL4_SetMR(PDMSGREG_FUNC, PD_FUNC_BENCH_IPC_ACK);
@@ -1174,6 +1188,9 @@ void pd_component_handle(seL4_MessageInfo_t tag,
         break;
     case PD_FUNC_GIVE_RES_REQ:
         handle_give_resource_req(sender_badge, tag, received_cap->capPtr);
+        break;
+    case PD_FUNC_EXIT_REQ:
+        handle_exit_req(sender_badge, tag, received_cap->capPtr);
         break;
     case PD_FUNC_BENCH_IPC_REQ:
         handle_ipc_bench_req();
