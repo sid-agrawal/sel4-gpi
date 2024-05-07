@@ -34,18 +34,25 @@ int start_ramdisk_pd(seL4_CPtr *ramdisk_pd_cap,
                      uint64_t *ramdisk_id);
 
 /**
- * @brief Sanity test for shared memory with ramdisk
- * Maps the mo to the ramdisk's address space and returns
- * the first word read
+ * @brief
+ * Establish shared memory with ramdisk
+ * Shared memory will be used for future read/write calls
  *
  * @param server_ep_cap raw ramdisk ep
- * @param mo memory to read block into, should be size >= RAMDISK_BLOCK_SIZE
- * @param res where resulting word will be written
+ * @param mo memory to share, should be size >= RAMDISK_BLOCK_SIZE
  * @return int 0 on success, -1 on failure.
  */
-int ramdisk_client_sanity_test(seL4_CPtr server_ep_cap,
-                               mo_client_context_t *mo,
-                               seL4_Word *res);
+int ramdisk_client_bind(seL4_CPtr server_ep_cap,
+                        mo_client_context_t *mo);
+
+/**
+ * @brief
+ * Remove shared memory from ramdisk
+ *
+ * @param server_ep_cap raw ramdisk ep
+ * @return int 0 on success, -1 on failure.
+ */
+int ramdisk_client_unbind(seL4_CPtr server_ep_cap);
 
 /**
  * @brief Allocate a new block from ramdisk
@@ -55,30 +62,28 @@ int ramdisk_client_sanity_test(seL4_CPtr server_ep_cap,
  *
  * @param server_ep_cap Well known server endpoint cap.
  * @param ret_conn client's connection object
- * @param mo shared memory for future requests
  * @return int 0 on success, -1 on failure.
  */
 int ramdisk_client_alloc_block(seL4_CPtr server_ep_cap,
-                               ramdisk_client_context_t *ret_conn,
-                               mo_client_context_t *mo);
+                               ramdisk_client_context_t *ret_conn);
 
 /**
  * @brief Read an allocated block from ramdisk
+ * Uses the shared memory as set in ramdisk_client_bind
  *
  * @param conn client connection object
- * @param mo memory to read block into, should be size >= RAMDISK_BLOCK_SIZE
  * @return int 0 on success, -1 on failure.
  */
-int ramdisk_client_read(ramdisk_client_context_t *conn, mo_client_context_t *mo);
+int ramdisk_client_read(ramdisk_client_context_t *conn);
 
 /**
  * @brief Write an allocated block to ramdisk
+ * Uses the shared memory as set in ramdisk_client_bind
  *
  * @param conn client connection object
- * @param mo memory to write into block, should be size >= RAMDISK_BLOCK_SIZE
  * @return int 0 on success, -1 on failure.
  */
-int ramdisk_client_write(ramdisk_client_context_t *conn, mo_client_context_t *mo);
+int ramdisk_client_write(ramdisk_client_context_t *conn);
 
 /**
  * Get the block size of the ramdisk

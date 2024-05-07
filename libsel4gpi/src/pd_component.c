@@ -765,32 +765,32 @@ static void handle_add_rde_req(seL4_Word sender_badge, seL4_MessageInfo_t old_ta
     {
         OSDB_PRINTF(PD_DEBUG, PDSERVS "add_rde_req: Failed to find target badge %lx.\n",
                     sender_badge);
-        error = -1;
+        error = 1;
     }
     else if (server_data == NULL)
     {
         OSDB_PRINTF(PD_DEBUG, PDSERVS "add_rde_req: Failed to find server badge %lx.\n",
                     server_badge);
-        error = -1;
+        error = 1;
     }
     else if (resource_manager_data == NULL)
     {
         OSDB_PRINTF(PD_DEBUG, PDSERVS "add_rde_req: Failed to find resource manager ID %ld.\n",
                     manager_id);
-        error = -1;
+        error = 1;
     }
     else if (get_client_id_from_badge(sender_badge) != target_data->pd.pd_obj_id && target_data->pd.pd_started)
     {
         // (XXX) Arya: Allow a PD to update its own RDE mid-flight, but not another PD's
         OSDB_PRINTF(PD_DEBUG, PDSERVS "add_rde_req: cannot add new RDEs to another PD after it has been started\n");
-        error = -1;
+        error = 1;
     }
     else if (server_data->pd.pd_obj_id != resource_manager_data->pd->pd_obj_id)
     {
         OSDB_PRINTF(PD_DEBUG, PDSERVS "add_rde_req: wrong server PD provided (%d) for resource manager in PD %d\n",
                     server_data->pd.pd_obj_id,
                     resource_manager_data->pd->pd_obj_id);
-        error = -1;
+        error = 1;
     }
     else
     {
@@ -826,13 +826,13 @@ static void handle_share_rde_req(seL4_Word sender_badge, seL4_MessageInfo_t old_
     {
         OSDB_PRINTF(PD_DEBUG, PDSERVS "share_rde_req: Failed to find target badge %lx.\n",
                     sender_badge);
-        error = -1;
+        error = 1;
     }
     else if (client_data == NULL)
     {
         OSDB_PRINTF(PD_DEBUG, PDSERVS "share_rde_req: Failed to find client ID %d.\n",
                     client_id);
-        error = -1;
+        error = 1;
     }
 
     osmosis_rde_t *rde = pd_rde_get(&client_data->pd, type, ns_id);
@@ -840,7 +840,7 @@ static void handle_share_rde_req(seL4_Word sender_badge, seL4_MessageInfo_t old_
     {
         OSDB_PRINTF(PD_DEBUG, PDSERVS "share_rde_req: Failed to find RDE for type %d and NS_ID %ld.\n",
                     type, ns_id);
-        error = -1;
+        error = 1;
     }
 
     pd_component_resource_manager_entry_t *resource_manager_data = pd_component_resource_manager_get_entry_by_id(rde->manager_id);
@@ -849,12 +849,12 @@ static void handle_share_rde_req(seL4_Word sender_badge, seL4_MessageInfo_t old_
     {
         OSDB_PRINTF(PD_DEBUG, PDSERVS "share_rde_req: Failed to find resource manager ID %ld.\n",
                     rde->manager_id);
-        error = -1;
+        error = 1;
     }
     else if (target_data->pd.pd_started)
     {
         OSDB_PRINTF(PD_DEBUG, PDSERVS "share_rde_req: cannot add new RDEs after PD has been started\n");
-        error = -1;
+        error = 1;
     }
     else
     {
@@ -884,7 +884,7 @@ static void handle_register_resource_manager_req(seL4_Word sender_badge, seL4_Me
     {
         OSDB_PRINTF(PD_DEBUG, PDSERVS "register_resource_manager: Failed to find client badge %lx.\n",
                     sender_badge);
-        error = -1;
+        error = 1;
     }
     else
     {
@@ -926,25 +926,25 @@ static void handle_register_namespace_req(seL4_Word sender_badge, seL4_MessageIn
     {
         OSDB_PRINTF(PD_DEBUG, PDSERVS "handle_register_namespace_req: Failed to find client PD with ID %ld.\n",
                     get_client_id_from_badge(sender_badge));
-        error = -1;
+        error = 1;
     }
     else if (target_data == NULL)
     {
         OSDB_PRINTF(PD_DEBUG, PDSERVS "handle_register_namespace_req: Failed to find taret PD with ID %ld.\n",
                     target_data);
-        error = -1;
+        error = 1;
     }
     else if (resource_manager_data == NULL)
     {
         OSDB_PRINTF(PD_DEBUG, PDSERVS "handle_register_namespace_req: Failed to find resource manager with ID %ld.\n",
                     manager_id);
-        error = -1;
+        error = 1;
     }
     else if (resource_manager_data->pd->pd_obj_id != get_client_id_from_badge(sender_badge))
     {
         OSDB_PRINTF(PD_DEBUG, PDSERVS "handle_register_namespace_req: resource manager PD (%ld) and client PD (%ld) do not match.\n",
                     resource_manager_data->pd->pd_obj_id, get_client_id_from_badge(sender_badge));
-        error = -1;
+        error = 1;
     }
     else
     {
@@ -983,13 +983,13 @@ static void handle_create_resource_req(seL4_Word sender_badge, seL4_MessageInfo_
     {
         OSDB_PRINTF(PD_DEBUG, PDSERVS "handle_create_resource_req: Failed to find resource server with ID %ld.\n",
                     server_id);
-        error = -1;
+        error = 1;
     }
     else if (resource_manager_data == NULL)
     {
         OSDB_PRINTF(PD_DEBUG, PDSERVS "handle_create_resource_req: Failed to find resource manager with ID %ld.\n",
                     manager_id);
-        error = -1;
+        error = 1;
     }
     else
     {
@@ -1038,19 +1038,19 @@ static void handle_give_resource_req(seL4_Word sender_badge, seL4_MessageInfo_t 
     {
         OSDB_PRINTF(PD_DEBUG, PDSERVS "handle_give_resource_req: Failed to find resource server with ID %ld.\n",
                     server_id);
-        error = -1;
+        error = 1;
     }
     else if (resource_manager_data == NULL)
     {
         OSDB_PRINTF(PD_DEBUG, PDSERVS "handle_give_resource_req: Failed to find resource manager with ID %ld.\n",
                     manager_id);
-        error = -1;
+        error = 1;
     }
     else if (recipient_data == NULL)
     {
         OSDB_PRINTF(PD_DEBUG, PDSERVS "handle_give_resource_req: Failed to find recipient id %ld.\n",
                     recipient_id);
-        error = -1;
+        error = 1;
     }
 
     osmosis_pd_cap_t *resource_data;
@@ -1060,7 +1060,7 @@ static void handle_give_resource_req(seL4_Word sender_badge, seL4_MessageInfo_t 
     {
         OSDB_PRINTF(PD_DEBUG, PDSERVS "handle_give_resource_req: Failed to find resource with id %ld.\n",
                     resource_id);
-        error = -1;
+        error = 1;
     }
     else
     {

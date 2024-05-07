@@ -34,8 +34,11 @@ enum rd_server_funcs
     RD_FUNC_WRITE_REQ,
     RD_FUNC_WRITE_ACK,
 
-    RD_FUNC_SANITY_REQ,
-    RD_FUNC_SANITY_ACK,
+    RD_FUNC_BIND_REQ,
+    RD_FUNC_BIND_ACK,
+
+    RD_FUNC_UNBIND_REQ,
+    RD_FUNC_UNBIND_ACK,
 };
 
 enum rd_msgregs
@@ -45,11 +48,6 @@ enum rd_msgregs
 
     /* This is a convenience label for IPC MessageInfo length. */
     RDMSGREG_LABEL0,
-
-    /* Sanity */
-    RDMSGREG_SANITY_REQ_END = RDMSGREG_LABEL0,
-    RDMSGREG_SANITY_ACK_VAL = RDMSGREG_LABEL0,
-    RDMSGREG_SANITY_ACK_END,
 
     /* Create */
     RDMSGREG_CREATE_REQ_END = RDMSGREG_LABEL0,

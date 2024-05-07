@@ -251,8 +251,7 @@ static int init_naive_blocks()
   for (int i = 0; i < FS_SIZE; i++)
   {
     error = ramdisk_client_alloc_block(ramdisk_ep,
-                                       &get_xv6fs_server()->naive_blocks[i],
-                                       get_xv6fs_server()->shared_mem);
+                                       &get_xv6fs_server()->naive_blocks[i]);
     CHECK_ERROR(error, "failed to alloc a block from ramdisk");
   }
 
@@ -285,6 +284,9 @@ int xv6fs_init()
                             server->shared_mem,
                             &server->shared_mem_vaddr);
   CHECK_ERROR(error, "failed to map shared mem page");
+
+  error = ramdisk_client_bind(get_xv6fs_server()->rd_ep, server->shared_mem);
+  CHECK_ERROR(error, "failed to bind shared mem page");
 
   /* Initialize the blocks */
   error = init_naive_blocks();
@@ -573,6 +575,10 @@ seL4_MessageInfo_t xv6fs_request_handler(seL4_MessageInfo_t tag, seL4_Word sende
                                             &dest);
       CHECK_ERROR_GOTO(error, "Failed to give the resource", error, done);
 
+      // Unattach the MO
+      error = resource_server_unattach(&get_xv6fs_server()->gen, mo_vaddr);
+      CHECK_ERROR_GOTO(error, "Failed to unattach MO", error, done);
+
       // Send the reply
       seL4_MessageInfo_ptr_set_length(&reply_tag, FSMSGREG_CREATE_ACK_END);
       seL4_SetMR(FSMSGREG_CREATE_ACK_DEST, dest);
@@ -733,8 +739,7 @@ done:
 static int block_read(uint32_t blockno, void *buf)
 {
   XV6FS_PRINTF("Reading blockno %d\n", blockno);
-  int error = ramdisk_client_read(&get_xv6fs_server()->naive_blocks[blockno],
-                                  get_xv6fs_server()->shared_mem);
+  int error = ramdisk_client_read(&get_xv6fs_server()->naive_blocks[blockno]);
 
   if (error == 0)
   {
@@ -748,8 +753,7 @@ static int block_write(uint32_t blockno, void *buf)
 {
   XV6FS_PRINTF("Writing blockno %d\n", blockno);
   memcpy(get_xv6fs_server()->shared_mem_vaddr, buf, RAMDISK_BLOCK_SIZE);
-  return ramdisk_client_write(&get_xv6fs_server()->naive_blocks[blockno],
-                              get_xv6fs_server()->shared_mem);
+  return ramdisk_client_write(&get_xv6fs_server()->naive_blocks[blockno]);
 }
 
 /* Override xv6 block read/write functions */

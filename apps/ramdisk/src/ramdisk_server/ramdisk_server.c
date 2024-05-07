@@ -145,7 +145,7 @@ seL4_MessageInfo_t ramdisk_request_handler(seL4_MessageInfo_t tag, seL4_Word sen
 
             RAMDISK_PRINTF("Get RR for blockno %d\n", blockno);
             void *mem_vaddr = (void *)seL4_GetMR(RSMSGREG_EXTRACT_RR_REQ_VADDR);
-            model_state_t *model_state = (model_state_t *) mem_vaddr;
+            model_state_t *model_state = (model_state_t *)mem_vaddr;
             void *free_mem = mem_vaddr + sizeof(model_state_t);
             size_t free_size = seL4_GetMR(RSMSGREG_EXTRACT_RR_REQ_SIZE) - sizeof(model_state_t);
 
@@ -194,30 +194,31 @@ seL4_MessageInfo_t ramdisk_request_handler(seL4_MessageInfo_t tag, seL4_Word sen
 
         switch (op)
         {
-        case RD_FUNC_SANITY_REQ:
+        case RD_FUNC_BIND_REQ:
+            RAMDISK_PRINTF("Binding MO for client %ld\n", client_id);
+
             /* Attach memory object to server ADS */
             error = resource_server_attach_mo(&get_ramdisk_server()->gen, cap, &mo_vaddr);
             CHECK_ERROR_GOTO(error, "Failed to attach MO", error, done);
 
-            RAMDISK_PRINTF("Can access vaddr %p, val 0x%x\n", mo_vaddr, *((int *)mo_vaddr));
+            get_ramdisk_server()->shared_mem[client_id] = mo_vaddr;
 
-            seL4_MessageInfo_ptr_set_length(&reply_tag, RDMSGREG_SANITY_ACK_END);
-            seL4_SetMR(RDMSGREG_FUNC, RD_FUNC_SANITY_ACK);
-            seL4_SetMR(RDMSGREG_SANITY_ACK_VAL, *(int *)mo_vaddr);
+            // RAMDISK_PRINTF("Can access vaddr %p, val 0x%x\n", mo_vaddr, *((int *)mo_vaddr));
+
+            seL4_SetMR(RDMSGREG_FUNC, RD_FUNC_BIND_ACK);
             break;
-
-        case RD_FUNC_CREATE_REQ:
-            //* Attach memory object to server ADS */
+        case RD_FUNC_UNBIND_REQ:
+            RAMDISK_PRINTF("Unbinding MO for client %ld\n", client_id);
+            
+            /* Remove shared mem from server ADS */
             mo_vaddr = get_ramdisk_server()->shared_mem[client_id];
-            if (mo_vaddr == NULL)
-            {
-                error = resource_server_attach_mo(&get_ramdisk_server()->gen, cap, &mo_vaddr);
-                CHECK_ERROR_GOTO(error, "Failed to attach MO", error, done);
 
-                RAMDISK_PRINTF("Attached MO\n");
-                get_ramdisk_server()->shared_mem[client_id] = mo_vaddr;
-            }
+            error = resource_server_unattach(&get_ramdisk_server()->gen, mo_vaddr);
+            CHECK_ERROR_GOTO(error, "Failed to unattach MO", error, done);
 
+            seL4_SetMR(RDMSGREG_FUNC, RD_FUNC_BIND_ACK);
+            break;
+        case RD_FUNC_CREATE_REQ:
             // Assign a new block to this ep
             CHECK_ERROR_GOTO(get_ramdisk_server()->free_blocks == NULL, "no more free blocks to assign",
                              RD_SERVER_ERROR_NO_BLOCKS, done);

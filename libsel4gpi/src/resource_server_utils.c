@@ -26,10 +26,8 @@
     {                              \
         if (error != seL4_NoError) \
         {                          \
-            ZF_LOGE(SERVER_UTILS   \
-                    "%s: %s"       \
+            ZF_LOGE("%s"           \
                     ", %d.",       \
-                    __func__,      \
                     msg,           \
                     error);        \
             return error;          \
@@ -303,7 +301,6 @@ int resource_server_attach_mo(resource_server_context_t *context,
                               seL4_CPtr mo_cap,
                               void **vaddr)
 {
-    // (XXX) Arya: Track the MO so we can unattach and free it later
     int error = 0;
     mo_client_context_t mo_conn;
 
@@ -315,6 +312,24 @@ int resource_server_attach_mo(resource_server_context_t *context,
                               &mo_conn,
                               vaddr);
     CHECK_ERROR(error, "failed to attach client's MO to ADS");
+
+    return error;
+}
+
+/**
+ * Remove a previously attached MO from the server's ADS
+ * @param vaddr The vaddr where MO was attached
+ */
+int resource_server_unattach(resource_server_context_t *context,
+                             void *vaddr)
+{
+    int error = 0;
+
+    CHECK_ERROR(vaddr == NULL, "cannot unattach a NULL vaddr");
+
+    error = ads_client_rm(&context->ads_conn,
+                          vaddr);
+    CHECK_ERROR(error, "failed to unattach from ADS");
 
     return error;
 }

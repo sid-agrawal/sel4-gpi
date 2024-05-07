@@ -55,30 +55,36 @@ int start_ramdisk_pd(seL4_CPtr *ramdisk_pd_cap,
     return 0;
 }
 
-int ramdisk_client_sanity_test(seL4_CPtr server_ep_cap,
-                               mo_client_context_t *mo,
-                               seL4_Word *res)
+int ramdisk_client_bind(seL4_CPtr server_ep_cap,
+                        mo_client_context_t *mo)
 {
-    seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 1, RDMSGREG_SANITY_REQ_END);
-    seL4_SetMR(RDMSGREG_FUNC, RD_FUNC_SANITY_REQ);
+    seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 1, 1);
+    seL4_SetMR(RDMSGREG_FUNC, RD_FUNC_BIND_REQ);
     seL4_SetCap(0, mo->badged_server_ep_cspath.capPtr);
     tag = seL4_Call(server_ep_cap, tag);
 
     int error = seL4_MessageInfo_get_label(tag);
-    CHECK_ERROR(error, "failed ramdisk sanity test\n");
+    CHECK_ERROR(error, "failed ramdisk bind request\n");
+    return 0;
+}
 
-    *res = seL4_GetMR(RDMSGREG_SANITY_ACK_VAL);
+int ramdisk_client_unbind(seL4_CPtr server_ep_cap)
+{
+    seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0, 1);
+    seL4_SetMR(RDMSGREG_FUNC, RD_FUNC_UNBIND_REQ);
+    tag = seL4_Call(server_ep_cap, tag);
+
+    int error = seL4_MessageInfo_get_label(tag);
+    CHECK_ERROR(error, "failed ramdisk unbind request\n");
     return 0;
 }
 
 int ramdisk_client_alloc_block(seL4_CPtr server_ep_cap,
-                               ramdisk_client_context_t *ret_conn,
-                               mo_client_context_t *mo)
+                               ramdisk_client_context_t *ret_conn)
 {
     /* Request a new block from server */
-    seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 1, 1);
+    seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0, 1);
     seL4_SetMR(RDMSGREG_FUNC, RD_FUNC_CREATE_REQ);
-    seL4_SetCap(0, mo->badged_server_ep_cspath.capPtr);
     tag = seL4_Call(server_ep_cap, tag);
     int error = seL4_MessageInfo_get_label(tag);
     CHECK_ERROR(error, "failed to get block from ramdisk server\n");
@@ -88,28 +94,26 @@ int ramdisk_client_alloc_block(seL4_CPtr server_ep_cap,
     return 0;
 }
 
-int ramdisk_client_read(ramdisk_client_context_t *conn, mo_client_context_t *mo)
+int ramdisk_client_read(ramdisk_client_context_t *conn)
 {
     seL4_Error error;
 
     /* Send IPC to ramdisk server */
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0, 1);
     seL4_SetMR(RDMSGREG_FUNC, RD_FUNC_READ_REQ);
-    //seL4_SetCap(0, mo->badged_server_ep_cspath.capPtr);
     tag = seL4_Call(conn->badged_server_ep_cspath.capPtr, tag);
     error = seL4_MessageInfo_get_label(tag);
 
     return error;
 }
 
-int ramdisk_client_write(ramdisk_client_context_t *conn, mo_client_context_t *mo)
+int ramdisk_client_write(ramdisk_client_context_t *conn)
 {
     seL4_Error error;
 
     /* Send IPC to ramdisk server */
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0, 1);
     seL4_SetMR(RDMSGREG_FUNC, RD_FUNC_WRITE_REQ);
-    //seL4_SetCap(0, mo->badged_server_ep_cspath.capPtr);
     tag = seL4_Call(conn->badged_server_ep_cspath.capPtr, tag);
     error = seL4_MessageInfo_get_label(tag);
 

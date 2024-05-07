@@ -343,12 +343,12 @@ static void handle_remove_req(seL4_Word sender_badge, seL4_MessageInfo_t old_tag
     {
         OSDB_PRINTF(ADS_DEBUG, ADSSERVS "main: Failed to find ADS with ID %ld.\n",
                     ads_id);
-        error = -1;
+        error = 1;
     }
     else
     {
         // Default error if we do not find the corresponding memory region
-        error = -1;
+        error = 1;
 
         // Find the attach node corresponding to this vaddr
         attach_node_t *prev = NULL;
@@ -356,13 +356,15 @@ static void handle_remove_req(seL4_Word sender_badge, seL4_MessageInfo_t old_tag
         {
             if (node->vaddr == vaddr)
             {
+                error = 0;
+
                 // Remove the VMR
                 error = ads_rm(&client_data->ads,
                                get_ads_component()->server_vka,
                                vaddr,
                                seL4_PageBits,
                                node->n_pages);
-                
+
                 // Remove the attach node
                 if (prev == NULL)
                 {
@@ -375,10 +377,18 @@ static void handle_remove_req(seL4_Word sender_badge, seL4_MessageInfo_t old_tag
 
                 free(node->frame_caps);
                 free(node);
+
+                break;
             }
 
             prev = node;
         }
+    }
+
+    if (error)
+    {
+        OSDB_PRINTF(ADS_DEBUG, ADSSERVS "main: Failed to find memory region with vaddr %p.\n",
+                    vaddr);
     }
 
     seL4_SetMR(ADSMSGREG_FUNC, ADS_FUNC_RM_ACK);

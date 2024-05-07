@@ -76,53 +76,48 @@ int test_ramdisk(env_t env)
                               (void **)&buf);
     test_assert(error == 0);
 
-    /* Sanity test shared memory */
-    seL4_Word test_value = 0x1234;
-    *((int *)buf) = test_value;
-    printf("buf addr: %p, contents: 0x%x\n", buf, *((int *)buf));
-    seL4_Word res;
-    error = ramdisk_client_sanity_test(ramdisk_client_ep, &mo_conn, &res);
+    // Set up shared memory 
+    error = ramdisk_client_bind(ramdisk_client_ep, &mo_conn);
     test_assert(error == seL4_NoError);
-    test_assert(res == test_value);
 
     // Get a block
     ramdisk_client_context_t block;
-    error = ramdisk_client_alloc_block(ramdisk_client_ep, &block, &mo_conn);
+    error = ramdisk_client_alloc_block(ramdisk_client_ep, &block);
     test_assert(error == seL4_NoError);
 
     // Write and read from beginning of disk
     strcpy(buf, TEST_STR_1);
     printf("buf addr: %p, contents: %s\n", buf, buf);
-    error = ramdisk_client_write(&block, &mo_conn);
+    error = ramdisk_client_write(&block);
     test_assert(error == seL4_NoError);
 
     memset(buf, 0, RAMDISK_BLOCK_SIZE); // clear the test string from the buffer
-    error = ramdisk_client_read(&block, &mo_conn);
+    error = ramdisk_client_read(&block);
     test_assert(error == seL4_NoError);
     test_assert(strcmp(buf, TEST_STR_1) == 0);
 
     // Write and read from another block
     ramdisk_client_context_t block2;
-    error = ramdisk_client_alloc_block(ramdisk_client_ep, &block2, &mo_conn);
+    error = ramdisk_client_alloc_block(ramdisk_client_ep, &block2);
     test_assert(error == seL4_NoError);
 
     strcpy(buf, TEST_STR_2);
-    error = ramdisk_client_write(&block2, &mo_conn);
+    error = ramdisk_client_write(&block2);
     test_assert(error == seL4_NoError);
 
     memset(buf, 0, RAMDISK_BLOCK_SIZE); // clear the test string from the buffer
-    error = ramdisk_client_read(&block2, &mo_conn);
+    error = ramdisk_client_read(&block2);
     test_assert(error == seL4_NoError);
     test_assert(strcmp(buf, TEST_STR_2) == 0);
 
     // Write/read entire block
     memset(buf, 0x42, RAMDISK_BLOCK_SIZE);
 
-    error = ramdisk_client_write(&block, &mo_conn);
+    error = ramdisk_client_write(&block);
     test_assert(error == seL4_NoError);
 
     memset(buf, 0, RAMDISK_BLOCK_SIZE); // clear the test string from the buffer
-    error = ramdisk_client_read(&block, &mo_conn);
+    error = ramdisk_client_read(&block);
     test_assert(error == seL4_NoError);
     test_assert(buf[0] == 0x42);
     test_assert(buf[RAMDISK_BLOCK_SIZE - 1] == 0x42);
@@ -131,20 +126,24 @@ int test_ramdisk(env_t env)
     for (int i = 3; i <= 20; i++)
     {
         printf("----- Allocating block %d ---- \n", i);
-        error = ramdisk_client_alloc_block(ramdisk_client_ep, &block, &mo_conn);
+        error = ramdisk_client_alloc_block(ramdisk_client_ep, &block);
         test_assert(error == seL4_NoError);
 
         buf[0] = i;
-        error = ramdisk_client_write(&block, &mo_conn);
+        error = ramdisk_client_write(&block);
         test_assert(error == seL4_NoError);
 
         buf[0] = 0;
-        error = ramdisk_client_read(&block, &mo_conn);
+        error = ramdisk_client_read(&block);
         test_assert(error == seL4_NoError);
         test_assert(buf[0] == i);
     }
 
     // TODO: test freeing blocks, if implemented
+
+    // Unbind shared memory
+    error = ramdisk_client_unbind(ramdisk_client_ep);
+    test_assert(error == seL4_NoError);
 
     // Print whole-pd model state
     // error = pd_client_dump(&pd_conn, NULL, 0);

@@ -162,6 +162,13 @@ int resource_server_attach_mo(resource_server_context_t *context,
                               void **vaddr);
 
 /**
+ * Remove a previously attached MO from the server's ADS
+ * @param vaddr The vaddr where MO was attached
+ */
+int resource_server_unattach(resource_server_context_t *context,
+                             void *vaddr);
+
+/**
  * Request a resource server to dump resource relations
  *
  * @param server_ep Unbadged ep of the resource server
