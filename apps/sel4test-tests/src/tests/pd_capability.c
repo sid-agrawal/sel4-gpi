@@ -173,7 +173,8 @@ int test_new_process_osmosis_shmem(env_t env)
     error = vka_cspace_alloc(&env->vka, &slot);
     test_error_eq(error, 0);
     ads_client_context_t ads_os_cap;
-    error = ads_component_client_connect(ads_rde, slot, &ads_os_cap, NULL);
+    seL4_Word new_ads_id;
+    error = ads_component_client_connect(ads_rde, slot, &ads_os_cap, &new_ads_id);
     test_error_eq(error, 0);
 
     /* new CPU */
@@ -186,8 +187,15 @@ int test_new_process_osmosis_shmem(env_t env)
     error = ads_client_load_elf(&ads_os_cap, "hello");
     test_error_eq(error, 0);
 
-    void *stack = sel4gpi_create_stack(16);
+    ads_client_context_t new_ads_rde = {.badged_server_ep_cspath.capPtr = sel4gpi_get_rde_by_ns_id(new_ads_id, GPICAP_TYPE_ADS)};
+    void *stack = sel4gpi_get_vmr(&new_ads_rde, 16, NULL);
     test_assert(stack != NULL);
+
+    void *heap = sel4gpi_get_vmr(&new_ads_rde, 100, PD_HEAP_LOC);
+    test_assert(heap != NULL);
+
+    void *ipc_buf = sel4gpi_get_vmr(&new_ads_rde, 1, NULL);
+    test_assert(ipc_buf != NULL);
 
     printf("here\n");
 #if 0

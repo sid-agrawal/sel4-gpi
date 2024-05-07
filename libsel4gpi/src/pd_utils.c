@@ -74,15 +74,12 @@ void sel4gpi_set_exit_cb(void)
     sel4runtime_set_exit(sel4gpi_exit_cb);
 }
 
-void *sel4gpi_create_stack(int num_pages)
+void *sel4gpi_get_vmr(ads_client_context_t *ads_rde, int num_pages, void *vaddr)
 {
     int error;
 
     pd_client_context_t self_pd;
     self_pd.badged_server_ep_cspath.capPtr = sel4gpi_get_pd_cap();
-
-    ads_client_context_t vmr_rde;
-    vmr_rde.badged_server_ep_cspath.capPtr = sel4gpi_get_rde_by_ns_id(sel4gpi_get_binded_ads_id(), GPICAP_TYPE_ADS);
 
     seL4_CPtr mo_rde = sel4gpi_get_rde(GPICAP_TYPE_MO);
 
@@ -91,14 +88,14 @@ void *sel4gpi_create_stack(int num_pages)
     error = pd_client_next_slot(&self_pd, &slot);
     assert(error == 0);
 
-    mo_client_context_t stack_mo;
-    error = mo_component_client_connect(mo_rde, slot, num_pages, &stack_mo);
+    mo_client_context_t mo;
+    error = mo_component_client_connect(mo_rde, slot, num_pages, &mo);
     assert(error == 0);
 
     /* attach stack to cpu */
-    void *stack_addr_in_new_cpu;
-    error = ads_client_attach(&vmr_rde, NULL, &stack_mo, &stack_addr_in_new_cpu);
+    void *new_vaddr;
+    error = ads_client_attach(ads_rde, vaddr, &mo, &new_vaddr);
     assert(error == 0);
 
-    return stack_addr_in_new_cpu;
+    return new_vaddr;
 }
