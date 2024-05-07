@@ -61,6 +61,9 @@ enum ads_component_funcs
 
     ADS_FUNC_GET_RR_REQ,
     ADS_FUNC_GET_RR_ACK,
+
+    ADS_FUNC_LOAD_ELF_REQ,
+    ADS_FUNC_LOAD_ELF_ACK
 };
 
 /* Designated purposes of each message register in the mini-protocol. */
@@ -128,6 +131,11 @@ enum ads_component_msgregs
     ADSMSGREG_DISCONNECT_REQ_END = ADSMSGREG_LABEL0,
 
     ADSMSGREG_DISCONNECT_ACK_END = ADSMSGREG_LABEL0,
+
+    ADSMSGREG_LOAD_ELF_REQ_IMAGE = ADSMSGREG_LABEL0,
+    ADSMSGREG_LOAD_ELF_REQ_END,
+
+    ADSMSGREG_LOAD_ELF_ACK_END = ADSMSGREG_LABEL0,
 };
 
 /* Per-client context maintained by the server. */

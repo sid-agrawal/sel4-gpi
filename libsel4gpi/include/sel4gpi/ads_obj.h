@@ -154,3 +154,5 @@ static seL4_CPtr assign_asid_pool(seL4_CPtr asid_pool, seL4_CPtr pd)
 
     return error;
 }
+
+int ads_load_elf(vspace_t *loadee_vspace, sel4utils_process_t *proc, char *image_name);

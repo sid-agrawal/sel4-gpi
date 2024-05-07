@@ -16,6 +16,7 @@
 #include <sel4gpi/mo_clientapi.h>
 #include <sel4gpi/badge_usage.h>
 #include <sel4gpi/debug.h>
+#include <sel4gpi/gpi_images.h>
 
 int ads_component_client_connect(seL4_CPtr server_ep_cap,
                                  seL4_CPtr free_slot,
@@ -155,5 +156,27 @@ int ads_client_testing(ads_client_context_t *conn, vka_t *vka,
                                                   ADSMSGREG_TESTING_REQ_END);
 
     tag = seL4_Call(conn->badged_server_ep_cspath.capPtr, tag);
+    return 0;
+}
+
+int ads_client_load_elf(ads_client_context_t *loadee_ads,
+                        const char *image_name)
+{
+    int error = 0;
+    seL4_SetMR(ADSMSGREG_FUNC, ADS_FUNC_LOAD_ELF_REQ);
+    int image_id = sel4gpi_image_name_to_id(image_name);
+    if (image_id == -1)
+    {
+        OSDB_PRINTF(ADS_DEBUG, ADSSERVC "invalid image name received %s\n", image_name);
+        return -1;
+    }
+
+    seL4_SetMR(ADSMSGREG_LOAD_ELF_REQ_IMAGE, image_id);
+
+    seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0,
+                                                  ADSMSGREG_LOAD_ELF_REQ_END);
+
+    tag = seL4_Call(loadee_ads->badged_server_ep_cspath.capPtr, tag);
+    assert(seL4_MessageInfo_get_label(tag) == 0);
     return 0;
 }

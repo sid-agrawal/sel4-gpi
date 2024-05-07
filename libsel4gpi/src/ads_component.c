@@ -29,6 +29,7 @@
 #include <sel4gpi/gpi_server.h>
 #include <sel4gpi/badge_usage.h>
 #include <sel4gpi/debug.h>
+#include <sel4gpi/gpi_images.h>
 
 uint64_t ads_assign_new_badge_and_objectID(ads_component_registry_entry_t *reg)
 {
@@ -492,6 +493,35 @@ void ads_handle_allocation_request(seL4_MessageInfo_t tag, seL4_Word sender_badg
     }
 }
 
+void handle_load_elf_request(seL4_Word sender_badge, seL4_MessageInfo_t old_tag)
+{
+    int error;
+    seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0, ADSMSGREG_LOAD_ELF_ACK_END);
+
+    ads_component_registry_entry_t *target_ads = ads_component_registry_get_entry_by_badge(sender_badge);
+    assert(target_ads != NULL);
+
+    // printf("target PD")
+    pd_component_registry_entry_t *target_pd = pd_component_registry_get_entry_by_id(get_client_id_from_badge(sender_badge));
+    assert(target_pd != NULL);
+
+    int image_id = (int)seL4_GetMR(ADSMSGREG_LOAD_ELF_REQ_IMAGE);
+    if (image_id < 0 || image_id > PD_N_IMAGES)
+    {
+        OSDB_PRINTF(ADS_DEBUG, ADSSERVS "Requesting load of bad image ID %d\n", image_id);
+        tag = seL4_MessageInfo_set_label(tag, 1);
+        return reply(tag);
+    }
+
+    error = ads_load_elf(target_ads->ads.vspace, &target_pd->pd.proc, pd_images[image_id]);
+    if (error)
+    {
+        tag = seL4_MessageInfo_set_label(tag, 1);
+    }
+
+    return reply(tag);
+}
+
 /**
  * @brief The starting point for the ads server's thread.
  *
@@ -515,6 +545,9 @@ void ads_component_handle(seL4_MessageInfo_t tag,
         break;
     case ADS_FUNC_GET_RR_REQ:
         handle_get_rr_req(sender_badge, tag);
+        break;
+    case ADS_FUNC_LOAD_ELF_REQ:
+        handle_load_elf_request(sender_badge, tag);
         break;
     default:
         gpi_panic(ADSSERVS "Unknown func type.", (seL4_Word)func);

@@ -33,6 +33,7 @@
 #include <sel4gpi/gpi_server.h>
 #include <sel4gpi/badge_usage.h>
 #include <sel4gpi/debug.h>
+#include <sel4gpi/gpi_images.h>
 
 uint64_t pd_assign_new_badge_and_objectID(pd_component_registry_entry_t *reg)
 {
@@ -416,9 +417,6 @@ void pd_handle_allocation_request(seL4_Word sender_badge, seL4_MessageInfo_t *re
     }
     memset((void *)client_reg_ptr, 0, sizeof(pd_component_registry_entry_t));
     pd_component_registry_insert(client_reg_ptr);
-
-    // Allocate a new cspace
-    // TODO
 
     int error = pd_new(&client_reg_ptr->pd,
                        get_pd_component()->server_vka,

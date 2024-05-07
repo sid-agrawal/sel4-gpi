@@ -22,6 +22,10 @@
 
 #define MAX_MO_RR 10000
 
+/* This is doesn't belong here but we need it */
+extern char _cpio_archive[];
+extern char _cpio_archive_end[];
+
 int ads_new(vspace_t *loader,
             vka_t *vka,
             ads_t *ret_ads)
@@ -632,4 +636,50 @@ error_exit:
     free(alloc_data);
     free(ret_ads->vspace);
     return -1;
+}
+
+int ads_load_elf(vspace_t *loadee_vspace, sel4utils_process_t *proc, char *image_name)
+{
+    int error;
+    OSDB_PRINTF(ADS_DEBUG, ADSSERVS "Loading %s's ELF\n", image_name);
+    seL4_CPtr slot;
+    vspace_t *server_vspace = get_ads_component()->server_vspace;
+    vka_t *server_vka = get_ads_component()->server_vka;
+
+    unsigned long size;
+    unsigned long cpio_len = _cpio_archive_end - _cpio_archive;
+    char const *file = cpio_get_file(_cpio_archive, cpio_len, image_name, &size);
+    elf_t elf;
+    elf_newFile(file, size, &elf);
+
+    proc->entry_point = sel4utils_elf_load(loadee_vspace, server_vspace, server_vka, server_vka, &elf);
+    if (proc->entry_point == NULL)
+    {
+        ZF_LOGE("Failed to load elf file\n");
+        goto error;
+    }
+
+    proc->sysinfo = sel4utils_elf_get_vsyscall(&elf);
+
+    /* Retrieve the ELF phdrs */
+    proc->num_elf_phdrs = sel4utils_elf_num_phdrs(&elf);
+    proc->elf_phdrs = calloc(proc->num_elf_phdrs, sizeof(Elf_Phdr));
+    if (!proc->elf_phdrs)
+    {
+        ZF_LOGE("Failed to allocate memory for elf phdr information");
+        goto error;
+    }
+    sel4utils_elf_read_phdrs(&elf, proc->num_elf_phdrs, proc->elf_phdrs);
+
+    return 0;
+error:
+    if (proc->elf_regions)
+    {
+        free(proc->elf_regions);
+    }
+
+    if (proc->elf_phdrs)
+    {
+        free(proc->elf_phdrs);
+    }
 }

@@ -407,7 +407,6 @@ static int pd_setup_proc(pd_t *pd, vka_t *server_vka, vspace_t *server_vspace, a
     elf_t elf;
     elf_newFile(file, size, &elf);
 
-    // (XXX) Linh: Do we need to add the ELF regions to the PD as resources?
     pd->proc.entry_point = sel4utils_elf_load(target_ads->vspace, server_vspace, server_vka, server_vka, &elf);
     if (pd->proc.entry_point == NULL)
     {
@@ -815,7 +814,7 @@ int pd_start(pd_t *pd,
         snprintf(argv[i], WORD_STRING_SIZE, "%" PRIuPTR "", args[i]);
     }
 
-    OSDB_PRINTF(PD_DEBUG, "Starting PD with string args: [", argc);
+    OSDB_PRINTF(PD_DEBUG, "Starting PD with string args: [");
     for (int i = 0; i < argc; i++)
     {
         OSDB_PRINTF(PD_DEBUG, "%s, ", string_args[i]);

@@ -60,7 +60,8 @@ seL4_CPtr sel4gpi_get_rde_by_ns_id(uint32_t ns_id, gpi_cap_t type)
     return seL4_CapNull;
 }
 
-static sel4gpi_exit_cb(int code) {
+static sel4gpi_exit_cb(int code)
+{
     /* Notify the pd component to destruct this PD */
     pd_client_context_t pd_conn;
     pd_conn.badged_server_ep_cspath.capPtr = sel4gpi_get_pd_cap();

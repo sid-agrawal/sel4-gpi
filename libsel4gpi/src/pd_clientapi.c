@@ -14,6 +14,7 @@
 #include <sel4gpi/pd_clientapi.h>
 #include <sel4gpi/badge_usage.h>
 #include <sel4gpi/debug.h>
+#include <sel4gpi/gpi_images.h>
 
 int pd_component_client_connect(seL4_CPtr server_ep_cap,
                                 seL4_CPtr free_slot,
@@ -64,17 +65,7 @@ int pd_client_load(pd_client_context_t *pd_os_cap,
     seL4_SetMR(PDMSGREG_FUNC, PD_FUNC_LOAD_REQ);
 
     /* Send the badged endpoint cap of the ads client as a cap */
-    int image_id = -1;
-    for (int i = 0; i < PD_N_IMAGES; i++)
-    {
-        if (strcmp(image, pd_images[i]) == 0)
-        {
-            OSDB_PRINTF(PD_DEBUG, PDSERVC "image id is %d\n", i);
-            image_id = i;
-            break;
-        }
-    }
-
+    int image_id = sel4gpi_image_name_to_id(image);
     if (image_id == -1)
     {
         OSDB_PRINTF(PD_DEBUG, PDSERVC "invalid image name received %s\n", image);

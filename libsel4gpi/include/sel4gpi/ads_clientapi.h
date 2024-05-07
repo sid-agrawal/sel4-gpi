@@ -107,3 +107,5 @@ int ads_client_testing(ads_client_context_t *conn, vka_t *vka,
                        ads_client_context_t *ads_conn_clone1,
                        ads_client_context_t *ads_conn_clone2,
                        ads_client_context_t *ads_conn_clone3);
+
+int ads_client_load_elf(ads_client_context_t *loadee_ads, const char *image_name);

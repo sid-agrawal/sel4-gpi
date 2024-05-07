@@ -154,37 +154,39 @@ int test_new_process_osmosis_shmem(env_t env)
     test_pd_os_cap.badged_server_ep_cspath.capPtr = sel4gpi_get_pd_cap();
 
     ads_client_context_t test_ads_os_cap;
-    test_ads_os_cap.badged_server_ep_cspath.capPtr = sel4gpi_get_rde_by_ns_id(sel4gpi_get_binded_ads_id(), GPICAP_TYPE_ADS);
+    test_ads_os_cap.badged_server_ep_cspath.capPtr = sel4gpi_get_ads_cap();
 
     seL4_CPtr ads_rde = sel4gpi_get_rde(GPICAP_TYPE_ADS);
     seL4_CPtr pd_rde = sel4gpi_get_rde(GPICAP_TYPE_PD);
     seL4_CPtr mo_rde = sel4gpi_get_rde(GPICAP_TYPE_MO);
     seL4_CPtr cpu_rde = sel4gpi_get_rde(GPICAP_TYPE_CPU);
 
-    /* Create a new PD */
+    /* new PD */
     seL4_CPtr slot;
     error = vka_cspace_alloc(&env->vka, &slot);
     assert(error == 0);
-
     pd_client_context_t pd_os_cap;
     error = pd_component_client_connect(pd_rde, slot, &pd_os_cap);
     assert(error == 0);
 
-    /* Create a new ADS Cap, which will be in the context of a PD and image */
+    /* new ADS */
     error = vka_cspace_alloc(&env->vka, &slot);
     assert(error == 0);
-
     ads_client_context_t ads_os_cap;
     error = ads_component_client_connect(ads_rde, slot, &ads_os_cap, NULL);
     assert(error == 0);
 
+    /* new CPU */
     error = vka_cspace_alloc(&env->vka, &slot);
     assert(error == 0);
-
     cpu_client_context_t cpu_os_cap;
     error = cpu_component_client_connect(cpu_rde, slot, &cpu_os_cap);
     assert(error == 0);
 
+    printf("here\n");
+    error = ads_client_load_elf(&ads_os_cap, "hello");
+
+#if 0
     // Make a new AS, loads an image
     error = pd_client_load(&pd_os_cap, &ads_os_cap, &cpu_os_cap, "hello");
     assert(error == 0);
@@ -250,7 +252,7 @@ int test_new_process_osmosis_shmem(env_t env)
     pd_client_dump(&test_pd_os_cap, NULL, 0);
     // pd_client_dump(&pd_os_cap, NULL, 0);
     // Hello PD should also attach it.
-#if 0
+
 
     // Wait for it to finish.
     seL4_Word sender_badge = 0;
