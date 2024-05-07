@@ -10,9 +10,9 @@
  */
 
 #include <sel4gpi/cpu_clientapi.h>
-#include <sel4gpi/ads_clientapi.h>
 #include <sel4gpi/badge_usage.h>
 #include <sel4gpi/debug.h>
+#include <sel4gpi/gpi_client.h>
 
 int cpu_component_client_connect(seL4_CPtr server_ep_cap,
                                  seL4_CPtr free_slot,
@@ -46,7 +46,7 @@ int cpu_component_client_connect(seL4_CPtr server_ep_cap,
 int cpu_client_config(cpu_client_context_t *conn,
                       ads_client_context_t *ads_conn,
                       mo_client_context_t *ipc_buf_mo,
-                      seL4_CPtr cspace_root,
+                      pd_client_context_t *pd,
                       seL4_Word cnode_guard,
                       seL4_CPtr fault_ep_position,
                       seL4_Word ipc_buf_addr)
@@ -58,7 +58,7 @@ int cpu_client_config(cpu_client_context_t *conn,
 
     /* Send the badged endpoint cap of the ads client as a cap */
     seL4_Uint64 extraCaps = 2;
-    seL4_SetCap(0, cspace_root);                              /*cspace*/
+    seL4_SetCap(0, pd->badged_server_ep_cspath.capPtr);       /*cspace*/
     seL4_SetCap(1, ads_conn->badged_server_ep_cspath.capPtr); /*vspace*/
     if (ipc_buf_mo)
     {

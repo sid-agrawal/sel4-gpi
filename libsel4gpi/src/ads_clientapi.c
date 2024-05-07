@@ -13,10 +13,9 @@
 #include <vka/capops.h>
 
 #include <sel4gpi/ads_clientapi.h>
-#include <sel4gpi/mo_clientapi.h>
 #include <sel4gpi/badge_usage.h>
 #include <sel4gpi/debug.h>
-#include <sel4gpi/gpi_images.h>
+#include <sel4gpi/gpi_client.h>
 
 int ads_component_client_connect(seL4_CPtr server_ep_cap,
                                  seL4_CPtr free_slot,

@@ -1,4 +1,4 @@
-#include <sel4gpi/gpi_images.h>
+#include <sel4gpi/gpi_client.h>
 #include <string.h>
 
 int sel4gpi_image_name_to_id(const char *image_name)

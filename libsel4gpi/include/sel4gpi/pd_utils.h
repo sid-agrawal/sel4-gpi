@@ -4,6 +4,7 @@
 
 #include <sel4gpi/badge_usage.h>
 #include <sel4gpi/ads_clientapi.h>
+#include <sel4gpi/mo_clientapi.h>
 #include <stdint.h>
 #include <sel4/types.h>
 
@@ -54,4 +55,4 @@ seL4_CPtr sel4gpi_get_rde_by_ns_id(uint32_t ns_id, gpi_cap_t type);
  */
 void sel4gpi_set_exit_cb(void);
 
-void *sel4gpi_get_vmr(ads_client_context_t *ads_rde, int num_pages, void *vaddr, sel4utils_reservation_type_t vmr_type);
+void *sel4gpi_get_vmr(ads_client_context_t *ads_rde, int num_pages, void *vaddr, sel4utils_reservation_type_t vmr_type, mo_client_context_t *ret_mo);

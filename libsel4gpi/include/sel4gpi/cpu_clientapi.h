@@ -12,13 +12,7 @@
 #include <vspace/vspace.h>
 
 #include <sel4gpi/cpu_component.h>
-#include <sel4gpi/ads_clientapi.h>
-
-typedef struct _cpu_client_context
-{
-   cspacepath_t badged_server_ep_cspath;
-   // cspacepath_t public_server_ep_cspath;
-} cpu_client_context_t;
+#include <sel4gpi/gpi_client.h>
 
 /**
  * @brief   Initialize the cpu client.
@@ -53,24 +47,13 @@ int cpu_client_start(cpu_client_context_t *conn,
                      sel4utils_thread_entry_fn entry_fn,
                      seL4_Word initial_stack,
                      seL4_Word arg0);
-
-/**
- * @brief Configure the cpu oject.
- *
- * @param conn client connection object
- * @param ads_conn ads connection object
- * @param cspace_root cspace root for the cpu object.
- * @param fault_ep W.r.t of the CPU's cspace, the fault endpoint.
- * @return int 0 on success, -1 on failure.
- */
-
 /**
  * @brief Configure the cpu oject.
  *
  * @param conn client connection object
  * @param ads_conn ads connection object
  * @param ipc_buf_mo MO of the the ipc buf for the cpu (OPTIONAL)
- * @param cspace_root cspace root for the cpu object.
+ * @param pd the PD to which this CPU will be configured for
  * @param cnode_guard guard configured for the cspace root
  * @param fault_ep_position W.r.t of the CPU's cspace, the fault endpoint (OPTIONAL)
  * @param ipc_buf_addr address to IPC buf (in CPU's vspace, OPTIONAL)
@@ -79,7 +62,7 @@ int cpu_client_start(cpu_client_context_t *conn,
 int cpu_client_config(cpu_client_context_t *conn,
                       ads_client_context_t *ads_conn,
                       mo_client_context_t *ipc_buf_mo,
-                      seL4_CPtr cspace_root,
+                      pd_client_context_t *pd,
                       seL4_Word cnode_guard,
                       seL4_CPtr fault_ep_position,
                       seL4_Word ipc_buf_addr);

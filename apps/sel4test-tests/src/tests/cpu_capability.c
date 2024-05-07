@@ -84,7 +84,7 @@ int test_separate_threads(env_t env)
     test_ads_resource.badged_server_ep_cspath.capPtr = sel4gpi_get_ads_cap();
     seL4_Word cnode_guard = api_make_guard_skip_word(seL4_WordBits - TEST_PROCESS_CSPACE_SIZE_BITS);
 
-    error = cpu_client_config(&new_cpu, &test_ads_resource, NULL, env->cspace_root, cnode_guard, 0, 0);
+    error = cpu_client_config(&new_cpu, &test_ads_resource, NULL, NULL, cnode_guard, 0, 0);
     test_error_eq(error, 0);
 
     //uintptr_t aligned_stack_pointer = sel4gpi_setup_thread_stack(stack_addr_in_new_cpu, 16);

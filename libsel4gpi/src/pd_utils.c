@@ -1,5 +1,6 @@
 #include <sel4runtime.h>
 #include <sel4gpi/pd_clientapi.h>
+#include <sel4gpi/mo_clientapi.h>
 
 #include <sel4gpi/pd_utils.h>
 
@@ -74,7 +75,7 @@ void sel4gpi_set_exit_cb(void)
     sel4runtime_set_exit(sel4gpi_exit_cb);
 }
 
-void *sel4gpi_get_vmr(ads_client_context_t *ads_rde, int num_pages, void *vaddr, sel4utils_reservation_type_t vmr_type)
+void *sel4gpi_get_vmr(ads_client_context_t *ads_rde, int num_pages, void *vaddr, sel4utils_reservation_type_t vmr_type, mo_client_context_t *ret_mo)
 {
     int error;
 
@@ -96,6 +97,11 @@ void *sel4gpi_get_vmr(ads_client_context_t *ads_rde, int num_pages, void *vaddr,
     void *new_vaddr;
     error = ads_client_attach(ads_rde, vaddr, &mo, vmr_type, &new_vaddr);
     assert(error == 0);
+
+    if (ret_mo)
+    {
+        *ret_mo = mo;
+    }
 
     return new_vaddr;
 }

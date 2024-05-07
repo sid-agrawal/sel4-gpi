@@ -12,13 +12,7 @@
 #include <vspace/vspace.h>
 
 #include <sel4gpi/mo_component.h>
-
-typedef struct _mo_client_context
-{
-   cspacepath_t badged_server_ep_cspath;
-   // cspacepath_t public_server_ep_cspath;
-   uint64_t id; // Needed only for RR dump
-} mo_client_context_t;
+#include <sel4gpi/gpi_client.h>
 
 /**
  * @brief   Initialize the MO client.

@@ -12,18 +12,11 @@
 #include <vspace/vspace.h>
 
 #include <sel4gpi/pd_component.h>
-#include <sel4gpi/ads_clientapi.h>
-#include <sel4gpi/cpu_clientapi.h>
+#include <sel4gpi/gpi_client.h>
 
 // Default cap root and depth for pd cspace
 #define PD_CAP_ROOT SEL4UTILS_CNODE_SLOT
 #define PD_CAP_DEPTH seL4_WordBits
-
-typedef struct _pd_client_context
-{
-   cspacepath_t badged_server_ep_cspath;
-   // cspacepath_t public_server_ep_cspath;
-} pd_client_context_t;
 
 /**
  * @brief   Initialize the pd client.

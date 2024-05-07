@@ -29,7 +29,7 @@
 #include <sel4gpi/gpi_server.h>
 #include <sel4gpi/badge_usage.h>
 #include <sel4gpi/debug.h>
-#include <sel4gpi/gpi_images.h>
+#include <sel4gpi/gpi_client.h>
 
 uint64_t ads_assign_new_badge_and_objectID(ads_component_registry_entry_t *reg)
 {
