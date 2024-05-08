@@ -286,7 +286,7 @@ int test_ads_stack_isolated_stack_die(env_t env)
 
     // Start it.
     // Add args.
-    error = cpu_client_start(&cpu_conn, (sel4utils_thread_entry_fn)test_func_die);
+    error = cpu_client_start(&cpu_conn, test_func_die);
     test_error_eq(error, 0);
 
     OSDB_PRINTF(ADS_DEBUG, "%d: main_thread: shared_var(%p) = %ld\n", __LINE__, &shared_var_stack, shared_var_stack);

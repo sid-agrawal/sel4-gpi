@@ -172,7 +172,8 @@ int ads_client_testing(ads_client_context_t *conn, vka_t *vka,
  */
 int ads_client_load_elf(ads_client_context_t *loadee_ads,
                         pd_client_context_t *loadee_pd,
-                        const char *image_name)
+                        const char *image_name,
+                        void **ret_entry_point)
 {
     int error = 0;
     seL4_SetMR(ADSMSGREG_FUNC, ADS_FUNC_LOAD_ELF_REQ);
@@ -191,6 +192,8 @@ int ads_client_load_elf(ads_client_context_t *loadee_ads,
 
     tag = seL4_Call(loadee_ads->badged_server_ep_cspath.capPtr, tag);
     assert(seL4_MessageInfo_get_label(tag) == 0);
+
+    *ret_entry_point = (void *)seL4_GetMR(ADSMSGREG_LOAD_ELF_ACK_ENTRY_PT);
     return 0;
 }
 
@@ -199,7 +202,8 @@ int ads_client_prepare_stack(ads_client_context_t *target_ads,
                              void *stack_top,
                              int stack_size,
                              int argc,
-                             seL4_Word *args)
+                             seL4_Word *args,
+                             void **ret_init_stack)
 {
     int error = 0;
     seL4_SetMR(ADSMSGREG_FUNC, ADS_FUNC_PROC_SETUP_REQ);
@@ -238,5 +242,7 @@ int ads_client_prepare_stack(ads_client_context_t *target_ads,
 
     tag = seL4_Call(target_ads->badged_server_ep_cspath.capPtr, tag);
     assert(seL4_MessageInfo_get_label(tag) == 0);
+
+    *ret_init_stack = (void *)seL4_GetMR(ADSMSGREG_PROC_SETUP_ACK_INIT_STACK);
     return 0;
 }

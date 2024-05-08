@@ -531,12 +531,14 @@ void handle_load_elf_request(seL4_Word sender_badge, seL4_MessageInfo_t old_tag)
     }
 
     OSDB_PRINTF(ADS_DEBUG, ADSSERVS "Loading %s's ELF into PD %ld\n", pd_images[image_id], target_pd->pd.pd_obj_id);
-    error = ads_load_elf(target_ads->ads.vspace, &target_pd->pd.proc, pd_images[image_id]);
+    void *entry_point;
+    error = ads_load_elf(target_ads->ads.vspace, &target_pd->pd.proc, pd_images[image_id], &entry_point);
     if (error)
     {
         tag = seL4_MessageInfo_set_label(tag, 1);
     }
 
+    seL4_SetMR(ADSMSGREG_LOAD_ELF_ACK_ENTRY_PT, (seL4_Word)entry_point);
     seL4_SetMR(ADSMSGREG_FUNC, ADS_FUNC_LOAD_ELF_ACK);
     return reply(tag);
 }
@@ -600,12 +602,14 @@ void handle_proc_setup_req(seL4_Word sender_badge, seL4_MessageInfo_t old_tag)
     target_pd->pd.proc.thread.stack_top = (void *)seL4_GetMR(ADSMSGREG_PROC_SETUP_REQ_STACK);
     target_pd->pd.proc.thread.stack_size = seL4_GetMR(ADSMSGREG_PROC_SETUP_REQ_STACK_SZ);
 
-    error = ads_prepare_proc_stack(&target_pd->pd.proc,
-                                   (void *)target_pd->pd.init_data_in_PD,
-                                   get_gpi_server()->server_vka,
-                                   get_pd_component()->server_vspace,
-                                   argc,
-                                   argv);
+    void *init_stack;
+    error = ads_proc_setup(&target_pd->pd.proc,
+                           (void *)target_pd->pd.init_data_in_PD,
+                           get_gpi_server()->server_vka,
+                           get_pd_component()->server_vspace,
+                           argc,
+                           argv,
+                           &init_stack);
 
     if (error)
     {
@@ -614,6 +618,7 @@ void handle_proc_setup_req(seL4_Word sender_badge, seL4_MessageInfo_t old_tag)
         return reply(tag);
     }
 
+    seL4_SetMR(ADSMSGREG_PROC_SETUP_ACK_INIT_STACK, (seL4_Word)init_stack);
     seL4_SetMR(ADSMSGREG_FUNC, ADS_FUNC_PROC_SETUP_ACK);
     return reply(tag);
 }

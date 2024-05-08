@@ -92,13 +92,13 @@ int cpu_client_change_vspace(cpu_client_context_t *conn,
 }
 
 int cpu_client_start(cpu_client_context_t *conn,
-                     sel4utils_thread_entry_fn entry_fn,
-                     seL4_Word initial_stack,
+                     void *entry_point,
+                     void *initial_stack,
                      seL4_Word arg0)
 {
     seL4_SetMR(CPUMSGREG_FUNC, CPU_FUNC_START_REQ);
-    seL4_SetMR(CPUMSGREG_START_FUNC_VADDR, (seL4_Word)entry_fn);
-    seL4_SetMR(CPUMSGREG_START_INIT_STACK_ADDR, initial_stack);
+    seL4_SetMR(CPUMSGREG_START_FUNC_VADDR, (seL4_Word)entry_point);
+    seL4_SetMR(CPUMSGREG_START_INIT_STACK_ADDR, (seL4_Word)initial_stack);
     seL4_SetMR(CPUMSGREG_START_ARG0, arg0);
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0,
                                                   CPUMSGREG_START_REQ_END);

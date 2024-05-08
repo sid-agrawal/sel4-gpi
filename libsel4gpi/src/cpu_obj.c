@@ -21,7 +21,7 @@
 #include <sel4/sel4.h>
 #include <sel4runtime.h>
 
-int cpu_start(cpu_t *cpu, sel4utils_thread_entry_fn entry_point, seL4_Word init_stack, seL4_Word arg0)
+int cpu_start(cpu_t *cpu, void *entry_point, void *init_stack, seL4_Word arg0)
 {
     OSDB_PRINTF(CPU_DEBUG, CPUSERVS "cpu_start: starting CPU at entry point %p and arg0 %lx\n", entry_point, arg0);
     int error;
@@ -39,18 +39,19 @@ int cpu_start(cpu_t *cpu, sel4utils_thread_entry_fn entry_point, seL4_Word init_
     // assert(error == 0);
 
     /* Write context and registers */
-    sel4utils_arch_init_local_context((void *)entry_point, (void *)arg0,
-                                      (void *)cpu->tls_base, (void *)cpu->thread.ipc_buffer_addr, cpu->thread.stack_top, &regs);
+    // sel4utils_arch_init_local_context((void *)entry_point, (void *)arg0,
+    //                                   (void *)cpu->tls_base, (void *)cpu->thread.ipc_buffer_addr, cpu->thread.stack_top, &regs);
 
-    assert(error == 0);
+    // assert(error == 0);
+    // sel4utils_arch_init_context(entry_point)
+    error = sel4utils_arch_init_context(entry_point, init_stack, &regs);
+    if (error)
+    {
+        return error;
+    }
 
-    error = seL4_TCB_WriteRegisters(cpu->thread.tcb.cptr, 0, 0, sizeof(regs) / sizeof(seL4_Word), &regs);
-    assert(error == 0);
-
-    // resume the new thread
-    error = seL4_TCB_Resume(cpu->thread.tcb.cptr);
-    assert(error == 0);
-    return 0;
+    error = seL4_TCB_WriteRegisters(cpu->thread.tcb.cptr, 1, 0, sizeof(regs) / sizeof(seL4_Word), &regs);
+    return error;
 }
 
 int cpu_config_vspace(cpu_t *cpu,

@@ -648,7 +648,10 @@ error_exit:
 
 /* ======================================= CONVENIENCE FUNCTIONS (NOT PART OF FRAMEWORK) ================================================= */
 
-int ads_load_elf(vspace_t *loadee_vspace, sel4utils_process_t *proc, char *image_name)
+int ads_load_elf(vspace_t *loadee_vspace,
+                 sel4utils_process_t *proc,
+                 char *image_name,
+                 void **ret_entry_point)
 {
     int error;
     seL4_CPtr slot;
@@ -681,6 +684,8 @@ int ads_load_elf(vspace_t *loadee_vspace, sel4utils_process_t *proc, char *image
     sel4utils_elf_read_phdrs(&elf, proc->num_elf_phdrs, proc->elf_phdrs);
     proc->pagesz = PAGE_SIZE_4K;
 
+    *ret_entry_point = proc->entry_point;
+
     return 0;
 error:
     if (proc->elf_regions)
@@ -699,7 +704,8 @@ int ads_proc_setup(sel4utils_process_t *process,
                    vka_t *vka,
                    vspace_t *vspace,
                    int argc,
-                   char *argv[])
+                   char *argv[],
+                   void **ret_init_stack)
 {
     assert(vspace != NULL);
     assert(&process->vspace != NULL);
@@ -849,6 +855,6 @@ int ads_proc_setup(sel4utils_process_t *process,
     }
 
     process->thread.initial_stack_pointer = (void *)initial_stack_pointer;
-
+    *ret_init_stack = (void *)initial_stack_pointer;
     return 0;
 }

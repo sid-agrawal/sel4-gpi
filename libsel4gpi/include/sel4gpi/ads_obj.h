@@ -168,7 +168,7 @@ static seL4_CPtr assign_asid_pool(seL4_CPtr asid_pool, seL4_CPtr pd)
  * @param image_name
  * @return int
  */
-int ads_load_elf(vspace_t *loadee_vspace, sel4utils_process_t *proc, char *image_name);
+int ads_load_elf(vspace_t *loadee_vspace, sel4utils_process_t *proc, char *image_name, void **ret_entry_point);
 
 /**
  * @brief slightly modified version of the sel4utils process spawn function
@@ -180,6 +180,7 @@ int ads_load_elf(vspace_t *loadee_vspace, sel4utils_process_t *proc, char *image
  * @param vspace
  * @param argc
  * @param argv
+ * @param ret_init_stack the position of the initial stack pointer after setup
  * @return int
  */
 int ads_proc_setup(sel4utils_process_t *process,
@@ -187,4 +188,5 @@ int ads_proc_setup(sel4utils_process_t *process,
                    vka_t *vka,
                    vspace_t *vspace,
                    int argc,
-                   char *argv[]);
+                   char *argv[],
+                   void **ret_init_stack);

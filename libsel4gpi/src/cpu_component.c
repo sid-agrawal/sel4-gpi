@@ -198,8 +198,8 @@ static void handle_start_req(seL4_Word sender_badge, seL4_MessageInfo_t old_tag,
     seL4_Word arg0 = seL4_GetMR(CPUMSGREG_START_ARG0);
 
     error = cpu_start(&client_data->cpu,
-                      (sel4utils_thread_entry_fn)seL4_GetMR(1),
-                      init_stack,
+                      (void *)seL4_GetMR(CPUMSGREG_START_FUNC_VADDR),
+                      (void *)init_stack,
                       arg0);
     if (error)
     {

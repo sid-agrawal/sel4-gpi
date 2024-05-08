@@ -113,9 +113,10 @@ int ads_client_testing(ads_client_context_t *conn, vka_t *vka,
  * @param loadee_ads the ADS to load the ELF into
  * @param loadee_pd the PD which is being set up with this ELF
  * @param image_name
+ * @param ret_entry_point the vaddr entry point of the loaded ELF
  * @return int 0 on success
  */
-int ads_client_load_elf(ads_client_context_t *loadee_ads, pd_client_context_t *loadee_pd, const char *image_name);
+int ads_client_load_elf(ads_client_context_t *loadee_ads, pd_client_context_t *loadee_pd, const char *image_name, void **ret_entry_point);
 
 /**
  * @brief sets up the stack in a given ADS so that the process corresponding to the given PD can be spawned
@@ -126,6 +127,7 @@ int ads_client_load_elf(ads_client_context_t *loadee_ads, pd_client_context_t *l
  * @param stack_size size of the stack (in pages)
  * @param argc the number of arguments to place on the stack
  * @param args the arguments
+ * @param ret_init_stack the position of the initial stack pointer after setup
  * @return int 0 on success
  */
-int ads_client_prepare_stack(ads_client_context_t *target_ads, pd_client_context_t *target_pd, void *stack_top, int stack_size, int argc, seL4_Word *args);
+int ads_client_prepare_stack(ads_client_context_t *target_ads, pd_client_context_t *target_pd, void *stack_top, int stack_size, int argc, seL4_Word *args, void **ret_init_stack);

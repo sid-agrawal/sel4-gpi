@@ -44,8 +44,8 @@ int cpu_component_client_disconnect(cpu_client_context_t *conn);
  * @return int 0 on success, -1 on failure.
  */
 int cpu_client_start(cpu_client_context_t *conn,
-                     sel4utils_thread_entry_fn entry_fn,
-                     seL4_Word initial_stack,
+                     void *entry_point,
+                     void *initial_stack,
                      seL4_Word arg0);
 /**
  * @brief Configure the cpu oject.

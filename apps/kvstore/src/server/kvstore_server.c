@@ -292,7 +292,7 @@ int kvstore_server_start_thread(seL4_CPtr *kvstore_ep)
     /* start the thread */
     // uintptr_t aligned_stack_pointer = sel4gpi_setup_thread_stack(stack_addr_in_new_cpu, 16);
     void *stack_top = stack_addr_in_new_cpu + stack_pages * SIZE_BITS_TO_BYTES(seL4_PageBits);
-    error = cpu_client_start(&new_cpu, (sel4utils_thread_entry_fn)&kvstore_server_main_thread, (seL4_Word)stack_top, temp_ep);
+    error = cpu_client_start(&new_cpu, &kvstore_server_main_thread, stack_top, temp_ep);
     CHECK_ERROR(error, "failed to start cpu for thread", KVSTORE_ERROR_UNKNOWN);
 
     // Wait for it to finish starting

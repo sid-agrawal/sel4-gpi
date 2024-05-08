@@ -33,8 +33,8 @@ typedef struct _cpu
  * @return int 0 on success, -1 on failure.
  */
 int cpu_start(cpu_t *cpu,
-              sel4utils_thread_entry_fn entry_point,
-              seL4_Word init_stack,
+              void *entry_point,
+              void *init_stack,
               seL4_Word arg0);
 
 /**

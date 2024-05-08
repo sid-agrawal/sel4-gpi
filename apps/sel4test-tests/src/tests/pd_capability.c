@@ -185,7 +185,8 @@ int test_new_process_osmosis_shmem(env_t env)
     error = cpu_component_client_connect(cpu_rde, slot, &cpu_os_cap);
     test_error_eq(error, 0);
 
-    error = ads_client_load_elf(&ads_os_cap, &pd_os_cap, "hello");
+    void *entry_point;
+    error = ads_client_load_elf(&ads_os_cap, &pd_os_cap, "hello", &entry_point);
     test_error_eq(error, 0);
 
     ads_client_context_t new_ads_rde = {.badged_server_ep_cspath.capPtr = sel4gpi_get_rde_by_ns_id(new_ads_id, GPICAP_TYPE_ADS)};
@@ -204,10 +205,15 @@ int test_new_process_osmosis_shmem(env_t env)
     test_error_eq(error, 0);
 
     seL4_Word arg0 = 1;
-    error = ads_client_prepare_stack(&ads_os_cap, &pd_os_cap, stack, 16, 1, &arg0);
+    void *init_stack;
+    error = ads_client_prepare_stack(&ads_os_cap, &pd_os_cap, stack, 16, 1, &arg0, &init_stack);
     test_error_eq(error, 0);
 
-    printf("here\n");
+    error = pd_client_share_rde(&pd_os_cap, GPICAP_TYPE_MO, NSID_DEFAULT);
+    test_error_eq(error, 0);
+
+    error = cpu_client_start(&cpu_os_cap, entry_point, init_stack, 0);
+    test_error_eq(error, 0);
 #if 0
     // Make a new AS, loads an image
     error = pd_client_load(&pd_os_cap, &ads_os_cap, &cpu_os_cap, "hello");
