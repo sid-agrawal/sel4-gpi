@@ -231,62 +231,19 @@ int ads_component_attach(uint64_t ads_id, uint64_t mo_id, void *vaddr, void **re
         return -1;
     }
 
-    uint32_t num_pages = mo_reg->mo.num_pages;
-    mo_frame_t *root_frame_caps = mo_reg->mo.frame_caps_in_root_task;
-
-    OSDB_PRINTF(ADS_DEBUG, ADSSERVS "attaching mo with id %lu, num pages: %d\n", mo_reg->mo.mo_obj_id, num_pages);
-
-    /* Make a copy of the frame caps for this new mapping */
-    attach_node_t *attach_node = malloc(sizeof(attach_node_t));
-    attach_node->mo_id = mo_id;
-    attach_node->frame_caps = malloc(sizeof(seL4_CPtr) * num_pages);
-    attach_node->type = SEL4UTILS_RES_TYPE_OTHER;
-    attach_node->n_pages = num_pages;
-    attach_node->next = client_data->ads.attach_nodes;
-    client_data->ads.attach_nodes = attach_node;
-
-    for (int i = 0; i < num_pages; i++)
-    {
-        cspacepath_t from_path, to_path;
-        vka_cspace_make_path(get_ads_component()->server_vka, root_frame_caps[i].cap, &from_path);
-
-        /* allocate a path for the copy*/
-        int error = vka_cspace_alloc_path(get_ads_component()->server_vka, &to_path);
-        if (error)
-        {
-            OSDB_PRINTF(ADS_DEBUG, ADSSERVS "main: Failed to allocate slot in root cspace, error: %d", error);
-            return -1;
-        }
-
-        /* copy the frame cap */
-        error = vka_cnode_copy(&to_path, &from_path, seL4_AllRights);
-        if (error)
-        {
-            OSDB_PRINTF(ADS_DEBUG, ADSSERVS "main: Failed to copy cap, error: %d", error);
-            return -1;
-        }
-
-        attach_node->frame_caps[i] = to_path.capPtr;
-
-        // void *frame_paddr = (void *)seL4_DebugCapPaddr(attach_node->frame_caps[i]);
-        // OSDB_PRINTF(ADS_DEBUG, ADSSERVS "paddr of frame to map: %p\n", frame_paddr);
-    }
-
-    error = ads_attach(&client_data->ads,
-                       get_ads_component()->server_vka,
-                       vaddr,
-                       num_pages,
-                       attach_node->frame_caps,
-                       ret_vaddr,
-                       client_data->ads.vspace);
+    /* Attach the MO */
+    error = ads_attach_mo(&client_data->ads,
+                          get_ads_component()->server_vka,
+                          vaddr,
+                          &mo_reg->mo,
+                          ret_vaddr);
 
     if (error)
     {
-        OSDB_PRINTF(ADS_DEBUG, ADSSERVS "main: Failed to attach at vaddr:%p num_pages: %u to client ID %ld.\n",
-                    vaddr, num_pages, ads_id);
+        OSDB_PRINTF(ADS_DEBUG, ADSSERVS "main: Failed to attach at vaddr:%p to client ID %ld.\n",
+                    vaddr, ads_id);
         return -1;
     }
-    attach_node->vaddr = *ret_vaddr;
 
     return error;
 }
@@ -347,49 +304,16 @@ static void handle_remove_req(seL4_Word sender_badge, seL4_MessageInfo_t old_tag
     }
     else
     {
-        // Default error if we do not find the corresponding memory region
-        error = 1;
-
-        // Find the attach node corresponding to this vaddr
-        attach_node_t *prev = NULL;
-        for (attach_node_t *node = client_data->ads.attach_nodes; node != NULL; node = node->next)
-        {
-            if (node->vaddr == vaddr)
-            {
-                error = 0;
-
-                // Remove the VMR
-                error = ads_rm(&client_data->ads,
-                               get_ads_component()->server_vka,
-                               vaddr,
-                               seL4_PageBits,
-                               node->n_pages);
-
-                // Remove the attach node
-                if (prev == NULL)
-                {
-                    client_data->ads.attach_nodes = node->next;
-                }
-                else
-                {
-                    prev->next = node->next;
-                }
-
-                free(node->frame_caps);
-                free(node);
-
-                break;
-            }
-
-            prev = node;
-        }
+        error = ads_rm(&client_data->ads, get_ads_component()->server_vka, vaddr);
     }
 
     if (error)
     {
-        OSDB_PRINTF(ADS_DEBUG, ADSSERVS "main: Failed to find memory region with vaddr %p.\n",
+        OSDB_PRINTF(ADS_DEBUG, ADSSERVS "main: Failed to remove pages from vaddr %p.\n",
                     vaddr);
     }
+
+    OSDB_PRINTF(ADS_DEBUG, ADSSERVS "removed pages from %p\n", vaddr);
 
     seL4_SetMR(ADSMSGREG_FUNC, ADS_FUNC_RM_ACK);
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(error, 0, 0, ADSMSGREG_RM_ACK_END);

@@ -98,17 +98,17 @@ error_exit:
 }
 
 int ads_attach(ads_t *ads,
-               vka_t *vka,
                void *vaddr,
                uint32_t num_pages,
+               size_t size_bits,
                seL4_CPtr *frame_caps,
-               void **ret_vaddr,
-               /*sel4utils_process_t*/ vspace_t *process_cookie)
+               uint32_t mo_id,
+               void **ret_vaddr)
 {
     int cacheable = 1;
     vspace_t *target = ads->vspace;
 
-    /* Reserver the range in the vspace */
+    /* Reserve the range in the vspace */
     seL4_CapRights_t rights = seL4_AllRights;
     reservation_t res;
     if (vaddr == NULL)
@@ -133,9 +133,7 @@ int ads_attach(ads_t *ads,
         return 1;
     }
 
-    /* Map the frame cap into the vspace */
-
-    size_t size_bits = seL4_PageBits;
+    /* Map the frame caps into the vspace */
 
 // (XXX) Arya: Not sure what the intention was with the process cookie
 // But setting it causes the processes to page fault once exiting
@@ -165,30 +163,125 @@ int ads_attach(ads_t *ads,
         return 1;
     }
     *ret_vaddr = vaddr;
+
+    /* Track the attachment */
+    attach_node_t *attach_node = malloc(sizeof(attach_node_t));
+    attach_node->mo_id = mo_id;
+    attach_node->frame_caps = malloc(sizeof(seL4_CPtr) * num_pages);
+    memcpy(attach_node->frame_caps, frame_caps, sizeof(seL4_CPtr) * num_pages);
+    attach_node->type = SEL4UTILS_RES_TYPE_OTHER;
+    attach_node->n_pages = num_pages;
+    attach_node->vaddr = *ret_vaddr;
+    attach_node->next = ads->attach_nodes;
+    ads->attach_nodes = attach_node;
+
     OSDB_PRINTF(ADS_DEBUG, ADSSERVS "attached %u pages at %p\n", num_pages, *ret_vaddr);
 
     return 0;
 }
 
-int ads_rm(ads_t *ads, vka_t *vka, void *vaddr, size_t size_bits, uint32_t num_pages)
+int ads_attach_mo(ads_t *ads,
+                  vka_t *vka,
+                  void *vaddr,
+                  mo_t *mo,
+                  void **ret_vaddr)
+{
+    int error;
+
+    uint32_t num_pages = mo->num_pages;
+    mo_frame_t *root_frame_caps = mo->frame_caps_in_root_task;
+
+    OSDB_PRINTF(ADS_DEBUG, ADSSERVS "attaching mo with id %lu, num pages: %d\n", mo->mo_obj_id, num_pages);
+
+    /* Make a copy of the frame caps for this new mapping */
+    seL4_CPtr frame_caps[num_pages];
+    for (int i = 0; i < num_pages; i++)
+    {
+        cspacepath_t from_path, to_path;
+        vka_cspace_make_path(vka, root_frame_caps[i].cap, &from_path);
+
+        /* allocate a path for the copy*/
+        int error = vka_cspace_alloc_path(vka, &to_path);
+        if (error)
+        {
+            OSDB_PRINTF(ADS_DEBUG, ADSSERVS "main: Failed to allocate slot in root cspace, error: %d", error);
+            return -1;
+        }
+
+        /* copy the frame cap */
+        error = vka_cnode_copy(&to_path, &from_path, seL4_AllRights);
+        if (error)
+        {
+            OSDB_PRINTF(ADS_DEBUG, ADSSERVS "main: Failed to copy cap, error: %d", error);
+            return -1;
+        }
+
+        frame_caps[i] = to_path.capPtr;
+
+        // void *frame_paddr = (void *)seL4_DebugCapPaddr(attach_node->frame_caps[i]);
+        // OSDB_PRINTF(ADS_DEBUG, ADSSERVS "paddr of frame to map: %p\n", frame_paddr);
+    }
+
+    /* Perform the attachment of the new frame caps */
+    error = ads_attach(ads,
+                       vaddr,
+                       num_pages,
+                       seL4_PageBits,
+                       frame_caps,
+                       mo->mo_obj_id,
+                       ret_vaddr);
+
+    return error;
+}
+
+int ads_rm(ads_t *ads, vka_t *vka, void *vaddr)
 {
     assert(vaddr != NULL);
 
-    int error;
+    int error = 0;
+    size_t size_bits = seL4_PageBits; // (XXX) Arya: Need to change if we ever have other page size
     vspace_t *target = ads->vspace;
 
-    // Free the reservation made by attach
-    sel4utils_free_reservation_by_vaddr(target, vaddr);
+    /* Find the attach node corresponding to this vaddr */
 
-    /* Unmap the pages from the vspace */
-    // (XXX) Arya: I believe we want VSPACE_PRESERVE here
-    // Otherwise, sel4utils will attempt to free the frame caps and their corresponding untyped
-    // Which we do not want, since the MO continues to exist
-    sel4utils_unmap_pages(target, vaddr, num_pages, size_bits, VSPACE_PRESERVE);
+    error = 1; // Default error if we do not find the corresponding memory region
 
-    OSDB_PRINTF(ADS_DEBUG, ADSSERVS "removed %u pages from %p\n", num_pages, vaddr);
+    attach_node_t *prev = NULL;
+    for (attach_node_t *node = ads->attach_nodes; node != NULL; node = node->next)
+    {
+        if (node->vaddr == vaddr)
+        {
+            error = 0;
 
-    return 0;
+            // Remove the reservation
+            sel4utils_free_reservation_by_vaddr(target, vaddr);
+
+            // Unmap the pages
+            // (XXX) Arya: I believe we want VSPACE_PRESERVE here
+            // Otherwise, sel4utils will attempt to free the frame caps and their corresponding untyped
+            // Which we do not want, since the MO continues to exist
+            sel4utils_unmap_pages(target, vaddr, node->n_pages, size_bits, VSPACE_PRESERVE);
+
+            // Remove the attach node
+            if (prev == NULL)
+            {
+                ads->attach_nodes = node->next;
+            }
+            else
+            {
+                prev->next = node->next;
+            }
+
+            free(node->frame_caps);
+            free(node);
+
+            break;
+        }
+
+        prev = node;
+    }
+
+    return error;
 }
 
 int ads_bind(ads_t *ads, vka_t *vka, seL4_CPtr *cpu_cap)

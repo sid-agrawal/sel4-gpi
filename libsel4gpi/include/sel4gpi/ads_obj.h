@@ -13,9 +13,10 @@
 #include <sel4utils/vspace_internal.h>
 #include <sel4utils/process.h>
 #include <sel4gpi/model_exporting.h>
+#include <sel4gpi/mo_obj.h>
 
 /**
- * Represents at attachment of a memory object
+ * Represents an attachment of a memory object
  * to an ADS
  *
  * Each attach of the same MO requires a copy
@@ -51,35 +52,53 @@ typedef struct _ads
 int ads_new(vspace_t *loader,
             vka_t *vka,
             ads_t *ret_ads);
+
 /**
  * @brief Attach a frame at a given address to the ads.
  *
  * @param ads ads object
- * @param vka vka object to allocate cspace slots and PT from
  * @param vaddr virtual address to attach the frame to
  * @param num_pages num of pages to attach
+ * @param size_bits size of the pages
  * @param frame_caps caps to the frames to attach
+ * @param mo_id (optional) ID of the MO these frames are from
+ * @param ret_vaddr returns vaddr attached at
  * @return int 0 on success, -1 on failure.
  */
 int ads_attach(ads_t *ads,
-               vka_t *vka,
                void *vaddr,
                uint32_t num_pages,
-               seL4_CPtr *frame_cap,
-               void **ret_vaddr,
-               /*sel4utils_process_t*/ vspace_t *process_cookie);
+               size_t size_bits,
+               seL4_CPtr *frame_caps,
+               uint32_t mo_id,
+               void **ret_vaddr);
 
 /**
- * @brief Remove frame(s) from the ads.
+ * @brief Attach an MO at a given address to the ads.
  *
  * @param ads ads object
  * @param vka vka object to allocate cspace slots and PT from
- * @param vaddr virtual address to remove the frame from
- * @param size size of the frame(s), in size bits
- * @param num_pages number of frames
+ * @param vaddr virtual address to attach the frame to
+ * @param mo MO to attach
+ * @param ret_vaddr returns vaddr attached at
  * @return int 0 on success, -1 on failure.
  */
-int ads_rm(ads_t *ads, vka_t *vka, void *vaddr, size_t size_bits, uint32_t num_pages);
+int ads_attach_mo(ads_t *ads,
+                  vka_t *vka,
+                  void *vaddr,
+                  mo_t *mo,
+                  void **ret_vaddr);
+
+/**
+ * @brief Remove a region from the ADS
+ * Requires that a region was attached using ads_attach at the given vaddr
+ *
+ * @param ads ads object
+ * @param vka vka object to allocate cspace slots and PT from
+ * @param vaddr virtual address at the beginning of the region to remove
+ * @return int 0 on success, -1 on failure.
+ */
+int ads_rm(ads_t *ads, vka_t *vka, void *vaddr);
 
 /**
  * @brief
