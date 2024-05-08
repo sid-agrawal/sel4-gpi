@@ -144,9 +144,6 @@ typedef struct _pd
     char allocator_mem_pool[PD_ALLOCATOR_STATIC_POOL_SIZE];
     vka_t pd_vka;
 
-    // PD start state
-    int pd_started; // whether or not the pd has been started
-
     // PD's accessible resources
     osmosis_pd_cap_t *has_access_to;
     uint64_t has_access_to_count;
@@ -157,12 +154,6 @@ typedef struct _pd
     uint64_t init_data_mo_id;
     osm_pd_init_data_t *init_data;       // RT vaddr of the init data
     osm_pd_init_data_t *init_data_in_PD; // PD's vaddr of the init data
-
-    // Special caps to send to all PDs
-    seL4_CPtr pd_cap_in_RT;
-    seL4_CPtr ads_cap_in_RT;
-    seL4_CPtr cpu_cap_in_RT;
-    uint32_t ads_obj_id;
 } pd_t;
 
 /*

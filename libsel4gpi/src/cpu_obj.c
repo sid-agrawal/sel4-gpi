@@ -40,7 +40,7 @@ int cpu_start(cpu_t *cpu, sel4utils_thread_entry_fn entry_point, seL4_Word init_
 
     /* Write context and registers */
     sel4utils_arch_init_local_context((void *)entry_point, (void *)arg0,
-                                      (void *)cpu->tls_base, (void *)cpu->thread.ipc_buffer_addr, stack_top, &regs);
+                                      (void *)cpu->tls_base, (void *)cpu->thread.ipc_buffer_addr, cpu->thread.stack_top, &regs);
 
     assert(error == 0);
 

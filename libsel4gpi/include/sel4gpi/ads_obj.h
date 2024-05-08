@@ -158,4 +158,33 @@ static seL4_CPtr assign_asid_pool(seL4_CPtr asid_pool, seL4_CPtr pd)
     return error;
 }
 
+/* ======================================= CONVENIENCE FUNCTIONS (NOT PART OF FRAMEWORK) ================================================= */
+
+/**
+ * @brief loads an ELF with image_name into the given vspace
+ *
+ * @param loadee_vspace
+ * @param proc the process struct that belongs to the PD obj
+ * @param image_name
+ * @return int
+ */
 int ads_load_elf(vspace_t *loadee_vspace, sel4utils_process_t *proc, char *image_name);
+
+/**
+ * @brief slightly modified version of the sel4utils process spawn function
+ * sets up the stack, but doesn't actually start the process
+ *
+ * @param process
+ * @param osm_init_data
+ * @param vka
+ * @param vspace
+ * @param argc
+ * @param argv
+ * @return int
+ */
+int ads_proc_setup(sel4utils_process_t *process,
+                   void *osm_init_data,
+                   vka_t *vka,
+                   vspace_t *vspace,
+                   int argc,
+                   char *argv[]);

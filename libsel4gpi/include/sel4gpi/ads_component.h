@@ -63,7 +63,10 @@ enum ads_component_funcs
     ADS_FUNC_GET_RR_ACK,
 
     ADS_FUNC_LOAD_ELF_REQ,
-    ADS_FUNC_LOAD_ELF_ACK
+    ADS_FUNC_LOAD_ELF_ACK,
+
+    ADS_FUNC_PROC_SETUP_REQ,
+    ADS_FUNC_PROC_SETUP_ACK
 };
 
 /* Designated purposes of each message register in the mini-protocol. */
@@ -137,6 +140,18 @@ enum ads_component_msgregs
     ADSMSGREG_LOAD_ELF_REQ_END,
 
     ADSMSGREG_LOAD_ELF_ACK_END = ADSMSGREG_LABEL0,
+
+    /* (XXX) For now,  we only pass upt to 4 args, which may need fixing */
+    ADSMSGREG_PROC_SETUP_REQ_ARGC = ADSMSGREG_LABEL0,
+    ADSMSGREG_PROC_SETUP_REQ_ARG0,
+    ADSMSGREG_PROC_SETUP_REQ_ARG1,
+    ADSMSGREG_PROC_SETUP_REQ_ARG2,
+    ADSMSGREG_PROC_SETUP_REQ_ARG3,
+    ADSMSGREG_PROC_SETUP_REQ_STACK,
+    ADSMSGREG_PROC_SETUP_REQ_STACK_SZ,
+    ADSMSGREG_PROC_SETUP_REQ_END,
+
+    ADSMSGREG_PROC_SETUP_ACK_END = ADSMSGREG_LABEL0
 };
 
 /* Per-client context maintained by the server. */

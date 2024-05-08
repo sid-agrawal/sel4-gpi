@@ -185,11 +185,11 @@ int test_new_process_osmosis_shmem(env_t env)
     error = cpu_component_client_connect(cpu_rde, slot, &cpu_os_cap);
     test_error_eq(error, 0);
 
-    error = ads_client_load_elf(&ads_os_cap, "hello");
+    error = ads_client_load_elf(&ads_os_cap, &pd_os_cap, "hello");
     test_error_eq(error, 0);
 
     ads_client_context_t new_ads_rde = {.badged_server_ep_cspath.capPtr = sel4gpi_get_rde_by_ns_id(new_ads_id, GPICAP_TYPE_ADS)};
-    void *stack = sel4gpi_get_vmr(&new_ads_rde, 16, NULL, SEL4UTILS_RES_TYPE_STACK, NULL);
+    void *stack = sel4gpi_new_sized_stack(&new_ads_rde, 16);
     test_assert(stack != NULL);
 
     void *heap = sel4gpi_get_vmr(&new_ads_rde, 100, (void *)PD_HEAP_LOC, SEL4UTILS_RES_TYPE_HEAP, NULL);
@@ -201,6 +201,10 @@ int test_new_process_osmosis_shmem(env_t env)
 
     seL4_Word cnode_guard = api_make_guard_skip_word(seL4_WordBits - TEST_PROCESS_CSPACE_SIZE_BITS);
     error = cpu_client_config(&cpu_os_cap, &ads_os_cap, &ipc_mo, &pd_os_cap, cnode_guard, seL4_CapNull, (seL4_Word)ipc_buf);
+    test_error_eq(error, 0);
+
+    seL4_Word arg0 = 1;
+    error = ads_client_prepare_stack(&ads_os_cap, &pd_os_cap, stack, 16, 1, &arg0);
     test_error_eq(error, 0);
 
     printf("here\n");

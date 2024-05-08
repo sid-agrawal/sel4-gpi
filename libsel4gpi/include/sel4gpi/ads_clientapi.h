@@ -104,11 +104,28 @@ int ads_client_testing(ads_client_context_t *conn, vka_t *vka,
                        ads_client_context_t *ads_conn_clone2,
                        ads_client_context_t *ads_conn_clone3);
 
+/* ======================================= CONVENIENCE FUNCTIONS (NOT PART OF FRAMEWORK) ================================================= */
+
 /**
  * @brief Load an image's ELF into the given ADS
+ * NOTE: this is not part of the OSmosis framework, it is here for convenience
  *
- * @param loadee_ads
+ * @param loadee_ads the ADS to load the ELF into
+ * @param loadee_pd the PD which is being set up with this ELF
  * @param image_name
- * @return int
+ * @return int 0 on success
  */
-int ads_client_load_elf(ads_client_context_t *loadee_ads, const char *image_name);
+int ads_client_load_elf(ads_client_context_t *loadee_ads, pd_client_context_t *loadee_pd, const char *image_name);
+
+/**
+ * @brief sets up the stack in a given ADS so that the process corresponding to the given PD can be spawned
+ *
+ * @param target_ads the ADS where the stack resides
+ * @param target_pd the process PD which will use this stack
+ * @param stack_top vaddr to the top of the stack in the target ADS
+ * @param stack_size size of the stack (in pages)
+ * @param argc the number of arguments to place on the stack
+ * @param args the arguments
+ * @return int 0 on success
+ */
+int ads_client_prepare_stack(ads_client_context_t *target_ads, pd_client_context_t *target_pd, void *stack_top, int stack_size, int argc, seL4_Word *args);

@@ -203,7 +203,6 @@ int pd_new(pd_t *pd,
 
     pd->has_access_to_count = 0;
     pd->has_access_to = NULL; // required for uthash initialization
-    pd->pd_started = false;
 
     // Create the MO for the PD's init data
     vka_object_t frame;
@@ -606,7 +605,6 @@ int pd_configure(pd_t *pd,
     assert(error == 0);
 
     // the ADS cap is both a resource manager and a resource
-    pd->ads_obj_id = target_ads->ads_obj_id;
     seL4_Word badge = gpi_new_badge(GPICAP_TYPE_ADS, 0x00, pd->pd_obj_id, target_ads->ads_obj_id, target_ads->ads_obj_id);
     error = pd_send_cap(pd, get_ads_component()->server_ep_obj.cptr, badge, &pd->init_data->ads_cap);
     ZF_LOGF_IFERR(error, "Failed to send ADS resource cap to PD");
@@ -619,12 +617,24 @@ int pd_configure(pd_t *pd,
     pd->init_data->binded_ads_ns_id = target_ads->ads_obj_id;
     target_cpu->binded_ads_id = target_ads->ads_obj_id;
 
-    // Send CPU cap as a resource
-    badge = gpi_new_badge(GPICAP_TYPE_CPU, 0x00, pd->pd_obj_id, NSID_DEFAULT, target_cpu->cpu_obj_id);
-    pd_send_cap(pd, get_cpu_component()->server_ep_obj.cptr, badge, &pd->init_data->cpu_cap);
-    ZF_LOGF_IFERR(error, "Failed to send CPU cap to PD");
+    // (XXX) Linh: Should a PD be given access to its own CPU obj?
+    // badge = gpi_new_badge(GPICAP_TYPE_CPU, 0x00, pd->pd_obj_id, NSID_DEFAULT, target_cpu->cpu_obj_id);
+    // pd_send_cap(pd, get_cpu_component()->server_ep_obj.cptr, badge, &pd->init_data->cpu_cap);
+    // ZF_LOGF_IFERR(error, "Failed to send CPU cap to PD");
 
     memcpy(&pd->proc.vspace, target_ads->vspace, sizeof(vspace_t));
+
+    // Send the PD's PD resource
+    badge = gpi_new_badge(GPICAP_TYPE_PD, 0x00, pd->pd_obj_id, NSID_DEFAULT, pd->pd_obj_id);
+    pd_send_cap(pd, get_pd_component()->server_ep_obj.cptr, badge, &pd->init_data->pd_cap);
+
+    // Map init data to the PD
+    error = ads_component_attach(pd->init_data->binded_ads_ns_id, pd->init_data_mo_id, NULL, (void **)&pd->init_data_in_PD);
+    if (error)
+    {
+        ZF_LOGF("Failed to attach init data to child PD");
+    }
+    OSDB_PRINTF(PD_DEBUG, PDSERVS "Mapped PD's init data at %p\n", (void *)pd->init_data_in_PD);
 
     OSDB_PRINTF(PD_DEBUG, PDSERVS "PD%d free_slot.start %ld\n", pd->pd_obj_id, pd->proc.cspace_next_free);
     return 0;
@@ -777,7 +787,7 @@ int pd_start(pd_t *pd,
     pd_send_cap(pd, pd_endpoint_in_root, badge, &pd->init_data->pd_cap);
 
     // Map init data to the PD
-    error = ads_component_attach(pd->ads_obj_id, pd->init_data_mo_id, NULL, (void **)&pd->init_data_in_PD);
+    error = ads_component_attach(pd->init_data->binded_ads_ns_id, pd->init_data_mo_id, NULL, (void **)&pd->init_data_in_PD);
     if (error)
     {
         ZF_LOGF("Failed to attach init data to child PD");
@@ -814,9 +824,6 @@ int pd_start(pd_t *pd,
                                           argv,
                                           1);
     ZF_LOGF_IF(error != 0, "Failed to start test process!");
-
-    pd->pd_started = true;
-
     return 0;
 }
 

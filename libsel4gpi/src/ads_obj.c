@@ -20,6 +20,8 @@
 #include <sel4gpi/gpi_server.h>
 #include <sel4gpi/model_exporting.h>
 #include <cpio/cpio.h>
+#include <sel4utils/helpers.h>
+#include <sel4runtime/auxv.h>
 
 #define MAX_MO_RR 10000
 
@@ -644,10 +646,11 @@ error_exit:
     return -1;
 }
 
+/* ======================================= CONVENIENCE FUNCTIONS (NOT PART OF FRAMEWORK) ================================================= */
+
 int ads_load_elf(vspace_t *loadee_vspace, sel4utils_process_t *proc, char *image_name)
 {
     int error;
-    OSDB_PRINTF(ADS_DEBUG, ADSSERVS "Loading %s's ELF\n", image_name);
     seL4_CPtr slot;
     vspace_t *server_vspace = get_ads_component()->server_vspace;
     vka_t *server_vka = get_ads_component()->server_vka;
@@ -689,4 +692,163 @@ error:
     {
         free(proc->elf_phdrs);
     }
+}
+
+int ads_proc_setup(sel4utils_process_t *process,
+                   void *osm_init_data,
+                   vka_t *vka,
+                   vspace_t *vspace,
+                   int argc,
+                   char *argv[])
+{
+    assert(vspace != NULL);
+    assert(&process->vspace != NULL);
+    /* define an envp and auxp */
+    int error;
+    int envc = 0;
+    char *envp[] = {};
+
+    uintptr_t initial_stack_pointer = (uintptr_t)process->thread.stack_top - sizeof(seL4_Word);
+
+    /* Copy the elf headers */
+    uintptr_t at_phdr;
+    error = sel4utils_stack_write(vspace, &process->vspace, vka, process->elf_phdrs,
+                                  process->num_elf_phdrs * sizeof(Elf_Phdr), &initial_stack_pointer);
+    if (error)
+    {
+        ZF_LOGE("%s: Failed to write stack\n", __func__);
+        return -1;
+    }
+    at_phdr = initial_stack_pointer;
+
+    /* initialize of aux vectors */
+    int auxc = 7;
+    Elf_auxv_t auxv[8];
+    auxv[0].a_type = AT_PAGESZ;
+    auxv[0].a_un.a_val = process->pagesz;
+    auxv[1].a_type = AT_PHDR;
+    auxv[1].a_un.a_val = at_phdr;
+    auxv[2].a_type = AT_PHNUM;
+    auxv[2].a_un.a_val = process->num_elf_phdrs;
+    auxv[3].a_type = AT_PHENT;
+    auxv[3].a_un.a_val = sizeof(Elf_Phdr);
+    auxv[4].a_type = AT_SEL4_IPC_BUFFER_PTR;
+    auxv[4].a_un.a_val = process->thread.ipc_buffer_addr;
+    auxv[5].a_type = AT_SEL4_TCB;
+    auxv[5].a_un.a_val = process->dest_tcb_cptr;
+
+    auxv[6].a_type = AT_OSM_INIT_DATA;
+    auxv[6].a_un.a_val = (uint64_t)osm_init_data;
+
+    if (process->sysinfo)
+    {
+        auxv[7].a_type = AT_SYSINFO;
+        auxv[7].a_un.a_val = process->sysinfo;
+        auxc++;
+    }
+
+    seL4_UserContext context = {0};
+
+    uintptr_t dest_argv[argc];
+    uintptr_t dest_envp[envc];
+
+    /* write all the strings into the stack */
+    /* Copy over the user arguments */
+    error = sel4utils_stack_copy_args(vspace, &process->vspace, vka, argc, argv, dest_argv, &initial_stack_pointer);
+    if (error)
+    {
+        ZF_LOGE("%s: Failed to write stack\n", __func__);
+        return -1;
+    }
+
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wstringop-overflow"
+    /* copy the environment */
+    error = sel4utils_stack_copy_args(vspace, &process->vspace, vka, envc, envp, dest_envp, &initial_stack_pointer);
+    if (error)
+    {
+        ZF_LOGE("%s: Failed to write stack\n", __func__);
+        return -1;
+    }
+#pragma GCC diagnostic pop
+
+    /* we need to make sure the stack is aligned to a double word boundary after we push on everything else
+     * below this point. First, work out how much we are going to push */
+    size_t to_push = 5 * sizeof(seL4_Word) +  /* constants */
+                     sizeof(auxv[0]) * auxc + /* aux */
+                     sizeof(dest_argv) +      /* args */
+                     sizeof(dest_envp);       /* env */
+    uintptr_t hypothetical_stack_pointer = initial_stack_pointer - to_push;
+    uintptr_t rounded_stack_pointer = ALIGN_DOWN(hypothetical_stack_pointer, STACK_CALL_ALIGNMENT);
+    ptrdiff_t stack_rounding = hypothetical_stack_pointer - rounded_stack_pointer;
+    initial_stack_pointer -= stack_rounding;
+
+    /* construct initial stack frame */
+    /* Null terminate aux */
+    error = sel4utils_stack_write_constant(vspace, &process->vspace, vka, 0, &initial_stack_pointer);
+    if (error)
+    {
+        ZF_LOGE("%s: Failed to write stack\n", __func__);
+        return -1;
+    }
+    error = sel4utils_stack_write_constant(vspace, &process->vspace, vka, 0, &initial_stack_pointer);
+    if (error)
+    {
+        ZF_LOGE("%s: Failed to write stack\n", __func__);
+        return -1;
+    }
+    /* write aux */
+    error = sel4utils_stack_write(vspace, &process->vspace, vka, auxv, sizeof(auxv[0]) * auxc, &initial_stack_pointer);
+    if (error)
+    {
+        ZF_LOGE("%s: Failed to write stack\n", __func__);
+        return -1;
+    }
+    /* Null terminate environment */
+    error = sel4utils_stack_write_constant(vspace, &process->vspace, vka, 0, &initial_stack_pointer);
+    if (error)
+    {
+        ZF_LOGE("%s: Failed to write stack\n", __func__);
+        return -1;
+    }
+    /* write environment */
+    error = sel4utils_stack_write(vspace, &process->vspace, vka, dest_envp, sizeof(dest_envp), &initial_stack_pointer);
+    if (error)
+    {
+        ZF_LOGE("%s: Failed to write stack\n", __func__);
+        return -1;
+    }
+    /* Null terminate arguments */
+    error = sel4utils_stack_write_constant(vspace, &process->vspace, vka, 0, &initial_stack_pointer);
+    if (error)
+    {
+        ZF_LOGE("%s: Failed to write stack\n", __func__);
+        return -1;
+    }
+    /* write arguments */
+    error = sel4utils_stack_write(vspace, &process->vspace, vka, dest_argv, sizeof(dest_argv), &initial_stack_pointer);
+    if (error)
+    {
+        ZF_LOGE("%s: Failed to write stack\n", __func__);
+        return -1;
+    }
+    /* Push argument count */
+    error = sel4utils_stack_write_constant(vspace, &process->vspace, vka, argc, &initial_stack_pointer);
+    if (error)
+    {
+        ZF_LOGE("%s: Failed to write stack\n", __func__);
+        return -1;
+    }
+
+    assert(initial_stack_pointer % (2 * sizeof(seL4_Word)) == 0);
+    error = sel4utils_arch_init_context(process->entry_point, (void *)initial_stack_pointer, &context);
+    if (error)
+    {
+        printf("sel4utils_arch_init_context error\n");
+        return error;
+    }
+
+    process->thread.initial_stack_pointer = (void *)initial_stack_pointer;
+
+    return 0;
 }

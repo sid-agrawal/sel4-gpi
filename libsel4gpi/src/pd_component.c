@@ -563,8 +563,8 @@ static void handle_next_slot_req(seL4_Word sender_badge,
                                  seL4_CPtr received_cap)
 {
 
-    OSDB_PRINTF(PD_DEBUG, PDSERVS "Got next slot request from client badge %lx.\n",
-                sender_badge);
+    // OSDB_PRINTF(PD_DEBUG, PDSERVS "Got next slot request from client badge %lx.\n",
+    //             sender_badge);
 
     pd_component_registry_entry_t *client_data = pd_component_registry_get_entry_by_badge(sender_badge);
     if (client_data == NULL)
@@ -849,7 +849,7 @@ static void handle_add_rde_req(seL4_Word sender_badge, seL4_MessageInfo_t old_ta
                     manager_id);
         error = 1;
     }
-    else if (get_client_id_from_badge(sender_badge) != target_data->pd.pd_obj_id && target_data->pd.pd_started)
+    else if (get_client_id_from_badge(sender_badge) != target_data->pd.pd_obj_id)
     {
         // (XXX) Arya: Allow a PD to update its own RDE mid-flight, but not another PD's
         OSDB_PRINTF(PD_DEBUG, PDSERVS "add_rde_req: cannot add new RDEs to another PD after it has been started\n");
@@ -919,11 +919,6 @@ static void handle_share_rde_req(seL4_Word sender_badge, seL4_MessageInfo_t old_
     {
         OSDB_PRINTF(PD_DEBUG, PDSERVS "share_rde_req: Failed to find resource manager ID %ld.\n",
                     rde->manager_id);
-        error = 1;
-    }
-    else if (target_data->pd.pd_started)
-    {
-        OSDB_PRINTF(PD_DEBUG, PDSERVS "share_rde_req: cannot add new RDEs after PD has been started\n");
         error = 1;
     }
     else

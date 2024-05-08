@@ -233,8 +233,6 @@ enum pd_component_msgregs
 typedef struct _pd_component_registry_entry
 {
     pd_t pd;
-    /* In our model each PD can have its own cspace. */
-    seL4_CNode cspace_root;
     seL4_CPtr raw_cap_in_root;
     struct _pd_component_registry_entry *next;
 

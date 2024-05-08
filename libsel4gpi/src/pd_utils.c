@@ -87,16 +87,16 @@ void *sel4gpi_get_vmr(ads_client_context_t *ads_rde, int num_pages, void *vaddr,
     /* allocate stack frame */
     seL4_CPtr slot;
     error = pd_client_next_slot(&self_pd, &slot);
-    assert(error == 0);
+    GOTO_IF_ERR(error);
 
     mo_client_context_t mo;
     error = mo_component_client_connect(mo_rde, slot, num_pages, &mo);
-    assert(error == 0);
+    GOTO_IF_ERR(error);
 
     /* attach stack to cpu */
     void *new_vaddr;
     error = ads_client_attach(ads_rde, vaddr, &mo, vmr_type, &new_vaddr);
-    assert(error == 0);
+    GOTO_IF_ERR(error);
 
     if (ret_mo)
     {
@@ -104,4 +104,24 @@ void *sel4gpi_get_vmr(ads_client_context_t *ads_rde, int num_pages, void *vaddr,
     }
 
     return new_vaddr;
+
+error:
+    printf("ERROR\n");
+    return NULL;
+}
+
+void *sel4gpi_new_sized_stack(ads_client_context_t *ads, size_t n_pages)
+{
+    int error = 0;
+
+    /* one extra page for the guard */
+    void *vaddr = sel4gpi_get_vmr(ads, n_pages, NULL, SEL4UTILS_RES_TYPE_STACK, NULL);
+    if (vaddr == NULL)
+    {
+        return NULL;
+    }
+
+    uintptr_t stack_top = (uintptr_t)vaddr + (n_pages * PAGE_SIZE_4K);
+
+    return (void *)stack_top;
 }

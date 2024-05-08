@@ -161,6 +161,8 @@ int ads_client_testing(ads_client_context_t *conn, vka_t *vka,
     return 0;
 }
 
+/* ======================================= CONVENIENCE FUNCTIONS (NOT PART OF FRAMEWORK) ================================================= */
+
 /**
  * @brief Load an image's ELF into the given ADS
  *
@@ -169,6 +171,7 @@ int ads_client_testing(ads_client_context_t *conn, vka_t *vka,
  * @return int
  */
 int ads_client_load_elf(ads_client_context_t *loadee_ads,
+                        pd_client_context_t *loadee_pd,
                         const char *image_name)
 {
     int error = 0;
@@ -181,11 +184,59 @@ int ads_client_load_elf(ads_client_context_t *loadee_ads,
     }
 
     seL4_SetMR(ADSMSGREG_LOAD_ELF_REQ_IMAGE, image_id);
+    seL4_SetCap(0, loadee_pd->badged_server_ep_cspath.capPtr);
 
-    seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0,
+    seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 1,
                                                   ADSMSGREG_LOAD_ELF_REQ_END);
 
     tag = seL4_Call(loadee_ads->badged_server_ep_cspath.capPtr, tag);
+    assert(seL4_MessageInfo_get_label(tag) == 0);
+    return 0;
+}
+
+int ads_client_prepare_stack(ads_client_context_t *target_ads,
+                             pd_client_context_t *target_pd,
+                             void *stack_top,
+                             int stack_size,
+                             int argc,
+                             seL4_Word *args)
+{
+    int error = 0;
+    seL4_SetMR(ADSMSGREG_FUNC, ADS_FUNC_PROC_SETUP_REQ);
+    seL4_SetCap(0, target_pd->badged_server_ep_cspath.capPtr);
+
+    seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 1,
+                                                  ADSMSGREG_PROC_SETUP_REQ_END);
+
+    seL4_SetMR(ADSMSGREG_PROC_SETUP_REQ_ARGC, argc);
+
+    OSDB_PRINTF(ADS_DEBUG, ADSSERVC "Setting up process with args: [");
+    for (int i = 0; i < argc; i++)
+    {
+        OSDB_PRINTF(ADS_DEBUG, "%ld, ", args[i]);
+
+        switch (i)
+        {
+        case 0:
+            seL4_SetMR(ADSMSGREG_PROC_SETUP_REQ_ARG0, args[i]);
+            break;
+        case 1:
+            seL4_SetMR(ADSMSGREG_PROC_SETUP_REQ_ARG1, args[i]);
+            break;
+        case 2:
+            seL4_SetMR(ADSMSGREG_PROC_SETUP_REQ_ARG2, args[i]);
+            break;
+        case 3:
+            seL4_SetMR(ADSMSGREG_PROC_SETUP_REQ_ARG3, args[i]);
+            break;
+        }
+    }
+    OSDB_PRINTF(ADS_DEBUG, "]\n");
+
+    seL4_SetMR(ADSMSGREG_PROC_SETUP_REQ_STACK, (seL4_Word)stack_top);
+    seL4_SetMR(ADSMSGREG_PROC_SETUP_REQ_STACK_SZ, stack_size);
+
+    tag = seL4_Call(target_ads->badged_server_ep_cspath.capPtr, tag);
     assert(seL4_MessageInfo_get_label(tag) == 0);
     return 0;
 }

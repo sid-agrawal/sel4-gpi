@@ -271,8 +271,6 @@ static void handle_config_req(seL4_Word sender_badge,
     seL4_CPtr ipc_buf_frame = ipc_mo_data == NULL ? seL4_CapNull : ipc_mo_data->mo.frame_caps_in_root_task[0].cap;
 
     seL4_CNode cspace_root = pd_data->pd.proc.cspace.cptr;
-    seL4_Word type = seL4_DebugCapIdentify(cspace_root);
-    printf("type: %ld\n", type);
 
     error = cpu_config_vspace(&client_data->cpu,
                               get_cpu_component()->server_vka,

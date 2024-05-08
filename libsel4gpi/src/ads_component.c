@@ -233,6 +233,10 @@ int ads_component_attach(uint64_t ads_id, uint64_t mo_id, void *vaddr, void **re
     }
     sel4utils_reservation_type_t vmr_type = (sel4utils_reservation_type_t)seL4_GetMR(ADSMSGREG_ATTACH_REQ_TYPE);
     /* Attach the MO */
+    if (vmr_type < SEL4UTILS_RES_TYPE_ELF || vmr_type >= SEL4UTILS_RES_TYPE_MAX)
+    {
+        vmr_type = SEL4UTILS_RES_TYPE_OTHER;
+    }
     error = ads_attach_mo(&client_data->ads,
                           get_ads_component()->server_vka,
                           vaddr,
@@ -497,14 +501,26 @@ void ads_handle_allocation_request(seL4_MessageInfo_t tag, seL4_Word sender_badg
 void handle_load_elf_request(seL4_Word sender_badge, seL4_MessageInfo_t old_tag)
 {
     int error;
+    assert(seL4_MessageInfo_get_capsUnwrapped(old_tag) == 1);
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0, ADSMSGREG_LOAD_ELF_ACK_END);
 
     ads_component_registry_entry_t *target_ads = ads_component_registry_get_entry_by_badge(sender_badge);
-    assert(target_ads != NULL);
+    if (!target_ads)
+    {
+        OSDB_PRINTF(ADS_DEBUG, ADSSERVS "Couldn't find associated ADS data for: \n");
+        badge_print(sender_badge);
+        tag = seL4_MessageInfo_set_label(tag, 1);
+        return reply(tag);
+    }
 
-    // printf("target PD")
-    pd_component_registry_entry_t *target_pd = pd_component_registry_get_entry_by_id(get_client_id_from_badge(sender_badge));
-    assert(target_pd != NULL);
+    pd_component_registry_entry_t *target_pd = pd_component_registry_get_entry_by_id(get_object_id_from_badge(seL4_GetBadge(0)));
+    if (!target_pd)
+    {
+        OSDB_PRINTF(ADS_DEBUG, ADSSERVS "Couldn't find associated PD data for: \n");
+        badge_print(seL4_GetBadge(0));
+        tag = seL4_MessageInfo_set_label(tag, 1);
+        return reply(tag);
+    }
 
     int image_id = (int)seL4_GetMR(ADSMSGREG_LOAD_ELF_REQ_IMAGE);
     if (image_id < 0 || image_id > PD_N_IMAGES)
@@ -514,12 +530,91 @@ void handle_load_elf_request(seL4_Word sender_badge, seL4_MessageInfo_t old_tag)
         return reply(tag);
     }
 
+    OSDB_PRINTF(ADS_DEBUG, ADSSERVS "Loading %s's ELF into PD %ld\n", pd_images[image_id], target_pd->pd.pd_obj_id);
     error = ads_load_elf(target_ads->ads.vspace, &target_pd->pd.proc, pd_images[image_id]);
     if (error)
     {
         tag = seL4_MessageInfo_set_label(tag, 1);
     }
 
+    seL4_SetMR(ADSMSGREG_FUNC, ADS_FUNC_LOAD_ELF_ACK);
+    return reply(tag);
+}
+
+void handle_proc_setup_req(seL4_Word sender_badge, seL4_MessageInfo_t old_tag)
+{
+    int error;
+    assert(seL4_MessageInfo_get_capsUnwrapped(old_tag) == 1);
+    seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0, ADSMSGREG_PROC_SETUP_ACK_END);
+
+    ads_component_registry_entry_t *target_ads = ads_component_registry_get_entry_by_badge(sender_badge);
+    if (!target_ads)
+    {
+        OSDB_PRINTF(ADS_DEBUG, ADSSERVS "Couldn't find associated ADS data for: \n");
+        badge_print(sender_badge);
+        tag = seL4_MessageInfo_set_label(tag, 1);
+        return reply(tag);
+    }
+
+    pd_component_registry_entry_t *target_pd = pd_component_registry_get_entry_by_id(get_object_id_from_badge(seL4_GetBadge(0)));
+    if (!target_pd)
+    {
+        OSDB_PRINTF(ADS_DEBUG, ADSSERVS "Couldn't find associated PD data for: \n");
+        badge_print(seL4_GetBadge(0));
+        tag = seL4_MessageInfo_set_label(tag, 1);
+        return reply(tag);
+    }
+
+    /* parse the arguments */
+    int argc = seL4_GetMR(ADSMSGREG_PROC_SETUP_REQ_ARGC);
+    seL4_Word args[argc];
+
+    for (int i = 0; i < argc; i++)
+    {
+        switch (i)
+        {
+        case 0:
+            args[i] = seL4_GetMR(ADSMSGREG_PROC_SETUP_REQ_ARG0);
+            break;
+        case 1:
+            args[i] = seL4_GetMR(ADSMSGREG_PROC_SETUP_REQ_ARG1);
+            break;
+        case 2:
+            args[i] = seL4_GetMR(ADSMSGREG_PROC_SETUP_REQ_ARG2);
+            break;
+        case 3:
+            args[i] = seL4_GetMR(ADSMSGREG_PROC_SETUP_REQ_ARG3);
+            break;
+        }
+    }
+
+    char string_args[argc][WORD_STRING_SIZE];
+    char *argv[argc];
+
+    for (int i = 0; i < argc; i++)
+    {
+        argv[i] = string_args[i];
+        snprintf(argv[i], WORD_STRING_SIZE, "%" PRIuPTR "", args[i]);
+    }
+
+    target_pd->pd.proc.thread.stack_top = (void *)seL4_GetMR(ADSMSGREG_PROC_SETUP_REQ_STACK);
+    target_pd->pd.proc.thread.stack_size = seL4_GetMR(ADSMSGREG_PROC_SETUP_REQ_STACK_SZ);
+
+    error = ads_prepare_proc_stack(&target_pd->pd.proc,
+                                   (void *)target_pd->pd.init_data_in_PD,
+                                   get_gpi_server()->server_vka,
+                                   get_pd_component()->server_vspace,
+                                   argc,
+                                   argv);
+
+    if (error)
+    {
+        OSDB_PRINTF(ADS_DEBUG, ADSSERVS "Couldn't write into process's stack\n");
+        tag = seL4_MessageInfo_set_label(tag, 1);
+        return reply(tag);
+    }
+
+    seL4_SetMR(ADSMSGREG_FUNC, ADS_FUNC_PROC_SETUP_ACK);
     return reply(tag);
 }
 
@@ -549,6 +644,9 @@ void ads_component_handle(seL4_MessageInfo_t tag,
         break;
     case ADS_FUNC_LOAD_ELF_REQ:
         handle_load_elf_request(sender_badge, tag);
+        break;
+    case ADS_FUNC_PROC_SETUP_REQ:
+        handle_proc_setup_req(sender_badge, tag);
         break;
     default:
         gpi_panic(ADSSERVS "Unknown func type.", (seL4_Word)func);
