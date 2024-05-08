@@ -151,6 +151,10 @@ int test_new_process_osmosis_shmem(env_t env)
     ccnt_t start;
     SEL4BENCH_READ_CCNT(start);
 
+    seL4_Word arg0 = 1;
+    error = sel4gpi_spawn_process("hello", 16, 100, 1, &arg0);
+    test_error_eq(error, 0);
+#if 0
     pd_client_context_t test_pd_os_cap;
     test_pd_os_cap.badged_server_ep_cspath.capPtr = sel4gpi_get_pd_cap();
 
@@ -214,7 +218,7 @@ int test_new_process_osmosis_shmem(env_t env)
 
     error = cpu_client_start(&cpu_os_cap, entry_point, init_stack, 0);
     test_error_eq(error, 0);
-#if 0
+
     // Make a new AS, loads an image
     error = pd_client_load(&pd_os_cap, &ads_os_cap, &cpu_os_cap, "hello");
     test_error_eq(error, 0);

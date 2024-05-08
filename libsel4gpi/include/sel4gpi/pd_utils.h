@@ -10,6 +10,7 @@
 #include <sel4/types.h>
 
 #define PD_HEAP_LOC 0x5000000000
+
 #define GOTO_IF_ERR(err) \
     do                   \
     {                    \
@@ -84,3 +85,5 @@ void *sel4gpi_get_vmr(ads_client_context_t *ads_rde, int num_pages, void *vaddr,
  * @return the top of the stack in the given ADS (NOT the current one)
  */
 void *sel4gpi_new_sized_stack(ads_client_context_t *ads, size_t n_pages);
+
+int sel4gpi_spawn_process(const char *image_name, int stack_pages, int heap_pages, int argc, seL4_Word *args);

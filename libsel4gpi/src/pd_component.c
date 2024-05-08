@@ -533,7 +533,7 @@ static void handle_load_req(seL4_Word sender_badge,
 
     int image_id = seL4_GetMR(PDMSGREG_LOAD_FUNC_IMAGE);
     const char *image_path = pd_images[image_id];
-    uint64_t heap_size = pd_image_heap_size[image_id];
+    // uint64_t heap_size = pd_image_heap_size[image_id];
 
     seL4_CNode cspace_root = received_cap;
     // error = pd_load_image(&client_data->pd,
