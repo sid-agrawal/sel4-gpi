@@ -125,46 +125,21 @@ static int spawn_pd_native(env_t env)
 static int spawn_pd_osm(env_t env)
 {
     int error;
-    seL4_CPtr ads_rde = sel4gpi_get_rde(GPICAP_TYPE_ADS);
-    seL4_CPtr pd_rde = sel4gpi_get_rde(GPICAP_TYPE_PD);
-    seL4_CPtr cpu_rde = sel4gpi_get_rde(GPICAP_TYPE_CPU);
 
-    seL4_CPtr slot;
-    error = vka_cspace_alloc(&env->vka, &slot);
+    sel4gpi_process_t proc;
+    error = sel4gpi_configure_process("hello_benchmark", DEFAULT_STACK_PAGES, DEFAULT_HEAP_PAGES, &proc);
     test_error_eq(error, 0);
-
-    error = pd_component_client_connect(pd_rde, slot, &osm_pd);
-    test_error_eq(error, 0);
-
-    /* Create a new ADS Cap, which will be in the context of a PD and image */
-    error = vka_cspace_alloc(&env->vka, &slot);
-    test_error_eq(error, 0);
-
-    error = ads_component_client_connect(ads_rde, slot, &osm_pd_ads, &osm_pd_ads_ns_id);
-    test_error_eq(error, 0);
-
-    error = vka_cspace_alloc(&env->vka, &slot);
-    test_error_eq(error, 0);
-
-    cpu_client_context_t cpu_os_cap;
-    error = cpu_component_client_connect(cpu_rde, slot, &cpu_os_cap);
-    test_error_eq(error, 0);
-
-    // Make a new AS, loads an image
-    error = pd_client_load(&osm_pd, &osm_pd_ads, &cpu_os_cap, "hello_benchmark");
-    test_error_eq(error, 0);
-    // printf("Loaded hello\n");
 
     error = vka_alloc_endpoint(&env->vka, &hello_ep);
     test_error_eq(error, 0);
 
+    seL4_CPtr slot;
     error = pd_client_send_cap(&osm_pd, hello_ep.cptr, &slot);
     test_error_eq(error, 0);
     // Start the CPU.
     seL4_Word args[2] = {slot, 0};
-    error = pd_client_start(&osm_pd,
-                            2,
-                            args); // with this arg.
+
+    error = sel4gpi_spawn_process(&proc, 2, args);
     test_error_eq(error, 0);
 
     return 0;
@@ -327,7 +302,7 @@ static int benchmark_ads_create(env_t env, bool native)
         test_error_eq(error, 0);
 
         ads_client_context_t new_ads;
-        error = ads_component_client_connect(ads_rde, slot, &new_ads, NULL);
+        error = ads_component_client_connect(ads_rde, slot, &new_ads);
         SEL4BENCH_READ_CCNT(ads_create_end);
     }
 
@@ -417,7 +392,7 @@ static int benchmark_cpu(env_t env, bool native)
         ads_client_context_t new_ads;
         error = vka_cspace_alloc(&env->vka, &slot);
         test_error_eq(error, 0);
-        error = ads_component_client_connect(sel4gpi_get_rde(GPICAP_TYPE_ADS), slot, &new_ads, NULL);
+        error = ads_component_client_connect(sel4gpi_get_rde(GPICAP_TYPE_ADS), slot, &new_ads);
         test_error_eq(error, 0);
 
         SEL4BENCH_READ_CCNT(cpu_bind_start);

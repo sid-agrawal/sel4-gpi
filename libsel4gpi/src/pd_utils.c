@@ -126,7 +126,7 @@ void *sel4gpi_new_sized_stack(ads_client_context_t *ads, size_t n_pages)
     return (void *)stack_top;
 }
 
-int sel4gpi_spawn_process(const char *image_name, int stack_pages, int heap_pages, int argc, seL4_Word *args)
+int sel4gpi_configure_process(const char *image_name, int stack_pages, int heap_pages, sel4gpi_process_t *ret_proc)
 {
     int error;
     pd_client_context_t self_pd_cap;
@@ -149,8 +149,7 @@ int sel4gpi_spawn_process(const char *image_name, int stack_pages, int heap_page
     error = pd_client_next_slot(&self_pd_cap, &slot);
     GOTO_IF_ERR(error);
     ads_client_context_t new_ads;
-    seL4_Word new_ads_id;
-    error = ads_component_client_connect(ads_rde, slot, &new_ads, &new_ads_id);
+    error = ads_component_client_connect(ads_rde, slot, &new_ads);
     GOTO_IF_ERR(error);
 
     /* new CPU */
@@ -164,7 +163,7 @@ int sel4gpi_spawn_process(const char *image_name, int stack_pages, int heap_page
     error = ads_client_load_elf(&new_ads, &new_pd, image_name, &entry_point);
     GOTO_IF_ERR(error);
 
-    ads_client_context_t new_ads_rde = {.badged_server_ep_cspath.capPtr = sel4gpi_get_rde_by_ns_id(new_ads_id, GPICAP_TYPE_ADS)};
+    ads_client_context_t new_ads_rde = {.badged_server_ep_cspath.capPtr = sel4gpi_get_rde_by_ns_id(new_ads.id, GPICAP_TYPE_ADS)};
     void *stack = sel4gpi_new_sized_stack(&new_ads_rde, stack_pages);
     test_assert(stack != NULL);
 
@@ -179,19 +178,40 @@ int sel4gpi_spawn_process(const char *image_name, int stack_pages, int heap_page
     error = cpu_client_config(&new_cpu, &new_ads, &ipc_mo, &new_pd, cnode_guard, seL4_CapNull, (seL4_Word)ipc_buf);
     GOTO_IF_ERR(error);
 
-    void *init_stack;
-    error = ads_client_prepare_stack(&new_ads, &new_pd, stack, stack_pages, argc, args, &init_stack);
-    GOTO_IF_ERR(error);
-
     error = pd_client_share_rde(&new_pd, GPICAP_TYPE_MO, NSID_DEFAULT);
     GOTO_IF_ERR(error);
 
-    error = cpu_client_start(&new_cpu, entry_point, init_stack, 0);
-    GOTO_IF_ERR(error);
+    // error = cpu_client_start(&new_cpu, entry_point, init_stack, 0);
+    // GOTO_IF_ERR(error);
+
+    if (ret_proc)
+    {
+        ret_proc->pd = new_pd;
+        ret_proc->ads = new_ads;
+        ret_proc->cpu = new_cpu;
+        ret_proc->entry_point = entry_point;
+        ret_proc->stack = stack;
+        ret_proc->stack_pages = stack_pages;
+    }
 
     return 0;
 error:
     // TODO cleanup allocated objects
     printf("Error occured during process spawn\n");
     return -1;
+}
+
+int sel4gpi_spawn_process(sel4gpi_process_t *proc, int argc, seL4_Word *args)
+{
+    int error;
+    void *init_stack;
+    error = ads_client_prepare_stack(&proc->ads, &proc->pd, proc->stack, proc->stack_pages, argc, args, &init_stack);
+    GOTO_IF_ERR(error);
+
+    error = cpu_client_start(&proc->cpu, proc->entry_point, init_stack, 0);
+    GOTO_IF_ERR(error);
+
+    return 0;
+error:
+    return error;
 }

@@ -44,18 +44,6 @@ int pd_component_client_connect(seL4_CPtr server_ep_cap,
 int pd_client_disconnect(pd_client_context_t *conn);
 
 /**
- * @brief
- *
- * @param conn client connection object
- * @param image elf image to load in the PD
- * @return int 0 on success, -1 on failure.
- */
-int pd_client_load(pd_client_context_t *pd_os_cap,
-                   ads_client_context_t *ads_os_cap,
-                   cpu_client_context_t *cpu_os_cap,
-                   const char *image);
-
-/**
  * @brief Send a cap to PD and gets the slot number in the PD.
  *
  * @param conn client connection object
@@ -117,16 +105,6 @@ int pd_client_badge_ep(pd_client_context_t *conn,
  */
 int pd_client_dump(pd_client_context_t *conn,
                    char *buf, size_t size);
-
-/**
- * @brief Start the pd oject.
- *
- * @param conn client connection object
- * @param argc number of args to pass to pd
- * @param args word args to pass to pd, length >= argc
- * @return int 0 on success, -1 on failure.
- */
-int pd_client_start(pd_client_context_t *conn, int argc, seL4_Word *args);
 
 /**
  * @brief Share an RDE with another PD

@@ -65,50 +65,25 @@ int start_resource_server_pd(uint64_t rde_id,
     error = pd_client_alloc_ep(&current_pd, &ep);
     CHECK_ERROR(error, "failed to allocate endpoint");
 
-    // Create a new PD
-    pd_client_context_t new_pd;
-    seL4_CPtr free_slot;
-    error = pd_client_next_slot(&current_pd, &free_slot);
-    CHECK_ERROR(error, "failed to allocate slot");
-    error = pd_component_client_connect(sel4gpi_get_rde(GPICAP_TYPE_PD), free_slot, &new_pd);
-    CHECK_ERROR(error, "failed to create new pd");
+    sel4gpi_process_t proc;
+    error = sel4gpi_configure_process(image_name, DEFAULT_STACK_PAGES, DEFAULT_HEAP_PAGES, &proc);
+    CHECK_ERROR(error, "failed to configure process");
 
     if (server_pd_cap)
     {
-        *server_pd_cap = new_pd.badged_server_ep_cspath.capPtr;
+        *server_pd_cap = proc.pd.badged_server_ep_cspath.capPtr;
     }
-
-    // Create a new ADS Cap, which will be in the context of a PD and image
-    ads_client_context_t new_ads;
-    error = pd_client_next_slot(&current_pd, &free_slot);
-    CHECK_ERROR(error, "failed to allocate slot");
-    error = ads_component_client_connect(sel4gpi_get_rde(GPICAP_TYPE_ADS), free_slot, &new_ads, NULL);
-    CHECK_ERROR(error, "failed to create new ads");
-
-    error = pd_client_next_slot(&current_pd, &free_slot);
-    CHECK_ERROR(error, "failed to allocate slot");
-    cpu_client_context_t new_cpu;
-    error = cpu_component_client_connect(sel4gpi_get_rde(GPICAP_TYPE_CPU), free_slot, &new_cpu);
-    CHECK_ERROR(error, "failed to create new cpu");
-
-    // Make a new AS, loads an image
-    error = pd_client_load(&new_pd, &new_ads, &new_cpu, image_name);
-    CHECK_ERROR(error, "failed to load pd image");
 
     // Copy the parent ep to the new PD
     seL4_Word parent_ep_slot;
-    error = pd_client_send_cap(&new_pd, ep, &parent_ep_slot);
+    error = pd_client_send_cap(&proc.pd, ep, &parent_ep_slot);
     CHECK_ERROR(error, "failed to send parent's ep cap to pd");
-
-    // Share the MO RDE (requires that the current process has one)
-    error = pd_client_share_rde(&new_pd, GPICAP_TYPE_MO, NSID_DEFAULT);
-    CHECK_ERROR(error, "failed to share parent's MO RDE with pd");
 
     // Copy the RDE to the new PD
     if (rde_pd_cap > 0)
     {
         RESOURCE_SERVER_PRINTF("SENDING RDE\n");
-        error = pd_client_add_rde(&new_pd, rde_pd_cap, rde_id, NSID_DEFAULT);
+        error = pd_client_add_rde(&proc.pd, rde_pd_cap, rde_id, NSID_DEFAULT);
         CHECK_ERROR(error, "failed to send rde to pd");
     }
 
@@ -118,7 +93,7 @@ int start_resource_server_pd(uint64_t rde_id,
     args[0] = parent_ep_slot;
 
     // Start it
-    error = pd_client_start(&new_pd, argc, args);
+    error = sel4gpi_spawn_process(&proc, argc, args);
     CHECK_ERROR(error, "failed to start pd");
 
     // Wait for it to finish starting

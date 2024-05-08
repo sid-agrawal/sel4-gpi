@@ -496,68 +496,6 @@ static void handle_disconnect_req(seL4_Word sender_badge,
     return reply(tag);
 }
 
-static void handle_load_req(seL4_Word sender_badge,
-                            seL4_MessageInfo_t old_tag,
-                            seL4_CPtr received_cap)
-{
-    // Find the client - like start
-    OSDB_PRINTF(PD_DEBUG, PDSERVS "-----main: Got pd-load request\n");
-    badge_print(sender_badge);
-    assert(GPICAP_TYPE_PD == get_cap_type_from_badge(sender_badge));
-
-    // OSDB_PRINTF(PD_DEBUG, PDSERVS " received_cap: ");
-    //  debug_cap_identify("", received_cap);
-
-    assert(seL4_MessageInfo_get_label(old_tag) == 0);
-
-    int error = 0;
-
-    /* Find the client */
-    pd_component_registry_entry_t *client_data = pd_component_registry_get_entry_by_badge(sender_badge);
-    if (client_data == NULL)
-    {
-        OSDB_PRINTF(PD_DEBUG, PDSERVS "main: Failed to find client badge %lx.\n",
-                    sender_badge);
-        assert(0);
-        return;
-    }
-
-    seL4_Word badge = seL4_GetBadge(0);
-
-    ads_component_registry_entry_t *ads_data = ads_component_registry_get_entry_by_badge(badge);
-    assert(ads_data != NULL);
-
-    badge = seL4_GetBadge(1);
-    cpu_component_registry_entry_t *cpu_data = cpu_component_registry_get_entry_by_badge(badge);
-    assert(cpu_data != NULL);
-
-    int image_id = seL4_GetMR(PDMSGREG_LOAD_FUNC_IMAGE);
-    const char *image_path = pd_images[image_id];
-    // uint64_t heap_size = pd_image_heap_size[image_id];
-
-    seL4_CNode cspace_root = received_cap;
-    // error = pd_load_image(&client_data->pd,
-    //                       get_pd_component()->server_vka,
-    //                       get_pd_component()->server_simple,
-    //                       image_path,
-    //                       get_pd_component()->server_vspace,
-    //                       &ads_data->ads,
-    //                       &cpu_data->cpu,
-    //                       heap_size);
-    if (error)
-    {
-        OSDB_PRINTF(PD_DEBUG, PDSERVS "main: Failed to config from client badge:");
-        badge_print(sender_badge);
-        assert(0);
-        return;
-    }
-    OSDB_PRINTF(PD_DEBUG, PDSERVS "main: config done.\n");
-
-    seL4_SetMR(PDMSGREG_FUNC, PD_FUNC_LOAD_ACK);
-    seL4_MessageInfo_t tag = seL4_MessageInfo_new(error, 0, 0, PDMSGREG_LOAD_ACK_END);
-    return reply(tag);
-}
-
 static void handle_next_slot_req(seL4_Word sender_badge,
                                  seL4_MessageInfo_t old_tag,
                                  seL4_CPtr received_cap)
@@ -755,68 +693,6 @@ static void handle_dump_cap_req(seL4_Word sender_badge, seL4_MessageInfo_t old_t
     return reply(tag);
 }
 
-static void handle_start_req(seL4_Word sender_badge, seL4_MessageInfo_t old_tag, seL4_CPtr received_cap)
-{
-    OSDB_PRINTF(PD_DEBUG, PDSERVS "main: Got start request from client badge %lx.\n",
-                sender_badge);
-
-    int error;
-
-    /* parse the arguments */
-    int argc = seL4_GetMR(PDMSGREG_START_ARGC);
-    seL4_Word args[argc];
-
-    for (int i = 0; i < argc; i++)
-    {
-        switch (i)
-        {
-        case 0:
-            args[i] = seL4_GetMR(PDMSGREG_START_ARG0);
-            break;
-        case 1:
-            args[i] = seL4_GetMR(PDMSGREG_START_ARG1);
-            break;
-        case 2:
-            args[i] = seL4_GetMR(PDMSGREG_START_ARG2);
-            break;
-        case 3:
-            args[i] = seL4_GetMR(PDMSGREG_START_ARG3);
-            break;
-        }
-    }
-
-    /* Find the client */
-    pd_component_registry_entry_t *client_data = pd_component_registry_get_entry_by_badge(sender_badge);
-    if (client_data == NULL)
-    {
-        OSDB_PRINTF(PD_DEBUG, PDSERVS "main: Failed to find client badge %lx.\n",
-                    sender_badge);
-        return;
-    }
-    OSDB_PRINTF(PD_DEBUG, PDSERVS "main: found client_data %p.\n", client_data);
-    for (int i = 0; i < 5; i++)
-    {
-        OSDB_PRINTF(PD_DEBUG, PDSERVS "MR[%d] = %lx\n", i, seL4_GetMR(i));
-    }
-
-    error = pd_start(&client_data->pd,
-                     get_pd_component()->server_vka,
-                     client_data->pd.pd_cap_in_RT,
-                     get_pd_component()->server_vspace,
-                     argc,
-                     args);
-
-    if (error)
-    {
-        OSDB_PRINTF(PD_DEBUG, PDSERVS "main: Failed to start PD.\n");
-        return;
-    }
-
-    seL4_SetMR(PDMSGREG_FUNC, PD_FUNC_START_ACK);
-    seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0, PDMSGREG_START_ACK_END);
-    return reply(tag);
-}
-
 static void handle_add_rde_req(seL4_Word sender_badge, seL4_MessageInfo_t old_tag, seL4_CPtr received_cap)
 {
     int error;
@@ -847,12 +723,6 @@ static void handle_add_rde_req(seL4_Word sender_badge, seL4_MessageInfo_t old_ta
     {
         OSDB_PRINTF(PD_DEBUG, PDSERVS "add_rde_req: Failed to find resource manager ID %ld.\n",
                     manager_id);
-        error = 1;
-    }
-    else if (get_client_id_from_badge(sender_badge) != target_data->pd.pd_obj_id)
-    {
-        // (XXX) Arya: Allow a PD to update its own RDE mid-flight, but not another PD's
-        OSDB_PRINTF(PD_DEBUG, PDSERVS "add_rde_req: cannot add new RDEs to another PD after it has been started\n");
         error = 1;
     }
     else if (server_data->pd.pd_obj_id != resource_manager_data->pd->pd_obj_id)
@@ -1212,9 +1082,6 @@ void pd_component_handle(seL4_MessageInfo_t tag,
     case PD_FUNC_DISCONNECT_REQ:
         handle_disconnect_req(sender_badge, tag, received_cap->capPtr);
         break;
-    case PD_FUNC_LOAD_REQ:
-        handle_load_req(sender_badge, tag, received_cap->capPtr);
-        break;
     case PD_FUNC_NEXT_SLOT_REQ:
         handle_next_slot_req(sender_badge, tag, received_cap->capPtr);
         break;
@@ -1232,9 +1099,6 @@ void pd_component_handle(seL4_MessageInfo_t tag,
         break;
     case PD_FUNC_DUMP_REQ:
         handle_dump_cap_req(sender_badge, tag, received_cap->capPtr);
-        break;
-    case PD_FUNC_START_REQ:
-        handle_start_req(sender_badge, tag, received_cap->capPtr);
         break;
     case PD_FUNC_ADD_RDE_REQ:
         handle_add_rde_req(sender_badge, tag, received_cap->capPtr);

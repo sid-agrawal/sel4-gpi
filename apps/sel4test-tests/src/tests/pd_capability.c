@@ -30,112 +30,6 @@
         printf("%s(): " msg "\n", __func__, ##__VA_ARGS__); \
     } while (0)
 
-int test_new_process_osmosis(env_t env)
-{
-    int error;
-    printf("------------------STARTING: %s------------------\n", __func__);
-
-    sel4bench_init();
-    // Make new PD i.e. CSspace
-    ccnt_t start;
-    SEL4BENCH_READ_CCNT(start);
-
-    seL4_CPtr ads_rde = sel4gpi_get_rde(GPICAP_TYPE_ADS);
-    seL4_CPtr pd_rde = sel4gpi_get_rde(GPICAP_TYPE_PD);
-    seL4_CPtr cpu_rde = sel4gpi_get_rde(GPICAP_TYPE_CPU);
-
-    seL4_CPtr slot;
-    error = vka_cspace_alloc(&env->vka, &slot);
-    test_error_eq(error, 0);
-
-    /* Create a new PD */
-    pd_client_context_t pd_os_cap;
-    error = pd_component_client_connect(pd_rde, slot, &pd_os_cap);
-    test_error_eq(error, 0);
-
-    /* Create a new ADS Cap, which will be in the context of a PD and image */
-    error = vka_cspace_alloc(&env->vka, &slot);
-    test_error_eq(error, 0);
-
-    ads_client_context_t ads_os_cap;
-    error = ads_component_client_connect(ads_rde, slot, &ads_os_cap, NULL);
-    test_error_eq(error, 0);
-
-    error = vka_cspace_alloc(&env->vka, &slot);
-    test_error_eq(error, 0);
-
-    cpu_client_context_t cpu_os_cap;
-    error = cpu_component_client_connect(cpu_rde, slot, &cpu_os_cap);
-    test_error_eq(error, 0);
-
-    error = pd_client_share_rde(&pd_os_cap, GPICAP_TYPE_MO, NSID_DEFAULT);
-    test_error_eq(error, 0);
-
-    // Make a new AS, loads an image
-    error = pd_client_load(&pd_os_cap, &ads_os_cap, &cpu_os_cap, "hello");
-    test_error_eq(error, 0);
-
-    // Copy the ep_object to the new PD
-    // error = pd_client_send_cap(&pd_os_cap, ep_object.cptr, &slot);
-    // test_error_eq(error, 0);
-
-    /*
-        (XXX) Create a new CPU cap, and make that the PD's primary CPU cap.
-    */
-
-    // Start the CPU.
-    error = pd_client_start(&pd_os_cap, 0, 0); // with this arg.
-    test_error_eq(error, 0);
-
-    /*********************************************/
-
-    /* Create a new PD */
-    error = vka_cspace_alloc(&env->vka, &slot);
-    test_error_eq(error, 0);
-
-    pd_client_context_t pd_os_cap2;
-    error = pd_component_client_connect(pd_rde, slot, &pd_os_cap2);
-    test_error_eq(error, 0);
-
-    /* Create a new ADS Cap, which will be in the context of a PD and image */
-    error = vka_cspace_alloc(&env->vka, &slot);
-    test_error_eq(error, 0);
-
-    ads_client_context_t ads_os_cap2;
-    error = ads_component_client_connect(ads_rde, slot, &ads_os_cap2, NULL);
-    test_error_eq(error, 0);
-
-    error = vka_cspace_alloc(&env->vka, &slot);
-    test_error_eq(error, 0);
-
-    cpu_client_context_t cpu_os_cap2;
-    error = cpu_component_client_connect(cpu_rde, slot, &cpu_os_cap2);
-    test_error_eq(error, 0);
-
-    error = pd_client_share_rde(&pd_os_cap2, GPICAP_TYPE_MO, NSID_DEFAULT);
-    test_error_eq(error, 0);
-
-    // Make a new AS, loads an image
-    error = pd_client_load(&pd_os_cap2, &ads_os_cap2, &cpu_os_cap2, "hello");
-    test_error_eq(error, 0);
-
-    // Start the CPU.
-    error = pd_client_start(&pd_os_cap2, 0, 0); // with this arg.
-    test_error_eq(error, 0);
-
-    error = pd_client_dump(&pd_os_cap2, NULL, 0);
-    test_error_eq(error, 0);
-
-    error = pd_client_dump(&pd_os_cap, NULL, 0);
-    test_error_eq(error, 0);
-
-    /*********************************************/
-    printf("------------------ENDING: %s------------------\n", __func__);
-    return sel4test_get_result();
-}
-
-DEFINE_TEST(GPIPD001, "OSMO: Ensure that as new process works", test_new_process_osmosis, true)
-
 int test_new_process_osmosis_shmem(env_t env)
 {
     int error;
@@ -152,7 +46,11 @@ int test_new_process_osmosis_shmem(env_t env)
     SEL4BENCH_READ_CCNT(start);
 
     seL4_Word arg0 = 1;
-    error = sel4gpi_spawn_process("hello", 16, 100, 1, &arg0);
+    sel4gpi_process_t proc;
+    error = sel4gpi_configure_process("hello", DEFAULT_STACK_PAGES, DEFAULT_HEAP_PAGES, &proc);
+    test_error_eq(error, 0);
+
+    error = sel4gpi_spawn_process(&proc, 1, &arg0);
     test_error_eq(error, 0);
 #if 0
     pd_client_context_t test_pd_os_cap;
@@ -308,7 +206,7 @@ int test_new_process_osmosis_shmem(env_t env)
 #endif
     return sel4test_get_result();
 }
-DEFINE_TEST(GPIPD002,
+DEFINE_TEST(GPIPD001,
             "OSMO: Ensure that as new process works w/ SHMEM",
             test_new_process_osmosis_shmem,
             true)

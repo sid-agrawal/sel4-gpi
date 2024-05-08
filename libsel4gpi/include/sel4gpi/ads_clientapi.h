@@ -25,8 +25,7 @@
  */
 int ads_component_client_connect(seL4_CPtr server_ep_cap,
                                  seL4_CPtr free_slot,
-                                 ads_client_context_t *ret_conn,
-                                 seL4_Word *ret_ads_ns);
+                                 ads_client_context_t *ret_conn);
 
 /**
  * @brief   Disconnect the ads client.

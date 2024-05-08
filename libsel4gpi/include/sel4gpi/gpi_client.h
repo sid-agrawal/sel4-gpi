@@ -19,6 +19,7 @@ typedef struct _cpu_client_context
 typedef struct _ads_client_context
 {
    cspacepath_t badged_server_ep_cspath;
+   uint64_t id;
    // cspacepath_t public_server_ep_cspath;
 } ads_client_context_t;
 

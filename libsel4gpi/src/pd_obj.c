@@ -605,9 +605,9 @@ int pd_configure(pd_t *pd,
     assert(error == 0);
 
     // the ADS cap is both a resource manager and a resource
-    // seL4_Word badge = gpi_new_badge(GPICAP_TYPE_ADS, 0x00, pd->pd_obj_id, target_ads->ads_obj_id, target_ads->ads_obj_id);
-    // error = pd_send_cap(pd, get_ads_component()->server_ep_obj.cptr, badge, &pd->init_data->ads_cap);
-    // ZF_LOGF_IFERR(error, "Failed to send ADS resource cap to PD");
+    seL4_Word badge = gpi_new_badge(GPICAP_TYPE_ADS, 0x00, pd->pd_obj_id, target_ads->ads_obj_id, target_ads->ads_obj_id);
+    error = pd_send_cap(pd, get_ads_component()->server_ep_obj.cptr, badge, &pd->init_data->ads_cap);
+    ZF_LOGF_IFERR(error, "Failed to send ADS resource cap to PD");
 
     // the ADS cap also acts an as RDE, however since its object ID is set, a PD can never
     // make a new ADS from this EP
@@ -617,15 +617,14 @@ int pd_configure(pd_t *pd,
     pd->init_data->binded_ads_ns_id = target_ads->ads_obj_id;
     target_cpu->binded_ads_id = target_ads->ads_obj_id;
 
-    // (XXX) Linh: Should a PD be given access to its own CPU obj?
-    // badge = gpi_new_badge(GPICAP_TYPE_CPU, 0x00, pd->pd_obj_id, NSID_DEFAULT, target_cpu->cpu_obj_id);
-    // pd_send_cap(pd, get_cpu_component()->server_ep_obj.cptr, badge, &pd->init_data->cpu_cap);
-    // ZF_LOGF_IFERR(error, "Failed to send CPU cap to PD");
+    badge = gpi_new_badge(GPICAP_TYPE_CPU, 0x00, pd->pd_obj_id, NSID_DEFAULT, target_cpu->cpu_obj_id);
+    pd_send_cap(pd, get_cpu_component()->server_ep_obj.cptr, badge, &pd->init_data->cpu_cap);
+    ZF_LOGF_IFERR(error, "Failed to send CPU cap to PD");
 
     memcpy(&pd->proc.vspace, target_ads->vspace, sizeof(vspace_t));
 
     // Send the PD's PD resource
-    seL4_Word badge = gpi_new_badge(GPICAP_TYPE_PD, 0x00, pd->pd_obj_id, NSID_DEFAULT, pd->pd_obj_id);
+    badge = gpi_new_badge(GPICAP_TYPE_PD, 0x00, pd->pd_obj_id, NSID_DEFAULT, pd->pd_obj_id);
     pd_send_cap(pd, pd->pd_cap_in_RT, badge, &pd->init_data->pd_cap);
 
     // Map init data to the PD

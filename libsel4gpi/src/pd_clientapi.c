@@ -57,33 +57,6 @@ int pd_client_disconnect(pd_client_context_t *conn)
     return seL4_MessageInfo_get_label(tag);
 }
 
-int pd_client_load(pd_client_context_t *pd_os_cap,
-                   ads_client_context_t *ads_os_cap,
-                   cpu_client_context_t *cpu_os_cap,
-                   const char *image)
-{
-    seL4_SetMR(PDMSGREG_FUNC, PD_FUNC_LOAD_REQ);
-
-    /* Send the badged endpoint cap of the ads client as a cap */
-    int image_id = sel4gpi_image_name_to_id(image);
-    if (image_id == -1)
-    {
-        OSDB_PRINTF(PD_DEBUG, PDSERVC "invalid image name received %s\n", image);
-        return -1;
-    }
-
-    seL4_SetMR(PDMSGREG_LOAD_FUNC_IMAGE, image_id);
-    seL4_SetCap(0, ads_os_cap->badged_server_ep_cspath.capPtr);
-    seL4_SetCap(1, cpu_os_cap->badged_server_ep_cspath.capPtr);
-
-    seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 2,
-                                                  PDMSGREG_LOAD_REQ_END);
-
-    tag = seL4_Call(pd_os_cap->badged_server_ep_cspath.capPtr, tag);
-    assert(seL4_MessageInfo_ptr_get_label(&tag) == 0);
-    return 0;
-}
-
 int pd_client_dump(pd_client_context_t *conn,
                    char *buf,
                    size_t buf_sz)
@@ -122,7 +95,7 @@ int pd_client_next_slot(pd_client_context_t *conn,
     seL4_SetMR(PDMSGREG_FUNC, PD_FUNC_NEXT_SLOT_REQ);
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0,
                                                   PDMSGREG_NEXT_SLOT_REQ_END);
-    OSDB_PRINTF(PD_DEBUG, "pd_client_next_slot call\n");
+    // OSDB_PRINTF(PD_DEBUG, "pd_client_next_slot call\n");
     tag = seL4_Call(conn->badged_server_ep_cspath.capPtr, tag);
     *slot = seL4_GetMR(PDMSGREG_NEXT_SLOT_PD_SLOT);
     assert(seL4_MessageInfo_ptr_get_label(&tag) == 0);
@@ -187,49 +160,6 @@ int pd_client_badge_ep(pd_client_context_t *conn,
     *ret_ep = seL4_GetMR(PDMSGREG_BADGE_EP_PD_SLOT);
     assert(seL4_MessageInfo_ptr_get_label(&tag) == 0);
     assert(*ret_ep != 0);
-    return 0;
-}
-
-int pd_client_start(pd_client_context_t *conn, int argc, seL4_Word *args)
-{
-    if (argc > PD_MAX_ARGC)
-    {
-        ZF_LOGE(PDSERVC "invalid argc (%d) to start pd client, max is (%d)\n", argc, PD_MAX_ARGC);
-        return -1;
-    }
-    seL4_SetMR(PDMSGREG_FUNC, PD_FUNC_START_REQ);
-
-    // Setup the arguments
-    OSDB_PRINTF(PD_DEBUG, PDSERVC "Starting PD with %d args: [", argc);
-
-    seL4_SetMR(PDMSGREG_START_ARGC, argc);
-
-    for (int i = 0; i < argc; i++)
-    {
-        OSDB_PRINTF(PD_DEBUG, "%ld, ", args[i]);
-
-        switch (i)
-        {
-        case 0:
-            seL4_SetMR(PDMSGREG_START_ARG0, args[i]);
-            break;
-        case 1:
-            seL4_SetMR(PDMSGREG_START_ARG1, args[i]);
-            break;
-        case 2:
-            seL4_SetMR(PDMSGREG_START_ARG2, args[i]);
-            break;
-        case 3:
-            seL4_SetMR(PDMSGREG_START_ARG3, args[i]);
-            break;
-        }
-    }
-    OSDB_PRINTF(PD_DEBUG, "]\n");
-
-    seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0,
-                                                  PDMSGREG_START_REQ_END);
-    tag = seL4_Call(conn->badged_server_ep_cspath.capPtr, tag);
-    assert(seL4_MessageInfo_ptr_get_label(&tag) == 0);
     return 0;
 }
 
