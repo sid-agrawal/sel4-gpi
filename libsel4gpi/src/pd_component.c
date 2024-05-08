@@ -276,7 +276,7 @@ int forge_pd_cap_from_init_data(
     OSDB_PRINTF(PD_DEBUG, PDSERVS "main: Forged a new PD cap(EP: %lx) with badge value: %lx \n",
                 dest.capPtr, badge);
 
-    client_reg_ptr->raw_cap_in_root = dest_cptr;
+    client_reg_ptr->pd.pd_cap_in_RT = dest_cptr;
     return 0;
 }
 
@@ -321,9 +321,9 @@ void update_forged_pd_cap_from_init_data(test_init_data_t *init_data, sel4utils_
     pd_add_resource(pd, GPICAP_TYPE_ADS, ads_id, NSID_DEFAULT, child_as_cap_in_parent, pd->init_data->ads_cap, child_as_cap_in_parent);
 
     // not using pd_send_cap bc this is already badged
-    error = copy_cap_to_pd(pd, reg_ptr->raw_cap_in_root, &pd->init_data->pd_cap);
+    error = copy_cap_to_pd(pd, reg_ptr->pd.pd_cap_in_RT, &pd->init_data->pd_cap);
     assert(error == 0);
-    pd_add_resource(pd, GPICAP_TYPE_PD, pd->pd_obj_id, NSID_DEFAULT, reg_ptr->raw_cap_in_root, pd->init_data->pd_cap, reg_ptr->raw_cap_in_root);
+    pd_add_resource(pd, GPICAP_TYPE_PD, pd->pd_obj_id, NSID_DEFAULT, reg_ptr->pd.pd_cap_in_RT, pd->init_data->pd_cap, reg_ptr->pd.pd_cap_in_RT);
 
     error = copy_cap_to_pd(pd, child_cpu_cap_in_parent, &pd->init_data->cpu_cap);
     assert(error == 0);
@@ -452,7 +452,7 @@ void pd_handle_allocation_request(seL4_Word sender_badge, seL4_MessageInfo_t *re
         OSDB_PRINTF(PD_DEBUG, PDSERVS "main: Failed to mint client badge %lx.\n", badge);
         return;
     }
-    client_reg_ptr->raw_cap_in_root = dest_cptr;
+    client_reg_ptr->pd.pd_cap_in_RT = dest_cptr;
     /* Return this badged end point in the return message. */
     seL4_SetCap(0, dest.capPtr);
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(error, 0, 1, 1);
@@ -801,7 +801,7 @@ static void handle_start_req(seL4_Word sender_badge, seL4_MessageInfo_t old_tag,
 
     error = pd_start(&client_data->pd,
                      get_pd_component()->server_vka,
-                     client_data->raw_cap_in_root,
+                     client_data->pd.pd_cap_in_RT,
                      get_pd_component()->server_vspace,
                      argc,
                      args);

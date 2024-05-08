@@ -28,7 +28,7 @@ file(
 )
 
 # temp for now, since the cpu client api calls need to be fixed
-list(REMOVE_ITEM deps "${CMAKE_CURRENT_SOURCE_DIR}/src/tests/lwc.c")
+list(REMOVE_ITEM deps "${CMAKE_CURRENT_SOURCE_DIR}/src/tests/ads_capability.c")
 list(REMOVE_ITEM deps "${CMAKE_CURRENT_SOURCE_DIR}/src/tests/lwc.c")
 
 add_subdirectory(../sqlite3 sqlite3)

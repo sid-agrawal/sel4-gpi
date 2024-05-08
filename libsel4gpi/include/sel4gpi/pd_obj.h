@@ -154,6 +154,8 @@ typedef struct _pd
     uint64_t init_data_mo_id;
     osm_pd_init_data_t *init_data;       // RT vaddr of the init data
     osm_pd_init_data_t *init_data_in_PD; // PD's vaddr of the init data
+
+    seL4_CPtr pd_cap_in_RT;
 } pd_t;
 
 /*

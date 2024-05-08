@@ -233,7 +233,6 @@ enum pd_component_msgregs
 typedef struct _pd_component_registry_entry
 {
     pd_t pd;
-    seL4_CPtr raw_cap_in_root;
     struct _pd_component_registry_entry *next;
 
 } pd_component_registry_entry_t;
