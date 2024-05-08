@@ -102,7 +102,7 @@ typedef struct osmosis_pd_cap
 
     /**
      * (XXX) Arya: not sure yet if we need this field
-    */
+     */
     uint64_t ns_id;
 } osmosis_pd_cap_t;
 
@@ -130,8 +130,10 @@ typedef struct _osm_pd_init_data
 typedef struct _pd
 {
     uint32_t pd_obj_id;
+
     /* This is only for model extraction purposes */
     char *image_name;
+
     /* Keeping this, since there's no point in duplicating fields from it in here*/
     sel4utils_process_t proc;
 
@@ -174,6 +176,12 @@ EP if applicable
 int pd_new(pd_t *pd,
            vka_t *server_vka,
            vspace_t *server_vspace);
+
+/**
+ * Destroy the internal data for a PD
+ * (XXX) Arya: Note, does not destroy the PD's resources
+ */
+int pd_destroy(pd_t *pd, vka_t *server_vka, vspace_t *server_vspace);
 
 int pd_load_image(pd_t *pd,
                   vka_t *vka,

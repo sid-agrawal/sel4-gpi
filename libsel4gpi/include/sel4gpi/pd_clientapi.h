@@ -39,11 +39,16 @@ int pd_component_client_connect(seL4_CPtr server_ep_cap,
 
 /**
  * @brief   Disconnect the pd client.
+ * Destroys all internal metadata associated with the PD.
+ * 
+ * (XXX) Arya: Should this immediately delete the PD, or just decrement refcount?
+ * (XXX) Arya: Should there be options to destroy resources
+ * held by the PD?
  *
  * @param conn
  * @return int 0 on success, -1 on failure.
  */
-int pd_component_client_disconnect(pd_client_context_t *conn);
+int pd_client_disconnect(pd_client_context_t *conn);
 
 /**
  * @brief

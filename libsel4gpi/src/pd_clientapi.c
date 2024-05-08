@@ -27,8 +27,6 @@ int pd_component_client_connect(seL4_CPtr server_ep_cap,
                            seL4_WordBits); /* Depth i.e. how many bits of free_slot to interpret*/
 
     OSDB_PRINTF(PD_DEBUG, PDSERVC "%s %d pd_endpoint is %lu:__ \n", __FUNCTION__, __LINE__, server_ep_cap);
-    // debug_cap_identify(PDSERVC, server_ep_cap);
-
     OSDB_PRINTF(PD_DEBUG, PDSERVC "Set a receive path for the badged ep: %d\n", (int)free_slot);
 
     /* Set request type */
@@ -41,8 +39,21 @@ int pd_component_client_connect(seL4_CPtr server_ep_cap,
     ret_conn->badged_server_ep_cspath.capPtr = free_slot;
 
     OSDB_PRINTF(PD_DEBUG, PDSERVC "received badged endpoint and it was kept in %d:__\n", (int)free_slot);
-    // debug_cap_identify(PDSERVC, path.capPtr);
     return 0;
+}
+
+int pd_client_disconnect(pd_client_context_t *conn)
+{
+    seL4_SetMR(PDMSGREG_FUNC, PD_FUNC_DISCONNECT_REQ);
+    seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0,
+                                                  PDMSGREG_DISCONNECT_REQ_END);
+
+    OSDB_PRINTF(PD_DEBUG, PDSERVC "Sending disconnect request for PD via EP: %lu.\n",
+                conn->badged_server_ep_cspath.capPtr);
+
+    tag = seL4_Call(conn->badged_server_ep_cspath.capPtr, tag);
+
+    return seL4_MessageInfo_get_label(tag);
 }
 
 int pd_client_load(pd_client_context_t *pd_os_cap,
@@ -334,8 +345,6 @@ void pd_client_exit(pd_client_context_t *conn)
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0,
                                                   PDMSGREG_EXIT_REQ_END);
     seL4_Call(conn->badged_server_ep_cspath.capPtr, tag);
-
-    return 0;
 }
 
 void pd_client_bench_ipc(pd_client_context_t *conn, seL4_CPtr dummy_send_cap, seL4_CPtr dummy_recv_cap, bool cap_transfer)

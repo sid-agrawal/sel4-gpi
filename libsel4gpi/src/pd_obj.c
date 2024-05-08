@@ -239,6 +239,41 @@ int pd_new(pd_t *pd,
     return 0;
 }
 
+int pd_destroy(pd_t *pd, vka_t *server_vka, vspace_t *server_vspace)
+{
+    int error = 0;
+
+    // (XXX) Arya: To fix later, should extract functionality from sel4utils_destroy_process
+    // And what is destroyed depends on the PD
+    sel4utils_destroy_process(&pd->proc, server_vka);
+
+    /* Clean up metadata */
+    if (pd->image_name)
+    {
+        free(pd->image_name);
+    }
+
+    // Hash table of holding resources
+    osmosis_pd_cap_t *current, *tmp;
+    HASH_ITER(hh, pd->has_access_to, current, tmp)
+    {
+        HASH_DEL(pd->has_access_to, current);
+        free(current);
+    }
+
+    // Frame for init data
+    // (XXX) Arya: TODO destroy the init data MO
+    vspace_unmap_pages(server_vspace, pd->init_data, 1, seL4_PageBits, server_vka);
+
+    // The PD's VKA/allocator are destroyed with allocator_mem_pool
+
+    // Other caps in RT
+    vka_cspace_free(server_vka, pd->pd_cap_in_RT);
+    // The CPtrs like "ads_cap_in_RT" should be destroyed when the ADS is destroyed
+
+    return error;
+}
+
 int pd_next_slot(pd_t *pd,
                  seL4_CPtr *next_free_slot)
 {
@@ -921,7 +956,7 @@ static int res_dump(pd_t *pd, model_state_t *ms, osmosis_pd_cap_t *current_cap,
         {
             pd_component_registry_entry_t *pd_data = pd_component_registry_get_entry_by_id(current_cap->res_id);
             assert(pd_data != NULL);
-            //pd_dump(&pd_data->pd);
+            // pd_dump(&pd_data->pd);
             pd_dump_internal(&pd_data->pd, ms, rr_frame_path, rr_local_vaddr);
         }
         break;
@@ -1064,7 +1099,8 @@ int pd_dump(pd_t *pd)
 
     /* Add the PD's data */
     error = pd_dump_internal(pd, ms, rr_frame_path, rr_local_vaddr);
-    if (error != 0) {
+    if (error != 0)
+    {
         return error;
     }
 

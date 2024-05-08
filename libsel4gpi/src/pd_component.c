@@ -134,6 +134,41 @@ pd_component_registry_entry_t *pd_component_registry_get_entry_by_badge(seL4_Wor
 }
 
 /**
+ * @brief Remove an item from the registry entry for the given badge.
+ *
+ * @param badge
+ * @return pd_component_registry_entry_t*
+ */
+static void pd_component_registry_remove_entry_by_badge(seL4_Word badge)
+{
+    uint64_t objectID = get_object_id_from_badge(badge);
+
+    /* Get the head of the list */
+    pd_component_registry_entry_t *current_ctx = get_pd_component()->client_registry;
+
+    // Check if entry to remove is head of list
+    if (current_ctx->pd.pd_obj_id == objectID)
+    {
+        get_pd_component()->client_registry = current_ctx->next;
+        free(current_ctx);
+        return;
+    }
+
+    // Otherwise remove from list
+    while (current_ctx->next != NULL)
+    {
+        if (current_ctx->next->pd.pd_obj_id == objectID)
+        {
+            current_ctx->next = current_ctx->next->next;
+            free(current_ctx->next);
+
+            return;
+        }
+        current_ctx = current_ctx->next;
+    }
+}
+
+/**
  * @brief Insert a new resource manager into the resource manager registry Linked List.
  * Returns a new ID assigned to the resource manager
  *
@@ -423,6 +458,43 @@ void pd_handle_allocation_request(seL4_Word sender_badge, seL4_MessageInfo_t *re
     /* Return this badged end point in the return message. */
     seL4_SetCap(0, dest.capPtr);
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(error, 0, 1, 1);
+    return reply(tag);
+}
+
+static void handle_disconnect_req(seL4_Word sender_badge,
+                                  seL4_MessageInfo_t old_tag,
+                                  seL4_CPtr received_cap)
+{
+    int error = 0;
+
+    OSDB_PRINTF(PD_DEBUG, PDSERVS "Got disconnect request from client badge %lx.\n",
+                sender_badge);
+
+    pd_component_registry_entry_t *client_data = pd_component_registry_get_entry_by_badge(sender_badge);
+
+    if (client_data == NULL)
+    {
+        OSDB_PRINTF(PD_DEBUG, PDSERVS "Failed to find client badge %lx.\n",
+                    sender_badge);
+        error = 1;
+    }
+    else
+    {
+        uint32_t pd_id = client_data->pd.pd_obj_id;
+
+        /* Free the PD metadata */
+        error = pd_destroy(&client_data->pd, get_pd_component()->server_vka, get_pd_component()->server_vspace);
+
+        /* Remove the PD from registry */
+        pd_component_registry_remove_entry_by_badge(sender_badge);
+
+        /* (XXX) Arya: Cleanup resources like ADS? */
+
+        OSDB_PRINTF(PD_DEBUG, PDSERVS "Cleaned up PD %d.\n", pd_id);
+    }
+
+    seL4_SetMR(PDMSGREG_FUNC, PD_FUNC_DISCONNECT_ACK);
+    seL4_MessageInfo_t tag = seL4_MessageInfo_new(error, 0, 0, PDMSGREG_DISCONNECT_ACK_END);
     return reply(tag);
 }
 
@@ -1105,10 +1177,7 @@ static void handle_exit_req(seL4_Word sender_badge, seL4_MessageInfo_t old_tag, 
     OSDB_PRINTF(PD_DEBUG, PDSERVS "Got exit request from client badge %lx\n",
                 sender_badge);
 
-    printf("WARNING: PD exit unimplemented, not cleaned up\n");
-
-    // (XXX) Free up the PD's resources
-
+    handle_disconnect_req(sender_badge, old_tag, received_cap);
     return;
 }
 
@@ -1147,6 +1216,9 @@ void pd_component_handle(seL4_MessageInfo_t tag,
     uint64_t blah = seL4_GetMR(1);
     switch (func)
     {
+    case PD_FUNC_DISCONNECT_REQ:
+        handle_disconnect_req(sender_badge, tag, received_cap->capPtr);
+        break;
     case PD_FUNC_LOAD_REQ:
         handle_load_req(sender_badge, tag, received_cap->capPtr);
         break;
