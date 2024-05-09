@@ -11,7 +11,7 @@
 #include <sel4/sel4.h>
 #include <sel4/types.h>
 
-#include <sel4gpi/resource_server_utils.h>
+#include <sel4gpi/resource_server_remote_utils.h>
 #include <ramdisk_client.h>
 
 #include <fs_shared.h>
@@ -25,25 +25,19 @@ typedef struct _ads_client_context ads_client_context_t;
 struct _pd_client_context;
 typedef struct _pd_client_context pd_client_context_t;
 
-/* Per-client context maintained by the server. */
-typedef struct _fs_registry_entry
+// Registry of open files
+typedef struct _file_registry_entry
 {
-    struct file *file;
-    uint32_t count; // There can be more than one cap to this object
-    struct _fs_registry_entry *next;
+    resource_server_registry_node_t gen;
+    struct file *file; // handle of the open file
+} file_registry_entry_t;
 
-} fs_registry_entry_t;
-
-/**
- * State maintained for namespaces
- */
-typedef struct _fs_namespace
+// Registry of namespaces
+typedef struct _fs_namespace_entry
 {
-    uint64_t id;             // ID of the namespace
+    resource_server_registry_node_t gen;
     char ns_prefix[MAXPATH]; // prefix of this namespace in the default ns
-
-    struct _fs_namespace *next;
-} fs_namespace_t;
+} fs_namespace_entry_t;
 
 /*
 Context of the server
@@ -57,9 +51,8 @@ typedef struct _xv6fs_server_context
     seL4_CPtr rd_ep;
 
     // Internal data
-    int registry_n_entries;
-    fs_registry_entry_t *client_registry;
-    fs_namespace_t *namespaces;
+    resource_server_registry_t file_registry;
+    resource_server_registry_t ns_registry;
 
     // Fields for naive block implementation
     mo_client_context_t *shared_mem;

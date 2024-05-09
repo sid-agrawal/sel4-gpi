@@ -32,8 +32,6 @@
 
 #define PD_ALLOCATOR_STATIC_POOL_SIZE ((1 << seL4_PageBits) * 20)
 
-#define NSID_DEFAULT 1 // Default namespace ID
-
 // (XXX) This is not yet used anywher.
 typedef struct pd_name
 {

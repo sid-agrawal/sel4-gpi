@@ -31,21 +31,6 @@
 #include <sel4gpi/badge_usage.h>
 #include <sel4gpi/debug.h>
 
-uint64_t mo_assign_new_badge_and_objectID(mo_component_registry_entry_t *reg)
-{
-    get_mo_component()->registry_n_entries++;
-    // Add the latest ID to the obj and to the badlge.
-    seL4_Word badge_val = gpi_new_badge(GPICAP_TYPE_MO,
-                                        0x00,
-                                        0x00,
-                                        NSID_DEFAULT,
-                                        get_mo_component()->registry_n_entries);
-
-    assert(badge_val != 0);
-    reg->mo.mo_obj_id = get_mo_component()->registry_n_entries;
-    OSDB_PRINTF(MO_DEBUG, "mo_assign_new_badge_and_objectID: new badge: %lx\n", badge_val);
-    return badge_val;
-}
 mo_component_context_t *get_mo_component(void)
 {
     return &get_gpi_server()->mo_component;
@@ -68,30 +53,23 @@ static inline void reply(seL4_MessageInfo_t tag)
     api_reply(get_mo_component()->server_thread.reply.cptr, tag);
 }
 
-/**
- * @brief Insert a new client into the client registry Linked List.
- *
- * @param new_node
- */
-static void mo_component_registry_insert(mo_component_registry_entry_t *new_node)
+int mo_component_initialize(simple_t *server_simple,
+                            vka_t *server_vka,
+                            seL4_CPtr server_cspace,
+                            vspace_t *server_vspace,
+                            sel4utils_thread_t server_thread,
+                            vka_object_t server_ep_obj)
 {
-    // TODO:Use a mutex
+    mo_component_context_t *component = get_mo_component();
 
-    mo_component_registry_entry_t *head = get_mo_component()->client_registry;
+    component->server_simple = server_simple;
+    component->server_vka = server_vka;
+    component->server_cspace = server_cspace;
+    component->server_vspace = server_vspace;
+    component->server_thread = server_thread;
+    component->server_ep_obj = server_ep_obj;
 
-    if (head == NULL)
-    {
-        get_mo_component()->client_registry = new_node;
-        new_node->next = NULL;
-        return;
-    }
-
-    while (head->next != NULL)
-    {
-        head = head->next;
-    }
-    head->next = new_node;
-    new_node->next = NULL;
+    resource_server_initialize_registry(&component->mo_registry, NULL);
 }
 
 /**
@@ -102,19 +80,7 @@ static void mo_component_registry_insert(mo_component_registry_entry_t *new_node
  */
 mo_component_registry_entry_t *mo_component_registry_get_entry_by_badge(seL4_Word badge)
 {
-
-    uint64_t objectID = get_object_id_from_badge(badge);
-    mo_component_registry_entry_t *current_ctx = get_mo_component()->client_registry;
-
-    while (current_ctx != NULL)
-    {
-        if ((seL4_Word)current_ctx->mo.mo_obj_id == objectID)
-        {
-            break;
-        }
-        current_ctx = current_ctx->next;
-    }
-    return current_ctx;
+    return (mo_component_registry_entry_t *)resource_server_registry_get_by_badge(&get_mo_component()->mo_registry, badge);
 }
 
 /**
@@ -123,19 +89,9 @@ mo_component_registry_entry_t *mo_component_registry_get_entry_by_badge(seL4_Wor
  * @param res_id
  * @return ads_component_registry_entry_t*
  */
-mo_component_registry_entry_t *mo_component_registry_get_entry_by_id(seL4_Word objectID)
+mo_component_registry_entry_t *mo_component_registry_get_entry_by_id(seL4_Word object_id)
 {
-    mo_component_registry_entry_t *current_ctx = get_mo_component()->client_registry;
-
-    while (current_ctx != NULL)
-    {
-        if (current_ctx->mo.mo_obj_id == objectID)
-        {
-            break;
-        }
-        current_ctx = current_ctx->next;
-    }
-    return current_ctx;
+    return (mo_component_registry_entry_t *)resource_server_registry_get_by_id(&get_mo_component()->mo_registry, object_id);
 }
 
 // (XXX): Somwehere here we should call mo_new
@@ -169,7 +125,9 @@ void mo_handle_allocation_request(seL4_Word sender_badge, seL4_MessageInfo_t *re
         return;
     }
     memset((void *)client_reg_ptr, 0, sizeof(mo_component_registry_entry_t));
-    mo_component_registry_insert(client_reg_ptr);
+
+    seL4_Word badge = resource_server_registry_badge_and_insert(&get_mo_component()->mo_registry, (resource_server_registry_node_t *)client_reg_ptr,
+                                                                GPICAP_TYPE_MO, NSID_DEFAULT, &client_reg_ptr->mo.mo_obj_id);
 
     /* Createa a new MO object */
     /* Allocate frames */
@@ -195,16 +153,12 @@ void mo_handle_allocation_request(seL4_Word sender_badge, seL4_MessageInfo_t *re
     vka_cspace_alloc(get_mo_component()->server_vka, &dest_cptr);
     vka_cspace_make_path(get_mo_component()->server_vka, dest_cptr, &dest);
 
-    // Add the latest ID to the obj and to the badlge.
-    seL4_Word badge = mo_assign_new_badge_and_objectID(client_reg_ptr);
-    uint32_t client_id = get_client_id_from_badge(sender_badge);
-
     // (XXX) Linh: this is not very nice as we're coupling the PD and MO components
-    osmosis_pd_cap_t *res = pd_add_resource_by_id(client_id, GPICAP_TYPE_MO, get_object_id_from_badge(badge));
+    osmosis_pd_cap_t *res = pd_add_resource_by_id(get_client_id_from_badge(sender_badge), GPICAP_TYPE_MO, get_object_id_from_badge(badge));
     if (res)
     {
         res->slot_in_RT_Debug = dest_cptr;
-        badge = set_client_id_to_badge(badge, client_id);
+        badge = set_client_id_to_badge(badge, get_client_id_from_badge(sender_badge));
     }
 
     error = vka_cnode_mint(&dest,
@@ -282,7 +236,8 @@ int forge_mo_caps_from_vspace(vspace_t *child_vspace,
                                                  (mo_t **)&res->mo_ref);
             assert(error == 0);
 
-            if (id_ret) {
+            if (id_ret)
+            {
                 id_ret[j] = ((mo_t *)res->mo_ref)->mo_obj_id;
             }
 
@@ -290,7 +245,8 @@ int forge_mo_caps_from_vspace(vspace_t *child_vspace,
             if (target_ads != NULL)
             {
                 attach_node_t *attach_node = malloc(sizeof(attach_node_t));
-                attach_node->mo_id = ((mo_t *)res->mo_ref)->mo_obj_id;;
+                attach_node->mo_id = ((mo_t *)res->mo_ref)->mo_obj_id;
+                ;
                 attach_node->vaddr = (void *)(void *)res->start;
                 attach_node->type = res->type;
                 attach_node->n_pages = num_frames;
@@ -338,9 +294,8 @@ int forge_mo_cap_from_frames(seL4_CPtr *frame_caps,
     vka_cspace_make_path(get_mo_component()->server_vka, dest_cptr, &dest);
 
     /* Update the info in the registry entry. */
-    seL4_Word badge = mo_assign_new_badge_and_objectID(client_reg_ptr);
-    badge = set_client_id_to_badge(badge, client_pd_id);
-    mo_component_registry_insert(client_reg_ptr);
+    seL4_Word badge = resource_server_registry_badge_and_insert(&get_mo_component()->mo_registry, (resource_server_registry_node_t *)client_reg_ptr,
+                                                                GPICAP_TYPE_MO, NSID_DEFAULT, &client_reg_ptr->mo.mo_obj_id);
 
     client_reg_ptr->mo.frame_caps_in_root_task = malloc(sizeof(mo_frame_t) * num_pages);
     assert(client_reg_ptr->mo.frame_caps_in_root_task != NULL);

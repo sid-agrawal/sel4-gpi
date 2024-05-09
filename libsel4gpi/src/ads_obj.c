@@ -248,6 +248,8 @@ int ads_attach_mo(ads_t *ads,
 
 int ads_rm(ads_t *ads, vka_t *vka, void *vaddr)
 {
+    printf("TEMPA ads rm\n");
+
     assert(vaddr != NULL);
 
     int error = 0;
@@ -293,6 +295,7 @@ int ads_rm(ads_t *ads, vka_t *vka, void *vaddr)
         prev = node;
     }
 
+    printf("TEMPA ads rm complete\n");
     return error;
 }
 

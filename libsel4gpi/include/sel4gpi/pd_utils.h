@@ -8,10 +8,15 @@
 #include <sel4gpi/cpu_clientapi.h>
 #include <stdint.h>
 #include <sel4/types.h>
+#include <sel4gpi/badge_usage.h>
+#include <sel4gpi/resource_space_clientapi.h>
 
 #define PD_HEAP_LOC 0x5000000000
 #define DEFAULT_STACK_PAGES 16
 #define DEFAULT_HEAP_PAGES 100
+#define PD_CAP_ROOT SEL4UTILS_CNODE_SLOT
+#define PD_CAP_DEPTH seL4_WordBits
+#define PD_CSPACE_SIZE_BITS 17
 
 #define GOTO_IF_ERR(err) \
     do                   \

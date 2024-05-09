@@ -35,22 +35,6 @@
 #include <sel4gpi/debug.h>
 #include <sel4gpi/gpi_client.h>
 
-uint64_t pd_assign_new_badge_and_objectID(pd_component_registry_entry_t *reg)
-{
-    get_pd_component()->registry_n_entries++;
-    // Add the latest ID to the obj and to the badlge.
-    seL4_Word badge_val = gpi_new_badge(GPICAP_TYPE_PD,
-                                        0x00,
-                                        0x00, /* (XXX) This needs to be changed  to the PD*/
-                                        NSID_DEFAULT,
-                                        get_pd_component()->registry_n_entries);
-
-    assert(badge_val != 0);
-    reg->pd.pd_obj_id = get_pd_component()->registry_n_entries;
-    OSDB_PRINTF(PD_DEBUG, "pd_assign_new_badge_and_objectID: new badge: %lx\n", badge_val);
-    return badge_val;
-}
-
 pd_component_context_t *get_pd_component(void)
 {
     return &get_gpi_server()->pd_component;
@@ -73,155 +57,49 @@ static inline void reply(seL4_MessageInfo_t tag)
     api_reply(get_pd_component()->server_thread.reply.cptr, tag);
 }
 
-/**
- * @brief Insert a new client into the client registry Linked List.
- *
- * @param new_node
- */
-static void pd_component_registry_insert(pd_component_registry_entry_t *new_node)
-{
-    // TODO:Use a mutex
-
-    pd_component_registry_entry_t *head = get_pd_component()->client_registry;
-
-    if (head == NULL)
-    {
-        get_pd_component()->client_registry = new_node;
-        new_node->next = NULL;
-        return;
-    }
-
-    while (head->next != NULL)
-    {
-        head = head->next;
-    }
-    head->next = new_node;
-    new_node->next = NULL;
-}
-
-/**
- * @brief Lookup the client registry entry for the given object id.
- *
- * @param object_id
- * @return pd_component_registry_entry_t*
- */
 pd_component_registry_entry_t *pd_component_registry_get_entry_by_id(seL4_Word object_id)
 {
-    /* Get the head of the list */
-    pd_component_registry_entry_t *current_ctx = get_pd_component()->client_registry;
-
-    while (current_ctx != NULL)
-    {
-        if ((seL4_Word)current_ctx->pd.pd_obj_id == object_id)
-        {
-            break;
-        }
-        current_ctx = current_ctx->next;
-    }
-    return current_ctx;
+    return (pd_component_registry_entry_t *)resource_server_registry_get_by_id(&get_pd_component()->pd_registry, object_id);
 }
 
-/**
- * @brief Lookup the client registry entry for the given badge.
- *
- * @param badge
- * @return pd_component_registry_entry_t*
- */
 pd_component_registry_entry_t *pd_component_registry_get_entry_by_badge(seL4_Word badge)
 {
-
-    uint64_t objectID = get_object_id_from_badge(badge);
-    return pd_component_registry_get_entry_by_id(objectID);
+    return (pd_component_registry_entry_t *)resource_server_registry_get_by_badge(&get_pd_component()->pd_registry, badge);
 }
 
-/**
- * @brief Remove an item from the registry entry for the given badge.
- *
- * @param badge
- * @return pd_component_registry_entry_t*
- */
-static void pd_component_registry_remove_entry_by_badge(seL4_Word badge)
-{
-    uint64_t objectID = get_object_id_from_badge(badge);
-
-    /* Get the head of the list */
-    pd_component_registry_entry_t *current_ctx = get_pd_component()->client_registry;
-
-    // Check if entry to remove is head of list
-    if (current_ctx->pd.pd_obj_id == objectID)
-    {
-        get_pd_component()->client_registry = current_ctx->next;
-        free(current_ctx);
-        return;
-    }
-
-    // Otherwise remove from list
-    while (current_ctx->next != NULL)
-    {
-        if (current_ctx->next->pd.pd_obj_id == objectID)
-        {
-            current_ctx->next = current_ctx->next->next;
-            free(current_ctx->next);
-
-            return;
-        }
-        current_ctx = current_ctx->next;
-    }
-}
-
-/**
- * @brief Insert a new resource manager into the resource manager registry Linked List.
- * Returns a new ID assigned to the resource manager
- *
- * @param new_node
- */
-int pd_component_resource_manager_insert(pd_component_resource_manager_entry_t *new_node)
-{
-    // TODO:Use a mutex
-
-    pd_component_resource_manager_entry_t *head = get_pd_component()->server_registry;
-
-    if (head == NULL)
-    {
-        get_pd_component()->server_registry = new_node;
-        new_node->next = NULL;
-    }
-    else
-    {
-
-        while (head->next != NULL)
-        {
-            head = head->next;
-        }
-        head->next = new_node;
-        new_node->next = NULL;
-    }
-
-    new_node->manager_id = get_pd_component()->resource_manager_n_entries;
-    get_pd_component()->resource_manager_n_entries++;
-    return new_node->manager_id;
-}
-
-/**
- * @brief Lookup the resource server registry entry for the given object id.
- *
- * @param server_id
- * @return pd_component_resource_manager_entry_t*
- */
 pd_component_resource_manager_entry_t *pd_component_resource_manager_get_entry_by_id(seL4_Word manager_id)
 {
-    /* Get the head of the list */
-    pd_component_resource_manager_entry_t *current_ctx = get_pd_component()->server_registry;
+    return (pd_component_resource_manager_entry_t *)resource_server_registry_get_by_id(&get_pd_component()->server_registry, manager_id);
+}
 
-    while (current_ctx != NULL)
-    {
-        if ((seL4_Word)current_ctx->manager_id == manager_id)
-        {
-            break;
-        }
-        current_ctx = current_ctx->next;
-    }
-    return current_ctx;
+int pd_component_resource_manager_insert(pd_component_resource_manager_entry_t *new_node)
+{
+    uint32_t new_id;
+    resource_server_registry_badge_and_insert(&get_pd_component()->server_registry, (resource_server_registry_node_t *)new_node,
+                                              GPICAP_TYPE_RS, NSID_DEFAULT, &new_id);
+    return new_id;
+}
+
+// (XXX) Arya: Nasty hack so we can update the forged test PD
+uint64_t test_pd_id;
+
+int pd_component_initialize(simple_t *server_simple,
+                            vka_t *server_vka,
+                            seL4_CPtr server_cspace,
+                            vspace_t *server_vspace,
+                            sel4utils_thread_t server_thread,
+                            vka_object_t server_ep_obj)
+{
+    pd_component_context_t *component = get_pd_component();
+
+    component->server_simple = server_simple;
+    component->server_vka = server_vka;
+    component->server_cspace = server_cspace;
+    component->server_vspace = server_vspace;
+    component->server_thread = server_thread;
+    component->server_ep_obj = server_ep_obj;
+    resource_server_initialize_registry(&component->pd_registry, NULL);
+    resource_server_initialize_registry(&component->server_registry, NULL);
 }
 
 int forge_pd_cap_from_init_data(
@@ -258,10 +136,9 @@ int forge_pd_cap_from_init_data(
     vka_cspace_make_path(get_pd_component()->server_vka, dest_cptr, &dest);
 
     /* Update the info in the registry entry. */
-    seL4_Word badge = pd_assign_new_badge_and_objectID(client_reg_ptr);
-    set_client_id_to_badge(badge, pd->pd_obj_id);
-
-    pd_component_registry_insert(client_reg_ptr);
+    seL4_Word badge = resource_server_registry_badge_and_insert(&get_pd_component()->pd_registry, (resource_server_registry_node_t *)client_reg_ptr,
+                                                                GPICAP_TYPE_PD, NSID_DEFAULT, &client_reg_ptr->pd.pd_obj_id);
+    test_pd_id = client_reg_ptr->gen.object_id;
 
     int error = vka_cnode_mint(&dest,
                                &src,
@@ -287,10 +164,10 @@ void update_forged_pd_cap_from_init_data(test_init_data_t *init_data, sel4utils_
 
     // Assumes this is called to set up the test process
     // (XXX) Arya: Would this fail if used for a second test?
-    pd_component_registry_entry_t *reg_ptr = get_pd_component()->client_registry;
+    pd_component_registry_entry_t *reg_ptr = (pd_component_registry_entry_t *)resource_server_registry_get_by_id(&get_pd_component()->pd_registry, test_pd_id);
     pd_t *pd = &reg_ptr->pd;
     assert(pd != NULL);
-    assert(pd->pd_obj_id == 0x1);
+
     pd->image_name = "TEST_PD";
 
     // Split the test process' cspace and initialize a vka with half
@@ -348,7 +225,8 @@ void *get_osmosis_pd_init_data(vspace_t *test_vspace)
 {
     // Assumes this is called to set up the test process
     // (XXX) Arya: Would this fail if used for a second test?
-    pd_t *pd = &get_pd_component()->client_registry->pd;
+    pd_component_registry_entry_t *reg_ptr = (pd_component_registry_entry_t *)resource_server_registry_get_by_id(&get_pd_component()->pd_registry, test_pd_id);
+    pd_t *pd = &reg_ptr->pd;
 
     // Copy the init data frame cap
     cspacepath_t src, dest;
@@ -416,14 +294,13 @@ void pd_handle_allocation_request(seL4_Word sender_badge, seL4_MessageInfo_t *re
         return;
     }
     memset((void *)client_reg_ptr, 0, sizeof(pd_component_registry_entry_t));
-    pd_component_registry_insert(client_reg_ptr);
 
     int error = pd_new(&client_reg_ptr->pd,
                        get_pd_component()->server_vka,
                        get_pd_component()->server_vspace);
 
-    /* Create a badged endpoint for the client to send messages to.
-     * Use the address of the client_registry_entry as the badge.
+    /**
+     * Create a badged endpoint for the client to send messages to.
      */
     cspacepath_t src, dest;
     vka_cspace_make_path(get_pd_component()->server_vka,
@@ -432,9 +309,10 @@ void pd_handle_allocation_request(seL4_Word sender_badge, seL4_MessageInfo_t *re
     vka_cspace_alloc(get_pd_component()->server_vka, &dest_cptr);
     vka_cspace_make_path(get_pd_component()->server_vka, dest_cptr, &dest);
 
-    // Add the latest ID to the obj and to the badlge.
-    // (XXX) Arya: replace with pd_send_cap?
-    seL4_Word badge = pd_assign_new_badge_and_objectID(client_reg_ptr);
+    seL4_Word badge = resource_server_registry_badge_and_insert(&get_pd_component()->pd_registry, (resource_server_registry_node_t *)client_reg_ptr,
+                                                                GPICAP_TYPE_PD, NSID_DEFAULT, &client_reg_ptr->pd.pd_obj_id);
+
+    // (XXX) Arya: Can this be replaced with pd_send_cap?
     uint32_t client_id = get_client_id_from_badge(sender_badge);
     osmosis_pd_cap_t *res = pd_add_resource_by_id(client_id, GPICAP_TYPE_PD, get_object_id_from_badge(badge));
     if (res)
@@ -453,6 +331,7 @@ void pd_handle_allocation_request(seL4_Word sender_badge, seL4_MessageInfo_t *re
         return;
     }
     client_reg_ptr->pd.pd_cap_in_RT = dest_cptr;
+
     /* Return this badged end point in the return message. */
     seL4_SetCap(0, dest.capPtr);
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(error, 0, 1, 1);
@@ -484,7 +363,7 @@ static void handle_disconnect_req(seL4_Word sender_badge,
         error = pd_destroy(&client_data->pd, get_pd_component()->server_vka, get_pd_component()->server_vspace);
 
         /* Remove the PD from registry */
-        pd_component_registry_remove_entry_by_badge(sender_badge);
+        resource_server_registry_delete(&get_pd_component()->pd_registry, (resource_server_registry_node_t *)client_data);
 
         /* (XXX) Arya: Cleanup resources like ADS? */
 
@@ -737,7 +616,7 @@ static void handle_add_rde_req(seL4_Word sender_badge, seL4_MessageInfo_t old_ta
         rde_type_t rde_type = {.type = resource_manager_data->resource_type};
         error = pd_add_rde(&target_data->pd,
                            rde_type,
-                           resource_manager_data->manager_id,
+                           resource_manager_data->gen.object_id,
                            ns_id,
                            resource_manager_data->server_ep);
     }
@@ -796,7 +675,7 @@ static void handle_share_rde_req(seL4_Word sender_badge, seL4_MessageInfo_t old_
         rde_type_t rde_type = {.type = type};
         error = pd_add_rde(&target_data->pd,
                            rde_type,
-                           resource_manager_data->manager_id,
+                           resource_manager_data->gen.object_id,
                            ns_id,
                            resource_manager_data->server_ep);
     }

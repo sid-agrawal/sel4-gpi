@@ -13,6 +13,7 @@
 
 #include <sel4gpi/mo_obj.h>
 #include <sel4gpi/ads_obj.h>
+#include <sel4gpi/resource_server_utils.h>
 
 /** @file APIs for managing and interacting with the serial server thread.
  *
@@ -72,10 +73,8 @@ enum mo_component_msgregs
 /* Per-client context maintained by the server. */
 typedef struct _mo_component_registry_entry
 {
+    resource_server_registry_node_t gen;
     mo_t mo;
-    uint32_t count; /*There can be more than one cap to this object.*/
-    struct _mo_component_registry_entry *next;
-
 } mo_component_registry_entry_t;
 
 /* State maintained by the server. */
@@ -90,9 +89,19 @@ typedef struct _mo_component_context
     // The server listens on this endpoint.
     vka_object_t server_ep_obj;
 
-    int registry_n_entries;
-    mo_component_registry_entry_t *client_registry;
+    // Registry
+    resource_server_registry_t mo_registry;
 } mo_component_context_t;
+
+/**
+ * To initialize the mo component at the beginning of execution
+ */
+int mo_component_initialize(simple_t *server_simple,
+                            vka_t *server_vka,
+                            seL4_CPtr server_cspace,
+                            vspace_t *server_vspace,
+                            sel4utils_thread_t server_thread,
+                            vka_object_t server_ep_obj);
 
 /**
  * Internal library function: acts as the main() for the server thread.

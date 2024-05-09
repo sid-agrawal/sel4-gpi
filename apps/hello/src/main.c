@@ -42,7 +42,6 @@ int main(int argc, char **argv)
 
     int error;
 
-    osm_pd_init_data_t *init_data = sel4runtime_get_osm_init_data();
     seL4_CPtr pd_cap = sel4gpi_get_pd_cap();
     seL4_CPtr ads_cap = sel4gpi_get_rde_by_ns_id(sel4gpi_get_binded_ads_id(), GPICAP_TYPE_ADS);
     assert(ads_cap != seL4_CapNull);

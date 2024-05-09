@@ -15,7 +15,8 @@
 
 #include <sel4gpi/ads_clientapi.h>
 #include <sel4gpi/pd_clientapi.h>
-#include <sel4gpi/resource_server_utils.h>
+#include <sel4gpi/resource_server_remote_utils.h>
+#include <sel4gpi/resource_space_clientapi.h>
 #include <ramdisk_client.h>
 
 #include <libc_fs_helpers.h>
@@ -101,134 +102,19 @@ static void apply_prefix(char *prefix, char *path)
   strcpy(path, temp);
 }
 
-/**
- * Insert the data for a namespace
- */
-static void insert_ns(fs_namespace_t *ns)
+static void ns_registry_entry_on_delete(resource_server_registry_node_t *node_gen)
 {
-  ns->next = get_xv6fs_server()->namespaces;
-  get_xv6fs_server()->namespaces = ns;
+  fs_namespace_entry_t *node = (fs_namespace_entry_t *)node_gen;
+  
+  // (XXX) Any cleanup necessary for NS
 }
 
-/**
- * Find the data for a namespace
- */
-static fs_namespace_t *find_ns(uint64_t nsid)
+static void file_registry_entry_on_delete(resource_server_registry_node_t *node_gen)
 {
-  for (fs_namespace_t *curr = get_xv6fs_server()->namespaces; curr != NULL; curr = curr->next)
-  {
-    if (curr->id == nsid)
-    {
-      return curr;
-    }
-  }
+  file_registry_entry_t *node = (file_registry_entry_t *)node_gen;
 
-  return NULL;
-}
-
-/**
- * @brief Insert a new client into the client registry Linked List.
- *
- * @param new_node
- */
-static void fs_registry_insert(fs_registry_entry_t *new_node)
-{
-  fs_registry_entry_t *head = get_xv6fs_server()->client_registry;
-
-  if (head == NULL)
-  {
-    get_xv6fs_server()->client_registry = new_node;
-    new_node->next = NULL;
-    return;
-  }
-
-  while (head->next != NULL)
-  {
-    head = head->next;
-  }
-  head->next = new_node;
-  new_node->next = NULL;
-}
-
-/**
- * @brief Lookup the client registry entry for the given id.
- *
- * @param object_id
- * @return fs_registry_entry_t*
- */
-static fs_registry_entry_t *fs_registry_get_entry_by_id(uint64_t object_id)
-{
-  fs_registry_entry_t *current_ctx = get_xv6fs_server()->client_registry;
-  uint64_t file_id = get_local_object_id_from_badge(object_id);
-
-  while (current_ctx != NULL)
-  {
-    if ((seL4_Word)current_ctx->file->id == file_id)
-    {
-      break;
-    }
-    current_ctx = current_ctx->next;
-  }
-  return current_ctx;
-}
-
-/**
- * @brief Lookup the client registry entry for the given badge.
- *
- * @param badge
- * @return fs_registry_entry_t*
- */
-static fs_registry_entry_t *fs_registry_get_entry_by_badge(seL4_Word badge)
-{
-
-  uint64_t object_id = get_object_id_from_badge(badge);
-  return fs_registry_get_entry_by_id(object_id);
-}
-
-/**
- * @brief Close the registry entry
- * If the entry has no references, close the corresponding file
- *
- * @param entry entry to close
- * @return fs_registry_entry_t*
- */
-static void fs_registry_close(fs_registry_entry_t *entry)
-{
-  fs_registry_entry_t *current_ctx = get_xv6fs_server()->client_registry;
-
-  // Check if entry to remove is head of list
-  if (current_ctx == entry)
-  {
-    current_ctx->count--;
-
-    if (current_ctx->count == 0)
-    {
-      get_xv6fs_server()->client_registry = entry->next;
-      xv6fs_sys_fileclose(entry->file);
-      free(entry);
-    }
-
-    return;
-  }
-
-  // Otherwise remove from list
-  while (current_ctx != NULL)
-  {
-    if (current_ctx->next == entry)
-    {
-      current_ctx->next->count--;
-
-      if (current_ctx->next->count == 0)
-      {
-        current_ctx->next = entry->next;
-        xv6fs_sys_fileclose(entry->file);
-        free(entry);
-      }
-
-      return;
-    }
-    current_ctx = current_ctx->next;
-  }
+  // Close the file in the FS
+  xv6fs_sys_fileclose(node->file);
 }
 
 /*--- XV6FS SERVER ---*/
@@ -299,6 +185,10 @@ int xv6fs_init()
   binit();
   fsinit(ROOTDEV);
 
+  /* Initialize the registries */
+  resource_server_initialize_registry(&get_xv6fs_server()->file_registry, file_registry_entry_on_delete);
+  resource_server_initialize_registry(&get_xv6fs_server()->ns_registry, ns_registry_entry_on_delete);
+
   XV6FS_PRINTF("Initialized file system\n");
 
   return error;
@@ -331,8 +221,6 @@ seL4_MessageInfo_t xv6fs_request_handler(seL4_MessageInfo_t tag, seL4_Word sende
       void *free_mem = mem_vaddr + sizeof(model_state_t);
       size_t free_size = seL4_GetMR(RSMSGREG_EXTRACT_RR_REQ_SIZE) - sizeof(model_state_t);
 
-// (XXX) Arya: Switch from dumping one resource to dumping entire namespace
-#if 1
       uint64_t ns_id = seL4_GetMR(RSMSGREG_EXTRACT_RR_REQ_ID);
       XV6FS_PRINTF("Get RR for ns %d\n", ns_id);
 
@@ -342,7 +230,8 @@ seL4_MessageInfo_t xv6fs_request_handler(seL4_MessageInfo_t tag, seL4_Word sende
 
       if (ns_id != NSID_DEFAULT)
       {
-        fs_namespace_t *ns = find_ns(ns_id);
+        fs_namespace_entry_t *ns = (fs_namespace_entry_t *) resource_server_registry_get_by_id(&get_xv6fs_server()->ns_registry, ns_id);
+
         if (ns == NULL)
         {
           XV6FS_PRINTF("Namespace did not exist for dumprr\n");
@@ -407,57 +296,6 @@ seL4_MessageInfo_t xv6fs_request_handler(seL4_MessageInfo_t tag, seL4_Word sende
       }
 
       free(blocknos);
-
-#else
-      uint64_t resource_id = seL4_GetMR(RSMSGREG_EXTRACT_RR_REQ_ID);
-
-      // Find the resource
-      fs_registry_entry_t *reg_entry = fs_registry_get_entry_by_id(resource_id);
-      if (reg_entry == NULL)
-      {
-        XV6FS_PRINTF("Received invalid resource for RR request, ID is 0x%lx, local ID is 0x%lx\n",
-                     resource_id, get_local_object_id_from_badge(resource_id));
-        error = RS_ERROR_DNE;
-
-        // (XXX) Arya: Ideally, we should have let the PD component know tha this file was deleted
-        // For now, just return RS_ERROR_DNE
-        goto done;
-      }
-
-      XV6FS_PRINTF("Get RR for fileno %ld\n", reg_entry->file->id);
-
-      // Add the entry for the resource
-      // (XXX) Arya: fileno may not be globally unique, need combined ID
-      char file_res_id[CSV_MAX_STRING_SIZE];
-      make_res_id(file_res_id, GPICAP_TYPE_FILE, resource_id);
-      add_resource_rr(rr_state, GPICAP_TYPE_FILE, file_res_id, row_ptr);
-      row_ptr++;
-
-      // Add relations for blocks
-      int n_blocknos = 100; // (XXX) Arya: what if there are more blocks?
-      int *blocknos = malloc(sizeof(int) * n_blocknos);
-      xv6fs_sys_blocknos(reg_entry->file, blocknos, n_blocknos, &n_blocknos);
-      XV6FS_PRINTF("File has %d blocks\n", n_blocknos);
-
-      char block_res_id[CSV_MAX_STRING_SIZE];
-
-      for (int i = 0; i < n_blocknos; i++)
-      {
-        if ((void *)(row_ptr + 1) >= mem_vaddr + mem_size)
-        {
-          XV6FS_PRINTF("Ran out of space in the MO to write RR, wrote %d rows\n", i);
-          error = RS_ERROR_RR_SIZE;
-          break;
-        }
-
-        uint64_t block_id = get_xv6fs_server()->naive_blocks[blocknos[i]].id;
-        make_res_id(block_res_id, GPICAP_TYPE_BLOCK, block_id);
-        add_resource_depends_on_rr(rr_state, file_res_id, block_res_id, REL_TYPE_MAP, row_ptr);
-        row_ptr++;
-      }
-      free(blocknos);
-#endif
-
       clean_model_state(model_state);
 
       seL4_SetMR(RDMSGREG_FUNC, RS_FUNC_GET_RR_ACK);
@@ -485,10 +323,10 @@ seL4_MessageInfo_t xv6fs_request_handler(seL4_MessageInfo_t tag, seL4_Word sende
       XV6FS_PRINTF("Registered new namespace with ID %ld\n", ns_id);
 
       // Bookkeeping the NS
-      fs_namespace_t *ns_entry = malloc(sizeof(fs_namespace_t));
-      ns_entry->id = ns_id;
+      fs_namespace_entry_t *ns_entry = malloc(sizeof(fs_namespace_entry_t));
+      ns_entry->gen.object_id = ns_id;
       make_ns_prefix(ns_entry->ns_prefix, ns_id);
-      insert_ns(ns_entry);
+      resource_server_registry_insert(&get_xv6fs_server()->ns_registry, (resource_server_registry_node_t *)ns_entry);
 
       // Create directory in global FS
       error = xv6fs_sys_mkdir(ns_entry->ns_prefix);
@@ -510,7 +348,7 @@ seL4_MessageInfo_t xv6fs_request_handler(seL4_MessageInfo_t tag, seL4_Word sende
       ns_id = get_ns_id_from_badge(sender_badge);
       if (ns_id != NSID_DEFAULT)
       {
-        fs_namespace_t *ns = find_ns(ns_id);
+        fs_namespace_entry_t *ns = (fs_namespace_entry_t *) resource_server_registry_get_by_id(&get_xv6fs_server()->ns_registry, ns_id);
         if (ns == NULL)
         {
           XV6FS_PRINTF("Namespace did not exist\n");
@@ -535,15 +373,15 @@ seL4_MessageInfo_t xv6fs_request_handler(seL4_MessageInfo_t tag, seL4_Word sende
       }
 
       // Add to registry if not already present
-      fs_registry_entry_t *reg_entry = fs_registry_get_entry_by_id(file->id);
+      file_registry_entry_t *reg_entry = (file_registry_entry_t *) resource_server_registry_get_by_id(&get_xv6fs_server()->file_registry, file->id);
 
       if (reg_entry == NULL)
       {
         XV6FS_PRINTF("File not previously open, make new registry entry\n");
-        reg_entry = malloc(sizeof(fs_registry_entry_t));
-        reg_entry->count = 1;
+        reg_entry = malloc(sizeof(file_registry_entry_t));
+        reg_entry->gen.object_id = file->id;
         reg_entry->file = file;
-        fs_registry_insert(reg_entry);
+        resource_server_registry_insert(&get_xv6fs_server()->file_registry, (resource_server_registry_node_t *)reg_entry);
 
         // Notify the PD component about the new reousrce
         error = resource_server_create_resource(&get_xv6fs_server()->gen, file->id);
@@ -552,9 +390,9 @@ seL4_MessageInfo_t xv6fs_request_handler(seL4_MessageInfo_t tag, seL4_Word sende
       else
       {
         XV6FS_PRINTF("File was already open, use previous registry entry\n");
-        reg_entry->count++;
+        resource_server_registry_inc(&get_xv6fs_server()->file_registry, (resource_server_registry_node_t *)reg_entry);
 
-        fileclose(file); // We don't need another copy of the structure
+        xv6fs_sys_fileclose(file); // We don't need another copy of the structure
         file = reg_entry->file;
         filedup(file);
       }
@@ -595,7 +433,7 @@ seL4_MessageInfo_t xv6fs_request_handler(seL4_MessageInfo_t tag, seL4_Word sende
       ns_id = get_ns_id_from_badge(sender_badge);
       if (ns_id != NSID_DEFAULT)
       {
-        fs_namespace_t *ns = find_ns(ns_id);
+        fs_namespace_entry_t *ns = (fs_namespace_entry_t *) resource_server_registry_get_by_id(&get_xv6fs_server()->ns_registry, ns_id);
         if (ns == NULL)
         {
           XV6FS_PRINTF("Namespace did not exist\n");
@@ -609,7 +447,8 @@ seL4_MessageInfo_t xv6fs_request_handler(seL4_MessageInfo_t tag, seL4_Word sende
       /* Find the file to link */
       seL4_Word file_badge = seL4_GetBadge(1);
 
-      reg_entry = fs_registry_get_entry_by_badge(file_badge);
+      reg_entry = (file_registry_entry_t *) resource_server_registry_get_by_badge(&get_xv6fs_server()->file_registry, file_badge);
+
       if (reg_entry == NULL)
       {
         XV6FS_PRINTF("Received invalid file to link\n");
@@ -617,7 +456,7 @@ seL4_MessageInfo_t xv6fs_request_handler(seL4_MessageInfo_t tag, seL4_Word sende
         goto done;
       }
 
-      XV6FS_PRINTF("File to link has id %ld, linking to path %s\n", reg_entry->file->id, pathname);
+      XV6FS_PRINTF("File to link has id %ld, linking to path %s\n", reg_entry->gen.object_id, pathname);
 
       /* Do the link */
       error = xv6fs_sys_dolink2(reg_entry->file, pathname);
@@ -635,7 +474,7 @@ seL4_MessageInfo_t xv6fs_request_handler(seL4_MessageInfo_t tag, seL4_Word sende
       ns_id = get_ns_id_from_badge(sender_badge);
       if (ns_id != NSID_DEFAULT)
       {
-        fs_namespace_t *ns = find_ns(ns_id);
+        fs_namespace_entry_t *ns = (fs_namespace_entry_t *) resource_server_registry_get_by_id(&get_xv6fs_server()->ns_registry, ns_id);
         if (ns == NULL)
         {
           XV6FS_PRINTF("Namespace did not exist\n");
@@ -663,7 +502,8 @@ seL4_MessageInfo_t xv6fs_request_handler(seL4_MessageInfo_t tag, seL4_Word sende
     XV6FS_PRINTF("Received badged request with object id %lx\n", get_object_id_from_badge(sender_badge));
 
     int ret;
-    fs_registry_entry_t *reg_entry = fs_registry_get_entry_by_badge(sender_badge);
+    file_registry_entry_t *reg_entry = (file_registry_entry_t *) resource_server_registry_get_by_badge(&get_xv6fs_server()->file_registry, sender_badge);
+
     if (reg_entry == NULL)
     {
       XV6FS_PRINTF("Received invalid badge\n");
@@ -711,7 +551,7 @@ seL4_MessageInfo_t xv6fs_request_handler(seL4_MessageInfo_t tag, seL4_Word sende
       XV6FS_PRINTF("Close file (%d)\n", reg_entry->file->id);
 
       /* Remove the ref in the registry entry */
-      fs_registry_close(reg_entry);
+      resource_server_registry_dec(&get_xv6fs_server()->file_registry, (resource_server_registry_node_t *)reg_entry);
 
       seL4_MessageInfo_ptr_set_length(&reply_tag, FSMSGREG_CLOSE_ACK_END);
       seL4_SetMR(RDMSGREG_FUNC, FS_FUNC_CLOSE_ACK);

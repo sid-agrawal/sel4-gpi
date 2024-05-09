@@ -74,6 +74,8 @@ int cpu_config_vspace(cpu_t *cpu,
     cpu->thread.ipc_buffer_addr = ipc_buf_addr;
     cpu->thread.ipc_buffer = ipc_buffer_frame;
 
+    printf("TEMPA IPC buf vaddr %p\n", ipc_buf_addr);
+
     int error = seL4_TCB_Configure(cpu->thread.tcb.cptr,
                                    fault_ep,   // fault endpoint
                                    root_cnode, // root cnode

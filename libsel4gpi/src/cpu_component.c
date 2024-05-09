@@ -32,21 +32,6 @@
 #include <sel4gpi/badge_usage.h>
 #include <sel4gpi/debug.h>
 
-uint64_t cpu_assign_new_badge_and_objectID(cpu_component_registry_entry_t *reg)
-{
-    get_cpu_component()->registry_n_entries++;
-    // Add the latest ID to the obj and to the badlge.
-    seL4_Word badge_val = gpi_new_badge(GPICAP_TYPE_CPU,
-                                        0x00,
-                                        0x00,
-                                        NSID_DEFAULT,
-                                        get_cpu_component()->registry_n_entries);
-
-    assert(badge_val != 0);
-    reg->cpu.cpu_obj_id = get_cpu_component()->registry_n_entries;
-    OSDB_PRINTF(CPU_DEBUG, "cpu_assign_new_badge_and_objectID: new badge: %lx\n", badge_val);
-    return badge_val;
-}
 cpu_component_context_t *get_cpu_component(void)
 {
     return &get_gpi_server()->cpu_component;
@@ -69,53 +54,33 @@ static inline void reply(seL4_MessageInfo_t tag)
     api_reply(get_cpu_component()->server_thread.reply.cptr, tag);
 }
 
-/**
- * @brief Insert a new client into the client registry Linked List.
- *
- * @param new_node
- */
-static void cpu_component_registry_insert(cpu_component_registry_entry_t *new_node)
+int cpu_component_initialize(simple_t *server_simple,
+                             vka_t *server_vka,
+                             seL4_CPtr server_cspace,
+                             vspace_t *server_vspace,
+                             sel4utils_thread_t server_thread,
+                             vka_object_t server_ep_obj)
 {
-    // TODO:Use a mutex
+    cpu_component_context_t *component = get_cpu_component();
 
-    cpu_component_registry_entry_t *head = get_cpu_component()->client_registry;
+    component->server_simple = server_simple;
+    component->server_vka = server_vka;
+    component->server_cspace = server_cspace;
+    component->server_vspace = server_vspace;
+    component->server_thread = server_thread;
+    component->server_ep_obj = server_ep_obj;
 
-    if (head == NULL)
-    {
-        get_cpu_component()->client_registry = new_node;
-        new_node->next = NULL;
-        return;
-    }
-
-    while (head->next != NULL)
-    {
-        head = head->next;
-    }
-    head->next = new_node;
-    new_node->next = NULL;
+    resource_server_initialize_registry(&component->cpu_registry, NULL);
 }
 
-/**
- * @brief Lookup the client registry entry for the give badge.
- *
- * @param badge
- * @return cpu_component_registry_entry_t*
- */
 cpu_component_registry_entry_t *cpu_component_registry_get_entry_by_badge(seL4_Word badge)
 {
+    return (cpu_component_registry_entry_t *)resource_server_registry_get_by_badge(&get_cpu_component()->cpu_registry, badge);
+}
 
-    uint64_t objectID = get_object_id_from_badge(badge);
-    cpu_component_registry_entry_t *current_ctx = get_cpu_component()->client_registry;
-
-    while (current_ctx != NULL)
-    {
-        if ((seL4_Word)current_ctx->cpu.cpu_obj_id == objectID)
-        {
-            break;
-        }
-        current_ctx = current_ctx->next;
-    }
-    return current_ctx;
+cpu_component_registry_entry_t *cpu_component_registry_get_entry_by_id(seL4_Word object_id)
+{
+    return (cpu_component_registry_entry_t *)resource_server_registry_get_by_id(&get_cpu_component()->cpu_registry, object_id);
 }
 
 // (XXX): Somwehere here we should call cpu_new
@@ -131,7 +96,6 @@ void cpu_handle_allocation_request(seL4_Word sender_badge, seL4_MessageInfo_t *r
         return;
     }
     memset((void *)client_reg_ptr, 0, sizeof(cpu_component_registry_entry_t));
-    cpu_component_registry_insert(client_reg_ptr);
 
     /* Createa a new CPU object */
 
@@ -154,15 +118,15 @@ void cpu_handle_allocation_request(seL4_Word sender_badge, seL4_MessageInfo_t *r
     vka_cspace_make_path(get_cpu_component()->server_vka, dest_cptr, &dest);
 
     // Add the latest ID to the obj and to the badlge.
-    seL4_Word badge = cpu_assign_new_badge_and_objectID(client_reg_ptr);
-    uint32_t client_id = get_client_id_from_badge(sender_badge);
+    seL4_Word badge = resource_server_registry_badge_and_insert(&get_cpu_component()->cpu_registry, (resource_server_registry_node_t *)client_reg_ptr,
+                                                                GPICAP_TYPE_CPU, NSID_DEFAULT, &client_reg_ptr->cpu.cpu_obj_id);
 
     // (XXX) Linh: this is not very nice as we're coupling the PD and CPU components
-    osmosis_pd_cap_t *res = pd_add_resource_by_id(client_id, GPICAP_TYPE_CPU, get_object_id_from_badge(badge));
+    osmosis_pd_cap_t *res = pd_add_resource_by_id(client_reg_ptr->cpu.cpu_obj_id, GPICAP_TYPE_CPU, get_object_id_from_badge(badge));
     if (res)
     {
         res->slot_in_RT_Debug = dest_cptr;
-        badge = set_client_id_to_badge(badge, client_id);
+        badge = set_client_id_to_badge(badge, client_reg_ptr->cpu.cpu_obj_id);
     }
     error = vka_cnode_mint(&dest,
                            &src,
@@ -367,27 +331,6 @@ static void handle_change_vspace_req(seL4_Word sender_badge,
     return reply(tag);
 }
 
-/**
- * @brief Lookup the client registry entry for the given objectID
- *
- * @param res_id
- * @return cpu_component_registry_entry_t*
- */
-cpu_component_registry_entry_t *cpu_component_registry_get_entry_by_id(seL4_Word objectID)
-{
-    cpu_component_registry_entry_t *current_ctx = get_cpu_component()->client_registry;
-
-    while (current_ctx != NULL)
-    {
-        if (current_ctx->cpu.cpu_obj_id == objectID)
-        {
-            break;
-        }
-        current_ctx = current_ctx->next;
-    }
-    return current_ctx;
-}
-
 int forge_cpu_cap_from_tcb(sel4utils_process_t *process, // Change this to the sel4utils_thread_t
                            vka_t *vka, uint32_t client_id,
                            seL4_CPtr *cap_ret, uint32_t *cpu_obj_id_ret)
@@ -414,9 +357,8 @@ int forge_cpu_cap_from_tcb(sel4utils_process_t *process, // Change this to the s
     vka_cspace_make_path(get_cpu_component()->server_vka, dest_cptr, &dest);
 
     /* Update the info in the registry entry. */
-    seL4_Word badge = cpu_assign_new_badge_and_objectID(client_reg_ptr);
-    badge = set_client_id_to_badge(badge, client_id);
-    cpu_component_registry_insert(client_reg_ptr);
+    seL4_Word badge = resource_server_registry_badge_and_insert(&get_cpu_component()->cpu_registry, (resource_server_registry_node_t *)client_reg_ptr,
+                                                                GPICAP_TYPE_CPU, NSID_DEFAULT, &client_reg_ptr->cpu.cpu_obj_id);
 
     // (XXX) A lot more will go here.
     client_reg_ptr->cpu.thread = process->thread;

@@ -56,6 +56,8 @@ int cpu_client_config(cpu_client_context_t *conn,
     seL4_SetMR(CPUMSGREG_CONFIG_FAULT_EP, fault_ep_position);
     seL4_SetMR(CPUMSGREG_CONFIG_CNODE_GUARD, cnode_guard);
 
+    printf("TEMPA cpu client ipc buf vaddr %p\n", ipc_buf_addr);
+
     /* Send the badged endpoint cap of the ads client as a cap */
     seL4_Uint64 extraCaps = 2;
     seL4_SetCap(0, pd->badged_server_ep_cspath.capPtr);       /*cspace*/

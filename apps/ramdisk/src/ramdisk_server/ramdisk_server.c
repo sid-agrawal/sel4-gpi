@@ -9,7 +9,7 @@
 
 #include <sel4gpi/ads_clientapi.h>
 #include <sel4gpi/pd_clientapi.h>
-#include <sel4gpi/resource_server_utils.h>
+#include <sel4gpi/resource_server_remote_utils.h>
 #include <sel4gpi/model_exporting.h>
 
 #include <ramdisk_server.h>

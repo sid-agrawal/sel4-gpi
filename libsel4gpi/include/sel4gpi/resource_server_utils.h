@@ -2,238 +2,118 @@
 
 #include <stdint.h>
 
+#include <utils/uthash.h>
 #include <sel4/sel4.h>
-#include <sel4test/test.h>
-
-#include <sel4gpi/ads_clientapi.h>
-#include <sel4gpi/mo_clientapi.h>
-#include <sel4gpi/pd_clientapi.h>
 
 /** @file
- * Utility functions for PDs that serve GPI resources
+ * Utility functions for all servers of GPI resources, both in RT and other PDs
  */
 
-#define RESOURCE_SERVER_DEBUG 0
-
-/* IPC values returned in the "label" message header. */
-enum rs_errors
+/**
+ * Generic resource server registry
+ * Maintains per-resource metadata
+ * Resource servers should 'subclass' the node type
+ * by creating a struct:
+ *
+ * struct my_resource_server_registry_node {
+ *  resource_server_registry_node_t gen;
+ *  <...server specific data here...>
+ * }
+ */
+typedef struct _resource_server_registry_node
 {
-    RS_NOERROR = 0,
-    /* No future collisions with seL4_Error.*/
-    RS_ERROR_RR_SIZE = seL4_NumErrors, // RR request shared memory is too small
-    RS_ERROR_DNE,                      // RR request resource no longer exists
-    RS_ERROR_NS,                       // Namespace does not exist
-    RS_NUM_ERRORS
-};
+    // Unique ID within the registry
+    uint64_t object_id;
 
-/* IPC Message register values for RSMSGREG_FUNC */
-enum rs_funcs
+    // Reference count to this node
+    uint32_t count;
+
+    UT_hash_handle hh;
+} resource_server_registry_node_t;
+
+typedef struct _resource_server_registry
 {
-    RS_FUNC_GET_RR_REQ = 0,
-    RS_FUNC_GET_RR_ACK,
+    // Hash table of registry nodes
+    resource_server_registry_node_t *head;
+    uint32_t n_entries;
 
-    RS_FUNC_NEW_NS_REQ,
-    RS_FUNC_NEW_NS_ACK,
+    // Function to be called before a node is deleted, or NULL
+    void (*on_delete)(resource_server_registry_node_t *node);
 
-    RS_FUNC_END,
-};
+} resource_server_registry_t;
 
-/* Message registers for all resource server requests */
-enum rs_msgregs
-{
-    /* These are fixed headers in every message. */
-    RSMSGREG_FUNC = 0,
-
-    /* This is a convenience label for IPC MessageInfo length. */
-    RSMSGREG_LABEL0,
-
-    /* Extract RR */
-    RSMSGREG_EXTRACT_RR_REQ_SIZE = RSMSGREG_LABEL0,
-    RSMSGREG_EXTRACT_RR_REQ_VADDR,
-    RSMSGREG_EXTRACT_RR_REQ_ID,
-    RSMSGREG_EXTRACT_RR_REQ_PD_ID,
-    RSMSGREG_EXTRACT_RR_REQ_RS_PD_ID,
-    RSMSGREG_EXTRACT_RR_REQ_END,
-    RSMSGREG_EXTRACT_RR_ACK_END = RSMSGREG_LABEL0,
-
-    /* New NS */
-    RSMSGREG_NEW_NS_REQ_END = RSMSGREG_LABEL0,
-    RSMSGREG_NEW_NS_ACK_ID = RSMSGREG_LABEL0,
-    RSMSGREG_NEW_NS_ACK_END,
-};
+/* --- Functions for managing a registry --- */
 
 /**
- * Generic resource server context
- */
-typedef struct _resource_server_context
-{
-    gpi_cap_t resource_type;
-    uint64_t server_id;
-
-    // Run to serve requests
-    seL4_MessageInfo_t (*request_handler)(seL4_MessageInfo_t, seL4_Word, seL4_CPtr, bool *);
-
-    // Run once when the server is started
-    int (*init_fn)();
-
-    // RDEs and other EPs
-    seL4_CPtr parent_ep;
-    seL4_CPtr mo_ep;
-    ads_client_context_t ads_conn;
-    pd_client_context_t pd_conn;
-
-    // The server listens on this endpoint.
-    seL4_CPtr server_ep;
-
-    // Other
-    seL4_CPtr mcs_reply;
-} resource_server_context_t;
-
-/**
- * Starts a resource server in a new PD
- * @param rde_id Manager ID of RDE to add, optionsl
- * @param rde_pd_cap PD resource for RDE to add, optional
- * @param image_name name of the resource server's image
- * @param server_pd_cap returns the PD resource of the started server
- * @param resource_manager_id returns the resource manager ID of the started server
- */
-int start_resource_server_pd(uint64_t rde_id,
-                             seL4_CPtr rde_pd_cap,
-                             char *image_name,
-                             seL4_CPtr *server_pd_cap,
-                             uint64_t *resource_manager_id);
-
-/**
- * Starts the resource server in the current
- * thread of the current PD
+ * Initialize a registry
  *
- * @param server_type The type of resource this server will serve
- * @param request_handler Function to handle client requests
- *                  param: seL4_MessageInfo_t tag, the request tag
- *                  param: seL4_Word badge, the request's badge
- *                  param: seL4_CPtr cap, the received cap
- *                  return: seL4_MessageInfo_t reply info
- * @param parent_ep Endpoint of the parent process
- * @param init_fn To run at the beginning of main thread execution
- * @return 0 on successful exit, nonzero otherwise
+ * @param registry the registry to initialize
+ * @param on_delete (optional) function to be called before a node is deleted
  */
-int resource_server_start(resource_server_context_t *context,
-                          gpi_cap_t server_type,
-                          seL4_MessageInfo_t (*request_handler)(seL4_MessageInfo_t, seL4_Word, seL4_CPtr, bool *),
-                          seL4_CPtr parent_ep,
-                          int (*init_fn)());
+void resource_server_initialize_registry(resource_server_registry_t *registry, void (*on_delete)(resource_server_registry_node_t *));
 
 /**
- * Recv function for MCS or non-MCS kernel
- */
-seL4_MessageInfo_t resource_server_recv(resource_server_context_t *context,
-                                        seL4_Word *sender_badge_ptr);
-
-/**
- * Reply function for MCS or non-MCS kernel
- */
-void resource_server_reply(resource_server_context_t *context,
-                           seL4_MessageInfo_t tag);
-
-/**
- * Gets the next free cspace slot, otherwise uses pd clientapi
- */
-int resource_server_next_slot(resource_server_context_t *context,
-                              seL4_CPtr *slot);
-
-/**
- * Frees a previously allocated cspace slot, otherwise uses pd clientapi
- */
-int resource_server_free_slot(resource_server_context_t *context,
-                              seL4_CPtr slot);
-
-/**
- * Main function for a resource server, receives requests
- */
-int resource_server_main(void *context_v);
-
-/**
- * Attach a MO from a client request to the server's ADS
- * @param mo_cap The MO cap to attach
- * @param vaddr Returns the vaddr where MO was attached
- */
-int resource_server_attach_mo(resource_server_context_t *context,
-                              seL4_CPtr mo_cap,
-                              void **vaddr);
-
-/**
- * Remove a previously attached MO from the server's ADS
- * @param vaddr The vaddr where MO was attached
- */
-int resource_server_unattach(resource_server_context_t *context,
-                             void *vaddr);
-
-/**
- * Request a resource server to dump resource relations
+ * Insert a new node to the registry
  *
- * @param server_ep Unbadged ep of the resource server
- * @param res_id The id of the resource to dump relations for
- * @param pd_id The id of the pd that has the resource (for the has_access_to row)
- * @param server_pd_id The id of the server pd
- * @param remote_vaddr location of shared memory in the resource server
- * @param local_vaddr location of shared memory in the caller
- * @param size size of shared memory
- * @param model_state_t Location of the resulting model state
- *                     (same as local_vaddr on success)
- * @return
- *      RS_NOERROR if dump completed successfully
- *      RS_ERROR_RR_SIZE if size was too small to write RR
- *      + Error codes for the respective resource server
+ * @param registry
+ * @param node the node to insert
  */
-int resource_server_get_rr(seL4_CPtr server_ep,
-                           seL4_Word res_id,
-                           seL4_Word pd_id,
-                           seL4_Word server_pd_id,
-                           void *remote_vaddr,
-                           void *local_vaddr,
-                           size_t size,
-                           model_state_t **ret_state);
+void resource_server_registry_insert(resource_server_registry_t *registry, resource_server_registry_node_t *node);
 
 /**
- * Notifies the PD component of a resource that is created, but not yet
- * given to a client PD
+ * Get a node from the registry by the resource ID
  *
- * @param resource_id ID of the resource, needs to be unique within this server
- * @param dest Returns the slot of the badged copy in the recipient's cspace
+ * @param registry
+ * @param object_id id of the resource to find the corresponding node
+ * @return The corresponding node, or NULL if not found
  */
-int resource_server_create_resource(resource_server_context_t *context,
-                                    uint64_t resource_id);
+resource_server_registry_node_t *resource_server_registry_get_by_id(resource_server_registry_t *registry, uint64_t object_id);
 
 /**
- * Notifies the PD component to create a badged copy of the server's endpoint
- * as a new resource in the recipient's cspace
+ * Get a node from the registry by the gpi badge
  *
- * @param ns_id ID of the namespace being allocated from
- * @param resource_id ID of the resource, needs to be unique within this server
- * @param client_id ID of the client PD
- * @param dest Returns the slot of the badged copy in the recipient's cspace
+ * @param registry
+ * @param badge badge of the resource to find the corresponding node
+ * @return The corresponding node, or NULL if not found
  */
-int resource_server_give_resource(resource_server_context_t *context,
-                                  uint64_t ns_id,
-                                  uint64_t resource_id,
-                                  uint64_t client_id,
-                                  seL4_CPtr *dest);
+resource_server_registry_node_t *resource_server_registry_get_by_badge(resource_server_registry_t *registry, seL4_Word badge);
 
 /**
- * Creates a new namespace ID for this resource server
+ * Delete a node from the registry
+ * Regardless of reference count, the node will be deleted
  *
- * @param client_id Client ID of the client that requested the new NS
- * @param ns_id returns the newly allocated NS ID
+ * @param registry
+ * @param node node to delete
  */
-int resource_server_new_ns(resource_server_context_t *context,
-                           uint64_t client_id,
-                           uint64_t *ns_id);
+void resource_server_registry_delete(resource_server_registry_t *registry, resource_server_registry_node_t *node);
 
 /**
- * Request a new namespace ID from a resource server
+ * Increment the reference count of a node in the registry
  *
- * @param server_ep the EP of the resource server
- * @param ns_id returns the newly allocated NS ID
+ * @param registry
+ * @param node the node to increment
  */
-int resource_server_client_new_ns(seL4_CPtr server_ep,
-                                  uint64_t *ns_id);
+void resource_server_registry_inc(resource_server_registry_t *registry, resource_server_registry_node_t *node);
+
+/**
+ * Decrement the reference count of a node in the registry
+ * If this reduces reference count to 0, the node will be deleted
+ *
+ * @param registry
+ * @param node the node to decrement
+ */
+void resource_server_registry_dec(resource_server_registry_t *registry, resource_server_registry_node_t *node);
+
+/**
+ * Assign an object id for a new registry entry before inserting
+ * Constructs and returns the corresponding resource badge
+ *
+ * @param registry
+ * @param node new node to assign an ID to
+ * @param resource_type type of resource (for badge)
+ * @param ns_id ns id (for badge)
+ * @param new_obj_id returns the assigned object id
+ * @return the new resource badge
+ */
+uint64_t resource_server_registry_badge_and_insert(resource_server_registry_t *registry, resource_server_registry_node_t *node,
+                                                   gpi_cap_t resource_type, uint64_t ns_id, uint32_t *new_obj_id);

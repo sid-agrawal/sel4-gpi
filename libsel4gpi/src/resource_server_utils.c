@@ -6,6 +6,7 @@
 #include <sel4utils/process.h>
 #include <sel4gpi/pd_utils.h>
 #include <sel4gpi/resource_server_utils.h>
+#include <sel4gpi/resource_server_remote_utils.h>
 
 #define SERVER_UTILS "SERVER_UTILS"
 
@@ -310,14 +311,14 @@ int resource_server_unattach(resource_server_context_t *context,
     return error;
 }
 
-int resource_server_get_rr(seL4_CPtr server_ep,
-                           seL4_Word res_id,
-                           seL4_Word pd_id,
-                           seL4_Word server_pd_id,
-                           void *remote_vaddr,
-                           void *local_vaddr,
-                           size_t size,
-                           model_state_t **ret_state)
+int resource_server_client_get_rr(seL4_CPtr server_ep,
+                                  seL4_Word res_id,
+                                  seL4_Word pd_id,
+                                  seL4_Word server_pd_id,
+                                  void *remote_vaddr,
+                                  void *local_vaddr,
+                                  size_t size,
+                                  model_state_t **ret_state)
 {
     RESOURCE_SERVER_PRINTF("requesting resource relations for ID 0x%lx\n", res_id);
     RESOURCE_SERVER_PRINTF("Shared mem local addr: %p, remote addr: %p\n", local_vaddr, remote_vaddr);
@@ -412,4 +413,78 @@ int resource_server_new_ns(resource_server_context_t *context,
     error = pd_client_register_namespace(&context->pd_conn, context->server_id, client_id, ns_id);
 
     return error;
+}
+
+/* --- Functions for managing a registry --- */
+
+void resource_server_initialize_registry(resource_server_registry_t *registry, void (*on_delete)(resource_server_registry_node_t *))
+{
+    registry->head = NULL;
+    registry->on_delete = on_delete;
+    registry->n_entries = 0;
+}
+
+void resource_server_registry_insert(resource_server_registry_t *registry, resource_server_registry_node_t *node)
+{
+    registry->n_entries++;
+    node->count = 1;
+    HASH_ADD(hh, registry->head, object_id, sizeof(node->object_id), node);
+}
+
+resource_server_registry_node_t *resource_server_registry_get_by_id(resource_server_registry_t *registry, uint64_t object_id)
+{
+    resource_server_registry_node_t *node;
+    HASH_FIND(hh, registry->head, &object_id, sizeof(object_id), node);
+    return node;
+}
+
+resource_server_registry_node_t *resource_server_registry_get_by_badge(resource_server_registry_t *registry, seL4_Word badge)
+{
+    resource_server_registry_get_by_id(registry, get_local_object_id_from_badge(badge));
+}
+
+void resource_server_registry_delete(resource_server_registry_t *registry, resource_server_registry_node_t *node)
+{
+    if (registry->on_delete)
+    {
+        registry->on_delete(node);
+    }
+
+    HASH_DEL(registry->head, node);
+    free(node);
+    registry->n_entries--;
+}
+
+void resource_server_registry_inc(resource_server_registry_t *registry, resource_server_registry_node_t *node)
+{
+    node->count++;
+}
+
+void resource_server_registry_dec(resource_server_registry_t *registry, resource_server_registry_node_t *node)
+{
+    node->count--;
+
+    if (node->count == 0)
+    {
+        resource_server_registry_delete(registry, node);
+    }
+}
+
+uint64_t resource_server_registry_badge_and_insert(resource_server_registry_t *registry, resource_server_registry_node_t *node,
+                                                   gpi_cap_t resource_type, uint64_t ns_id, uint32_t *new_obj_id)
+{
+    uint32_t new_id = registry->n_entries + 1;
+
+    seL4_Word badge_val = gpi_new_badge(resource_type,
+                                        0x00,
+                                        0x00,
+                                        ns_id,
+                                        new_id);
+    assert(badge_val != 0);
+    node->object_id = new_id;
+
+    resource_server_registry_insert(registry, node);
+
+    *new_obj_id = new_id;
+    return badge_val;
 }

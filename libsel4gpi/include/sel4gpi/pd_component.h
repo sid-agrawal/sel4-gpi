@@ -12,6 +12,8 @@
 
 #include <sel4gpi/pd_obj.h>
 #include <sel4gpi/test_init_data.h>
+#include <sel4gpi/resource_server_utils.h>
+#include <sel4gpi/resource_space_clientapi.h>
 
 /** @file APIs for managing and interacting with the serial server thread.
  *
@@ -229,25 +231,12 @@ enum pd_component_msgregs
     PDMSGREG_BENCH_IPC_ACK_END = PDMSGREG_LABEL0
 };
 
-/* Per-client context maintained by the server. */
+// Registry of PDs maintained by the server
 typedef struct _pd_component_registry_entry
 {
+    resource_server_registry_node_t gen;
     pd_t pd;
-    struct _pd_component_registry_entry *next;
-
 } pd_component_registry_entry_t;
-
-/* Tracks resource servers that have registered with the pd component */
-typedef struct _pd_component_resource_manager_entry
-{
-    uint32_t manager_id;
-    gpi_cap_t resource_type;
-    seL4_CPtr server_ep;
-    pd_t *pd;
-    uint64_t ns_index; // Tracks the last allocated namespace ID
-
-    struct _pd_component_resource_manager_entry *next;
-} pd_component_resource_manager_entry_t;
 
 /* State maintained by the server. */
 typedef struct _pd_component_context
@@ -261,15 +250,23 @@ typedef struct _pd_component_context
     // The server listens on this endpoint.
     vka_object_t server_ep_obj;
 
-    // Registry data
-    int registry_n_entries;
-    pd_component_registry_entry_t *client_registry;
-    int resource_manager_n_entries;
-    pd_component_resource_manager_entry_t *server_registry;
+    // Registries
+    resource_server_registry_t pd_registry;
+    resource_server_registry_t server_registry;
 
     // Root task's PD
     pd_t rt_pd;
 } pd_component_context_t;
+
+/**
+ * To initialize the pd component at the beginning of execution
+ */
+int pd_component_initialize(simple_t *server_simple,
+                            vka_t *server_vka,
+                            seL4_CPtr server_cspace,
+                            vspace_t *server_vspace,
+                            sel4utils_thread_t server_thread,
+                            vka_object_t server_ep_obj);
 
 /**
  * Internal library function: acts as the main() for the server thread.
@@ -327,6 +324,17 @@ pd_component_registry_entry_t *pd_component_registry_get_entry_by_badge(seL4_Wor
  */
 pd_component_resource_manager_entry_t *pd_component_resource_manager_get_entry_by_id(seL4_Word manager_id);
 
-osmosis_pd_cap_t *pd_add_resource_by_id(uint32_t client_id, gpi_cap_t cap_type, uint32_t res_id);
-
+/**
+ * @brief Lookup the pd registry entry for the given object id.
+ * (XXX) Arya: This needs to be exposed for pd_obj to use it. Is there a better way?
+ *
+ * @param object_id
+ * @return pd_component_registry_entry_t*
+ */
 pd_component_registry_entry_t *pd_component_registry_get_entry_by_id(seL4_Word object_id);
+
+/**
+ * Add a resource to a PD
+ * (XXX) Arya: Exposed for the cpu and mo components. Is there a better way?
+ */
+osmosis_pd_cap_t *pd_add_resource_by_id(uint32_t client_id, gpi_cap_t cap_type, uint32_t res_id);

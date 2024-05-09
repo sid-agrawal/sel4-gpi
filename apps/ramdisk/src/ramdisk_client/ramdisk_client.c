@@ -7,7 +7,7 @@
 #include <vspace/vspace.h>
 
 #include <sel4gpi/pd_clientapi.h>
-#include <sel4gpi/resource_server_utils.h>
+#include <sel4gpi/resource_server_remote_utils.h>
 
 #include <ramdisk_client.h>
 #include <ramdisk_shared.h>

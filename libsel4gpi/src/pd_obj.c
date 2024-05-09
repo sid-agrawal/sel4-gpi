@@ -31,6 +31,7 @@
 #include <sel4gpi/cpu_obj.h>
 #include <sel4gpi/debug.h>
 #include <sel4gpi/resource_server_utils.h>
+#include <sel4gpi/resource_server_clientapi.h>
 #include <sel4gpi/pd_utils.h>
 
 #define CSPACE_SIZE_BITS 17
@@ -240,6 +241,8 @@ int pd_new(pd_t *pd,
 
 int pd_destroy(pd_t *pd, vka_t *server_vka, vspace_t *server_vspace)
 {
+    printf("TEMPA pd destroy\n");
+
     int error = 0;
 
     // (XXX) Arya: To fix later, should extract functionality from sel4utils_destroy_process
@@ -269,6 +272,8 @@ int pd_destroy(pd_t *pd, vka_t *server_vka, vspace_t *server_vspace)
     // Other caps in RT
     vka_cspace_free(server_vka, pd->pd_cap_in_RT);
     // The CPtrs like "ads_cap_in_RT" should be destroyed when the ADS is destroyed
+
+    printf("TEMPA pd destroy complete\n");
 
     return error;
 }
@@ -676,6 +681,9 @@ int pd_send_cap(pd_t *to_pd,
             ads_component_registry_entry_t *ads_reg = ads_component_registry_get_entry_by_badge(badge);
             assert(ads_reg != NULL);
 
+            // Copying the resource, so increase the reference count
+            resource_server_registry_inc(&get_ads_component()->ads_registry, (resource_server_registry_node_t *)ads_reg);
+
             res_id = ads_reg->ads.ads_obj_id;
             break;
         case GPICAP_TYPE_MO:
@@ -684,7 +692,9 @@ int pd_send_cap(pd_t *to_pd,
             // Increment the counter in the mo_t object.
             mo_component_registry_entry_t *mo_reg = mo_component_registry_get_entry_by_badge(badge);
             assert(mo_reg != NULL);
-            mo_reg->count++;
+
+            // Copying the resource, so increase the reference count
+            resource_server_registry_inc(&get_mo_component()->mo_registry, (resource_server_registry_node_t *)mo_reg);
 
             res_id = mo_reg->mo.mo_obj_id;
             break;
@@ -695,6 +705,9 @@ int pd_send_cap(pd_t *to_pd,
             cpu_component_registry_entry_t *cpu_reg = cpu_component_registry_get_entry_by_badge(badge);
             assert(cpu_reg != NULL);
 
+            // Copying the resource, so increase the reference count
+            resource_server_registry_inc(&get_cpu_component()->cpu_registry, (resource_server_registry_node_t *)cpu_reg);
+
             res_id = cpu_reg->cpu.cpu_obj_id;
             break;
         case GPICAP_TYPE_PD:
@@ -703,6 +716,9 @@ int pd_send_cap(pd_t *to_pd,
 
             pd_component_registry_entry_t *pd_reg = pd_component_registry_get_entry_by_badge(badge);
             assert(pd_reg != NULL);
+
+            // Copying the resource, so increase the reference count
+            resource_server_registry_inc(&get_pd_component()->pd_registry, (resource_server_registry_node_t *)pd_reg);
 
             res_id = pd_reg->pd.pd_obj_id;
             break;
@@ -868,7 +884,7 @@ static int request_remote_rr(pd_t *pd, model_state_t *ms, uint64_t server_id, ui
     }
 
     // Get RR from remote resource server
-    error = resource_server_get_rr(server_cap, obj_id, pd->pd_obj_id,
+    error = resource_server_client_get_rr(server_cap, obj_id, pd->pd_obj_id,
                                    server_entry->pd->pd_obj_id,
                                    rr_remote_vaddr, rr_local_vaddr,
                                    SIZE_BITS_TO_BYTES(seL4_LargePageBits), &ms2);

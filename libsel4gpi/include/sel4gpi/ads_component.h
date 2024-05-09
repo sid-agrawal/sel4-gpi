@@ -11,6 +11,7 @@
 #include <vspace/vspace.h>
 
 #include <sel4gpi/ads_obj.h>
+#include <sel4gpi/resource_server_utils.h>
 
 /** @file APIs for managing and interacting with the serial server thread.
  *
@@ -159,8 +160,8 @@ enum ads_component_msgregs
 /* Per-client context maintained by the server. */
 typedef struct _ads_component_registry_entry
 {
+    resource_server_registry_node_t gen;
     ads_t ads;
-    struct _ads_component_registry_entry *next;
 } ads_component_registry_entry_t;
 
 /* State maintained by the server. */
@@ -175,9 +176,18 @@ typedef struct _ads_component_context
     // The server listens on this endpoint.
     vka_object_t server_ep_obj;
 
-    int registry_n_entries;
-    ads_component_registry_entry_t *client_registry;
+    resource_server_registry_t ads_registry;
 } ads_component_context_t;
+
+/**
+ * To initialize the ads component at the beginning of execution
+ */
+int ads_component_initialize(simple_t *server_simple,
+                             vka_t *server_vka,
+                             seL4_CPtr server_cspace,
+                             vspace_t *server_vspace,
+                             sel4utils_thread_t server_thread,
+                             vka_object_t server_ep_obj);
 
 /**
  * Internal library function: acts as the main() for the server thread.
@@ -208,10 +218,6 @@ ads_component_context_t *get_ads_component(void);
  */
 int forge_ads_cap_from_vspace(vspace_t *vspace, vka_t *vka, uint32_t client_pd_id, seL4_CPtr *cap_ret, uint32_t *ads_obj_id_ret);
 
-ads_component_registry_entry_t *ads_component_registry_get_entry_by_badge(seL4_Word badge);
-
-ads_component_registry_entry_t *ads_component_registry_get_entry_by_id(seL4_Word object_ID);
-
 /**
  * Attach an MO to an ADS by ID
  * Note: Only useable from the root task
@@ -223,3 +229,8 @@ ads_component_registry_entry_t *ads_component_registry_get_entry_by_id(seL4_Word
  * @param ret_vaddr Returns the attached vaddr
  */
 int ads_component_attach(uint64_t ads_id, uint64_t mo_id, void *vaddr, void **ret_vaddr);
+
+// (XXX) Arya: Needed by cpu component and pd component. Can we decouple these?
+ads_component_registry_entry_t *ads_component_registry_get_entry_by_badge(seL4_Word badge);
+
+ads_component_registry_entry_t *ads_component_registry_get_entry_by_id(seL4_Word object_ID);

@@ -87,28 +87,27 @@ gpi_server_parent_spawn_thread(simple_t *parent_simple, vka_t *parent_vka,
 
     *server_ep_cap = get_gpi_server()->server_ep_obj.cptr;
 
-    /* Setup the ADS Component */
-    ads_component_context_t *adsc = &get_gpi_server()->ads_component;
-    adsc->server_simple = parent_simple;
-    adsc->server_vka = parent_vka;
-    adsc->server_cspace = parent_cspace_cspath.root;
-    adsc->server_vspace = parent_vspace;
-    adsc->server_thread = get_gpi_server()->server_thread;
-    adsc->server_ep_obj = get_gpi_server()->server_ep_obj;
+    /* Setup the PD Component */
+    pd_component_initialize(parent_simple, parent_vka, parent_cspace_cspath.root, parent_vspace,
+                            get_gpi_server()->server_thread, get_gpi_server()->server_ep_obj);
 
     pd_component_resource_manager_entry_t *manager_entry = malloc(sizeof(pd_component_resource_manager_entry_t));
+    manager_entry->resource_type = GPICAP_TYPE_PD;
+    manager_entry->server_ep = get_gpi_server()->server_ep_obj.cptr;
+    get_gpi_server()->pd_manager_id = pd_component_resource_manager_insert(manager_entry);
+
+    /* Setup the ADS Component */
+    ads_component_initialize(parent_simple, parent_vka, parent_cspace_cspath.root, parent_vspace,
+                             get_gpi_server()->server_thread, get_gpi_server()->server_ep_obj);
+
+    manager_entry = malloc(sizeof(pd_component_resource_manager_entry_t));
     manager_entry->resource_type = GPICAP_TYPE_ADS;
     manager_entry->server_ep = get_gpi_server()->server_ep_obj.cptr;
     get_gpi_server()->ads_manager_id = pd_component_resource_manager_insert(manager_entry);
 
     /* Setup MO Component */
-    mo_component_context_t *moc = &get_gpi_server()->mo_component;
-    moc->server_simple = parent_simple;
-    moc->server_vka = parent_vka;
-    moc->server_cspace = parent_cspace_cspath.root;
-    moc->server_vspace = parent_vspace;
-    moc->server_thread = get_gpi_server()->server_thread;
-    moc->server_ep_obj = get_gpi_server()->server_ep_obj;
+    mo_component_initialize(parent_simple, parent_vka, parent_cspace_cspath.root, parent_vspace,
+                            get_gpi_server()->server_thread, get_gpi_server()->server_ep_obj);
 
     manager_entry = malloc(sizeof(pd_component_resource_manager_entry_t));
     manager_entry->resource_type = GPICAP_TYPE_MO;
@@ -116,32 +115,13 @@ gpi_server_parent_spawn_thread(simple_t *parent_simple, vka_t *parent_vka,
     get_gpi_server()->mo_manager_id = pd_component_resource_manager_insert(manager_entry);
 
     /* Setup the CPU Component */
-    cpu_component_context_t *cpuc = &get_gpi_server()->cpu_component;
-    cpuc->server_simple = parent_simple;
-    cpuc->server_vka = parent_vka;
-    cpuc->server_cspace = parent_cspace_cspath.root;
-    cpuc->server_vspace = parent_vspace;
-    cpuc->server_thread = get_gpi_server()->server_thread;
-    cpuc->server_ep_obj = get_gpi_server()->server_ep_obj;
+    cpu_component_initialize(parent_simple, parent_vka, parent_cspace_cspath.root, parent_vspace,
+                             get_gpi_server()->server_thread, get_gpi_server()->server_ep_obj);
 
     manager_entry = malloc(sizeof(pd_component_resource_manager_entry_t));
     manager_entry->resource_type = GPICAP_TYPE_CPU;
     manager_entry->server_ep = get_gpi_server()->server_ep_obj.cptr;
     get_gpi_server()->cpu_manager_id = pd_component_resource_manager_insert(manager_entry);
-
-    /* Setup the PD Component */
-    pd_component_context_t *pdc = &get_gpi_server()->pd_component;
-    pdc->server_simple = parent_simple;
-    pdc->server_vka = parent_vka;
-    pdc->server_cspace = parent_cspace_cspath.root;
-    pdc->server_vspace = parent_vspace;
-    pdc->server_thread = get_gpi_server()->server_thread;
-    pdc->server_ep_obj = get_gpi_server()->server_ep_obj;
-
-    manager_entry = malloc(sizeof(pd_component_resource_manager_entry_t));
-    manager_entry->resource_type = GPICAP_TYPE_PD;
-    manager_entry->server_ep = get_gpi_server()->server_ep_obj.cptr;
-    get_gpi_server()->pd_manager_id = pd_component_resource_manager_insert(manager_entry);
 
     /* And also allocate a badged copy of the Server's endpoint that the Parent
      * can use to send to the Server. This is used to allow the Server to report
@@ -324,6 +304,9 @@ void gpi_server_main()
             /* depth */ received_cap_path.capDepth);
         tag = recv(&sender_badge);
 
+        OSDB_PRINTF(GPI_DEBUG, GPISERVS "Got message on EP with ");
+        badge_print(sender_badge);
+
         seL4_MessageInfo_t reply_tag;
         if (sender_badge == 0 ||
             get_object_id_from_badge(sender_badge) == BADGE_OBJ_ID_NULL)
@@ -338,8 +321,6 @@ void gpi_server_main()
         else
         { /* Handle Typed Request */
             gpi_cap_t cap_type = get_cap_type_from_badge(sender_badge);
-            OSDB_PRINTF(GPI_DEBUG, GPISERVS "Got message on EP with ");
-            badge_print(sender_badge);
 
             switch (cap_type)
             {

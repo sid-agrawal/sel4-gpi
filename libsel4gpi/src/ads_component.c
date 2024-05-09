@@ -31,24 +31,6 @@
 #include <sel4gpi/debug.h>
 #include <sel4gpi/gpi_client.h>
 
-uint64_t ads_assign_new_badge_and_objectID(ads_component_registry_entry_t *reg)
-{
-    get_ads_component()->registry_n_entries++;
-    uint64_t new_id = NSID_DEFAULT + get_ads_component()->registry_n_entries;
-
-    // Add the latest ID to the obj and to the badlge.
-    seL4_Word badge_val = gpi_new_badge(GPICAP_TYPE_ADS,
-                                        0x00,
-                                        0x00,
-                                        new_id,
-                                        new_id);
-
-    assert(badge_val != 0);
-    reg->ads.ads_obj_id = new_id;
-    OSDB_PRINTF(ADS_DEBUG, ADSSERVS "ads_assign_new_badge_and_objectID: new badge: %lx\n", badge_val);
-    return badge_val;
-}
-
 ads_component_context_t *get_ads_component(void)
 {
     return &get_gpi_server()->ads_component;
@@ -71,30 +53,25 @@ static inline void reply(seL4_MessageInfo_t tag)
     api_reply(get_ads_component()->server_thread.reply.cptr, tag);
 }
 
-/**
- * @brief Insert a new client into the client registry Linked List.
- *
- * @param new_node
- */
-static void ads_component_registry_insert(ads_component_registry_entry_t *new_node)
+int ads_component_initialize(simple_t *server_simple,
+                             vka_t *server_vka,
+                             seL4_CPtr server_cspace,
+                             vspace_t *server_vspace,
+                             sel4utils_thread_t server_thread,
+                             vka_object_t server_ep_obj)
 {
-    // TODO:Use a mutex
+    ads_component_context_t *component = get_ads_component();
 
-    ads_component_registry_entry_t *head = get_ads_component()->client_registry;
+    component->server_simple = server_simple;
+    component->server_vka = server_vka;
+    component->server_cspace = server_cspace;
+    component->server_vspace = server_vspace;
+    component->server_thread = server_thread;
+    component->server_ep_obj = server_ep_obj;
 
-    if (head == NULL)
-    {
-        get_ads_component()->client_registry = new_node;
-        new_node->next = NULL;
-        return;
-    }
-
-    while (head->next != NULL)
-    {
-        head = head->next;
-    }
-    head->next = new_node;
-    new_node->next = NULL;
+    resource_server_initialize_registry(&component->ads_registry, NULL);
+    // (XXX) Arya: Dirty hack to prevent overlap with ADS NS ID, will be fixed when I add resource spaces
+    component->ads_registry.n_entries = NSID_DEFAULT;
 }
 
 /**
@@ -105,19 +82,7 @@ static void ads_component_registry_insert(ads_component_registry_entry_t *new_no
  */
 ads_component_registry_entry_t *ads_component_registry_get_entry_by_badge(seL4_Word badge)
 {
-
-    uint64_t objectID = get_object_id_from_badge(badge);
-    ads_component_registry_entry_t *current_ctx = get_ads_component()->client_registry;
-
-    while (current_ctx != NULL)
-    {
-        if (current_ctx->ads.ads_obj_id == objectID)
-        {
-            break;
-        }
-        current_ctx = current_ctx->next;
-    }
-    return current_ctx;
+    return (ads_component_registry_entry_t *)resource_server_registry_get_by_badge(&get_ads_component()->ads_registry, badge);
 }
 
 /**
@@ -126,20 +91,9 @@ ads_component_registry_entry_t *ads_component_registry_get_entry_by_badge(seL4_W
  * @param res_id
  * @return ads_component_registry_entry_t*
  */
-ads_component_registry_entry_t *ads_component_registry_get_entry_by_id(seL4_Word objectID)
+ads_component_registry_entry_t *ads_component_registry_get_entry_by_id(seL4_Word object_id)
 {
-
-    ads_component_registry_entry_t *current_ctx = get_ads_component()->client_registry;
-
-    while (current_ctx != NULL)
-    {
-        if (current_ctx->ads.ads_obj_id == objectID)
-        {
-            break;
-        }
-        current_ctx = current_ctx->next;
-    }
-    return current_ctx;
+    return (ads_component_registry_entry_t *)resource_server_registry_get_by_id(&get_ads_component()->ads_registry, object_id);
 }
 
 static void handle_ads_allocation(seL4_Word sender_badge, seL4_MessageInfo_t *reply_tag)
@@ -155,7 +109,6 @@ static void handle_ads_allocation(seL4_Word sender_badge, seL4_MessageInfo_t *re
         return;
     }
     memset((void *)client_reg_ptr, 0, sizeof(ads_component_registry_entry_t));
-    ads_component_registry_insert(client_reg_ptr);
 
     // We never created a new vpsace...
     int error = ads_new(get_ads_component()->server_vspace,
@@ -177,8 +130,11 @@ static void handle_ads_allocation(seL4_Word sender_badge, seL4_MessageInfo_t *re
     vka_cspace_alloc(get_ads_component()->server_vka, &dest_cptr);
     vka_cspace_make_path(get_ads_component()->server_vka, dest_cptr, &dest);
 
-    seL4_Word badge = ads_assign_new_badge_and_objectID(client_reg_ptr);
+    seL4_Word badge = resource_server_registry_badge_and_insert(&get_ads_component()->ads_registry, (resource_server_registry_node_t *)client_reg_ptr,
+                                                                GPICAP_TYPE_ADS, NSID_DEFAULT, &client_reg_ptr->ads.ads_obj_id);
     uint32_t client_id = get_client_id_from_badge(sender_badge);
+
+    printf("TEMPA NEW ADS ID IS %d\n", client_reg_ptr->ads.ads_obj_id);
 
     // (XXX) Linh: this is not very nice as we're coupling the PD and ADS components
     pd_component_registry_entry_t *client_pd_data = pd_component_registry_get_entry_by_id(client_id);
@@ -187,7 +143,7 @@ static void handle_ads_allocation(seL4_Word sender_badge, seL4_MessageInfo_t *re
     badge = set_client_id_to_badge(badge, client_id);
 
     rde_type_t type = {.type = GPICAP_TYPE_ADS};
-    error = pd_add_rde(&client_pd_data->pd, type, get_gpi_server()->ads_manager_id, get_ns_id_from_badge(badge), get_ads_component()->server_ep_obj.cptr);
+    error = pd_add_rde(&client_pd_data->pd, type, get_gpi_server()->ads_manager_id, client_reg_ptr->ads.ads_obj_id, get_ads_component()->server_ep_obj.cptr);
     if (error)
     {
         OSDB_PRINTF(ADS_DEBUG, ADSSERVS "main: Failed to add ADS to PD's RDE\n");
@@ -204,7 +160,7 @@ static void handle_ads_allocation(seL4_Word sender_badge, seL4_MessageInfo_t *re
     }
     /* Return this badged end point in the return message. */
     seL4_SetCap(0, dest.capPtr);
-    seL4_SetMR(ADSMSGREG_CONNECT_ACK_ADS_NS, get_ns_id_from_badge(badge));
+    seL4_SetMR(ADSMSGREG_CONNECT_ACK_ADS_NS, client_reg_ptr->ads.ads_obj_id);
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(error, 0, 1, ADSMSGREG_CONNECT_ACK_END);
     OSDB_PRINTF(ADS_DEBUG, ADSSERVS "main: Successfully allocated a new ads %lx.\n", badge);
     return reply(tag);
@@ -425,7 +381,6 @@ static void handle_shallow_copy_req(seL4_Word sender_badge)
         return;
     }
     assert(client_reg_ptr->ads.vspace != NULL);
-    ads_component_registry_insert(client_reg_ptr);
     OSDB_PRINTF(ADS_DEBUG, ADSSERVS "Shallow Copy done.\n");
 
     /* Create a badged endpoint for the client to send messages to.
@@ -438,16 +393,17 @@ static void handle_shallow_copy_req(seL4_Word sender_badge)
     vka_cspace_alloc(get_ads_component()->server_vka, &dest_cptr);
     vka_cspace_make_path(get_ads_component()->server_vka, dest_cptr, &dest_path);
 
-    seL4_Word badge = ads_assign_new_badge_and_objectID(client_reg_ptr);
-
+    seL4_Word badge = resource_server_registry_badge_and_insert(&get_ads_component()->ads_registry, (resource_server_registry_node_t *)client_reg_ptr,
+                                                                GPICAP_TYPE_ADS, NSID_DEFAULT, &client_reg_ptr->ads.ads_obj_id);
     seL4_Word client_id = get_client_id_from_badge(sender_badge);
+
     pd_component_registry_entry_t *client_pd_data = pd_component_registry_get_entry_by_id(client_id);
     ZF_LOGF_IF(client_pd_data == NULL, "Couldn't find PD client data");
     pd_add_resource(&client_pd_data->pd, GPICAP_TYPE_ADS, get_object_id_from_badge(badge), NSID_DEFAULT, dest_cptr, seL4_CapNull, seL4_CapNull);
     badge = set_client_id_to_badge(badge, client_id);
 
     rde_type_t type = {.type = GPICAP_TYPE_ADS};
-    error = pd_add_rde(&client_pd_data->pd, type, get_gpi_server()->ads_manager_id, get_ns_id_from_badge(badge), get_ads_component()->server_ep_obj.cptr);
+    error = pd_add_rde(&client_pd_data->pd, type, get_gpi_server()->ads_manager_id, client_reg_ptr->ads.ads_obj_id, get_ads_component()->server_ep_obj.cptr);
     if (error)
     {
         OSDB_PRINTF(ADS_DEBUG, ADSSERVS "main: Failed to add ADS to PD's RDE\n");
@@ -683,10 +639,11 @@ int forge_ads_cap_from_vspace(vspace_t *vspace, vka_t *vka, uint32_t client_pd_i
     vka_cspace_make_path(get_ads_component()->server_vka, dest_cptr, &dest);
 
     /* Update the info in the registry entry. */
-    seL4_Word badge = ads_assign_new_badge_and_objectID(client_reg_ptr);
+    seL4_Word badge = resource_server_registry_badge_and_insert(&get_ads_component()->ads_registry, (resource_server_registry_node_t *)client_reg_ptr,
+                                                                GPICAP_TYPE_ADS, NSID_DEFAULT, &client_reg_ptr->ads.ads_obj_id);
     badge = set_client_id_to_badge(badge, client_pd_id);
     badge = set_ns_id_to_badge(badge, get_object_id_from_badge(badge));
-    ads_component_registry_insert(client_reg_ptr);
+
     client_reg_ptr->ads.vspace = vspace;
     int error = vka_cnode_mint(&dest,
                                &src,

@@ -279,8 +279,9 @@ int kvstore_server_start_thread(seL4_CPtr *kvstore_ep)
     CHECK_ERROR(error, "failed to attach ipc buf", KVSTORE_ERROR_UNKNOWN);
 
     /* configure cpu */
-    seL4_Word cnode_guard = api_make_guard_skip_word(seL4_WordBits - TEST_PROCESS_CSPACE_SIZE_BITS);
+    seL4_Word cnode_guard = api_make_guard_skip_word(seL4_WordBits - PD_CSPACE_SIZE_BITS);
 
+    printf("TEMPA cpu config in start thread\n");
     error = cpu_client_config(&new_cpu, &self_ads_conn, &ipc_buf_mo, NULL, cnode_guard, 0, (seL4_Word)ipc_buf_addr_in_new_cpu);
     CHECK_ERROR(error, "failed to configure cpu for thread", KVSTORE_ERROR_UNKNOWN);
 
