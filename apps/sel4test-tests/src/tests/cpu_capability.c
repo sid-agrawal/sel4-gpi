@@ -55,9 +55,6 @@ int test_separate_threads(env_t env)
     seL4_CPtr slot;
     error = pd_client_next_slot(&test_pd_os_cap, &slot);
 
-    // ads_client_context_t new_ads;
-    // error = ads_component_client_connect(ads_rde, slot, &new_ads);
-
     /* Create a new CPU obj */
     error = pd_client_next_slot(&test_pd_os_cap, &slot);
     test_error_eq(error, 0);

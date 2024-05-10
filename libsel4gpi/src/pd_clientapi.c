@@ -287,3 +287,22 @@ void pd_client_bench_ipc(pd_client_context_t *conn, seL4_CPtr dummy_send_cap, se
 
     assert(seL4_MessageInfo_ptr_get_label(&tag) == 0);
 }
+
+/* WIP threads */
+int pd_client_clone(seL4_CPtr pd_rde, pd_client_context_t *to_copy, seL4_CPtr free_slot, uint8_t flags, pd_client_context_t *ret_copied)
+{
+    seL4_SetCapReceivePath(SEL4UTILS_CNODE_SLOT, /* Position of the cap to the CNODE */
+                           free_slot,            /* CPTR in this CSPACE */
+                           /* This works coz we have a single level cnode with no guard.*/
+                           seL4_WordBits); /* Depth i.e. how many bits of free_slot to interpret*/
+
+    seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 1, PDMSGREG_CLONE_REQ_END);
+    seL4_SetCap(0, to_copy->badged_server_ep_cspath.capPtr);
+
+    tag = seL4_Call(pd_rde, tag);
+    assert(seL4_MessageInfo_get_extraCaps(tag) == 1);
+
+    ret_copied->badged_server_ep_cspath.capPtr = free_slot;
+
+    return seL4_MessageInfo_get_label(tag);
+}

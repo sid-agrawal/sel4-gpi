@@ -34,16 +34,9 @@ int test_new_process_osmosis_shmem(env_t env)
 {
     int error;
     printf("------------------STARTING: %s------------------\n", __func__);
+    // pd_client_context_t self_pd = { .badged_server_ep_cspath.capPtr = sel4gpi_get_pd_cap() };
 
-#if CONFIG_MAX_NUM_NODES > 1
-    seL4_TCB_GetAffinity_t affinity = seL4_TCB_GetAffinity(env->tcb);
-    TEST_LOG("affinity: %ld", affinity.affinity);
-#endif // CONFIG_MAX_NUM_NODES > 1
-
-    sel4bench_init();
-    // Make new PD i.e. CSspace
-    ccnt_t start;
-    SEL4BENCH_READ_CCNT(start);
+    // pd_client_shallow_copy(sel4gpi_get_rde(GPICAP_TYPE_PD), &self_pd, )
 
     seL4_Word arg0 = 1;
     sel4gpi_process_t proc;

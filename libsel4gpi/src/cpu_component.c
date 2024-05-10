@@ -163,8 +163,7 @@ static void handle_start_req(seL4_Word sender_badge, seL4_MessageInfo_t old_tag,
 
     error = cpu_start(&client_data->cpu,
                       (void *)seL4_GetMR(CPUMSGREG_START_FUNC_VADDR),
-                      (void *)init_stack,
-                      arg0);
+                      (void *)init_stack);
     if (error)
     {
         OSDB_PRINTF(CPU_DEBUG, CPUSERVS "main: Failed to start CPU.\n");

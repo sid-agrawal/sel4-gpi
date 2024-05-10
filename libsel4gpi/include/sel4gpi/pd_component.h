@@ -14,6 +14,7 @@
 #include <sel4gpi/test_init_data.h>
 #include <sel4gpi/resource_server_utils.h>
 #include <sel4gpi/resource_space_clientapi.h>
+#include <sel4gpi/error_handle.h>
 
 /** @file APIs for managing and interacting with the serial server thread.
  *
@@ -92,6 +93,9 @@ enum pd_component_funcs
 
     PD_FUNC_BENCH_IPC_REQ,
     PD_FUNC_BENCH_IPC_ACK,
+
+    PD_FUNC_CLONE_REQ,
+    PD_FUNC_CLONE_ACK
 };
 
 /* Designated purposes of each message register in the mini-protocol. */
@@ -228,7 +232,11 @@ enum pd_component_msgregs
     PDMSGREG_BENCH_IPC_REQ_CAP_TRANSFER = PDMSGREG_LABEL0,
     PDMSGREG_BENCH_IPC_REQ_END,
 
-    PDMSGREG_BENCH_IPC_ACK_END = PDMSGREG_LABEL0
+    PDMSGREG_BENCH_IPC_ACK_END = PDMSGREG_LABEL0,
+
+    PDMSGREG_CLONE_REQ_END = PDMSGREG_LABEL0,
+
+    PDMSGREG_CLONE_ACK_END = PDMSGREG_LABEL0
 };
 
 // Registry of PDs maintained by the server

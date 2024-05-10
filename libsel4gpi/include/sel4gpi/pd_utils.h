@@ -10,6 +10,7 @@
 #include <sel4/types.h>
 #include <sel4gpi/badge_usage.h>
 #include <sel4gpi/resource_space_clientapi.h>
+#include <sel4gpi/error_handle.h>
 
 #define PD_HEAP_LOC 0x5000000000
 #define DEFAULT_STACK_PAGES 16
@@ -17,15 +18,6 @@
 #define PD_CAP_ROOT SEL4UTILS_CNODE_SLOT
 #define PD_CAP_DEPTH seL4_WordBits
 #define PD_CSPACE_SIZE_BITS 17
-
-#define GOTO_IF_ERR(err) \
-    do                   \
-    {                    \
-        if (err)         \
-        {                \
-            goto error;  \
-        }                \
-    } while (0)
 
 typedef struct _sel4gpi_process
 {

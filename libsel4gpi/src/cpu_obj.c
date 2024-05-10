@@ -21,9 +21,9 @@
 #include <sel4/sel4.h>
 #include <sel4runtime.h>
 
-int cpu_start(cpu_t *cpu, void *entry_point, void *init_stack, seL4_Word arg0)
+int cpu_start(cpu_t *cpu, void *entry_point, void *init_stack)
 {
-    OSDB_PRINTF(CPU_DEBUG, CPUSERVS "cpu_start: starting CPU at entry point %p and arg0 %lx\n", entry_point, arg0);
+    OSDB_PRINTF(CPU_DEBUG, CPUSERVS "cpu_start: starting CPU at entry point %p\n", entry_point);
     int error;
     seL4_UserContext regs = {0};
     // void *stack_top = init_stack == 0 ? cpu->thread.stack_top : init_stack;

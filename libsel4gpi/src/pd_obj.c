@@ -398,123 +398,6 @@ int pd_bootstrap_allocator(pd_t *pd,
     return 0;
 }
 
-static int pd_setup_proc(pd_t *pd, vka_t *server_vka, vspace_t *server_vspace, ads_t *target_ads, const char *image_name, uint64_t heap_size)
-{
-    int error;
-
-    seL4_CPtr slot;
-    // copy_cap_to_pd(pd, pd->proc.thread.tcb.cptr, &slot);
-
-    unsigned long size;
-    unsigned long cpio_len = _cpio_archive_end - _cpio_archive;
-    char const *file = cpio_get_file(_cpio_archive, cpio_len, image_name, &size);
-    elf_t elf;
-    elf_newFile(file, size, &elf);
-
-    pd->proc.entry_point = sel4utils_elf_load(target_ads->vspace, server_vspace, server_vka, server_vka, &elf);
-    if (pd->proc.entry_point == NULL)
-    {
-        ZF_LOGE("Failed to load elf file\n");
-        goto error;
-    }
-
-    pd->proc.sysinfo = sel4utils_elf_get_vsyscall(&elf);
-
-    /* Retrieve the ELF phdrs */
-    pd->proc.num_elf_phdrs = sel4utils_elf_num_phdrs(&elf);
-    pd->proc.elf_phdrs = calloc(pd->proc.num_elf_phdrs, sizeof(Elf_Phdr));
-    if (!pd->proc.elf_phdrs)
-    {
-        ZF_LOGE("Failed to allocate memory for elf phdr information");
-        goto error;
-    }
-    sel4utils_elf_read_phdrs(&elf, pd->proc.num_elf_phdrs, pd->proc.elf_phdrs);
-    /* ================================================ */
-    /**
-     * By default, all ELF sections will be shared during ads_shallow_copy
-     * If we want to separate data sections, will need to identify them here and check for
-     * their vaddr when copying
-     */
-    // uint64_t section_size;
-    // uintptr_t lib_data_section = sel4utils_elf_get_section(&elf, ELF_LIB_DATA_SECTION, &section_size);
-
-    /* select the default page size of machine this process is running on */
-    pd->proc.pagesz = PAGE_SIZE_4K;
-
-    /* set up IPC buffer */
-    pd->proc.thread.ipc_buffer_addr = (seL4_Word)vspace_new_ipc_buffer(target_ads->vspace, &pd->proc.thread.ipc_buffer);
-    if (pd->proc.thread.ipc_buffer_addr == 0)
-    {
-        ZF_LOGE("Failed to allocate PD's IPC buffer");
-        goto error;
-    }
-
-    /* set up stack */
-    pd->proc.thread.stack_size = BYTES_TO_4K_PAGES(CONFIG_SEL4UTILS_STACK_SIZE);
-    pd->proc.thread.stack_top = vspace_new_sized_stack(target_ads->vspace, pd->proc.thread.stack_size);
-    if (pd->proc.thread.stack_top == NULL)
-    {
-        ZF_LOGE("Failed to allocate PD's stack");
-        goto error;
-    }
-
-    /* set up heap */
-    // (XXX) Arya: Use predefined location, and predefined size per image
-    // Workaround so we can still use the static malloc
-    if (heap_size > 0)
-    {
-        int n_pages = DIV_ROUND_UP(heap_size, BIT(seL4_PageBits));
-
-        reservation_t heap_res = vspace_reserve_range_at(target_ads->vspace, (void *)PD_HEAP_LOC, heap_size, seL4_AllRights, 0);
-        sel4utils_res_t *sel4utils_res = reservation_to_res(heap_res);
-        sel4utils_res->type = SEL4UTILS_RES_TYPE_HEAP;
-
-        error = vspace_new_pages_at_vaddr(target_ads->vspace, (void *)PD_HEAP_LOC, n_pages, seL4_PageBits, heap_res);
-        ZF_LOGF_IF(error, "Failed to allocate PD's heap");
-    }
-
-    /* Forge MOs for these regions */
-    int max_mo_caps = 10;
-    int n_mo_caps;
-    seL4_CPtr *mo_caps = calloc(max_mo_caps, sizeof(seL4_CPtr));
-    uint64_t *mo_cap_ids = calloc(max_mo_caps, sizeof(uint64_t));
-    error = forge_mo_caps_from_vspace(target_ads->vspace, target_ads, server_vka, 0, &n_mo_caps, mo_caps, mo_cap_ids);
-    ZF_LOGE_IF(error, "Failed to forge MO caps for PD's vspace");
-
-    /* Add MOs to root task since nobody else will have them */
-    for (int i = 0; i < n_mo_caps; i++)
-    {
-        pd_add_resource(&get_pd_component()->rt_pd, GPICAP_TYPE_MO, mo_cap_ids[i], NSID_DEFAULT, mo_caps[i], 0, 0);
-    }
-    free(mo_caps);
-    free(mo_cap_ids);
-
-    return 0;
-
-error:
-    if (pd->proc.elf_regions)
-    {
-        free(pd->proc.elf_regions);
-    }
-
-    if (pd->proc.elf_phdrs)
-    {
-        free(pd->proc.elf_phdrs);
-    }
-
-    if (pd->proc.thread.ipc_buffer_addr)
-    {
-        vspace_free_ipc_buffer(target_ads->vspace, (void *)pd->proc.thread.ipc_buffer_addr);
-    }
-
-    if (pd->proc.thread.stack_top)
-    {
-        vspace_free_sized_stack(target_ads->vspace, pd->proc.thread.stack_top, pd->proc.thread.stack_size);
-    }
-
-    return -1;
-}
-
 static int pd_setup_cspace(pd_t *pd, vka_t *vka)
 {
     int error;
@@ -780,65 +663,6 @@ int pd_send_cap(pd_t *to_pd,
 
     /* Add to our caps data struct */
 
-    return 0;
-}
-
-int pd_start(pd_t *pd,
-             vka_t *vka,
-             seL4_CPtr pd_endpoint_in_root,
-             vspace_t *server_vspace,
-             int argc,
-             seL4_Word *args)
-{
-    int error;
-
-    OSDB_PRINTF(PD_DEBUG, PDSERVS "pd_start: ARGS: pd_endpoint_in_root: %ld, argc: %d\n",
-                pd_endpoint_in_root, argc);
-    assert(&pd->proc != NULL);
-    assert(&pd->proc.vspace != NULL);
-
-    // Send the PD's PD resource
-    seL4_Word badge = gpi_new_badge(GPICAP_TYPE_PD, 0x00, pd->pd_obj_id, NSID_DEFAULT, pd->pd_obj_id);
-    pd_send_cap(pd, pd_endpoint_in_root, badge, &pd->init_data->pd_cap);
-
-    // Map init data to the PD
-    error = ads_component_attach(pd->init_data->binded_ads_ns_id, pd->init_data_mo_id, NULL, (void **)&pd->init_data_in_PD);
-    if (error)
-    {
-        ZF_LOGF("Failed to attach init data to child PD");
-    }
-    OSDB_PRINTF(PD_DEBUG, "Mapped PD's init data at %p\n", (void *)pd->init_data_in_PD);
-
-    // Phase1: Start it.
-    // Phase2: start the CPU thread.
-
-    /* set up string args for the process */
-    char string_args[argc][WORD_STRING_SIZE];
-    char *argv[argc];
-
-    for (int i = 0; i < argc; i++)
-    {
-        argv[i] = string_args[i];
-        snprintf(argv[i], WORD_STRING_SIZE, "%" PRIuPTR "", args[i]);
-    }
-
-    OSDB_PRINTF(PD_DEBUG, "Starting PD with string args: [");
-    for (int i = 0; i < argc; i++)
-    {
-        OSDB_PRINTF(PD_DEBUG, "%s, ", string_args[i]);
-    }
-    OSDB_PRINTF(PD_DEBUG, "]\n");
-
-    /* spawn the process */
-    OSDB_PRINTF(PD_DEBUG, PDSERVS "pd_start: starting PD\n");
-    error = sel4utils_osm_spawn_process_v(&(pd->proc),
-                                          (void *)pd->init_data_in_PD,
-                                          get_gpi_server()->server_vka,
-                                          server_vspace,
-                                          argc,
-                                          argv,
-                                          1);
-    ZF_LOGF_IF(error != 0, "Failed to start test process!");
     return 0;
 }
 
@@ -1147,3 +971,12 @@ inline void print_pd_osm_rde_info(osmosis_rde_t *o)
                cap_type_to_str(o->type.type));
     }
 }
+
+// WIP thread resource sharing
+/* int pd_clone(pd_t *src, pd_t *dest)
+{
+    for (osmosis_pd_cap_t *current_cap = src->has_access_to; current_cap != NULL; current_cap = current_cap->hh.next)
+    {
+        // copy resources from src to dest pd
+    }
+} */

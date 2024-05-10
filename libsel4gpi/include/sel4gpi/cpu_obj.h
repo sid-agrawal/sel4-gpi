@@ -30,20 +30,13 @@ typedef struct _cpu
  * @brief Start the given CPU
  *
  * @param cpu cpu object
+ * @param entry_point the entry point for the CPU, does not need to be a function
+ * @param init_stack pointer to the starting position of the stack ASSUMES that it has already been set up with arguments
  * @return int 0 on success, -1 on failure.
  */
 int cpu_start(cpu_t *cpu,
               void *entry_point,
-              void *init_stack,
-              seL4_Word arg0);
-
-/**
- * @brief Config the cpu object
- *
- * @param cpu cpu object
- * @param vspace vspace i.e. root PT cap
- * @return int 0 on success, -1 on failure.
- */
+              void *init_stack);
 
 /**
  * @brief

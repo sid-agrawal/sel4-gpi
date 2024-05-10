@@ -281,23 +281,25 @@ osmosis_pd_cap_t *pd_add_resource_by_id(uint32_t client_id, gpi_cap_t cap_type, 
     return NULL;
 }
 
-void pd_handle_allocation_request(seL4_Word sender_badge, seL4_MessageInfo_t *reply_tag)
+static pd_component_registry_entry_t *pd_allocate(seL4_Word sender_badge)
 {
-    OSDB_PRINTF(PD_DEBUG, PDSERVS "main: Got connect request from badge %lx\n", sender_badge);
-
     /* Allocate a new registry entry for the client. */
     pd_component_registry_entry_t *client_reg_ptr =
         malloc(sizeof(pd_component_registry_entry_t));
     if (client_reg_ptr == 0)
     {
         OSDB_PRINTF(PD_DEBUG, PDSERVS "main: Failed to allocate new badge for client.\n");
-        return;
+        return NULL;
     }
     memset((void *)client_reg_ptr, 0, sizeof(pd_component_registry_entry_t));
 
     int error = pd_new(&client_reg_ptr->pd,
                        get_pd_component()->server_vka,
                        get_pd_component()->server_vspace);
+    if (error)
+    {
+        return NULL;
+    }
 
     /**
      * Create a badged endpoint for the client to send messages to.
@@ -328,13 +330,27 @@ void pd_handle_allocation_request(seL4_Word sender_badge, seL4_MessageInfo_t *re
     if (error)
     {
         OSDB_PRINTF(PD_DEBUG, PDSERVS "main: Failed to mint client badge %lx.\n", badge);
-        return;
+        return NULL;
     }
     client_reg_ptr->pd.pd_cap_in_RT = dest_cptr;
 
+    return client_reg_ptr;
+}
+
+void pd_handle_allocation_request(seL4_Word sender_badge, seL4_MessageInfo_t *reply_tag)
+{
+    OSDB_PRINTF(PD_DEBUG, PDSERVS "main: Got connect request from badge %lx\n", sender_badge);
+    int error = 0;
     /* Return this badged end point in the return message. */
-    seL4_SetCap(0, dest.capPtr);
-    seL4_MessageInfo_t tag = seL4_MessageInfo_new(error, 0, 1, 1);
+    pd_component_registry_entry_t *reg_entry = pd_allocate(sender_badge);
+    if (!reg_entry)
+    {
+        OSDB_PRINTF(PD_DEBUG, PDSERVS "Failed to create a new PD\n");
+        error = 1;
+    }
+
+    seL4_SetCap(0, reg_entry->pd.pd_cap_in_RT);
+    seL4_MessageInfo_t tag = seL4_MessageInfo_new(error, 0, 1, PDMSGREG_CONNECT_ACK_END);
     return reply(tag);
 }
 
@@ -942,6 +958,27 @@ static void handle_ipc_bench_req(void)
     return reply(tag);
 }
 
+static void handle_clone_req(seL4_Word sender_badge, seL4_MessageInfo_t old_tag)
+{
+    int error;
+    seL4_SetMR(PDMSGREG_FUNC, PD_FUNC_CLONE_REQ);
+    seL4_MessageInfo_t tag;
+
+    pd_component_registry_entry_t *pd_data = pd_component_registry_get_entry_by_badge(sender_badge);
+    GOTO_PRINT_IF_COND(!pd_data, "Failed to find sender data\n");
+
+    pd_component_registry_entry_t *new_pd = pd_allocate(sender_badge);
+    GOTO_PRINT_IF_COND(!new_pd, "Failed to allocate new PD\n");
+
+error:
+    badge_print(sender_badge);
+    error = 1;
+    free(new_pd);
+    // (XXX) Linh: delete the minted cap as well
+    tag = seL4_MessageInfo_new(error, 0, 0, PDMSGREG_CLONE_ACK_END);
+    return reply(tag);
+}
+
 /**
  * @brief The starting point for the pd server's thread.
  *
@@ -1002,6 +1039,9 @@ void pd_component_handle(seL4_MessageInfo_t tag,
         break;
     case PD_FUNC_BENCH_IPC_REQ:
         handle_ipc_bench_req();
+        break;
+    case PD_FUNC_CLONE_REQ:
+        handle_clone_req(sender_badge, tag);
         break;
     default:
         gpi_panic(PDSERVS "Unknown func type.", (seL4_Word)func);
