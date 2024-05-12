@@ -143,6 +143,16 @@ int ads_attach(ads_t *ads,
                sel4utils_reservation_type_t vmr_type);
 
 /**
+ * Use to forge an ADS attach from a vspace attach
+ * (XXX) Arya: to be deprecated eventually
+ * 
+ * @param ads ads object
+ * @param res the sel4utils_res object
+ * @param mo the forged MO 
+ */
+int ads_forge_attach(ads_t *ads, sel4utils_res_t *res, mo_t *mo);
+
+/**
  * @brief Remove a region from the ADS
  * Requires that a region was attached using ads_attach at the given vaddr
  *

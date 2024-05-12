@@ -96,7 +96,7 @@ mo_component_registry_entry_t *mo_component_registry_get_entry_by_id(seL4_Word o
 
 int mo_component_allocate_mo(uint64_t client_id, bool forge, int num_pages, mo_component_registry_entry_t **ret_entry, seL4_CPtr *ret_cap)
 {
-    int error;
+    int error = 0;
 
     /* Create the registry entry */
     mo_component_registry_entry_t *client_reg_ptr = malloc(sizeof(mo_component_registry_entry_t));
@@ -146,9 +146,9 @@ int mo_component_allocate_mo(uint64_t client_id, bool forge, int num_pages, mo_c
     *ret_cap = resource_server_make_badged_ep(get_mo_component()->server_vka, get_mo_component()->server_ep_obj.cptr,
                                               (resource_server_registry_node_t *)client_reg_ptr, GPICAP_TYPE_MO, NSID_DEFAULT, client_id);
 
-    if (error)
+    if (ret_cap == seL4_CapNull)
     {
-        OSDB_PRINTF(PD_DEBUG, PDSERVS "main: Failed to make badged ep for new ADS\n");
+        OSDB_PRINTF(MO_DEBUG, MOSERVS "Failed to make badged ep for new MO\n");
         return 1;
     }
 

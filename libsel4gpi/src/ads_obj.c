@@ -178,13 +178,13 @@ int ads_reserve(ads_t *ads,
 
 attach_node_t *ads_get_res_by_id(ads_t *ads, uint64_t res_id)
 {
-    attach_node_map_t *map_entry = (attach_node_map_t *) resource_server_registry_get_by_id(&ads->attach_id_to_vaddr_map, res_id);
+    attach_node_map_t *map_entry = (attach_node_map_t *)resource_server_registry_get_by_id(&ads->attach_id_to_vaddr_map, res_id);
     return ads_get_res_by_vaddr(ads, map_entry->vaddr);
 }
 
 attach_node_t *ads_get_res_by_vaddr(ads_t *ads, void *vaddr)
 {
-    return (attach_node_t *) resource_server_registry_get_by_id(&ads->attach_registry, vaddr);
+    return (attach_node_t *)resource_server_registry_get_by_id(&ads->attach_registry, (uint64_t)vaddr);
 }
 
 int ads_attach_to_res(ads_t *ads,
@@ -195,7 +195,10 @@ int ads_attach_to_res(ads_t *ads,
 {
     int error = 0;
 
-    OSDB_PRINTF(ADS_DEBUG, ADSSERVS "attaching mo with id %lu, of type: %s, num pages: %d\n", mo->mo_obj_id, human_readable_va_res_type(reservation->type), reservation->n_pages);
+    OSDB_PRINTF(ADS_DEBUG, ADSSERVS "attaching mo (id %lu, pages: %d) to reservation(vaddr: %p, type: %s, pages: %d) offset %d\n",
+                mo->mo_obj_id, mo->num_pages,
+                reservation->vaddr, human_readable_va_res_type(reservation->type), reservation->n_pages,
+                offset);
 
     /* Make a copy of the frame caps for this new mapping */
     seL4_CPtr frame_caps[mo->num_pages];
@@ -284,6 +287,38 @@ int ads_attach(ads_t *ads,
     return error;
 }
 
+int ads_forge_attach(ads_t *ads, sel4utils_res_t *res, mo_t *mo)
+{
+    // Add the attach node for this region
+    attach_node_t *attach_node = malloc(sizeof(attach_node_t));
+    attach_node_map_t *attach_node_map_entry = malloc(sizeof(attach_node_map_t));
+
+    if (attach_node == NULL || attach_node_map_entry == NULL)
+    {
+        ZF_LOGE("Failed to allocate attach node for forged attach\n");
+        return 1;
+    }
+
+    // Map a shorter attach node ID to vaddr
+    attach_node_map_entry->vaddr = (void *)res->start;
+    resource_server_registry_insert_new_id(&ads->attach_id_to_vaddr_map, (resource_server_registry_node_t *)attach_node_map_entry);
+
+    // The attach node is keyed by vaddr
+    memset((void *)attach_node, 0, sizeof(attach_node_t));
+    attach_node->res.res = res;
+    attach_node->vaddr = (void *)res->start;
+    attach_node->map_entry = attach_node_map_entry;
+    attach_node->type = res->type;
+    attach_node->n_pages = mo->num_pages;
+    attach_node->gen.object_id = res->start;
+    attach_node->mo_attached = true;
+    attach_node->mo_id = mo->mo_obj_id;
+    attach_node->mo_offset = 0;
+    resource_server_registry_insert(&ads->attach_registry, (resource_server_registry_node_t *)attach_node);
+
+    return 0;
+}
+
 int ads_rm(ads_t *ads, vka_t *vka, void *vaddr)
 {
     assert(vaddr != NULL);
@@ -364,7 +399,7 @@ void ads_dump_rr(ads_t *ads, model_state_t *ms, gpi_model_node_t *pd_node)
     uint32_t added_mo_rrs[MAX_MO_RR];
     int num_added_mo_rrs = 0;
     bool skip = false;
-    for (attach_node_t *res = (attach_node_t *) ads->attach_registry.head; res != NULL; res = (attach_node_t *) res->gen.hh.next)
+    for (attach_node_t *res = (attach_node_t *)ads->attach_registry.head; res != NULL; res = (attach_node_t *)res->gen.hh.next)
     {
         // Skip extra attaches of the same MO
         for (int i = 0; i < num_added_mo_rrs; i++)
@@ -486,6 +521,8 @@ int ads_shallow_copy(vspace_t *loader,
                      bool shallow_copy,
                      ads_t *ret_ads)
 {
+    OSDB_PRINTF(ADS_DEBUG, "Shallow copying ADS(%d)\n", ads->ads_obj_id);
+
     // (XXX) Arya: Can some of this be replaced with ads_new?
 
     ret_ads->vspace = malloc(sizeof(vspace_t));
@@ -556,7 +593,7 @@ int ads_shallow_copy(vspace_t *loader,
     sel4utils_alloc_data_t *from_data = get_alloc_data(from);
     sel4utils_res_t *from_sel4_res = from_data->reservation_head;
 
-    ZF_LOGE("===========Start of interesting output================\n");
+    OSDB_PRINTF(ADS_DEBUG, "=========== Start of ADS copy (%d -> %d) ================\n", ads->ads_obj_id, ret_ads->ads_obj_id);
 
     /* walk all the reservations */
     // (XXX) Arya: We may be able to just walk attach nodes instead of reservations (eventually?)
@@ -588,9 +625,9 @@ int ads_shallow_copy(vspace_t *loader,
         // Find the original attach node
         attach_node_t *old_attach_node = ads_get_res_by_vaddr(ads, (void *)from_sel4_res->start);
 
-        if (error)
+        if (old_attach_node == NULL)
         {
-            ZF_LOGE("Failed to find the attach node for vaddr: %p\n", (void *) from_sel4_res->start);
+            ZF_LOGE("Failed to find the attach node for vaddr: %p\n", (void *)from_sel4_res->start);
             goto error_exit;
         }
 
@@ -602,13 +639,16 @@ int ads_shallow_copy(vspace_t *loader,
 
             if (error)
             {
-                ZF_LOGE("Failed to find the MO (%ld) for vaddr: %p\n", old_attach_node->mo_id, (void *) from_sel4_res->start);
+                ZF_LOGE("Failed to find the MO (%ld) for vaddr: %p\n", old_attach_node->mo_id, (void *)from_sel4_res->start);
                 goto error_exit;
             }
         }
         else
         {
-            printf("TEMPA ISSUE found a region with no MO!!! Don't know what to do\n");
+            // If no MO attached, skip to next reservation
+            ZF_LOGE("Skipping reservation at vaddr: %p, no MO attached\n", (void *)from_sel4_res->start);
+            from_sel4_res = from_sel4_res->next;
+            continue;
         }
 
         // Shallow copy IPC buffer, stack, init data, elf
@@ -622,33 +662,13 @@ int ads_shallow_copy(vspace_t *loader,
                         (void *)from_sel4_res->start, (void *)from_sel4_res->end,
                         human_readable_size(from_sel4_res->end - from_sel4_res->start));
 
-            if (old_attach_node->mo_attached)
-            {
-                // Attach the same MO in the new ADS
-                error = ads_attach_to_res(ads, vka, new_attach_node, old_attach_node->mo_offset, old_mo);
+            // Attach the same MO in the new ADS
+            error = ads_attach_to_res(ret_ads, vka, new_attach_node, old_attach_node->mo_offset, old_mo);
 
-                if (error)
-                {
-                    ZF_LOGE("Failed to attach pages to region\n");
-                    return 1;
-                }
-            }
-            else
+            if (error)
             {
-                // (XXX) Arya: This is bad and should be avoided
-                printf("TEMPA no MO for shallow copy\n");
-
-                error = sel4utils_share_mem_at_vaddr(from, to,
-                                                     (void *)from_sel4_res->start,
-                                                     num_pages,
-                                                     PAGE_BITS_4K,
-                                                     (void *)from_sel4_res->start,
-                                                     new_attach_node->res);
-                if (error)
-                {
-                    ZF_LOGE("Failed to map memory while sharing copy: %d\n", error);
-                    goto error_exit;
-                }
+                ZF_LOGE("Failed to attach pages to region\n");
+                return 1;
             }
         }
         else if (from_sel4_res->type == SEL4UTILS_RES_TYPE_HEAP)
@@ -658,87 +678,50 @@ int ads_shallow_copy(vspace_t *loader,
                         (void *)from_sel4_res->start, (void *)from_sel4_res->end,
                         human_readable_size(from_sel4_res->end - from_sel4_res->start));
 
-            if (old_attach_node->mo_attached)
+            // Make a new MO
+            // The "client" to hold this MO is the root task
+            mo_component_registry_entry_t *mo_entry;
+            seL4_CPtr mo_cap; // Not used since we are not giving this MO away
+            error = mo_component_allocate_mo(get_gpi_server()->rt_pd_id, false, num_pages, &mo_entry, &mo_cap);
+
+            if (error)
             {
-                // Make a new MO
-                // The "client" to hold this MO is the root task
-                mo_component_registry_entry_t *mo_entry;
-                seL4_CPtr mo_cap; // Not used since we are not giving this MO away
-                error = mo_component_allocate_mo(get_gpi_server()->rt_pd_id, false, num_pages, &mo_entry, &mo_cap);
-
-                if (error)
-                {
-                    ZF_LOGE("Failed to allocate a new MO for deep copy\n");
-                    goto error_exit;
-                }
-
-                // Attach the new MO in the new ADS
-                mo_t *new_mo = &mo_entry->mo;
-                error = ads_attach_to_res(ads, vka, new_attach_node, old_attach_node->mo_offset, new_mo);
-
-                if (error)
-                {
-                    ZF_LOGE("Failed to attach pages to region\n");
-                    return 1;
-                }
-
-                // Temporarily map the pages of both MO to current vspace and copy data
-                // (XXX) Arya: no ADS for RT so just manually map the pages
-                void *old_mo_va = vspace_map_pages(loader, old_mo->frame_caps_in_root_task, NULL, seL4_AllRights, num_pages, MO_PAGE_BITS, 1);
-
-                if (old_mo_va == NULL)
-                {
-                    ZF_LOGE("Failed to map old MO for deep copy\n");
-                    goto error_exit;
-                }
-
-                void *new_mo_va = vspace_map_pages(loader, new_mo->frame_caps_in_root_task, NULL, seL4_AllRights, num_pages, MO_PAGE_BITS, 1);
-
-                if (new_mo_va == NULL)
-                {
-                    ZF_LOGE("Failed to map new MO for deep copy\n");
-                    goto error_exit;
-                }
-
-                memcpy(new_mo_va, old_mo_va, num_pages * SIZE_BITS_TO_BYTES(MO_PAGE_BITS));
-
-                vspace_unmap_pages(loader, old_mo_va, num_pages, MO_PAGE_BITS, VSPACE_FREE);
-                vspace_unmap_pages(loader, new_mo_va, num_pages, MO_PAGE_BITS, VSPACE_FREE);
+                ZF_LOGE("Failed to allocate a new MO for deep copy\n");
+                goto error_exit;
             }
-            else
+
+            // Attach the new MO in the new ADS
+            mo_t *new_mo = &mo_entry->mo;
+            error = ads_attach_to_res(ret_ads, vka, new_attach_node, old_attach_node->mo_offset, new_mo);
+
+            if (error)
             {
-                // (XXX) Arya: This is bad and should be avoided
-                printf("TEMPA no MO for deep copy\n");
-
-                error = sel4utils_copy_mem_at_vaddr(
-                    loader,
-                    from, to,
-                    (void *)from_sel4_res->start,
-                    num_pages,
-                    PAGE_BITS_4K,
-                    (void *)from_sel4_res->start,
-                    new_attach_node->res);
-
-                if (error)
-                {
-                    ZF_LOGE("Failed to map memory while making copy: %d\n", error);
-                    goto error_exit;
-                }
-
-                // Forge new MO for copied region
-                seL4_CPtr *caps = calloc(num_pages, sizeof(seL4_CPtr));
-
-                for (int i = 0; i < num_pages; i++)
-                {
-                    void *p = (void *)from_sel4_res->start + BIT(seL4_PageBits) * i;
-                    caps[i] = sel4utils_get_cap(to, p);
-                }
-
-                seL4_CPtr mo_cap;
-                mo_t *mo_obj;
-                error = forge_mo_cap_from_frames(caps, num_pages, vka, get_gpi_server()->rt_pd_id, &mo_cap, &mo_obj);
-                ZF_LOGE_IF(error, "Failed to forge MO cap for PD's heap");
+                ZF_LOGE("Failed to attach pages to region\n");
+                return 1;
             }
+
+            // Temporarily map the pages of both MO to current vspace and copy data
+            // (XXX) Arya: no ADS for RT so just manually map the pages
+            void *old_mo_va = vspace_map_pages(loader, old_mo->frame_caps_in_root_task, NULL, seL4_AllRights, num_pages, MO_PAGE_BITS, 1);
+
+            if (old_mo_va == NULL)
+            {
+                ZF_LOGE("Failed to map old MO for deep copy\n");
+                goto error_exit;
+            }
+
+            void *new_mo_va = vspace_map_pages(loader, new_mo->frame_caps_in_root_task, NULL, seL4_AllRights, num_pages, MO_PAGE_BITS, 1);
+
+            if (new_mo_va == NULL)
+            {
+                ZF_LOGE("Failed to map new MO for deep copy\n");
+                goto error_exit;
+            }
+
+            memcpy(new_mo_va, old_mo_va, num_pages * SIZE_BITS_TO_BYTES(MO_PAGE_BITS));
+
+            vspace_unmap_pages(loader, old_mo_va, num_pages, MO_PAGE_BITS, VSPACE_FREE);
+            vspace_unmap_pages(loader, new_mo_va, num_pages, MO_PAGE_BITS, VSPACE_FREE);
         }
 
         // Move to next node.

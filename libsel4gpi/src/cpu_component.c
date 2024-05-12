@@ -76,7 +76,7 @@ int cpu_component_initialize(simple_t *server_simple,
 // Utility function to create an VCPU, add to registry, badge an endpoint, etc.
 static int cpu_component_allocate_cpu(uint64_t client_id, bool forge, cpu_component_registry_entry_t **ret_entry, seL4_CPtr *ret_cap)
 {
-    int error;
+    int error = 0;
 
     /* Create the registry entry */
     cpu_component_registry_entry_t *client_reg_ptr = malloc(sizeof(cpu_component_registry_entry_t));
@@ -106,9 +106,9 @@ static int cpu_component_allocate_cpu(uint64_t client_id, bool forge, cpu_compon
     *ret_cap = resource_server_make_badged_ep(get_cpu_component()->server_vka, get_cpu_component()->server_ep_obj.cptr,
                                               (resource_server_registry_node_t *)client_reg_ptr, GPICAP_TYPE_CPU, NSID_DEFAULT, client_id);
 
-    if (error)
+    if (ret_cap == seL4_CapNull)
     {
-        OSDB_PRINTF(CPU_DEBUG, CPUSERVS "main: Failed to make badged ep for new ADS\n");
+        OSDB_PRINTF(CPU_DEBUG, CPUSERVS "Failed to make badged ep for new CPU\n");
         return 1;
     }
 

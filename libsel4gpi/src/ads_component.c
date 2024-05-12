@@ -31,6 +31,8 @@
 #include <sel4gpi/debug.h>
 #include <sel4gpi/gpi_client.h>
 
+static int forge_ads_attachments_from_vspace(ads_t *ads, uint32_t client_pd_id);
+
 ads_component_context_t *get_ads_component(void)
 {
     return &get_gpi_server()->ads_component;
@@ -99,7 +101,7 @@ ads_component_registry_entry_t *ads_component_registry_get_entry_by_id(seL4_Word
 // Utility function to create an ADS, add to registry, badge an endpoint, etc.
 static int ads_component_allocate_ads(uint64_t client_id, bool forge, ads_component_registry_entry_t **ret_entry, seL4_CPtr *ret_cap)
 {
-    int error;
+    int error = 0;
 
     /* Create the registry entry */
     ads_component_registry_entry_t *client_reg_ptr = malloc(sizeof(ads_component_registry_entry_t));
@@ -130,9 +132,9 @@ static int ads_component_allocate_ads(uint64_t client_id, bool forge, ads_compon
     *ret_cap = resource_server_make_badged_ep(get_ads_component()->server_vka, get_ads_component()->server_ep_obj.cptr,
                                               (resource_server_registry_node_t *)client_reg_ptr, GPICAP_TYPE_ADS, NSID_DEFAULT, client_id);
 
-    if (error)
+    if (ret_cap == seL4_CapNull)
     {
-        OSDB_PRINTF(ADS_DEBUG, ADSSERVS "main: Failed to make badged ep for new ADS\n");
+        OSDB_PRINTF(ADS_DEBUG, ADSSERVS "Failed to make badged ep for new ADS\n");
         return 1;
     }
 
@@ -211,7 +213,7 @@ static void handle_reserve_req(seL4_Word sender_badge, seL4_MessageInfo_t old_ta
         attach_node_t *reservation;
         error = ads_reserve(&ads_entry->ads, vaddr, num_pages, MO_PAGE_BITS, vmr_type, &reservation);
         ret_vaddr = reservation->vaddr;
-        
+
         // Make a cap for the reservation
         // The object ID is the shorter map entry ID, not the full vaddr of the reservation
         ret_cap = resource_server_make_badged_ep(get_ads_component()->server_vka, get_ads_component()->server_ep_obj.cptr,
@@ -587,6 +589,14 @@ void handle_load_elf_request(seL4_Word sender_badge, seL4_MessageInfo_t old_tag)
         tag = seL4_MessageInfo_set_label(tag, 1);
     }
 
+    // For now, we must fake the ADS attachments after loading elf
+    error = forge_ads_attachments_from_vspace(&target_ads->ads, get_gpi_server()->rt_pd_id);
+
+    if (error) {
+        tag = seL4_MessageInfo_set_label(tag, 1);
+        return reply(tag);
+    }
+
     seL4_SetMR(ADSMSGREG_LOAD_ELF_ACK_ENTRY_PT, (seL4_Word)entry_point);
     seL4_SetMR(ADSMSGREG_FUNC, ADS_FUNC_LOAD_ELF_ACK);
     return reply(tag);
@@ -719,24 +729,17 @@ int forge_ads_cap_from_vspace(vspace_t *vspace, vka_t *vka, uint32_t client_pd_i
 
     error = ads_component_allocate_ads(client_pd_id, true, &new_entry, &ret_cap);
 
+    if (error) {
+        return error;
+    }
+
     /* Update the ADS object with the vspace data */
     new_entry->ads.vspace = vspace;
+    error = forge_ads_attachments_from_vspace(&new_entry->ads, client_pd_id);
 
-    /* Iterate and print reservation_list*/
-    // sel4utils_res_t *res = get_alloc_data(vspace)->reservation_head;
-    // while (res != NULL)
-    // {
-    //     OSDB_PRINTF(ADS_DEBUG, ADSSERVS "\tmain: Reservation: 0x%lx --> 0x%lx\n", res->start, res->end);
-    //     /* print cap for each page in the reservation*/
-    //     for (void *va = (void *)res->start; va < (void *)res->end; va += PAGE_SIZE_4K)
-    //     {
-    //         seL4_CPtr cap;
-    //         cap = vspace_get_cap(vspace, va);
-    //         OSDB_PRINTF(ADS_DEBUG, ADSSERVS "\tmain: Cap for va: %p is %d TYPE: %d\n", va, cap, seL4_DebugCapIdentify(cap));
-    //     }
-
-    //     res = res->next;
-    // }
+    if (error) {
+        return error;
+    }
 
     if (ads_obj_id_ret)
     {
@@ -744,5 +747,77 @@ int forge_ads_cap_from_vspace(vspace_t *vspace, vka_t *vka, uint32_t client_pd_i
     }
 
     *cap_ret = ret_cap;
+    return 0;
+}
+
+/**
+ * Walks the ADS' vspace and creates ADS attach nodes for any vspace reservations that
+ * do not have an attach node.
+ * 
+ * Eventually we should not need this at all.
+*/
+static int forge_ads_attachments_from_vspace(ads_t *ads, uint32_t client_pd_id)
+{
+    int error = 0;
+
+    /* Walk every reservation and create MO / attach node*/
+    sel4utils_alloc_data_t *child_data = get_alloc_data(ads->vspace);
+    sel4utils_res_t *res = child_data->reservation_head;
+
+    OSDB_PRINTF(ADS_DEBUG, "--- Begin forging ADS attach nodes from vspace --- \n");
+    while (res != NULL)
+    {
+        OSDB_PRINTF(ADS_DEBUG, "Found reservation [%p,%p]\n", (void *)res->start, (void *)res->end);
+
+        /* Get the caps in the reservation */
+        uint32_t num_frames = (res->end - res->start) / PAGE_SIZE_4K;
+        seL4_CPtr *frame_caps = malloc(sizeof(seL4_CPtr) * num_frames);
+        assert(frame_caps != NULL);
+
+        int i = 0;
+        for (void *start = (void *)res->start;
+             start < (void *)res->end;
+             start += PAGE_SIZE_4K)
+        {
+            frame_caps[i] = vspace_get_cap(ads->vspace, start);
+            i++;
+        }
+
+        /* This way, we can call forge_ads_cap_from_vspace again and again */
+        // (XXX) Arya: is this check necessary?
+        if (res->mo_ref == NULL)
+        {
+            OSDB_PRINTF(ADS_DEBUG, "Forging MO/attach for reservation [%p,%p]\n", (void *)res->start, (void *)res->end);
+
+            // (XXX) Arya: This may have issues if the region is not mapped to physical pages everywhere
+            seL4_CPtr cap_ret;
+            error = forge_mo_cap_from_frames(frame_caps,
+                                             num_frames,
+                                             get_ads_component()->server_vka,
+                                             client_pd_id,
+                                             &cap_ret,
+                                             (mo_t **)&res->mo_ref);
+
+            if (error)
+            {
+                OSDB_PRINTF(ADS_DEBUG, ADSSERVS "Failed to forge MO cap while forging ADS attach\n");
+                return 1;
+            }
+
+            // Add the attach node for this region
+            error = ads_forge_attach(ads, res, res->mo_ref);
+
+            if (error)
+            {
+                OSDB_PRINTF(ADS_DEBUG, ADSSERVS "Failed to forge ADS attach\n");
+                return 1;
+            }
+        }
+
+        res = res->next;
+    }
+
+    OSDB_PRINTF(ADS_DEBUG, "--- Finish forging ADS attach nodes from vspace --- \n");
+
     return 0;
 }

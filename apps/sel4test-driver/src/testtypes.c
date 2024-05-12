@@ -22,6 +22,7 @@
 #include <sel4testsupport/testreporter.h>
 
 #define QEMU_SERIAL_IRQ 33
+#define PD_FORGE 1
 
 /* Bootstrap test type. */
 static inline void bootstrap_set_up_test_type(uintptr_t e)
@@ -276,41 +277,6 @@ void basic_set_up(uintptr_t e)
      * or a fault to see when the test finishes */
     env->endpoint = sel4utils_copy_cap_to_process(&(env->test_process), &env->vka, env->test_process.fault_endpoint.cptr);
 
-    // (XXX) Arya: Are these used?
-    /* Forge MO caps for the ADS */
-    seL4_CPtr mo_caps[MAX_MO_CHILD];
-    uint32_t ret_num_mo;
-
-    error = forge_mo_caps_from_vspace(
-        &env->test_process.vspace,
-        NULL,
-        &env->vka,
-        TEST_PD_ID,
-        &ret_num_mo,
-        mo_caps,
-        NULL);
-    assert(error == 0);
-
-    for (int i = 0; i < ret_num_mo; i++)
-    {
-        ZF_LOGE("MO CAP[%d]: %lu", i, mo_caps[i]);
-        env->child_mo_cptr_in_child[i] = sel4utils_copy_cap_to_process(
-            &(env->test_process),
-            &env->vka,
-            mo_caps[i]);
-        assert(env->child_mo_cptr_in_child[i] != 0);
-    }
-
-#define PD_FORGE 1
-#ifdef PD_FORGE
-    error = forge_pd_cap_from_init_data(env->init, &env->vka);
-    if (error)
-    {
-        ZF_LOGF("Failed to forge child's PD cap");
-    }
-    //--------------------------------------------------------------------
-#endif
-
     env->gpi_endpoint_in_child = sel4utils_copy_cap_to_process(&(env->test_process),
                                                                &env->vka, env->gpi_endpoint_in_parent);
     assert(env->gpi_endpoint_in_child != 0);
@@ -342,10 +308,6 @@ Warning:
     printf("%s:%d: free_slot.start %ld\n", __FUNCTION__, __LINE__, env->init->free_slots.start);
     env->init->free_slots.end = (1u << TEST_PROCESS_CSPACE_SIZE_BITS);
     assert(env->init->free_slots.start < env->init->free_slots.end);
-
-#ifdef PD_FORGE
-    update_forged_pd_cap_from_init_data(env->init, &env->test_process);
-#endif
 }
 
 test_result_t basic_run_test(struct testcase *test, uintptr_t e)
@@ -378,8 +340,9 @@ test_result_t basic_run_test(struct testcase *test, uintptr_t e)
 /* spawn the process */
 #ifdef PD_FORGE
     // (XXX) Arya: We aren't starting the test process as a normal PD yet,
-    // so use this workaround to give it a resource directory anyway
-    void *osm_init_data = get_osmosis_pd_init_data(&env->test_process.vspace);
+    // so use this workaround to create a PD object anyway
+    void *osm_init_data;
+    forge_pd_cap_from_init_data(env->init, &env->test_process, &osm_init_data);
     error = sel4utils_osm_spawn_process_v(&(env->test_process), osm_init_data,
                                           &env->vka, &env->vspace,
                                           argc, argv, 1);

@@ -289,23 +289,14 @@ void pd_handle_allocation_request(seL4_Word sender_badge, seL4_MessageInfo_t *re
 // Creates a dummy PD object for the root task
 void forge_pd_for_root_task(uint64_t *rt_id);
 
-// Only used to forge the test process' PD cap
-int forge_pd_cap_from_init_data(
-    test_init_data_t *init_data, // Change this to something else
-    vka_t *vka);
-
-// Only used to update the test process' PD cap
-void update_forged_pd_cap_from_init_data(test_init_data_t *init_data, sel4utils_process_t *test_process);
-
 /**
- * Only used for starting the test process, maps the init data
- * into the test process vspace
- * (XXX) Arya: Ideally we use something better
- *
- * @param test_vspace The test process vspace
- * Returns the address where init data was mapped
- */
-void *get_osmosis_pd_init_data(vspace_t *test_vspace);
+ * Only used to forge the test process' PD cap
+ * 
+ * @param init_data the test driver's init data
+ * @param test_process test process struct
+ * @param osm_init_data returns the vaddr of the osmosis init data in the test PD
+*/
+void forge_pd_cap_from_init_data(test_init_data_t *init_data, sel4utils_process_t *test_process, void **osm_init_data);
 
 /**
  * @brief Insert a new resource manager into the resource manager registry Linked List.
