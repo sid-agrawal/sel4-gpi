@@ -254,6 +254,7 @@ int pd_destroy(pd_t *pd, vka_t *server_vka, vspace_t *server_vspace)
     }
 
     // Hash table of holding resources
+    // (XXX) Arya: This can trigger sys_munmap which is not supported
     osmosis_pd_cap_t *current, *tmp;
     HASH_ITER(hh, pd->has_access_to, current, tmp)
     {
@@ -915,7 +916,10 @@ int pd_dump(pd_t *pd)
     gpi_model_node_t *rt_node = get_root_node(ms);
 
     /* Add caps from RT (not all caps, just specially tracked ones) */
-    pd_t *rt_pd = pd_component_registry_get_entry_by_id(get_gpi_server()->rt_pd_id);
+    pd_component_registry_entry_t *rt_entry = pd_component_registry_get_entry_by_id(get_gpi_server()->rt_pd_id);
+    assert(rt_entry != NULL);
+    pd_t *rt_pd = &rt_entry->pd;
+
     for (osmosis_pd_cap_t *current_cap = rt_pd->has_access_to; current_cap != NULL; current_cap = current_cap->hh.next)
     {
         // print_pd_osm_cap_info(current_cap);

@@ -131,7 +131,7 @@ static int pd_component_allocate_pd(uint64_t client_id, bool forge, pd_component
     /* Create the badged endpoint */
     *ret_cap = resource_server_make_badged_ep(get_pd_component()->server_vka, get_pd_component()->server_ep_obj.cptr,
                                               (resource_server_registry_node_t *)client_reg_ptr, GPICAP_TYPE_PD, NSID_DEFAULT, client_id);
-    client_reg_ptr->pd.pd_cap_in_RT = ret_cap;
+    client_reg_ptr->pd.pd_cap_in_RT = *ret_cap;
 
     if (ret_cap == seL4_CapNull)
     {
@@ -176,8 +176,6 @@ void forge_pd_cap_from_init_data(test_init_data_t *init_data, sel4utils_process_
     pd_new(pd,
            get_pd_component()->server_vka,
            get_pd_component()->server_vspace);
-
-    new_entry->pd.pd_cap_in_RT = ret_cap;
 
     // Split the test process' cspace and initialize a vka with half
     seL4_CPtr mid_slot = DIV_ROUND_UP(init_data->free_slots.start + init_data->free_slots.end, 2);

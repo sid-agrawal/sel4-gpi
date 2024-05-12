@@ -24,11 +24,11 @@ static pd_client_context_t pd_conn;
 static seL4_CPtr self_ep;
 
 static uint64_t ramdisk_id;
-static seL4_CPtr ramdisk_pd_cap;
+static pd_client_context_t ramdisk_pd;
 static uint64_t fs_id;
-static seL4_CPtr fs_pd_cap;
+static pd_client_context_t fs_pd;
 static uint64_t fs_2_id;
-static seL4_CPtr fs_2_pd_cap;
+static pd_client_context_t fs_2_pd;
 
 typedef enum _kvstore_mode
 {
@@ -40,10 +40,10 @@ typedef enum _kvstore_mode
 
 static void dump_model()
 {
-    #if DUMP_MODEL
+#if DUMP_MODEL
     /* Print model state */
     pd_client_dump(&pd_conn, NULL, 0);
-    #endif
+#endif
 }
 
 // Setup before all tests
@@ -58,15 +58,15 @@ static int setup(env_t env)
     vka_cspace_make_path(&env->vka, sel4gpi_get_pd_cap(), &pd_conn.badged_server_ep_cspath);
 
     /* Start ramdisk server process */
-    error = start_ramdisk_pd(&ramdisk_pd_cap, &ramdisk_id);
+    error = start_ramdisk_pd(&ramdisk_pd.badged_server_ep_cspath.capPtr, &ramdisk_id);
     test_assert(error == 0);
 
     /* Start fs server process */
-    error = start_xv6fs_pd(ramdisk_id, ramdisk_pd_cap, &fs_pd_cap, &fs_id);
+    error = start_xv6fs_pd(ramdisk_id, ramdisk_pd.badged_server_ep_cspath.capPtr, &fs_pd.badged_server_ep_cspath.capPtr, &fs_id);
     test_assert(error == 0);
 
     /* Add FS ep to RDE */
-    error = pd_client_add_rde(&pd_conn, fs_pd_cap, fs_id, NSID_DEFAULT);
+    error = pd_client_add_rde(&pd_conn, fs_pd.badged_server_ep_cspath.capPtr, fs_id, NSID_DEFAULT);
     test_assert(error == 0);
     seL4_CPtr fs_client_ep = sel4gpi_get_rde(GPICAP_TYPE_FILE);
 
@@ -84,14 +84,16 @@ static int setup(env_t env)
  * @param fs_nsid namespace ID of fs to share
  * @param fs_manager_id set to a special fs manager id that is not in the current RD (optional)
  * @param fs_pd_cap set to a special fs_ep that is not in the current RD (optional)
+ * @param kvstore_pd  returns the pd resource for the kvstore process
  */
-static int start_kvstore_server(seL4_CPtr *kvstore_ep, uint64_t fs_nsid, uint64_t fs_manager_id, seL4_CPtr fs_pd_cap)
+static int start_kvstore_server(seL4_CPtr *kvstore_ep, uint64_t fs_nsid, uint64_t fs_manager_id, seL4_CPtr fs_pd_cap, pd_client_context_t *kvstore_pd)
 {
     int error;
 
     sel4gpi_process_t kvserver_proc;
     error = sel4gpi_configure_process(KVSTORE_SERVER_APP, DEFAULT_STACK_PAGES, DEFAULT_HEAP_PAGES, &kvserver_proc);
     test_assert(error == 0);
+    *kvstore_pd = kvserver_proc.pd;
 
     // Setup the hello PD's args
     int argc = 1;
@@ -230,6 +232,13 @@ int test_kvstore_lib_in_same_pd(env_t env)
 
     dump_model();
 
+    /* Cleanup servers */
+    error = pd_client_disconnect(&fs_pd);
+    test_assert(error == 0);
+    error = pd_client_disconnect(&ramdisk_pd);
+    test_assert(error == 0);
+    // Hello will exit by itself and get cleaned up
+
     printf("------------------ENDING: %s------------------\n", __func__);
     return sel4test_get_result();
 }
@@ -245,8 +254,9 @@ int test_kvstore_lib_in_diff_pd(env_t env)
     test_assert(error == 0);
 
     /* Start the kvstore PD */
+    pd_client_context_t kvstore_pd;
     seL4_CPtr kvstore_ep;
-    error = start_kvstore_server(&kvstore_ep, NSID_DEFAULT, 0, 0);
+    error = start_kvstore_server(&kvstore_ep, NSID_DEFAULT, 0, 0, &kvstore_pd);
     test_assert(error == 0);
 
     /* Start the app PD */
@@ -260,6 +270,15 @@ int test_kvstore_lib_in_diff_pd(env_t env)
     test_assert(error == 0);
 
     dump_model();
+
+    /* Cleanup servers */
+    error = pd_client_disconnect(&kvstore_pd);
+    test_assert(error == 0);
+    error = pd_client_disconnect(&fs_pd);
+    test_assert(error == 0);
+    error = pd_client_disconnect(&ramdisk_pd);
+    test_assert(error == 0);
+    // Hello will exit by itself and get cleaned up
 
     printf("------------------ENDING: %s------------------\n", __func__);
     return sel4test_get_result();
@@ -286,13 +305,14 @@ int test_kvstore_diff_namespace(env_t env)
     test_assert(error == 0);
 
     /* Start the kvstore PD */
-    seL4_CPtr kvstore_ep_1;
-    error = start_kvstore_server(&kvstore_ep_1, nsid_1, 0, 0);
+    seL4_CPtr kvstore_ep;
+    pd_client_context_t kvstore_pd;
+    error = start_kvstore_server(&kvstore_ep, nsid_1, 0, 0, &kvstore_pd);
     test_assert(error == 0);
 
     /* Start the app PD */
-    pd_client_context_t hello_pd_1;
-    error = start_hello_kvstore(SEPARATE_PROC, kvstore_ep_1, &hello_pd_1, nsid_2, 0, 0);
+    pd_client_context_t hello_pd;
+    error = start_hello_kvstore(SEPARATE_PROC, kvstore_ep, &hello_pd, nsid_2, 0, 0);
     test_assert(error == 0);
 
     /* Wait for test result */
@@ -302,6 +322,15 @@ int test_kvstore_diff_namespace(env_t env)
     test_assert(error == 0);
 
     dump_model();
+
+    /* Cleanup servers */
+    error = pd_client_disconnect(&kvstore_pd);
+    test_assert(error == 0);
+    error = pd_client_disconnect(&fs_pd);
+    test_assert(error == 0);
+    error = pd_client_disconnect(&ramdisk_pd);
+    test_assert(error == 0);
+    // Hello will exit by itself and get cleaned up
 
     printf("------------------ENDING: %s------------------\n", __func__);
     return sel4test_get_result();
@@ -318,17 +347,18 @@ int test_kvstore_diff_fs(env_t env)
     test_assert(error == 0);
 
     /* Start second fs server process */
-    error = start_xv6fs_pd(ramdisk_id, ramdisk_pd_cap, &fs_2_pd_cap, &fs_2_id);
+    error = start_xv6fs_pd(ramdisk_id, ramdisk_pd.badged_server_ep_cspath.capPtr, &fs_2_pd.badged_server_ep_cspath.capPtr, &fs_2_id);
     test_assert(error == 0);
 
     /* Start the kvstore PD */
-    seL4_CPtr kvstore_ep_1;
-    error = start_kvstore_server(&kvstore_ep_1, NSID_DEFAULT, 0, 0);
+    seL4_CPtr kvstore_ep;
+    pd_client_context_t kvstore_pd;
+    error = start_kvstore_server(&kvstore_ep, NSID_DEFAULT, 0, 0, &kvstore_pd);
     test_assert(error == 0);
 
     /* Start the app PD */
-    pd_client_context_t hello_pd_1;
-    error = start_hello_kvstore(SEPARATE_PROC, kvstore_ep_1, &hello_pd_1, NSID_DEFAULT, fs_2_id, fs_2_pd_cap);
+    pd_client_context_t hello_pd;
+    error = start_hello_kvstore(SEPARATE_PROC, kvstore_ep, &hello_pd, NSID_DEFAULT, fs_2_id, fs_2_pd.badged_server_ep_cspath.capPtr);
     test_assert(error == 0);
 
     /* Wait for test result */
@@ -338,6 +368,17 @@ int test_kvstore_diff_fs(env_t env)
     test_assert(error == 0);
 
     dump_model();
+
+    /* Cleanup servers */
+    error = pd_client_disconnect(&kvstore_pd);
+    test_assert(error == 0);
+    error = pd_client_disconnect(&fs_pd);
+    test_assert(error == 0);
+    error = pd_client_disconnect(&fs_2_pd);
+    test_assert(error == 0);
+    error = pd_client_disconnect(&ramdisk_pd);
+    test_assert(error == 0);
+    // Hello will exit by itself and get cleaned up
 
     printf("------------------ENDING: %s------------------\n", __func__);
     return sel4test_get_result();
@@ -365,6 +406,13 @@ int test_kvstore_lib_same_pd_diff_ads(env_t env)
 
     dump_model();
 
+    /* Cleanup servers */
+    error = pd_client_disconnect(&fs_pd);
+    test_assert(error == 0);
+    error = pd_client_disconnect(&ramdisk_pd);
+    test_assert(error == 0);
+    // Hello will exit by itself and get cleaned up
+
     printf("------------------ENDING: %s------------------\n", __func__);
     return sel4test_get_result();
 }
@@ -391,6 +439,13 @@ int test_kvstore_diff_threads(env_t env)
 
     dump_model();
 
+    /* Cleanup servers */
+    error = pd_client_disconnect(&fs_pd);
+    test_assert(error == 0);
+    error = pd_client_disconnect(&ramdisk_pd);
+    test_assert(error == 0);
+    // Hello will exit by itself and get cleaned up
+
     printf("------------------ENDING: %s------------------\n", __func__);
     return sel4test_get_result();
 }
@@ -407,12 +462,14 @@ int test_kvstore_two_sets(env_t env)
 
     /* Start the kvstore PD 1 */
     seL4_CPtr kvstore_ep_1;
-    error = start_kvstore_server(&kvstore_ep_1, NSID_DEFAULT, 0, 0);
+    pd_client_context_t kvstore_pd_1;
+    error = start_kvstore_server(&kvstore_ep_1, NSID_DEFAULT, 0, 0, &kvstore_pd_1);
     test_assert(error == 0);
 
     /* Start the kvstore PD 2 */
     seL4_CPtr kvstore_ep_2;
-    error = start_kvstore_server(&kvstore_ep_2, NSID_DEFAULT, 0, 0);
+    pd_client_context_t kvstore_pd_2;
+    error = start_kvstore_server(&kvstore_ep_2, NSID_DEFAULT, 0, 0, &kvstore_pd_2);
     test_assert(error == 0);
 
     /* Start the app PD 1 */
@@ -435,6 +492,17 @@ int test_kvstore_two_sets(env_t env)
     test_assert(error == 0);
 
     dump_model();
+
+    /* Cleanup servers */
+    error = pd_client_disconnect(&kvstore_pd_1);
+    test_assert(error == 0);
+    error = pd_client_disconnect(&kvstore_pd_2);
+    test_assert(error == 0);
+    error = pd_client_disconnect(&fs_pd);
+    test_assert(error == 0);
+    error = pd_client_disconnect(&ramdisk_pd);
+    test_assert(error == 0);
+    // Hello will exit by itself and get cleaned up
 
     printf("------------------ENDING: %s------------------\n", __func__);
     return sel4test_get_result();
