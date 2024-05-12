@@ -20,19 +20,27 @@
 #include <sel4gpi/model_exporting.h>
 
 int mo_new(mo_t *mo,
-           mo_frame_t *caps,
+           seL4_CPtr *caps,
            uint32_t num_caps,
            vka_t *vka)
 {
     assert(caps != NULL);
 
-    mo->frame_caps_in_root_task = malloc(num_caps * sizeof(mo_frame_t));
+    mo->frame_caps_in_root_task = malloc(num_caps * sizeof(seL4_CPtr));
+    mo->frame_paddrs = malloc(num_caps * sizeof(uintptr_t));
+
     assert(mo->frame_caps_in_root_task != NULL);
 
     for (int i = 0; i < num_caps; i++)
     {
-        assert(caps[i].cap != seL4_CapNull);
+        // We cannot assert this, may be forging an MO from a reservation
+        // that is not fully backed
+        // assert(caps[i] != seL4_CapNull);
+
         mo->frame_caps_in_root_task[i] = caps[i];
+
+        // (XXX) Arya: Should we have a non-debug function for this?
+        mo->frame_paddrs[i] = seL4_DebugCapPaddr(caps[i]);
     }
 
     mo->num_pages = num_caps;
@@ -52,7 +60,7 @@ void mo_dump_rr(mo_t *mo, model_state_t *ms, gpi_model_node_t *pd_node)
     /* Add the page nodes and relations */
     for (int i = 0; i < mo->num_pages; i++)
     {
-        if (mo->frame_caps_in_root_task[i].cap == 0) {
+        if (mo->frame_caps_in_root_task[i] == 0) {
             /**
              * This can happen if there was an ADS deep copy of a region that did not 
              * have backing pages for the entire region.
@@ -60,7 +68,7 @@ void mo_dump_rr(mo_t *mo, model_state_t *ms, gpi_model_node_t *pd_node)
             continue;
         }
 
-        gpi_model_node_t *pmr_node = add_resource_node(ms, GPICAP_TYPE_PMR, 1, mo->frame_caps_in_root_task[i].paddr);
+        gpi_model_node_t *pmr_node = add_resource_node(ms, GPICAP_TYPE_PMR, 1, mo->frame_paddrs[i]);
         add_edge(ms, GPI_EDGE_TYPE_MAP, mo_node, pmr_node);
         add_edge(ms, GPI_EDGE_TYPE_HOLD, root_node, pmr_node);
     }

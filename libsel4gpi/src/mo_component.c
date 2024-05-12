@@ -94,88 +94,95 @@ mo_component_registry_entry_t *mo_component_registry_get_entry_by_id(seL4_Word o
     return (mo_component_registry_entry_t *)resource_server_registry_get_by_id(&get_mo_component()->mo_registry, object_id);
 }
 
-// (XXX): Somwehere here we should call mo_new
-void mo_handle_allocation_request(seL4_Word sender_badge, seL4_MessageInfo_t *reply_tag)
+int mo_component_allocate_mo(uint64_t client_id, bool forge, int num_pages, mo_component_registry_entry_t **ret_entry, seL4_CPtr *ret_cap)
 {
-    seL4_Word num_pages = seL4_GetMR(MOMSGREG_CONNECT_REQ_NUM_PAGES);
-    OSDB_PRINTF(MO_DEBUG, MOSERVS "Got connect request for %ld pages\n", num_pages);
+    int error;
 
-    /* Allocator numm_pages frame */
-    mo_frame_t *frame_caps = malloc(sizeof(mo_frame_t) * num_pages);
-    assert(frame_caps != NULL);
-
-    vka_object_t frame_obj;
-    for (int i = 0; i < num_pages; i++)
-    {
-        int error = vka_alloc_frame_maybe_device(get_mo_component()->server_vka,
-                                                 seL4_PageBits,
-                                                 false,
-                                                 &frame_obj);
-        assert(error == 0);
-        frame_caps[i].cap = frame_obj.cptr;
-        frame_caps[i].paddr = vka_object_paddr(get_mo_component()->server_vka, &frame_obj);
-        // OSDB_PRINTF(MO_DEBUG, MOSERVS "%s %d: Allocated frame %lu\n", __FUNCTION__, __LINE__, frame_caps[i]);
-    }
-
-    /* Allocate a new registry entry for the client. */
+    /* Create the registry entry */
     mo_component_registry_entry_t *client_reg_ptr = malloc(sizeof(mo_component_registry_entry_t));
     if (client_reg_ptr == 0)
     {
         OSDB_PRINTF(MO_DEBUG, MOSERVS "main: Failed to allocate new badge for client.\n");
-        return;
+        return 1;
     }
     memset((void *)client_reg_ptr, 0, sizeof(mo_component_registry_entry_t));
 
-    seL4_Word badge = resource_server_registry_badge_and_insert(&get_mo_component()->mo_registry, (resource_server_registry_node_t *)client_reg_ptr,
-                                                                GPICAP_TYPE_MO, NSID_DEFAULT, &client_reg_ptr->mo.mo_obj_id);
+    client_reg_ptr->mo.mo_obj_id = resource_server_registry_insert_new_id(&get_mo_component()->mo_registry, (resource_server_registry_node_t *)client_reg_ptr);
+    *ret_entry = client_reg_ptr;
 
-    /* Createa a new MO object */
-    /* Allocate frames */
+    /* Create the MO object */
+    if (!forge)
+    {
+        /* Allocate frames */
+        seL4_CPtr *frame_caps = malloc(sizeof(seL4_CPtr) * num_pages);
+        assert(frame_caps != NULL);
 
-    int error = mo_new(&client_reg_ptr->mo,
+        vka_object_t frame_obj;
+        for (int i = 0; i < num_pages; i++)
+        {
+            error = vka_alloc_frame_maybe_device(get_mo_component()->server_vka,
+                                                 seL4_PageBits,
+                                                 false,
+                                                 &frame_obj);
+            assert(error == 0);
+            frame_caps[i] = frame_obj.cptr;
+        }
+
+        /* Create a new MO object */
+        error = mo_new(&client_reg_ptr->mo,
                        frame_caps,
                        num_pages,
                        get_mo_component()->server_vka);
+        if (error)
+        {
+            OSDB_PRINTF(MO_DEBUG, MOSERVS "main: Failed to create new MO object\n");
+            return 1;
+        }
+
+        free(frame_caps);
+    }
+
+    /* Create the badged endpoint */
+    *ret_cap = resource_server_make_badged_ep(get_mo_component()->server_vka, get_mo_component()->server_ep_obj.cptr,
+                                              (resource_server_registry_node_t *)client_reg_ptr, GPICAP_TYPE_MO, NSID_DEFAULT, client_id);
+
     if (error)
     {
-        OSDB_PRINTF(MO_DEBUG, MOSERVS "main: Failed to create new MO object\n");
-        return;
+        OSDB_PRINTF(PD_DEBUG, PDSERVS "main: Failed to make badged ep for new ADS\n");
+        return 1;
     }
-    free(frame_caps);
 
-    /* Create a badged endpoint for the client to send messages to.
-     * Use the address of the client_registry_entry as the badge.
-     */
-    cspacepath_t src, dest;
-    vka_cspace_make_path(get_mo_component()->server_vka,
-                         get_mo_component()->server_ep_obj.cptr, &src);
-    seL4_CPtr dest_cptr;
-    vka_cspace_alloc(get_mo_component()->server_vka, &dest_cptr);
-    vka_cspace_make_path(get_mo_component()->server_vka, dest_cptr, &dest);
-
-    // (XXX) Linh: this is not very nice as we're coupling the PD and MO components
-    osmosis_pd_cap_t *res = pd_add_resource_by_id(get_client_id_from_badge(sender_badge), GPICAP_TYPE_MO, get_object_id_from_badge(badge));
+    /* Add the resource to the client */
+    osmosis_pd_cap_t *res = pd_add_resource_by_id(client_id, GPICAP_TYPE_MO, client_reg_ptr->mo.mo_obj_id);
     if (res)
     {
-        res->slot_in_RT_Debug = dest_cptr;
-        badge = set_client_id_to_badge(badge, get_client_id_from_badge(sender_badge));
+        res->slot_in_RT_Debug = *ret_cap;
     }
 
-    error = vka_cnode_mint(&dest,
-                           &src,
-                           seL4_AllRights,
-                           badge);
-    if (error)
-    {
-        OSDB_PRINTF(MO_DEBUG, MOSERVS "main: Failed to mint client badge %lx.\n", badge);
-        return;
-    }
-    OSDB_PRINTF(MO_DEBUG, MOSERVS "Minted MO with new badge: %lx\n", badge);
+    return 0;
+}
+
+void mo_handle_allocation_request(seL4_Word sender_badge, seL4_MessageInfo_t *reply_tag)
+{
+    OSDB_PRINTF(MO_DEBUG, MOSERVS "main: Got MO connect request from %lx\n", sender_badge);
+    badge_print(sender_badge);
+
+    int error = 0;
+    seL4_CPtr ret_cap;
+    mo_component_registry_entry_t *new_entry;
+    uint32_t client_id = get_client_id_from_badge(sender_badge);
+    seL4_Word num_pages = seL4_GetMR(MOMSGREG_CONNECT_REQ_NUM_PAGES);
+
+    OSDB_PRINTF(MO_DEBUG, MOSERVS "Got connect request for %ld pages\n", num_pages);
+
+    error = mo_component_allocate_mo(client_id, false, num_pages, &new_entry, &ret_cap);
+
     /* Return this badged end point in the return message. */
-    seL4_SetCap(0, dest.capPtr);
+    seL4_SetCap(0, ret_cap);
     seL4_SetMR(MOMSGREG_FUNC, MO_FUNC_CONNECT_ACK);
-    seL4_SetMR(MOMSGREG_CONNECT_ACK_ID, get_object_id_from_badge(badge));
+    seL4_SetMR(MOMSGREG_CONNECT_ACK_ID, new_entry->mo.mo_obj_id);
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(error, 0, 1, MOMSGREG_CONNECT_ACK_END);
+    OSDB_PRINTF(MO_DEBUG, MOSERVS "main: Successfully allocated a new MO.\n");
     return reply(tag);
 }
 
@@ -187,6 +194,8 @@ int forge_mo_caps_from_vspace(vspace_t *child_vspace,
                               seL4_CPtr *cap_ret,
                               uint64_t *id_ret)
 {
+    // (XXX) Arya: TODO this should be part of forge ads from vspace
+
     /* Walk every reservation */
     OSDB_PRINTF(MO_DEBUG, "%s: %d\n", __FUNCTION__, __LINE__);
 
@@ -228,6 +237,7 @@ int forge_mo_caps_from_vspace(vspace_t *child_vspace,
         /* This way, we can call forge_mo_caps_from vspace again and again */
         if (res->mo_ref == NULL)
         {
+            // (XXX) Arya: This may have issues if the region is not mapped to physical pages everywhere
             int error = forge_mo_cap_from_frames(frame_caps,
                                                  num_frames,
                                                  vka,
@@ -242,16 +252,17 @@ int forge_mo_caps_from_vspace(vspace_t *child_vspace,
             }
 
             // Add the attach node for this region
+            // (XXX) Arya: Again, separation of concerns, this should be in ADS but leave here for now
             if (target_ads != NULL)
             {
                 attach_node_t *attach_node = malloc(sizeof(attach_node_t));
                 attach_node->mo_id = ((mo_t *)res->mo_ref)->mo_obj_id;
-                ;
+                attach_node->mo_attached = true;
+                attach_node->mo_offset = 0;
                 attach_node->vaddr = (void *)(void *)res->start;
                 attach_node->type = res->type;
                 attach_node->n_pages = num_frames;
-                attach_node->next = target_ads->attach_nodes;
-                target_ads->attach_nodes = attach_node;
+                resource_server_registry_insert(&target_ads->attach_registry, (resource_server_registry_node_t *)attach_node);
             }
         }
 
@@ -272,58 +283,32 @@ int forge_mo_cap_from_frames(seL4_CPtr *frame_caps,
                              seL4_CPtr *cap_ret,
                              mo_t **mo_ret)
 {
-
     assert(frame_caps != NULL);
-    /* Allocate a new registry entry for the client. */
-    mo_component_registry_entry_t *client_reg_ptr = malloc(sizeof(mo_component_registry_entry_t));
-    if (client_reg_ptr == NULL)
-    {
-        OSDB_PRINTF(MO_DEBUG, MOSERVS "main: Failed to allocate new badge for client.\n");
-        return 1;
-    }
-    memset((void *)client_reg_ptr, 0, sizeof(mo_component_registry_entry_t));
 
-    /* Create a badged endpoint for the client to send messages to.
-     * Use the address of the client_registry_entry as the badge.
-     */
-    cspacepath_t src, dest;
-    vka_cspace_make_path(get_mo_component()->server_vka,
-                         get_mo_component()->server_ep_obj.cptr, &src);
-    seL4_CPtr dest_cptr;
-    vka_cspace_alloc(get_mo_component()->server_vka, &dest_cptr);
-    vka_cspace_make_path(get_mo_component()->server_vka, dest_cptr, &dest);
+    int error = 0;
+    mo_component_registry_entry_t *new_entry;
 
-    /* Update the info in the registry entry. */
-    seL4_Word badge = resource_server_registry_badge_and_insert(&get_mo_component()->mo_registry, (resource_server_registry_node_t *)client_reg_ptr,
-                                                                GPICAP_TYPE_MO, NSID_DEFAULT, &client_reg_ptr->mo.mo_obj_id);
-
-    client_reg_ptr->mo.frame_caps_in_root_task = malloc(sizeof(mo_frame_t) * num_pages);
-    assert(client_reg_ptr->mo.frame_caps_in_root_task != NULL);
-
-    // (XXX) A lot more will go here.
-    for (int i = 0; i < num_pages; i++)
-    {
-        client_reg_ptr->mo.frame_caps_in_root_task[i].cap = frame_caps[i];
-
-        // (XXX) Arya: Should we have a non-debug way to get paddr?
-        client_reg_ptr->mo.frame_caps_in_root_task[i].paddr = seL4_DebugCapPaddr(frame_caps[i]);
-    }
-    client_reg_ptr->mo.num_pages = num_pages;
-
-    int error = vka_cnode_mint(&dest,
-                               &src,
-                               seL4_AllRights,
-                               badge);
+    /* Allocate the MO object */
+    error = mo_component_allocate_mo(client_pd_id, true, num_pages, &new_entry, cap_ret);
     if (error)
     {
-        OSDB_PRINTF(MO_DEBUG, MOSERVS "main: Failed to mint client badge %lx.\n", badge);
+        OSDB_PRINTF(MO_DEBUG, MOSERVS "main: Failed to allocate MO for forge.\n");
         return 1;
     }
-    OSDB_PRINTF(MO_DEBUG, MOSERVS "main: Forged a new MO cap(EP: %lx) with badge value: %lx and %u pages.\n",
-                dest.capPtr, badge, client_reg_ptr->mo.num_pages);
 
-    *cap_ret = dest_cptr;
-    *mo_ret = &client_reg_ptr->mo;
+    /* Update the MO object from frames */
+    error = mo_new(&new_entry->mo, frame_caps, num_pages, vka);
+
+    if (error)
+    {
+        OSDB_PRINTF(MO_DEBUG, MOSERVS "main: Failed to initalize forged MO.\n");
+        return 1;
+    }
+
+    OSDB_PRINTF(MO_DEBUG, MOSERVS "main: Forged a new MO cap(EP: %lx) with %u pages.\n",
+                cap_ret, new_entry->mo.num_pages);
+
+    *mo_ret = &new_entry->mo;
     return 0;
 }
 

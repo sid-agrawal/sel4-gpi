@@ -45,6 +45,12 @@ enum ads_component_funcs
     ADS_FUNC_ATTACH_REQ = 0,
     ADS_FUNC_ATTACH_ACK,
 
+    ADS_FUNC_RESERVE_REQ,
+    ADS_FUNC_RESERVE_ACK,
+
+    ADS_FUNC_ATTACH_RESERVE_REQ,
+    ADS_FUNC_ATTACH_RESERVE_ACK,
+
     ADS_FUNC_SHALLOW_COPY_REQ,
     ADS_FUNC_SHALLOW_COPY_ACK,
 
@@ -102,6 +108,21 @@ enum ads_component_msgregs
 
     ADSMSGREG_ATTACH_ACK_VA = ADSMSGREG_LABEL0,
     ADSMSGREG_ATTACH_ACK_END,
+
+    /* Reserve */
+    ADSMSGREG_RESERVE_REQ_VA = ADSMSGREG_LABEL0,
+    ADSMSGREG_RESERVE_REQ_SIZE,
+    ADSMSGREG_RESERVE_REQ_TYPE,
+    ADSMSGREG_RESERVE_REQ_END,
+
+    ADSMSGREG_RESERVE_ACK_VA = ADSMSGREG_LABEL0,
+    ADSMSGREG_RESERVE_ACK_END,
+
+    /* Attach to Reserve */
+    ADSMSGREG_ATTACH_RESERVE_REQ_OFFSET = ADSMSGREG_LABEL0,
+    ADSMSGREG_ATTACH_RESERVE_REQ_END,
+
+    ADSMSGREG_ATTACH_RESERVE_ACK_END = ADSMSGREG_LABEL0,
 
     /* Shallow Copy */
     ADSMSGREG_SHALLOW_COPY_REQ_OMIT_VA = ADSMSGREG_LABEL0,
@@ -225,10 +246,11 @@ int forge_ads_cap_from_vspace(vspace_t *vspace, vka_t *vka, uint32_t client_pd_i
  *
  * @param ads_id ID of the ADS to attach to
  * @param mo_id ID of the MO to attach
+ * @param vmr_type type of VMR to attach to
  * @param vaddr Requested vaddr to attach at, or NULL
  * @param ret_vaddr Returns the attached vaddr
  */
-int ads_component_attach(uint64_t ads_id, uint64_t mo_id, void *vaddr, void **ret_vaddr);
+int ads_component_attach(uint64_t ads_id, uint64_t mo_id, sel4utils_reservation_type_t vmr_type, void *vaddr, void **ret_vaddr);
 
 // (XXX) Arya: Needed by cpu component and pd component. Can we decouple these?
 ads_component_registry_entry_t *ads_component_registry_get_entry_by_badge(seL4_Word badge);

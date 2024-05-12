@@ -73,6 +73,55 @@ int cpu_component_initialize(simple_t *server_simple,
     resource_server_initialize_registry(&component->cpu_registry, NULL);
 }
 
+// Utility function to create an VCPU, add to registry, badge an endpoint, etc.
+static int cpu_component_allocate_cpu(uint64_t client_id, bool forge, cpu_component_registry_entry_t **ret_entry, seL4_CPtr *ret_cap)
+{
+    int error;
+
+    /* Create the registry entry */
+    cpu_component_registry_entry_t *client_reg_ptr = malloc(sizeof(cpu_component_registry_entry_t));
+    if (client_reg_ptr == 0)
+    {
+        OSDB_PRINTF(CPU_DEBUG, CPUSERVS "main: Failed to allocate new badge for client.\n");
+        return 1;
+    }
+    memset((void *)client_reg_ptr, 0, sizeof(cpu_component_registry_entry_t));
+
+    client_reg_ptr->cpu.cpu_obj_id = resource_server_registry_insert_new_id(&get_cpu_component()->cpu_registry, (resource_server_registry_node_t *)client_reg_ptr);
+    *ret_entry = client_reg_ptr;
+
+    /* Create the CPU object */
+    if (!forge)
+    {
+        error = cpu_new(&client_reg_ptr->cpu,
+                        get_cpu_component()->server_vka);
+        if (error)
+        {
+            OSDB_PRINTF(CPU_DEBUG, CPUSERVS "main: Failed to create new CPU object\n");
+            return 1;
+        }
+    }
+
+    /* Create the badged endpoint */
+    *ret_cap = resource_server_make_badged_ep(get_cpu_component()->server_vka, get_cpu_component()->server_ep_obj.cptr,
+                                              (resource_server_registry_node_t *)client_reg_ptr, GPICAP_TYPE_CPU, NSID_DEFAULT, client_id);
+
+    if (error)
+    {
+        OSDB_PRINTF(CPU_DEBUG, CPUSERVS "main: Failed to make badged ep for new ADS\n");
+        return 1;
+    }
+
+    /* Add the resource to the client */
+    osmosis_pd_cap_t *res = pd_add_resource_by_id(client_id, GPICAP_TYPE_CPU, client_reg_ptr->cpu.cpu_obj_id);
+    if (res)
+    {
+        res->slot_in_RT_Debug = *ret_cap;
+    }
+
+    return 0;
+}
+
 cpu_component_registry_entry_t *cpu_component_registry_get_entry_by_badge(seL4_Word badge)
 {
     return (cpu_component_registry_entry_t *)resource_server_registry_get_by_badge(&get_cpu_component()->cpu_registry, badge);
@@ -86,60 +135,20 @@ cpu_component_registry_entry_t *cpu_component_registry_get_entry_by_id(seL4_Word
 // (XXX): Somwehere here we should call cpu_new
 void cpu_handle_allocation_request(seL4_Word sender_badge, seL4_MessageInfo_t *reply_tag)
 {
-    OSDB_PRINTF(CPU_DEBUG, CPUSERVS "main: Got connect request\n");
+    OSDB_PRINTF(CPU_DEBUG, CPUSERVS "main: Got CPU connect request from %lx\n", sender_badge);
+    badge_print(sender_badge);
 
-    /* Allocate a new registry entry for the client. */
-    cpu_component_registry_entry_t *client_reg_ptr = malloc(sizeof(cpu_component_registry_entry_t));
-    if (client_reg_ptr == 0)
-    {
-        OSDB_PRINTF(CPU_DEBUG, CPUSERVS "main: Failed to allocate new badge for client.\n");
-        return;
-    }
-    memset((void *)client_reg_ptr, 0, sizeof(cpu_component_registry_entry_t));
+    int error = 0;
+    seL4_CPtr ret_cap;
+    cpu_component_registry_entry_t *new_entry;
+    uint32_t client_id = get_client_id_from_badge(sender_badge);
 
-    /* Createa a new CPU object */
+    error = cpu_component_allocate_cpu(client_id, false, &new_entry, &ret_cap);
 
-    int error = cpu_new(&client_reg_ptr->cpu,
-                        get_cpu_component()->server_vka);
-    if (error)
-    {
-        OSDB_PRINTF(CPU_DEBUG, CPUSERVS "main: Failed to create new CPU object\n");
-        return;
-    }
-
-    /* Create a badged endpoint for the client to send messages to.
-     * Use the address of the client_registry_entry as the badge.
-     */
-    cspacepath_t src, dest;
-    vka_cspace_make_path(get_cpu_component()->server_vka,
-                         get_cpu_component()->server_ep_obj.cptr, &src);
-    seL4_CPtr dest_cptr;
-    vka_cspace_alloc(get_cpu_component()->server_vka, &dest_cptr);
-    vka_cspace_make_path(get_cpu_component()->server_vka, dest_cptr, &dest);
-
-    // Add the latest ID to the obj and to the badlge.
-    seL4_Word badge = resource_server_registry_badge_and_insert(&get_cpu_component()->cpu_registry, (resource_server_registry_node_t *)client_reg_ptr,
-                                                                GPICAP_TYPE_CPU, NSID_DEFAULT, &client_reg_ptr->cpu.cpu_obj_id);
-
-    // (XXX) Linh: this is not very nice as we're coupling the PD and CPU components
-    osmosis_pd_cap_t *res = pd_add_resource_by_id(client_reg_ptr->cpu.cpu_obj_id, GPICAP_TYPE_CPU, get_object_id_from_badge(badge));
-    if (res)
-    {
-        res->slot_in_RT_Debug = dest_cptr;
-        badge = set_client_id_to_badge(badge, client_reg_ptr->cpu.cpu_obj_id);
-    }
-    error = vka_cnode_mint(&dest,
-                           &src,
-                           seL4_AllRights,
-                           badge);
-    if (error)
-    {
-        OSDB_PRINTF(CPU_DEBUG, CPUSERVS "main: Failed to mint client badge %lx.\n", badge);
-        return;
-    }
     /* Return this badged end point in the return message. */
-    seL4_SetCap(0, dest.capPtr);
-    seL4_MessageInfo_t tag = seL4_MessageInfo_new(error, 0, 1, 1);
+    seL4_SetCap(0, ret_cap);
+    seL4_MessageInfo_t tag = seL4_MessageInfo_new(error, 0, 1, CPUMSGREG_CONNECT_ACK_END);
+    OSDB_PRINTF(CPU_DEBUG, CPUSERVS "main: Successfully allocated a new CPU.\n");
     return reply(tag);
 }
 
@@ -231,7 +240,7 @@ static void handle_config_req(seL4_Word sender_badge,
     seL4_Word ipc_buf_mo_badge = seL4_GetBadge(2);
     // it's ok if this doesn't exist
     mo_component_registry_entry_t *ipc_mo_data = mo_component_registry_get_entry_by_badge(ipc_buf_mo_badge);
-    seL4_CPtr ipc_buf_frame = ipc_mo_data == NULL ? seL4_CapNull : ipc_mo_data->mo.frame_caps_in_root_task[0].cap;
+    seL4_CPtr ipc_buf_frame = ipc_mo_data == NULL ? seL4_CapNull : ipc_mo_data->mo.frame_caps_in_root_task[0];
 
     seL4_CNode cspace_root = pd_data->pd.proc.cspace.cptr;
 
@@ -251,9 +260,10 @@ static void handle_config_req(seL4_Word sender_badge,
         return;
     }
     client_data->cpu.binded_ads_id = asre->ads.ads_obj_id;
-    OSDB_PRINTF(CPU_DEBUG, CPUSERVS "main: config done.\n");
 
     pd_configure(&pd_data->pd, "", &asre->ads, &client_data->cpu);
+
+    OSDB_PRINTF(CPU_DEBUG, CPUSERVS "Finished configuring CPU\n");
 
     seL4_SetMR(CPUMSGREG_FUNC, CPU_FUNC_CONFIG_ACK);
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(error, 0, 0, CPUMSGREG_CONFIG_ACK_END);
@@ -265,7 +275,7 @@ static void handle_change_vspace_req(seL4_Word sender_badge,
                                      seL4_CPtr received_cap)
 {
     // Find the client - like start
-    OSDB_PRINTF(CPU_DEBUG, CPUSERVS "-----main: Got change vsspace  request from:");
+    OSDB_PRINTF(CPU_DEBUG, CPUSERVS "Got change vsspace request from:");
     badge_print(sender_badge);
 
     OSDB_PRINTF(CPU_DEBUG, CPUSERVS " received_cap: ");
@@ -318,7 +328,6 @@ static void handle_change_vspace_req(seL4_Word sender_badge,
         assert(0);
         return;
     }
-    OSDB_PRINTF(CPU_DEBUG, CPUSERVS "main: config done.\n");
 
     pd_component_registry_entry_t *pd_data = pd_component_registry_get_entry_by_id(get_client_id_from_badge(sender_badge));
     pd_data->pd.init_data->binded_ads_ns_id = ads_data->ads.ads_obj_id;
@@ -334,53 +343,32 @@ int forge_cpu_cap_from_tcb(sel4utils_process_t *process, // Change this to the s
                            vka_t *vka, uint32_t client_id,
                            seL4_CPtr *cap_ret, uint32_t *cpu_obj_id_ret)
 {
-
     assert(process != NULL);
-    /* Allocate a new registry entry for the client. */
-    cpu_component_registry_entry_t *client_reg_ptr = malloc(sizeof(cpu_component_registry_entry_t));
-    if (client_reg_ptr == 0)
-    {
-        OSDB_PRINTF(CPU_DEBUG, CPUSERVS "main: Failed to allocate new badge for client.\n");
-        return 1;
-    }
-    memset((void *)client_reg_ptr, 0, sizeof(cpu_component_registry_entry_t));
 
-    /* Create a badged endpoint for the client to send messages to.
-     * Use the address of the client_registry_entry as the badge.
-     */
-    cspacepath_t src, dest;
-    vka_cspace_make_path(get_cpu_component()->server_vka,
-                         get_cpu_component()->server_ep_obj.cptr, &src);
-    seL4_CPtr dest_cptr;
-    vka_cspace_alloc(get_cpu_component()->server_vka, &dest_cptr);
-    vka_cspace_make_path(get_cpu_component()->server_vka, dest_cptr, &dest);
+    int error = 0;
+    seL4_CPtr ret_cap;
+    cpu_component_registry_entry_t *new_entry;
 
-    /* Update the info in the registry entry. */
-    seL4_Word badge = resource_server_registry_badge_and_insert(&get_cpu_component()->cpu_registry, (resource_server_registry_node_t *)client_reg_ptr,
-                                                                GPICAP_TYPE_CPU, NSID_DEFAULT, &client_reg_ptr->cpu.cpu_obj_id);
-
-    // (XXX) A lot more will go here.
-    client_reg_ptr->cpu.thread = process->thread;
-    // client_reg_ptr->cpu.tls_base = &process->thread.tls_base;
-    client_reg_ptr->cpu.cspace = process->cspace.cptr;
-
-    int error = vka_cnode_mint(&dest,
-                               &src,
-                               seL4_AllRights,
-                               badge);
+    /* Allocate the CPU object */
+    error = cpu_component_allocate_cpu(client_id, false, &new_entry, &ret_cap);
     if (error)
     {
-        OSDB_PRINTF(CPU_DEBUG, CPUSERVS "main: Failed to mint client badge %lx.\n", badge);
+        OSDB_PRINTF(CPU_DEBUG, CPUSERVS "main: Failed to allocate CPU for forge.\n");
         return 1;
     }
-    OSDB_PRINTF(CPU_DEBUG, CPUSERVS "main: Forged a new CPU cap(EP: %lx) with badge value: %lx IPC_Buff %p stack %p\n",
-                dest.capPtr, badge, client_reg_ptr->cpu.thread.ipc_buffer_addr, client_reg_ptr->cpu.thread.stack_top);
 
-    *cap_ret = dest_cptr;
+    /* Update the CPU object from TCB */
+    new_entry->cpu.thread = process->thread;
+    // client_reg_ptr->cpu.tls_base = &process->thread.tls_base;
+    new_entry->cpu.cspace = process->cspace.cptr;
+
+    *cap_ret = ret_cap;
+
     if (cpu_obj_id_ret)
     {
-        *cpu_obj_id_ret = get_object_id_from_badge(badge);
+        *cpu_obj_id_ret = new_entry->cpu.cpu_obj_id;
     }
+
     return 0;
 }
 

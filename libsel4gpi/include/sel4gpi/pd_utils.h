@@ -10,7 +10,6 @@
 #include <sel4/types.h>
 #include <sel4gpi/badge_usage.h>
 #include <sel4gpi/resource_space_clientapi.h>
-#include <sel4gpi/error_handle.h>
 
 #define PD_HEAP_LOC 0x5000000000
 #define DEFAULT_STACK_PAGES 16
@@ -118,3 +117,4 @@ int sel4gpi_configure_process(const char *image_name,
  * @return int
  */
 int sel4gpi_spawn_process(sel4gpi_process_t *proc, int argc, seL4_Word *args);
+

@@ -14,22 +14,39 @@
 #include <sel4utils/process.h>
 #include <sel4gpi/model_exporting.h>
 #include <sel4gpi/mo_obj.h>
+#include <sel4gpi/resource_server_utils.h>
+
+// Used in a map from attach node ID to vaddr
+typedef struct _attach_node_map
+{
+    resource_server_registry_node_t gen;
+    void *vaddr; // Key for the attach registry
+} attach_node_map_t;
 
 /**
- * Represents an attachment of a memory object
- * to an ADS
+ * Represents an reservation in the ADS (essentially a VMR resource)
+ * Optinoally, also an attachment of an MO
  *
  * Each attach of the same MO requires a copy
  * of the frame capabilities
  * */
 typedef struct _attach_node
 {
-    seL4_Word mo_id;
+    resource_server_registry_node_t gen;
+
+    void *vaddr;                  // Key for the UTHash
+    attach_node_map_t *map_entry; // the attach node map entry for this node
+    reservation_t res;
     sel4utils_reservation_type_t type;
-    void *vaddr;
     uint32_t n_pages;
+
+    // Only if an MO is attached
+    // (XXX) Arya: Assumes we only need to attach one MO to a reservation
+    bool mo_attached;
+    size_t mo_offset;
+    seL4_Word mo_id;
     seL4_CPtr *frame_caps;
-    struct _attach_node *next;
+    uint32_t n_frames;
 } attach_node_t;
 
 typedef struct _ads
@@ -38,7 +55,9 @@ typedef struct _ads
     vka_object_t *root_page_dir;
     sel4utils_process_t *process_for_cookies;
     uint32_t ads_obj_id;
-    attach_node_t *attach_nodes;
+
+    resource_server_registry_t attach_registry;
+    resource_server_registry_t attach_id_to_vaddr_map;
 } ads_t;
 
 /**
@@ -54,43 +73,74 @@ int ads_new(vspace_t *loader,
             ads_t *ret_ads);
 
 /**
- * @brief Attach a frame at a given address to the ads.
+ * Reserve a region of the ADS
  *
  * @param ads ads object
- * @param vaddr virtual address to attach the frame to
- * @param num_pages num of pages to attach
+ * @param vaddr virtual address to reserve
+ * @param num_pages num of pages to reserve
  * @param size_bits size of the pages
- * @param frame_caps caps to the frames to attach
- * @param mo_id (optional) ID of the MO these frames are from
- * @param ret_vaddr returns vaddr attached at
  * @param vmr_type the type of VMR, e.g. heap, stack, IPC buffer, etc.
- * @return int 0 on success, -1 on failure.
+ * @param ret_node returns the created reservation node
+ * @return int 0 on success, 1 on failure.
  */
-int ads_attach(ads_t *ads,
-               void *vaddr,
-               uint32_t num_pages,
-               size_t size_bits,
-               seL4_CPtr *frame_caps,
-               uint32_t mo_id,
-               void **ret_vaddr,
-               sel4utils_reservation_type_t vmr_type);
+int ads_reserve(ads_t *ads,
+                void *vaddr,
+                uint32_t num_pages,
+                size_t size_bits,
+                sel4utils_reservation_type_t vmr_type,
+                attach_node_t **ret_node);
 
 /**
- * @brief Attach an MO at a given address to the ads.
+ * Get an attach node from the ADS by ID
+ *
+ * @param ads ads object
+ * @param res_id the ID of the reservation to find
+ * @return the corresponding attach node, or NULL if not found
+ */
+attach_node_t *ads_get_res_by_id(ads_t *ads, uint64_t res_id);
+
+/**
+ * Get an attach node from the ADS by vaddr
+ *
+ * @param ads ads object
+ * @param vaddr the vaddr of the reservation to find
+ * @return the corresponding attach node, or NULL if not found
+ */
+attach_node_t *ads_get_res_by_vaddr(ads_t *ads, void *vaddr);
+
+/**
+ * Attach an MO to an existing ADS reservation
+ *
+ * @param ads ads object
+ * @param vka vka object to allocate cspace slots and PT from
+ * @param reservation the existing reservation
+ * @param offset offset into the reservation to attach the MO at
+ * @param mo the MO to attach
+ * @return int 0 on success, 1 on failure.
+ */
+int ads_attach_to_res(ads_t *ads,
+                      vka_t *vka,
+                      attach_node_t *reservation,
+                      size_t offset,
+                      mo_t *mo);
+
+/**
+ * @brief Attach an MO at a given address to the ADS.
+ * Makes a corresponding VMR reservation at the same time.
  *
  * @param ads ads object
  * @param vka vka object to allocate cspace slots and PT from
  * @param vaddr virtual address to attach the frame to
  * @param mo MO to attach
  * @param ret_vaddr returns vaddr attached at
- * @return int 0 on success, -1 on failure.
+ * @return int 0 on success, 1 on failure.
  */
-int ads_attach_mo(ads_t *ads,
-                  vka_t *vka,
-                  void *vaddr,
-                  mo_t *mo,
-                  void **ret_vaddr,
-                  sel4utils_reservation_type_t vmr_type);
+int ads_attach(ads_t *ads,
+               vka_t *vka,
+               void *vaddr,
+               mo_t *mo,
+               void **ret_vaddr,
+               sel4utils_reservation_type_t vmr_type);
 
 /**
  * @brief Remove a region from the ADS

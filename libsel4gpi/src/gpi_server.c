@@ -123,6 +123,9 @@ gpi_server_parent_spawn_thread(simple_t *parent_simple, vka_t *parent_vka,
     manager_entry->server_ep = get_gpi_server()->server_ep_obj.cptr;
     get_gpi_server()->cpu_manager_id = pd_component_resource_manager_insert(manager_entry);
 
+    /* Initialize the root task's PD resource */
+    forge_pd_for_root_task(&get_gpi_server()->rt_pd_id);
+
     /* And also allocate a badged copy of the Server's endpoint that the Parent
      * can use to send to the Server. This is used to allow the Server to report
      * back to the Parent on whether or not the Server successfully bound to a
@@ -231,6 +234,13 @@ void handle_allocation_request(seL4_MessageInfo_t tag,
             received_cap_path,
             reply_tag); /*unused*/
         break;
+    case GPICAP_TYPE_VMR:
+        ads_handle_allocation_request(
+            tag,
+            sender_badge,
+            received_cap_path,
+            reply_tag); /*unused*/
+        break;
     case GPICAP_TYPE_MO:
         mo_handle_allocation_request(
             sender_badge,
@@ -325,6 +335,12 @@ void gpi_server_main()
             switch (cap_type)
             {
             case GPICAP_TYPE_ADS:
+                ads_component_handle(tag,
+                                     sender_badge,
+                                     &received_cap_path,
+                                     &reply_tag); /*unused*/
+                break;
+            case GPICAP_TYPE_VMR:
                 ads_component_handle(tag,
                                      sender_badge,
                                      &received_cap_path,

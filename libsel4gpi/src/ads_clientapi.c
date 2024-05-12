@@ -41,7 +41,7 @@ int ads_component_client_connect(seL4_CPtr server_ep_cap,
     ret_conn->id = seL4_GetMR(ADSMSGREG_CONNECT_ACK_ADS_NS);
     // OSDB_PRINTF(ADS_DEBUG, ADSSERVC"Received badged endpoint and it was kept in:");
     // debug_cap_identify(ADSSERVC, ret_conn->badged_server_ep_cspath.capPtr);
-    return 0;
+    return seL4_MessageInfo_get_label(tag);
 }
 
 int ads_client_attach(ads_client_context_t *conn,
@@ -53,7 +53,6 @@ int ads_client_attach(ads_client_context_t *conn,
     seL4_SetMR(ADSMSGREG_FUNC, ADS_FUNC_ATTACH_REQ);
     seL4_SetMR(ADSMSGREG_ATTACH_REQ_VA, (seL4_Word)vaddr);
     seL4_SetMR(ADSMSGREG_ATTACH_REQ_TYPE, (seL4_Word)vmr_type);
-    // seL4_SetMR(ADSMSGREG_ATTACH_REQ_SZ, (seL4_Word) size);
     seL4_SetCap(0, mo_cap->badged_server_ep_cspath.capPtr);
 
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 1,
@@ -62,10 +61,66 @@ int ads_client_attach(ads_client_context_t *conn,
     OSDB_PRINTF(ADS_DEBUG, ADSSERVC "Sending attach request to server via EP: %lu.\n",
                 conn->badged_server_ep_cspath.capPtr);
     tag = seL4_Call(conn->badged_server_ep_cspath.capPtr, tag);
-    *ret_vaddr = (void *)seL4_GetMR(ADSMSGREG_ATTACH_REQ_VA);
+    *ret_vaddr = (void *)seL4_GetMR(ADSMSGREG_ATTACH_ACK_VA);
     assert(*ret_vaddr != NULL);
 
-    return 0;
+    return seL4_MessageInfo_get_label(tag);
+}
+
+int ads_client_reserve(ads_client_context_t *conn,
+                       seL4_CPtr free_slot,
+                       void *vaddr,
+                       size_t size,
+                       sel4utils_reservation_type_t vmr_type,
+                       ads_vmr_context_t *ret_conn,
+                       void **ret_vaddr)
+{
+    // Set the receive path for a new connection
+    seL4_SetCapReceivePath(SEL4UTILS_CNODE_SLOT,
+                           free_slot,
+                           seL4_WordBits);
+
+    seL4_SetMR(ADSMSGREG_FUNC, ADS_FUNC_RESERVE_REQ);
+    seL4_SetMR(ADSMSGREG_RESERVE_REQ_VA, (seL4_Word)vaddr);
+    seL4_SetMR(ADSMSGREG_RESERVE_REQ_TYPE, (seL4_Word)vmr_type);
+    seL4_SetMR(ADSMSGREG_RESERVE_REQ_SIZE, (seL4_Word)size);
+
+    seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0,
+                                                  ADSMSGREG_RESERVE_REQ_END);
+
+    OSDB_PRINTF(ADS_DEBUG, ADSSERVC "Sending reserve request to server via EP: %lu.\n",
+                conn->badged_server_ep_cspath.capPtr);
+
+    tag = seL4_Call(conn->badged_server_ep_cspath.capPtr, tag);
+    ret_conn->badged_server_ep_cspath.capPtr = free_slot;
+
+    *ret_vaddr = (void *)seL4_GetMR(ADSMSGREG_RESERVE_ACK_VA);
+    assert(*ret_vaddr != NULL);
+
+    OSDB_PRINTF(ADS_DEBUG, ADSSERVC "Finished reserve request, result in slot: %lu.\n",
+                free_slot);
+
+    return seL4_MessageInfo_get_label(tag);
+}
+
+int ads_client_attach_to_reserve(ads_vmr_context_t *reservation,
+                                 mo_client_context_t *mo,
+                                 size_t offset)
+{
+    seL4_SetMR(ADSMSGREG_FUNC, ADS_FUNC_ATTACH_RESERVE_REQ);
+    seL4_SetMR(ADSMSGREG_ATTACH_RESERVE_REQ_OFFSET, (seL4_Word)offset);
+
+    seL4_SetCap(0, mo->badged_server_ep_cspath.capPtr);
+
+    seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 2,
+                                                  ADSMSGREG_ATTACH_RESERVE_REQ_END);
+
+    OSDB_PRINTF(ADS_DEBUG, ADSSERVC "Sending attach-to-reserve request to server via EP: %lu.\n",
+                reservation->badged_server_ep_cspath.capPtr);
+
+    tag = seL4_Call(reservation->badged_server_ep_cspath.capPtr, tag);
+
+    return seL4_MessageInfo_get_label(tag);
 }
 
 int ads_client_shallow_copy(ads_client_context_t *conn, seL4_CPtr free_slot, void *omit_vaddr, ads_client_context_t *ret_conn)
@@ -89,7 +144,7 @@ int ads_client_shallow_copy(ads_client_context_t *conn, seL4_CPtr free_slot, voi
     tag = seL4_Call(conn->badged_server_ep_cspath.capPtr, tag);
     assert(seL4_MessageInfo_get_extraCaps(tag) == 1);
     ret_conn->badged_server_ep_cspath.capPtr = free_slot;
-    return 0;
+    return seL4_MessageInfo_get_label(tag);
 }
 
 /* To Change:
@@ -115,7 +170,7 @@ int ads_client_dump_rr(ads_client_context_t *conn, char *ads_rr, size_t size)
     OSDB_PRINTF(ADS_DEBUG, ADSSERVC "Sending dump RR request to server via EP: %lu.\n",
                 conn->badged_server_ep_cspath.capPtr);
     tag = seL4_Call(conn->badged_server_ep_cspath.capPtr, tag);
-    return 0;
+    return seL4_MessageInfo_get_label(tag);
 }
 
 int ads_client_rm(ads_client_context_t *conn, void *vaddr)
@@ -154,7 +209,7 @@ int ads_client_testing(ads_client_context_t *conn, vka_t *vka,
                                                   ADSMSGREG_TESTING_REQ_END);
 
     tag = seL4_Call(conn->badged_server_ep_cspath.capPtr, tag);
-    return 0;
+    return seL4_MessageInfo_get_label(tag);
 }
 
 /* ======================================= CONVENIENCE FUNCTIONS (NOT PART OF FRAMEWORK) ================================================= */
@@ -190,7 +245,7 @@ int ads_client_load_elf(ads_client_context_t *loadee_ads,
     assert(seL4_MessageInfo_get_label(tag) == 0);
 
     *ret_entry_point = (void *)seL4_GetMR(ADSMSGREG_LOAD_ELF_ACK_ENTRY_PT);
-    return 0;
+    return seL4_MessageInfo_get_label(tag);
 }
 
 int ads_client_prepare_stack(ads_client_context_t *target_ads,
@@ -240,5 +295,5 @@ int ads_client_prepare_stack(ads_client_context_t *target_ads,
     assert(seL4_MessageInfo_get_label(tag) == 0);
 
     *ret_init_stack = (void *)seL4_GetMR(ADSMSGREG_PROC_SETUP_ACK_INIT_STACK);
-    return 0;
+    return seL4_MessageInfo_get_label(tag);
 }

@@ -4,6 +4,11 @@
 
 #include <sel4/sel4.h>
 #include <sel4utils/process.h>
+
+#include <vka/vka.h>
+#include <vka/object.h>
+#include <vka/capops.h>
+
 #include <sel4gpi/pd_utils.h>
 #include <sel4gpi/resource_server_utils.h>
 #include <sel4gpi/resource_server_remote_utils.h>
@@ -470,21 +475,41 @@ void resource_server_registry_dec(resource_server_registry_t *registry, resource
     }
 }
 
-uint64_t resource_server_registry_badge_and_insert(resource_server_registry_t *registry, resource_server_registry_node_t *node,
-                                                   gpi_cap_t resource_type, uint64_t ns_id, uint32_t *new_obj_id)
+uint64_t resource_server_registry_insert_new_id(resource_server_registry_t *registry, resource_server_registry_node_t *node)
 {
-    uint32_t new_id = registry->n_entries + 1;
+    uint64_t new_id = registry->n_entries + 1;
 
-    seL4_Word badge_val = gpi_new_badge(resource_type,
-                                        0x00,
-                                        0x00,
-                                        ns_id,
-                                        new_id);
-    assert(badge_val != 0);
     node->object_id = new_id;
-
     resource_server_registry_insert(registry, node);
 
-    *new_obj_id = new_id;
-    return badge_val;
+    return new_id;
+}
+
+seL4_CPtr resource_server_make_badged_ep(vka_t* vka, seL4_CPtr src_ep, resource_server_registry_node_t *node, gpi_cap_t resource_type, uint64_t ns_id, uint64_t client_id)
+{
+    int error = 0;
+
+    /* Make the badge */
+    seL4_Word badge = gpi_new_badge(resource_type,
+                                        0x00,
+                                        client_id,
+                                        ns_id,
+                                        node->object_id);
+    
+    assert(badge != 0);
+
+    /* Mint the cap */
+    cspacepath_t src, dest;
+    vka_cspace_make_path(vka, src_ep, &src);
+
+    seL4_CPtr dest_cptr;
+    vka_cspace_alloc(vka, &dest_cptr);
+    vka_cspace_make_path(vka, dest_cptr, &dest);
+
+    error = vka_cnode_mint(&dest,
+                           &src,
+                           seL4_AllRights,
+                           badge);
+
+    return dest.capPtr;
 }

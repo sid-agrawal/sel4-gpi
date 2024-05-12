@@ -14,7 +14,6 @@
 #include <sel4gpi/test_init_data.h>
 #include <sel4gpi/resource_server_utils.h>
 #include <sel4gpi/resource_space_clientapi.h>
-#include <sel4gpi/error_handle.h>
 
 /** @file APIs for managing and interacting with the serial server thread.
  *
@@ -111,6 +110,11 @@ enum pd_component_msgregs
     PDMSGREG_CONNECT_REQ_END = PDMSGREG_LABEL0,
 
     PDMSGREG_CONNECT_ACK_END = PDMSGREG_LABEL0,
+
+    /* Clone PD */
+    PDMSGREG_CLONE_REQ_END = PDMSGREG_LABEL0,
+
+    PDMSGREG_CLONE_ACK_END = PDMSGREG_LABEL0,
 
     /* Server Spawn */
     PDMSGREG_SPAWN_SYNC_REQ_END = PDMSGREG_LABEL0,
@@ -233,10 +237,6 @@ enum pd_component_msgregs
     PDMSGREG_BENCH_IPC_REQ_END,
 
     PDMSGREG_BENCH_IPC_ACK_END = PDMSGREG_LABEL0,
-
-    PDMSGREG_CLONE_REQ_END = PDMSGREG_LABEL0,
-
-    PDMSGREG_CLONE_ACK_END = PDMSGREG_LABEL0
 };
 
 // Registry of PDs maintained by the server
@@ -261,9 +261,6 @@ typedef struct _pd_component_context
     // Registries
     resource_server_registry_t pd_registry;
     resource_server_registry_t server_registry;
-
-    // Root task's PD
-    pd_t rt_pd;
 } pd_component_context_t;
 
 /**
@@ -288,6 +285,9 @@ void pd_component_handle(seL4_MessageInfo_t tag,
 pd_component_context_t *get_pd_component(void);
 
 void pd_handle_allocation_request(seL4_Word sender_badge, seL4_MessageInfo_t *reply_tag);
+
+// Creates a dummy PD object for the root task
+void forge_pd_for_root_task(uint64_t *rt_id);
 
 // Only used to forge the test process' PD cap
 int forge_pd_cap_from_init_data(

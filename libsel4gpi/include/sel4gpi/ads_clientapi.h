@@ -21,7 +21,7 @@
  * @param free_slot a slot to receive a cap in
  * @param ret_conn client's connection object
  * @param ret_ads_ns the NS ID of the ADS resource, for access to its RDE, can be NULL
- * @return int 0 on success, -1 on failure.
+ * @return int 0 on success, 1 on failure.
  */
 int ads_component_client_connect(seL4_CPtr server_ep_cap,
                                  seL4_CPtr free_slot,
@@ -31,19 +31,20 @@ int ads_component_client_connect(seL4_CPtr server_ep_cap,
  * @brief   Disconnect the ads client.
  *
  * @param conn
- * @return int 0 on success, -1 on failure.
+ * @return int 0 on success, 1 on failure.
  */
 int ads_component_client_disconnect(ads_client_context_t *conn);
 
 /**
- * @brief
+ * Attach an MO to an ADS, and simultaneously reserve the VMR of the correct
+ * size to attach to
  *
  * @param conn client connection object
  * @param vaddr virtual address to attach at, can be NULL
  * @param mo_cap MO cap of the memory to attach
  * @param vmr_type the type of virtual memory (e.g. stack, heap, ipc buffer)
  * @param ret_vaddr virtual address where the MO was attached.
- * @return int 0 on success, -1 on failure.
+ * @return int 0 on success, 1 on failure.
  */
 int ads_client_attach(ads_client_context_t *conn,
                       void *vaddr,
@@ -52,14 +53,45 @@ int ads_client_attach(ads_client_context_t *conn,
                       void **ret_vaddr);
 
 /**
- * @brief   
+ * Reserve a VMR of an ADS
+ *
+ * @param conn client connection object to the ADS
+ * @param free_slot a slot to receive a cap in
+ * @param vaddr requested reservation address (or NULL)
+ * @param size size in bytes of the region to reserve
+ * @param vmr_type the type of virtual memory (e.g. stack, heap, ipc buffer)
+ * @param ret_conn returns the context for the reserved VMR
+ * @param ret_vaddr return virtual address where the MO was attached.
+ * @return int 0 on success, 1 on failure
+ */
+int ads_client_reserve(ads_client_context_t *conn,
+                       seL4_CPtr free_slot,
+                       void *vaddr,
+                       size_t size,
+                       sel4utils_reservation_type_t vmr_type,
+                       ads_vmr_context_t *ret_conn,
+                       void **ret_vaddr);
+
+/**
+ * Attach an MO to an ADS at a given VMR reservation
+ *
+ * @param reservation reservation to attach to
+ * @param mo mo to attach
+ * @param offset offset into the reservation to attach the MO
+ * @return int 0 on success, 1 on failure.
+ */
+int ads_client_attach_to_reserve(ads_vmr_context_t *reservation,
+                                 mo_client_context_t *mo,
+                                 size_t offset);
+/**
+ * @brief
  * Remove a memory region from the ads.
  * Removes the entire reservation starting at the provided vaddr.
  * (XXX) Arya: This operation is really VMR delete
  *
  * @param conn client connection object
  * @param vaddr virtual address to remove
- * @return int 0 on success, -1 on failure.
+ * @return int 0 on success, 1 on failure.
  */
 int ads_client_rm(ads_client_context_t *conn, void *vaddr);
 
@@ -68,7 +100,7 @@ int ads_client_rm(ads_client_context_t *conn, void *vaddr);
  *
  * @param conn client connection object
  * @param cpu_cap CAP of the CPU to bind to. For now the CPU cap is just the TCB cap.
- * @return int 0 on success, -1 on failure.
+ * @return int 0 on success, 1 on failure.
  */
 int ads_client_bind_cpu(ads_client_context_t *conn, seL4_CPtr cpu_cap);
 
@@ -77,7 +109,7 @@ int ads_client_bind_cpu(ads_client_context_t *conn, seL4_CPtr cpu_cap);
  * @param conn original ads connection object
  * @param omit_vaddr Do not shallow copy the segment with this starting VA
  * @param ads_cap_ret return cap
- * @return int 0 on success, -1 on failure.
+ * @return int 0 on success, 1 on failure.
  */
 int ads_client_shallow_copy(ads_client_context_t *conn, seL4_CPtr free_slot, void *omit_vaddr,
                             ads_client_context_t *conn_ret);
@@ -85,7 +117,7 @@ int ads_client_shallow_copy(ads_client_context_t *conn, seL4_CPtr free_slot, voi
 /**
  * @brief Dump the resource relations of the ads.
  * @param conn ads connection object
- * @return int 0 on success, -1 on failure.
+ * @return int 0 on success, 1 on failure.
  */
 int ads_client_dump_rr(ads_client_context_t *conn, char *buf, size_t buf_size);
 
@@ -94,7 +126,7 @@ int ads_client_dump_rr(ads_client_context_t *conn, char *buf, size_t buf_size);
  *
  * @param conn ads connection object
  * @param ret_id id of the ads as a return value
- * @return int 0 on success, -1 on failure.
+ * @return int 0 on success, 1 on failure.
  */
 int ads_client_getID(ads_client_context_t *conn, seL4_Word *ret_id);
 

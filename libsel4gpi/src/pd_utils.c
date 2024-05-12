@@ -4,6 +4,17 @@
 
 #include <sel4gpi/pd_utils.h>
 
+// (XXX) Arya: Adding because macro was missing, linh to add error_handle.h
+#define GOTO_IF_ERR(check, msg)                  \
+    do                                           \
+    {                                            \
+        if ((check) != seL4_NoError)             \
+        {                                        \
+            printf("PD_UTILS ERROR: %s\n", msg); \
+            goto err_goto;                       \
+        }                                        \
+    } while (0);
+
 seL4_CPtr sel4gpi_get_pd_cap(void)
 {
     seL4_CPtr slot = ((osm_pd_init_data_t *)sel4runtime_get_osm_init_data())->pd_cap;
@@ -87,16 +98,16 @@ void *sel4gpi_get_vmr(ads_client_context_t *ads_rde, int num_pages, void *vaddr,
     /* allocate stack frame */
     seL4_CPtr slot;
     error = pd_client_next_slot(&self_pd, &slot);
-    GOTO_IF_ERR(error);
+    GOTO_IF_ERR(error, "failed to allocate next slot");
 
     mo_client_context_t mo;
     error = mo_component_client_connect(mo_rde, slot, num_pages, &mo);
-    GOTO_IF_ERR(error);
+    GOTO_IF_ERR(error, "failed to allocate MO\n");
 
     /* attach stack to cpu */
     void *new_vaddr;
     error = ads_client_attach(ads_rde, vaddr, &mo, vmr_type, &new_vaddr);
-    GOTO_IF_ERR(error);
+    GOTO_IF_ERR(error, "failed to attach MO\n");
 
     if (ret_mo)
     {
@@ -105,25 +116,50 @@ void *sel4gpi_get_vmr(ads_client_context_t *ads_rde, int num_pages, void *vaddr,
 
     return new_vaddr;
 
-error:
-    printf("ERROR\n");
+err_goto:
     return NULL;
 }
 
 void *sel4gpi_new_sized_stack(ads_client_context_t *ads, size_t n_pages)
 {
     int error = 0;
+    seL4_CPtr slot;
 
-    /* one extra page for the guard */
-    void *vaddr = sel4gpi_get_vmr(ads, n_pages, NULL, SEL4UTILS_RES_TYPE_STACK, NULL);
-    if (vaddr == NULL)
-    {
-        return NULL;
-    }
+    pd_client_context_t self_pd;
+    self_pd.badged_server_ep_cspath.capPtr = sel4gpi_get_pd_cap();
 
-    uintptr_t stack_top = (uintptr_t)vaddr + (n_pages * PAGE_SIZE_4K);
+    seL4_CPtr mo_rde = sel4gpi_get_rde(GPICAP_TYPE_MO);
+
+    /* reserve one extra page for the guard */
+    void *vaddr;
+    error = pd_client_next_slot(&self_pd, &slot);
+    GOTO_IF_ERR(error, "failed to allocate next slot");
+
+    size_t res_size = (n_pages + 1) * (SIZE_BITS_TO_BYTES(MO_PAGE_BITS));
+    ads_vmr_context_t reservation;
+    error = ads_client_reserve(ads, slot, NULL, res_size, SEL4UTILS_RES_TYPE_STACK, &reservation, &vaddr);
+    GOTO_IF_ERR(error, "failed to reserve VMR for stack");
+
+    /* allocate MO */
+    error = pd_client_next_slot(&self_pd, &slot);
+    GOTO_IF_ERR(error, "failed to allocate next slot");
+
+    mo_client_context_t mo;
+    error = mo_component_client_connect(mo_rde, slot, n_pages, &mo);
+    GOTO_IF_ERR(error, "failed to allocate MO");
+
+    /* attach MO to ADS */
+    size_t offset = SIZE_BITS_TO_BYTES(MO_PAGE_BITS);
+    error = ads_client_attach_to_reserve(&reservation, &mo, offset);
+    GOTO_IF_ERR(error, "failed to attach MO to reserved stack");
+
+    uintptr_t stack_top = (uintptr_t)vaddr + res_size;
 
     return (void *)stack_top;
+
+err_goto:
+    printf("Error while allocating stack\n");
+    return NULL;
 }
 
 int sel4gpi_configure_process(const char *image_name, int stack_pages, int heap_pages, sel4gpi_process_t *ret_proc)
@@ -140,46 +176,49 @@ int sel4gpi_configure_process(const char *image_name, int stack_pages, int heap_
     /* new PD */
     seL4_CPtr slot;
     error = pd_client_next_slot(&self_pd_cap, &slot);
-    GOTO_IF_ERR(error);
+    GOTO_IF_ERR(error, "failed to allocate next slot");
+
     pd_client_context_t new_pd;
     error = pd_component_client_connect(pd_rde, slot, &new_pd);
-    GOTO_IF_ERR(error);
+    GOTO_IF_ERR(error, "failed to allocate a PD");
 
     /* new ADS */
     error = pd_client_next_slot(&self_pd_cap, &slot);
-    GOTO_IF_ERR(error);
+    GOTO_IF_ERR(error, "failed to allocate next slot");
+
     ads_client_context_t new_ads;
     error = ads_component_client_connect(ads_rde, slot, &new_ads);
-    GOTO_IF_ERR(error);
+    GOTO_IF_ERR(error, "failed to allocate a new ADS");
 
     /* new CPU */
     error = pd_client_next_slot(&self_pd_cap, &slot);
-    GOTO_IF_ERR(error);
+    GOTO_IF_ERR(error, "failed to allocate next slot");
+
     cpu_client_context_t new_cpu;
     error = cpu_component_client_connect(cpu_rde, slot, &new_cpu);
-    GOTO_IF_ERR(error);
+    GOTO_IF_ERR(error, "failed to allocate a new VCPU");
 
     void *entry_point;
     error = ads_client_load_elf(&new_ads, &new_pd, image_name, &entry_point);
-    GOTO_IF_ERR(error);
+    GOTO_IF_ERR(error, "failed to load elf to ADS");
 
     ads_client_context_t new_ads_rde = {.badged_server_ep_cspath.capPtr = sel4gpi_get_rde_by_ns_id(new_ads.id, GPICAP_TYPE_ADS)};
     void *stack = sel4gpi_new_sized_stack(&new_ads_rde, stack_pages);
-    test_assert(stack != NULL);
+    GOTO_IF_ERR(stack == NULL, "failed to allocate a new stack");
 
     void *heap = sel4gpi_get_vmr(&new_ads_rde, heap_pages, (void *)PD_HEAP_LOC, SEL4UTILS_RES_TYPE_HEAP, NULL);
-    test_assert(heap != NULL);
+    GOTO_IF_ERR(heap == NULL, "failed to allocate a new heap");
 
     mo_client_context_t ipc_mo;
     void *ipc_buf = sel4gpi_get_vmr(&new_ads_rde, 1, NULL, SEL4UTILS_RES_TYPE_IPC_BUF, &ipc_mo);
-    test_assert(ipc_buf != NULL);
+    GOTO_IF_ERR(ipc_buf == NULL, "failed to allocate a new IPC buf");
 
     seL4_Word cnode_guard = api_make_guard_skip_word(seL4_WordBits - TEST_PROCESS_CSPACE_SIZE_BITS);
     error = cpu_client_config(&new_cpu, &new_ads, &ipc_mo, &new_pd, cnode_guard, seL4_CapNull, (seL4_Word)ipc_buf);
-    GOTO_IF_ERR(error);
+    GOTO_IF_ERR(error, "failed to configure CPU");
 
     error = pd_client_share_rde(&new_pd, GPICAP_TYPE_MO, NSID_DEFAULT);
-    GOTO_IF_ERR(error);
+    GOTO_IF_ERR(error, "failed to share RDE");
 
     // error = cpu_client_start(&new_cpu, entry_point, init_stack, 0);
     // GOTO_IF_ERR(error);
@@ -195,7 +234,8 @@ int sel4gpi_configure_process(const char *image_name, int stack_pages, int heap_
     }
 
     return 0;
-error:
+
+err_goto:
     // TODO cleanup allocated objects
     printf("Error occured during process spawn\n");
     return -1;
@@ -206,12 +246,13 @@ int sel4gpi_spawn_process(sel4gpi_process_t *proc, int argc, seL4_Word *args)
     int error;
     void *init_stack;
     error = ads_client_prepare_stack(&proc->ads, &proc->pd, proc->stack, proc->stack_pages, argc, args, &init_stack);
-    GOTO_IF_ERR(error);
+    GOTO_IF_ERR(error, "failed to prepare stack");
 
     error = cpu_client_start(&proc->cpu, proc->entry_point, init_stack, 0);
-    GOTO_IF_ERR(error);
+    GOTO_IF_ERR(error, "failed to start CPU");
 
     return 0;
-error:
+
+err_goto:
     return error;
 }

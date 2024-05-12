@@ -226,7 +226,7 @@ int pd_new(pd_t *pd,
     }
 
     // Track the init data MO in RT only
-    pd_add_resource(&get_pd_component()->rt_pd, GPICAP_TYPE_MO, rde_mo_obj->mo_obj_id, NSID_DEFAULT, pd->init_data_mo.badged_server_ep_cspath.capPtr, 0, 0);
+    pd_add_resource_by_id(get_gpi_server()->rt_pd_id, GPICAP_TYPE_MO, rde_mo_obj->mo_obj_id);
     // pd_add_resource(pd, GPICAP_TYPE_MO, rde_mo_obj->mo_obj_id, pd->init_data_mo.badged_server_ep_cspath.capPtr, seL4_CapNull, pd->init_data_mo.badged_server_ep_cspath.capPtr);
 
     // Setup init data
@@ -241,8 +241,6 @@ int pd_new(pd_t *pd,
 
 int pd_destroy(pd_t *pd, vka_t *server_vka, vspace_t *server_vspace)
 {
-    printf("TEMPA pd destroy\n");
-
     int error = 0;
 
     // (XXX) Arya: To fix later, should extract functionality from sel4utils_destroy_process
@@ -270,10 +268,11 @@ int pd_destroy(pd_t *pd, vka_t *server_vka, vspace_t *server_vspace)
     // The PD's VKA/allocator are destroyed with allocator_mem_pool
 
     // Other caps in RT
-    vka_cspace_free(server_vka, pd->pd_cap_in_RT);
+    cspacepath_t path;
+    vka_cspace_make_path(server_vka, pd->pd_cap_in_RT, &path);
+    vka_cnode_delete(&path);
+    vka_cspace_free_path(server_vka, path);
     // The CPtrs like "ads_cap_in_RT" should be destroyed when the ADS is destroyed
-
-    printf("TEMPA pd destroy complete\n");
 
     return error;
 }
@@ -485,7 +484,7 @@ int pd_configure(pd_t *pd,
     pd->proc.thread = target_cpu->thread;
 
     /* The RT manages this ADS */
-    pd_add_resource(&get_pd_component()->rt_pd, GPICAP_TYPE_ADS, target_ads->ads_obj_id, NSID_DEFAULT, 0, 0, 0);
+    pd_add_resource_by_id(get_gpi_server()->rt_pd_id, GPICAP_TYPE_ADS, target_ads->ads_obj_id);
 
     /* Initialize a vka for the PD's cspace */
     error = pd_bootstrap_allocator(pd, pd->proc.cspace.cptr, pd->proc.cspace_next_free,
@@ -516,7 +515,7 @@ int pd_configure(pd_t *pd,
     pd_send_cap(pd, pd->pd_cap_in_RT, badge, &pd->init_data->pd_cap);
 
     // Map init data to the PD
-    error = ads_component_attach(pd->init_data->binded_ads_ns_id, pd->init_data_mo_id, NULL, (void **)&pd->init_data_in_PD);
+    error = ads_component_attach(pd->init_data->binded_ads_ns_id, pd->init_data_mo_id, SEL4UTILS_RES_TYPE_OTHER, NULL, (void **)&pd->init_data_in_PD);
     if (error)
     {
         ZF_LOGF("Failed to attach init data to child PD");
@@ -709,9 +708,9 @@ static int request_remote_rr(pd_t *pd, model_state_t *ms, uint64_t server_id, ui
 
     // Get RR from remote resource server
     error = resource_server_client_get_rr(server_cap, obj_id, pd->pd_obj_id,
-                                   server_entry->pd->pd_obj_id,
-                                   rr_remote_vaddr, rr_local_vaddr,
-                                   SIZE_BITS_TO_BYTES(seL4_LargePageBits), &ms2);
+                                          server_entry->pd->pd_obj_id,
+                                          rr_remote_vaddr, rr_local_vaddr,
+                                          SIZE_BITS_TO_BYTES(seL4_LargePageBits), &ms2);
 
     if (error == RS_ERROR_DNE)
     {
@@ -916,10 +915,11 @@ int pd_dump(pd_t *pd)
     gpi_model_node_t *rt_node = get_root_node(ms);
 
     /* Add caps from RT (not all caps, just specially tracked ones) */
-    for (osmosis_pd_cap_t *current_cap = get_pd_component()->rt_pd.has_access_to; current_cap != NULL; current_cap = current_cap->hh.next)
+    pd_t *rt_pd = pd_component_registry_get_entry_by_id(get_gpi_server()->rt_pd_id);
+    for (osmosis_pd_cap_t *current_cap = rt_pd->has_access_to; current_cap != NULL; current_cap = current_cap->hh.next)
     {
         // print_pd_osm_cap_info(current_cap);
-        if (res_dump(&get_pd_component()->rt_pd, ms, current_cap, rt_node, rr_frame_path, rr_local_vaddr) != 0)
+        if (res_dump(rt_pd, ms, current_cap, rt_node, rr_frame_path, rr_local_vaddr) != 0)
         {
             return -1;
         }

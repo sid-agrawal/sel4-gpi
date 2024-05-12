@@ -106,14 +106,23 @@ void resource_server_registry_dec(resource_server_registry_t *registry, resource
 
 /**
  * Assign an object id for a new registry entry before inserting
- * Constructs and returns the corresponding resource badge
  *
  * @param registry
- * @param node new node to assign an ID to
- * @param resource_type type of resource (for badge)
- * @param ns_id ns id (for badge)
- * @param new_obj_id returns the assigned object id
+ * @param node new node to insert and assign an ID to
+ * @return the assigned object id of the node
+ */
+uint64_t resource_server_registry_insert_new_id(resource_server_registry_t *registry, resource_server_registry_node_t *node);
+
+/**
+ * Creates a badged version of an endpoint for a particular resource
+ *
+ * @param vka vka to use for cap mint
+ * @param src_ep source endpoint to badge
+ * @param node node to make a badge for
+ * @param resource_type type of resource
+ * @param ns_id namespace the resource is from
+ * @param client_id client the badge is meant for
  * @return the new resource badge
  */
-uint64_t resource_server_registry_badge_and_insert(resource_server_registry_t *registry, resource_server_registry_node_t *node,
-                                                   gpi_cap_t resource_type, uint64_t ns_id, uint32_t *new_obj_id);
+seL4_CPtr resource_server_make_badged_ep(vka_t *vka, seL4_CPtr src_ep, resource_server_registry_node_t *node,
+                                         gpi_cap_t resource_type, uint64_t ns_id, uint64_t client_id);

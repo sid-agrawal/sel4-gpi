@@ -14,16 +14,13 @@
 #include <sel4utils/process.h>
 #include <sel4gpi/model_exporting.h>
 
-typedef struct _mo_frame
-{
-    seL4_CPtr cap;
-    seL4_Word paddr;
-} mo_frame_t;
+#define MO_PAGE_BITS seL4_PageBits
 
 typedef struct _mo
 {
     uint64_t mo_obj_id;
-    mo_frame_t *frame_caps_in_root_task;
+    seL4_CPtr *frame_caps_in_root_task;
+    uintptr_t *frame_paddrs;
     uint32_t num_pages;
 } mo_t;
 
@@ -37,7 +34,7 @@ typedef struct _mo
  * @return int 0 on success, -1 on failure.
  */
 int mo_new(mo_t *mo,
-           mo_frame_t *frame_caps,
+           seL4_CPtr *frame_caps,
            uint32_t num_caps,
            vka_t *vka);
 

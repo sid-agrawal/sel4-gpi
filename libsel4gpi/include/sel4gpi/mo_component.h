@@ -134,3 +134,14 @@ int forge_mo_caps_from_vspace(vspace_t *child_vspace,
 mo_component_registry_entry_t *mo_component_registry_get_entry_by_badge(seL4_Word badge);
 
 mo_component_registry_entry_t *mo_component_registry_get_entry_by_id(seL4_Word objectID);
+
+/**
+ * Allocate a new MO object and add it to the registry
+ * Exposed for use by the ADS component during ADS copy
+ * 
+ * @param client_id PD id of the recipient of the MO
+ * @param forge true if this function should not actually allocate an MO with frames, use for forging
+ * @param ret_entry registry entry of the new MO
+ * @param ret_cap the badged endpoint capability for the new MO
+*/
+int mo_component_allocate_mo(uint64_t client_id, bool forge, int num_pages, mo_component_registry_entry_t **ret_entry, seL4_CPtr *ret_cap);

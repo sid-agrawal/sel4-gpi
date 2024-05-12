@@ -74,10 +74,9 @@ pd_component_resource_manager_entry_t *pd_component_resource_manager_get_entry_b
 
 int pd_component_resource_manager_insert(pd_component_resource_manager_entry_t *new_node)
 {
-    uint32_t new_id;
-    resource_server_registry_badge_and_insert(&get_pd_component()->server_registry, (resource_server_registry_node_t *)new_node,
-                                              GPICAP_TYPE_RS, NSID_DEFAULT, &new_id);
-    return new_id;
+    resource_server_registry_insert_new_id(&get_pd_component()->server_registry, (resource_server_registry_node_t *)new_node);
+
+    return new_node->gen.object_id;
 }
 
 // (XXX) Arya: Nasty hack so we can update the forged test PD
@@ -102,13 +101,13 @@ int pd_component_initialize(simple_t *server_simple,
     resource_server_initialize_registry(&component->server_registry, NULL);
 }
 
-int forge_pd_cap_from_init_data(
-    test_init_data_t *init_data, // Change this to something else
-    vka_t *vka)
-{
-    assert(init_data != NULL);
 
-    /* Allocate a new registry entry for the client. */
+// Utility function to create a PD, add to registry, badge an endpoint, etc.
+static int pd_component_allocate_pd(uint64_t client_id, bool forge, pd_component_registry_entry_t **ret_entry, seL4_CPtr *ret_cap)
+{
+    int error;
+
+    /* Create the registry entry */
     pd_component_registry_entry_t *client_reg_ptr = malloc(sizeof(pd_component_registry_entry_t));
     if (client_reg_ptr == 0)
     {
@@ -117,43 +116,80 @@ int forge_pd_cap_from_init_data(
     }
     memset((void *)client_reg_ptr, 0, sizeof(pd_component_registry_entry_t));
 
-    pd_t *pd = &client_reg_ptr->pd;
+    client_reg_ptr->pd.pd_obj_id = resource_server_registry_insert_new_id(&get_pd_component()->pd_registry, (resource_server_registry_node_t *)client_reg_ptr);
+    *ret_entry = client_reg_ptr;
+
+    /* Create the PD object */
+    if (!forge)
+    {
+        error = pd_new(&client_reg_ptr->pd,
+                       get_pd_component()->server_vka,
+                       get_pd_component()->server_vspace);
+        if (error)
+        {
+            OSDB_PRINTF(PD_DEBUG, PDSERVS "main: Failed to create new pd object\n");
+            return 1;
+        }
+    }
+
+    /* Create the badged endpoint */
+    *ret_cap = resource_server_make_badged_ep(get_pd_component()->server_vka, get_pd_component()->server_ep_obj.cptr,
+                                              (resource_server_registry_node_t *)client_reg_ptr, GPICAP_TYPE_PD, NSID_DEFAULT, client_id);
+    client_reg_ptr->pd.pd_cap_in_RT = ret_cap;
+
+    if (error)
+    {
+        OSDB_PRINTF(PD_DEBUG, PDSERVS "main: Failed to make badged ep for new ADS\n");
+        return 1;
+    }
+
+    /* Add the resource to the client */
+    osmosis_pd_cap_t *res = pd_add_resource_by_id(client_id, GPICAP_TYPE_PD, client_reg_ptr->pd.pd_obj_id);
+    if (res)
+    {
+        res->slot_in_RT_Debug = *ret_cap;
+    }
+
+    return 0;
+}
+
+void forge_pd_for_root_task(uint64_t *rt_id)
+{
+    pd_component_registry_entry_t *rt_entry = malloc(sizeof(pd_component_registry_entry_t));
+    *rt_id = resource_server_registry_insert_new_id(&get_pd_component()->pd_registry, (resource_server_registry_node_t *)rt_entry);
+}
+
+int forge_pd_cap_from_init_data(
+    test_init_data_t *init_data, // Change this to something else
+    vka_t *vka)
+{
+    assert(init_data != NULL);
+
+    int error = 0;
+    seL4_CPtr ret_cap;
+    pd_component_registry_entry_t *new_entry;
+
+    /* Allocate the PD object */
+    // (XXX) Arya: Need to get client ID
+    error = pd_component_allocate_pd(0, true, &new_entry, &ret_cap);
+    if (error)
+    {
+        OSDB_PRINTF(PD_DEBUG, PDSERVS "main: Failed to allocate PD for forge.\n");
+        return 1;
+    }
+
+    /* Update the PD object from init data */
+    pd_t *pd = &new_entry->pd;
     pd_new(pd,
            get_pd_component()->server_vka,
            get_pd_component()->server_vspace);
 
-    /* Create a badged endpoint for the client to send messages to.
-     * Use the address of the client_registry_entry as the badge.
-     */
-    // (XXX) Arya: We might be able to replace this with the RDE in init data
-    cspacepath_t src,
-        dest;
-    vka_cspace_make_path(
-        get_pd_component()->server_vka,
-        get_pd_component()->server_ep_obj.cptr, &src);
-    seL4_CPtr dest_cptr;
-    vka_cspace_alloc(get_pd_component()->server_vka, &dest_cptr);
-    vka_cspace_make_path(get_pd_component()->server_vka, dest_cptr, &dest);
-
-    /* Update the info in the registry entry. */
-    seL4_Word badge = resource_server_registry_badge_and_insert(&get_pd_component()->pd_registry, (resource_server_registry_node_t *)client_reg_ptr,
-                                                                GPICAP_TYPE_PD, NSID_DEFAULT, &client_reg_ptr->pd.pd_obj_id);
-    test_pd_id = client_reg_ptr->gen.object_id;
-
-    int error = vka_cnode_mint(&dest,
-                               &src,
-                               seL4_AllRights,
-                               badge);
-    if (error)
-    {
-        OSDB_PRINTF(PD_DEBUG, CPUSERVS "main: Failed to mint client badge %lx.\n", badge);
-        return 1;
-    }
+    test_pd_id = new_entry->pd.pd_obj_id;
+    new_entry->pd.pd_cap_in_RT = ret_cap;
 
     OSDB_PRINTF(PD_DEBUG, PDSERVS "main: Forged a new PD cap(EP: %lx) with badge value: %lx \n",
-                dest.capPtr, badge);
+                ret_cap);
 
-    client_reg_ptr->pd.pd_cap_in_RT = dest_cptr;
     return 0;
 }
 
@@ -163,7 +199,6 @@ void update_forged_pd_cap_from_init_data(test_init_data_t *init_data, sel4utils_
     assert(init_data != NULL);
 
     // Assumes this is called to set up the test process
-    // (XXX) Arya: Would this fail if used for a second test?
     pd_component_registry_entry_t *reg_ptr = (pd_component_registry_entry_t *)resource_server_registry_get_by_id(&get_pd_component()->pd_registry, test_pd_id);
     pd_t *pd = &reg_ptr->pd;
     assert(pd != NULL);
@@ -180,11 +215,25 @@ void update_forged_pd_cap_from_init_data(test_init_data_t *init_data, sel4utils_
     ZF_LOGF_IFERR(error, "Failed to initialize PD VKA");
     init_data->free_slots.end = mid_slot - 1;
 
+    // Add the basic RDEs
+    rde_type_t ads_type = {.type = GPICAP_TYPE_ADS};
+    pd_add_rde(pd, ads_type, get_gpi_server()->ads_manager_id, NSID_DEFAULT, get_gpi_server()->server_ep_obj.cptr);
+
+    rde_type_t cpu_type = {.type = GPICAP_TYPE_CPU};
+    pd_add_rde(pd, cpu_type, get_gpi_server()->cpu_manager_id, NSID_DEFAULT, get_gpi_server()->server_ep_obj.cptr);
+
+    rde_type_t mo_type = {.type = GPICAP_TYPE_MO};
+    pd_add_rde(pd, mo_type, get_gpi_server()->mo_manager_id, NSID_DEFAULT, get_gpi_server()->server_ep_obj.cptr);
+
+    rde_type_t pd_type = {.type = GPICAP_TYPE_PD};
+    pd_add_rde(pd, pd_type, get_gpi_server()->pd_manager_id, NSID_DEFAULT, get_gpi_server()->server_ep_obj.cptr);
+
     // Forge ADS cap
     seL4_CPtr child_as_cap_in_parent;
     uint32_t ads_id;
     error = forge_ads_cap_from_vspace(&test_process->vspace, get_pd_component()->server_vka, pd->pd_obj_id, &child_as_cap_in_parent, &ads_id);
     ZF_LOGF_IFERR(error, "Failed to forge child's as cap");
+    pd->init_data->binded_ads_ns_id = ads_id;
 
     // Forge CPU cap
     seL4_CPtr child_cpu_cap_in_parent;
@@ -205,20 +254,6 @@ void update_forged_pd_cap_from_init_data(test_init_data_t *init_data, sel4utils_
     error = copy_cap_to_pd(pd, child_cpu_cap_in_parent, &pd->init_data->cpu_cap);
     assert(error == 0);
     pd_add_resource(pd, GPICAP_TYPE_CPU, cpu_id, NSID_DEFAULT, child_cpu_cap_in_parent, pd->init_data->cpu_cap, child_cpu_cap_in_parent);
-
-    rde_type_t ads_type = {.type = GPICAP_TYPE_ADS};
-    pd_add_rde(pd, ads_type, get_gpi_server()->ads_manager_id, NSID_DEFAULT, get_gpi_server()->server_ep_obj.cptr);
-    pd_add_rde(pd, ads_type, get_gpi_server()->ads_manager_id, ads_id, get_gpi_server()->server_ep_obj.cptr);
-    pd->init_data->binded_ads_ns_id = ads_id;
-
-    rde_type_t cpu_type = {.type = GPICAP_TYPE_CPU};
-    pd_add_rde(pd, cpu_type, get_gpi_server()->cpu_manager_id, NSID_DEFAULT, get_gpi_server()->server_ep_obj.cptr);
-
-    rde_type_t mo_type = {.type = GPICAP_TYPE_MO};
-    pd_add_rde(pd, mo_type, get_gpi_server()->mo_manager_id, NSID_DEFAULT, get_gpi_server()->server_ep_obj.cptr);
-
-    rde_type_t pd_type = {.type = GPICAP_TYPE_PD};
-    pd_add_rde(pd, pd_type, get_gpi_server()->pd_manager_id, NSID_DEFAULT, get_gpi_server()->server_ep_obj.cptr);
 }
 
 void *get_osmosis_pd_init_data(vspace_t *test_vspace)
@@ -271,6 +306,7 @@ void *get_osmosis_pd_init_data(vspace_t *test_vspace)
 
 osmosis_pd_cap_t *pd_add_resource_by_id(uint32_t client_id, gpi_cap_t cap_type, uint32_t res_id)
 {
+    // (XXX) Arya: Why are we treating the test process specially? Can we remove this?
     if (client_id != 0) // only test processes would have no client ID
     {
         pd_component_registry_entry_t *client_pd_data = pd_component_registry_get_entry_by_id(client_id);
@@ -281,76 +317,20 @@ osmosis_pd_cap_t *pd_add_resource_by_id(uint32_t client_id, gpi_cap_t cap_type, 
     return NULL;
 }
 
-static pd_component_registry_entry_t *pd_allocate(seL4_Word sender_badge)
-{
-    /* Allocate a new registry entry for the client. */
-    pd_component_registry_entry_t *client_reg_ptr =
-        malloc(sizeof(pd_component_registry_entry_t));
-    if (client_reg_ptr == 0)
-    {
-        OSDB_PRINTF(PD_DEBUG, PDSERVS "main: Failed to allocate new badge for client.\n");
-        return NULL;
-    }
-    memset((void *)client_reg_ptr, 0, sizeof(pd_component_registry_entry_t));
-
-    int error = pd_new(&client_reg_ptr->pd,
-                       get_pd_component()->server_vka,
-                       get_pd_component()->server_vspace);
-    if (error)
-    {
-        return NULL;
-    }
-
-    /**
-     * Create a badged endpoint for the client to send messages to.
-     */
-    cspacepath_t src, dest;
-    vka_cspace_make_path(get_pd_component()->server_vka,
-                         get_pd_component()->server_ep_obj.cptr, &src);
-    seL4_CPtr dest_cptr;
-    vka_cspace_alloc(get_pd_component()->server_vka, &dest_cptr);
-    vka_cspace_make_path(get_pd_component()->server_vka, dest_cptr, &dest);
-
-    seL4_Word badge = resource_server_registry_badge_and_insert(&get_pd_component()->pd_registry, (resource_server_registry_node_t *)client_reg_ptr,
-                                                                GPICAP_TYPE_PD, NSID_DEFAULT, &client_reg_ptr->pd.pd_obj_id);
-
-    // (XXX) Arya: Can this be replaced with pd_send_cap?
-    uint32_t client_id = get_client_id_from_badge(sender_badge);
-    osmosis_pd_cap_t *res = pd_add_resource_by_id(client_id, GPICAP_TYPE_PD, get_object_id_from_badge(badge));
-    if (res)
-    {
-        res->slot_in_RT_Debug = dest_cptr;
-        badge = set_client_id_to_badge(badge, client_id);
-    }
-
-    error = vka_cnode_mint(&dest,
-                           &src,
-                           seL4_AllRights,
-                           badge);
-    if (error)
-    {
-        OSDB_PRINTF(PD_DEBUG, PDSERVS "main: Failed to mint client badge %lx.\n", badge);
-        return NULL;
-    }
-    client_reg_ptr->pd.pd_cap_in_RT = dest_cptr;
-
-    return client_reg_ptr;
-}
-
 void pd_handle_allocation_request(seL4_Word sender_badge, seL4_MessageInfo_t *reply_tag)
 {
     OSDB_PRINTF(PD_DEBUG, PDSERVS "main: Got connect request from badge %lx\n", sender_badge);
     int error = 0;
-    /* Return this badged end point in the return message. */
-    pd_component_registry_entry_t *reg_entry = pd_allocate(sender_badge);
-    if (!reg_entry)
-    {
-        OSDB_PRINTF(PD_DEBUG, PDSERVS "Failed to create a new PD\n");
-        error = 1;
-    }
+    seL4_CPtr ret_cap;
+    pd_component_registry_entry_t *new_entry;
+    uint32_t client_id = get_client_id_from_badge(sender_badge);
 
-    seL4_SetCap(0, reg_entry->pd.pd_cap_in_RT);
+    error = pd_component_allocate_pd(client_id, false, &new_entry, &ret_cap);
+
+    /* Return this badged end point in the return message. */
+    seL4_SetCap(0, ret_cap);
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(error, 0, 1, PDMSGREG_CONNECT_ACK_END);
+    OSDB_PRINTF(PD_DEBUG, PDSERVS "main: Successfully allocated a new CPU.\n");
     return reply(tag);
 }
 
@@ -960,22 +940,31 @@ static void handle_ipc_bench_req(void)
 
 static void handle_clone_req(seL4_Word sender_badge, seL4_MessageInfo_t old_tag)
 {
-    int error;
+    int error = 0;
+    seL4_CPtr ret_cap;
+    pd_component_registry_entry_t *new_entry;
+    uint32_t client_id = get_client_id_from_badge(sender_badge);
+
     seL4_SetMR(PDMSGREG_FUNC, PD_FUNC_CLONE_REQ);
     seL4_MessageInfo_t tag;
 
     pd_component_registry_entry_t *pd_data = pd_component_registry_get_entry_by_badge(sender_badge);
-    GOTO_PRINT_IF_COND(!pd_data, "Failed to find sender data\n");
+    if (pd_data == NULL)
+    {
+        OSDB_PRINTF(PD_DEBUG, PDSERVS "handle_give_resource_req: Failed to find PD badge %lx.\n",
+                    sender_badge);
+        error = 1;
+    } else {
+        error = pd_component_allocate_pd(client_id, false, &new_entry, &ret_cap);
+    }
 
-    pd_component_registry_entry_t *new_pd = pd_allocate(sender_badge);
-    GOTO_PRINT_IF_COND(!new_pd, "Failed to allocate new PD\n");
+    if (error) {
+        // Do cleanup
+        // (XXX) Linh: delete the minted cap as well
+    }
 
-error:
-    badge_print(sender_badge);
-    error = 1;
-    free(new_pd);
-    // (XXX) Linh: delete the minted cap as well
     tag = seL4_MessageInfo_new(error, 0, 0, PDMSGREG_CLONE_ACK_END);
+    seL4_SetMR(PDMSGREG_FUNC, PD_FUNC_CLONE_REQ);
     return reply(tag);
 }
 
