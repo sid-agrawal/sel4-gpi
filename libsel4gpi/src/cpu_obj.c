@@ -42,7 +42,7 @@ int cpu_start(cpu_t *cpu, void *entry_point, void *init_stack)
     // error = seL4_TCB_SetTLSBase(cpu->thread.tcb.cptr, cpu->tls_base);
     // assert(error == 0);
 
-    /* Write context and registers */
+    // /* Write context and registers */
     // sel4utils_arch_init_local_context((void *)entry_point, (void *)arg0,
     //                                   (void *)cpu->tls_base, (void *)cpu->thread.ipc_buffer_addr, cpu->thread.stack_top, &regs);
 

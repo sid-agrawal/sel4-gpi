@@ -633,8 +633,8 @@ void ads_component_handle(seL4_MessageInfo_t tag,
     case ADS_FUNC_LOAD_ELF_REQ:
         handle_load_elf_request(sender_badge, tag);
         break;
-    case ADS_FUNC_PROC_SETUP_REQ:
-        handle_proc_setup_req(sender_badge, tag);
+    case ADS_FUNC_PD_SETUP_REQ:
+        handle_PD_SETUP_req(sender_badge, tag);
         break;
     case ADS_FUNC_ATTACH_RESERVE_REQ:
         handle_attach_to_reserve_req(sender_badge, tag, received_cap->capPtr);

@@ -17,6 +17,7 @@
 #define PD_CAP_ROOT SEL4UTILS_CNODE_SLOT
 #define PD_CAP_DEPTH seL4_WordBits
 #define PD_CSPACE_SIZE_BITS 17
+#define MAX_RESOURCE_CONFIGS 50
 
 typedef struct _sel4gpi_process
 {
@@ -27,6 +28,19 @@ typedef struct _sel4gpi_process
     void *stack;
     void *entry_point;
 } sel4gpi_process_t;
+
+typedef struct _resource_config
+{
+    gpi_cap_t type;
+    uint32_t subtype; // currently only defined for VMRs - will be cast to the sel4utils_reservation_type_t
+    bool shared;      // unclear how to define a partial number for this
+} resource_config_t;
+
+// typedef struct _sel4gpi_pd_config
+// {
+//     // hashtable of resources?
+//     resource_config_t res_cfg[MAX_RESOURCE_CONFIGS];
+// } sel4gpi_pd_config_t;
 
 /*
  * Get the osmosis pd cap from the env
@@ -89,13 +103,13 @@ void *sel4gpi_get_vmr(ads_client_context_t *ads_rde, int num_pages, void *vaddr,
  * @brief creates a new stack with num_pages in the given ADS, it will NOT be mapped to the current one.
  *        NOTE: no guard page is created
  * @param ads the ADS in which to create the stack
- * @param num_pages number of pages for the stack
+ * @param n_pages number of pages for the stack
  * @return the top of the stack in the given ADS (NOT the current one)
  */
 void *sel4gpi_new_sized_stack(ads_client_context_t *ads, size_t n_pages);
 
 /**
- * @brief configures a process using only osmosis framework functions. By default, shares the MO RDE with the process.
+ * @brief (WIP - to be removed) configures a process using only osmosis framework functions. By default, shares the MO RDE with the process.
  *
  * @param image_name
  * @param stack_pages number of pages for the stack
@@ -111,10 +125,17 @@ int sel4gpi_configure_process(const char *image_name,
                               sel4gpi_process_t *ret_proc);
 
 /**
- * @brief spawns the given process
+ * @brief (WIP - to be removed) spawns the given process
  *
  * @param proc a populated sel4gpi_process_t struct
  * @return int
  */
 int sel4gpi_spawn_process(sel4gpi_process_t *proc, int argc, seL4_Word *args);
 
+/**
+ * @brief (WIP) create a new PD based on the given configuration of resources
+ *
+ * @param cfg
+ * @return int
+ */
+int sel4gpi_configure_pd(resource_config_t *cfg);

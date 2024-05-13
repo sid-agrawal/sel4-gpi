@@ -225,8 +225,8 @@ static seL4_CPtr assign_asid_pool(seL4_CPtr asid_pool, seL4_CPtr pd)
  *
  * @param loadee_vspace
  * @param proc the process struct that belongs to the PD obj
- * @param image_name
- * @return int
+ * @param image_name name of the ELF image to load
+ * @return 0 on success, 1 on failure
  */
 int ads_load_elf(vspace_t *loadee_vspace, sel4utils_process_t *proc, char *image_name, void **ret_entry_point);
 
@@ -234,14 +234,14 @@ int ads_load_elf(vspace_t *loadee_vspace, sel4utils_process_t *proc, char *image
  * @brief slightly modified version of the sel4utils process spawn function
  * sets up the stack, but doesn't actually start the process
  *
- * @param process
- * @param osm_init_data
- * @param vka
- * @param vspace
- * @param argc
- * @param argv
+ * @param process the process struct holding info after an ELF has been loaded
+ * @param osm_init_data initial OSmosis data for the PD
+ * @param vka the loader's VKA
+ * @param vspace the loader's vspace
+ * @param argc the number of arguments
+ * @param argv the arguments
  * @param ret_init_stack the position of the initial stack pointer after setup
- * @return int
+ * @return 0 on success, 1 on failure
  */
 int ads_proc_setup(sel4utils_process_t *process,
                    void *osm_init_data,
@@ -250,3 +250,12 @@ int ads_proc_setup(sel4utils_process_t *process,
                    int argc,
                    char *argv[],
                    void **ret_init_stack);
+
+/**
+ * @brief setup the stack to allow a thread to run
+ *
+ * @param stack_top pointer to the top of the stack (in the thread's VSpace)
+ * @param ret_init_stack returns the pointer to the stack position after it's been initialized
+ * @return 0 on success, 1 on failure
+ */
+int ads_thread_setup(void *stack_top, void **ret_init_stack);

@@ -101,7 +101,7 @@ int test_new_process_osmosis_shmem(env_t env)
 
     seL4_Word arg0 = 1;
     void *init_stack;
-    error = ads_client_prepare_stack(&ads_os_cap, &pd_os_cap, stack, 16, 1, &arg0, &init_stack);
+    error = ads_client_pd_setup(&ads_os_cap, &pd_os_cap, stack, 16, 1, &arg0, &init_stack);
     test_error_eq(error, 0);
 
     error = pd_client_share_rde(&pd_os_cap, GPICAP_TYPE_MO, NSID_DEFAULT);

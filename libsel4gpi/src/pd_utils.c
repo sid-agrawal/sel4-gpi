@@ -95,7 +95,6 @@ void *sel4gpi_get_vmr(ads_client_context_t *ads_rde, int num_pages, void *vaddr,
 
     seL4_CPtr mo_rde = sel4gpi_get_rde(GPICAP_TYPE_MO);
 
-    /* allocate stack frame */
     seL4_CPtr slot;
     error = pd_client_next_slot(&self_pd, &slot);
     GOTO_IF_ERR(error, "failed to allocate next slot");
@@ -104,7 +103,6 @@ void *sel4gpi_get_vmr(ads_client_context_t *ads_rde, int num_pages, void *vaddr,
     error = mo_component_client_connect(mo_rde, slot, num_pages, &mo);
     GOTO_IF_ERR(error, "failed to allocate MO\n");
 
-    /* attach stack to cpu */
     void *new_vaddr;
     error = ads_client_attach(ads_rde, vaddr, &mo, vmr_type, &new_vaddr);
     GOTO_IF_ERR(error, "failed to attach MO\n");
@@ -245,7 +243,7 @@ int sel4gpi_spawn_process(sel4gpi_process_t *proc, int argc, seL4_Word *args)
 {
     int error;
     void *init_stack;
-    error = ads_client_prepare_stack(&proc->ads, &proc->pd, proc->stack, proc->stack_pages, argc, args, &init_stack);
+    error = ads_client_pd_setup(&proc->ads, &proc->pd, proc->stack, proc->stack_pages, argc, args, ADS_PROC, &init_stack);
     GOTO_IF_ERR(error, "failed to prepare stack");
 
     error = cpu_client_start(&proc->cpu, proc->entry_point, init_stack, 0);
@@ -254,5 +252,28 @@ int sel4gpi_spawn_process(sel4gpi_process_t *proc, int argc, seL4_Word *args)
     return 0;
 
 err_goto:
+    return error;
+}
+
+static int configure_vmr_resource(resource_config_t *cfg_item)
+{
+}
+
+int sel4gpi_configure_pd(resource_config_t *cfg)
+{
+    int error = 0;
+    for (int i = 0; i < MAX_RESOURCE_CONFIGS; i++)
+    {
+        switch (cfg[i].type)
+        {
+        case GPICAP_TYPE_ADS: // this is really the VMR type
+            error = configure_vmr_resource(&cfg[i]);
+            break;
+
+        default:
+            break;
+        }
+    }
+
     return error;
 }

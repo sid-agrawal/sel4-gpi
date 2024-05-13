@@ -891,3 +891,7 @@ int ads_proc_setup(sel4utils_process_t *process,
     *ret_init_stack = (void *)initial_stack_pointer;
     return 0;
 }
+
+// int ads_thread_setup(void *stack_top, void **ret_init_stack)
+// {
+// }

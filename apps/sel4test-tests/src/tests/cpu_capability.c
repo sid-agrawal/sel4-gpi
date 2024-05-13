@@ -51,9 +51,14 @@ int test_separate_threads(env_t env)
     seL4_CPtr mo_rde = sel4gpi_get_rde(GPICAP_TYPE_MO);
     seL4_CPtr cpu_rde = sel4gpi_get_rde(GPICAP_TYPE_CPU);
 
-    /* Create a new ADS obj */
+    /* new PD to represent the thread */
     seL4_CPtr slot;
     error = pd_client_next_slot(&test_pd_os_cap, &slot);
+    test_error_eq(error, 0);
+
+    pd_client_context_t thread_pd;
+    error = pd_component_client_connect(pd_rde, slot, &thread_pd);
+    test_error_eq(error, 0);
 
     /* Create a new CPU obj */
     error = pd_client_next_slot(&test_pd_os_cap, &slot);
@@ -64,28 +69,26 @@ int test_separate_threads(env_t env)
     test_error_eq(error, 0);
 
     /* allocate stack frame */
-    error = pd_client_next_slot(&test_pd_os_cap, &slot);
-    test_error_eq(error, 0);
+    void *stack = sel4gpi_new_sized_stack(&test_ads_os_cap, DEFAULT_STACK_PAGES);
+    test_assert(stack != NULL);
 
-    mo_client_context_t stack_mo;
-    error = mo_component_client_connect(mo_rde, slot, 16, &stack_mo);
-    test_error_eq(error, 0);
-
-    /* attach stack to cpu */
-    void *stack_addr_in_new_cpu;
-    error = ads_client_attach(&test_ads_os_cap, NULL, &stack_mo, SEL4UTILS_RES_TYPE_STACK, &stack_addr_in_new_cpu);
-    test_error_eq(error, 0);
-
-    /* configure cpu */
+    /* prepare stack */
     ads_client_context_t test_ads_resource;
     test_ads_resource.badged_server_ep_cspath.capPtr = sel4gpi_get_ads_cap();
     seL4_Word cnode_guard = api_make_guard_skip_word(seL4_WordBits - TEST_PROCESS_CSPACE_SIZE_BITS);
 
-    error = cpu_client_config(&new_cpu, &test_ads_resource, NULL, NULL, cnode_guard, 0, 0);
+    seL4_Word arg = 2;
+    void *init_stack;
+    error = ads_client_pd_setup(&test_ads_resource, &thread_pd, stack, DEFAULT_STACK_PAGES, 1, &arg, ADS_THREAD, &init_stack);
+    test_error_eq(error, 0);
+    test_assert(init_stack != NULL);
+
+    /* configure cpu */
+    error = cpu_client_config(&new_cpu, &test_ads_resource, NULL, &thread_pd, cnode_guard, 0, 0);
     test_error_eq(error, 0);
 
     //uintptr_t aligned_stack_pointer = sel4gpi_setup_thread_stack(stack_addr_in_new_cpu, 16);
-    error = cpu_client_start(&new_cpu, &test_thread, stack_addr_in_new_cpu, 2);
+    error = cpu_client_start(&new_cpu, &test_thread, init_stack, 0);
     test_error_eq(error, 0);
 
     // terrible sleep mechanism to allow thread to run bc we don't have usleep
@@ -96,7 +99,7 @@ int test_separate_threads(env_t env)
         i++;
     }
 
-    pd_client_dump(&test_pd_os_cap, NULL, 0);
+    // pd_client_dump(&test_pd_os_cap, NULL, 0);
     return sel4test_get_result();
 }
 DEFINE_TEST(GPITH001,
