@@ -17,6 +17,10 @@
 #include <sel4gpi/debug.h>
 #include <sel4gpi/gpi_client.h>
 
+// Defined for utility printing macros
+#define DEBUG_ID ADS_DEBUG
+#define SERVER_ID ADSSERVC
+
 int ads_component_client_connect(seL4_CPtr server_ep_cap,
                                  seL4_CPtr free_slot,
                                  ads_client_context_t *ret_conn)
@@ -28,7 +32,7 @@ int ads_component_client_connect(seL4_CPtr server_ep_cap,
                            /* This works coz we have a single level cnode with no guard.*/
                            seL4_WordBits); /* Depth i.e. how many bits of free_slot to interpret*/
 
-    OSDB_PRINTF(ADS_DEBUG, ADSSERVC "Set a receive path for the badged ep: %d\n", (int)free_slot);
+    OSDB_PRINTF("Set a receive path for the badged ep: %d\n", (int)free_slot);
 
     /* Set request type */
     seL4_SetMR(0, GPICAP_TYPE_ADS);
@@ -58,7 +62,7 @@ int ads_client_attach(ads_client_context_t *conn,
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 1,
                                                   ADSMSGREG_ATTACH_REQ_END);
 
-    OSDB_PRINTF(ADS_DEBUG, ADSSERVC "Sending attach request to server via EP: %lu.\n",
+    OSDB_PRINTF("Sending attach request to server via EP: %lu.\n",
                 conn->badged_server_ep_cspath.capPtr);
     tag = seL4_Call(conn->badged_server_ep_cspath.capPtr, tag);
     *ret_vaddr = (void *)seL4_GetMR(ADSMSGREG_ATTACH_ACK_VA);
@@ -88,7 +92,7 @@ int ads_client_reserve(ads_client_context_t *conn,
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0,
                                                   ADSMSGREG_RESERVE_REQ_END);
 
-    OSDB_PRINTF(ADS_DEBUG, ADSSERVC "Sending reserve request to server via EP: %lu.\n",
+    OSDB_PRINTF("Sending reserve request to server via EP: %lu.\n",
                 conn->badged_server_ep_cspath.capPtr);
 
     tag = seL4_Call(conn->badged_server_ep_cspath.capPtr, tag);
@@ -97,7 +101,7 @@ int ads_client_reserve(ads_client_context_t *conn,
     *ret_vaddr = (void *)seL4_GetMR(ADSMSGREG_RESERVE_ACK_VA);
     assert(*ret_vaddr != NULL);
 
-    OSDB_PRINTF(ADS_DEBUG, ADSSERVC "Finished reserve request, result in slot: %lu.\n",
+    OSDB_PRINTF("Finished reserve request, result in slot: %lu.\n",
                 free_slot);
 
     return seL4_MessageInfo_get_label(tag);
@@ -115,7 +119,7 @@ int ads_client_attach_to_reserve(ads_vmr_context_t *reservation,
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 2,
                                                   ADSMSGREG_ATTACH_RESERVE_REQ_END);
 
-    OSDB_PRINTF(ADS_DEBUG, ADSSERVC "Sending attach-to-reserve request to server via EP: %lu.\n",
+    OSDB_PRINTF("Sending attach-to-reserve request to server via EP: %lu.\n",
                 reservation->badged_server_ep_cspath.capPtr);
 
     tag = seL4_Call(reservation->badged_server_ep_cspath.capPtr, tag);
@@ -132,44 +136,18 @@ int ads_client_shallow_copy(ads_client_context_t *conn, seL4_CPtr free_slot, voi
                            /* This works coz we have a single level cnode with no guard.*/
                            seL4_WordBits); /* Depth i.e. how many bits of free_slot to interpret*/
 
-    OSDB_PRINTF(ADS_DEBUG, ADSSERVC "Set a receive path for the badged ep: %d\n", (int)free_slot);
+    OSDB_PRINTF("Set a receive path for the badged ep: %d\n", (int)free_slot);
 
     seL4_SetMR(ADSMSGREG_FUNC, ADS_FUNC_SHALLOW_COPY_REQ);
     seL4_SetMR(ADSMSGREG_SHALLOW_COPY_REQ_OMIT_VA, omit_vaddr != NULL ? (seL4_Word)omit_vaddr : 0);
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0,
                                                   ADSMSGREG_SHALLOW_COPY_REQ_END);
 
-    OSDB_PRINTF(ADS_DEBUG, ADSSERVC "Sending clone request to server via EP: %lu.\n",
+    OSDB_PRINTF("Sending clone request to server via EP: %lu.\n",
                 conn->badged_server_ep_cspath.capPtr);
     tag = seL4_Call(conn->badged_server_ep_cspath.capPtr, tag);
     assert(seL4_MessageInfo_get_extraCaps(tag) == 1);
     ret_conn->badged_server_ep_cspath.capPtr = free_slot;
-    return seL4_MessageInfo_get_label(tag);
-}
-
-/* To Change:
-    Alloc a page frame cap:
-    Pass it to the server
-
-    On return from the server,
-    map the page frame cap to the vaddr
-    copy the contents to a malloced region of memory
-    unmap the page frame cap
-    free the page frame cap
-
-*/
-int ads_client_dump_rr(ads_client_context_t *conn, char *ads_rr, size_t size)
-{
-
-    seL4_SetMR(ADSMSGREG_FUNC, ADS_FUNC_GET_RR_REQ);
-    seL4_SetMR(ADSMSGREG_GET_RR_REQ_BUF_VA, (seL4_Word)ads_rr);
-    seL4_SetMR(ADSMSGREG_GET_RR_REQ_BUF_SZ, (seL4_Word)size);
-    seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0,
-                                                  ADSMSGREG_GET_RR_REQ_END);
-
-    OSDB_PRINTF(ADS_DEBUG, ADSSERVC "Sending dump RR request to server via EP: %lu.\n",
-                conn->badged_server_ep_cspath.capPtr);
-    tag = seL4_Call(conn->badged_server_ep_cspath.capPtr, tag);
     return seL4_MessageInfo_get_label(tag);
 }
 
@@ -181,7 +159,7 @@ int ads_client_rm(ads_client_context_t *conn, void *vaddr)
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0,
                                                   ADSMSGREG_RM_REQ_END);
 
-    OSDB_PRINTF(ADS_DEBUG, ADSSERVC "Sending remove request to server via EP: %lu.\n",
+    OSDB_PRINTF("Sending remove request to server via EP: %lu.\n",
                 conn->badged_server_ep_cspath.capPtr);
     tag = seL4_Call(conn->badged_server_ep_cspath.capPtr, tag);
 
@@ -231,7 +209,7 @@ int ads_client_load_elf(ads_client_context_t *loadee_ads,
     int image_id = sel4gpi_image_name_to_id(image_name);
     if (image_id == -1)
     {
-        OSDB_PRINTF(ADS_DEBUG, ADSSERVC "invalid image name received %s\n", image_name);
+        OSDB_PRINTF("invalid image name received %s\n", image_name);
         return -1;
     }
 
@@ -265,10 +243,10 @@ int ads_client_prepare_stack(ads_client_context_t *target_ads,
 
     seL4_SetMR(ADSMSGREG_PROC_SETUP_REQ_ARGC, argc);
 
-    OSDB_PRINTF(ADS_DEBUG, ADSSERVC "Setting up process with args: [");
+    OSDB_PRINTF("Setting up process with args: [");
     for (int i = 0; i < argc; i++)
     {
-        OSDB_PRINTF(ADS_DEBUG, "%ld, ", args[i]);
+        OSDB_PRINTF("%ld, ", args[i]);
 
         switch (i)
         {
@@ -286,7 +264,7 @@ int ads_client_prepare_stack(ads_client_context_t *target_ads,
             break;
         }
     }
-    OSDB_PRINTF(ADS_DEBUG, "]\n");
+    OSDB_PRINTF("]\n");
 
     seL4_SetMR(ADSMSGREG_PROC_SETUP_REQ_STACK, (seL4_Word)stack_top);
     seL4_SetMR(ADSMSGREG_PROC_SETUP_REQ_STACK_SZ, stack_size);

@@ -25,6 +25,10 @@
 
 #define MAX_MO_RR 10000
 
+// Defined for utility printing macros
+#define DEBUG_ID ADS_DEBUG
+#define SERVER_ID ADSSERVS
+
 /* This is doesn't belong here but we need it */
 extern char _cpio_archive[];
 extern char _cpio_archive_end[];
@@ -154,7 +158,7 @@ int ads_reserve(ads_t *ads,
 
     if (attach_node == NULL || attach_node_map_entry == NULL)
     {
-        OSDB_PRINTF(ADS_DEBUG, ADSSERVS "Failed to allocate registry entry for ADS reservation.\n");
+        OSDB_PRINTF("Failed to allocate registry entry for ADS reservation.\n");
         return 1;
     }
 
@@ -195,7 +199,7 @@ int ads_attach_to_res(ads_t *ads,
 {
     int error = 0;
 
-    OSDB_PRINTF(ADS_DEBUG, ADSSERVS "attaching mo (id %lu, pages: %d) to reservation(vaddr: %p, type: %s, pages: %d) offset %d\n",
+    OSDB_PRINTF("attaching mo (id %lu, pages: %d) to reservation(vaddr: %p, type: %s, pages: %d) offset %d\n",
                 mo->mo_obj_id, mo->num_pages,
                 reservation->vaddr, human_readable_va_res_type(reservation->type), reservation->n_pages,
                 offset);
@@ -211,7 +215,7 @@ int ads_attach_to_res(ads_t *ads,
         int error = vka_cspace_alloc_path(vka, &to_path);
         if (error)
         {
-            OSDB_PRINTF(ADS_DEBUG, ADSSERVS "main: Failed to allocate slot in root cspace, error: %d", error);
+            OSDB_PRINTF("main: Failed to allocate slot in root cspace, error: %d", error);
             return 1;
         }
 
@@ -219,14 +223,14 @@ int ads_attach_to_res(ads_t *ads,
         error = vka_cnode_copy(&to_path, &from_path, seL4_AllRights);
         if (error)
         {
-            OSDB_PRINTF(ADS_DEBUG, ADSSERVS "main: Failed to copy cap, error: %d", error);
+            OSDB_PRINTF("main: Failed to copy cap, error: %d", error);
             return 1;
         }
 
         frame_caps[i] = to_path.capPtr;
 
         // void *frame_paddr = (void *)seL4_DebugCapPaddr(attach_node->frame_caps[i]);
-        // OSDB_PRINTF(ADS_DEBUG, ADSSERVS "paddr of frame to map: %p\n", frame_paddr);
+        // OSDB_PRINTF("paddr of frame to map: %p\n", frame_paddr);
     }
 
     /* Map the frame caps into the vspace */
@@ -441,7 +445,7 @@ void ads_dump_rr(ads_t *ads, model_state_t *ms, gpi_model_node_t *pd_node)
     vka_t *vka = get_alloc_data(ads_vspace)->vka;
 
     assert(vka != NULL);
-    OSDB_PRINTF(ADS_DEBUG, ADSSERVS "vka address: %p\n", vka);
+    OSDB_PRINTF("vka address: %p\n", vka);
 
     while (from_sel4_res != NULL)
     {
@@ -463,7 +467,7 @@ void ads_dump_rr(ads_t *ads, model_state_t *ms, gpi_model_node_t *pd_node)
             seL4_CPtr cap = vspace_get_cap(ads_vspace, start);
             if (cap == 0)
             {
-                OSDB_PRINTF(ADS_DEBUG, ADSSERVS "No cap for %p\n", start);
+                OSDB_PRINTF("No cap for %p\n", start);
             }
             else
             {
@@ -514,98 +518,37 @@ void ads_dump_rr(ads_t *ads, model_state_t *ms, gpi_model_node_t *pd_node)
 }
 
 int ads_shallow_copy(vspace_t *loader,
-                     ads_t *ads,
                      vka_t *vka,
+                     ads_t *src_ads,
+                     ads_t *dst_ads,
                      void *omit_vaddr,
                      void *pd_osm_data,
-                     bool shallow_copy,
-                     ads_t *ret_ads)
+                     bool shallow_copy)
 {
-    OSDB_PRINTF(ADS_DEBUG, "Shallow copying ADS(%d)\n", ads->ads_obj_id);
+    OSDB_PRINTF("Shallow copying ADS(%d)\n", src_ads->ads_obj_id);
 
-    // (XXX) Arya: Can some of this be replaced with ads_new?
+    int error = 0;
+    vspace_t *from = src_ads->vspace;
+    vspace_t *to = dst_ads->vspace;
 
-    ret_ads->vspace = malloc(sizeof(vspace_t));
-    if (ret_ads->vspace == NULL)
-    {
-        ZF_LOGE("Failed to allocate vspace\n");
-        goto error_exit;
-    }
-    ret_ads->process_for_cookies = malloc(sizeof(sel4utils_process_t));
-    if (ret_ads->process_for_cookies == NULL)
-    {
-        ZF_LOGE("Failed to allocate process struct for coolies in ads_shallow_copy\n");
-        goto error_exit;
-    }
-    vspace_t *from = ads->vspace;
     assert(from != NULL);
-    vspace_t *to = ret_ads->vspace;
-
-    // OSDB_PRINTF(ADS_DEBUG, "Cloning vspace\n");
-    // printf("Old vspace details:\n");
-    // sel4utils_walk_vspace(from, NULL);
-
-    // Give vspace root
-    // assign asid pool
-    static vka_object_t vspace_root_object;
-    sel4utils_alloc_data_t *alloc_data = malloc(sizeof(sel4utils_alloc_data_t));
-    if (alloc_data == NULL)
-    {
-        ZF_LOGE("Failed to allocate memory for alloc data\n");
-        goto error_exit;
-    }
-
-    int error = vka_alloc_vspace_root(vka, &vspace_root_object);
-    if (error)
-    {
-        ZF_LOGE("Failed to allocate page directory for new process: %d\n", error);
-        goto error_exit;
-    }
-
-    /* assign an asid pool */
-    if (!config_set(CONFIG_X86_64) &&
-        assign_asid_pool(seL4_CapInitThreadASIDPool, vspace_root_object.cptr) != seL4_NoError)
-    {
-        goto error_exit;
-    }
-
-    // Create empty vspace
-    error = sel4utils_get_vspace(
-        loader,
-        to,
-        alloc_data,
-        vka,
-        vspace_root_object.cptr,
-        sel4utils_allocated_object,
-
-        /*
-            sel4utils_allocated_object expects a process struct as a cookie
-            Instead use a different function which suited are needs better.
-        */
-
-        &(ret_ads->process_for_cookies));
-    if (error)
-    {
-        ZF_LOGE("Failed to get new vspace while making copy: %d\n in %s", error, __FUNCTION__);
-        goto error_exit;
-    }
+    assert(to != NULL);
 
     sel4utils_alloc_data_t *from_data = get_alloc_data(from);
     sel4utils_res_t *from_sel4_res = from_data->reservation_head;
 
-    OSDB_PRINTF(ADS_DEBUG, "=========== Start of ADS copy (%d -> %d) ================\n", ads->ads_obj_id, ret_ads->ads_obj_id);
+    OSDB_PRINTF("=========== Start of ADS copy (%d -> %d) ================\n", src_ads->ads_obj_id, dst_ads->ads_obj_id);
 
     /* walk all the reservations */
     // (XXX) Arya: We may be able to just walk attach nodes instead of reservations (eventually?)
-
     int num_pages;
     while (from_sel4_res != NULL)
     {
-        OSDB_PRINTF(ADS_DEBUG, "Reservation: %p\n", (void *)from_sel4_res->start);
+        OSDB_PRINTF("Reservation: %p\n", (void *)from_sel4_res->start);
 
         if (from_sel4_res->start == (uintptr_t)omit_vaddr)
         {
-            OSDB_PRINTF(ADS_DEBUG, "Skipping the region, with start vaddr of %p\n", omit_vaddr);
+            OSDB_PRINTF("Skipping the region, with start vaddr of %p\n", omit_vaddr);
             from_sel4_res = from_sel4_res->next;
             continue;
         }
@@ -614,7 +557,7 @@ int ads_shallow_copy(vspace_t *loader,
         num_pages = (from_sel4_res->end - from_sel4_res->start) / (SIZE_BITS_TO_BYTES(MO_PAGE_BITS));
 
         attach_node_t *new_attach_node;
-        error = ads_reserve(ret_ads, from_sel4_res->start, num_pages, MO_PAGE_BITS, from_sel4_res->type, &new_attach_node);
+        error = ads_reserve(dst_ads, from_sel4_res->start, num_pages, MO_PAGE_BITS, from_sel4_res->type, &new_attach_node);
 
         if (error)
         {
@@ -623,7 +566,7 @@ int ads_shallow_copy(vspace_t *loader,
         }
 
         // Find the original attach node
-        attach_node_t *old_attach_node = ads_get_res_by_vaddr(ads, (void *)from_sel4_res->start);
+        attach_node_t *old_attach_node = ads_get_res_by_vaddr(src_ads, (void *)from_sel4_res->start);
 
         if (old_attach_node == NULL)
         {
@@ -657,13 +600,13 @@ int ads_shallow_copy(vspace_t *loader,
             from_sel4_res->start == (uintptr_t)pd_osm_data ||
             from_sel4_res->type == SEL4UTILS_RES_TYPE_ELF)
         {
-            OSDB_PRINTF(ADS_DEBUG, "======================Shallow copying [%s] %p to %p [%s]\n",
+            OSDB_PRINTF("======================Shallow copying [%s] %p to %p [%s]\n",
                         human_readable_va_res_type(from_sel4_res->type),
                         (void *)from_sel4_res->start, (void *)from_sel4_res->end,
                         human_readable_size(from_sel4_res->end - from_sel4_res->start));
 
             // Attach the same MO in the new ADS
-            error = ads_attach_to_res(ret_ads, vka, new_attach_node, old_attach_node->mo_offset, old_mo);
+            error = ads_attach_to_res(dst_ads, vka, new_attach_node, old_attach_node->mo_offset, old_mo);
 
             if (error)
             {
@@ -673,7 +616,7 @@ int ads_shallow_copy(vspace_t *loader,
         }
         else if (from_sel4_res->type == SEL4UTILS_RES_TYPE_HEAP)
         {
-            OSDB_PRINTF(ADS_DEBUG, "======================Deep copying [%s] %p to %p [%s]\n",
+            OSDB_PRINTF("======================Deep copying [%s] %p to %p [%s]\n",
                         human_readable_va_res_type(from_sel4_res->type),
                         (void *)from_sel4_res->start, (void *)from_sel4_res->end,
                         human_readable_size(from_sel4_res->end - from_sel4_res->start));
@@ -692,7 +635,7 @@ int ads_shallow_copy(vspace_t *loader,
 
             // Attach the new MO in the new ADS
             mo_t *new_mo = &mo_entry->mo;
-            error = ads_attach_to_res(ret_ads, vka, new_attach_node, old_attach_node->mo_offset, new_mo);
+            error = ads_attach_to_res(dst_ads, vka, new_attach_node, old_attach_node->mo_offset, new_mo);
 
             if (error)
             {
@@ -727,15 +670,13 @@ int ads_shallow_copy(vspace_t *loader,
         // Move to next node.
         from_sel4_res = from_sel4_res->next;
     }
-    OSDB_PRINTF(ADS_DEBUG, "New vspace details:\n");
+    OSDB_PRINTF("New vspace details:\n");
     // sel4utils_walk_vspace(to, NULL);
     // For each reservation: call share_mem_at_vaddr
     return 0;
 
 error_exit:
-    free(alloc_data);
-    free(ret_ads->vspace);
-    return -1;
+    return 1;
 }
 
 /* ======================================= CONVENIENCE FUNCTIONS (NOT PART OF FRAMEWORK) ================================================= */

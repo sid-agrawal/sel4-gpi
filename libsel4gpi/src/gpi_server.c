@@ -26,6 +26,10 @@
 #include <sel4gpi/badge_usage.h>
 #include <sel4gpi/debug.h>
 
+// Defined for utility printing macros
+#define DEBUG_ID GPI_DEBUG
+#define SERVER_ID GPISERVS
+
 static gpi_server_context_t gpi_server;
 
 gpi_server_context_t *get_gpi_server(void)
@@ -196,12 +200,12 @@ gpi_server_parent_spawn_thread(simple_t *parent_simple, vka_t *parent_vka,
         goto out;
     }
 
-    OSDB_PRINTF(GPI_DEBUG, GPISERVP "spawn_thread: Server thread binded well. at public EP %lu\n",
-                get_gpi_server()->server_ep_obj.cptr);
+    OSDB_PRINTF_2(GPI_DEBUG, GPISERVP "spawn_thread: Server thread binded well. at public EP %lu\n",
+                  get_gpi_server()->server_ep_obj.cptr);
     return 0;
 
 out:
-    OSDB_PRINTF(GPI_DEBUG, "spawn_thread: Server ran into an error.\n");
+    OSDB_PRINTF("spawn_thread: Server ran into an error.\n");
     if (get_gpi_server()->_badged_server_ep_cspath.capPtr != 0)
     {
         vka_cspace_free_path(parent_vka, get_gpi_server()->_badged_server_ep_cspath);
@@ -222,7 +226,7 @@ void handle_allocation_request(seL4_MessageInfo_t tag,
                                seL4_MessageInfo_t *reply_tag)
 {
     gpi_cap_t req_cap_type = get_ns_id_from_badge(sender_badge) == 0 ? seL4_GetMR(0) : get_cap_type_from_badge(sender_badge);
-    OSDB_PRINTF(GPI_DEBUG, GPISERVS "handle_allocation_request: Got request for cap type %s\n",
+    OSDB_PRINTF("handle_allocation_request: Got request for cap type %s\n",
                 cap_type_to_str(req_cap_type));
 
     switch (req_cap_type)
@@ -290,13 +294,13 @@ void gpi_server_main()
      * that is possible).
      */
 
-    OSDB_PRINTF(GPI_DEBUG, GPISERVS "gpi_server_main: Got a call from the parent.\n");
+    OSDB_PRINTF("gpi_server_main: Got a call from the parent.\n");
     if (error != 0)
     {
         seL4_TCB_Suspend(get_gpi_server()->server_thread.tcb.cptr);
     }
 
-    OSDB_PRINTF(GPI_DEBUG, GPISERVS "main: Entering main loop and accepting requests.\n");
+    OSDB_PRINTF("main: Entering main loop and accepting requests.\n");
 
     while (1)
     {
@@ -314,7 +318,7 @@ void gpi_server_main()
             /* depth */ received_cap_path.capDepth);
         tag = recv(&sender_badge);
 
-        OSDB_PRINTF(GPI_DEBUG, GPISERVS "Got message on EP with ");
+        OSDB_PRINTF("Got message on EP with ");
         badge_print(sender_badge);
 
         seL4_MessageInfo_t reply_tag;
@@ -322,7 +326,7 @@ void gpi_server_main()
             get_object_id_from_badge(sender_badge) == BADGE_OBJ_ID_NULL)
         {
             // PDs will have badged GPI caps with null object ID
-            OSDB_PRINTF(GPI_DEBUG, GPISERVS "Got an allocation request\n");
+            OSDB_PRINTF("Got an allocation request\n");
             handle_allocation_request(tag,
                                       sender_badge,
                                       &received_cap_path,

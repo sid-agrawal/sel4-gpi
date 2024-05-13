@@ -13,9 +13,20 @@
 #define GPI_DEBUG 16
 #define ALL_DEBUG 0x1f
 #define OSMOSIS_DEBUG NO_DEBUG // selectively enable component debug e.g. (PD_DEBUG | ADS_DEBUG)
+#define OSMOSIS_ERROR ALL_DEBUG // selectively enable component error messages e.g. (PD_DEBUG | ADS_DEBUG)
 
 #if OSMOSIS_DEBUG
-#define OSDB_PRINTF(component, ...)                     \
+// Utility print, requires DEBUG_ID and SERVER_ID defined
+#define OSDB_PRINTF(...)                   \
+    do                                     \
+    {                                      \
+        if (OSMOSIS_DEBUG & (DEBUG_ID))    \
+        {                                  \
+            printf(SERVER_ID __VA_ARGS__); \
+        }                                  \
+    } while (0)
+
+#define OSDB_PRINTF_2(component, ...)                   \
     do                                                  \
     {                                                   \
         if ((OSMOSIS_DEBUG & (component)) == component) \
@@ -25,4 +36,18 @@
     } while (0)
 #else
 #define OSDB_PRINTF(...)
+#define OSDB_PRINTF_2(...)
+#endif
+
+#if OSMOSIS_ERROR
+#define OSDB_PRINTERR(...)                 \
+    do                                     \
+    {                                      \
+        if (OSMOSIS_ERROR & (DEBUG_ID))    \
+        {                                  \
+            printf(SERVER_ID __VA_ARGS__); \
+        }                                  \
+    } while (0)
+#else
+#define OSDB_PRINTERR(...)
 #endif

@@ -46,6 +46,9 @@ enum pd_component_funcs
     PD_FUNC_LOAD_REQ = 0,
     PD_FUNC_LOAD_ACK,
 
+    PD_FUNC_CONNECT_REQ = 0,
+    PD_FUNC_CONNECT_ACK,
+
     PD_FUNC_NEXT_SLOT_REQ,
     PD_FUNC_NEXT_SLOT_ACK,
 

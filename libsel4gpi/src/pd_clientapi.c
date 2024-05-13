@@ -16,6 +16,10 @@
 #include <sel4gpi/debug.h>
 #include <sel4gpi/gpi_client.h>
 
+// Defined for utility printing macros
+#define DEBUG_ID PD_DEBUG
+#define SERVER_ID PDSERVS
+
 int pd_component_client_connect(seL4_CPtr server_ep_cap,
                                 seL4_CPtr free_slot,
                                 pd_client_context_t *ret_conn)
@@ -27,8 +31,8 @@ int pd_component_client_connect(seL4_CPtr server_ep_cap,
                            /* This works coz we have a single level cnode with no guard.*/
                            seL4_WordBits); /* Depth i.e. how many bits of free_slot to interpret*/
 
-    OSDB_PRINTF(PD_DEBUG, PDSERVC "%s %d pd_endpoint is %lu:__ \n", __FUNCTION__, __LINE__, server_ep_cap);
-    OSDB_PRINTF(PD_DEBUG, PDSERVC "Set a receive path for the badged ep: %d\n", (int)free_slot);
+    OSDB_PRINTF("%s %d pd_endpoint is %lu:__ \n", __FUNCTION__, __LINE__, server_ep_cap);
+    OSDB_PRINTF("Set a receive path for the badged ep: %d\n", (int)free_slot);
 
     /* Set request type */
     seL4_SetMR(0, GPICAP_TYPE_PD);
@@ -39,8 +43,8 @@ int pd_component_client_connect(seL4_CPtr server_ep_cap,
 
     ret_conn->badged_server_ep_cspath.capPtr = free_slot;
 
-    OSDB_PRINTF(PD_DEBUG, PDSERVC "received badged endpoint and it was kept in %d:__\n", (int)free_slot);
-    return 0;
+    OSDB_PRINTF("received badged endpoint and it was kept in %d:__\n", (int)free_slot);
+    return seL4_MessageInfo_ptr_get_label(&tag);
 }
 
 int pd_client_disconnect(pd_client_context_t *conn)
@@ -49,7 +53,7 @@ int pd_client_disconnect(pd_client_context_t *conn)
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0,
                                                   PDMSGREG_DISCONNECT_REQ_END);
 
-    OSDB_PRINTF(PD_DEBUG, PDSERVC "Sending disconnect request for PD via EP: %lu.\n",
+    OSDB_PRINTF("Sending disconnect request for PD via EP: %lu.\n",
                 conn->badged_server_ep_cspath.capPtr);
 
     tag = seL4_Call(conn->badged_server_ep_cspath.capPtr, tag);
@@ -68,11 +72,11 @@ int pd_client_dump(pd_client_context_t *conn,
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0,
                                                   PDMSGREG_DUMP_REQ_END);
 
-    OSDB_PRINTF(PD_DEBUG, PDSERVC "Sending dump RR request to PD via EP: %lu.\n",
+    OSDB_PRINTF("Sending dump RR request to PD via EP: %lu.\n",
                 conn->badged_server_ep_cspath.capPtr);
     // (XXX) Linh: for some reason, this doesn't block if we try to dump a test PD's state and causes issues
     tag = seL4_Call(conn->badged_server_ep_cspath.capPtr, tag);
-    return 0;
+    return seL4_MessageInfo_ptr_get_label(&tag);
 }
 
 int pd_client_send_cap(pd_client_context_t *conn, seL4_CPtr cap_to_send,
@@ -84,9 +88,8 @@ int pd_client_send_cap(pd_client_context_t *conn, seL4_CPtr cap_to_send,
                                                   PDMSGREG_SEND_CAP_REQ_END);
     tag = seL4_Call(conn->badged_server_ep_cspath.capPtr, tag);
     *slot = seL4_GetMR(PDMSGREG_SEND_CAP_PD_SLOT);
-    assert(seL4_MessageInfo_ptr_get_label(&tag) == 0);
-    assert(*slot != 0);
-    return 0;
+
+    return seL4_MessageInfo_ptr_get_label(&tag);
 }
 
 int pd_client_next_slot(pd_client_context_t *conn,
@@ -98,9 +101,8 @@ int pd_client_next_slot(pd_client_context_t *conn,
     // OSDB_PRINTF(PD_DEBUG, "pd_client_next_slot call\n");
     tag = seL4_Call(conn->badged_server_ep_cspath.capPtr, tag);
     *slot = seL4_GetMR(PDMSGREG_NEXT_SLOT_PD_SLOT);
-    assert(seL4_MessageInfo_ptr_get_label(&tag) == 0);
-    assert(*slot != 0);
-    return 0;
+
+    return seL4_MessageInfo_ptr_get_label(&tag);
 }
 
 int pd_client_free_slot(pd_client_context_t *conn,
@@ -112,8 +114,8 @@ int pd_client_free_slot(pd_client_context_t *conn,
                                                   PDMSGREG_FREE_SLOT_REQ_END);
     seL4_SetMR(PDMSGREG_FREE_SLOT_REQ_SLOT, slot);
     tag = seL4_Call(conn->badged_server_ep_cspath.capPtr, tag);
-    assert(seL4_MessageInfo_ptr_get_label(&tag) == 0);
-    return 0;
+
+    return seL4_MessageInfo_ptr_get_label(&tag);
 }
 
 /**
@@ -131,9 +133,8 @@ int pd_client_alloc_ep(pd_client_context_t *conn,
                                                   PDMSGREG_ALLOC_EP_REQ_END);
     tag = seL4_Call(conn->badged_server_ep_cspath.capPtr, tag);
     *ret_ep = seL4_GetMR(PDMSGREG_ALLOC_EP_PD_SLOT);
-    assert(seL4_MessageInfo_ptr_get_label(&tag) == 0);
-    assert(*ret_ep != 0);
-    return 0;
+
+    return seL4_MessageInfo_ptr_get_label(&tag);
 }
 
 /**
@@ -158,9 +159,8 @@ int pd_client_badge_ep(pd_client_context_t *conn,
     seL4_SetMR(PDMSGREG_BADGE_EP_REQ_SRC, src_ep);
     tag = seL4_Call(conn->badged_server_ep_cspath.capPtr, tag);
     *ret_ep = seL4_GetMR(PDMSGREG_BADGE_EP_PD_SLOT);
-    assert(seL4_MessageInfo_ptr_get_label(&tag) == 0);
-    assert(*ret_ep != 0);
-    return 0;
+
+    return seL4_MessageInfo_ptr_get_label(&tag);
 }
 
 int pd_client_add_rde(pd_client_context_t *conn,
@@ -175,8 +175,8 @@ int pd_client_add_rde(pd_client_context_t *conn,
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 1,
                                                   PDMSGREG_ADD_RDE_REQ_END);
     tag = seL4_Call(conn->badged_server_ep_cspath.capPtr, tag);
-    assert(seL4_MessageInfo_ptr_get_label(&tag) == 0);
-    return 0;
+
+    return seL4_MessageInfo_ptr_get_label(&tag);
 }
 
 int pd_client_share_rde(pd_client_context_t *conn,
@@ -189,8 +189,8 @@ int pd_client_share_rde(pd_client_context_t *conn,
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 1,
                                                   PDMSGREG_SHARE_RDE_REQ_END);
     tag = seL4_Call(conn->badged_server_ep_cspath.capPtr, tag);
-    assert(seL4_MessageInfo_ptr_get_label(&tag) == 0);
-    return 0;
+
+    return seL4_MessageInfo_ptr_get_label(&tag);
 }
 
 int pd_client_register_resource_manager(pd_client_context_t *conn,
@@ -204,9 +204,9 @@ int pd_client_register_resource_manager(pd_client_context_t *conn,
     seL4_SetMR(PDMSGREG_REGISTER_SERV_REQ_TYPE, resource_type);
     seL4_SetCap(0, server_ep);
     tag = seL4_Call(conn->badged_server_ep_cspath.capPtr, tag);
-    assert(seL4_MessageInfo_ptr_get_label(&tag) == 0);
     *manager_id = seL4_GetMR(PDMSGREG_REGISTER_SERV_ACK_ID);
-    return 0;
+
+    return seL4_MessageInfo_ptr_get_label(&tag);
 }
 
 int pd_client_register_namespace(pd_client_context_t *conn,
@@ -220,9 +220,9 @@ int pd_client_register_namespace(pd_client_context_t *conn,
     seL4_SetMR(PDMSGREG_REGISTER_NS_REQ_MANAGER_ID, manager_id);
     seL4_SetMR(PDMSGREG_REGISTER_NS_REQ_CLIENT_ID, client_id);
     tag = seL4_Call(conn->badged_server_ep_cspath.capPtr, tag);
-    assert(seL4_MessageInfo_ptr_get_label(&tag) == 0);
     *ns_id = seL4_GetMR(PDMSGREG_REGISTER_NS_ACK_NSID);
-    return 0;
+
+    return seL4_MessageInfo_ptr_get_label(&tag);
 }
 
 int pd_client_create_resource(pd_client_context_t *conn,
@@ -235,8 +235,8 @@ int pd_client_create_resource(pd_client_context_t *conn,
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0,
                                                   PDMSGREG_CREATE_RES_REQ_END);
     tag = seL4_Call(conn->badged_server_ep_cspath.capPtr, tag);
-    assert(seL4_MessageInfo_ptr_get_label(&tag) == 0);
-    return 0;
+
+    return seL4_MessageInfo_ptr_get_label(&tag);
 }
 
 int pd_client_give_resource(pd_client_context_t *conn,
@@ -254,9 +254,9 @@ int pd_client_give_resource(pd_client_context_t *conn,
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0,
                                                   PDMSGREG_GIVE_RES_REQ_END);
     tag = seL4_Call(conn->badged_server_ep_cspath.capPtr, tag);
-    assert(seL4_MessageInfo_ptr_get_label(&tag) == 0);
     *dest = seL4_GetMR(PDMSGREG_GIVE_RES_ACK_DEST);
-    return 0;
+
+    return seL4_MessageInfo_ptr_get_label(&tag);
 }
 
 void pd_client_exit(pd_client_context_t *conn)

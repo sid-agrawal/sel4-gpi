@@ -21,9 +21,13 @@
 #include <sel4/sel4.h>
 #include <sel4runtime.h>
 
+// Defined for utility printing macros
+#define DEBUG_ID CPU_DEBUG
+#define SERVER_ID CPUSERVS
+
 int cpu_start(cpu_t *cpu, void *entry_point, void *init_stack)
 {
-    OSDB_PRINTF(CPU_DEBUG, CPUSERVS "cpu_start: starting CPU at entry point %p\n", entry_point);
+    OSDB_PRINTF("cpu_start: starting CPU at entry point %p\n", entry_point);
     int error;
     seL4_UserContext regs = {0};
     // void *stack_top = init_stack == 0 ? cpu->thread.stack_top : init_stack;
@@ -63,7 +67,7 @@ int cpu_config_vspace(cpu_t *cpu,
                       seL4_CPtr ipc_buffer_frame,
                       seL4_Word ipc_buf_addr)
 {
-    OSDB_PRINTF(CPU_DEBUG, CPUSERVS "cpu_config_vspace: Configuring CPU\n");
+    OSDB_PRINTF("cpu_config_vspace: Configuring CPU\n");
 
     seL4_CPtr vspace_root = vspace->get_root(vspace); // root page table
     assert(vspace_root != 0);
@@ -94,7 +98,7 @@ int cpu_change_vspace(cpu_t *cpu,
                       vka_t *vka,
                       vspace_t *vspace)
 {
-    OSDB_PRINTF(CPU_DEBUG, CPUSERVS "cpu_change_vspace: Configuring CPU\n");
+    OSDB_PRINTF("cpu_change_vspace: Configuring CPU\n");
 
     seL4_CPtr vspace_root = vspace->get_root(vspace); // root page table
     assert(vspace_root != 0);

@@ -145,10 +145,10 @@ int ads_attach(ads_t *ads,
 /**
  * Use to forge an ADS attach from a vspace attach
  * (XXX) Arya: to be deprecated eventually
- * 
+ *
  * @param ads ads object
  * @param res the sel4utils_res object
- * @param mo the forged MO 
+ * @param mo the forged MO
  */
 int ads_forge_attach(ads_t *ads, sel4utils_res_t *res, mo_t *mo);
 
@@ -177,16 +177,16 @@ int ads_bind(ads_t *ads, vka_t *vka, seL4_CPtr *cpu_cap);
  * @brief
  *
  * @param loader vspace of the function running this
- * @param ads ads object to clone
  * @param vka vka object to allocate cspace slots and PT from
+ * @param src_ads ads object to clone
+ * @param dst_ads target to copy into
  * @param omit_vaddr start vaddr of the segment to omit
  * @param pd_osm_data vaddr of a PDs osm data (e.g. RD table) - we need to shallow copy this
  * @param shallow_copy if true, only copy the page table entries, do not copy the frames
- * @param ret_ads return ads of the cloned ads
  * @return int
  */
-int ads_shallow_copy(vspace_t *loader, ads_t *ads, vka_t *vka, void *omit_vaddr,
-                     void *pd_osm_data, bool shallow_copy, ads_t *ret_ads);
+int ads_shallow_copy(vspace_t *loader, vka_t *vka, ads_t *src_ads, ads_t *dst_ads, void *omit_vaddr,
+                     void *pd_osm_data, bool shallow_copy);
 
 /**
  * @param ads ads object to dump the RR for

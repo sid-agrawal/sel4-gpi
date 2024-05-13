@@ -34,6 +34,11 @@
 #include <sel4gpi/badge_usage.h>
 #include <sel4gpi/debug.h>
 #include <sel4gpi/gpi_client.h>
+#include <sel4gpi/error_handle.h>
+
+// Defined for utility printing macros
+#define DEBUG_ID PD_DEBUG
+#define SERVER_ID PDSERVS
 
 pd_component_context_t *get_pd_component(void)
 {
@@ -105,11 +110,8 @@ static int pd_component_allocate_pd(uint64_t client_id, bool forge, pd_component
 
     /* Create the registry entry */
     pd_component_registry_entry_t *client_reg_ptr = malloc(sizeof(pd_component_registry_entry_t));
-    if (client_reg_ptr == 0)
-    {
-        OSDB_PRINTF(PD_DEBUG, PDSERVS "main: Failed to allocate new badge for client.\n");
-        return 1;
-    }
+    SERVER_GOTO_IF_COND(client_reg_ptr == NULL, "Failed to allocate new badge for client.\n");
+
     memset((void *)client_reg_ptr, 0, sizeof(pd_component_registry_entry_t));
 
     client_reg_ptr->pd.pd_obj_id = resource_server_registry_insert_new_id(&get_pd_component()->pd_registry, (resource_server_registry_node_t *)client_reg_ptr);
@@ -121,11 +123,8 @@ static int pd_component_allocate_pd(uint64_t client_id, bool forge, pd_component
         error = pd_new(&client_reg_ptr->pd,
                        get_pd_component()->server_vka,
                        get_pd_component()->server_vspace);
-        if (error)
-        {
-            OSDB_PRINTF(PD_DEBUG, PDSERVS "main: Failed to create new pd object\n");
-            return 1;
-        }
+
+        SERVER_GOTO_IF_ERR(error, "Failed to create new pd object\n");
     }
 
     /* Create the badged endpoint */
@@ -133,11 +132,7 @@ static int pd_component_allocate_pd(uint64_t client_id, bool forge, pd_component
                                               (resource_server_registry_node_t *)client_reg_ptr, GPICAP_TYPE_PD, NSID_DEFAULT, client_id);
     client_reg_ptr->pd.pd_cap_in_RT = *ret_cap;
 
-    if (ret_cap == seL4_CapNull)
-    {
-        OSDB_PRINTF(PD_DEBUG, PDSERVS "Failed to make badged ep for new PD\n");
-        return 1;
-    }
+    SERVER_GOTO_IF_COND(ret_cap == seL4_CapNull, "Failed to make badged ep for new PD\n");
 
     /* Add the resource to the client */
     osmosis_pd_cap_t *res = pd_add_resource_by_id(client_id, GPICAP_TYPE_PD, client_reg_ptr->pd.pd_obj_id);
@@ -146,7 +141,8 @@ static int pd_component_allocate_pd(uint64_t client_id, bool forge, pd_component
         res->slot_in_RT_Debug = *ret_cap;
     }
 
-    return 0;
+err_goto:
+    return error;
 }
 
 void forge_pd_for_root_task(uint64_t *rt_id)
@@ -154,9 +150,6 @@ void forge_pd_for_root_task(uint64_t *rt_id)
     pd_component_registry_entry_t *rt_entry = malloc(sizeof(pd_component_registry_entry_t));
     *rt_id = resource_server_registry_insert_new_id(&get_pd_component()->pd_registry, (resource_server_registry_node_t *)rt_entry);
 }
-
-// (XXX) Arya: Nasty hack so we can update the forged test PD
-uint64_t test_pd_id;
 
 void forge_pd_cap_from_init_data(test_init_data_t *init_data, sel4utils_process_t *test_process, void **osm_init_data)
 {
@@ -234,73 +227,30 @@ void forge_pd_cap_from_init_data(test_init_data_t *init_data, sel4utils_process_
 
     *osm_init_data = init_data_vaddr;
     pd->init_data_in_PD = init_data_vaddr;
-    OSDB_PRINTF(PD_DEBUG, PDSERVS "Test process init data is at %p\n", pd->init_data_in_PD);
-}
-
-void *get_osmosis_pd_init_data(vspace_t *test_vspace)
-{
-    // Assumes this is called to set up the test process
-    // (XXX) Arya: Would this fail if used for a second test?
-    pd_component_registry_entry_t *reg_ptr = (pd_component_registry_entry_t *)resource_server_registry_get_by_id(&get_pd_component()->pd_registry, test_pd_id);
-    pd_t *pd = &reg_ptr->pd;
-
-    // Copy the init data frame cap
-    cspacepath_t src, dest;
-    vka_cspace_make_path(get_pd_component()->server_vka, pd->init_data_frame, &src);
-    vka_cspace_alloc_path(get_pd_component()->server_vka, &dest);
-    vka_cnode_copy(&dest, &src, seL4_AllRights);
-
-    // Map the init data frame in test process
-    // (XXX) Arya: It's possible that the test process vspace will not be
-    // aware of this allocation. Ideally we replace this whole workaround evenutally
-    void *init_data_vaddr = 0x50000000;
-
-    reservation_t res = sel4utils_reserve_range_at(test_vspace,
-                                                   init_data_vaddr,
-                                                   1 * PAGE_SIZE_4K,
-                                                   seL4_AllRights, 1);
-
-    if (res.res == NULL)
-    {
-        ZF_LOGF("get_osmosis_pd_init_data failed to reserve range\n");
-    }
-
-    size_t size_bits = seL4_PageBits;
-    int error = sel4utils_map_pages_at_vaddr(test_vspace,
-                                             &dest.capPtr,
-                                             NULL,
-                                             init_data_vaddr,
-                                             1,
-                                             seL4_PageBits,
-                                             res);
-
-    if (error != seL4_NoError)
-    {
-        ZF_LOGF("get_osmosis_pd_init_data failed to map init data to test vspace\n");
-    }
-
-    pd->init_data_in_PD = init_data_vaddr;
-    OSDB_PRINTF(PD_DEBUG, PDSERVS "Test process init data is at %p\n", pd->init_data_in_PD);
-
-    return pd->init_data_in_PD;
+    OSDB_PRINTF("Test process init data is at %p\n", pd->init_data_in_PD);
 }
 
 osmosis_pd_cap_t *pd_add_resource_by_id(uint32_t client_id, gpi_cap_t cap_type, uint32_t res_id)
 {
+    int error = 0;
+
     // (XXX) Arya: Why are we treating the test process specially? Can we remove this?
     if (client_id != 0) // only test processes would have no client ID
     {
         pd_component_registry_entry_t *client_pd_data = pd_component_registry_get_entry_by_id(client_id);
-        ZF_LOGF_IF(client_pd_data == NULL, "Couldn't find PD client data");
+        SERVER_GOTO_IF_COND(client_pd_data == NULL, "Couldn't find PD (%d) to add resource \n", client_id);
+
         osmosis_pd_cap_t *res = pd_add_resource(&client_pd_data->pd, cap_type, res_id, NSID_DEFAULT, seL4_CapNull, seL4_CapNull, seL4_CapNull);
         return res;
     }
+
+err_goto:
     return NULL;
 }
 
 void pd_handle_allocation_request(seL4_Word sender_badge, seL4_MessageInfo_t *reply_tag)
 {
-    OSDB_PRINTF(PD_DEBUG, PDSERVS "main: Got connect request from badge %lx\n", sender_badge);
+    OSDB_PRINTF("Got connect request from badge %lx\n", sender_badge);
     int error = 0;
     seL4_CPtr ret_cap;
     pd_component_registry_entry_t *new_entry;
@@ -308,10 +258,15 @@ void pd_handle_allocation_request(seL4_Word sender_badge, seL4_MessageInfo_t *re
 
     error = pd_component_allocate_pd(client_id, false, &new_entry, &ret_cap);
 
+    if (error == 0)
+    {
+        OSDB_PRINTF("Successfully allocated a new PD.\n");
+    }
+
     /* Return this badged end point in the return message. */
     seL4_SetCap(0, ret_cap);
+    seL4_SetMR(PDMSGREG_FUNC, PD_FUNC_CONNECT_ACK);
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(error, 0, 1, PDMSGREG_CONNECT_ACK_END);
-    OSDB_PRINTF(PD_DEBUG, PDSERVS "main: Successfully allocated a new CPU.\n");
     return reply(tag);
 }
 
@@ -319,34 +274,26 @@ static void handle_disconnect_req(seL4_Word sender_badge,
                                   seL4_MessageInfo_t old_tag,
                                   seL4_CPtr received_cap)
 {
+    OSDB_PRINTF("Got disconnect request from client badge %lx.\n", sender_badge);
     int error = 0;
 
-    OSDB_PRINTF(PD_DEBUG, PDSERVS "Got disconnect request from client badge %lx.\n",
-                sender_badge);
-
     pd_component_registry_entry_t *client_data = pd_component_registry_get_entry_by_badge(sender_badge);
+    SERVER_GOTO_IF_COND(client_data == NULL, "Couldn't find PD (%ld)\n", get_object_id_from_badge(sender_badge));
 
-    if (client_data == NULL)
-    {
-        OSDB_PRINTF(PD_DEBUG, PDSERVS "Failed to find client badge %lx.\n",
-                    sender_badge);
-        error = 1;
-    }
-    else
-    {
-        uint32_t pd_id = client_data->pd.pd_obj_id;
+    uint32_t pd_id = client_data->pd.pd_obj_id;
 
-        /* Free the PD metadata */
-        error = pd_destroy(&client_data->pd, get_pd_component()->server_vka, get_pd_component()->server_vspace);
+    /* Free the PD metadata */
+    error = pd_destroy(&client_data->pd, get_pd_component()->server_vka, get_pd_component()->server_vspace);
+    SERVER_GOTO_IF_ERR(error, "Failed to destroy PD (%d)\n", pd_id);
 
-        /* Remove the PD from registry */
-        resource_server_registry_delete(&get_pd_component()->pd_registry, (resource_server_registry_node_t *)client_data);
+    /* Remove the PD from registry */
+    resource_server_registry_delete(&get_pd_component()->pd_registry, (resource_server_registry_node_t *)client_data);
 
-        /* (XXX) Arya: Cleanup resources like ADS? */
+    /* (XXX) Arya: Cleanup resources like ADS? */
 
-        OSDB_PRINTF(PD_DEBUG, PDSERVS "Cleaned up PD %d.\n", pd_id);
-    }
+    OSDB_PRINTF("Cleaned up PD %d.\n", pd_id);
 
+err_goto:
     seL4_SetMR(PDMSGREG_FUNC, PD_FUNC_DISCONNECT_ACK);
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(error, 0, 0, PDMSGREG_DISCONNECT_ACK_END);
     return reply(tag);
@@ -356,24 +303,20 @@ static void handle_next_slot_req(seL4_Word sender_badge,
                                  seL4_MessageInfo_t old_tag,
                                  seL4_CPtr received_cap)
 {
-
-    // OSDB_PRINTF(PD_DEBUG, PDSERVS "Got next slot request from client badge %lx.\n",
-    //             sender_badge);
+    OSDB_PRINTF("Got next slot request from client badge %lx.\n", sender_badge);
+    int error = 0;
 
     pd_component_registry_entry_t *client_data = pd_component_registry_get_entry_by_badge(sender_badge);
-    if (client_data == NULL)
-    {
-        OSDB_PRINTF(PD_DEBUG, PDSERVS "Failed to find client badge %lx.\n",
-                    sender_badge);
-        return;
-    }
-    seL4_Word slot;
-    int error = pd_next_slot(&client_data->pd,
-                             &slot);
+    SERVER_GOTO_IF_COND(client_data == NULL, "Couldn't find PD (%ld)\n", get_object_id_from_badge(sender_badge));
 
-    seL4_SetMR(PDMSGREG_FUNC, PD_FUNC_NEXT_SLOT_ACK);
+    seL4_Word slot;
+    error = pd_next_slot(&client_data->pd,
+                         &slot);
+
     seL4_SetMR(PDMSGREG_NEXT_SLOT_PD_SLOT, slot);
 
+err_goto:
+    seL4_SetMR(PDMSGREG_FUNC, PD_FUNC_NEXT_SLOT_ACK);
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(error, 0, 0,
                                                   PDMSGREG_NEXT_SLOT_ACK_END);
     return reply(tag);
@@ -383,25 +326,19 @@ static void handle_free_slot_req(seL4_Word sender_badge,
                                  seL4_MessageInfo_t old_tag,
                                  seL4_CPtr received_cap)
 {
-
-    OSDB_PRINTF(PD_DEBUG, PDSERVS "Got free slot request from client badge %lx, id %ld.\n",
-                sender_badge, get_client_id_from_badge(sender_badge));
+    OSDB_PRINTF("Got free slot request from client badge %lx.\n", sender_badge);
+    int error = 0;
 
     pd_component_registry_entry_t *client_data = pd_component_registry_get_entry_by_badge(sender_badge);
-    if (client_data == NULL)
-    {
-        OSDB_PRINTF(PD_DEBUG, PDSERVS "Failed to find client badge %lx.\n",
-                    sender_badge);
-        return;
-    }
+    SERVER_GOTO_IF_COND(client_data == NULL, "Couldn't find PD (%ld)\n", get_object_id_from_badge(sender_badge));
+
     seL4_Word slot = seL4_GetMR(PDMSGREG_FREE_SLOT_REQ_SLOT);
-    OSDB_PRINTF(PD_DEBUG, PDSERVS "Freeing PD's slot %d.\n", (int)slot);
+    OSDB_PRINTF("Freeing PD's slot %d.\n", (int)slot);
 
-    int error = pd_free_slot(&client_data->pd,
-                             slot);
+    error = pd_free_slot(&client_data->pd, slot);
 
+err_goto:
     seL4_SetMR(PDMSGREG_FUNC, PD_FUNC_FREE_SLOT_ACK);
-
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(error, 0, 0,
                                                   PDMSGREG_FREE_SLOT_ACK_END);
     return reply(tag);
@@ -411,26 +348,22 @@ static void handle_alloc_ep_req(seL4_Word sender_badge,
                                 seL4_MessageInfo_t old_tag,
                                 seL4_CPtr received_cap)
 {
-
-    OSDB_PRINTF(PD_DEBUG, PDSERVS "Got alloc ep request from client badge %lx.\n",
-                sender_badge);
+    OSDB_PRINTF("Got alloc ep request from client badge %lx.\n", sender_badge);
+    int error = 0;
 
     pd_component_registry_entry_t *client_data = pd_component_registry_get_entry_by_badge(sender_badge);
-    if (client_data == NULL)
-    {
-        OSDB_PRINTF(PD_DEBUG, PDSERVS "Failed to find client badge %lx.\n",
-                    sender_badge);
-        return;
-    }
+    SERVER_GOTO_IF_COND(client_data == NULL, "Failed to find client badge %lx.\n", sender_badge);
+
     seL4_CPtr slot;
-    int error = pd_alloc_ep(&client_data->pd,
-                            get_pd_component()->server_vka,
-                            &slot);
+    error = pd_alloc_ep(&client_data->pd,
+                        get_pd_component()->server_vka,
+                        &slot);
 
-    seL4_SetMR(PDMSGREG_FUNC, PD_FUNC_ALLOC_EP_ACK);
     seL4_SetMR(PDMSGREG_ALLOC_EP_PD_SLOT, slot);
-    OSDB_PRINTF(PD_DEBUG, PDSERVS "Allocated ep in slot %d\n", (int)slot);
+    OSDB_PRINTF("Allocated ep in slot %d\n", (int)slot);
 
+err_goto:
+    seL4_SetMR(PDMSGREG_FUNC, PD_FUNC_ALLOC_EP_ACK);
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(error, 0, 0,
                                                   PDMSGREG_ALLOC_EP_ACK_END);
     return reply(tag);
@@ -440,30 +373,25 @@ static void handle_badge_ep_req(seL4_Word sender_badge,
                                 seL4_MessageInfo_t old_tag,
                                 seL4_CPtr received_cap)
 {
-
-    OSDB_PRINTF(PD_DEBUG, PDSERVS "Got badge ep request from client badge %lx.\n",
-                sender_badge);
+    OSDB_PRINTF("Got badge ep request from client badge %lx.\n", sender_badge);
+    int error = 0;
 
     pd_component_registry_entry_t *client_data = pd_component_registry_get_entry_by_badge(sender_badge);
-    if (client_data == NULL)
-    {
-        OSDB_PRINTF(PD_DEBUG, PDSERVS "Failed to find client badge %lx.\n",
-                    sender_badge);
-        return;
-    }
+    SERVER_GOTO_IF_COND(client_data == NULL, "Couldn't find PD (%ld)\n", get_object_id_from_badge(sender_badge));
 
     seL4_Word badge = seL4_GetMR(PDMSGREG_BADGE_EP_REQ_BADGE);
     seL4_CPtr src_ep_slot = seL4_GetMR(PDMSGREG_BADGE_EP_REQ_SRC);
     seL4_Word slot;
 
-    int error = pd_badge_ep(&client_data->pd,
-                            src_ep_slot,
-                            badge,
-                            &slot);
+    error = pd_badge_ep(&client_data->pd,
+                        src_ep_slot,
+                        badge,
+                        &slot);
 
-    seL4_SetMR(PDMSGREG_FUNC, PD_FUNC_BADGE_EP_ACK);
     seL4_SetMR(PDMSGREG_BADGE_EP_PD_SLOT, slot);
 
+err_goto:
+    seL4_SetMR(PDMSGREG_FUNC, PD_FUNC_BADGE_EP_ACK);
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(error, 0, 0,
                                                   PDMSGREG_BADGE_EP_ACK_END);
     return reply(tag);
@@ -473,48 +401,30 @@ static void handle_send_cap_req(seL4_Word sender_badge,
                                 seL4_MessageInfo_t old_tag,
                                 seL4_CPtr received_cap)
 {
-    OSDB_PRINTF(PD_DEBUG, PDSERVS "main: Got send-cap request from client badge %lx.\n",
-                sender_badge);
+    OSDB_PRINTF("Got send-cap request from client badge %lx.\n", sender_badge);
+    int error = 0;
 
-    /*
-    Unwerapped works only if the badgted extra cap is the badged verion of the EPcap via which the
-    client is sending the cap.
-
-    */
-    OSDB_PRINTF(PD_DEBUG, PDSERVS " received_cap: %lu (badge: %lx)\n",
-                received_cap, seL4_GetBadge(0));
-    OSDB_PRINTF(PD_DEBUG, PDSERVS " Unwrapped: %s\n",
+    /* This only works if the extra cap is a GPI core cap (badged version of GPI server EP) */
+    OSDB_PRINTF("received_cap: %lu (badge: %lx)\n", received_cap, seL4_GetBadge(0));
+    OSDB_PRINTF("Unwrapped: %s\n",
                 seL4_MessageInfo_get_capsUnwrapped(old_tag) ? "true" : "false");
-    // debug_cap_identify("", received_cap);
-
-    // assert(seL4_MessageInfo_get_extraCaps(old_tag) == 1);
-    assert(seL4_MessageInfo_get_label(old_tag) == 0);
-
-    // assert(seL4_MessageInfo_get_capsUnwrapped(old_tag) == 0);
 
     /* Find the client */
     pd_component_registry_entry_t *client_data = pd_component_registry_get_entry_by_badge(sender_badge);
-    if (client_data == NULL)
-    {
-        OSDB_PRINTF(PD_DEBUG, PDSERVS "main: Failed to find client badge %lx.\n",
-                    sender_badge);
-        return;
-    }
+    SERVER_GOTO_IF_COND(client_data == NULL, "Couldn't find PD (%ld)\n", get_object_id_from_badge(sender_badge));
 
-    seL4_Word received_caps_badge = 0;
-    // if (seL4_MessageInfo_get_capsUnwrapped(old_tag) == 1) {
-    received_caps_badge = seL4_GetBadge(0);
-    // }
+    seL4_Word received_caps_badge = seL4_GetBadge(0);
 
     seL4_Word slot;
-    int error = pd_send_cap(&client_data->pd,
-                            received_cap,
-                            received_caps_badge,
-                            &slot);
+    error = pd_send_cap(&client_data->pd,
+                        received_cap,
+                        received_caps_badge,
+                        &slot);
 
-    seL4_SetMR(PDMSGREG_FUNC, PD_FUNC_SENDCAP_ACK);
     seL4_SetMR(PDMSGREG_SEND_CAP_PD_SLOT, slot);
 
+err_goto:
+    seL4_SetMR(PDMSGREG_FUNC, PD_FUNC_SENDCAP_ACK);
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(error, 0, 0,
                                                   PDMSGREG_SEND_CAP_ACK_END);
     return reply(tag);
@@ -522,28 +432,20 @@ static void handle_send_cap_req(seL4_Word sender_badge,
 
 static void handle_dump_cap_req(seL4_Word sender_badge, seL4_MessageInfo_t old_tag, seL4_CPtr received_cap)
 {
-    OSDB_PRINTF(PD_DEBUG, PDSERVS "main: Got dump-cap request from client badge %lx.\n",
-                sender_badge);
+    OSDB_PRINTF("Got dump-cap request from client badge %lx.\n", sender_badge);
+    int error = 0;
 
     assert(seL4_MessageInfo_get_extraCaps(old_tag) == 0);
     assert(seL4_MessageInfo_get_label(old_tag) == 0);
 
     /* Find the client */
     pd_component_registry_entry_t *client_data = pd_component_registry_get_entry_by_badge(sender_badge);
-    if (client_data == NULL)
-    {
-        OSDB_PRINTF(PD_DEBUG, PDSERVS "main: Failed to find client badge %lx.\n",
-                    sender_badge);
-        return;
-    }
+    SERVER_GOTO_IF_COND(client_data == NULL, "Couldn't find PD (%ld)\n", get_object_id_from_badge(sender_badge));
 
-    // Extract buffer and VA
-    // Find out which AS it belongs too.
+    error = pd_dump(&client_data->pd);
 
-    int error = pd_dump(&client_data->pd);
-
+err_goto:
     seL4_SetMR(PDMSGREG_FUNC, PD_FUNC_DUMP_ACK);
-
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(error, 0, 0,
                                                   PDMSGREG_DUMP_ACK_END);
     return reply(tag);
@@ -551,10 +453,8 @@ static void handle_dump_cap_req(seL4_Word sender_badge, seL4_MessageInfo_t old_t
 
 static void handle_add_rde_req(seL4_Word sender_badge, seL4_MessageInfo_t old_tag, seL4_CPtr received_cap)
 {
-    int error;
-
-    OSDB_PRINTF(PD_DEBUG, PDSERVS "add_rde_req: Got request from client badge %lx.\n",
-                sender_badge);
+    OSDB_PRINTF("add_rde_req: Got request from client badge %lx.\n", sender_badge);
+    int error = 0;
 
     seL4_Word server_badge = seL4_GetBadge(0);
     seL4_Word manager_id = seL4_GetMR(PDMSGREG_ADD_RDE_REQ_MANAGER_ID);
@@ -563,41 +463,22 @@ static void handle_add_rde_req(seL4_Word sender_badge, seL4_MessageInfo_t old_ta
     pd_component_registry_entry_t *server_data = pd_component_registry_get_entry_by_badge(server_badge);
     pd_component_resource_manager_entry_t *resource_manager_data = pd_component_resource_manager_get_entry_by_id(manager_id);
 
-    if (target_data == NULL)
-    {
-        OSDB_PRINTF(PD_DEBUG, PDSERVS "add_rde_req: Failed to find target badge %lx.\n",
-                    sender_badge);
-        error = 1;
-    }
-    else if (server_data == NULL)
-    {
-        OSDB_PRINTF(PD_DEBUG, PDSERVS "add_rde_req: Failed to find server badge %lx.\n",
-                    server_badge);
-        error = 1;
-    }
-    else if (resource_manager_data == NULL)
-    {
-        OSDB_PRINTF(PD_DEBUG, PDSERVS "add_rde_req: Failed to find resource manager ID %ld.\n",
-                    manager_id);
-        error = 1;
-    }
-    else if (server_data->pd.pd_obj_id != resource_manager_data->pd->pd_obj_id)
-    {
-        OSDB_PRINTF(PD_DEBUG, PDSERVS "add_rde_req: wrong server PD provided (%d) for resource manager in PD %d\n",
-                    server_data->pd.pd_obj_id,
-                    resource_manager_data->pd->pd_obj_id);
-        error = 1;
-    }
-    else
-    {
-        rde_type_t rde_type = {.type = resource_manager_data->resource_type};
-        error = pd_add_rde(&target_data->pd,
-                           rde_type,
-                           resource_manager_data->gen.object_id,
-                           ns_id,
-                           resource_manager_data->server_ep);
-    }
+    SERVER_GOTO_IF_COND(target_data == NULL, "Couldn't find target PD (%ld)\n", get_object_id_from_badge(sender_badge));
+    SERVER_GOTO_IF_COND(server_data == NULL, "Couldn't find server PD (%ld)\n", get_object_id_from_badge(server_badge));
+    SERVER_GOTO_IF_COND(resource_manager_data == NULL, "Couldn't find resource_manager_data (%ld)\n", manager_id);
+    SERVER_GOTO_IF_COND(server_data->pd.pd_obj_id != resource_manager_data->pd->pd_obj_id,
+                        "add_rde_req: wrong server PD (%ld) provided for resource manager in PD (%ld)\n",
+                        server_data->pd.pd_obj_id,
+                        resource_manager_data->pd->pd_obj_id);
 
+    rde_type_t rde_type = {.type = resource_manager_data->resource_type};
+    error = pd_add_rde(&target_data->pd,
+                       rde_type,
+                       resource_manager_data->gen.object_id,
+                       ns_id,
+                       resource_manager_data->server_ep);
+
+err_goto:
     seL4_SetMR(PDMSGREG_FUNC, PD_FUNC_ADD_RDE_ACK);
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(error, 0, 0,
                                                   PDMSGREG_ADD_RDE_ACK_END);
@@ -606,57 +487,35 @@ static void handle_add_rde_req(seL4_Word sender_badge, seL4_MessageInfo_t old_ta
 
 static void handle_share_rde_req(seL4_Word sender_badge, seL4_MessageInfo_t old_tag, seL4_CPtr received_cap)
 {
-    int error;
+    int error = 0;
 
     seL4_Word type = seL4_GetMR(PDMSGREG_SHARE_RDE_REQ_TYPE);
     seL4_Word ns_id = seL4_GetMR(PDMSGREG_SHARE_RDE_REQ_NS);
 
-    OSDB_PRINTF(PD_DEBUG, PDSERVS "share_rde_req: Got request from client badge %lx for RDE type %d with NS %d.\n",
+    OSDB_PRINTF("share_rde_req: Got request from client badge %lx for RDE type %d with NS %d.\n",
                 sender_badge, type, ns_id);
-
+                
     seL4_Word client_id = get_client_id_from_badge(sender_badge);
     pd_component_registry_entry_t *target_data = pd_component_registry_get_entry_by_badge(sender_badge);
     pd_component_registry_entry_t *client_data = pd_component_registry_get_entry_by_id(client_id);
 
-    if (target_data == NULL)
-    {
-        OSDB_PRINTF(PD_DEBUG, PDSERVS "share_rde_req: Failed to find target badge %lx.\n",
-                    sender_badge);
-        error = 1;
-    }
-    else if (client_data == NULL)
-    {
-        OSDB_PRINTF(PD_DEBUG, PDSERVS "share_rde_req: Failed to find client ID %d.\n",
-                    client_id);
-        error = 1;
-    }
+    SERVER_GOTO_IF_COND(target_data == NULL, "Couldn't find target PD (%ld)\n", get_object_id_from_badge(sender_badge));
+    SERVER_GOTO_IF_COND(client_data == NULL, "Couldn't find client PD (%ld)\n", client_id);
 
     osmosis_rde_t *rde = pd_rde_get(&client_data->pd, type, ns_id);
-    if (rde == NULL)
-    {
-        OSDB_PRINTF(PD_DEBUG, PDSERVS "share_rde_req: Failed to find RDE for type %d and NS_ID %ld.\n",
-                    type, ns_id);
-        error = 1;
-    }
+    SERVER_GOTO_IF_COND(rde == NULL, "share_rde_req: Failed to find RDE for type %d and NS_ID %ld.\n", type, ns_id);
 
     pd_component_resource_manager_entry_t *resource_manager_data = pd_component_resource_manager_get_entry_by_id(rde->manager_id);
+    SERVER_GOTO_IF_COND(resource_manager_data == NULL, "share_rde_req: Failed to find resource manager ID %ld.\n", rde->manager_id);
 
-    if (resource_manager_data == NULL)
-    {
-        OSDB_PRINTF(PD_DEBUG, PDSERVS "share_rde_req: Failed to find resource manager ID %ld.\n",
-                    rde->manager_id);
-        error = 1;
-    }
-    else
-    {
-        rde_type_t rde_type = {.type = type};
-        error = pd_add_rde(&target_data->pd,
-                           rde_type,
-                           resource_manager_data->gen.object_id,
-                           ns_id,
-                           resource_manager_data->server_ep);
-    }
+    rde_type_t rde_type = {.type = type};
+    error = pd_add_rde(&target_data->pd,
+                       rde_type,
+                       resource_manager_data->gen.object_id,
+                       ns_id,
+                       resource_manager_data->server_ep);
 
+err_goto:
     seL4_SetMR(PDMSGREG_FUNC, PD_FUNC_SHARE_RDE_ACK);
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(error, 0, 0,
                                                   PDMSGREG_SHARE_RDE_ACK_END);
@@ -665,34 +524,26 @@ static void handle_share_rde_req(seL4_Word sender_badge, seL4_MessageInfo_t old_
 
 static void handle_register_resource_manager_req(seL4_Word sender_badge, seL4_MessageInfo_t old_tag, seL4_CPtr received_cap)
 {
+    OSDB_PRINTF("Got register server request from client badge %lx.\n", sender_badge);
     int error = 0;
 
-    OSDB_PRINTF(PD_DEBUG, PDSERVS "Got register server request from client badge %lx.\n",
-                sender_badge);
-
     pd_component_registry_entry_t *client_data = pd_component_registry_get_entry_by_badge(sender_badge);
-    if (client_data == NULL)
-    {
-        OSDB_PRINTF(PD_DEBUG, PDSERVS "register_resource_manager: Failed to find client badge %lx.\n",
-                    sender_badge);
-        error = 1;
-    }
-    else
-    {
-        assert(seL4_MessageInfo_get_extraCaps(old_tag) == 1);
+    SERVER_GOTO_IF_COND(client_data == NULL, "Couldn't find target PD (%ld)\n", get_object_id_from_badge(sender_badge));
 
-        pd_component_resource_manager_entry_t *rs_entry = malloc(sizeof(pd_component_resource_manager_entry_t));
-        rs_entry->pd = &client_data->pd;
-        rs_entry->server_ep = received_cap;
-        rs_entry->resource_type = seL4_GetMR(PDMSGREG_REGISTER_SERV_REQ_TYPE);
-        rs_entry->ns_index = NSID_DEFAULT;
+    assert(seL4_MessageInfo_get_extraCaps(old_tag) == 1);
 
-        int manager_id = pd_component_resource_manager_insert(rs_entry);
-        OSDB_PRINTF(PD_DEBUG, PDSERVS "Registered server, cap is at %ld.\n", rs_entry->server_ep);
+    pd_component_resource_manager_entry_t *rs_entry = malloc(sizeof(pd_component_resource_manager_entry_t));
+    rs_entry->pd = &client_data->pd;
+    rs_entry->server_ep = received_cap;
+    rs_entry->resource_type = seL4_GetMR(PDMSGREG_REGISTER_SERV_REQ_TYPE);
+    rs_entry->ns_index = NSID_DEFAULT;
 
-        seL4_SetMR(PDMSGREG_REGISTER_SERV_ACK_ID, manager_id);
-    }
+    int manager_id = pd_component_resource_manager_insert(rs_entry);
+    OSDB_PRINTF("Registered server, cap is at %ld.\n", rs_entry->server_ep);
 
+    seL4_SetMR(PDMSGREG_REGISTER_SERV_ACK_ID, manager_id);
+
+err_goto:
     seL4_SetMR(PDMSGREG_FUNC, PD_FUNC_REGISTER_SERV_ACK);
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(error, 0, 0,
                                                   PDMSGREG_REGISTER_SERV_ACK_END);
@@ -701,10 +552,8 @@ static void handle_register_resource_manager_req(seL4_Word sender_badge, seL4_Me
 
 static void handle_register_namespace_req(seL4_Word sender_badge, seL4_MessageInfo_t old_tag, seL4_CPtr received_cap)
 {
+    OSDB_PRINTF("Got register namespace request from client badge %lx.\n", sender_badge);
     int error = 0;
-
-    OSDB_PRINTF(PD_DEBUG, PDSERVS "Got register namespace request from client badge %lx.\n",
-                sender_badge);
 
     seL4_Word manager_id = seL4_GetMR(PDMSGREG_REGISTER_NS_REQ_MANAGER_ID);
     seL4_Word target_id = seL4_GetMR(PDMSGREG_REGISTER_NS_REQ_CLIENT_ID);
@@ -713,44 +562,25 @@ static void handle_register_namespace_req(seL4_Word sender_badge, seL4_MessageIn
     pd_component_registry_entry_t *target_data = pd_component_registry_get_entry_by_id(target_id);
     pd_component_resource_manager_entry_t *resource_manager_data = pd_component_resource_manager_get_entry_by_id(manager_id);
 
-    if (client_data == NULL)
-    {
-        OSDB_PRINTF(PD_DEBUG, PDSERVS "handle_register_namespace_req: Failed to find client PD with ID %ld.\n",
-                    get_client_id_from_badge(sender_badge));
-        error = 1;
-    }
-    else if (target_data == NULL)
-    {
-        OSDB_PRINTF(PD_DEBUG, PDSERVS "handle_register_namespace_req: Failed to find taret PD with ID %ld.\n",
-                    target_data);
-        error = 1;
-    }
-    else if (resource_manager_data == NULL)
-    {
-        OSDB_PRINTF(PD_DEBUG, PDSERVS "handle_register_namespace_req: Failed to find resource manager with ID %ld.\n",
-                    manager_id);
-        error = 1;
-    }
-    else if (resource_manager_data->pd->pd_obj_id != get_client_id_from_badge(sender_badge))
-    {
-        OSDB_PRINTF(PD_DEBUG, PDSERVS "handle_register_namespace_req: resource manager PD (%ld) and client PD (%ld) do not match.\n",
-                    resource_manager_data->pd->pd_obj_id, get_client_id_from_badge(sender_badge));
-        error = 1;
-    }
-    else
-    {
-        resource_manager_data->ns_index++;
-        uint64_t ns_id = resource_manager_data->ns_index;
+    SERVER_GOTO_IF_COND(client_data == NULL, "Couldn't find client PD (%ld)\n", get_object_id_from_badge(sender_badge));
+    SERVER_GOTO_IF_COND(target_data == NULL, "Couldn't find target PD (%ld)\n", target_id);
+    SERVER_GOTO_IF_COND(resource_manager_data == NULL, "Couldn't find resource manager (%ld)\n", manager_id);
+    SERVER_GOTO_IF_COND(resource_manager_data->pd->pd_obj_id != get_client_id_from_badge(sender_badge),
+                        "resource manager PD (%ld) and client PD (%ld) do not match.\n",
+                        resource_manager_data->pd->pd_obj_id, get_client_id_from_badge(sender_badge));
 
-        // Add the RDE for the NS to the target PD
-        rde_type_t rde_type = {.type = resource_manager_data->resource_type};
-        pd_add_rde(&target_data->pd, rde_type, manager_id,
-                   ns_id, resource_manager_data->server_ep);
+    resource_manager_data->ns_index++;
+    uint64_t ns_id = resource_manager_data->ns_index;
 
-        OSDB_PRINTF(PD_DEBUG, PDSERVS "Registered namespace, ID is %ld.\n", ns_id);
-        seL4_SetMR(PDMSGREG_REGISTER_NS_ACK_NSID, ns_id);
-    }
+    // Add the RDE for the NS to the target PD
+    rde_type_t rde_type = {.type = resource_manager_data->resource_type};
+    pd_add_rde(&target_data->pd, rde_type, manager_id,
+               ns_id, resource_manager_data->server_ep);
 
+    OSDB_PRINTF("Registered namespace, ID is %ld.\n", ns_id);
+    seL4_SetMR(PDMSGREG_REGISTER_NS_ACK_NSID, ns_id);
+
+err_goto:
     seL4_SetMR(PDMSGREG_FUNC, PD_FUNC_REGISTER_NS_ACK);
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(error, 0, 0,
                                                   PDMSGREG_REGISTER_NS_ACK_END);
@@ -759,10 +589,8 @@ static void handle_register_namespace_req(seL4_Word sender_badge, seL4_MessageIn
 
 static void handle_create_resource_req(seL4_Word sender_badge, seL4_MessageInfo_t old_tag, seL4_CPtr received_cap)
 {
+    OSDB_PRINTF("Got create resource request from client badge %lx.\n", sender_badge);
     int error = 0;
-
-    OSDB_PRINTF(PD_DEBUG, PDSERVS "Got create resource request from client badge %lx.\n",
-                sender_badge);
 
     seL4_Word server_id = get_object_id_from_badge(sender_badge);
     seL4_Word manager_id = seL4_GetMR(PDMSGREG_CREATE_RES_REQ_MANAGER_ID);
@@ -770,39 +598,28 @@ static void handle_create_resource_req(seL4_Word sender_badge, seL4_MessageInfo_
 
     pd_component_registry_entry_t *server_data = pd_component_registry_get_entry_by_id(server_id);
     pd_component_resource_manager_entry_t *resource_manager_data = pd_component_resource_manager_get_entry_by_id(manager_id);
-    if (server_data == NULL)
+    SERVER_GOTO_IF_COND(server_data == NULL, "Couldn't find client PD (%ld)\n", get_object_id_from_badge(sender_badge));
+    SERVER_GOTO_IF_COND(resource_manager_data == NULL, "Couldn't find resource manager (%ld)\n", manager_id);
+
+    gpi_cap_t resource_type = resource_manager_data->resource_type;
+
+    OSDB_PRINTF("resource manager %ld creates resource with ID %ld\n",
+                manager_id, resource_id);
+
+    osmosis_pd_cap_t *osm_cap;
+    HASH_FIND_INT(server_data->pd.has_access_to, &resource_id, osm_cap);
+    if (osm_cap == NULL)
     {
-        OSDB_PRINTF(PD_DEBUG, PDSERVS "handle_create_resource_req: Failed to find resource server with ID %ld.\n",
-                    server_id);
-        error = 1;
-    }
-    else if (resource_manager_data == NULL)
-    {
-        OSDB_PRINTF(PD_DEBUG, PDSERVS "handle_create_resource_req: Failed to find resource manager with ID %ld.\n",
-                    manager_id);
-        error = 1;
+        // Resource is not already in the hash
+        osm_cap = pd_add_resource(&server_data->pd, resource_type, resource_id, NSID_DEFAULT, seL4_CapNull, seL4_CapNull, seL4_CapNull);
     }
     else
     {
-        gpi_cap_t resource_type = resource_manager_data->resource_type;
-
-        OSDB_PRINTF(PD_DEBUG, PDSERVS "resource manager %ld creates resource with ID %ld\n",
-                    manager_id, resource_id);
-
-        osmosis_pd_cap_t *osm_cap;
-        HASH_FIND_INT(server_data->pd.has_access_to, &resource_id, osm_cap);
-        if (osm_cap == NULL)
-        {
-            // Resource is not already in the hash
-            osm_cap = pd_add_resource(&server_data->pd, resource_type, resource_id, NSID_DEFAULT, seL4_CapNull, seL4_CapNull, seL4_CapNull);
-        }
-        else
-        {
-            OSDB_PRINTF(PD_DEBUG, PDSERVS "handle_create_resource_req: Resource already exists %ld.\n",
-                        resource_id);
-        }
+        OSDB_PRINTF("handle_create_resource_req: Resource already exists %ld.\n",
+                    resource_id);
     }
 
+err_goto:
     seL4_SetMR(PDMSGREG_FUNC, PD_FUNC_CREATE_RES_ACK);
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(error, 0, 0,
                                                   PDMSGREG_CREATE_RES_ACK_END);
@@ -811,10 +628,9 @@ static void handle_create_resource_req(seL4_Word sender_badge, seL4_MessageInfo_
 
 static void handle_give_resource_req(seL4_Word sender_badge, seL4_MessageInfo_t old_tag, seL4_CPtr received_cap)
 {
-    int error = 0;
-
-    OSDB_PRINTF(PD_DEBUG, PDSERVS "Got give resource request from client badge %lx, resource ID %ld.\n",
+    OSDB_PRINTF("Got give resource request from client badge %lx, resource ID %ld.\n",
                 sender_badge, seL4_GetMR(PDMSGREG_GIVE_RES_REQ_RES_ID));
+    int error = 0;
 
     seL4_Word server_id = get_object_id_from_badge(sender_badge);
     seL4_Word recipient_id = seL4_GetMR(PDMSGREG_GIVE_RES_REQ_CLIENT_ID);
@@ -825,64 +641,42 @@ static void handle_give_resource_req(seL4_Word sender_badge, seL4_MessageInfo_t 
     pd_component_registry_entry_t *recipient_data = pd_component_registry_get_entry_by_id(recipient_id);
     pd_component_resource_manager_entry_t *resource_manager_data = pd_component_resource_manager_get_entry_by_id(manager_id);
 
-    if (server_data == NULL)
-    {
-        OSDB_PRINTF(PD_DEBUG, PDSERVS "handle_give_resource_req: Failed to find resource server with ID %ld.\n",
-                    server_id);
-        error = 1;
-    }
-    else if (resource_manager_data == NULL)
-    {
-        OSDB_PRINTF(PD_DEBUG, PDSERVS "handle_give_resource_req: Failed to find resource manager with ID %ld.\n",
-                    manager_id);
-        error = 1;
-    }
-    else if (recipient_data == NULL)
-    {
-        OSDB_PRINTF(PD_DEBUG, PDSERVS "handle_give_resource_req: Failed to find recipient id %ld.\n",
-                    recipient_id);
-        error = 1;
-    }
+    SERVER_GOTO_IF_COND(server_data == NULL, "Couldn't find server PD (%ld)\n", server_id);
+    SERVER_GOTO_IF_COND(recipient_data == NULL, "Couldn't find target PD (%ld)\n", recipient_id);
+    SERVER_GOTO_IF_COND(resource_manager_data == NULL, "Couldn't find resource manager (%ld)\n", manager_id);
 
     osmosis_pd_cap_t *resource_data;
     HASH_FIND_INT(server_data->pd.has_access_to, &resource_id, resource_data);
+    SERVER_GOTO_IF_COND(resource_data == NULL, "Couldn't find resource (%ld)\n", resource_id);
 
-    if (resource_data == NULL)
+    OSDB_PRINTF("resource manager %ld gives resource ID %ld to client %ld\n",
+                manager_id, resource_id, recipient_id);
+
+    osmosis_pd_cap_t *osm_cap;
+    HASH_FIND_INT(recipient_data->pd.has_access_to, &resource_id, osm_cap);
+    if (osm_cap == NULL)
     {
-        OSDB_PRINTF(PD_DEBUG, PDSERVS "handle_give_resource_req: Failed to find resource with id %ld.\n",
-                    resource_id);
-        error = 1;
-    }
-    else
-    {
-        OSDB_PRINTF(PD_DEBUG, PDSERVS "resource manager %ld gives resource ID %ld to client %ld\n",
-                    manager_id, resource_id, recipient_id);
-
-        osmosis_pd_cap_t *osm_cap;
-        HASH_FIND_INT(recipient_data->pd.has_access_to, &resource_id, osm_cap);
-        if (osm_cap == NULL)
-        {
-            // Resource is not already in the recipient's hash table
-            osm_cap = pd_add_resource(&recipient_data->pd, resource_manager_data->resource_type, resource_id, ns_id, seL4_CapNull, seL4_CapNull, seL4_CapNull);
-        }
-
-        seL4_Word badge = gpi_new_badge(resource_manager_data->resource_type,
-                                        0x00,
-                                        recipient_id,
-                                        ns_id,
-                                        resource_id);
-
-        // (XXX) Arya: How to handle duplicate entries to the same resource?
-        // The hash table is keyed by resource ID
-        // Badge the resource manager's endpoint to create a resource capability
-        cspacepath_t src_path;
-        seL4_CPtr dest;
-        vka_cspace_make_path(get_pd_component()->server_vka, resource_manager_data->server_ep, &src_path);
-        error = pd_mint(&recipient_data->pd, &src_path, badge, &dest);
-        osm_cap->slot_in_PD_Debug = dest;
-        seL4_SetMR(PDMSGREG_GIVE_RES_ACK_DEST, dest);
+        // Resource is not already in the recipient's hash table
+        osm_cap = pd_add_resource(&recipient_data->pd, resource_manager_data->resource_type, resource_id, ns_id, seL4_CapNull, seL4_CapNull, seL4_CapNull);
     }
 
+    seL4_Word badge = gpi_new_badge(resource_manager_data->resource_type,
+                                    0x00,
+                                    recipient_id,
+                                    ns_id,
+                                    resource_id);
+
+    // (XXX) Arya: How to handle duplicate entries to the same resource?
+    // The hash table is keyed by resource ID
+    // Badge the resource manager's endpoint to create a resource capability
+    cspacepath_t src_path;
+    seL4_CPtr dest;
+    vka_cspace_make_path(get_pd_component()->server_vka, resource_manager_data->server_ep, &src_path);
+    error = pd_mint(&recipient_data->pd, &src_path, badge, &dest);
+    osm_cap->slot_in_PD_Debug = dest;
+    seL4_SetMR(PDMSGREG_GIVE_RES_ACK_DEST, dest);
+
+err_goto:
     seL4_SetMR(PDMSGREG_FUNC, PD_FUNC_GIVE_RES_ACK);
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(error, 0, 0,
                                                   PDMSGREG_GIVE_RES_ACK_END);
@@ -891,13 +685,9 @@ static void handle_give_resource_req(seL4_Word sender_badge, seL4_MessageInfo_t 
 
 static void handle_exit_req(seL4_Word sender_badge, seL4_MessageInfo_t old_tag, seL4_CPtr received_cap)
 {
-    int error = 0;
-
-    OSDB_PRINTF(PD_DEBUG, PDSERVS "Got exit request from client badge %lx\n",
-                sender_badge);
+    OSDB_PRINTF("Got exit request from client badge %lx\n", sender_badge);
 
     handle_disconnect_req(sender_badge, old_tag, received_cap);
-    return;
 }
 
 static void handle_ipc_bench_req(void)
@@ -921,6 +711,7 @@ static void handle_ipc_bench_req(void)
 
 static void handle_clone_req(seL4_Word sender_badge, seL4_MessageInfo_t old_tag)
 {
+    OSDB_PRINTF("Got clone request from client badge %lx\n", sender_badge);
     int error = 0;
     seL4_CPtr ret_cap;
     pd_component_registry_entry_t *new_entry;
@@ -930,16 +721,9 @@ static void handle_clone_req(seL4_Word sender_badge, seL4_MessageInfo_t old_tag)
     seL4_MessageInfo_t tag;
 
     pd_component_registry_entry_t *pd_data = pd_component_registry_get_entry_by_badge(sender_badge);
-    if (pd_data == NULL)
-    {
-        OSDB_PRINTF(PD_DEBUG, PDSERVS "handle_give_resource_req: Failed to find PD badge %lx.\n",
-                    sender_badge);
-        error = 1;
-    }
-    else
-    {
-        error = pd_component_allocate_pd(client_id, false, &new_entry, &ret_cap);
-    }
+    SERVER_GOTO_IF_COND(pd_data == NULL, "Couldn't find client PD (%ld)\n", client_id);
+
+    error = pd_component_allocate_pd(client_id, false, &new_entry, &ret_cap);
 
     if (error)
     {
@@ -947,6 +731,7 @@ static void handle_clone_req(seL4_Word sender_badge, seL4_MessageInfo_t old_tag)
         // (XXX) Linh: delete the minted cap as well
     }
 
+err_goto:
     tag = seL4_MessageInfo_new(error, 0, 0, PDMSGREG_CLONE_ACK_END);
     seL4_SetMR(PDMSGREG_FUNC, PD_FUNC_CLONE_REQ);
     return reply(tag);
@@ -961,11 +746,8 @@ void pd_component_handle(seL4_MessageInfo_t tag,
                          cspacepath_t *received_cap,
                          seL4_MessageInfo_t *reply_tag) /* reply_tag not used right now*/
 {
-    enum pd_component_funcs func;
-    seL4_Error error = 0;
-    /* Post */
-    func = seL4_GetMR(PDMSGREG_FUNC);
-    uint64_t blah = seL4_GetMR(1);
+    enum pd_component_funcs func = seL4_GetMR(PDMSGREG_FUNC);
+
     switch (func)
     {
     case PD_FUNC_DISCONNECT_REQ:

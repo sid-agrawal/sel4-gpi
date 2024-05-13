@@ -42,6 +42,10 @@
 extern char _cpio_archive[];
 extern char _cpio_archive_end[];
 
+// Defined for utility printing macros
+#define DEBUG_ID PD_DEBUG
+#define SERVER_ID PDSERVS
+
 static int pd_setup_cspace(pd_t *pd, vka_t *vka);
 static int pd_dump_internal(pd_t *pd, model_state_t *ms, cspacepath_t rr_frame_path, void *rr_local_vaddr);
 
@@ -150,7 +154,7 @@ int pd_add_rde(pd_t *pd,
 
     if (idx == -1)
     {
-        OSDB_PRINTF(PD_DEBUG, "No more RDE NS slots available for type %d\n", type.type);
+        OSDB_PRINTF("No more RDE NS slots available for type %d\n", type.type);
         return 1;
     }
 
@@ -188,7 +192,7 @@ int pd_add_rde(pd_t *pd,
 
     pd->init_data->rde[type.type][idx].slot_in_PD = dest.capPtr;
 
-    OSDB_PRINTF(PD_DEBUG, "Added new RDE of type %d to PD %d, in slot %d, with badge %lx\n", type.type, client_id, (int)dest.capPtr, badge_val);
+    OSDB_PRINTF("Added new RDE of type %d to PD %d, in slot %d, with badge %lx\n", type.type, client_id, (int)dest.capPtr, badge_val);
 
     pd->init_data->rde_count++;
     return 0;
@@ -200,7 +204,7 @@ int pd_new(pd_t *pd,
 {
     int error;
 
-    OSDB_PRINTF(PD_DEBUG, PDSERVS "new PD: \n");
+    OSDB_PRINTF("new PD: \n");
 
     pd->has_access_to_count = 0;
     pd->has_access_to = NULL; // required for uthash initialization
@@ -381,7 +385,7 @@ int pd_bootstrap_allocator(pd_t *pd,
                                                                                               .end_slot = end_slot});
     if (error != seL4_NoError)
     {
-        OSDB_PRINTF(PD_DEBUG, PDSERVS "%s: Failed to initialize single-level cspace for PD id %d.\n",
+        OSDB_PRINTF("%s: Failed to initialize single-level cspace for PD id %d.\n",
                     __FUNCTION__, pd->pd_obj_id);
         return -1;
     }
@@ -389,7 +393,7 @@ int pd_bootstrap_allocator(pd_t *pd,
     error = allocman_attach_cspace(allocator, cspace_single_level_make_interface(cspace));
     if (error != seL4_NoError)
     {
-        OSDB_PRINTF(PD_DEBUG, PDSERVS "%s: Failed to attach cspace to allocman for PD id %d.\n",
+        OSDB_PRINTF("%s: Failed to attach cspace to allocman for PD id %d.\n",
                     __FUNCTION__, pd->pd_obj_id);
         return -1;
     }
@@ -521,9 +525,9 @@ int pd_configure(pd_t *pd,
     {
         ZF_LOGF("Failed to attach init data to child PD");
     }
-    OSDB_PRINTF(PD_DEBUG, PDSERVS "Mapped PD's init data at %p\n", (void *)pd->init_data_in_PD);
+    OSDB_PRINTF("Mapped PD's init data at %p\n", (void *)pd->init_data_in_PD);
 
-    OSDB_PRINTF(PD_DEBUG, PDSERVS "PD%d free_slot.start %ld\n", pd->pd_obj_id, pd->proc.cspace_next_free);
+    OSDB_PRINTF("PD%d free_slot.start %ld\n", pd->pd_obj_id, pd->proc.cspace_next_free);
     return 0;
 }
 
@@ -536,7 +540,7 @@ int pd_send_cap(pd_t *to_pd,
         (XXX): Need to handle how sending OSM caps would leand to additional data tracking.
     */
     assert(cap != 0);
-    OSDB_PRINTF(PD_DEBUG, "pd_send_cap: Sending cap %ld(badge:%lx) to pd %p\n", cap, badge, to_pd);
+    OSDB_PRINTF("pd_send_cap: Sending cap %ld(badge:%lx) to pd %p\n", cap, badge, to_pd);
 
     seL4_Word new_badge;
     int error = 0;
@@ -637,7 +641,7 @@ int pd_send_cap(pd_t *to_pd,
                                    new_badge);
             if (error)
             {
-                OSDB_PRINTF(PD_DEBUG, PDSERVS "%s: Failed to mint new_badge %lx.\n",
+                OSDB_PRINTF("%s: Failed to mint new_badge %lx.\n",
                             __FUNCTION__, new_badge);
                 return 1;
             }
@@ -659,7 +663,7 @@ int pd_send_cap(pd_t *to_pd,
         ZF_LOGF("Failed to copy cap to process");
         return -1;
     }
-    OSDB_PRINTF(PD_DEBUG, PDSERVS "pd_send_cap: copied cap at %ld to child\n", *slot);
+    OSDB_PRINTF("pd_send_cap: copied cap at %ld to child\n", *slot);
 
     /* Add to our caps data struct */
 
@@ -675,27 +679,27 @@ static int request_remote_rr(pd_t *pd, model_state_t *ms, uint64_t server_id, ui
 
     if (server_entry == NULL)
     {
-        OSDB_PRINTF(PD_DEBUG, PDSERVS "Failed to find resource server with ID 0x%lx\n", server_id);
+        OSDB_PRINTF("Failed to find resource server with ID 0x%lx\n", server_id);
         return -1;
     }
     seL4_CPtr server_cap = server_entry->server_ep;
     model_state_t *ms2;
 
-    OSDB_PRINTF(PD_DEBUG, PDSERVS "Resource ID 0x%lx, server ID 0x%lx, server EP at %d\n", obj_id, server_id, (int)server_cap);
+    OSDB_PRINTF("Resource ID 0x%lx, server ID 0x%lx, server EP at %d\n", obj_id, server_id, (int)server_cap);
 
     // Pre-map the memory so resource server does not need to call root task
     cspacepath_t rr_frame_copy_path;
     error = vka_cspace_alloc_path(get_gpi_server()->server_vka, &rr_frame_copy_path);
     if (error != seL4_NoError)
     {
-        OSDB_PRINTF(PD_DEBUG, PDSERVS "Failed to allocate path for RR frame copy %d", error);
+        OSDB_PRINTF("Failed to allocate path for RR frame copy %d", error);
         return -1;
     }
 
     error = vka_cnode_copy(&rr_frame_copy_path, &rr_frame_path, seL4_AllRights);
     if (error != seL4_NoError)
     {
-        OSDB_PRINTF(PD_DEBUG, ADSSERVS "Failed to copy RR frame cap cap, error: %d", error);
+        OSDB_PRINTF("Failed to copy RR frame cap cap, error: %d", error);
         return -1;
     }
 
@@ -703,7 +707,7 @@ static int request_remote_rr(pd_t *pd, model_state_t *ms, uint64_t server_id, ui
                                              seL4_AllRights, 1, seL4_LargePageBits, 1);
     if (rr_remote_vaddr == NULL)
     {
-        OSDB_PRINTF(PD_DEBUG, PDSERVS "Failed to map RR frame to resource server, %d", error);
+        OSDB_PRINTF("Failed to map RR frame to resource server, %d", error);
         return -1;
     }
 
@@ -769,7 +773,7 @@ static int res_dump(pd_t *pd, model_state_t *ms, osmosis_pd_cap_t *current_cap,
         // Use some other method to get the cap details
         break;
     case GPICAP_TYPE_BLOCK:
-        OSDB_PRINTF(PD_DEBUG, PDSERVS "Calling another PD to get the info for resource with ID 0x%x\n", current_cap->res_id);
+        OSDB_PRINTF("Calling another PD to get the info for resource with ID 0x%x\n", current_cap->res_id);
 
         // Find the server that created this resource based on the resource id
         uint64_t obj_id = current_cap->res_id;
@@ -877,7 +881,7 @@ int pd_dump(pd_t *pd)
 {
     int error;
 
-    OSDB_PRINTF(PD_DEBUG, PDSERVS "pd_dump_cap: Dumping all details of PD:%u\n", pd->pd_obj_id);
+    OSDB_PRINTF("pd_dump_cap: Dumping all details of PD:%u\n", pd->pd_obj_id);
 
     /*
         For all caps that belong to this PD

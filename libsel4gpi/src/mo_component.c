@@ -30,6 +30,11 @@
 #include <sel4gpi/gpi_server.h>
 #include <sel4gpi/badge_usage.h>
 #include <sel4gpi/debug.h>
+#include <sel4gpi/error_handle.h>
+
+// Defined for utility printing macros
+#define DEBUG_ID MO_DEBUG
+#define SERVER_ID MOSERVS
 
 mo_component_context_t *get_mo_component(void)
 {
@@ -100,11 +105,7 @@ int mo_component_allocate_mo(uint64_t client_id, bool forge, int num_pages, mo_c
 
     /* Create the registry entry */
     mo_component_registry_entry_t *client_reg_ptr = malloc(sizeof(mo_component_registry_entry_t));
-    if (client_reg_ptr == 0)
-    {
-        OSDB_PRINTF(MO_DEBUG, MOSERVS "main: Failed to allocate new badge for client.\n");
-        return 1;
-    }
+    SERVER_GOTO_IF_COND(client_reg_ptr == NULL, "Couldn't allocate new MO reg entry\n");
     memset((void *)client_reg_ptr, 0, sizeof(mo_component_registry_entry_t));
 
     client_reg_ptr->mo.mo_obj_id = resource_server_registry_insert_new_id(&get_mo_component()->mo_registry, (resource_server_registry_node_t *)client_reg_ptr);
@@ -133,24 +134,18 @@ int mo_component_allocate_mo(uint64_t client_id, bool forge, int num_pages, mo_c
                        frame_caps,
                        num_pages,
                        get_mo_component()->server_vka);
-        if (error)
-        {
-            OSDB_PRINTF(MO_DEBUG, MOSERVS "main: Failed to create new MO object\n");
-            return 1;
-        }
 
         free(frame_caps);
+
+        // (XXX) Arya: Do some cleanup here
+        SERVER_GOTO_IF_ERR(error, "Failed to initialize new MO object\n");
     }
 
     /* Create the badged endpoint */
     *ret_cap = resource_server_make_badged_ep(get_mo_component()->server_vka, get_mo_component()->server_ep_obj.cptr,
                                               (resource_server_registry_node_t *)client_reg_ptr, GPICAP_TYPE_MO, NSID_DEFAULT, client_id);
 
-    if (ret_cap == seL4_CapNull)
-    {
-        OSDB_PRINTF(MO_DEBUG, MOSERVS "Failed to make badged ep for new MO\n");
-        return 1;
-    }
+    SERVER_GOTO_IF_COND(ret_cap == seL4_CapNull, "Failed to make badged ep for new MO\n");
 
     /* Add the resource to the client */
     osmosis_pd_cap_t *res = pd_add_resource_by_id(client_id, GPICAP_TYPE_MO, client_reg_ptr->mo.mo_obj_id);
@@ -159,12 +154,13 @@ int mo_component_allocate_mo(uint64_t client_id, bool forge, int num_pages, mo_c
         res->slot_in_RT_Debug = *ret_cap;
     }
 
-    return 0;
+err_goto:
+    return error;
 }
 
 void mo_handle_allocation_request(seL4_Word sender_badge, seL4_MessageInfo_t *reply_tag)
 {
-    OSDB_PRINTF(MO_DEBUG, MOSERVS "main: Got MO connect request from %lx\n", sender_badge);
+    OSDB_PRINTF("Got MO allocation request from %lx\n", sender_badge);
     badge_print(sender_badge);
 
     int error = 0;
@@ -173,107 +169,21 @@ void mo_handle_allocation_request(seL4_Word sender_badge, seL4_MessageInfo_t *re
     uint32_t client_id = get_client_id_from_badge(sender_badge);
     seL4_Word num_pages = seL4_GetMR(MOMSGREG_CONNECT_REQ_NUM_PAGES);
 
-    OSDB_PRINTF(MO_DEBUG, MOSERVS "Got connect request for %ld pages\n", num_pages);
+    OSDB_PRINTF("Got connect request for %ld pages\n", num_pages);
 
     error = mo_component_allocate_mo(client_id, false, num_pages, &new_entry, &ret_cap);
+    SERVER_GOTO_IF_ERR(error, "Failed to allocate new MO object\n");
+
+    OSDB_PRINTF("Successfully allocated a new MO.\n");
 
     /* Return this badged end point in the return message. */
     seL4_SetCap(0, ret_cap);
-    seL4_SetMR(MOMSGREG_FUNC, MO_FUNC_CONNECT_ACK);
     seL4_SetMR(MOMSGREG_CONNECT_ACK_ID, new_entry->mo.mo_obj_id);
+
+err_goto:
+    seL4_SetMR(MOMSGREG_FUNC, MO_FUNC_CONNECT_ACK);
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(error, 0, 1, MOMSGREG_CONNECT_ACK_END);
-    OSDB_PRINTF(MO_DEBUG, MOSERVS "main: Successfully allocated a new MO.\n");
     return reply(tag);
-}
-
-int forge_mo_caps_from_vspace(vspace_t *child_vspace,
-                              ads_t *target_ads,
-                              vka_t *vka,
-                              uint32_t client_pd_id,
-                              uint32_t *num_ret_caps,
-                              seL4_CPtr *cap_ret,
-                              uint64_t *id_ret)
-{
-    // (XXX) Arya: TODO this should be part of forge ads from vspace
-
-    /* Walk every reservation */
-    OSDB_PRINTF(MO_DEBUG, "%s: %d\n", __FUNCTION__, __LINE__);
-
-    sel4utils_alloc_data_t *child_data = get_alloc_data(child_vspace);
-    OSDB_PRINTF(MO_DEBUG, "%s: %d\n", __FUNCTION__, __LINE__);
-    sel4utils_res_t *res = child_data->reservation_head;
-    OSDB_PRINTF(MO_DEBUG, "%s: %d\n", __FUNCTION__, __LINE__);
-
-    OSDB_PRINTF(MO_DEBUG, "forge_mo_caps_from_vspace: %d\n", __LINE__);
-    while (res != NULL)
-    {
-        *num_ret_caps = *num_ret_caps + 1;
-        OSDB_PRINTF(MO_DEBUG, "forge_mo_caps_from_vspace: %d\n", __LINE__);
-        res = res->next;
-    }
-
-    /* For each reservation, forge an MO */
-    int j = 0;
-    res = child_data->reservation_head;
-    OSDB_PRINTF(MO_DEBUG, "forge_mo_caps_from_vspace: %d\n", __LINE__);
-    while (res != NULL)
-    {
-
-        OSDB_PRINTF(MO_DEBUG, "forge_mo_caps_from_vspace: %d\n", __LINE__);
-        /* Get the caps in a reservation */
-        uint32_t num_frames = (res->end - res->start) / PAGE_SIZE_4K;
-        seL4_CPtr *frame_caps = malloc(sizeof(seL4_CPtr) * num_frames);
-        assert(frame_caps != NULL);
-
-        int i = 0;
-        for (void *start = (void *)res->start;
-             start < (void *)res->end;
-             start += PAGE_SIZE_4K)
-        {
-            frame_caps[i] = vspace_get_cap(child_vspace, start);
-            i++;
-        }
-
-        /* This way, we can call forge_mo_caps_from vspace again and again */
-        if (res->mo_ref == NULL)
-        {
-            // (XXX) Arya: This may have issues if the region is not mapped to physical pages everywhere
-            int error = forge_mo_cap_from_frames(frame_caps,
-                                                 num_frames,
-                                                 vka,
-                                                 client_pd_id,
-                                                 &cap_ret[j],
-                                                 (mo_t **)&res->mo_ref);
-            assert(error == 0);
-
-            if (id_ret)
-            {
-                id_ret[j] = ((mo_t *)res->mo_ref)->mo_obj_id;
-            }
-
-            // Add the attach node for this region
-            // (XXX) Arya: Again, separation of concerns, this should be in ADS but leave here for now
-            if (target_ads != NULL)
-            {
-                attach_node_t *attach_node = malloc(sizeof(attach_node_t));
-                attach_node->mo_id = ((mo_t *)res->mo_ref)->mo_obj_id;
-                attach_node->mo_attached = true;
-                attach_node->mo_offset = 0;
-                attach_node->vaddr = (void *)(void *)res->start;
-                attach_node->type = res->type;
-                attach_node->n_pages = num_frames;
-                resource_server_registry_insert(&target_ads->attach_registry, (resource_server_registry_node_t *)attach_node);
-            }
-        }
-
-        res = res->next;
-        j++;
-    }
-
-    /* Add the MO's cap to the cap_ret*/
-
-    assert(*num_ret_caps < 10);
-    return 0;
 }
 
 int forge_mo_cap_from_frames(seL4_CPtr *frame_caps,
@@ -283,6 +193,8 @@ int forge_mo_cap_from_frames(seL4_CPtr *frame_caps,
                              seL4_CPtr *cap_ret,
                              mo_t **mo_ret)
 {
+    OSDB_PRINTF("Forging MO cap from frames %lx\n");
+
     assert(frame_caps != NULL);
 
     int error = 0;
@@ -290,26 +202,19 @@ int forge_mo_cap_from_frames(seL4_CPtr *frame_caps,
 
     /* Allocate the MO object */
     error = mo_component_allocate_mo(client_pd_id, true, num_pages, &new_entry, cap_ret);
-    if (error)
-    {
-        OSDB_PRINTF(MO_DEBUG, MOSERVS "main: Failed to allocate MO for forge.\n");
-        return 1;
-    }
+    SERVER_GOTO_IF_ERR(error, "Failed to allocate new MO object for forge\n");
 
     /* Update the MO object from frames */
     error = mo_new(&new_entry->mo, frame_caps, num_pages, vka);
+    SERVER_GOTO_IF_ERR(error, "Failed to initialize new MO object for forge\n");
 
-    if (error)
-    {
-        OSDB_PRINTF(MO_DEBUG, MOSERVS "main: Failed to initalize forged MO.\n");
-        return 1;
-    }
-
-    OSDB_PRINTF(MO_DEBUG, MOSERVS "main: Forged a new MO cap(EP: %lx) with %u pages.\n",
+    OSDB_PRINTF("Forged a new MO cap(EP: %lx) with %u pages.\n",
                 cap_ret, new_entry->mo.num_pages);
 
     *mo_ret = &new_entry->mo;
-    return 0;
+
+err_goto:
+    return error;
 }
 
 /**
@@ -321,10 +226,8 @@ void mo_component_handle(seL4_MessageInfo_t tag,
                          cspacepath_t *received_cap,
                          seL4_MessageInfo_t *reply_tag) /* reply_tag not used right now*/
 {
-    enum mo_component_funcs func;
-    seL4_Error error = 0;
-    /* Post */
-    func = seL4_GetMR(MOMSGREG_FUNC);
+    enum mo_component_funcs func = seL4_GetMR(MOMSGREG_FUNC);
+
     switch (func)
     {
     default:
