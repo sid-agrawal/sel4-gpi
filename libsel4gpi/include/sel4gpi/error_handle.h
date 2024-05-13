@@ -5,33 +5,25 @@
  *
  * Usage:
  *
- * GOTO_IF_ERR / GOTO_IF_COND / GOTO_PRINT_IF_COND:
+ * GOTO_IF_ERR / GOTO_IF_COND
  * - Specify a err_goto line within the function
  *
- * SERVER_RET_IF_COND
+ * SERVER_GOTO_IF_COND
  * - Use within a resource server, to return an error tag
  * - The DEBUG_ID and SERVER_ID values must be defined
  */
 
-#define GOTO_IF_ERR(err)   \
-    do                     \
-    {                      \
-        if (err)           \
-        {                  \
-            goto err_goto; \
-        }                  \
+#define GOTO_IF_ERR(err, msg, ...)      \
+    do                                  \
+    {                                   \
+        if ((err))                      \
+        {                               \
+            printf(msg, ##__VA_ARGS__); \
+            goto err_goto;              \
+        }                               \
     } while (0)
 
-#define GOTO_IF_COND(c)    \
-    do                     \
-    {                      \
-        if ((c))           \
-        {                  \
-            goto err_goto; \
-        }                  \
-    } while (0)
-
-#define GOTO_PRINT_IF_COND(c, msg, ...) \
+#define GOTO_IF_COND(c)                 \
     do                                  \
     {                                   \
         if ((c))                        \
@@ -47,7 +39,7 @@
 #define SERVER_GOTO_IF_ERR(err, ...)    \
     do                                  \
     {                                   \
-        if (err)                        \
+        if ((err))                      \
         {                               \
             OSDB_PRINTERR(__VA_ARGS__); \
             goto err_goto;              \
@@ -62,5 +54,27 @@
             OSDB_PRINTERR(__VA_ARGS__); \
             error = 1;                  \
             goto err_goto;              \
+        }                               \
+    } while (0)
+
+/* also prints the given badge in human-readable format */
+#define SERVER_GOTO_IF_COND_BG(c, badge, ...) \
+    do                                        \
+    {                                         \
+        if ((c))                              \
+        {                                     \
+            OSDB_PRINTERR(__VA_ARGS__);       \
+            badge_print((badge));             \
+            error = 1;                        \
+            goto err_goto;                    \
+        }                                     \
+    } while (0)
+
+#define SERVER_PRINT_IF_ERR(err, ...)   \
+    do                                  \
+    {                                   \
+        if ((err))                      \
+        {                               \
+            OSDB_PRINTERR(__VA_ARGS__); \
         }                               \
     } while (0)

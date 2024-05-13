@@ -37,6 +37,7 @@ typedef enum GPICAP_TYPE
 
 // (XXX) Arya: Should be able to make this 0 once we prefix badges with server ID
 #define BADGE_OBJ_ID_NULL 0xfffff
+#define MAX_BADGE_STR_SIZE 512
 
 /*
  How we are using the badge.
@@ -111,5 +112,14 @@ uint64_t gpi_new_badge_server(gpi_cap_t cap_type,
                               uint64_t object_id);
 
 void badge_print(seL4_Word badge);
+
+/**
+ * @brief formats badge details into a string for printing
+ *
+ * @param dest string buffer
+ * @param badge badge to print
+ */
+void badge_sprint(char *dest, seL4_Word badge);
+
 void gpi_panic(char *reason, uint64_t code);
 char *cap_type_to_str(gpi_cap_t cap_type);

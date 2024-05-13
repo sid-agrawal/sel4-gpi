@@ -1,19 +1,8 @@
 #include <sel4runtime.h>
 #include <sel4gpi/pd_clientapi.h>
 #include <sel4gpi/mo_clientapi.h>
-
+#include <sel4gpi/error_handle.h>
 #include <sel4gpi/pd_utils.h>
-
-// (XXX) Arya: Adding because macro was missing, linh to add error_handle.h
-#define GOTO_IF_ERR(check, msg)                  \
-    do                                           \
-    {                                            \
-        if ((check) != seL4_NoError)             \
-        {                                        \
-            printf("PD_UTILS ERROR: %s\n", msg); \
-            goto err_goto;                       \
-        }                                        \
-    } while (0);
 
 seL4_CPtr sel4gpi_get_pd_cap(void)
 {
@@ -255,25 +244,25 @@ err_goto:
     return error;
 }
 
-static int configure_vmr_resource(resource_config_t *cfg_item)
-{
-}
+// static int configure_vmr_resource(resource_config_t *cfg_item)
+// {
+// }
 
-int sel4gpi_configure_pd(resource_config_t *cfg)
-{
-    int error = 0;
-    for (int i = 0; i < MAX_RESOURCE_CONFIGS; i++)
-    {
-        switch (cfg[i].type)
-        {
-        case GPICAP_TYPE_ADS: // this is really the VMR type
-            error = configure_vmr_resource(&cfg[i]);
-            break;
+// int sel4gpi_configure_pd(resource_config_t *cfg)
+// {
+//     int error = 0;
+//     for (int i = 0; i < MAX_RESOURCE_CONFIGS; i++)
+//     {
+//         switch (cfg[i].type)
+//         {
+//         case GPICAP_TYPE_ADS: // this is really the VMR type
+//             error = configure_vmr_resource(&cfg[i]);
+//             break;
 
-        default:
-            break;
-        }
-    }
+//         default:
+//             break;
+//         }
+//     }
 
-    return error;
-}
+//     return error;
+// }

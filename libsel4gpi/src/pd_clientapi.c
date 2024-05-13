@@ -15,6 +15,8 @@
 #include <sel4gpi/badge_usage.h>
 #include <sel4gpi/debug.h>
 #include <sel4gpi/gpi_client.h>
+#include <sel4gpi/pd_utils.h>
+#include <sel4gpi/error_handle.h>
 
 // Defined for utility printing macros
 #define DEBUG_ID PD_DEBUG
@@ -288,21 +290,36 @@ void pd_client_bench_ipc(pd_client_context_t *conn, seL4_CPtr dummy_send_cap, se
     assert(seL4_MessageInfo_ptr_get_label(&tag) == 0);
 }
 
-/* WIP threads */
-int pd_client_clone(seL4_CPtr pd_rde, pd_client_context_t *to_copy, seL4_CPtr free_slot, uint8_t flags, pd_client_context_t *ret_copied)
+/* WIP */
+int pd_client_clone(seL4_CPtr pd_rde, pd_client_context_t *to_copy, seL4_CPtr free_slot, pd_resource_config_t *cfg, pd_client_context_t *ret_copied)
 {
+    int error = 0;
+    /* create message frame */
+    ads_client_context_t curr_vmr_rde = {.badged_server_ep_cspath.capPtr = sel4gpi_get_rde_by_ns_id(sel4gpi_get_binded_ads_id(), GPICAP_TYPE_ADS)};
+    mo_client_context_t shared_mo;
+    void *msg = sel4gpi_get_vmr(&curr_vmr_rde, 1, NULL, SEL4UTILS_RES_TYPE_SHARED_FRAMES, &shared_mo);
+    SERVER_GOTO_IF_COND(msg == NULL, "Couldn't create VMR for shared message\n");
+    memcpy(msg, cfg, sizeof(pd_resource_config_t) * MAX_RESOURCE_CONFIGS);
+
     seL4_SetCapReceivePath(SEL4UTILS_CNODE_SLOT, /* Position of the cap to the CNODE */
                            free_slot,            /* CPTR in this CSPACE */
                            /* This works coz we have a single level cnode with no guard.*/
                            seL4_WordBits); /* Depth i.e. how many bits of free_slot to interpret*/
 
-    seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 1, PDMSGREG_CLONE_REQ_END);
+    seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 2, PDMSGREG_CLONE_REQ_END);
     seL4_SetCap(0, to_copy->badged_server_ep_cspath.capPtr);
+    seL4_SetCap(1, shared_mo.badged_server_ep_cspath.capPtr);
 
     tag = seL4_Call(pd_rde, tag);
-    assert(seL4_MessageInfo_get_extraCaps(tag) == 1);
 
     ret_copied->badged_server_ep_cspath.capPtr = free_slot;
+    ads_client_context_t curr_ads_obj = {.badged_server_ep_cspath.capPtr = sel4gpi_get_ads_cap()};
+    error = ads_client_rm(&curr_ads_obj, msg);
+    SERVER_PRINT_IF_ERR(error, "Failed to unmap shared message frame\n");
+    // TODO: free MO
 
     return seL4_MessageInfo_get_label(tag);
+
+err_goto:
+    return 1;
 }

@@ -981,10 +981,10 @@ inline void print_pd_osm_rde_info(osmosis_rde_t *o)
 }
 
 // WIP thread resource sharing
-/* int pd_clone(pd_t *src, pd_t *dest)
-{
-    for (osmosis_pd_cap_t *current_cap = src->has_access_to; current_cap != NULL; current_cap = current_cap->hh.next)
-    {
-        // copy resources from src to dest pd
-    }
-} */
+// int pd_clone(pd_t *src, pd_t *dest)
+// {
+//     for (osmosis_pd_cap_t *current_cap = src->has_access_to; current_cap != NULL; current_cap = current_cap->hh.next)
+//     {
+//         // copy resources from src to dest pd
+//     }
+// }

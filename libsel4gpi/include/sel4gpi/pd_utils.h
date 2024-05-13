@@ -17,7 +17,6 @@
 #define PD_CAP_ROOT SEL4UTILS_CNODE_SLOT
 #define PD_CAP_DEPTH seL4_WordBits
 #define PD_CSPACE_SIZE_BITS 17
-#define MAX_RESOURCE_CONFIGS 50
 
 typedef struct _sel4gpi_process
 {
@@ -28,19 +27,6 @@ typedef struct _sel4gpi_process
     void *stack;
     void *entry_point;
 } sel4gpi_process_t;
-
-typedef struct _resource_config
-{
-    gpi_cap_t type;
-    uint32_t subtype; // currently only defined for VMRs - will be cast to the sel4utils_reservation_type_t
-    bool shared;      // unclear how to define a partial number for this
-} resource_config_t;
-
-// typedef struct _sel4gpi_pd_config
-// {
-//     // hashtable of resources?
-//     resource_config_t res_cfg[MAX_RESOURCE_CONFIGS];
-// } sel4gpi_pd_config_t;
 
 /*
  * Get the osmosis pd cap from the env
@@ -94,7 +80,7 @@ void sel4gpi_set_exit_cb(void);
  * @param num_pages number of pages
  * @param vaddr OPTIONAL, address in which the VMR should be mapped
  * @param vmr_type type of VMR, e.g. stack, heap, IPC buffer, etc.
- * @param ret_mo OPTIONAL, a reference to the MO object for this VMR
+ * @param ret_mo OPTIONAL, returns a reference to the MO object for this VMR
  * @return virtual address of the VMR, if vaddr argument is specified, it should be the same (or NULL, on failure)
  */
 void *sel4gpi_get_vmr(ads_client_context_t *ads_rde, int num_pages, void *vaddr, sel4utils_reservation_type_t vmr_type, mo_client_context_t *ret_mo);
@@ -132,10 +118,10 @@ int sel4gpi_configure_process(const char *image_name,
  */
 int sel4gpi_spawn_process(sel4gpi_process_t *proc, int argc, seL4_Word *args);
 
-/**
- * @brief (WIP) create a new PD based on the given configuration of resources
- *
- * @param cfg
- * @return int
- */
-int sel4gpi_configure_pd(resource_config_t *cfg);
+// /**
+//  * @brief (WIP) create a new PD based on the given configuration of resources
+//  *
+//  * @param cfg
+//  * @return int
+//  */
+// int sel4gpi_configure_pd(resource_config_t *cfg);

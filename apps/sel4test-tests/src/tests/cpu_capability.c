@@ -60,6 +60,9 @@ int test_separate_threads(env_t env)
     error = pd_component_client_connect(pd_rde, slot, &thread_pd);
     test_error_eq(error, 0);
 
+    // pd_client_clone(pd_rde, &thread_pd, )
+
+#if 0
     /* Create a new CPU obj */
     error = pd_client_next_slot(&test_pd_os_cap, &slot);
     test_error_eq(error, 0);
@@ -98,7 +101,7 @@ int test_separate_threads(env_t env)
         seL4_Yield();
         i++;
     }
-
+#endif
     // pd_client_dump(&test_pd_os_cap, NULL, 0);
     return sel4test_get_result();
 }

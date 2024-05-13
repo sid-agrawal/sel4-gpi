@@ -209,12 +209,13 @@ void pd_client_exit(pd_client_context_t *conn);
 void pd_client_bench_ipc(pd_client_context_t *conn, seL4_CPtr dummy_send_cap, seL4_CPtr dummy_recv_cap, bool cap_transfer);
 
 /**
- * @brief WIP creates a new PD by copying the specified resources and RDEs of the given PD
+ * @brief (WIP) creates a new PD based on the given configuration of resources
+ * NOTE: creates a shared message frame to encode the resource config, and cleans it up afterwards
  *
  * @param pd_rde the RDE for creating new PDs
- * @param to_copy the PD to copy the CSpace from
+ * @param to_copy the source PD to copy resources from
  * @param free_slot slot to receive the new PD cap
- * @param flags specifies the degree of sharing (XXX) TODO
+ * @param cfg specifies how resources from the given PD are shared
  * @param ret_copied returns the new PD with a CSpace copied from to_copy
  */
-int pd_client_clone(seL4_CPtr pd_rde, pd_client_context_t *to_copy, seL4_CPtr free_slot, uint8_t flags, pd_client_context_t *ret_copied);
+int pd_client_clone(seL4_CPtr pd_rde, pd_client_context_t *to_copy, seL4_CPtr free_slot, pd_resource_config_t *cfg, pd_client_context_t *ret_copied);

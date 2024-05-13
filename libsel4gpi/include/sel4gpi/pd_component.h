@@ -30,6 +30,7 @@
 
 #define PD_SERVER_BADGE_VALUE_EMPTY (0)
 #define PD_SERVER_BADGE_PARENT_VALUE (0xDEADBEEF)
+#define MAX_RESOURCE_CONFIGS 50
 
 /* IPC values returned in the "label" message header. */
 enum pd_component_errors
@@ -241,6 +242,14 @@ enum pd_component_msgregs
 
     PDMSGREG_BENCH_IPC_ACK_END = PDMSGREG_LABEL0,
 };
+
+// For creating new PDs: defines the level of sharing between a given source PD and the new PD
+typedef struct _pd_resource_config
+{
+    gpi_cap_t type;
+    uint32_t subtype; // currently only defined for VMRs - will be cast to the sel4utils_reservation_type_t
+    bool shared;      // unclear how to define a partial number for this
+} pd_resource_config_t;
 
 // Registry of PDs maintained by the server
 typedef struct _pd_component_registry_entry

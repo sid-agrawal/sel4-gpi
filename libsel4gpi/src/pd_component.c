@@ -709,31 +709,66 @@ static void handle_ipc_bench_req(void)
     return reply(tag);
 }
 
+/**
+ * @brief clones a given PD into another PD, based on the resource configurations
+ * this function highly couples all of the various GPI components, can we do any better?
+ */
 static void handle_clone_req(seL4_Word sender_badge, seL4_MessageInfo_t old_tag)
 {
-    OSDB_PRINTF("Got clone request from client badge %lx\n", sender_badge);
-    int error = 0;
-    seL4_CPtr ret_cap;
-    pd_component_registry_entry_t *new_entry;
-    uint32_t client_id = get_client_id_from_badge(sender_badge);
+    OSDB_PRINTF("Got clone request from client badge: ");
+    badge_print(sender_badge);
 
     seL4_SetMR(PDMSGREG_FUNC, PD_FUNC_CLONE_REQ);
+    int error = 0;
+
+    // TODO: this might need to be under an allocation request
     seL4_MessageInfo_t tag;
+    pd_component_registry_entry_t *sender_pd_data = pd_component_registry_get_entry_by_badge(sender_badge);
+    SERVER_GOTO_IF_COND_BG(sender_pd_data == NULL, sender_badge, "Couldn't find sender PD with badge: ");
 
-    pd_component_registry_entry_t *pd_data = pd_component_registry_get_entry_by_badge(sender_badge);
-    SERVER_GOTO_IF_COND(pd_data == NULL, "Couldn't find client PD (%ld)\n", client_id);
+    seL4_Word src_pd_badge = seL4_GetBadge(0);
+    pd_component_registry_entry_t *src_pd_data = pd_component_registry_get_entry_by_badge(src_pd_badge);
+    SERVER_GOTO_IF_COND_BG(src_pd_data == NULL, src_pd_badge, "Couldn't find src PD with badge: ");
 
-    error = pd_component_allocate_pd(client_id, false, &new_entry, &ret_cap);
+    seL4_Word shared_msg_mo_badge = seL4_GetBadge(1);
+    mo_component_registry_entry_t *shared_msg_mo_data = mo_component_registry_get_entry_by_badge(shared_msg_mo_badge);
+    SERVER_GOTO_IF_COND_BG(shared_msg_mo_data == NULL, shared_msg_mo_badge, "Couldn't find MO holding shared message, MO badge: ");
 
-    if (error)
-    {
-        // Do cleanup
-        // (XXX) Linh: delete the minted cap as well
-    }
+    // sel4utils_map_page(get_pd_component()->server_vka, )
+    /* we have to do this because there is no ADS obj for the RT */
+    pd_resource_config_t *resource_cfgs = (pd_resource_config_t *)vspace_map_pages(get_pd_component()->server_vspace, &shared_msg_mo_data->mo.frame_caps_in_root_task[0], NULL, seL4_AllRights, 1, seL4_PageBits, 1);
+    SERVER_GOTO_IF_COND(resource_cfgs == NULL, "Couldn't map in resource configs\n");
+
+    pd_component_registry_entry_t *new_entry;
+    seL4_CPtr ret_cap;
+    error = pd_component_allocate_pd(get_client_id_from_badge(sender_badge), false, &new_entry, &ret_cap);
+    SERVER_GOTO_IF_ERR(error, "Failed to allocate a new PD\n");
+
+    // for (int i = 0; i < MAX_RESOURCE_CONFIGS; i++)
+    // {
+    //     switch (resource_cfgs[i].type)
+    //     {
+    //     case GPICAP_TYPE_ADS:
+    //         // call ADS component
+    //         break;
+
+    //     default:
+    //         OSDB_PRINTF("Unhandled resource conifg type: %d\n", resource_cfgs[i].type);
+    //         break;
+    //     }
+    // }
+
+    vspace_unmap_pages(get_pd_component()->server_vspace, (void *)resource_cfgs, 1, seL4_PageBits, get_pd_component()->server_vka);
 
 err_goto:
     tag = seL4_MessageInfo_new(error, 0, 0, PDMSGREG_CLONE_ACK_END);
     seL4_SetMR(PDMSGREG_FUNC, PD_FUNC_CLONE_REQ);
+
+    if (resource_cfgs)
+    {
+        vspace_unmap_pages(get_pd_component()->server_vspace, (void *)resource_cfgs, 1, seL4_PageBits, get_pd_component()->server_vka);
+    }
+
     return reply(tag);
 }
 

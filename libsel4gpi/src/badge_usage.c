@@ -211,3 +211,14 @@ void gpi_panic(char *reason, uint64_t code)
     printf("PANIC: %s. CODE: %ld\n", reason, code);
     assert(0);
 }
+
+void badge_sprint(char *dest, seL4_Word badge)
+{
+    sprintf(dest, "BG: %lx\tCapType: %s\tPerms: %lu\tNSID: %lu\tCID: %lu\tOID: %lu",
+            badge,
+            cap_type_to_str(get_cap_type_from_badge(badge)),
+            get_perms_from_badge(badge),
+            get_ns_id_from_badge(badge),
+            get_client_id_from_badge(badge),
+            get_object_id_from_badge(badge));
+}

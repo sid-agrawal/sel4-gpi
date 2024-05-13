@@ -416,7 +416,7 @@ err_goto:
     return reply(tag);
 }
 
-void handle_proc_setup_req(seL4_Word sender_badge, seL4_MessageInfo_t old_tag)
+void handle_pd_setup_req(seL4_Word sender_badge, seL4_MessageInfo_t old_tag)
 {
     OSDB_PRINTF("Got proc setup request from client badge %lx.\n", sender_badge);
 
@@ -430,7 +430,7 @@ void handle_proc_setup_req(seL4_Word sender_badge, seL4_MessageInfo_t old_tag)
     SERVER_GOTO_IF_COND(target_pd == NULL, "Couldn't find target PD (%ld)\n", get_object_id_from_badge(seL4_GetBadge(0)));
 
     /* parse the arguments */
-    int argc = seL4_GetMR(ADSMSGREG_PROC_SETUP_REQ_ARGC);
+    int argc = seL4_GetMR(ADSMSGREG_PD_SETUP_REQ_ARGC);
 
     // These brackets limit the scope of argc/argv so we may goto err_goto
     {
@@ -441,16 +441,16 @@ void handle_proc_setup_req(seL4_Word sender_badge, seL4_MessageInfo_t old_tag)
             switch (i)
             {
             case 0:
-                args[i] = seL4_GetMR(ADSMSGREG_PROC_SETUP_REQ_ARG0);
+                args[i] = seL4_GetMR(ADSMSGREG_PD_SETUP_REQ_ARG0);
                 break;
             case 1:
-                args[i] = seL4_GetMR(ADSMSGREG_PROC_SETUP_REQ_ARG1);
+                args[i] = seL4_GetMR(ADSMSGREG_PD_SETUP_REQ_ARG1);
                 break;
             case 2:
-                args[i] = seL4_GetMR(ADSMSGREG_PROC_SETUP_REQ_ARG2);
+                args[i] = seL4_GetMR(ADSMSGREG_PD_SETUP_REQ_ARG2);
                 break;
             case 3:
-                args[i] = seL4_GetMR(ADSMSGREG_PROC_SETUP_REQ_ARG3);
+                args[i] = seL4_GetMR(ADSMSGREG_PD_SETUP_REQ_ARG3);
                 break;
             }
         }
@@ -464,8 +464,8 @@ void handle_proc_setup_req(seL4_Word sender_badge, seL4_MessageInfo_t old_tag)
             snprintf(argv[i], WORD_STRING_SIZE, "%" PRIuPTR "", args[i]);
         }
 
-        target_pd->pd.proc.thread.stack_top = (void *)seL4_GetMR(ADSMSGREG_PROC_SETUP_REQ_STACK);
-        target_pd->pd.proc.thread.stack_size = seL4_GetMR(ADSMSGREG_PROC_SETUP_REQ_STACK_SZ);
+        target_pd->pd.proc.thread.stack_top = (void *)seL4_GetMR(ADSMSGREG_PD_SETUP_REQ_STACK);
+        target_pd->pd.proc.thread.stack_size = seL4_GetMR(ADSMSGREG_PD_SETUP_REQ_STACK_SZ);
 
         void *init_stack;
         error = ads_proc_setup(&target_pd->pd.proc,
@@ -476,14 +476,14 @@ void handle_proc_setup_req(seL4_Word sender_badge, seL4_MessageInfo_t old_tag)
                                argv,
                                &init_stack);
 
-        seL4_SetMR(ADSMSGREG_PROC_SETUP_ACK_INIT_STACK, (seL4_Word)init_stack);
+        seL4_SetMR(ADSMSGREG_PD_SETUP_ACK_INIT_STACK, (seL4_Word)init_stack);
     }
 
     SERVER_GOTO_IF_ERR(error, "Failed to setup process stack\n");
 
 err_goto:
-    seL4_MessageInfo_t tag = seL4_MessageInfo_new(error, 0, 0, ADSMSGREG_PROC_SETUP_ACK_END);
-    seL4_SetMR(ADSMSGREG_FUNC, ADS_FUNC_PROC_SETUP_ACK);
+    seL4_MessageInfo_t tag = seL4_MessageInfo_new(error, 0, 0, ADSMSGREG_PD_SETUP_ACK_END);
+    seL4_SetMR(ADSMSGREG_FUNC, ADS_FUNC_PD_SETUP_ACK);
     return reply(tag);
 }
 
@@ -634,7 +634,7 @@ void ads_component_handle(seL4_MessageInfo_t tag,
         handle_load_elf_request(sender_badge, tag);
         break;
     case ADS_FUNC_PD_SETUP_REQ:
-        handle_PD_SETUP_req(sender_badge, tag);
+        handle_pd_setup_req(sender_badge, tag);
         break;
     case ADS_FUNC_ATTACH_RESERVE_REQ:
         handle_attach_to_reserve_req(sender_badge, tag, received_cap->capPtr);
