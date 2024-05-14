@@ -533,6 +533,9 @@ int forge_ads_cap_from_vspace(vspace_t *vspace, vka_t *vka, uint32_t client_pd_i
 
     /* Update the ADS object with the vspace data */
     new_entry->ads.vspace = vspace;
+    resource_server_initialize_registry(&new_entry->ads.attach_registry, NULL);
+    resource_server_initialize_registry(&new_entry->ads.attach_id_to_vaddr_map, NULL);
+
     error = forge_ads_attachments_from_vspace(&new_entry->ads, client_pd_id);
     SERVER_GOTO_IF_ERR(error, "Failed to forge ADS attachments from vspace\n");
 

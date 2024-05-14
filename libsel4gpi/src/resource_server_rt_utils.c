@@ -1,8 +1,12 @@
 #pragma once
 
+#include <sel4gpi/gpi_server.h>
 #include <sel4gpi/resource_server_rt_utils.h>
 #include <sel4gpi/error_handle.h>
 #include <sel4gpi/pd_component.h>
+
+#define DEBUG_ID GPI_DEBUG
+#define SERVER_ID GPISERVS
 
 static void resource_component_reply(resource_component_context_t *component, seL4_MessageInfo_t tag)
 {
@@ -44,6 +48,8 @@ void resource_component_handle(resource_component_context_t *component,
                                seL4_Word sender_badge,
                                cspacepath_t *received_cap)
 {
+    OSDB_PRINTF("Resource component handle: %s\n", cap_type_to_str(component->resource_type));
+
     int error = 0;
     bool needs_new_receive_slot = false;
 
@@ -70,9 +76,8 @@ int resource_component_allocate(resource_component_context_t *component,
     int error = 0;
 
     /* Create the registry entry */
-    resource_component_registry_entry_t *reg_entry = malloc(component->reg_entry_size);
+    resource_component_registry_entry_t *reg_entry = calloc(1, component->reg_entry_size);
     GOTO_IF_COND(reg_entry == NULL, "Couldn't allocate new %s reg entry\n", cap_type_to_str(component->resource_type));
-    memset((void *)reg_entry, 0, component->reg_entry_size);
 
     uint64_t resource_id = resource_server_registry_insert_new_id(&component->registry, (resource_server_registry_node_t *)reg_entry);
     *ret_entry = (resource_server_registry_node_t *)reg_entry;
@@ -108,6 +113,20 @@ resource_component_registry_entry_t *resource_component_registry_get_by_id(resou
                                                                            seL4_Word object_id)
 {
     return (resource_component_registry_entry_t *)resource_server_registry_get_by_id(&component->registry, object_id);
+}
+
+int resource_component_inc(resource_component_context_t *component,
+                           uint64_t object_id)
+{
+    int error = 0;
+
+    resource_component_registry_entry_t *reg_entry = resource_component_registry_get_by_id(component, object_id);
+    GOTO_IF_COND(reg_entry == NULL, "Couldn't find %s (%ld)\n", cap_type_to_str(component->resource_type), object_id);
+
+    resource_server_registry_inc(&component->registry, (resource_server_registry_node_t *)reg_entry);
+
+err_goto:
+    return error;
 }
 
 int resource_component_dec(resource_component_context_t *component,

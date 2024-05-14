@@ -70,10 +70,8 @@ void resource_server_registry_dec(resource_server_registry_t *registry, resource
 uint64_t resource_server_registry_insert_new_id(resource_server_registry_t *registry, resource_server_registry_node_t *node)
 {
     uint64_t new_id = registry->n_entries + 1;
-
     node->object_id = new_id;
     resource_server_registry_insert(registry, node);
-
     return new_id;
 }
 

@@ -73,10 +73,13 @@ int cpu_change_vspace(cpu_t *cpu,
  * @brief Create a new cpu object
  *
  * @param cpu cpu object
- * @return int 0 on success, -1 on failure.
+ * @param vka server VKA, used to allocate tcb
+ * @param vspace not used 
+ * @return int 0 on success, 1 on failure.
  */
 int cpu_new(cpu_t *cpu,
-            vka_t *vka);
+            vka_t *vka,
+            vspace_t *vspace);
 
 /**
  * @param cpu cpu object to dump the RR for

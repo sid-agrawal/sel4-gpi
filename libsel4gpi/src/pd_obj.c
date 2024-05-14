@@ -603,7 +603,7 @@ int pd_configure(pd_t *pd,
     target_cpu->binded_ads_id = target_ads->id;
 
     badge = gpi_new_badge(GPICAP_TYPE_CPU, 0x00, pd->id, NSID_DEFAULT, target_cpu->id);
-    error = pd_send_cap(pd, get_cpu_component()->server_ep_obj.cptr, badge, &pd->init_data->cpu_cap, true);
+    error = pd_send_cap(pd, get_cpu_component()->server_ep, badge, &pd->init_data->cpu_cap, true);
     ZF_LOGF_IFERR(error, "Failed to send CPU cap to PD");
 
     memcpy(&pd->proc.vspace, target_ads->vspace, sizeof(vspace_t));
@@ -659,18 +659,13 @@ int pd_send_cap(pd_t *to_pd,
             server_vka = get_ads_component()->server_vka;
             server_src_cap = get_ads_component()->server_ep;
 
-            ads_component_registry_entry_t *ads_reg = (ads_component_registry_entry_t *)
-                resource_component_registry_get_by_badge(get_ads_component(), badge);
-
-            assert(ads_reg != NULL);
-
             // Copying the resource, so increase the reference count
             if (inc_refcount)
             {
-                resource_server_registry_inc(&get_ads_component()->registry, (resource_server_registry_node_t *)ads_reg);
+                resource_component_inc(get_ads_component(), get_object_id_from_badge(badge));
             }
 
-            res_id = ads_reg->ads.id;
+            res_id = get_object_id_from_badge(badge);
             break;
         case GPICAP_TYPE_MO:
             server_vka = get_mo_component()->server_vka;
@@ -689,18 +684,19 @@ int pd_send_cap(pd_t *to_pd,
             break;
         case GPICAP_TYPE_CPU:
             server_vka = get_cpu_component()->server_vka;
-            server_src_cap = get_cpu_component()->server_ep_obj.cptr;
+            server_src_cap = get_cpu_component()->server_ep;
 
-            cpu_component_registry_entry_t *cpu_reg = cpu_component_registry_get_entry_by_badge(badge);
+            cpu_component_registry_entry_t *cpu_reg = (cpu_component_registry_entry_t *)
+                resource_component_registry_get_by_badge(get_cpu_component(), badge);
             assert(cpu_reg != NULL);
 
             // Copying the resource, so increase the reference count
             if (inc_refcount)
             {
-                resource_server_registry_inc(&get_cpu_component()->cpu_registry, (resource_server_registry_node_t *)cpu_reg);
+                resource_component_inc(get_cpu_component(), get_object_id_from_badge(badge));
             }
 
-            res_id = cpu_reg->cpu.id;
+            res_id = get_object_id_from_badge(badge);
             break;
         case GPICAP_TYPE_PD:
             server_vka = get_pd_component()->server_vka;

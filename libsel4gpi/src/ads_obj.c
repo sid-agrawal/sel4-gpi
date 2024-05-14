@@ -108,6 +108,7 @@ int ads_new(ads_t *ads,
 
     // Initialize VMR registry
     resource_server_initialize_registry(&ads->attach_registry, NULL);
+    resource_server_initialize_registry(&ads->attach_id_to_vaddr_map, NULL);
 
     return 0;
 

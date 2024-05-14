@@ -249,9 +249,10 @@ void handle_allocation_request(seL4_MessageInfo_t tag,
             reply_tag); /*unused*/
         break;
     case GPICAP_TYPE_CPU:
-        cpu_handle_allocation_request(
-            sender_badge,
-            reply_tag); /*unused*/
+        resource_component_handle(&get_gpi_server()->cpu_component,
+                                  tag,
+                                  sender_badge,
+                                  received_cap_path);
         break;
     case GPICAP_TYPE_PD:
         pd_handle_allocation_request(
@@ -355,10 +356,10 @@ void gpi_server_main()
                                     &reply_tag); /*unused*/
                 break;
             case GPICAP_TYPE_CPU:
-                cpu_component_handle(tag,
-                                     sender_badge,
-                                     &received_cap_path,
-                                     &reply_tag); /*unused*/
+                resource_component_handle(&get_gpi_server()->cpu_component,
+                                          tag,
+                                          sender_badge,
+                                          &received_cap_path);
                 break;
             case GPICAP_TYPE_PD:
                 pd_component_handle(tag,

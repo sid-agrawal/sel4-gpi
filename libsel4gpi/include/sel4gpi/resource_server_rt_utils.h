@@ -155,6 +155,16 @@ resource_component_registry_entry_t *resource_component_registry_get_by_id(resou
                                                                            seL4_Word object_id);
 
 /**
+ * Increment the reference count to a resource object
+ * If the count reaches zero, the object is destroyed
+ * 
+ * @param component
+ * @param object_id ID of the object
+*/
+int resource_component_inc(resource_component_context_t *component,
+                           uint64_t object_id);
+
+/**
  * Decrement the reference count to a resource object
  * If the count reaches zero, the object is destroyed
  * 

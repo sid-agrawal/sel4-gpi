@@ -86,7 +86,7 @@ void *sel4gpi_get_vmr(ads_client_context_t *ads_rde, int num_pages, void *vaddr,
 
     seL4_CPtr slot;
     error = pd_client_next_slot(&self_pd, &slot);
-    GOTO_IF_ERR(error, "failed to allocate next slot");
+    GOTO_IF_ERR(error, "failed to allocate next slot\n");
 
     mo_client_context_t mo;
     error = mo_component_client_connect(mo_rde, slot, num_pages, &mo);
@@ -120,25 +120,25 @@ void *sel4gpi_new_sized_stack(ads_client_context_t *ads, size_t n_pages)
     /* reserve one extra page for the guard */
     void *vaddr;
     error = pd_client_next_slot(&self_pd, &slot);
-    GOTO_IF_ERR(error, "failed to allocate next slot");
+    GOTO_IF_ERR(error, "failed to allocate next slot\n");
 
     size_t res_size = (n_pages + 1) * (SIZE_BITS_TO_BYTES(MO_PAGE_BITS));
     ads_vmr_context_t reservation;
     error = ads_client_reserve(ads, slot, NULL, res_size, SEL4UTILS_RES_TYPE_STACK, &reservation, &vaddr);
-    GOTO_IF_ERR(error, "failed to reserve VMR for stack");
+    GOTO_IF_ERR(error, "failed to reserve VMR for stack\n");
 
     /* allocate MO */
     error = pd_client_next_slot(&self_pd, &slot);
-    GOTO_IF_ERR(error, "failed to allocate next slot");
+    GOTO_IF_ERR(error, "failed to allocate next slot\n");
 
     mo_client_context_t mo;
     error = mo_component_client_connect(mo_rde, slot, n_pages, &mo);
-    GOTO_IF_ERR(error, "failed to allocate MO");
+    GOTO_IF_ERR(error, "failed to allocate MO\n");
 
     /* attach MO to ADS */
     size_t offset = SIZE_BITS_TO_BYTES(MO_PAGE_BITS);
     error = ads_client_attach_to_reserve(&reservation, &mo, offset);
-    GOTO_IF_ERR(error, "failed to attach MO to reserved stack");
+    GOTO_IF_ERR(error, "failed to attach MO to reserved stack\n");
 
     uintptr_t stack_top = (uintptr_t)vaddr + res_size;
 
@@ -163,49 +163,49 @@ int sel4gpi_configure_process(const char *image_name, int stack_pages, int heap_
     /* new PD */
     seL4_CPtr slot;
     error = pd_client_next_slot(&self_pd_cap, &slot);
-    GOTO_IF_ERR(error, "failed to allocate next slot");
+    GOTO_IF_ERR(error, "failed to allocate next slot\n");
 
     pd_client_context_t new_pd;
     error = pd_component_client_connect(pd_rde, slot, &new_pd);
-    GOTO_IF_ERR(error, "failed to allocate a PD");
+    GOTO_IF_ERR(error, "failed to allocate a PD\n");
 
     /* new ADS */
     error = pd_client_next_slot(&self_pd_cap, &slot);
-    GOTO_IF_ERR(error, "failed to allocate next slot");
+    GOTO_IF_ERR(error, "failed to allocate next slot\n");
 
     ads_client_context_t new_ads;
     error = ads_component_client_connect(ads_rde, slot, &new_ads);
-    GOTO_IF_ERR(error, "failed to allocate a new ADS");
+    GOTO_IF_ERR(error, "failed to allocate a new ADS\n");
 
     /* new CPU */
     error = pd_client_next_slot(&self_pd_cap, &slot);
-    GOTO_IF_ERR(error, "failed to allocate next slot");
+    GOTO_IF_ERR(error, "failed to allocate next slot\n");
 
     cpu_client_context_t new_cpu;
     error = cpu_component_client_connect(cpu_rde, slot, &new_cpu);
-    GOTO_IF_ERR(error, "failed to allocate a new VCPU");
+    GOTO_IF_ERR(error, "failed to allocate a new VCPU\n");
 
     void *entry_point;
     error = ads_client_load_elf(&new_ads, &new_pd, image_name, &entry_point);
-    GOTO_IF_ERR(error, "failed to load elf to ADS");
+    GOTO_IF_ERR(error, "failed to load elf to ADS\n");
 
     ads_client_context_t new_ads_rde = {.badged_server_ep_cspath.capPtr = sel4gpi_get_rde_by_ns_id(new_ads.id, GPICAP_TYPE_ADS)};
     void *stack = sel4gpi_new_sized_stack(&new_ads_rde, stack_pages);
-    GOTO_IF_ERR(stack == NULL, "failed to allocate a new stack");
+    GOTO_IF_ERR(stack == NULL, "failed to allocate a new stack\n");
 
     void *heap = sel4gpi_get_vmr(&new_ads_rde, heap_pages, (void *)PD_HEAP_LOC, SEL4UTILS_RES_TYPE_HEAP, NULL);
-    GOTO_IF_ERR(heap == NULL, "failed to allocate a new heap");
+    GOTO_IF_ERR(heap == NULL, "failed to allocate a new heap\n");
 
     mo_client_context_t ipc_mo;
     void *ipc_buf = sel4gpi_get_vmr(&new_ads_rde, 1, NULL, SEL4UTILS_RES_TYPE_IPC_BUF, &ipc_mo);
-    GOTO_IF_ERR(ipc_buf == NULL, "failed to allocate a new IPC buf");
+    GOTO_IF_ERR(ipc_buf == NULL, "failed to allocate a new IPC buf\n");
 
     seL4_Word cnode_guard = api_make_guard_skip_word(seL4_WordBits - TEST_PROCESS_CSPACE_SIZE_BITS);
     error = cpu_client_config(&new_cpu, &new_ads, &ipc_mo, &new_pd, cnode_guard, seL4_CapNull, (seL4_Word)ipc_buf);
-    GOTO_IF_ERR(error, "failed to configure CPU");
+    GOTO_IF_ERR(error, "failed to configure CPU\n");
 
     error = pd_client_share_rde(&new_pd, GPICAP_TYPE_MO, NSID_DEFAULT);
-    GOTO_IF_ERR(error, "failed to share RDE");
+    GOTO_IF_ERR(error, "failed to share RDE\n");
 
     // error = cpu_client_start(&new_cpu, entry_point, init_stack, 0);
     // GOTO_IF_ERR(error);
@@ -233,10 +233,10 @@ int sel4gpi_spawn_process(sel4gpi_process_t *proc, int argc, seL4_Word *args)
     int error;
     void *init_stack;
     error = ads_client_pd_setup(&proc->ads, &proc->pd, proc->stack, proc->stack_pages, argc, args, ADS_PROC, &init_stack);
-    GOTO_IF_ERR(error, "failed to prepare stack");
+    GOTO_IF_ERR(error, "failed to prepare stack\n");
 
     error = cpu_client_start(&proc->cpu, proc->entry_point, init_stack, 0);
-    GOTO_IF_ERR(error, "failed to start CPU");
+    GOTO_IF_ERR(error, "failed to start CPU\n");
 
     return 0;
 

@@ -116,7 +116,8 @@ int cpu_change_vspace(cpu_t *cpu,
 }
 
 int cpu_new(cpu_t *cpu,
-            vka_t *vka)
+            vka_t *vka,
+            vspace_t *vspace)
 {
     int error = vka_alloc_tcb(vka, &cpu->thread.tcb);
     assert(error == 0);

@@ -42,23 +42,6 @@ cpu_component_context_t *get_cpu_component(void)
     return &get_gpi_server()->cpu_component;
 }
 
-static inline seL4_MessageInfo_t recv(seL4_Word *sender_badge_ptr)
-{
-    /** NOTE:
-
-     * the reply param of api_recv(third param) is only used in the MCS kernel.
-     **/
-
-    return api_recv(get_cpu_component()->server_ep_obj.cptr,
-                    sender_badge_ptr,
-                    get_cpu_component()->server_thread.reply.cptr);
-}
-
-static inline void reply(seL4_MessageInfo_t tag)
-{
-    api_reply(get_cpu_component()->server_thread.reply.cptr, tag);
-}
-
 // Called when an item from the CPU registry is deleted
 static void on_cpu_registry_delete(resource_server_registry_node_t *node_gen)
 {
@@ -69,72 +52,12 @@ static void on_cpu_registry_delete(resource_server_registry_node_t *node_gen)
     cpu_destroy(&node->cpu);
 }
 
-int cpu_component_initialize(simple_t *server_simple,
-                             vka_t *server_vka,
-                             seL4_CPtr server_cspace,
-                             vspace_t *server_vspace,
-                             sel4utils_thread_t server_thread,
-                             vka_object_t server_ep_obj)
-{
-    cpu_component_context_t *component = get_cpu_component();
-
-    component->server_simple = server_simple;
-    component->server_vka = server_vka;
-    component->server_cspace = server_cspace;
-    component->server_vspace = server_vspace;
-    component->server_thread = server_thread;
-    component->server_ep_obj = server_ep_obj;
-
-    resource_server_initialize_registry(&component->cpu_registry, on_cpu_registry_delete);
-}
-
-// Utility function to create an VCPU, add to registry, badge an endpoint, etc.
-static int cpu_component_allocate_cpu(uint64_t client_id, bool forge, cpu_component_registry_entry_t **ret_entry, seL4_CPtr *ret_cap)
-{
-    int error = 0;
-
-    /* Create the registry entry */
-    cpu_component_registry_entry_t *client_reg_ptr = malloc(sizeof(cpu_component_registry_entry_t));
-    SERVER_GOTO_IF_COND(client_reg_ptr == NULL, "Couldn't allocate new CPU reg entry\n");
-    memset((void *)client_reg_ptr, 0, sizeof(cpu_component_registry_entry_t));
-
-    client_reg_ptr->cpu.id = resource_server_registry_insert_new_id(&get_cpu_component()->cpu_registry, (resource_server_registry_node_t *)client_reg_ptr);
-    *ret_entry = client_reg_ptr;
-
-    /* Create the CPU object */
-    if (!forge)
-    {
-        error = cpu_new(&client_reg_ptr->cpu,
-                        get_cpu_component()->server_vka);
-        SERVER_GOTO_IF_ERR(error, "Failed to initialize new CPU object\n");
-    }
-
-    /* Create the badged endpoint */
-    *ret_cap = resource_server_make_badged_ep(get_cpu_component()->server_vka, NULL, get_cpu_component()->server_ep_obj.cptr,
-                                              client_reg_ptr->cpu.id, GPICAP_TYPE_CPU, NSID_DEFAULT, client_id);
-
-    SERVER_GOTO_IF_COND(ret_cap == seL4_CapNull, "Failed to make badged ep for new CPU\n");
-
-    /* Add the resource to the client */
-    error = pd_add_resource_by_id(client_id, GPICAP_TYPE_CPU, client_reg_ptr->cpu.id, NSID_DEFAULT, *ret_cap, seL4_CapNull, *ret_cap);
-    SERVER_GOTO_IF_ERR(error, "Failed to add CPU resource to PD\n");
-
-err_goto:
-    return error;
-}
-
-cpu_component_registry_entry_t *cpu_component_registry_get_entry_by_badge(seL4_Word badge)
-{
-    return (cpu_component_registry_entry_t *)resource_server_registry_get_by_badge(&get_cpu_component()->cpu_registry, badge);
-}
-
 cpu_component_registry_entry_t *cpu_component_registry_get_entry_by_id(seL4_Word object_id)
 {
-    return (cpu_component_registry_entry_t *)resource_server_registry_get_by_id(&get_cpu_component()->cpu_registry, object_id);
+    return (cpu_component_registry_entry_t *)resource_server_registry_get_by_id(&get_cpu_component()->registry, object_id);
 }
 
-// (XXX): Somwehere here we should call cpu_new
-void cpu_handle_allocation_request(seL4_Word sender_badge, seL4_MessageInfo_t *reply_tag)
+static seL4_MessageInfo_t handle_cpu_allocation(seL4_Word sender_badge)
 {
     OSDB_PRINTF("Got CPU allocation request from %lx\n", sender_badge);
     badge_print(sender_badge);
@@ -144,25 +67,26 @@ void cpu_handle_allocation_request(seL4_Word sender_badge, seL4_MessageInfo_t *r
     cpu_component_registry_entry_t *new_entry;
     uint32_t client_id = get_client_id_from_badge(sender_badge);
 
-    error = cpu_component_allocate_cpu(client_id, false, &new_entry, &ret_cap);
+    error = resource_component_allocate(get_cpu_component(), client_id, false, (resource_server_registry_node_t **)&new_entry, &ret_cap);
     SERVER_GOTO_IF_ERR(error, "Failed to allocate new CPU object\n");
 
     seL4_SetCap(0, ret_cap);
 
-    OSDB_PRINTF("Allocated new CPU (%ld)\n", new_entry->cpu.id);
+    OSDB_PRINTF("Allocated new CPU (%d)\n", new_entry->cpu.id);
 
 err_goto:
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(error, 0, 1, CPUMSGREG_CONNECT_ACK_END);
-    return reply(tag);
+    return tag;
 }
 
-static void handle_start_req(seL4_Word sender_badge, seL4_MessageInfo_t old_tag, seL4_CPtr received_cap)
+static seL4_MessageInfo_t handle_start_req(seL4_Word sender_badge, seL4_MessageInfo_t old_tag)
 {
     OSDB_PRINTF("Got start request from client badge %lx.\n", sender_badge);
 
     int error = 0;
     /* Find the client */
-    cpu_component_registry_entry_t *client_data = cpu_component_registry_get_entry_by_badge(sender_badge);
+    cpu_component_registry_entry_t *client_data = (cpu_component_registry_entry_t *)
+        resource_component_registry_get_by_badge(get_cpu_component(), sender_badge);
     SERVER_GOTO_IF_COND(client_data == NULL, "Couldn't find CPU (%ld)\n", get_object_id_from_badge(sender_badge));
 
     seL4_Word init_stack = seL4_GetMR(CPUMSGREG_START_INIT_STACK_ADDR);
@@ -176,12 +100,11 @@ static void handle_start_req(seL4_Word sender_badge, seL4_MessageInfo_t old_tag,
 err_goto:
     seL4_SetMR(CPUMSGREG_FUNC, CPU_FUNC_START_ACK);
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(error, 0, 0, CPUMSGREG_START_ACK_END);
-    return reply(tag);
+    return tag;
 }
 
-static void handle_config_req(seL4_Word sender_badge,
-                              seL4_MessageInfo_t old_tag,
-                              seL4_CPtr received_cap)
+static seL4_MessageInfo_t handle_config_req(seL4_Word sender_badge,
+                                            seL4_MessageInfo_t old_tag)
 {
     OSDB_PRINTF("Got CPU config request from client badge %lx\n", sender_badge);
 
@@ -191,7 +114,8 @@ static void handle_config_req(seL4_Word sender_badge,
     SERVER_GOTO_IF_COND(seL4_MessageInfo_ptr_get_capsUnwrapped(&old_tag) < 2, "Config request requires 2 capsUnwrapped\n");
 
     /* Find the client */
-    cpu_component_registry_entry_t *client_data = cpu_component_registry_get_entry_by_badge(sender_badge);
+    cpu_component_registry_entry_t *client_data = (cpu_component_registry_entry_t *)
+        resource_component_registry_get_by_badge(get_cpu_component(), sender_badge);
     SERVER_GOTO_IF_COND(client_data == NULL, "Couldn't find CPU (%ld)\n", get_object_id_from_badge(sender_badge));
 
     pd_component_registry_entry_t *pd_data = pd_component_registry_get_entry_by_badge(seL4_GetBadge(0));
@@ -245,12 +169,12 @@ static void handle_config_req(seL4_Word sender_badge,
 err_goto:
     seL4_SetMR(CPUMSGREG_FUNC, CPU_FUNC_CONFIG_ACK);
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(error, 0, 0, CPUMSGREG_CONFIG_ACK_END);
-    return reply(tag);
+    return tag;
 }
 
-static void handle_change_vspace_req(seL4_Word sender_badge,
-                                     seL4_MessageInfo_t old_tag,
-                                     seL4_CPtr received_cap)
+static seL4_MessageInfo_t handle_change_vspace_req(seL4_Word sender_badge,
+                                                   seL4_MessageInfo_t old_tag,
+                                                   seL4_CPtr received_cap)
 {
     OSDB_PRINTF("Got change vspace from client badge %lx\n", sender_badge);
 
@@ -260,7 +184,8 @@ static void handle_change_vspace_req(seL4_Word sender_badge,
     SERVER_GOTO_IF_COND(seL4_MessageInfo_ptr_get_capsUnwrapped(&old_tag) < 1, "Change vspace request requires 1 capsUnwrapped\n");
 
     /* Find the client */
-    cpu_component_registry_entry_t *client_data = cpu_component_registry_get_entry_by_badge(sender_badge);
+    cpu_component_registry_entry_t *client_data = (cpu_component_registry_entry_t *)
+        resource_component_registry_get_by_badge(get_cpu_component(), sender_badge);
     SERVER_GOTO_IF_COND(client_data == NULL, "Couldn't find CPU (%ld)\n", get_object_id_from_badge(sender_badge));
 
     /* Find the PD */
@@ -288,8 +213,67 @@ static void handle_change_vspace_req(seL4_Word sender_badge,
 err_goto:
     seL4_SetMR(CPUMSGREG_FUNC, CPU_FUNC_CONFIG_ACK);
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(error, 0, 0, CPUMSGREG_CHANGE_VSPACE_ACK_END);
-    return reply(tag);
+    return tag;
 }
+
+static seL4_MessageInfo_t cpu_component_handle(seL4_MessageInfo_t tag,
+                                               seL4_Word sender_badge,
+                                               seL4_CPtr received_cap,
+                                               bool *need_new_recv_cap)
+{
+    enum cpu_component_funcs func = seL4_GetMR(CPUMSGREG_FUNC);
+    seL4_MessageInfo_t reply_tag;
+
+    if (get_object_id_from_badge(sender_badge) == BADGE_OBJ_ID_NULL)
+    {
+        reply_tag = handle_cpu_allocation(sender_badge);
+    }
+    else
+    {
+        switch (func)
+        {
+        case CPU_FUNC_START_REQ:
+            reply_tag = handle_start_req(sender_badge, tag);
+            break;
+
+        case CPU_FUNC_CONFIG_REQ:
+            reply_tag = handle_config_req(sender_badge, tag);
+            break;
+        case CPU_FUNC_CHANGE_VSPACE_REQ:
+            reply_tag = handle_change_vspace_req(sender_badge, tag, received_cap);
+            *need_new_recv_cap = true;
+            break;
+        default:
+            gpi_panic(CPUSERVS "Unknown func type.", (seL4_Word)func);
+            break;
+        }
+    }
+
+    return reply_tag;
+}
+
+int cpu_component_initialize(simple_t *server_simple,
+                             vka_t *server_vka,
+                             seL4_CPtr server_cspace,
+                             vspace_t *server_vspace,
+                             sel4utils_thread_t server_thread,
+                             vka_object_t server_ep_obj)
+{
+    resource_component_initialize(get_cpu_component(),
+                                  GPICAP_TYPE_CPU,
+                                  cpu_component_handle,
+                                  (int (*)(resource_component_object_t *, vka_t *, vspace_t *))cpu_new,
+                                  on_cpu_registry_delete,
+                                  sizeof(cpu_component_registry_entry_t),
+                                  server_simple,
+                                  server_vka,
+                                  server_cspace,
+                                  server_vspace,
+                                  server_thread,
+                                  server_ep_obj.cptr);
+}
+
+/** --- Functions callable by root task --- **/
 
 int forge_cpu_cap_from_tcb(sel4utils_process_t *process, // Change this to the sel4utils_thread_t
                            vka_t *vka, uint32_t client_id,
@@ -304,7 +288,7 @@ int forge_cpu_cap_from_tcb(sel4utils_process_t *process, // Change this to the s
     cpu_component_registry_entry_t *new_entry;
 
     /* Allocate the CPU object */
-    error = cpu_component_allocate_cpu(client_id, false, &new_entry, &ret_cap);
+    error = resource_component_allocate(get_cpu_component(), client_id, false, (resource_server_registry_node_t **)&new_entry, &ret_cap);
     SERVER_GOTO_IF_ERR(error, "Failed to allocate new CPU object for forge\n");
 
     /* Update the CPU object from TCB */
@@ -323,37 +307,6 @@ err_goto:
     return error;
 }
 
-/**
- * @brief The starting point for the cpu server's thread.
- *
- */
-void cpu_component_handle(seL4_MessageInfo_t tag,
-                          seL4_Word sender_badge,
-                          cspacepath_t *received_cap,
-                          seL4_MessageInfo_t *reply_tag) /* reply_tag not used right now*/
-{
-    enum cpu_component_funcs func = seL4_GetMR(CPUMSGREG_FUNC);
-
-    switch (func)
-    {
-    case CPU_FUNC_START_REQ:
-        handle_start_req(sender_badge, tag, received_cap->capPtr);
-        break;
-
-    case CPU_FUNC_CONFIG_REQ:
-        handle_config_req(sender_badge, tag, received_cap->capPtr);
-        break;
-    case CPU_FUNC_CHANGE_VSPACE_REQ:
-        handle_change_vspace_req(sender_badge, tag, received_cap->capPtr);
-        break;
-    default:
-        gpi_panic(CPUSERVS "Unknown func type.", (seL4_Word)func);
-        break;
-    }
-}
-
-/** --- Functions callable by root task --- **/
-
 int cpu_component_dec(uint64_t cpu_id)
 {
     int error = 0;
@@ -363,7 +316,7 @@ int cpu_component_dec(uint64_t cpu_id)
 
     OSDB_PRINTF("Decrementing CPU (%ld), refcount %d\n", cpu_id, client_data->gen.count);
 
-    resource_server_registry_dec(&get_cpu_component()->cpu_registry, (resource_server_registry_node_t *)client_data);
+    resource_server_registry_dec(&get_cpu_component()->registry, (resource_server_registry_node_t *)client_data);
 
 err_goto:
     return error;
