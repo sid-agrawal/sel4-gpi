@@ -137,3 +137,12 @@ mo_component_registry_entry_t *mo_component_registry_get_entry_by_id(seL4_Word o
  * @param ret_cap the badged endpoint capability for the new MO
 */
 int mo_component_allocate_mo(uint64_t client_id, bool forge, int num_pages, mo_component_registry_entry_t **ret_entry, seL4_CPtr *ret_cap);
+
+/**
+ * Decrement the reference count to an MO
+ * If the count reaches zero, the MO is destroyed
+ * Note: Only useable from the root task
+ * 
+ * @param mo_id ID of the MO
+*/
+int mo_component_dec(uint64_t mo_id);

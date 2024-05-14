@@ -173,7 +173,7 @@ int ads_reserve(ads_t *ads,
     attach_node->map_entry = attach_node_map_entry;
     attach_node->type = vmr_type;
     attach_node->n_pages = num_pages;
-    attach_node->gen.object_id = vaddr;
+    attach_node->gen.object_id = (uint64_t) vaddr;
     resource_server_registry_insert(&ads->attach_registry, (resource_server_registry_node_t *)attach_node);
 
     *ret_node = attach_node;
@@ -199,7 +199,7 @@ int ads_attach_to_res(ads_t *ads,
 {
     int error = 0;
 
-    OSDB_PRINTF("attaching mo (id %lu, pages: %d) to reservation(vaddr: %p, type: %s, pages: %d) offset %d\n",
+    OSDB_PRINTF("attaching mo (id %lu, pages: %d) to reservation(vaddr: %p, type: %s, pages: %d) offset %ld\n",
                 mo->mo_obj_id, mo->num_pages,
                 reservation->vaddr, human_readable_va_res_type(reservation->type), reservation->n_pages,
                 offset);
@@ -348,7 +348,7 @@ int ads_rm(ads_t *ads, vka_t *vka, void *vaddr)
     // Which we do not want, since the MO continues to exist
     sel4utils_unmap_pages(target, vaddr, node->n_pages, MO_PAGE_BITS, VSPACE_PRESERVE);
 
-    // Free the frame caps
+    // Free the frame caps (duplicated for this attach)
     for (int i = 0; i < node->n_frames; i++)
     {
         cspacepath_t path;
@@ -557,7 +557,7 @@ int ads_shallow_copy(vspace_t *loader,
         num_pages = (from_sel4_res->end - from_sel4_res->start) / (SIZE_BITS_TO_BYTES(MO_PAGE_BITS));
 
         attach_node_t *new_attach_node;
-        error = ads_reserve(dst_ads, from_sel4_res->start, num_pages, MO_PAGE_BITS, from_sel4_res->type, &new_attach_node);
+        error = ads_reserve(dst_ads, (void *) from_sel4_res->start, num_pages, MO_PAGE_BITS, from_sel4_res->type, &new_attach_node);
 
         if (error)
         {
@@ -677,6 +677,30 @@ int ads_shallow_copy(vspace_t *loader,
 
 error_exit:
     return 1;
+}
+
+void ads_destroy(ads_t *ads)
+{
+    /* Destroy the hash tables of attach nodes */
+    // (XXX) Arya: This can trigger sys_munmap which is not supported
+    resource_server_registry_node_t *current, *tmp;
+    HASH_ITER(hh, ads->attach_registry.head, current, tmp)
+    {
+        attach_node_t *node = (attach_node_t *)current;
+        resource_server_registry_delete(&ads->attach_id_to_vaddr_map, (resource_server_registry_node_t *)node->map_entry);
+        resource_server_registry_delete(&ads->attach_registry, current);
+    }
+
+    /* tear down the vspace */
+    vspace_tear_down(ads->vspace, VSPACE_FREE);
+
+    /**
+     * we should not need to free any objects created by the vspace,
+     * as they should be all MOs
+     * (XXX) Arya: Make sure this is the case
+     */
+
+    /* free the object */
 }
 
 /* ======================================= CONVENIENCE FUNCTIONS (NOT PART OF FRAMEWORK) ================================================= */

@@ -116,13 +116,14 @@ uint64_t resource_server_registry_insert_new_id(resource_server_registry_t *regi
 /**
  * Creates a badged version of an endpoint for a particular resource
  *
- * @param vka vka to use for cap mint
+ * @param src_vka vka for the source endpoint
+ * @param dst_vka vka for the destination (or NULL, to use src vka for destination)
  * @param src_ep source endpoint to badge
- * @param node node to make a badge for
+ * @param res_id ID of the resource, unique given type and ns_id
  * @param resource_type type of resource
  * @param ns_id namespace the resource is from
  * @param client_id client the badge is meant for
  * @return the new resource badge
  */
-seL4_CPtr resource_server_make_badged_ep(vka_t *vka, seL4_CPtr src_ep, resource_server_registry_node_t *node,
+seL4_CPtr resource_server_make_badged_ep(vka_t *src_vka, vka_t *dst_vka, seL4_CPtr src_ep, uint64_t res_id,
                                          gpi_cap_t resource_type, uint64_t ns_id, uint64_t client_id);

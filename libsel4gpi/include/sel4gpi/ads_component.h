@@ -258,6 +258,33 @@ int forge_ads_cap_from_vspace(vspace_t *vspace, vka_t *vka, uint32_t client_pd_i
  */
 int ads_component_attach(uint64_t ads_id, uint64_t mo_id, sel4utils_reservation_type_t vmr_type, void *vaddr, void **ret_vaddr);
 
+/**
+ * Remove an MO from an ADS by vaddr
+ * Note: Only useable from the root task
+ * 
+ * @param ads_id ID of the ADS to remove from
+ * @param vmr_id ID of the region to remove
+*/
+int ads_component_rm_by_id(uint64_t ads_id, uint32_t vmr_id);
+
+/**
+ * Remove an MO from an ADS by vaddr
+ * Note: Only useable from the root task
+ * 
+ * @param ads_id ID of the ADS to remove from
+ * @param vaddr vaddr of the region to remove
+*/
+int ads_component_rm_by_vaddr(uint64_t ads_id, void *vaddr);
+
+/**
+ * Decrement the reference count to an ADS
+ * If the count reaches zero, the ADS is destroyed
+ * Note: Only useable from the root task
+ * 
+ * @param ads_id ID of the ADS
+*/
+int ads_component_dec(uint64_t ads_id);
+
 // (XXX) Arya: Needed by cpu component and pd component. Can we decouple these?
 ads_component_registry_entry_t *ads_component_registry_get_entry_by_badge(seL4_Word badge);
 

@@ -58,6 +58,16 @@ static inline void reply(seL4_MessageInfo_t tag)
     api_reply(get_mo_component()->server_thread.reply.cptr, tag);
 }
 
+// Called when an item from the MO registry is deleted
+static void on_mo_registry_delete(resource_server_registry_node_t *node_gen)
+{
+    mo_component_registry_entry_t *node = (mo_component_registry_entry_t *)node_gen;
+
+    OSDB_PRINTF("Destroying MO (%d)\n", node->mo.mo_obj_id);
+
+    mo_destroy(&node->mo, get_mo_component()->server_vka);
+}
+
 int mo_component_initialize(simple_t *server_simple,
                             vka_t *server_vka,
                             seL4_CPtr server_cspace,
@@ -74,7 +84,7 @@ int mo_component_initialize(simple_t *server_simple,
     component->server_thread = server_thread;
     component->server_ep_obj = server_ep_obj;
 
-    resource_server_initialize_registry(&component->mo_registry, NULL);
+    resource_server_initialize_registry(&component->mo_registry, on_mo_registry_delete);
 }
 
 /**
@@ -105,7 +115,7 @@ int mo_component_allocate_mo(uint64_t client_id, bool forge, int num_pages, mo_c
 
     /* Create the registry entry */
     mo_component_registry_entry_t *client_reg_ptr = malloc(sizeof(mo_component_registry_entry_t));
-    SERVER_GOTO_IF_COND(client_reg_ptr == NULL, "Couldn't allocate new MO reg entry\n");
+    SERVER_GOTO_IF_COND(client_reg_ptr == NULL, "malloc ran out of memory to allocate MO registry entry\n");
     memset((void *)client_reg_ptr, 0, sizeof(mo_component_registry_entry_t));
 
     client_reg_ptr->mo.mo_obj_id = resource_server_registry_insert_new_id(&get_mo_component()->mo_registry, (resource_server_registry_node_t *)client_reg_ptr);
@@ -116,43 +126,42 @@ int mo_component_allocate_mo(uint64_t client_id, bool forge, int num_pages, mo_c
     {
         /* Allocate frames */
         seL4_CPtr *frame_caps = malloc(sizeof(seL4_CPtr) * num_pages);
-        assert(frame_caps != NULL);
+        vka_object_t *vka_objects = malloc(sizeof(vka_object_t) * num_pages);
+        SERVER_GOTO_IF_COND(frame_caps == NULL || vka_objects == NULL, "malloc ran out of memory to allocate MO frames\n");
 
-        vka_object_t frame_obj;
         for (int i = 0; i < num_pages; i++)
         {
             error = vka_alloc_frame_maybe_device(get_mo_component()->server_vka,
                                                  seL4_PageBits,
                                                  false,
-                                                 &frame_obj);
+                                                 &vka_objects[i]);
             assert(error == 0);
-            frame_caps[i] = frame_obj.cptr;
+            frame_caps[i] = vka_objects[i].cptr;
         }
 
         /* Create a new MO object */
         error = mo_new(&client_reg_ptr->mo,
                        frame_caps,
+                       vka_objects,
                        num_pages,
                        get_mo_component()->server_vka);
 
         free(frame_caps);
+        free(vka_objects);
 
         // (XXX) Arya: Do some cleanup here
         SERVER_GOTO_IF_ERR(error, "Failed to initialize new MO object\n");
     }
 
     /* Create the badged endpoint */
-    *ret_cap = resource_server_make_badged_ep(get_mo_component()->server_vka, get_mo_component()->server_ep_obj.cptr,
-                                              (resource_server_registry_node_t *)client_reg_ptr, GPICAP_TYPE_MO, NSID_DEFAULT, client_id);
+    *ret_cap = resource_server_make_badged_ep(get_mo_component()->server_vka, NULL, get_mo_component()->server_ep_obj.cptr,
+                                              client_reg_ptr->mo.mo_obj_id, GPICAP_TYPE_MO, NSID_DEFAULT, client_id);
 
     SERVER_GOTO_IF_COND(ret_cap == seL4_CapNull, "Failed to make badged ep for new MO\n");
 
     /* Add the resource to the client */
-    osmosis_pd_cap_t *res = pd_add_resource_by_id(client_id, GPICAP_TYPE_MO, client_reg_ptr->mo.mo_obj_id);
-    if (res)
-    {
-        res->slot_in_RT_Debug = *ret_cap;
-    }
+    error = pd_add_resource_by_id(client_id, GPICAP_TYPE_MO, client_reg_ptr->mo.mo_obj_id, NSID_DEFAULT, *ret_cap, seL4_CapNull, *ret_cap);
+    SERVER_GOTO_IF_ERR(error, "Failed to initialize add MO resource to PD\n");
 
 err_goto:
     return error;
@@ -193,7 +202,7 @@ int forge_mo_cap_from_frames(seL4_CPtr *frame_caps,
                              seL4_CPtr *cap_ret,
                              mo_t **mo_ret)
 {
-    OSDB_PRINTF("Forging MO cap from frames %lx\n");
+    OSDB_PRINTF("Forging MO cap from frames\n");
 
     assert(frame_caps != NULL);
 
@@ -205,11 +214,12 @@ int forge_mo_cap_from_frames(seL4_CPtr *frame_caps,
     SERVER_GOTO_IF_ERR(error, "Failed to allocate new MO object for forge\n");
 
     /* Update the MO object from frames */
-    error = mo_new(&new_entry->mo, frame_caps, num_pages, vka);
+    // Without the VKA objects, we won't be able to free these frames
+    error = mo_new(&new_entry->mo, frame_caps, NULL, num_pages, vka);
     SERVER_GOTO_IF_ERR(error, "Failed to initialize new MO object for forge\n");
 
-    OSDB_PRINTF("Forged a new MO cap(EP: %lx) with %u pages.\n",
-                cap_ret, new_entry->mo.num_pages);
+    OSDB_PRINTF("Forged a new MO cap(EP: %d) with %d pages.\n",
+                (int)*cap_ret, new_entry->mo.num_pages);
 
     *mo_ret = &new_entry->mo;
 
@@ -234,4 +244,21 @@ void mo_component_handle(seL4_MessageInfo_t tag,
         gpi_panic(MOSERVS "Unknown func type.", (seL4_Word)func);
         break;
     }
+}
+
+/** --- Functions callable by root task --- **/
+
+int mo_component_dec(uint64_t mo_id)
+{
+    int error = 0;
+
+    mo_component_registry_entry_t *client_data = mo_component_registry_get_entry_by_id(mo_id);
+    SERVER_GOTO_IF_COND(client_data == NULL, "Couldn't find MO (%ld)\n", mo_id);
+
+    OSDB_PRINTF("Decrementing MO (%ld), refcount %d\n", mo_id, client_data->gen.count);
+
+    resource_server_registry_dec(&get_mo_component()->mo_registry, (resource_server_registry_node_t *) client_data);
+
+err_goto:
+    return error;
 }

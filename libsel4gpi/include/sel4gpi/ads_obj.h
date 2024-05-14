@@ -196,6 +196,17 @@ int ads_shallow_copy(vspace_t *loader, vka_t *vka, ads_t *src_ads, ads_t *dst_ad
  */
 void ads_dump_rr(ads_t *ads, model_state_t *ms, gpi_model_node_t *pd_node);
 
+/**
+ * Destroys an ADS, including all metadata and internal tracking
+ * Does not destroy any MOs that are attached to the ADS
+ * 
+ * This does not remove the ADS from the ADS component registry
+ * This function should only be called by the ADS component
+ * 
+ * @param ads the ads object
+*/
+void ads_destroy(ads_t *ads);
+
 static seL4_CPtr get_asid_pool(seL4_CPtr asid_pool)
 {
     if (asid_pool == 0)

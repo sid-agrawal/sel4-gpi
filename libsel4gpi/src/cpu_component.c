@@ -59,6 +59,16 @@ static inline void reply(seL4_MessageInfo_t tag)
     api_reply(get_cpu_component()->server_thread.reply.cptr, tag);
 }
 
+// Called when an item from the CPU registry is deleted
+static void on_cpu_registry_delete(resource_server_registry_node_t *node_gen)
+{
+    cpu_component_registry_entry_t *node = (cpu_component_registry_entry_t *)node_gen;
+
+    OSDB_PRINTF("Destroying CPU (%d)\n", node->cpu.cpu_obj_id);
+
+    cpu_destroy(&node->cpu);
+}
+
 int cpu_component_initialize(simple_t *server_simple,
                              vka_t *server_vka,
                              seL4_CPtr server_cspace,
@@ -75,7 +85,7 @@ int cpu_component_initialize(simple_t *server_simple,
     component->server_thread = server_thread;
     component->server_ep_obj = server_ep_obj;
 
-    resource_server_initialize_registry(&component->cpu_registry, NULL);
+    resource_server_initialize_registry(&component->cpu_registry, on_cpu_registry_delete);
 }
 
 // Utility function to create an VCPU, add to registry, badge an endpoint, etc.
@@ -100,17 +110,14 @@ static int cpu_component_allocate_cpu(uint64_t client_id, bool forge, cpu_compon
     }
 
     /* Create the badged endpoint */
-    *ret_cap = resource_server_make_badged_ep(get_cpu_component()->server_vka, get_cpu_component()->server_ep_obj.cptr,
-                                              (resource_server_registry_node_t *)client_reg_ptr, GPICAP_TYPE_CPU, NSID_DEFAULT, client_id);
+    *ret_cap = resource_server_make_badged_ep(get_cpu_component()->server_vka, NULL, get_cpu_component()->server_ep_obj.cptr,
+                                              client_reg_ptr->cpu.cpu_obj_id, GPICAP_TYPE_CPU, NSID_DEFAULT, client_id);
 
     SERVER_GOTO_IF_COND(ret_cap == seL4_CapNull, "Failed to make badged ep for new CPU\n");
 
     /* Add the resource to the client */
-    osmosis_pd_cap_t *res = pd_add_resource_by_id(client_id, GPICAP_TYPE_CPU, client_reg_ptr->cpu.cpu_obj_id);
-    if (res)
-    {
-        res->slot_in_RT_Debug = *ret_cap;
-    }
+    error = pd_add_resource_by_id(client_id, GPICAP_TYPE_CPU, client_reg_ptr->cpu.cpu_obj_id, NSID_DEFAULT, *ret_cap, seL4_CapNull, *ret_cap);
+    SERVER_GOTO_IF_ERR(error, "Failed to add CPU resource to PD\n");
 
 err_goto:
     return error;
@@ -141,6 +148,8 @@ void cpu_handle_allocation_request(seL4_Word sender_badge, seL4_MessageInfo_t *r
     SERVER_GOTO_IF_ERR(error, "Failed to allocate new CPU object\n");
 
     seL4_SetCap(0, ret_cap);
+
+    OSDB_PRINTF("Allocated new CPU (%ld)\n", new_entry->cpu.cpu_obj_id);
 
 err_goto:
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(error, 0, 1, CPUMSGREG_CONNECT_ACK_END);
@@ -284,7 +293,7 @@ int forge_cpu_cap_from_tcb(sel4utils_process_t *process, // Change this to the s
                            vka_t *vka, uint32_t client_id,
                            seL4_CPtr *cap_ret, uint32_t *cpu_obj_id_ret)
 {
-    OSDB_PRINTF("Forging CPU cap from TCB %lx\n");
+    OSDB_PRINTF("Forging CPU cap from TCB\n");
 
     assert(process != NULL);
 
@@ -339,4 +348,21 @@ void cpu_component_handle(seL4_MessageInfo_t tag,
         gpi_panic(CPUSERVS "Unknown func type.", (seL4_Word)func);
         break;
     }
+}
+
+/** --- Functions callable by root task --- **/
+
+int cpu_component_dec(uint64_t cpu_id)
+{
+    int error = 0;
+
+    cpu_component_registry_entry_t *client_data = cpu_component_registry_get_entry_by_id(cpu_id);
+    SERVER_GOTO_IF_COND(client_data == NULL, "Couldn't find CPU (%ld)\n", cpu_id);
+
+    OSDB_PRINTF("Decrementing CPU (%ld), refcount %d\n", cpu_id, client_data->gen.count);
+
+    resource_server_registry_dec(&get_cpu_component()->cpu_registry, (resource_server_registry_node_t *) client_data);
+
+err_goto:
+    return error;
 }

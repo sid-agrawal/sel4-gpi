@@ -485,26 +485,31 @@ uint64_t resource_server_registry_insert_new_id(resource_server_registry_t *regi
     return new_id;
 }
 
-seL4_CPtr resource_server_make_badged_ep(vka_t* vka, seL4_CPtr src_ep, resource_server_registry_node_t *node, gpi_cap_t resource_type, uint64_t ns_id, uint64_t client_id)
+seL4_CPtr resource_server_make_badged_ep(vka_t *src_vka, vka_t *dst_vka, seL4_CPtr src_ep, uint64_t res_id, gpi_cap_t resource_type, uint64_t ns_id, uint64_t client_id)
 {
     int error = 0;
 
     /* Make the badge */
     seL4_Word badge = gpi_new_badge(resource_type,
-                                        0x00,
-                                        client_id,
-                                        ns_id,
-                                        node->object_id);
-    
+                                    0x00,
+                                    client_id,
+                                    ns_id,
+                                    res_id);
+
     assert(badge != 0);
 
     /* Mint the cap */
     cspacepath_t src, dest;
-    vka_cspace_make_path(vka, src_ep, &src);
+    vka_cspace_make_path(src_vka, src_ep, &src);
 
-    seL4_CPtr dest_cptr;
-    vka_cspace_alloc(vka, &dest_cptr);
-    vka_cspace_make_path(vka, dest_cptr, &dest);
+    if (dst_vka)
+    {
+        vka_cspace_alloc_path(dst_vka, &dest);
+    }
+    else
+    {
+        vka_cspace_alloc_path(src_vka, &dest);
+    }
 
     error = vka_cnode_mint(&dest,
                            &src,

@@ -12,12 +12,13 @@
 #include <vka/vka.h>
 #include <vka/object.h>
 #include <vspace/vspace.h>
+#include <utils/uthash.h>
 
 #include <sel4gpi/badge_usage.h>
 #include <sel4gpi/cap_tracking.h>
 #include <sel4gpi/ads_clientapi.h>
 #include <sel4gpi/cpu_obj.h>
-#include <utils/uthash.h>
+#include <sel4gpi/resource_server_utils.h>
 
 #define TEST_NAME_MAX (64 - 4 * sizeof(seL4_Word))
 #define MAX_SYS_OSM_CAPS 5000
@@ -50,6 +51,7 @@ typedef union rde_type
     gpi_cap_t type;
 } rde_type_t;
 
+// Tracks a request edge from a PD
 typedef struct osmosis_rde
 {
     // The slot of the RDE cap as per seL4
@@ -76,8 +78,11 @@ typedef struct osmosis_rde
     //   ... continues in the same order as labeled in the gpi_cap_t enum
 } osmosis_rde_t;
 
-typedef struct osmosis_pd_cap
+// Tracks a resource that a PD holds
+typedef struct _pd_hold_node
 {
+    resource_server_registry_node_t gen;
+
     // The slot of the cap as per seL4
     // do not rely on these, as this info is sometimes difficult to find
     seL4_Word slot_in_PD_Debug;
@@ -96,13 +101,12 @@ typedef struct osmosis_pd_cap
         Copy the cap from PD to RT and then calls RR on it.
     */
     gpi_cap_t type;
-    UT_hash_handle hh;
 
     /**
      * (XXX) Arya: not sure yet if we need this field
      */
     uint64_t ns_id;
-} osmosis_pd_cap_t;
+} pd_hold_node_t;
 
 /**
  * The data given to initialize a new Osmosis PD
@@ -143,8 +147,7 @@ typedef struct _pd
     vka_t pd_vka;
 
     // PD's accessible resources
-    osmosis_pd_cap_t *has_access_to;
-    uint64_t has_access_to_count;
+    resource_server_registry_t hold_registry;
 
     // Init data is mapped to PD and includes RDE and ADS/PD caps
     mo_client_context_t init_data_mo;
@@ -156,23 +159,9 @@ typedef struct _pd
     seL4_CPtr pd_cap_in_RT;
 } pd_t;
 
-/*
-What caps data
-Type:
-Permissions:
-EP if applicable
-
-*/
-
 int pd_new(pd_t *pd,
            vka_t *server_vka,
            vspace_t *server_vspace);
-
-/**
- * Destroy the internal data for a PD
- * (XXX) Arya: Note, does not destroy the PD's resources
- */
-int pd_destroy(pd_t *pd, vka_t *server_vka, vspace_t *server_vspace);
 
 int pd_configure(pd_t *pd,
                  const char *image_path,
@@ -181,10 +170,20 @@ int pd_configure(pd_t *pd,
 
 int pd_dump(pd_t *pd);
 
+/**
+ * Send a cap to another PD
+ * 
+ * @param pd the target PD
+ * @param cap the cap to send
+ * @param the badge of the cap to send
+ * @param slot returns the slot of the cap in the target PD
+ * @param inc_refcount if true, increments the refcount of the corresponding resource
+*/
 int pd_send_cap(pd_t *pd,
                 seL4_CPtr cap,
                 seL4_Word badge,
-                seL4_Word *slot);
+                seL4_Word *slot,
+                bool inc_refcount);
 
 int pd_start(pd_t *pd,
              vka_t *vka,
@@ -253,16 +252,28 @@ int pd_bootstrap_allocator(pd_t *pd,
                            size_t size_bits,
                            size_t guard_bits);
 
-void print_pd_osm_cap_info(osmosis_pd_cap_t *o);
+void print_pd_osm_cap_info(pd_hold_node_t *o);
 void print_pd_osm_rde_info(osmosis_rde_t *o);
 
-osmosis_pd_cap_t *pd_add_resource(pd_t *pd,
-                                  gpi_cap_t type,
-                                  uint32_t res_id,
-                                  uint32_t ns_id,
-                                  seL4_CPtr slot_in_RT,
-                                  seL4_CPtr slot_in_PD,
-                                  seL4_CPtr slot_in_serverPD);
+/**
+ * Add a resource that the PD holds
+ * Does not insert if the resource ID is a duplicate
+ * 
+ * @param type the resource type
+ * @param res_id the resource ID
+ * @param ns_id the resource's namespace ID
+ * @param slot_in_RT for debugging purposes, may be removed
+ * @param slot_in_PD for debugging purposes, may be removed
+ * @param slot_in_serverPD for debugging purposes, may be removed
+ * @return 0 on success, 1 otherwise
+ */
+int pd_add_resource(pd_t *pd,
+                    gpi_cap_t type,
+                    uint32_t res_id,
+                    uint32_t ns_id,
+                    seL4_CPtr slot_in_RT,
+                    seL4_CPtr slot_in_PD,
+                    seL4_CPtr slot_in_serverPD);
 
 /**
  * @brief Add an RDE to a PD
@@ -304,3 +315,17 @@ int copy_cap_to_pd(pd_t *to_pd,
 osmosis_rde_t *pd_rde_get(pd_t *pd,
                           gpi_cap_t type,
                           uint32_t ns_id);
+
+/**
+ * Destroys a PD object
+ * Destroys all resources internal to the PD
+ * Also triggers deletion of any resources if this was the last PD holding them
+ *
+ * This does not remove the PD from the PD component registry
+ * This function should only be called by the PD component
+ *
+ * @param pd the cpu object
+ * @param server_vka
+ * @param server_vspace
+ */
+void pd_destroy(pd_t *pd, vka_t *server_vka, vspace_t *server_vspace);

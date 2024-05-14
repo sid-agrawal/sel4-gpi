@@ -77,7 +77,6 @@ int cpu_change_vspace(cpu_t *cpu,
 int cpu_new(cpu_t *cpu,
             vka_t *vka);
 
-
 /**
  * @param cpu cpu object to dump the RR for
  * @param ms pointer to model state
@@ -85,3 +84,13 @@ int cpu_new(cpu_t *cpu,
  * @return void
  */
 void cpu_dump_rr(cpu_t *cpu, model_state_t *ms, gpi_model_node_t *pd_node);
+
+/**
+ * Destroys a VCPU object
+ *
+ * This does not remove the VCPU from the CPU component registry
+ * This function should only be called by the CPU component
+ *
+ * @param cpu the cpu object
+ */
+void cpu_destroy(cpu_t *cpu);

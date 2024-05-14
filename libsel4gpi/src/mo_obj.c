@@ -19,8 +19,12 @@
 #include <sel4gpi/debug.h>
 #include <sel4gpi/model_exporting.h>
 
+#define DEBUG_ID MO_DEBUG
+#define SERVER_ID MOSERVS
+
 int mo_new(mo_t *mo,
            seL4_CPtr *caps,
+           vka_object_t *vka_objects,
            uint32_t num_caps,
            vka_t *vka)
 {
@@ -28,6 +32,13 @@ int mo_new(mo_t *mo,
 
     mo->frame_caps_in_root_task = malloc(num_caps * sizeof(seL4_CPtr));
     mo->frame_paddrs = malloc(num_caps * sizeof(uintptr_t));
+
+    if (vka_objects)
+    {
+        mo->vka_objects = malloc(num_caps * sizeof(vka_object_t));
+    } else {
+        mo->vka_objects = NULL;
+    }
 
     assert(mo->frame_caps_in_root_task != NULL);
 
@@ -41,6 +52,11 @@ int mo_new(mo_t *mo,
 
         // (XXX) Arya: Should we have a non-debug function for this?
         mo->frame_paddrs[i] = seL4_DebugCapPaddr(caps[i]);
+
+        if (vka_objects)
+        {
+            mo->vka_objects[i] = vka_objects[i];
+        }
     }
 
     mo->num_pages = num_caps;
@@ -60,11 +76,12 @@ void mo_dump_rr(mo_t *mo, model_state_t *ms, gpi_model_node_t *pd_node)
     /* Add the page nodes and relations */
     for (int i = 0; i < mo->num_pages; i++)
     {
-        if (mo->frame_caps_in_root_task[i] == 0) {
+        if (mo->frame_caps_in_root_task[i] == 0)
+        {
             /**
-             * This can happen if there was an ADS deep copy of a region that did not 
+             * This can happen if there was an ADS deep copy of a region that did not
              * have backing pages for the entire region.
-            */
+             */
             continue;
         }
 
@@ -72,4 +89,23 @@ void mo_dump_rr(mo_t *mo, model_state_t *ms, gpi_model_node_t *pd_node)
         add_edge(ms, GPI_EDGE_TYPE_MAP, mo_node, pmr_node);
         add_edge(ms, GPI_EDGE_TYPE_HOLD, root_node, pmr_node);
     }
+}
+
+void mo_destroy(mo_t *mo, vka_t *server_vka)
+{
+    if (mo->vka_objects == NULL)
+    {
+        OSDB_PRINTERR("Can't free frames for MO (%ld), no associated vka objects\n", mo->mo_obj_id);
+        return;
+    }
+
+    /* Free all MO frames */
+    for (int i = 0; i < mo->num_pages; i++)
+    {
+        vka_free_object(server_vka, &mo->vka_objects[i]);
+    }
+
+    free(mo->frame_caps_in_root_task);
+    free(mo->frame_paddrs);
+    free(mo->vka_objects);
 }

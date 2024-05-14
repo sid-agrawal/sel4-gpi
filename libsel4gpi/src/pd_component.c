@@ -84,6 +84,16 @@ int pd_component_resource_manager_insert(pd_component_resource_manager_entry_t *
     return new_node->gen.object_id;
 }
 
+// Called when an item from the CPU registry is deleted
+static void on_pd_registry_delete(resource_server_registry_node_t *node_gen)
+{
+    pd_component_registry_entry_t *node = (pd_component_registry_entry_t *)node_gen;
+
+    OSDB_PRINTF("Destroying PD(%d, %s)\n", node->pd.pd_obj_id, node->pd.image_name);
+
+    pd_destroy(&node->pd, get_pd_component()->server_vka, get_pd_component()->server_vspace);
+}
+
 int pd_component_initialize(simple_t *server_simple,
                             vka_t *server_vka,
                             seL4_CPtr server_cspace,
@@ -99,7 +109,7 @@ int pd_component_initialize(simple_t *server_simple,
     component->server_vspace = server_vspace;
     component->server_thread = server_thread;
     component->server_ep_obj = server_ep_obj;
-    resource_server_initialize_registry(&component->pd_registry, NULL);
+    resource_server_initialize_registry(&component->pd_registry, on_pd_registry_delete);
     resource_server_initialize_registry(&component->server_registry, NULL);
 }
 
@@ -128,18 +138,15 @@ static int pd_component_allocate_pd(uint64_t client_id, bool forge, pd_component
     }
 
     /* Create the badged endpoint */
-    *ret_cap = resource_server_make_badged_ep(get_pd_component()->server_vka, get_pd_component()->server_ep_obj.cptr,
-                                              (resource_server_registry_node_t *)client_reg_ptr, GPICAP_TYPE_PD, NSID_DEFAULT, client_id);
+    *ret_cap = resource_server_make_badged_ep(get_pd_component()->server_vka, NULL, get_pd_component()->server_ep_obj.cptr,
+                                              client_reg_ptr->pd.pd_obj_id, GPICAP_TYPE_PD, NSID_DEFAULT, client_id);
     client_reg_ptr->pd.pd_cap_in_RT = *ret_cap;
 
     SERVER_GOTO_IF_COND(ret_cap == seL4_CapNull, "Failed to make badged ep for new PD\n");
 
     /* Add the resource to the client */
-    osmosis_pd_cap_t *res = pd_add_resource_by_id(client_id, GPICAP_TYPE_PD, client_reg_ptr->pd.pd_obj_id);
-    if (res)
-    {
-        res->slot_in_RT_Debug = *ret_cap;
-    }
+    error = pd_add_resource_by_id(client_id, GPICAP_TYPE_PD, client_reg_ptr->pd.pd_obj_id, NSID_DEFAULT, *ret_cap, seL4_CapNull, *ret_cap);
+    SERVER_GOTO_IF_ERR(error, "Failed to initialize add PD resource to PD\n");
 
 err_goto:
     return error;
@@ -150,6 +157,9 @@ void forge_pd_for_root_task(uint64_t *rt_id)
     pd_component_registry_entry_t *rt_entry = malloc(sizeof(pd_component_registry_entry_t));
     *rt_id = resource_server_registry_insert_new_id(&get_pd_component()->pd_registry, (resource_server_registry_node_t *)rt_entry);
 }
+
+// (XXX) Arya: hack to store the test PD ID for destroying it later
+uint64_t test_pd_id;
 
 void forge_pd_cap_from_init_data(test_init_data_t *init_data, sel4utils_process_t *test_process, void **osm_init_data)
 {
@@ -164,6 +174,7 @@ void forge_pd_cap_from_init_data(test_init_data_t *init_data, sel4utils_process_
     ZF_LOGF_IFERR(error, "Failed to allocate PD for forging");
     assert(error == 0);
     pd_t *pd = &new_entry->pd;
+    test_pd_id = pd->pd_obj_id;
 
     /* Update the PD object from init data */
     pd_new(pd,
@@ -206,8 +217,8 @@ void forge_pd_cap_from_init_data(test_init_data_t *init_data, sel4utils_process_
     error = forge_cpu_cap_from_tcb(test_process, get_pd_component()->server_vka, pd->pd_obj_id, &child_cpu_cap_in_parent, &cpu_id);
     ZF_LOGF_IFERR(error, "Failed to forge child's CPU cap");
 
-    // Copy the ADS/CPU/PD caps
-    // not using pd_send_cap bc this is already badged
+    // Copy the ADS/CPU/PD caps to the test process
+    // The refcount of each is 1
     error = copy_cap_to_pd(pd, child_as_cap_in_parent, &pd->init_data->ads_cap);
     assert(error == 0);
     pd_add_resource(pd, GPICAP_TYPE_ADS, ads_id, NSID_DEFAULT, child_as_cap_in_parent, pd->init_data->ads_cap, child_as_cap_in_parent);
@@ -221,7 +232,7 @@ void forge_pd_cap_from_init_data(test_init_data_t *init_data, sel4utils_process_
     pd_add_resource(pd, GPICAP_TYPE_CPU, cpu_id, NSID_DEFAULT, child_cpu_cap_in_parent, pd->init_data->cpu_cap, child_cpu_cap_in_parent);
 
     // Attach the init data to test PD
-    void *init_data_vaddr = 0x50000000;
+    void *init_data_vaddr = (void *)0x50000000;
     error = ads_component_attach(ads_id, pd->init_data_mo_id, SEL4UTILS_RES_TYPE_GENERIC, init_data_vaddr, &init_data_vaddr);
     assert(error == 0);
 
@@ -230,22 +241,41 @@ void forge_pd_cap_from_init_data(test_init_data_t *init_data, sel4utils_process_
     OSDB_PRINTF("Test process init data is at %p\n", pd->init_data_in_PD);
 }
 
-osmosis_pd_cap_t *pd_add_resource_by_id(uint32_t client_id, gpi_cap_t cap_type, uint32_t res_id)
+void destroy_test_pd(void)
+{
+    int error = 0;
+
+    pd_component_registry_entry_t *client_pd_data = pd_component_registry_get_entry_by_id(test_pd_id);
+    SERVER_GOTO_IF_COND(client_pd_data == NULL, "Couldn't find test PD (%ld) to destroy it\n", test_pd_id);
+
+    /* Remove the PD from registry, this will also destroy the PD */
+    resource_server_registry_delete(&get_pd_component()->pd_registry, (resource_server_registry_node_t *)client_pd_data);
+
+    return;
+
+err_goto:
+    ZF_LOGF("Failed to cleanup test PD\n");
+}
+
+int pd_add_resource_by_id(uint32_t pd_id, gpi_cap_t cap_type,
+                          uint32_t res_id, uint32_t ns_id,
+                          seL4_CPtr slot_in_RT,
+                          seL4_CPtr slot_in_PD,
+                          seL4_CPtr slot_in_serverPD)
 {
     int error = 0;
 
     // (XXX) Arya: Why are we treating the test process specially? Can we remove this?
-    if (client_id != 0) // only test processes would have no client ID
+    if (pd_id != 0) // only test processes would have no client ID
     {
-        pd_component_registry_entry_t *client_pd_data = pd_component_registry_get_entry_by_id(client_id);
-        SERVER_GOTO_IF_COND(client_pd_data == NULL, "Couldn't find PD (%d) to add resource \n", client_id);
+        pd_component_registry_entry_t *client_pd_data = pd_component_registry_get_entry_by_id(pd_id);
+        SERVER_GOTO_IF_COND(client_pd_data == NULL, "Couldn't find PD (%d) to add resource \n", pd_id);
 
-        osmosis_pd_cap_t *res = pd_add_resource(&client_pd_data->pd, cap_type, res_id, NSID_DEFAULT, seL4_CapNull, seL4_CapNull, seL4_CapNull);
-        return res;
+        error = pd_add_resource(&client_pd_data->pd, cap_type, res_id, ns_id, slot_in_RT, slot_in_PD, slot_in_serverPD);
     }
 
 err_goto:
-    return NULL;
+    return error;
 }
 
 void pd_handle_allocation_request(seL4_Word sender_badge, seL4_MessageInfo_t *reply_tag)
@@ -282,14 +312,10 @@ static void handle_disconnect_req(seL4_Word sender_badge,
 
     uint32_t pd_id = client_data->pd.pd_obj_id;
 
-    /* Free the PD metadata */
-    error = pd_destroy(&client_data->pd, get_pd_component()->server_vka, get_pd_component()->server_vspace);
-    SERVER_GOTO_IF_ERR(error, "Failed to destroy PD (%d)\n", pd_id);
-
-    /* Remove the PD from registry */
+    /* Remove the PD from registry, this will also destroy the PD */
     resource_server_registry_delete(&get_pd_component()->pd_registry, (resource_server_registry_node_t *)client_data);
 
-    /* (XXX) Arya: Cleanup resources like ADS? */
+    // (XXX) Arya: Should we be deleting from registry or just decrementing?
 
     OSDB_PRINTF("Cleaned up PD %d.\n", pd_id);
 
@@ -419,7 +445,8 @@ static void handle_send_cap_req(seL4_Word sender_badge,
     error = pd_send_cap(&client_data->pd,
                         received_cap,
                         received_caps_badge,
-                        &slot);
+                        &slot,
+                        true);
 
     seL4_SetMR(PDMSGREG_SEND_CAP_PD_SLOT, slot);
 
@@ -467,7 +494,7 @@ static void handle_add_rde_req(seL4_Word sender_badge, seL4_MessageInfo_t old_ta
     SERVER_GOTO_IF_COND(server_data == NULL, "Couldn't find server PD (%ld)\n", get_object_id_from_badge(server_badge));
     SERVER_GOTO_IF_COND(resource_manager_data == NULL, "Couldn't find resource_manager_data (%ld)\n", manager_id);
     SERVER_GOTO_IF_COND(server_data->pd.pd_obj_id != resource_manager_data->pd->pd_obj_id,
-                        "add_rde_req: wrong server PD (%ld) provided for resource manager in PD (%ld)\n",
+                        "add_rde_req: wrong server PD (%d) provided for resource manager in PD (%d)\n",
                         server_data->pd.pd_obj_id,
                         resource_manager_data->pd->pd_obj_id);
 
@@ -492,9 +519,9 @@ static void handle_share_rde_req(seL4_Word sender_badge, seL4_MessageInfo_t old_
     seL4_Word type = seL4_GetMR(PDMSGREG_SHARE_RDE_REQ_TYPE);
     seL4_Word ns_id = seL4_GetMR(PDMSGREG_SHARE_RDE_REQ_NS);
 
-    OSDB_PRINTF("share_rde_req: Got request from client badge %lx for RDE type %d with NS %d.\n",
+    OSDB_PRINTF("share_rde_req: Got request from client badge %lx for RDE type %ld with NS %ld.\n",
                 sender_badge, type, ns_id);
-                
+
     seL4_Word client_id = get_client_id_from_badge(sender_badge);
     pd_component_registry_entry_t *target_data = pd_component_registry_get_entry_by_badge(sender_badge);
     pd_component_registry_entry_t *client_data = pd_component_registry_get_entry_by_id(client_id);
@@ -503,10 +530,10 @@ static void handle_share_rde_req(seL4_Word sender_badge, seL4_MessageInfo_t old_
     SERVER_GOTO_IF_COND(client_data == NULL, "Couldn't find client PD (%ld)\n", client_id);
 
     osmosis_rde_t *rde = pd_rde_get(&client_data->pd, type, ns_id);
-    SERVER_GOTO_IF_COND(rde == NULL, "share_rde_req: Failed to find RDE for type %d and NS_ID %ld.\n", type, ns_id);
+    SERVER_GOTO_IF_COND(rde == NULL, "share_rde_req: Failed to find RDE for type %ld and NS_ID %ld.\n", type, ns_id);
 
     pd_component_resource_manager_entry_t *resource_manager_data = pd_component_resource_manager_get_entry_by_id(rde->manager_id);
-    SERVER_GOTO_IF_COND(resource_manager_data == NULL, "share_rde_req: Failed to find resource manager ID %ld.\n", rde->manager_id);
+    SERVER_GOTO_IF_COND(resource_manager_data == NULL, "share_rde_req: Failed to find resource manager ID %d.\n", rde->manager_id);
 
     rde_type_t rde_type = {.type = type};
     error = pd_add_rde(&target_data->pd,
@@ -566,7 +593,7 @@ static void handle_register_namespace_req(seL4_Word sender_badge, seL4_MessageIn
     SERVER_GOTO_IF_COND(target_data == NULL, "Couldn't find target PD (%ld)\n", target_id);
     SERVER_GOTO_IF_COND(resource_manager_data == NULL, "Couldn't find resource manager (%ld)\n", manager_id);
     SERVER_GOTO_IF_COND(resource_manager_data->pd->pd_obj_id != get_client_id_from_badge(sender_badge),
-                        "resource manager PD (%ld) and client PD (%ld) do not match.\n",
+                        "resource manager PD (%d) and client PD (%ld) do not match.\n",
                         resource_manager_data->pd->pd_obj_id, get_client_id_from_badge(sender_badge));
 
     resource_manager_data->ns_index++;
@@ -606,18 +633,7 @@ static void handle_create_resource_req(seL4_Word sender_badge, seL4_MessageInfo_
     OSDB_PRINTF("resource manager %ld creates resource with ID %ld\n",
                 manager_id, resource_id);
 
-    osmosis_pd_cap_t *osm_cap;
-    HASH_FIND_INT(server_data->pd.has_access_to, &resource_id, osm_cap);
-    if (osm_cap == NULL)
-    {
-        // Resource is not already in the hash
-        osm_cap = pd_add_resource(&server_data->pd, resource_type, resource_id, NSID_DEFAULT, seL4_CapNull, seL4_CapNull, seL4_CapNull);
-    }
-    else
-    {
-        OSDB_PRINTF("handle_create_resource_req: Resource already exists %ld.\n",
-                    resource_id);
-    }
+    error = pd_add_resource(&server_data->pd, resource_type, resource_id, NSID_DEFAULT, seL4_CapNull, seL4_CapNull, seL4_CapNull);
 
 err_goto:
     seL4_SetMR(PDMSGREG_FUNC, PD_FUNC_CREATE_RES_ACK);
@@ -645,36 +661,25 @@ static void handle_give_resource_req(seL4_Word sender_badge, seL4_MessageInfo_t 
     SERVER_GOTO_IF_COND(recipient_data == NULL, "Couldn't find target PD (%ld)\n", recipient_id);
     SERVER_GOTO_IF_COND(resource_manager_data == NULL, "Couldn't find resource manager (%ld)\n", manager_id);
 
-    osmosis_pd_cap_t *resource_data;
-    HASH_FIND_INT(server_data->pd.has_access_to, &resource_id, resource_data);
-    SERVER_GOTO_IF_COND(resource_data == NULL, "Couldn't find resource (%ld)\n", resource_id);
+    uint64_t res_node_id = gpi_new_badge(resource_manager_data->resource_type, 0, 0, ns_id, resource_id);
+    pd_hold_node_t *resource_data = (pd_hold_node_t *)resource_server_registry_get_by_id(&server_data->pd.hold_registry, res_node_id);
+    SERVER_GOTO_IF_COND(resource_data == NULL, "Couldn't find resource (%lx)\n", res_node_id);
 
     OSDB_PRINTF("resource manager %ld gives resource ID %ld to client %ld\n",
                 manager_id, resource_id, recipient_id);
 
-    osmosis_pd_cap_t *osm_cap;
-    HASH_FIND_INT(recipient_data->pd.has_access_to, &resource_id, osm_cap);
-    if (osm_cap == NULL)
-    {
-        // Resource is not already in the recipient's hash table
-        osm_cap = pd_add_resource(&recipient_data->pd, resource_manager_data->resource_type, resource_id, ns_id, seL4_CapNull, seL4_CapNull, seL4_CapNull);
-    }
+    /* Create a new badged EP for the resource */
+    seL4_CPtr dest = resource_server_make_badged_ep(get_pd_component()->server_vka, &recipient_data->pd.pd_vka,
+                                                    resource_manager_data->server_ep, resource_id,
+                                                    resource_manager_data->resource_type, ns_id, recipient_id);
+    seL4_SetMR(PDMSGREG_GIVE_RES_ACK_DEST, dest);
 
-    seL4_Word badge = gpi_new_badge(resource_manager_data->resource_type,
-                                    0x00,
-                                    recipient_id,
-                                    ns_id,
-                                    resource_id);
-
+    // Add the resource to the PD object
     // (XXX) Arya: How to handle duplicate entries to the same resource?
     // The hash table is keyed by resource ID
-    // Badge the resource manager's endpoint to create a resource capability
-    cspacepath_t src_path;
-    seL4_CPtr dest;
-    vka_cspace_make_path(get_pd_component()->server_vka, resource_manager_data->server_ep, &src_path);
-    error = pd_mint(&recipient_data->pd, &src_path, badge, &dest);
-    osm_cap->slot_in_PD_Debug = dest;
-    seL4_SetMR(PDMSGREG_GIVE_RES_ACK_DEST, dest);
+    error = pd_add_resource(&recipient_data->pd, resource_manager_data->resource_type, resource_id, ns_id,
+                            seL4_CapNull, dest, seL4_CapNull);
+    SERVER_GOTO_IF_ERR(error, "Failed to add resource to PD (%ld)\n", recipient_id);
 
 err_goto:
     seL4_SetMR(PDMSGREG_FUNC, PD_FUNC_GIVE_RES_ACK);

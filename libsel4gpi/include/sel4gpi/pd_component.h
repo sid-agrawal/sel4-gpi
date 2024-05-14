@@ -303,12 +303,17 @@ void forge_pd_for_root_task(uint64_t *rt_id);
 
 /**
  * Only used to forge the test process' PD cap
- * 
+ *
  * @param init_data the test driver's init data
  * @param test_process test process struct
  * @param osm_init_data returns the vaddr of the osmosis init data in the test PD
-*/
+ */
 void forge_pd_cap_from_init_data(test_init_data_t *init_data, sel4utils_process_t *test_process, void **osm_init_data);
+
+/**
+ * To be called to cleanup a forged test PD object
+*/
+void destroy_test_pd(void);
 
 /**
  * @brief Insert a new resource manager into the resource manager registry Linked List.
@@ -348,4 +353,8 @@ pd_component_registry_entry_t *pd_component_registry_get_entry_by_id(seL4_Word o
  * Add a resource to a PD
  * (XXX) Arya: Exposed for the cpu and mo components. Is there a better way?
  */
-osmosis_pd_cap_t *pd_add_resource_by_id(uint32_t client_id, gpi_cap_t cap_type, uint32_t res_id);
+int pd_add_resource_by_id(uint32_t pd_id, gpi_cap_t cap_type,
+                          uint32_t res_id, uint32_t ns_id,
+                          seL4_CPtr slot_in_RT,
+                          seL4_CPtr slot_in_PD,
+                          seL4_CPtr slot_in_serverPD);

@@ -381,8 +381,12 @@ void basic_tear_down(uintptr_t e)
         vka_cnode_revoke(&path);
     }
 
+    #if PD_FORGE
+    destroy_test_pd();
+    #else
     /* destroy the process */
     sel4utils_destroy_process(&(env->test_process), &env->vka);
+    #endif
 }
 
 DEFINE_TEST_TYPE(BASIC, BASIC, NULL, NULL, basic_set_up, basic_tear_down, basic_run_test);

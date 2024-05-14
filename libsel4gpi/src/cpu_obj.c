@@ -161,3 +161,10 @@ void cpu_dump_rr(cpu_t *cpu, model_state_t *ms, gpi_model_node_t *pd_node)
     add_resource_depends_on(ms, cpu_res_id, ads_res_id, REL_TYPE_MAP);
 #endif
 }
+
+void cpu_destroy(cpu_t *cpu)
+{
+    // (XXX) Arya: What is there to destroy here? 
+    // Thread/cspace/fault ep, etc. are all destroyed with the PD
+    return;
+}

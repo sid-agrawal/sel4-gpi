@@ -167,3 +167,12 @@ cpu_component_registry_entry_t *cpu_component_registry_get_entry_by_badge(seL4_W
  * @return cpu_component_registry_entry_t*
  */
 cpu_component_registry_entry_t *cpu_component_registry_get_entry_by_id(seL4_Word object_id);
+
+/**
+ * Decrement the reference count to a VCPU
+ * If the count reaches zero, the VCPU is destroyed
+ * Note: Only useable from the root task
+ * 
+ * @param cpu_id ID of the CPU
+*/
+int cpu_component_dec(uint64_t cpu_id);

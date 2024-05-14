@@ -82,19 +82,33 @@ int copy_cap_to_pd(pd_t *to_pd,
     return 0;
 }
 
-osmosis_pd_cap_t *pd_add_resource(pd_t *pd, gpi_cap_t type, uint32_t res_id, uint32_t ns_id,
-                                  seL4_CPtr slot_in_RT, seL4_CPtr slot_in_PD, seL4_CPtr slot_in_serverPD)
+int pd_add_resource(pd_t *pd, gpi_cap_t type, uint32_t res_id, uint32_t ns_id,
+                    seL4_CPtr slot_in_RT, seL4_CPtr slot_in_PD, seL4_CPtr slot_in_serverPD)
 {
-    osmosis_pd_cap_t *new = calloc(1, sizeof(osmosis_pd_cap_t));
-    new->type = type;
-    new->res_id = res_id;
-    new->ns_id = ns_id;
-    new->slot_in_RT_Debug = slot_in_RT;
-    new->slot_in_PD_Debug = slot_in_PD;
-    new->slot_in_ServerPD_Debug = slot_in_serverPD;
-    pd->has_access_to_count++;
-    HASH_ADD(hh, pd->has_access_to, res_id, sizeof(uint32_t), new);
-    return new;
+    // Unique resource ID is the badge with the following fields: type, ns_id, res_id
+    uint64_t res_node_id = gpi_new_badge(type, 0, 0, ns_id, res_id);
+    pd_hold_node_t *node = (pd_hold_node_t *)resource_server_registry_get_by_id(&pd->hold_registry, res_node_id);
+
+    if (node != NULL)
+    {
+        OSDB_PRINTF("Warning: adding resource with existing ID (%ld), do not insert again\n", res_node_id);
+        badge_print(res_node_id);
+    }
+    else
+    {
+        node = calloc(1, sizeof(pd_hold_node_t));
+        node->type = type;
+        node->res_id = res_id;
+        node->ns_id = ns_id;
+        node->slot_in_RT_Debug = slot_in_RT;
+        node->slot_in_PD_Debug = slot_in_PD;
+        node->slot_in_ServerPD_Debug = slot_in_serverPD;
+        node->gen.object_id = res_node_id;
+
+        resource_server_registry_insert(&pd->hold_registry, (resource_server_registry_node_t *)node);
+    }
+
+    return 0;
 }
 
 static int pd_rde_find_idx(pd_t *pd,
@@ -198,6 +212,47 @@ int pd_add_rde(pd_t *pd,
     return 0;
 }
 
+static void pd_held_resource_on_delete(resource_server_registry_node_t *node_gen)
+{
+    int error = 0;
+    pd_hold_node_t *node = (pd_hold_node_t *)node_gen;
+
+    OSDB_PRINTF("Freeing resource %s_%d_%d\n", cap_type_to_str(node->type), node->ns_id, node->res_id);
+
+    // If the resource is a core resource, free it directly
+    // Decrement the registry entry's count, and if it reaches zero, the resource will be freed
+    switch (node->type)
+    {
+    case GPICAP_TYPE_ADS:
+        error = ads_component_dec(node->res_id);
+        break;
+    case GPICAP_TYPE_CPU:
+        error = cpu_component_dec(node->res_id);
+        break;
+    case GPICAP_TYPE_MO:
+        error = mo_component_dec(node->res_id);
+        break;
+    case GPICAP_TYPE_PD:
+        // (XXX) Arya: I think we do not want to destroy a PD when the refcount reaches zero
+        // If it dies on its own, then it will be destroyed
+        break;
+    case GPICAP_TYPE_VMR:
+        // NS ID is the ADS, res ID is the VMR
+        error = ads_component_rm_by_id(node->ns_id, node->res_id);
+        break;
+    default:
+        // Otherwise, call the manager PD
+        // (XXX) Arya: TODO implement
+        // OSDB_PRINTERR("Not implemented: delete PD's held non-core resource %s-%d\n", cap_type_to_str(node->type), node->res_id);
+        break;
+    }
+
+    if (error)
+    {
+        OSDB_PRINTERR("Warning: Could not free PD's held resource %s-%d\n", cap_type_to_str(node->type), node->res_id);
+    }
+}
+
 int pd_new(pd_t *pd,
            vka_t *server_vka,
            vspace_t *server_vspace)
@@ -206,8 +261,8 @@ int pd_new(pd_t *pd,
 
     OSDB_PRINTF("new PD: \n");
 
-    pd->has_access_to_count = 0;
-    pd->has_access_to = NULL; // required for uthash initialization
+    // Initialize the hold registry
+    resource_server_initialize_registry(&pd->hold_registry, pd_held_resource_on_delete);
 
     // Create the MO for the PD's init data
     vka_object_t frame;
@@ -230,8 +285,8 @@ int pd_new(pd_t *pd,
     }
 
     // Track the init data MO in RT only
-    pd_add_resource_by_id(get_gpi_server()->rt_pd_id, GPICAP_TYPE_MO, rde_mo_obj->mo_obj_id);
-    // pd_add_resource(pd, GPICAP_TYPE_MO, rde_mo_obj->mo_obj_id, pd->init_data_mo.badged_server_ep_cspath.capPtr, seL4_CapNull, pd->init_data_mo.badged_server_ep_cspath.capPtr);
+    pd_add_resource_by_id(get_gpi_server()->rt_pd_id, GPICAP_TYPE_MO, rde_mo_obj->mo_obj_id, NSID_DEFAULT,
+                          pd->init_data_mo.badged_server_ep_cspath.capPtr, seL4_CapNull, pd->init_data_mo.badged_server_ep_cspath.capPtr);
 
     // Setup init data
     pd->init_data->rde_count = 0;
@@ -243,13 +298,52 @@ int pd_new(pd_t *pd,
     return 0;
 }
 
-int pd_destroy(pd_t *pd, vka_t *server_vka, vspace_t *server_vspace)
+void pd_destroy(pd_t *pd, vka_t *server_vka, vspace_t *server_vspace)
 {
-    int error = 0;
+    /* below is copied from sel4utils_destroy_process */
+    /* (XXX) Arya: eventually should be repartitioned to other components */
+    sel4utils_process_t *process = &pd->proc;
+    vka_t *vka = server_vka;
 
-    // (XXX) Arya: To fix later, should extract functionality from sel4utils_destroy_process
-    // And what is destroyed depends on the PD
-    sel4utils_destroy_process(&pd->proc, server_vka);
+    /* destroy the cnode */
+    if (process->own_cspace)
+    {
+        cspacepath_t path;
+        vka_cspace_make_path(vka, process->cspace.cptr, &path);
+        /* need to revoke the cnode to remove any self references that would keep the object
+         * alive when we try to delete it */
+        vka_cnode_revoke(&path);
+        vka_free_object(vka, &process->cspace);
+    }
+
+    /* destroy the thread */
+    sel4utils_clean_up_thread(vka, &process->vspace, &process->thread);
+
+    /* ADS component destroys the vspace */
+
+    /* destroy the endpoint */
+    if (process->own_ep && process->fault_endpoint.cptr != 0)
+    {
+        vka_free_object(vka, &process->fault_endpoint);
+    }
+
+    /* destroy the page directory */
+    if (process->own_vspace)
+    {
+        vka_free_object(vka, &process->pd);
+    }
+
+    /* Free elf information */
+    if (process->elf_regions)
+    {
+        free(process->elf_regions);
+    }
+
+    if (process->elf_phdrs)
+    {
+        free(process->elf_phdrs);
+    }
+    /* end copied from sel4utils_destroy_process */
 
     /* Clean up metadata */
     if (pd->image_name)
@@ -259,11 +353,11 @@ int pd_destroy(pd_t *pd, vka_t *server_vka, vspace_t *server_vspace)
 
     // Hash table of holding resources
     // (XXX) Arya: This can trigger sys_munmap which is not supported
-    osmosis_pd_cap_t *current, *tmp;
-    HASH_ITER(hh, pd->has_access_to, current, tmp)
+    // This also triggers resource deletion, if this PD held the last copy
+    resource_server_registry_node_t *current, *tmp;
+    HASH_ITER(hh, pd->hold_registry.head, current, tmp)
     {
-        HASH_DEL(pd->has_access_to, current);
-        free(current);
+        resource_server_registry_delete(&pd->hold_registry, current);
     }
 
     // Frame for init data
@@ -278,8 +372,6 @@ int pd_destroy(pd_t *pd, vka_t *server_vka, vspace_t *server_vspace)
     vka_cnode_delete(&path);
     vka_cspace_free_path(server_vka, path);
     // The CPtrs like "ads_cap_in_RT" should be destroyed when the ADS is destroyed
-
-    return error;
 }
 
 int pd_next_slot(pd_t *pd,
@@ -489,7 +581,8 @@ int pd_configure(pd_t *pd,
     pd->proc.thread = target_cpu->thread;
 
     /* The RT manages this ADS */
-    pd_add_resource_by_id(get_gpi_server()->rt_pd_id, GPICAP_TYPE_ADS, target_ads->ads_obj_id);
+    // (XXX) Arya: is this necessary?
+    pd_add_resource_by_id(get_gpi_server()->rt_pd_id, GPICAP_TYPE_ADS, target_ads->ads_obj_id, NSID_DEFAULT, seL4_CapNull, seL4_CapNull, seL4_CapNull);
 
     /* Initialize a vka for the PD's cspace */
     error = pd_bootstrap_allocator(pd, pd->proc.cspace.cptr, pd->proc.cspace_next_free,
@@ -498,7 +591,7 @@ int pd_configure(pd_t *pd,
 
     // the ADS cap is both a resource manager and a resource
     seL4_Word badge = gpi_new_badge(GPICAP_TYPE_ADS, 0x00, pd->pd_obj_id, target_ads->ads_obj_id, target_ads->ads_obj_id);
-    error = pd_send_cap(pd, get_ads_component()->server_ep_obj.cptr, badge, &pd->init_data->ads_cap);
+    error = pd_send_cap(pd, get_ads_component()->server_ep_obj.cptr, badge, &pd->init_data->ads_cap, true);
     ZF_LOGF_IFERR(error, "Failed to send ADS resource cap to PD");
 
     // the ADS cap also acts an as RDE, however since its object ID is set, a PD can never
@@ -510,14 +603,15 @@ int pd_configure(pd_t *pd,
     target_cpu->binded_ads_id = target_ads->ads_obj_id;
 
     badge = gpi_new_badge(GPICAP_TYPE_CPU, 0x00, pd->pd_obj_id, NSID_DEFAULT, target_cpu->cpu_obj_id);
-    pd_send_cap(pd, get_cpu_component()->server_ep_obj.cptr, badge, &pd->init_data->cpu_cap);
+    error = pd_send_cap(pd, get_cpu_component()->server_ep_obj.cptr, badge, &pd->init_data->cpu_cap, true);
     ZF_LOGF_IFERR(error, "Failed to send CPU cap to PD");
 
     memcpy(&pd->proc.vspace, target_ads->vspace, sizeof(vspace_t));
 
     // Send the PD's PD resource
     badge = gpi_new_badge(GPICAP_TYPE_PD, 0x00, pd->pd_obj_id, NSID_DEFAULT, pd->pd_obj_id);
-    pd_send_cap(pd, pd->pd_cap_in_RT, badge, &pd->init_data->pd_cap);
+    error = pd_send_cap(pd, pd->pd_cap_in_RT, badge, &pd->init_data->pd_cap, true);
+    ZF_LOGF_IFERR(error, "Failed to send PD cap to PD");
 
     // Map init data to the PD
     error = ads_component_attach(pd->init_data->binded_ads_ns_id, pd->init_data_mo_id, SEL4UTILS_RES_TYPE_OTHER, NULL, (void **)&pd->init_data_in_PD);
@@ -527,14 +621,14 @@ int pd_configure(pd_t *pd,
     }
     OSDB_PRINTF("Mapped PD's init data at %p\n", (void *)pd->init_data_in_PD);
 
-    OSDB_PRINTF("PD%d free_slot.start %ld\n", pd->pd_obj_id, pd->proc.cspace_next_free);
     return 0;
 }
 
 int pd_send_cap(pd_t *to_pd,
                 seL4_CPtr cap,
                 seL4_Word badge,
-                seL4_Word *slot)
+                seL4_Word *slot,
+                bool inc_refcount)
 {
     /*
         (XXX): Need to handle how sending OSM caps would leand to additional data tracking.
@@ -546,7 +640,7 @@ int pd_send_cap(pd_t *to_pd,
     int error = 0;
     cspacepath_t src, dest;
     seL4_CPtr dest_cptr;
-    osmosis_pd_cap_t *res;
+    pd_hold_node_t *res;
     bool should_mint = true;
 
     /*
@@ -569,7 +663,10 @@ int pd_send_cap(pd_t *to_pd,
             assert(ads_reg != NULL);
 
             // Copying the resource, so increase the reference count
-            resource_server_registry_inc(&get_ads_component()->ads_registry, (resource_server_registry_node_t *)ads_reg);
+            if (inc_refcount)
+            {
+                resource_server_registry_inc(&get_ads_component()->ads_registry, (resource_server_registry_node_t *)ads_reg);
+            }
 
             res_id = ads_reg->ads.ads_obj_id;
             break;
@@ -581,7 +678,10 @@ int pd_send_cap(pd_t *to_pd,
             assert(mo_reg != NULL);
 
             // Copying the resource, so increase the reference count
-            resource_server_registry_inc(&get_mo_component()->mo_registry, (resource_server_registry_node_t *)mo_reg);
+            if (inc_refcount)
+            {
+                resource_server_registry_inc(&get_mo_component()->mo_registry, (resource_server_registry_node_t *)mo_reg);
+            }
 
             res_id = mo_reg->mo.mo_obj_id;
             break;
@@ -593,7 +693,10 @@ int pd_send_cap(pd_t *to_pd,
             assert(cpu_reg != NULL);
 
             // Copying the resource, so increase the reference count
-            resource_server_registry_inc(&get_cpu_component()->cpu_registry, (resource_server_registry_node_t *)cpu_reg);
+            if (inc_refcount)
+            {
+                resource_server_registry_inc(&get_cpu_component()->cpu_registry, (resource_server_registry_node_t *)cpu_reg);
+            }
 
             res_id = cpu_reg->cpu.cpu_obj_id;
             break;
@@ -605,7 +708,10 @@ int pd_send_cap(pd_t *to_pd,
             assert(pd_reg != NULL);
 
             // Copying the resource, so increase the reference count
-            resource_server_registry_inc(&get_pd_component()->pd_registry, (resource_server_registry_node_t *)pd_reg);
+            if (inc_refcount)
+            {
+                resource_server_registry_inc(&get_pd_component()->pd_registry, (resource_server_registry_node_t *)pd_reg);
+            }
 
             res_id = pd_reg->pd.pd_obj_id;
             break;
@@ -685,7 +791,7 @@ static int request_remote_rr(pd_t *pd, model_state_t *ms, uint64_t server_id, ui
     seL4_CPtr server_cap = server_entry->server_ep;
     model_state_t *ms2;
 
-    OSDB_PRINTF("Resource ID 0x%lx, server ID 0x%lx, server EP at %d\n", obj_id, server_id, (int)server_cap);
+    OSDB_PRINTF("Resource ID 0x%x, server ID 0x%lx, server EP at %d\n", obj_id, server_id, (int)server_cap);
 
     // Pre-map the memory so resource server does not need to call root task
     cspacepath_t rr_frame_copy_path;
@@ -743,7 +849,7 @@ static int request_remote_rr(pd_t *pd, model_state_t *ms, uint64_t server_id, ui
 }
 
 // Add rows to model state for one resource
-static int res_dump(pd_t *pd, model_state_t *ms, osmosis_pd_cap_t *current_cap,
+static int res_dump(pd_t *pd, model_state_t *ms, pd_hold_node_t *current_cap,
                     gpi_model_node_t *pd_node, cspacepath_t rr_frame_path, void *rr_local_vaddr)
 {
     int error;
@@ -796,7 +902,7 @@ static int res_dump(pd_t *pd, model_state_t *ms, osmosis_pd_cap_t *current_cap,
         // (XXX) Arya: dump files by NS instead
         break;
     default:
-        ZF_LOGE("Invalid has_access_to cap type 0x%x", current_cap->type);
+        ZF_LOGE("Invalid holding cap type 0x%x", current_cap->type);
         break;
     }
 
@@ -865,12 +971,12 @@ static int pd_dump_internal(pd_t *pd, model_state_t *ms, cspacepath_t rr_frame_p
     }
 
     /* add caps that this PD has access to */
-    for (osmosis_pd_cap_t *current_cap = pd->has_access_to; current_cap != NULL; current_cap = current_cap->hh.next)
+    for (pd_hold_node_t *current_cap = (pd_hold_node_t *)pd->hold_registry.head; current_cap != NULL; current_cap = (pd_hold_node_t *)current_cap->gen.hh.next)
     {
         // print_pd_osm_cap_info(current_cap);
         if (res_dump(pd, ms, current_cap, pd_node, rr_frame_path, rr_local_vaddr) != 0)
         {
-            return -1;
+            return 1;
         }
     }
 
@@ -913,7 +1019,7 @@ int pd_dump(pd_t *pd)
                                             seL4_AllRights, 1, seL4_LargePageBits, 1);
     if (rr_local_vaddr == NULL)
     {
-        return -1;
+        return 1;
     }
 
     /* Add a special node for the RT */
@@ -924,12 +1030,12 @@ int pd_dump(pd_t *pd)
     assert(rt_entry != NULL);
     pd_t *rt_pd = &rt_entry->pd;
 
-    for (osmosis_pd_cap_t *current_cap = rt_pd->has_access_to; current_cap != NULL; current_cap = current_cap->hh.next)
+    for (pd_hold_node_t *current_cap = (pd_hold_node_t *)rt_pd->hold_registry.head; current_cap != NULL; current_cap = (pd_hold_node_t *)current_cap->gen.hh.next)
     {
         // print_pd_osm_cap_info(current_cap);
         if (res_dump(rt_pd, ms, current_cap, rt_node, rr_frame_path, rr_local_vaddr) != 0)
         {
-            return -1;
+            return 1;
         }
     }
 
@@ -958,7 +1064,7 @@ int pd_dump(pd_t *pd)
     return 0;
 }
 
-inline void print_pd_osm_cap_info(osmosis_pd_cap_t *o)
+inline void print_pd_osm_cap_info(pd_hold_node_t *o)
 {
     printf("Resource_ID: %d Slot_RT:%lx\t Slot_PD: %lx\t Slot_ServerPD: %lx\t T: %s\n",
            o->res_id,
