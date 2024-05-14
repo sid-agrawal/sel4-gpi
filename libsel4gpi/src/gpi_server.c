@@ -232,18 +232,16 @@ void handle_allocation_request(seL4_MessageInfo_t tag,
     switch (req_cap_type)
     {
     case GPICAP_TYPE_ADS:
-        ads_handle_allocation_request(
-            tag,
-            sender_badge,
-            received_cap_path,
-            reply_tag); /*unused*/
+        resource_component_handle(&get_gpi_server()->ads_component,
+                                  tag,
+                                  sender_badge,
+                                  received_cap_path);
         break;
     case GPICAP_TYPE_VMR:
-        ads_handle_allocation_request(
-            tag,
-            sender_badge,
-            received_cap_path,
-            reply_tag); /*unused*/
+        resource_component_handle(&get_gpi_server()->ads_component,
+                                  tag,
+                                  sender_badge,
+                                  received_cap_path);
         break;
     case GPICAP_TYPE_MO:
         mo_handle_allocation_request(
@@ -339,16 +337,16 @@ void gpi_server_main()
             switch (cap_type)
             {
             case GPICAP_TYPE_ADS:
-                ads_component_handle(tag,
-                                     sender_badge,
-                                     &received_cap_path,
-                                     &reply_tag); /*unused*/
+                resource_component_handle(&get_gpi_server()->ads_component,
+                                          tag,
+                                          sender_badge,
+                                          &received_cap_path);
                 break;
             case GPICAP_TYPE_VMR:
-                ads_component_handle(tag,
-                                     sender_badge,
-                                     &received_cap_path,
-                                     &reply_tag); /*unused*/
+                resource_component_handle(&get_gpi_server()->ads_component,
+                                          tag,
+                                          sender_badge,
+                                          &received_cap_path);
                 break;
             case GPICAP_TYPE_MO:
                 mo_component_handle(tag,

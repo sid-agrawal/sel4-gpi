@@ -23,14 +23,14 @@
         }                               \
     } while (0)
 
-#define GOTO_IF_COND(c)                 \
-    do                                  \
-    {                                   \
-        if ((c))                        \
-        {                               \
-            printf(msg, ##__VA_ARGS__); \
-            goto err_goto;              \
-        }                               \
+#define GOTO_IF_COND(c, ...)     \
+    do                           \
+    {                            \
+        if ((c))                 \
+        {                        \
+            printf(__VA_ARGS__); \
+            goto err_goto;       \
+        }                        \
     } while (0)
 
 // (XXX) Arya: Occasionally I see a weird issue

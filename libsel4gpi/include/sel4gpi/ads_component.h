@@ -11,7 +11,7 @@
 #include <vspace/vspace.h>
 
 #include <sel4gpi/ads_obj.h>
-#include <sel4gpi/resource_server_utils.h>
+#include <sel4gpi/resource_server_rt_utils.h>
 
 /** @file APIs for managing and interacting with the serial server thread.
  *
@@ -192,19 +192,7 @@ typedef struct _ads_component_registry_entry
 } ads_component_registry_entry_t;
 
 /* State maintained by the server. */
-typedef struct _ads_component_context
-{
-    simple_t *server_simple;
-    vka_t *server_vka;
-    seL4_CPtr server_cspace;
-    vspace_t *server_vspace;
-    sel4utils_thread_t server_thread;
-
-    // The server listens on this endpoint.
-    vka_object_t server_ep_obj;
-
-    resource_server_registry_t ads_registry;
-} ads_component_context_t;
+typedef resource_component_context_t ads_component_context_t;
 
 /**
  * To initialize the ads component at the beginning of execution
@@ -215,22 +203,6 @@ int ads_component_initialize(simple_t *server_simple,
                              vspace_t *server_vspace,
                              sel4utils_thread_t server_thread,
                              vka_object_t server_ep_obj);
-
-/**
- * Internal library function: acts as the main() for the server thread.
- **/
-void ads_component_handle(seL4_MessageInfo_t tag,
-                          seL4_Word badge,
-                          cspacepath_t *received_cap,
-                          seL4_MessageInfo_t *reply_tag);
-
-/**
- * @brief handles an allocation request to create an entirely new ADS
- *
- * @param sender_badge
- * @param reply_tag
- */
-void ads_handle_allocation_request(seL4_MessageInfo_t tag, seL4_Word sender_badge, cspacepath_t *received_cap, seL4_MessageInfo_t *reply_tag);
 
 /* Global server instance accessor functions. */
 ads_component_context_t *get_ads_component(void);
@@ -243,7 +215,7 @@ ads_component_context_t *get_ads_component(void);
  * @param cap_ret The cap to the vspace.
  * @return int
  */
-int forge_ads_cap_from_vspace(vspace_t *vspace, vka_t *vka, uint32_t client_pd_id, seL4_CPtr *cap_ret, uint32_t *ads_obj_id_ret);
+int forge_ads_cap_from_vspace(vspace_t *vspace, vka_t *vka, uint32_t client_pd_id, seL4_CPtr *cap_ret, uint32_t *id_ret);
 
 /**
  * Attach an MO to an ADS by ID
@@ -275,17 +247,3 @@ int ads_component_rm_by_id(uint64_t ads_id, uint32_t vmr_id);
  * @param vaddr vaddr of the region to remove
 */
 int ads_component_rm_by_vaddr(uint64_t ads_id, void *vaddr);
-
-/**
- * Decrement the reference count to an ADS
- * If the count reaches zero, the ADS is destroyed
- * Note: Only useable from the root task
- * 
- * @param ads_id ID of the ADS
-*/
-int ads_component_dec(uint64_t ads_id);
-
-// (XXX) Arya: Needed by cpu component and pd component. Can we decouple these?
-ads_component_registry_entry_t *ads_component_registry_get_entry_by_badge(seL4_Word badge);
-
-ads_component_registry_entry_t *ads_component_registry_get_entry_by_id(seL4_Word object_ID);

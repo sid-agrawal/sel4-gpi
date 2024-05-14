@@ -148,7 +148,7 @@ void cpu_component_handle(seL4_MessageInfo_t tag,
 cpu_component_context_t *get_cpu_component(void);
 
 void cpu_handle_allocation_request(seL4_Word sender_badge, seL4_MessageInfo_t *reply_tag);
-int forge_cpu_cap_from_tcb(sel4utils_process_t *proc, vka_t *vka, uint32_t client_id, seL4_CPtr *cap_ret, uint32_t *cpu_obj_id_ret);
+int forge_cpu_cap_from_tcb(sel4utils_process_t *proc, vka_t *vka, uint32_t client_id, seL4_CPtr *cap_ret, uint32_t *id_ret);
 
 // (XXX) Arya: These are exposed for the PD obj, can they be decoupled?
 

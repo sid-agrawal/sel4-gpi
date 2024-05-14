@@ -70,7 +70,7 @@ void mo_dump_rr(mo_t *mo, model_state_t *ms, gpi_model_node_t *pd_node)
 
     /* Add the MO node */
     // (XXX) Arya: MO does not belong to a resource space! To fix
-    gpi_model_node_t *mo_node = add_resource_node(ms, GPICAP_TYPE_MO, 1, mo->mo_obj_id);
+    gpi_model_node_t *mo_node = add_resource_node(ms, GPICAP_TYPE_MO, 1, mo->id);
     add_edge(ms, GPI_EDGE_TYPE_HOLD, pd_node, mo_node);
 
     /* Add the page nodes and relations */
@@ -95,7 +95,7 @@ void mo_destroy(mo_t *mo, vka_t *server_vka)
 {
     if (mo->vka_objects == NULL)
     {
-        OSDB_PRINTERR("Can't free frames for MO (%ld), no associated vka objects\n", mo->mo_obj_id);
+        OSDB_PRINTERR("Can't free frames for MO (%d), no associated vka objects\n", mo->id);
         return;
     }
 

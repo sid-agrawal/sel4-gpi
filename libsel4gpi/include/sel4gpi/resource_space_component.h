@@ -4,7 +4,10 @@
 #include <sel4/sel4.h>
 
 #include <sel4gpi/resource_server_utils.h>
-#include <sel4gpi/pd_obj.h>
+//#include <sel4gpi/pd_obj.h>
+
+// (XXX) Arya: Workaround for circular dependency, to be fixed
+typedef struct _pd pd_t;
 
 /**
  * Eventually this will be a fully-fledged component. 

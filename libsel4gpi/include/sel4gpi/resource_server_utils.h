@@ -9,6 +9,20 @@
  * Utility functions for all servers of GPI resources, both in RT and other PDs
  */
 
+#define SERVER_UTILS "SERVER_UTILS"
+
+// Could use the server's debug function instead
+#if RESOURCE_SERVER_DEBUG
+#define RESOURCE_SERVER_PRINTF(...)  \
+    do                               \
+    {                                \
+        printf("%s ", SERVER_UTILS); \
+        printf(__VA_ARGS__);         \
+    } while (0);
+#else
+#define RESOURCE_SERVER_PRINTF(...)
+#endif
+
 /**
  * Generic resource server registry
  * Maintains per-resource metadata

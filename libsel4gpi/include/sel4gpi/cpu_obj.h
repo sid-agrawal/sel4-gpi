@@ -16,8 +16,9 @@
 
 typedef struct _cpu
 {
+    uint32_t id;
+
     sel4utils_thread_t thread; // storage for some commonly used fields
-    uint64_t cpu_obj_id;
     uint64_t binded_ads_id;
     void *tls_base;
     // the currently binded cspace, could potentially change if reconfigured

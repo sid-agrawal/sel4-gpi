@@ -63,7 +63,7 @@ static void on_mo_registry_delete(resource_server_registry_node_t *node_gen)
 {
     mo_component_registry_entry_t *node = (mo_component_registry_entry_t *)node_gen;
 
-    OSDB_PRINTF("Destroying MO (%d)\n", node->mo.mo_obj_id);
+    OSDB_PRINTF("Destroying MO (%d)\n", node->mo.id);
 
     mo_destroy(&node->mo, get_mo_component()->server_vka);
 }
@@ -118,7 +118,7 @@ int mo_component_allocate_mo(uint64_t client_id, bool forge, int num_pages, mo_c
     SERVER_GOTO_IF_COND(client_reg_ptr == NULL, "malloc ran out of memory to allocate MO registry entry\n");
     memset((void *)client_reg_ptr, 0, sizeof(mo_component_registry_entry_t));
 
-    client_reg_ptr->mo.mo_obj_id = resource_server_registry_insert_new_id(&get_mo_component()->mo_registry, (resource_server_registry_node_t *)client_reg_ptr);
+    client_reg_ptr->mo.id = resource_server_registry_insert_new_id(&get_mo_component()->mo_registry, (resource_server_registry_node_t *)client_reg_ptr);
     *ret_entry = client_reg_ptr;
 
     /* Create the MO object */
@@ -155,12 +155,12 @@ int mo_component_allocate_mo(uint64_t client_id, bool forge, int num_pages, mo_c
 
     /* Create the badged endpoint */
     *ret_cap = resource_server_make_badged_ep(get_mo_component()->server_vka, NULL, get_mo_component()->server_ep_obj.cptr,
-                                              client_reg_ptr->mo.mo_obj_id, GPICAP_TYPE_MO, NSID_DEFAULT, client_id);
+                                              client_reg_ptr->mo.id, GPICAP_TYPE_MO, NSID_DEFAULT, client_id);
 
     SERVER_GOTO_IF_COND(ret_cap == seL4_CapNull, "Failed to make badged ep for new MO\n");
 
     /* Add the resource to the client */
-    error = pd_add_resource_by_id(client_id, GPICAP_TYPE_MO, client_reg_ptr->mo.mo_obj_id, NSID_DEFAULT, *ret_cap, seL4_CapNull, *ret_cap);
+    error = pd_add_resource_by_id(client_id, GPICAP_TYPE_MO, client_reg_ptr->mo.id, NSID_DEFAULT, *ret_cap, seL4_CapNull, *ret_cap);
     SERVER_GOTO_IF_ERR(error, "Failed to initialize add MO resource to PD\n");
 
 err_goto:
@@ -187,7 +187,7 @@ void mo_handle_allocation_request(seL4_Word sender_badge, seL4_MessageInfo_t *re
 
     /* Return this badged end point in the return message. */
     seL4_SetCap(0, ret_cap);
-    seL4_SetMR(MOMSGREG_CONNECT_ACK_ID, new_entry->mo.mo_obj_id);
+    seL4_SetMR(MOMSGREG_CONNECT_ACK_ID, new_entry->mo.id);
 
 err_goto:
     seL4_SetMR(MOMSGREG_FUNC, MO_FUNC_CONNECT_ACK);

@@ -89,7 +89,7 @@ static void on_pd_registry_delete(resource_server_registry_node_t *node_gen)
 {
     pd_component_registry_entry_t *node = (pd_component_registry_entry_t *)node_gen;
 
-    OSDB_PRINTF("Destroying PD(%d, %s)\n", node->pd.pd_obj_id, node->pd.image_name);
+    OSDB_PRINTF("Destroying PD(%d, %s)\n", node->pd.id, node->pd.image_name);
 
     pd_destroy(&node->pd, get_pd_component()->server_vka, get_pd_component()->server_vspace);
 }
@@ -124,7 +124,7 @@ static int pd_component_allocate_pd(uint64_t client_id, bool forge, pd_component
 
     memset((void *)client_reg_ptr, 0, sizeof(pd_component_registry_entry_t));
 
-    client_reg_ptr->pd.pd_obj_id = resource_server_registry_insert_new_id(&get_pd_component()->pd_registry, (resource_server_registry_node_t *)client_reg_ptr);
+    client_reg_ptr->pd.id = resource_server_registry_insert_new_id(&get_pd_component()->pd_registry, (resource_server_registry_node_t *)client_reg_ptr);
     *ret_entry = client_reg_ptr;
 
     /* Create the PD object */
@@ -139,13 +139,13 @@ static int pd_component_allocate_pd(uint64_t client_id, bool forge, pd_component
 
     /* Create the badged endpoint */
     *ret_cap = resource_server_make_badged_ep(get_pd_component()->server_vka, NULL, get_pd_component()->server_ep_obj.cptr,
-                                              client_reg_ptr->pd.pd_obj_id, GPICAP_TYPE_PD, NSID_DEFAULT, client_id);
+                                              client_reg_ptr->pd.id, GPICAP_TYPE_PD, NSID_DEFAULT, client_id);
     client_reg_ptr->pd.pd_cap_in_RT = *ret_cap;
 
     SERVER_GOTO_IF_COND(ret_cap == seL4_CapNull, "Failed to make badged ep for new PD\n");
 
     /* Add the resource to the client */
-    error = pd_add_resource_by_id(client_id, GPICAP_TYPE_PD, client_reg_ptr->pd.pd_obj_id, NSID_DEFAULT, *ret_cap, seL4_CapNull, *ret_cap);
+    error = pd_add_resource_by_id(client_id, GPICAP_TYPE_PD, client_reg_ptr->pd.id, NSID_DEFAULT, *ret_cap, seL4_CapNull, *ret_cap);
     SERVER_GOTO_IF_ERR(error, "Failed to initialize add PD resource to PD\n");
 
 err_goto:
@@ -174,7 +174,7 @@ void forge_pd_cap_from_init_data(test_init_data_t *init_data, sel4utils_process_
     ZF_LOGF_IFERR(error, "Failed to allocate PD for forging");
     assert(error == 0);
     pd_t *pd = &new_entry->pd;
-    test_pd_id = pd->pd_obj_id;
+    test_pd_id = pd->id;
 
     /* Update the PD object from init data */
     pd_new(pd,
@@ -207,14 +207,14 @@ void forge_pd_cap_from_init_data(test_init_data_t *init_data, sel4utils_process_
     // Forge ADS cap
     seL4_CPtr child_as_cap_in_parent;
     uint32_t ads_id;
-    error = forge_ads_cap_from_vspace(&test_process->vspace, get_pd_component()->server_vka, pd->pd_obj_id, &child_as_cap_in_parent, &ads_id);
+    error = forge_ads_cap_from_vspace(&test_process->vspace, get_pd_component()->server_vka, pd->id, &child_as_cap_in_parent, &ads_id);
     ZF_LOGF_IFERR(error, "Failed to forge child's as cap");
     pd->init_data->binded_ads_ns_id = ads_id;
 
     // Forge CPU cap
     seL4_CPtr child_cpu_cap_in_parent;
     uint32_t cpu_id;
-    error = forge_cpu_cap_from_tcb(test_process, get_pd_component()->server_vka, pd->pd_obj_id, &child_cpu_cap_in_parent, &cpu_id);
+    error = forge_cpu_cap_from_tcb(test_process, get_pd_component()->server_vka, pd->id, &child_cpu_cap_in_parent, &cpu_id);
     ZF_LOGF_IFERR(error, "Failed to forge child's CPU cap");
 
     // Copy the ADS/CPU/PD caps to the test process
@@ -225,7 +225,7 @@ void forge_pd_cap_from_init_data(test_init_data_t *init_data, sel4utils_process_
 
     error = copy_cap_to_pd(pd, pd->pd_cap_in_RT, &pd->init_data->pd_cap);
     assert(error == 0);
-    pd_add_resource(pd, GPICAP_TYPE_PD, pd->pd_obj_id, NSID_DEFAULT, pd->pd_cap_in_RT, pd->init_data->pd_cap, pd->pd_cap_in_RT);
+    pd_add_resource(pd, GPICAP_TYPE_PD, pd->id, NSID_DEFAULT, pd->pd_cap_in_RT, pd->init_data->pd_cap, pd->pd_cap_in_RT);
 
     error = copy_cap_to_pd(pd, child_cpu_cap_in_parent, &pd->init_data->cpu_cap);
     assert(error == 0);
@@ -310,7 +310,7 @@ static void handle_disconnect_req(seL4_Word sender_badge,
     pd_component_registry_entry_t *client_data = pd_component_registry_get_entry_by_badge(sender_badge);
     SERVER_GOTO_IF_COND(client_data == NULL, "Couldn't find PD (%ld)\n", get_object_id_from_badge(sender_badge));
 
-    uint32_t pd_id = client_data->pd.pd_obj_id;
+    uint32_t pd_id = client_data->pd.id;
 
     /* Remove the PD from registry, this will also destroy the PD */
     resource_server_registry_delete(&get_pd_component()->pd_registry, (resource_server_registry_node_t *)client_data);
@@ -493,10 +493,10 @@ static void handle_add_rde_req(seL4_Word sender_badge, seL4_MessageInfo_t old_ta
     SERVER_GOTO_IF_COND(target_data == NULL, "Couldn't find target PD (%ld)\n", get_object_id_from_badge(sender_badge));
     SERVER_GOTO_IF_COND(server_data == NULL, "Couldn't find server PD (%ld)\n", get_object_id_from_badge(server_badge));
     SERVER_GOTO_IF_COND(resource_manager_data == NULL, "Couldn't find resource_manager_data (%ld)\n", manager_id);
-    SERVER_GOTO_IF_COND(server_data->pd.pd_obj_id != resource_manager_data->pd->pd_obj_id,
+    SERVER_GOTO_IF_COND(server_data->pd.id != resource_manager_data->pd->id,
                         "add_rde_req: wrong server PD (%d) provided for resource manager in PD (%d)\n",
-                        server_data->pd.pd_obj_id,
-                        resource_manager_data->pd->pd_obj_id);
+                        server_data->pd.id,
+                        resource_manager_data->pd->id);
 
     rde_type_t rde_type = {.type = resource_manager_data->resource_type};
     error = pd_add_rde(&target_data->pd,
@@ -592,9 +592,9 @@ static void handle_register_namespace_req(seL4_Word sender_badge, seL4_MessageIn
     SERVER_GOTO_IF_COND(client_data == NULL, "Couldn't find client PD (%ld)\n", get_object_id_from_badge(sender_badge));
     SERVER_GOTO_IF_COND(target_data == NULL, "Couldn't find target PD (%ld)\n", target_id);
     SERVER_GOTO_IF_COND(resource_manager_data == NULL, "Couldn't find resource manager (%ld)\n", manager_id);
-    SERVER_GOTO_IF_COND(resource_manager_data->pd->pd_obj_id != get_client_id_from_badge(sender_badge),
+    SERVER_GOTO_IF_COND(resource_manager_data->pd->id != get_client_id_from_badge(sender_badge),
                         "resource manager PD (%d) and client PD (%ld) do not match.\n",
-                        resource_manager_data->pd->pd_obj_id, get_client_id_from_badge(sender_badge));
+                        resource_manager_data->pd->id, get_client_id_from_badge(sender_badge));
 
     resource_manager_data->ns_index++;
     uint64_t ns_id = resource_manager_data->ns_index;

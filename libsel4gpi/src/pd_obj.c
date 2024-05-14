@@ -177,7 +177,7 @@ int pd_add_rde(pd_t *pd,
     pd->init_data->rde[type.type][idx].type = type;
     pd->init_data->rde[type.type][idx].slot_in_RT = server_ep;
     pd->init_data->rde[type.type][idx].ns_id = ns_id;
-    uint32_t client_id = pd->pd_obj_id;
+    uint32_t client_id = pd->id;
 
     // Badge the raw endpoint for the client PD
     cspacepath_t src, dest;
@@ -224,7 +224,7 @@ static void pd_held_resource_on_delete(resource_server_registry_node_t *node_gen
     switch (node->type)
     {
     case GPICAP_TYPE_ADS:
-        error = ads_component_dec(node->res_id);
+        error = resource_component_dec(get_ads_component(), node->res_id);
         break;
     case GPICAP_TYPE_CPU:
         error = cpu_component_dec(node->res_id);
@@ -275,9 +275,9 @@ int pd_new(pd_t *pd,
     pd->init_data = (osm_pd_init_data_t *)vspace_map_pages(server_vspace, &frame.cptr, NULL, seL4_AllRights, 1, seL4_PageBits, 1);
 
     mo_t *rde_mo_obj;
-    error = forge_mo_cap_from_frames(&frame.cptr, 1, server_vka, pd->pd_obj_id,
+    error = forge_mo_cap_from_frames(&frame.cptr, 1, server_vka, pd->id,
                                      &pd->init_data_mo.badged_server_ep_cspath.capPtr, &rde_mo_obj);
-    pd->init_data_mo_id = rde_mo_obj->mo_obj_id;
+    pd->init_data_mo_id = rde_mo_obj->id;
 
     if (error)
     {
@@ -285,7 +285,7 @@ int pd_new(pd_t *pd,
     }
 
     // Track the init data MO in RT only
-    pd_add_resource_by_id(get_gpi_server()->rt_pd_id, GPICAP_TYPE_MO, rde_mo_obj->mo_obj_id, NSID_DEFAULT,
+    pd_add_resource_by_id(get_gpi_server()->rt_pd_id, GPICAP_TYPE_MO, rde_mo_obj->id, NSID_DEFAULT,
                           pd->init_data_mo.badged_server_ep_cspath.capPtr, seL4_CapNull, pd->init_data_mo.badged_server_ep_cspath.capPtr);
 
     // Setup init data
@@ -478,7 +478,7 @@ int pd_bootstrap_allocator(pd_t *pd,
     if (error != seL4_NoError)
     {
         OSDB_PRINTF("%s: Failed to initialize single-level cspace for PD id %d.\n",
-                    __FUNCTION__, pd->pd_obj_id);
+                    __FUNCTION__, pd->id);
         return -1;
     }
 
@@ -486,7 +486,7 @@ int pd_bootstrap_allocator(pd_t *pd,
     if (error != seL4_NoError)
     {
         OSDB_PRINTF("%s: Failed to attach cspace to allocman for PD id %d.\n",
-                    __FUNCTION__, pd->pd_obj_id);
+                    __FUNCTION__, pd->id);
         return -1;
     }
 
@@ -582,7 +582,7 @@ int pd_configure(pd_t *pd,
 
     /* The RT manages this ADS */
     // (XXX) Arya: is this necessary?
-    pd_add_resource_by_id(get_gpi_server()->rt_pd_id, GPICAP_TYPE_ADS, target_ads->ads_obj_id, NSID_DEFAULT, seL4_CapNull, seL4_CapNull, seL4_CapNull);
+    pd_add_resource_by_id(get_gpi_server()->rt_pd_id, GPICAP_TYPE_ADS, target_ads->id, NSID_DEFAULT, seL4_CapNull, seL4_CapNull, seL4_CapNull);
 
     /* Initialize a vka for the PD's cspace */
     error = pd_bootstrap_allocator(pd, pd->proc.cspace.cptr, pd->proc.cspace_next_free,
@@ -590,26 +590,26 @@ int pd_configure(pd_t *pd,
     assert(error == 0);
 
     // the ADS cap is both a resource manager and a resource
-    seL4_Word badge = gpi_new_badge(GPICAP_TYPE_ADS, 0x00, pd->pd_obj_id, target_ads->ads_obj_id, target_ads->ads_obj_id);
-    error = pd_send_cap(pd, get_ads_component()->server_ep_obj.cptr, badge, &pd->init_data->ads_cap, true);
+    seL4_Word badge = gpi_new_badge(GPICAP_TYPE_ADS, 0x00, pd->id, target_ads->id, target_ads->id);
+    error = pd_send_cap(pd, get_ads_component()->server_ep, badge, &pd->init_data->ads_cap, true);
     ZF_LOGF_IFERR(error, "Failed to send ADS resource cap to PD");
 
     // the ADS cap also acts an as RDE, however since its object ID is set, a PD can never
     // make a new ADS from this EP
     rde_type_t ads_rde_type = {.type = GPICAP_TYPE_ADS};
-    error = pd_add_rde(pd, ads_rde_type, get_gpi_server()->ads_manager_id, target_ads->ads_obj_id, get_ads_component()->server_ep_obj.cptr);
+    error = pd_add_rde(pd, ads_rde_type, get_gpi_server()->ads_manager_id, target_ads->id, get_ads_component()->server_ep);
     ZF_LOGE_IFERR(error, "Failed to add ADS RDE to PD");
-    pd->init_data->binded_ads_ns_id = target_ads->ads_obj_id;
-    target_cpu->binded_ads_id = target_ads->ads_obj_id;
+    pd->init_data->binded_ads_ns_id = target_ads->id;
+    target_cpu->binded_ads_id = target_ads->id;
 
-    badge = gpi_new_badge(GPICAP_TYPE_CPU, 0x00, pd->pd_obj_id, NSID_DEFAULT, target_cpu->cpu_obj_id);
+    badge = gpi_new_badge(GPICAP_TYPE_CPU, 0x00, pd->id, NSID_DEFAULT, target_cpu->id);
     error = pd_send_cap(pd, get_cpu_component()->server_ep_obj.cptr, badge, &pd->init_data->cpu_cap, true);
     ZF_LOGF_IFERR(error, "Failed to send CPU cap to PD");
 
     memcpy(&pd->proc.vspace, target_ads->vspace, sizeof(vspace_t));
 
     // Send the PD's PD resource
-    badge = gpi_new_badge(GPICAP_TYPE_PD, 0x00, pd->pd_obj_id, NSID_DEFAULT, pd->pd_obj_id);
+    badge = gpi_new_badge(GPICAP_TYPE_PD, 0x00, pd->id, NSID_DEFAULT, pd->id);
     error = pd_send_cap(pd, pd->pd_cap_in_RT, badge, &pd->init_data->pd_cap, true);
     ZF_LOGF_IFERR(error, "Failed to send PD cap to PD");
 
@@ -657,18 +657,20 @@ int pd_send_cap(pd_t *to_pd,
         {
         case GPICAP_TYPE_ADS:
             server_vka = get_ads_component()->server_vka;
-            server_src_cap = get_ads_component()->server_ep_obj.cptr;
+            server_src_cap = get_ads_component()->server_ep;
 
-            ads_component_registry_entry_t *ads_reg = ads_component_registry_get_entry_by_badge(badge);
+            ads_component_registry_entry_t *ads_reg = (ads_component_registry_entry_t *)
+                resource_component_registry_get_by_badge(get_ads_component(), badge);
+
             assert(ads_reg != NULL);
 
             // Copying the resource, so increase the reference count
             if (inc_refcount)
             {
-                resource_server_registry_inc(&get_ads_component()->ads_registry, (resource_server_registry_node_t *)ads_reg);
+                resource_server_registry_inc(&get_ads_component()->registry, (resource_server_registry_node_t *)ads_reg);
             }
 
-            res_id = ads_reg->ads.ads_obj_id;
+            res_id = ads_reg->ads.id;
             break;
         case GPICAP_TYPE_MO:
             server_vka = get_mo_component()->server_vka;
@@ -683,7 +685,7 @@ int pd_send_cap(pd_t *to_pd,
                 resource_server_registry_inc(&get_mo_component()->mo_registry, (resource_server_registry_node_t *)mo_reg);
             }
 
-            res_id = mo_reg->mo.mo_obj_id;
+            res_id = mo_reg->mo.id;
             break;
         case GPICAP_TYPE_CPU:
             server_vka = get_cpu_component()->server_vka;
@@ -698,7 +700,7 @@ int pd_send_cap(pd_t *to_pd,
                 resource_server_registry_inc(&get_cpu_component()->cpu_registry, (resource_server_registry_node_t *)cpu_reg);
             }
 
-            res_id = cpu_reg->cpu.cpu_obj_id;
+            res_id = cpu_reg->cpu.id;
             break;
         case GPICAP_TYPE_PD:
             server_vka = get_pd_component()->server_vka;
@@ -713,7 +715,7 @@ int pd_send_cap(pd_t *to_pd,
                 resource_server_registry_inc(&get_pd_component()->pd_registry, (resource_server_registry_node_t *)pd_reg);
             }
 
-            res_id = pd_reg->pd.pd_obj_id;
+            res_id = pd_reg->pd.id;
             break;
         default:
             // ZF_LOGF("Unknown cap type in %s", __FUNCTION__);
@@ -733,7 +735,7 @@ int pd_send_cap(pd_t *to_pd,
         {
             new_badge = gpi_new_badge(cap_type,
                                       get_perms_from_badge(badge),
-                                      to_pd->pd_obj_id, /* Client ID */
+                                      to_pd->id, /* Client ID */
                                       get_ns_id_from_badge(badge),
                                       get_object_id_from_badge(badge));
 
@@ -818,8 +820,8 @@ static int request_remote_rr(pd_t *pd, model_state_t *ms, uint64_t server_id, ui
     }
 
     // Get RR from remote resource server
-    error = resource_server_client_get_rr(server_cap, obj_id, pd->pd_obj_id,
-                                          server_entry->pd->pd_obj_id,
+    error = resource_server_client_get_rr(server_cap, obj_id, pd->id,
+                                          server_entry->pd->id,
                                           rr_remote_vaddr, rr_local_vaddr,
                                           SIZE_BITS_TO_BYTES(seL4_LargePageBits), &ms2);
 
@@ -859,8 +861,8 @@ static int res_dump(pd_t *pd, model_state_t *ms, pd_hold_node_t *current_cap,
     case GPICAP_TYPE_NONE:
         break;
     case GPICAP_TYPE_ADS:
-        ads_component_registry_entry_t *ads_data =
-            ads_component_registry_get_entry_by_id(current_cap->res_id);
+        ads_component_registry_entry_t *ads_data = (ads_component_registry_entry_t *)
+            resource_component_registry_get_by_id(get_ads_component(), current_cap->res_id);
         assert(ads_data != NULL);
 
         ads_dump_rr(&ads_data->ads, ms, pd_node);
@@ -890,7 +892,7 @@ static int res_dump(pd_t *pd, model_state_t *ms, pd_hold_node_t *current_cap,
 
         break;
     case GPICAP_TYPE_PD:
-        if (current_cap->res_id != pd->pd_obj_id)
+        if (current_cap->res_id != pd->id)
         {
             pd_component_registry_entry_t *pd_data = pd_component_registry_get_entry_by_id(current_cap->res_id);
             assert(pd_data != NULL);
@@ -917,7 +919,7 @@ static int pd_dump_internal(pd_t *pd, model_state_t *ms, cspacepath_t rr_frame_p
     int error;
 
     /* Add the PD node */
-    gpi_model_node_t *pd_node = add_pd_node(ms, pd->image_name, pd->pd_obj_id);
+    gpi_model_node_t *pd_node = add_pd_node(ms, pd->image_name, pd->id);
 
     /* Add request edges for all RDEs from this PD */
     for (int i = 0; i < GPICAP_TYPE_MAX; i++)
@@ -948,7 +950,7 @@ static int pd_dump_internal(pd_t *pd, model_state_t *ms, cspacepath_t rr_frame_p
 #endif
 
                 /* Add the resource server PD node */
-                int server_pd_id = rm->pd ? rm->pd->pd_obj_id : 0;
+                int server_pd_id = rm->pd ? rm->pd->id : 0;
                 gpi_model_node_t *resource_manager_pd = add_pd_node(ms, NULL, server_pd_id);
                 add_request_edge(ms, pd_node, resource_manager_pd, rde.type.type);
 
@@ -987,7 +989,7 @@ int pd_dump(pd_t *pd)
 {
     int error;
 
-    OSDB_PRINTF("pd_dump_cap: Dumping all details of PD:%u\n", pd->pd_obj_id);
+    OSDB_PRINTF("pd_dump_cap: Dumping all details of PD:%u\n", pd->id);
 
     /*
         For all caps that belong to this PD
@@ -1079,7 +1081,7 @@ inline void print_pd_osm_rde_info(osmosis_rde_t *o)
     if (o)
     {
         printf("RDE: PD_ID: %u\t Slot_RT:%lu\t Slot_PD: %lu\t T: %s\n",
-               o->pd_obj_id,
+               o->id,
                o->slot_in_RT,
                o->slot_in_PD,
                cap_type_to_str(o->type.type));

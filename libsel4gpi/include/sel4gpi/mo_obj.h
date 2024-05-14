@@ -18,7 +18,8 @@
 
 typedef struct _mo
 {
-    uint64_t mo_obj_id;
+    uint32_t id;
+
     seL4_CPtr *frame_caps_in_root_task;
     vka_object_t *vka_objects;
     uintptr_t *frame_paddrs;

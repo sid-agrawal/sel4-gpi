@@ -64,7 +64,7 @@ static void on_cpu_registry_delete(resource_server_registry_node_t *node_gen)
 {
     cpu_component_registry_entry_t *node = (cpu_component_registry_entry_t *)node_gen;
 
-    OSDB_PRINTF("Destroying CPU (%d)\n", node->cpu.cpu_obj_id);
+    OSDB_PRINTF("Destroying CPU (%d)\n", node->cpu.id);
 
     cpu_destroy(&node->cpu);
 }
@@ -98,7 +98,7 @@ static int cpu_component_allocate_cpu(uint64_t client_id, bool forge, cpu_compon
     SERVER_GOTO_IF_COND(client_reg_ptr == NULL, "Couldn't allocate new CPU reg entry\n");
     memset((void *)client_reg_ptr, 0, sizeof(cpu_component_registry_entry_t));
 
-    client_reg_ptr->cpu.cpu_obj_id = resource_server_registry_insert_new_id(&get_cpu_component()->cpu_registry, (resource_server_registry_node_t *)client_reg_ptr);
+    client_reg_ptr->cpu.id = resource_server_registry_insert_new_id(&get_cpu_component()->cpu_registry, (resource_server_registry_node_t *)client_reg_ptr);
     *ret_entry = client_reg_ptr;
 
     /* Create the CPU object */
@@ -111,12 +111,12 @@ static int cpu_component_allocate_cpu(uint64_t client_id, bool forge, cpu_compon
 
     /* Create the badged endpoint */
     *ret_cap = resource_server_make_badged_ep(get_cpu_component()->server_vka, NULL, get_cpu_component()->server_ep_obj.cptr,
-                                              client_reg_ptr->cpu.cpu_obj_id, GPICAP_TYPE_CPU, NSID_DEFAULT, client_id);
+                                              client_reg_ptr->cpu.id, GPICAP_TYPE_CPU, NSID_DEFAULT, client_id);
 
     SERVER_GOTO_IF_COND(ret_cap == seL4_CapNull, "Failed to make badged ep for new CPU\n");
 
     /* Add the resource to the client */
-    error = pd_add_resource_by_id(client_id, GPICAP_TYPE_CPU, client_reg_ptr->cpu.cpu_obj_id, NSID_DEFAULT, *ret_cap, seL4_CapNull, *ret_cap);
+    error = pd_add_resource_by_id(client_id, GPICAP_TYPE_CPU, client_reg_ptr->cpu.id, NSID_DEFAULT, *ret_cap, seL4_CapNull, *ret_cap);
     SERVER_GOTO_IF_ERR(error, "Failed to add CPU resource to PD\n");
 
 err_goto:
@@ -149,7 +149,7 @@ void cpu_handle_allocation_request(seL4_Word sender_badge, seL4_MessageInfo_t *r
 
     seL4_SetCap(0, ret_cap);
 
-    OSDB_PRINTF("Allocated new CPU (%ld)\n", new_entry->cpu.cpu_obj_id);
+    OSDB_PRINTF("Allocated new CPU (%ld)\n", new_entry->cpu.id);
 
 err_goto:
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(error, 0, 1, CPUMSGREG_CONNECT_ACK_END);
@@ -208,7 +208,8 @@ static void handle_config_req(seL4_Word sender_badge,
 
     /* Get the vspace for the ads */
     seL4_Word ads_cap_badge = seL4_GetBadge(1);
-    ads_component_registry_entry_t *asre = ads_component_registry_get_entry_by_badge(ads_cap_badge);
+    ads_component_registry_entry_t *asre = (ads_component_registry_entry_t *)
+        resource_component_registry_get_by_badge(get_ads_component(), ads_cap_badge);
     SERVER_GOTO_IF_COND(asre == NULL, "Couldn't find ADS (%ld)\n", get_object_id_from_badge(ads_cap_badge));
 
     vspace_t *ads_vspace = asre->ads.vspace;
@@ -233,7 +234,7 @@ static void handle_config_req(seL4_Word sender_badge,
     // (XXX) Arya: here, the issue with va_args was seen before adding the CPU object ID to the format
     SERVER_GOTO_IF_ERR(error, "Failed to configure vspace for CPU (%ld)\n", get_object_id_from_badge(sender_badge));
 
-    client_data->cpu.binded_ads_id = asre->ads.ads_obj_id;
+    client_data->cpu.binded_ads_id = asre->ads.id;
 
     /* Configure the vspace */
     error = pd_configure(&pd_data->pd, "", &asre->ads, &client_data->cpu);
@@ -268,7 +269,8 @@ static void handle_change_vspace_req(seL4_Word sender_badge,
 
     /* Find the ADS */
     seL4_Word ads_cap_badge = seL4_GetBadge(0);
-    ads_component_registry_entry_t *ads_data = ads_component_registry_get_entry_by_badge(ads_cap_badge);
+    ads_component_registry_entry_t *ads_data = (ads_component_registry_entry_t *)
+        resource_component_registry_get_by_badge(get_ads_component(), ads_cap_badge);
     SERVER_GOTO_IF_COND(ads_data == NULL, "Couldn't find ADS (%ld)\n", get_object_id_from_badge(ads_cap_badge));
     vspace_t *ads_vspace = ads_data->ads.vspace;
 
@@ -280,8 +282,8 @@ static void handle_change_vspace_req(seL4_Word sender_badge,
     SERVER_GOTO_IF_ERR(error, "Failed to change vspace\n");
 
     // Update the PD object with the new ADS
-    pd_data->pd.init_data->binded_ads_ns_id = ads_data->ads.ads_obj_id;
-    client_data->cpu.binded_ads_id = ads_data->ads.ads_obj_id;
+    pd_data->pd.init_data->binded_ads_ns_id = ads_data->ads.id;
+    client_data->cpu.binded_ads_id = ads_data->ads.id;
 
 err_goto:
     seL4_SetMR(CPUMSGREG_FUNC, CPU_FUNC_CONFIG_ACK);
@@ -291,7 +293,7 @@ err_goto:
 
 int forge_cpu_cap_from_tcb(sel4utils_process_t *process, // Change this to the sel4utils_thread_t
                            vka_t *vka, uint32_t client_id,
-                           seL4_CPtr *cap_ret, uint32_t *cpu_obj_id_ret)
+                           seL4_CPtr *cap_ret, uint32_t *id_ret)
 {
     OSDB_PRINTF("Forging CPU cap from TCB\n");
 
@@ -312,9 +314,9 @@ int forge_cpu_cap_from_tcb(sel4utils_process_t *process, // Change this to the s
 
     *cap_ret = ret_cap;
 
-    if (cpu_obj_id_ret)
+    if (id_ret)
     {
-        *cpu_obj_id_ret = new_entry->cpu.cpu_obj_id;
+        *id_ret = new_entry->cpu.id;
     }
 
 err_goto:
@@ -361,7 +363,7 @@ int cpu_component_dec(uint64_t cpu_id)
 
     OSDB_PRINTF("Decrementing CPU (%ld), refcount %d\n", cpu_id, client_data->gen.count);
 
-    resource_server_registry_dec(&get_cpu_component()->cpu_registry, (resource_server_registry_node_t *) client_data);
+    resource_server_registry_dec(&get_cpu_component()->cpu_registry, (resource_server_registry_node_t *)client_data);
 
 err_goto:
     return error;

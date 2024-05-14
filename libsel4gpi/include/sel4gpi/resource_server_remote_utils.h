@@ -47,20 +47,6 @@ typedef struct _resource_server_context
 } resource_server_context_t;
 
 /**
- * Starts a resource server in a new PD
- * @param rde_id Manager ID of RDE to add, optionsl
- * @param rde_pd_cap PD resource for RDE to add, optional
- * @param image_name name of the resource server's image
- * @param server_pd_cap returns the PD resource of the started server
- * @param resource_manager_id returns the resource manager ID of the started server
- */
-int start_resource_server_pd(uint64_t rde_id,
-                             seL4_CPtr rde_pd_cap,
-                             char *image_name,
-                             seL4_CPtr *server_pd_cap,
-                             uint64_t *resource_manager_id);
-
-/**
  * Starts the resource server in the current
  * thread of the current PD
  *

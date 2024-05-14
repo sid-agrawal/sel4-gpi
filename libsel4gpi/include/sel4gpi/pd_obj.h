@@ -59,13 +59,13 @@ typedef struct osmosis_rde
     seL4_Word slot_in_PD;
 
     /*
-        I think that type+pd_obj_id should be all we need
+        I think that type+id should be all we need
         to find out when OSM resources are shared.
         But let's keep track of slot_in* (above) for now.
     */
 
     /* OSmosis generated resource manager ID for RDE */
-    uint32_t pd_obj_id;
+    uint32_t id;
     uint32_t manager_id;
     uint32_t ns_id;
 
@@ -131,7 +131,7 @@ typedef struct _osm_pd_init_data
 
 typedef struct _pd
 {
-    uint32_t pd_obj_id;
+    uint32_t id;
 
     /* This is only for model extraction purposes */
     char *image_name;

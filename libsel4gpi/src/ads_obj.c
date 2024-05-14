@@ -33,31 +33,43 @@
 extern char _cpio_archive[];
 extern char _cpio_archive_end[];
 
-int ads_new(vspace_t *loader,
+int ads_new(ads_t *ads,
             vka_t *vka,
-            ads_t *ret_ads)
+            vspace_t *loader)
 {
+    int error = 0;
 
-    ret_ads->vspace = malloc(sizeof(vspace_t));
-    if (ret_ads->vspace == NULL)
+    // Allocate a vspace
+    ads->vspace = malloc(sizeof(vspace_t));
+    if (ads->vspace == NULL)
     {
         ZF_LOGE("Failed to allocate vspace\n");
         goto error_exit;
     }
-    ret_ads->process_for_cookies = malloc(sizeof(sel4utils_process_t));
-    if (ret_ads->process_for_cookies == NULL)
-    {
-        ZF_LOGE("Failed to allocate process struct for coolies in ads_new\n");
-        goto error_exit;
-    }
-    vspace_t *new_vspace = ret_ads->vspace;
+
+    vspace_t *new_vspace = ads->vspace;
     assert(new_vspace != NULL);
 
+    // Allocate process structure for cookies
+    ads->process_for_cookies = malloc(sizeof(sel4utils_process_t));
+    if (ads->process_for_cookies == NULL)
+    {
+        ZF_LOGE("Failed to allocate process struct for cookies in ads_new\n");
+        goto error_exit;
+    }
+
     // Give vspace root
-    // assign asid pool
     vka_object_t *vspace_root_object = malloc(sizeof(vka_object_t));
     assert(vspace_root_object != NULL);
 
+    error = vka_alloc_vspace_root(vka, vspace_root_object);
+    if (error)
+    {
+        ZF_LOGE("Failed to allocate page directory for new process: %d\n", error);
+        goto error_exit;
+    }
+
+    // Allocate alloc data
     sel4utils_alloc_data_t *alloc_data = malloc(sizeof(sel4utils_alloc_data_t));
     if (alloc_data == NULL)
     {
@@ -65,14 +77,7 @@ int ads_new(vspace_t *loader,
         goto error_exit;
     }
 
-    int error = vka_alloc_vspace_root(vka, vspace_root_object);
-    if (error)
-    {
-        ZF_LOGE("Failed to allocate page directory for new process: %d\n", error);
-        goto error_exit;
-    }
-
-    /* assign an asid pool */
+    // Assign an asid pool
     if (!config_set(CONFIG_X86_64) &&
         assign_asid_pool(seL4_CapInitThreadASIDPool, vspace_root_object->cptr) != seL4_NoError)
     {
@@ -93,22 +98,22 @@ int ads_new(vspace_t *loader,
             Instead use a different function which suited are needs better.
         */
 
-        &(ret_ads->process_for_cookies));
+        &(ads->process_for_cookies));
     if (error)
     {
         ZF_LOGE("Failed to get new vspace while making copy: %d\n in %s", error, __FUNCTION__);
         goto error_exit;
     }
-    ret_ads->root_page_dir = vspace_root_object;
+    ads->root_page_dir = vspace_root_object;
 
     // Initialize VMR registry
-    resource_server_initialize_registry(&ret_ads->attach_registry, NULL);
+    resource_server_initialize_registry(&ads->attach_registry, NULL);
 
     return 0;
 
 error_exit:
     free(alloc_data);
-    free(ret_ads->vspace);
+    free(ads->vspace);
     return -1;
 }
 
@@ -200,7 +205,7 @@ int ads_attach_to_res(ads_t *ads,
     int error = 0;
 
     OSDB_PRINTF("attaching mo (id %lu, pages: %d) to reservation(vaddr: %p, type: %s, pages: %d) offset %ld\n",
-                mo->mo_obj_id, mo->num_pages,
+                mo->id, mo->num_pages,
                 reservation->vaddr, human_readable_va_res_type(reservation->type), reservation->n_pages,
                 offset);
 
@@ -251,7 +256,7 @@ int ads_attach_to_res(ads_t *ads,
     /* Track the attachment */
     reservation->mo_attached = true;
     reservation->mo_offset = offset;
-    reservation->mo_id = mo->mo_obj_id;
+    reservation->mo_id = mo->id;
     reservation->n_frames = mo->num_pages;
     reservation->frame_caps = malloc(sizeof(seL4_CPtr) * mo->num_pages);
     memcpy(reservation->frame_caps, frame_caps, sizeof(seL4_CPtr) * mo->num_pages);
@@ -316,7 +321,7 @@ int ads_forge_attach(ads_t *ads, sel4utils_res_t *res, mo_t *mo)
     attach_node->n_pages = mo->num_pages;
     attach_node->gen.object_id = res->start;
     attach_node->mo_attached = true;
-    attach_node->mo_id = mo->mo_obj_id;
+    attach_node->mo_id = mo->id;
     attach_node->mo_offset = 0;
     resource_server_registry_insert(&ads->attach_registry, (resource_server_registry_node_t *)attach_node);
 
@@ -395,7 +400,7 @@ static char *ads_res_type_to_str(sel4utils_reservation_type_t type)
 void ads_dump_rr(ads_t *ads, model_state_t *ms, gpi_model_node_t *pd_node)
 {
     // (XXX) Arya: ADS does not belong to a resource space! To fix
-    gpi_model_node_t *ads_node = add_resource_node(ms, GPICAP_TYPE_ADS, 1, ads->ads_obj_id);
+    gpi_model_node_t *ads_node = add_resource_node(ms, GPICAP_TYPE_ADS, 1, ads->id);
 
     // (XXX) Arya: Do we want to only include the currently active ADS? Reintroduce the 'mapped' property?
     add_edge(ms, GPI_EDGE_TYPE_HOLD, pd_node, ads_node);
@@ -426,7 +431,7 @@ void ads_dump_rr(ads_t *ads, model_state_t *ms, gpi_model_node_t *pd_node)
 
         /* Add the VMR node */
         // (XXX) Arya: VMR is an implicit resource
-        gpi_model_node_t *vmr_node = add_resource_node(ms, GPICAP_TYPE_VMR, ads->ads_obj_id, (uint64_t)res->vaddr);
+        gpi_model_node_t *vmr_node = add_resource_node(ms, GPICAP_TYPE_VMR, ads->id, (uint64_t)res->vaddr);
         add_edge(ms, GPI_EDGE_TYPE_SUBSET, vmr_node, ads_node);
         add_edge(ms, GPI_EDGE_TYPE_HOLD, pd_node, vmr_node);
 
@@ -453,7 +458,7 @@ void ads_dump_rr(ads_t *ads, model_state_t *ms, gpi_model_node_t *pd_node)
         char res_id[CSV_MAX_STRING_SIZE];
         snprintf(res_type, CSV_MAX_STRING_SIZE, "%s", human_readable_va_res_type(from_sel4_res->type));
         snprintf(res_id, CSV_MAX_STRING_SIZE, "%u_%lx_%lx",
-                 ads->ads_obj_id, from_sel4_res->start,
+                 ads->id, from_sel4_res->start,
                  from_sel4_res->end);
         add_resource(ms, res_type, res_id);
         add_resource_depends_on(ms, ads_res_id, res_id);
@@ -525,7 +530,7 @@ int ads_shallow_copy(vspace_t *loader,
                      void *pd_osm_data,
                      bool shallow_copy)
 {
-    OSDB_PRINTF("Shallow copying ADS(%d)\n", src_ads->ads_obj_id);
+    OSDB_PRINTF("Shallow copying ADS(%d)\n", src_ads->id);
 
     int error = 0;
     vspace_t *from = src_ads->vspace;
@@ -537,7 +542,7 @@ int ads_shallow_copy(vspace_t *loader,
     sel4utils_alloc_data_t *from_data = get_alloc_data(from);
     sel4utils_res_t *from_sel4_res = from_data->reservation_head;
 
-    OSDB_PRINTF("=========== Start of ADS copy (%d -> %d) ================\n", src_ads->ads_obj_id, dst_ads->ads_obj_id);
+    OSDB_PRINTF("=========== Start of ADS copy (%d -> %d) ================\n", src_ads->id, dst_ads->id);
 
     /* walk all the reservations */
     // (XXX) Arya: We may be able to just walk attach nodes instead of reservations (eventually?)

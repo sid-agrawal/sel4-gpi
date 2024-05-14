@@ -124,7 +124,7 @@ int cpu_new(cpu_t *cpu,
     /*
             sel4utils_thread_config_t thread_config;
         sel4utils_thread_t thread_obj;
-        uint64_t cpu_obj_id;
+        uint64_t id;
         vka_object_t *tcb;
         void *stack_top;
         void *tls_base;
@@ -139,7 +139,7 @@ void cpu_dump_rr(cpu_t *cpu, model_state_t *ms, gpi_model_node_t *pd_node)
 
     /* Add the Virtual CPU node */
     // (XXX) Arya: Virtual CPU does not belong to a resource space! To fix
-    gpi_model_node_t *cpu_node = add_resource_node(ms, GPICAP_TYPE_CPU, 1, cpu->cpu_obj_id);
+    gpi_model_node_t *cpu_node = add_resource_node(ms, GPICAP_TYPE_CPU, 1, cpu->id);
     add_edge(ms, GPI_EDGE_TYPE_HOLD, pd_node, cpu_node);
 
     seL4_Word affinity = 0;

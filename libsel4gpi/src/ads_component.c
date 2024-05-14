@@ -43,122 +43,17 @@ ads_component_context_t *get_ads_component(void)
     return &get_gpi_server()->ads_component;
 }
 
-static inline seL4_MessageInfo_t recv(seL4_Word *sender_badge_ptr)
-{
-    /** NOTE:
-
-     * the reply param of api_recv(third param) is only used in the MCS kernel.
-     **/
-
-    return api_recv(get_ads_component()->server_ep_obj.cptr,
-                    sender_badge_ptr,
-                    get_ads_component()->server_thread.reply.cptr);
-}
-
-static inline void reply(seL4_MessageInfo_t tag)
-{
-    api_reply(get_ads_component()->server_thread.reply.cptr, tag);
-}
-
 // Called when an item from the ADS registry is deleted
 static void on_ads_registry_delete(resource_server_registry_node_t *node_gen)
 {
     ads_component_registry_entry_t *node = (ads_component_registry_entry_t *)node_gen;
 
-    OSDB_PRINTF("Destroying ADS (%d)\n", node->ads.ads_obj_id);
+    OSDB_PRINTF("Destroying ADS (%d)\n", node->ads.id);
 
     ads_destroy(&node->ads);
 }
 
-int ads_component_initialize(simple_t *server_simple,
-                             vka_t *server_vka,
-                             seL4_CPtr server_cspace,
-                             vspace_t *server_vspace,
-                             sel4utils_thread_t server_thread,
-                             vka_object_t server_ep_obj)
-{
-    ads_component_context_t *component = get_ads_component();
-
-    component->server_simple = server_simple;
-    component->server_vka = server_vka;
-    component->server_cspace = server_cspace;
-    component->server_vspace = server_vspace;
-    component->server_thread = server_thread;
-    component->server_ep_obj = server_ep_obj;
-
-    resource_server_initialize_registry(&component->ads_registry, on_ads_registry_delete);
-    // (XXX) Arya: Dirty hack to prevent overlap with ADS NS ID, will be fixed when I add resource spaces
-    component->ads_registry.n_entries = NSID_DEFAULT;
-}
-
-/**
- * @brief Lookup the client registry entry for the given objectID in the badge.
- *
- * @param badge
- * @return ads_component_registry_entry_t*
- */
-ads_component_registry_entry_t *ads_component_registry_get_entry_by_badge(seL4_Word badge)
-{
-    return (ads_component_registry_entry_t *)resource_server_registry_get_by_badge(&get_ads_component()->ads_registry, badge);
-}
-
-/**
- * @brief Lookup the client registry entry for the given objectID
- *
- * @param res_id
- * @return ads_component_registry_entry_t*
- */
-ads_component_registry_entry_t *ads_component_registry_get_entry_by_id(seL4_Word object_id)
-{
-    return (ads_component_registry_entry_t *)resource_server_registry_get_by_id(&get_ads_component()->ads_registry, object_id);
-}
-
-// Utility function to create an ADS, add to registry, badge an endpoint, etc.
-static int ads_component_allocate_ads(uint64_t client_id, bool forge, ads_component_registry_entry_t **ret_entry, seL4_CPtr *ret_cap)
-{
-    int error = 0;
-
-    /* Create the registry entry */
-    ads_component_registry_entry_t *client_reg_ptr = malloc(sizeof(ads_component_registry_entry_t));
-    SERVER_GOTO_IF_COND(client_reg_ptr == NULL, "Couldn't allocate new ADS reg entry\n");
-    memset((void *)client_reg_ptr, 0, sizeof(ads_component_registry_entry_t));
-
-    client_reg_ptr->ads.ads_obj_id = resource_server_registry_insert_new_id(&get_ads_component()->ads_registry, (resource_server_registry_node_t *)client_reg_ptr);
-    *ret_entry = client_reg_ptr;
-
-    /* Create the ADS object */
-    if (!forge)
-    {
-        error = ads_new(get_ads_component()->server_vspace,
-                        get_ads_component()->server_vka,
-                        &client_reg_ptr->ads);
-        SERVER_GOTO_IF_ERR(error, "Failed to initialize new ADS object\n");
-    }
-
-    /* Create the badged endpoint */
-    *ret_cap = resource_server_make_badged_ep(get_ads_component()->server_vka, NULL, get_ads_component()->server_ep_obj.cptr,
-                                              client_reg_ptr->ads.ads_obj_id, GPICAP_TYPE_ADS, NSID_DEFAULT, client_id);
-    SERVER_GOTO_IF_COND(ret_cap == seL4_CapNull, "Failed to make badged ep for new ADS\n");
-
-    /* Add the resource to the client */
-    error = pd_add_resource_by_id(client_id, GPICAP_TYPE_ADS, client_reg_ptr->ads.ads_obj_id, NSID_DEFAULT, *ret_cap, seL4_CapNull, *ret_cap);
-    SERVER_GOTO_IF_ERR(error, "Failed to add ADS resource to PD\n");
-
-    /* Add the RDE for the client */
-
-    // (XXX) Linh: this is not very nice as we're coupling the PD and ADS components
-    pd_component_registry_entry_t *client_pd_data = pd_component_registry_get_entry_by_id(client_id);
-    SERVER_GOTO_IF_COND(client_pd_data == NULL, "Couldn't find PD (%ld)\n", client_id);
-
-    rde_type_t type = {.type = GPICAP_TYPE_ADS};
-    error = pd_add_rde(&client_pd_data->pd, type, get_gpi_server()->ads_manager_id, client_reg_ptr->ads.ads_obj_id, get_ads_component()->server_ep_obj.cptr);
-    SERVER_GOTO_IF_ERR(error, "Couldn't find add ADS to PD (%ld)'s RDE\n", client_id);
-
-err_goto:
-    return error;
-}
-
-static void handle_ads_allocation(seL4_Word sender_badge, seL4_MessageInfo_t *reply_tag)
+static seL4_MessageInfo_t handle_ads_allocation(seL4_Word sender_badge)
 {
     OSDB_PRINTF("Got ADS allocation request from %lx\n", sender_badge);
 
@@ -167,22 +62,32 @@ static void handle_ads_allocation(seL4_Word sender_badge, seL4_MessageInfo_t *re
     ads_component_registry_entry_t *new_entry;
     uint32_t client_id = get_client_id_from_badge(sender_badge);
 
-    error = ads_component_allocate_ads(client_id, false, &new_entry, &ret_cap);
-
+    error = resource_component_allocate(get_ads_component(), client_id, false,
+                                        (resource_server_registry_node_t **)&new_entry, &ret_cap);
     SERVER_GOTO_IF_ERR(error, "Failed to allocate new ADS\n");
+
+    /* Add the RDE for the client */
+
+    // (XXX) Linh: this is not very nice as we're coupling the PD and ADS components
+    pd_component_registry_entry_t *client_pd_data = pd_component_registry_get_entry_by_id(client_id);
+    SERVER_GOTO_IF_COND(client_pd_data == NULL, "Couldn't find PD (%d)\n", client_id);
+
+    rde_type_t type = {.type = GPICAP_TYPE_ADS};
+    error = pd_add_rde(&client_pd_data->pd, type, get_gpi_server()->ads_manager_id, new_entry->ads.id, get_ads_component()->server_ep);
+    SERVER_GOTO_IF_ERR(error, "Couldn't find add ADS to PD (%d)'s RDE\n", client_id);
 
     OSDB_PRINTF("Successfully allocated a new ads.\n");
 
     /* Return this badged end point in the return message. */
     seL4_SetCap(0, ret_cap);
-    seL4_SetMR(ADSMSGREG_CONNECT_ACK_ADS_NS, new_entry->ads.ads_obj_id);
+    seL4_SetMR(ADSMSGREG_CONNECT_ACK_ADS_NS, new_entry->ads.id);
 
 err_goto:
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(error, 0, 1, ADSMSGREG_CONNECT_ACK_END);
-    return reply(tag);
+    return tag;
 }
 
-static void handle_reserve_req(seL4_Word sender_badge, seL4_MessageInfo_t old_tag)
+static seL4_MessageInfo_t handle_reserve_req(seL4_Word sender_badge, seL4_MessageInfo_t old_tag)
 {
     OSDB_PRINTF("Got ADS reserve request from %lx\n", sender_badge);
     int error = 0;
@@ -196,7 +101,8 @@ static void handle_reserve_req(seL4_Word sender_badge, seL4_MessageInfo_t old_ta
 
     /* Find the ADS */
     uint64_t ads_id = get_ns_id_from_badge(sender_badge);
-    ads_component_registry_entry_t *ads_entry = ads_component_registry_get_entry_by_id(ads_id);
+    ads_component_registry_entry_t *ads_entry = (ads_component_registry_entry_t *)
+        resource_component_registry_get_by_id(get_ads_component(), ads_id);
     SERVER_GOTO_IF_COND(ads_entry == NULL, "Couldn't find ADS (%ld)\n", ads_id);
 
     // Make the reservation
@@ -206,7 +112,7 @@ static void handle_reserve_req(seL4_Word sender_badge, seL4_MessageInfo_t old_ta
 
     // Make a cap for the reservation
     // The object ID is the shorter map entry ID, not the full vaddr of the reservation
-    ret_cap = resource_server_make_badged_ep(get_ads_component()->server_vka, NULL, get_ads_component()->server_ep_obj.cptr,
+    ret_cap = resource_server_make_badged_ep(get_ads_component()->server_vka, NULL, get_ads_component()->server_ep,
                                              reservation->map_entry->gen.object_id, GPICAP_TYPE_VMR, ads_id, client_id);
     SERVER_GOTO_IF_COND(ret_cap == seL4_CapNull, "Failed to make badged ep for reservation\n");
 
@@ -219,41 +125,10 @@ static void handle_reserve_req(seL4_Word sender_badge, seL4_MessageInfo_t old_ta
 err_goto:
     seL4_SetMR(ADSMSGREG_FUNC, ADS_FUNC_RESERVE_ACK);
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(error, 0, 1, ADSMSGREG_RESERVE_ACK_END);
-    return reply(tag);
+    return tag;
 }
 
-int ads_component_attach(uint64_t ads_id, uint64_t mo_id, sel4utils_reservation_type_t vmr_type, void *vaddr, void **ret_vaddr)
-{
-    int error = 0;
-
-    /* Find the client */
-    ads_component_registry_entry_t *client_data = ads_component_registry_get_entry_by_id(ads_id);
-    SERVER_GOTO_IF_COND(client_data == NULL, "Couldn't find ADS (%ld)\n", ads_id);
-
-    /* Find the MO */
-    mo_component_registry_entry_t *mo_reg = mo_component_registry_get_entry_by_id(mo_id);
-    SERVER_GOTO_IF_COND(mo_reg == NULL, "Couldn't find MO (%ld)\n", mo_id);
-
-    /* Attach the MO */
-    if (vmr_type < SEL4UTILS_RES_TYPE_ELF || vmr_type >= SEL4UTILS_RES_TYPE_MAX)
-    {
-        vmr_type = SEL4UTILS_RES_TYPE_OTHER;
-    }
-    error = ads_attach(&client_data->ads,
-                       get_ads_component()->server_vka,
-                       vaddr,
-                       &mo_reg->mo,
-                       ret_vaddr,
-                       vmr_type);
-
-    SERVER_GOTO_IF_ERR(error, "Failed to attach at vaddr (%p) to ADS (%ld).\n",
-                       vaddr, ads_id);
-
-err_goto:
-    return error;
-}
-
-static void handle_attach_req(seL4_Word sender_badge, seL4_MessageInfo_t old_tag, seL4_CPtr mo_cap)
+static seL4_MessageInfo_t handle_attach_req(seL4_Word sender_badge, seL4_MessageInfo_t old_tag, seL4_CPtr mo_cap)
 {
     OSDB_PRINTF("Got attach request from client badge %lx.\n", sender_badge);
 
@@ -273,10 +148,10 @@ err_goto:
     seL4_SetMR(ADSMSGREG_FUNC, ADS_FUNC_ATTACH_ACK);
     seL4_SetMR(ADSMSGREG_ATTACH_ACK_VA, (seL4_Word)vaddr);
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0, ADSMSGREG_ATTACH_ACK_END);
-    return reply(tag);
+    return tag;
 }
 
-static void handle_attach_to_reserve_req(seL4_Word sender_badge, seL4_MessageInfo_t old_tag, seL4_CPtr mo_cap)
+static seL4_MessageInfo_t handle_attach_to_reserve_req(seL4_Word sender_badge, seL4_MessageInfo_t old_tag, seL4_CPtr mo_cap)
 {
     OSDB_PRINTF("Got attach-to-reserve request from client badge %lx.\n", sender_badge);
 
@@ -291,7 +166,8 @@ static void handle_attach_to_reserve_req(seL4_Word sender_badge, seL4_MessageInf
     SERVER_GOTO_IF_COND(get_cap_type_from_badge(mo_badge) != GPICAP_TYPE_MO, "Bad attach request, given MO EP is not an MO\n");
 
     /* Find the ADS, MO, and reservation */
-    ads_component_registry_entry_t *client_data = ads_component_registry_get_entry_by_id(ads_id);
+    ads_component_registry_entry_t *client_data = (ads_component_registry_entry_t *)
+        resource_component_registry_get_by_id(get_ads_component(), ads_id);
     mo_component_registry_entry_t *mo_reg = mo_component_registry_get_entry_by_id(mo_id);
     attach_node_t *reservation = ads_get_res_by_id(&client_data->ads, reservation_id);
 
@@ -304,10 +180,10 @@ static void handle_attach_to_reserve_req(seL4_Word sender_badge, seL4_MessageInf
 err_goto:
     seL4_SetMR(ADSMSGREG_FUNC, ADS_FUNC_ATTACH_RESERVE_ACK);
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(error, 0, 0, ADSMSGREG_ATTACH_RESERVE_ACK_END);
-    return reply(tag);
+    return tag;
 }
 
-static void handle_remove_req(seL4_Word sender_badge, seL4_MessageInfo_t old_tag)
+static seL4_MessageInfo_t handle_remove_req(seL4_Word sender_badge, seL4_MessageInfo_t old_tag)
 {
     OSDB_PRINTF("Got remove request from client badge %lx.\n", sender_badge);
 
@@ -321,10 +197,10 @@ static void handle_remove_req(seL4_Word sender_badge, seL4_MessageInfo_t old_tag
 err_goto:
     seL4_SetMR(ADSMSGREG_FUNC, ADS_FUNC_RM_ACK);
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(error, 0, 0, ADSMSGREG_RM_ACK_END);
-    return reply(tag);
+    return tag;
 }
 
-static void handle_testing_req(seL4_Word sender_badge, seL4_MessageInfo_t old_tag)
+static seL4_MessageInfo_t handle_testing_req(seL4_Word sender_badge, seL4_MessageInfo_t old_tag)
 {
     OSDB_PRINTF("Got testing request from client badge %lx."
                 " extraCaps: %lu capsUnWrapped %lu\n",
@@ -338,10 +214,10 @@ static void handle_testing_req(seL4_Word sender_badge, seL4_MessageInfo_t old_ta
 
     seL4_SetMR(ADSMSGREG_FUNC, ADS_FUNC_TESTING_ACK);
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0, ADSMSGREG_TESTING_ACK_END);
-    return reply(tag);
+    return tag;
 }
 
-static void handle_shallow_copy_req(seL4_Word sender_badge)
+static seL4_MessageInfo_t handle_shallow_copy_req(seL4_Word sender_badge)
 {
     OSDB_PRINTF("Got Shallow copy request from client badge %lx.\n", sender_badge);
 
@@ -350,7 +226,8 @@ static void handle_shallow_copy_req(seL4_Word sender_badge)
     seL4_Word client_id = get_client_id_from_badge(sender_badge);
 
     /* Find the client */
-    ads_component_registry_entry_t *old_ads_entry = ads_component_registry_get_entry_by_badge(sender_badge);
+    ads_component_registry_entry_t *old_ads_entry = (ads_component_registry_entry_t *)
+        resource_component_registry_get_by_badge(get_ads_component(), sender_badge);
     pd_component_registry_entry_t *pd_data = pd_component_registry_get_entry_by_id(client_id);
 
     SERVER_GOTO_IF_COND(old_ads_entry == NULL, "Couldn't find source ADS (%ld)\n", get_object_id_from_badge(sender_badge));
@@ -358,7 +235,8 @@ static void handle_shallow_copy_req(seL4_Word sender_badge)
 
     /* Make a new ADS */
     ads_component_registry_entry_t *new_ads_entry;
-    error = ads_component_allocate_ads(client_id, false, &new_ads_entry, &ret_cap);
+    error = resource_component_allocate(get_ads_component(), client_id, false,
+                                        (resource_server_registry_node_t **)&new_ads_entry, &ret_cap);
 
     SERVER_GOTO_IF_ERR(error, "Failed to allocate new ADs for copy\n");
 
@@ -385,17 +263,18 @@ err_goto:
     seL4_SetCap(0, ret_cap);
     seL4_SetMR(ADSMSGREG_FUNC, ADS_FUNC_SHALLOW_COPY_ACK);
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(error, 0, 1, ADSMSGREG_SHALLOW_COPY_ACK_END);
-    return reply(tag);
+    return tag;
 }
 
-void handle_load_elf_request(seL4_Word sender_badge, seL4_MessageInfo_t old_tag)
+static seL4_MessageInfo_t handle_load_elf_request(seL4_Word sender_badge, seL4_MessageInfo_t old_tag)
 {
     OSDB_PRINTF("Got load elf request from client badge %lx.\n", sender_badge);
 
     int error = 0;
     SERVER_GOTO_IF_COND(seL4_MessageInfo_get_capsUnwrapped(old_tag) < 1, "Missing cap for target PD in capsUnwrapped\n");
 
-    ads_component_registry_entry_t *target_ads = ads_component_registry_get_entry_by_badge(sender_badge);
+    ads_component_registry_entry_t *target_ads = (ads_component_registry_entry_t *)
+        resource_component_registry_get_by_badge(get_ads_component(), sender_badge);
     pd_component_registry_entry_t *target_pd = pd_component_registry_get_entry_by_id(get_object_id_from_badge(seL4_GetBadge(0)));
     SERVER_GOTO_IF_COND(target_ads == NULL, "Couldn't find target ADS (%ld)\n", get_object_id_from_badge(sender_badge));
     SERVER_GOTO_IF_COND(target_pd == NULL, "Couldn't find target PD (%ld)\n", get_object_id_from_badge(seL4_GetBadge(0)));
@@ -403,7 +282,7 @@ void handle_load_elf_request(seL4_Word sender_badge, seL4_MessageInfo_t old_tag)
     int image_id = (int)seL4_GetMR(ADSMSGREG_LOAD_ELF_REQ_IMAGE);
     SERVER_GOTO_IF_COND(image_id < 0 || image_id > PD_N_IMAGES, "Requested elf load of bad image ID %d\n", image_id);
 
-    OSDB_PRINTF("Loading %s's ELF into PD %d\n", pd_images[image_id], target_pd->pd.pd_obj_id);
+    OSDB_PRINTF("Loading %s's ELF into PD %d\n", pd_images[image_id], target_pd->pd.id);
     void *entry_point;
     error = ads_load_elf(target_ads->ads.vspace, &target_pd->pd.proc, pd_images[image_id], &entry_point);
     SERVER_GOTO_IF_ERR(error, "Load ELF failed\n");
@@ -421,10 +300,10 @@ void handle_load_elf_request(seL4_Word sender_badge, seL4_MessageInfo_t old_tag)
 err_goto:
     seL4_SetMR(ADSMSGREG_FUNC, ADS_FUNC_LOAD_ELF_ACK);
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(error, 0, 0, ADSMSGREG_LOAD_ELF_ACK_END);
-    return reply(tag);
+    return tag;
 }
 
-void handle_pd_setup_req(seL4_Word sender_badge, seL4_MessageInfo_t old_tag)
+static seL4_MessageInfo_t handle_pd_setup_req(seL4_Word sender_badge, seL4_MessageInfo_t old_tag)
 {
     OSDB_PRINTF("Got proc setup request from client badge %lx.\n", sender_badge);
 
@@ -432,7 +311,8 @@ void handle_pd_setup_req(seL4_Word sender_badge, seL4_MessageInfo_t old_tag)
 
     SERVER_GOTO_IF_COND(seL4_MessageInfo_get_capsUnwrapped(old_tag) < 1, "Missing cap for target PD in capsUnwrapped\n");
 
-    ads_component_registry_entry_t *target_ads = ads_component_registry_get_entry_by_badge(sender_badge);
+    ads_component_registry_entry_t *target_ads = (ads_component_registry_entry_t *)
+        resource_component_registry_get_by_badge(get_ads_component(), sender_badge);
     pd_component_registry_entry_t *target_pd = pd_component_registry_get_entry_by_id(get_object_id_from_badge(seL4_GetBadge(0)));
     SERVER_GOTO_IF_COND(target_ads == NULL, "Couldn't find target ADS (%ld)\n", get_object_id_from_badge(sender_badge));
     SERVER_GOTO_IF_COND(target_pd == NULL, "Couldn't find target PD (%ld)\n", get_object_id_from_badge(seL4_GetBadge(0)));
@@ -492,34 +372,7 @@ void handle_pd_setup_req(seL4_Word sender_badge, seL4_MessageInfo_t old_tag)
 err_goto:
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(error, 0, 0, ADSMSGREG_PD_SETUP_ACK_END);
     seL4_SetMR(ADSMSGREG_FUNC, ADS_FUNC_PD_SETUP_ACK);
-    return reply(tag);
-}
-
-int forge_ads_cap_from_vspace(vspace_t *vspace, vka_t *vka, uint32_t client_pd_id, seL4_CPtr *cap_ret, uint32_t *ads_obj_id_ret)
-{
-    OSDB_PRINTF("Forging ADS cap from vspace\n");
-
-    int error = 0;
-    seL4_CPtr ret_cap;
-    ads_component_registry_entry_t *new_entry;
-
-    error = ads_component_allocate_ads(client_pd_id, true, &new_entry, &ret_cap);
-    SERVER_GOTO_IF_ERR(error, "Failed to allocate ADS for forging\n");
-
-    /* Update the ADS object with the vspace data */
-    new_entry->ads.vspace = vspace;
-    error = forge_ads_attachments_from_vspace(&new_entry->ads, client_pd_id);
-    SERVER_GOTO_IF_ERR(error, "Failed to forge ADS attachments from vspace\n");
-
-    if (ads_obj_id_ret)
-    {
-        *ads_obj_id_ret = new_entry->ads.ads_obj_id;
-    }
-
-    *cap_ret = ret_cap;
-
-err_goto:
-    return error;
+    return tag;
 }
 
 /**
@@ -587,79 +440,151 @@ err_goto:
     return error;
 }
 
-void ads_handle_allocation_request(seL4_MessageInfo_t tag, seL4_Word sender_badge, cspacepath_t *received_cap, seL4_MessageInfo_t *reply_tag)
+/**
+ * @brief The starting point for the ads server's thread.
+ *
+ */
+static seL4_MessageInfo_t ads_component_handle(seL4_MessageInfo_t tag,
+                                               seL4_Word sender_badge,
+                                               seL4_CPtr received_cap,
+                                               bool *need_new_recv_cap)
 {
     enum ads_component_funcs func = seL4_GetMR(ADSMSGREG_FUNC);
+    seL4_MessageInfo_t reply_tag;
 
-    if (get_ns_id_from_badge(sender_badge) == NSID_DEFAULT)
+    if (get_object_id_from_badge(sender_badge) == BADGE_OBJ_ID_NULL && get_ns_id_from_badge(sender_badge) == NSID_DEFAULT)
     {
-        handle_ads_allocation(sender_badge, reply_tag);
+        reply_tag = handle_ads_allocation(sender_badge);
     }
     else
     {
         switch (func)
         {
         case ADS_FUNC_ATTACH_REQ:
-            handle_attach_req(sender_badge, tag, received_cap->capPtr);
+            reply_tag = handle_attach_req(sender_badge, tag, received_cap);
+            *need_new_recv_cap = true;
             break;
         case ADS_FUNC_RM_REQ:
-            // (XXX) Arya: This isn't an allocation request, but workaround due to
-            // not having a VMR endpoint
-            handle_remove_req(sender_badge, tag);
+            reply_tag = handle_remove_req(sender_badge, tag);
             break;
         case ADS_FUNC_RESERVE_REQ:
-            handle_reserve_req(sender_badge, tag);
+            reply_tag = handle_reserve_req(sender_badge, tag);
+            break;
+        case ADS_FUNC_SHALLOW_COPY_REQ:
+            reply_tag = handle_shallow_copy_req(sender_badge);
+            break;
+        case ADS_FUNC_TESTING_REQ:
+            reply_tag = handle_testing_req(sender_badge, tag);
+            break;
+        case ADS_FUNC_LOAD_ELF_REQ:
+            reply_tag = handle_load_elf_request(sender_badge, tag);
+            break;
+        case ADS_FUNC_PD_SETUP_REQ:
+            reply_tag = handle_pd_setup_req(sender_badge, tag);
+            break;
+        case ADS_FUNC_ATTACH_RESERVE_REQ:
+            reply_tag = handle_attach_to_reserve_req(sender_badge, tag, received_cap);
+            *need_new_recv_cap = true;
             break;
         default:
-            gpi_panic(ADSSERVS "Unknown func type for ADS allocation request.", (seL4_Word)func);
+            gpi_panic(ADSSERVS "Unknown func type.", (seL4_Word)func);
             break;
         }
     }
+
+    // To replace with real value
+    return reply_tag;
 }
 
-/**
- * @brief The starting point for the ads server's thread.
- *
- */
-void ads_component_handle(seL4_MessageInfo_t tag,
-                          seL4_Word sender_badge,
-                          cspacepath_t *received_cap,
-                          seL4_MessageInfo_t *reply_tag)
+int ads_component_initialize(simple_t *server_simple,
+                             vka_t *server_vka,
+                             seL4_CPtr server_cspace,
+                             vspace_t *server_vspace,
+                             sel4utils_thread_t server_thread,
+                             vka_object_t server_ep_obj)
 {
-    enum ads_component_funcs func;
-
-    func = seL4_GetMR(ADSMSGREG_FUNC);
-    /* Post */
-    switch (func)
-    {
-    case ADS_FUNC_SHALLOW_COPY_REQ:
-        handle_shallow_copy_req(sender_badge);
-        break;
-    case ADS_FUNC_TESTING_REQ:
-        handle_testing_req(sender_badge, tag);
-        break;
-    case ADS_FUNC_LOAD_ELF_REQ:
-        handle_load_elf_request(sender_badge, tag);
-        break;
-    case ADS_FUNC_PD_SETUP_REQ:
-        handle_pd_setup_req(sender_badge, tag);
-        break;
-    case ADS_FUNC_ATTACH_RESERVE_REQ:
-        handle_attach_to_reserve_req(sender_badge, tag, received_cap->capPtr);
-        break;
-    default:
-        gpi_panic(ADSSERVS "Unknown func type.", (seL4_Word)func);
-        break;
-    }
+    resource_component_initialize(get_ads_component(),
+                                  GPICAP_TYPE_ADS,
+                                  ads_component_handle,
+                                  (int (*)(resource_component_object_t *, vka_t *, vspace_t *))ads_new,
+                                  on_ads_registry_delete,
+                                  sizeof(ads_component_registry_entry_t),
+                                  server_simple,
+                                  server_vka,
+                                  server_cspace,
+                                  server_vspace,
+                                  server_thread,
+                                  server_ep_obj.cptr);
 }
 
 /** --- Functions callable by root task --- **/
+
+int forge_ads_cap_from_vspace(vspace_t *vspace, vka_t *vka, uint32_t client_pd_id, seL4_CPtr *cap_ret, uint32_t *id_ret)
+{
+    OSDB_PRINTF("Forging ADS cap from vspace\n");
+
+    int error = 0;
+    seL4_CPtr ret_cap;
+    ads_component_registry_entry_t *new_entry;
+
+    error = error = resource_component_allocate(get_ads_component(), client_pd_id, false,
+                                                (resource_server_registry_node_t **)&new_entry, &ret_cap);
+    SERVER_GOTO_IF_ERR(error, "Failed to allocate ADS for forging\n");
+
+    /* Update the ADS object with the vspace data */
+    new_entry->ads.vspace = vspace;
+    error = forge_ads_attachments_from_vspace(&new_entry->ads, client_pd_id);
+    SERVER_GOTO_IF_ERR(error, "Failed to forge ADS attachments from vspace\n");
+
+    if (id_ret)
+    {
+        *id_ret = new_entry->ads.id;
+    }
+
+    *cap_ret = ret_cap;
+
+err_goto:
+    return error;
+}
+
+int ads_component_attach(uint64_t ads_id, uint64_t mo_id, sel4utils_reservation_type_t vmr_type, void *vaddr, void **ret_vaddr)
+{
+    int error = 0;
+
+    /* Find the client */
+    ads_component_registry_entry_t *client_data = (ads_component_registry_entry_t *)
+        resource_component_registry_get_by_id(get_ads_component(), ads_id);
+    SERVER_GOTO_IF_COND(client_data == NULL, "Couldn't find ADS (%ld)\n", ads_id);
+
+    /* Find the MO */
+    mo_component_registry_entry_t *mo_reg = mo_component_registry_get_entry_by_id(mo_id);
+    SERVER_GOTO_IF_COND(mo_reg == NULL, "Couldn't find MO (%ld)\n", mo_id);
+
+    /* Attach the MO */
+    if (vmr_type < SEL4UTILS_RES_TYPE_ELF || vmr_type >= SEL4UTILS_RES_TYPE_MAX)
+    {
+        vmr_type = SEL4UTILS_RES_TYPE_OTHER;
+    }
+    error = ads_attach(&client_data->ads,
+                       get_ads_component()->server_vka,
+                       vaddr,
+                       &mo_reg->mo,
+                       ret_vaddr,
+                       vmr_type);
+
+    SERVER_GOTO_IF_ERR(error, "Failed to attach at vaddr (%p) to ADS (%ld).\n",
+                       vaddr, ads_id);
+
+err_goto:
+    return error;
+}
 
 int ads_component_rm_by_id(uint64_t ads_id, uint32_t vmr_id)
 {
     int error = 0;
 
-    ads_component_registry_entry_t *client_data = ads_component_registry_get_entry_by_id(ads_id);
+    ads_component_registry_entry_t *client_data = (ads_component_registry_entry_t *)
+        resource_component_registry_get_by_id(get_ads_component(), ads_id);
     SERVER_GOTO_IF_COND(client_data == NULL, "Couldn't find ADS (%ld)\n", ads_id);
 
     attach_node_t *attach_node = ads_get_res_by_id(&client_data->ads, vmr_id);
@@ -674,25 +599,11 @@ int ads_component_rm_by_vaddr(uint64_t ads_id, void *vaddr)
 {
     int error = 0;
 
-    ads_component_registry_entry_t *client_data = ads_component_registry_get_entry_by_id(ads_id);
+    ads_component_registry_entry_t *client_data = (ads_component_registry_entry_t *)
+        resource_component_registry_get_by_id(get_ads_component(), ads_id);
     SERVER_GOTO_IF_COND(client_data == NULL, "Couldn't find ADS (%ld)\n", ads_id);
 
     error = ads_rm(&client_data->ads, get_ads_component()->server_vka, vaddr);
-
-err_goto:
-    return error;
-}
-
-int ads_component_dec(uint64_t ads_id)
-{
-    int error = 0;
-
-    ads_component_registry_entry_t *client_data = ads_component_registry_get_entry_by_id(ads_id);
-    SERVER_GOTO_IF_COND(client_data == NULL, "Couldn't find ADS (%ld)\n", ads_id);
-
-    OSDB_PRINTF("Decrementing ADS (%ld), refcount %d\n", ads_id, client_data->gen.count);
-
-    resource_server_registry_dec(&get_ads_component()->ads_registry, (resource_server_registry_node_t *) client_data);
 
 err_goto:
     return error;

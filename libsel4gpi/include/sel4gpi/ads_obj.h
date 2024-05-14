@@ -51,10 +51,10 @@ typedef struct _attach_node
 
 typedef struct _ads
 {
+    uint32_t id;
     vspace_t *vspace;
     vka_object_t *root_page_dir;
     sel4utils_process_t *process_for_cookies;
-    uint32_t ads_obj_id;
 
     resource_server_registry_t attach_registry;
     resource_server_registry_t attach_id_to_vaddr_map;
@@ -63,14 +63,14 @@ typedef struct _ads
 /**
  * @brief Create a new ads object.
  *
- * @param loader vspace of the function running this
+ * @param ads pointer to ads structure
  * @param vka vka object to allocate cspace slots and PT from
- * @param ret_ads return ads object
- * @return int 0 on success, -1 on failure.
+ * @param loader vspace of the function running this
+ * @return int 0 on success, 1 on failure.
  */
-int ads_new(vspace_t *loader,
+int ads_new(ads_t *ads,
             vka_t *vka,
-            ads_t *ret_ads);
+            vspace_t *loader);
 
 /**
  * Reserve a region of the ADS
@@ -199,12 +199,12 @@ void ads_dump_rr(ads_t *ads, model_state_t *ms, gpi_model_node_t *pd_node);
 /**
  * Destroys an ADS, including all metadata and internal tracking
  * Does not destroy any MOs that are attached to the ADS
- * 
+ *
  * This does not remove the ADS from the ADS component registry
  * This function should only be called by the ADS component
- * 
+ *
  * @param ads the ads object
-*/
+ */
 void ads_destroy(ads_t *ads);
 
 static seL4_CPtr get_asid_pool(seL4_CPtr asid_pool)
