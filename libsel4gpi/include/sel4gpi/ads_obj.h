@@ -15,6 +15,7 @@
 #include <sel4gpi/model_exporting.h>
 #include <sel4gpi/mo_obj.h>
 #include <sel4gpi/resource_server_utils.h>
+#include <sel4gpi/gpi_client.h>
 
 // Used in a map from attach node ID to vaddr
 typedef struct _attach_node_map
@@ -265,10 +266,20 @@ int ads_proc_setup(sel4utils_process_t *process,
                    void **ret_init_stack);
 
 /**
- * @brief setup the stack to allow a thread to run
+ * @brief (WIP) setup the stack to allow a thread to run
  *
  * @param stack_top pointer to the top of the stack (in the thread's VSpace)
  * @param ret_init_stack returns the pointer to the stack position after it's been initialized
  * @return 0 on success, 1 on failure
  */
 int ads_thread_setup(void *stack_top, void **ret_init_stack);
+
+/**
+ * @brief (WIP) share or create new VMR resources based on the given config
+ *
+ * @param from_ads the ADS to copy resources from
+ * @param to_ads the ADS to copy resources to
+ * @param cfg a single config item
+ * @return int 0 on success, 1 on failure
+ */
+int ads_configure_resources(ads_t *from_ads, ads_t *to_ads, ads_resource_config_t *cfg);

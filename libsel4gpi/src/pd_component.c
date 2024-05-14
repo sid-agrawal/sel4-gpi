@@ -478,7 +478,7 @@ static seL4_MessageInfo_t handle_ipc_bench_req(void)
 
 /**
  * @brief clones a given PD into another PD, based on the resource configurations
- * this function highly couples all of the various GPI components, can we do any better?
+ * (XXX) Linh: this function highly couples all of the various GPI components, can we do any better?
  */
 static seL4_MessageInfo_t handle_clone_req(seL4_Word sender_badge, seL4_MessageInfo_t old_tag)
 {
@@ -503,7 +503,6 @@ static seL4_MessageInfo_t handle_clone_req(seL4_Word sender_badge, seL4_MessageI
 
     SERVER_GOTO_IF_COND_BG(shared_msg_mo_data == NULL, shared_msg_mo_badge, "Couldn't find MO holding shared message, MO badge: ");
 
-    // sel4utils_map_page(get_pd_component()->server_vka, )
     /* we have to do this because there is no ADS obj for the RT */
     pd_resource_config_t *resource_cfgs = (pd_resource_config_t *)vspace_map_pages(get_pd_component()->server_vspace, &shared_msg_mo_data->mo.frame_caps_in_root_task[0], NULL, seL4_AllRights, 1, seL4_PageBits, 1);
     SERVER_GOTO_IF_COND(resource_cfgs == NULL, "Couldn't map in resource configs\n");
@@ -514,20 +513,6 @@ static seL4_MessageInfo_t handle_clone_req(seL4_Word sender_badge, seL4_MessageI
                                         (resource_server_registry_node_t **)&new_entry, &ret_cap);
     new_entry->pd.pd_cap_in_RT = ret_cap;
     SERVER_GOTO_IF_ERR(error, "Failed to allocate a new PD\n");
-
-    // for (int i = 0; i < MAX_RESOURCE_CONFIGS; i++)
-    // {
-    //     switch (resource_cfgs[i].type)
-    //     {
-    //     case GPICAP_TYPE_ADS:
-    //         // call ADS component
-    //         break;
-
-    //     default:
-    //         OSDB_PRINTF("Unhandled resource conifg type: %d\n", resource_cfgs[i].type);
-    //         break;
-    //     }
-    // }
 
     vspace_unmap_pages(get_pd_component()->server_vspace, (void *)resource_cfgs, 1, seL4_PageBits, get_pd_component()->server_vka);
 

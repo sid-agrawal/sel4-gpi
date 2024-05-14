@@ -19,6 +19,7 @@
 #include <sel4gpi/cap_tracking.h>
 #include <sel4gpi/gpi_server.h>
 #include <sel4gpi/model_exporting.h>
+#include <sel4gpi/error_handle.h>
 #include <cpio/cpio.h>
 #include <sel4utils/helpers.h>
 #include <sel4runtime/auxv.h>
@@ -524,6 +525,57 @@ void ads_dump_rr(ads_t *ads, model_state_t *ms, gpi_model_node_t *pd_node)
 #endif
 }
 
+/**
+ * @brief copies a VMR reservation from src_ads to dst_ads
+ *
+ * @param src_ads the source ADS
+ * @param dst_ads the destination ADS
+ * @param start address of the start of the VMR
+ * @param end address of the end of the VMR
+ * @param vmr_type VMR type (e.g. stack, heap, etc.)
+ * @param ret_old_attach_node returns the original attach node from src_ads
+ * @param ret_new_attach_node returns the created attach node for dst_ads
+ * @param ret_mo if MO was attached in src_ads's reservation, returns the MO, otherwise NULL
+ * @return 0 on success, 1 on failure
+ */
+static int ads_copy_reservation(ads_t *src_ads,
+                                ads_t *dst_ads,
+                                uintptr_t start,
+                                uintptr_t end,
+                                sel4utils_reservation_type_t vmr_type,
+                                attach_node_t **ret_old_attach_node,
+                                attach_node_t **ret_new_attach_node,
+                                mo_t **ret_mo)
+{
+    int error = 0;
+    int num_pages = (end - start) / (SIZE_BITS_TO_BYTES(MO_PAGE_BITS));
+
+    attach_node_t *new_attach_node;
+    error = ads_reserve(dst_ads, (void *)start, num_pages, MO_PAGE_BITS, vmr_type, &new_attach_node);
+    SERVER_GOTO_IF_ERR(error, "Failed to reserve region\n");
+
+    // Find the original attach node
+    attach_node_t *old_attach_node = ads_get_res_by_vaddr(src_ads, (void *)start);
+    SERVER_GOTO_IF_COND(old_attach_node == NULL, "Failed to find the attach node for vaddr: %p\n", (void *)start);
+
+    // Find the original MO
+    mo_t *old_mo;
+    if (old_attach_node->mo_attached)
+    {
+        old_mo = &mo_component_registry_get_entry_by_id(old_attach_node->mo_id)->mo;
+        SERVER_GOTO_IF_COND(old_mo == NULL, "Failed to find the MO (%ld) for vaddr: %p\n", old_attach_node->mo_id, (void *)start);
+    }
+
+    *ret_old_attach_node = old_attach_node;
+    *ret_new_attach_node = new_attach_node;
+    *ret_mo = old_mo;
+
+    return 0;
+
+err_goto:
+    return 1;
+}
+
 int ads_shallow_copy(vspace_t *loader,
                      vka_t *vka,
                      ads_t *src_ads,
@@ -560,46 +612,16 @@ int ads_shallow_copy(vspace_t *loader,
             continue;
         }
 
-        // Reserve the region
-        num_pages = (from_sel4_res->end - from_sel4_res->start) / (SIZE_BITS_TO_BYTES(MO_PAGE_BITS));
-
         attach_node_t *new_attach_node;
-        error = ads_reserve(dst_ads, (void *)from_sel4_res->start, num_pages, MO_PAGE_BITS, from_sel4_res->type, &new_attach_node);
+        attach_node_t *old_attach_node; // original attach node
+        mo_t *old_mo;                   // original MO
+        error = ads_copy_reservation(src_ads, dst_ads, from_sel4_res->start, from_sel4_res->end, from_sel4_res->type, &old_attach_node, &new_attach_node, &old_mo);
+        SERVER_GOTO_IF_ERR(error, "Copying reservation failed\n");
 
-        if (error)
-        {
-            ZF_LOGE("Failed to reserve region\n");
-            return 1;
-        }
-
-        // Find the original attach node
-        attach_node_t *old_attach_node = ads_get_res_by_vaddr(src_ads, (void *)from_sel4_res->start);
-
-        if (old_attach_node == NULL)
-        {
-            ZF_LOGE("Failed to find the attach node for vaddr: %p\n", (void *)from_sel4_res->start);
-            goto error_exit;
-        }
-
-        // Find the original MO
-        mo_t *old_mo;
-        if (old_attach_node->mo_attached)
-        {
-            mo_component_registry_entry_t *old_mo_entry = (mo_component_registry_entry_t *)
-                resource_component_registry_get_by_id(get_mo_component(), old_attach_node->mo_id);
-
-            old_mo = &old_mo_entry->mo;
-
-            if (error)
-            {
-                ZF_LOGE("Failed to find the MO (%ld) for vaddr: %p\n", old_attach_node->mo_id, (void *)from_sel4_res->start);
-                goto error_exit;
-            }
-        }
-        else
+        if (!old_attach_node->mo_attached)
         {
             // If no MO attached, skip to next reservation
-            ZF_LOGE("Skipping reservation at vaddr: %p, no MO attached\n", (void *)from_sel4_res->start);
+            OSDB_PRINTF("Skipping reservation at vaddr: %p, no MO attached\n", (void *)from_sel4_res->start);
             from_sel4_res = from_sel4_res->next;
             continue;
         }
@@ -641,7 +663,7 @@ int ads_shallow_copy(vspace_t *loader,
             if (error)
             {
                 ZF_LOGE("Failed to allocate a new MO for deep copy\n");
-                goto error_exit;
+                goto err_goto;
             }
 
             // Attach the new MO in the new ADS
@@ -661,7 +683,7 @@ int ads_shallow_copy(vspace_t *loader,
             if (old_mo_va == NULL)
             {
                 ZF_LOGE("Failed to map old MO for deep copy\n");
-                goto error_exit;
+                goto err_goto;
             }
 
             void *new_mo_va = vspace_map_pages(loader, new_mo->frame_caps_in_root_task, NULL, seL4_AllRights, num_pages, MO_PAGE_BITS, 1);
@@ -669,7 +691,7 @@ int ads_shallow_copy(vspace_t *loader,
             if (new_mo_va == NULL)
             {
                 ZF_LOGE("Failed to map new MO for deep copy\n");
-                goto error_exit;
+                goto err_goto;
             }
 
             memcpy(new_mo_va, old_mo_va, num_pages * SIZE_BITS_TO_BYTES(MO_PAGE_BITS));
@@ -686,7 +708,7 @@ int ads_shallow_copy(vspace_t *loader,
     // For each reservation: call share_mem_at_vaddr
     return 0;
 
-error_exit:
+err_goto:
     return 1;
 }
 
@@ -927,6 +949,45 @@ int ads_proc_setup(sel4utils_process_t *process,
     return 0;
 }
 
+/* WIP */
 // int ads_thread_setup(void *stack_top, void **ret_init_stack)
 // {
 // }
+
+int ads_configure_resources(ads_t *from_ads, ads_t *to_ads, ads_resource_config_t *cfg)
+{
+    int error = 0;
+    switch (cfg->code_shared)
+    {
+    case GPI_SHARED:
+        // shallow copy
+        break;
+    case GPI_COPY:
+        // deep copy
+        break;
+    case GPI_DISJOINT:
+        // elf load
+        break;
+    default:
+        break;
+    }
+
+    if (cfg->stack_shared == GPI_DISJOINT)
+    {
+        if (cfg->code_shared == GPI_DISJOINT)
+        {
+            // full C runtime setup
+        }
+        else
+        {
+            // only TLS setup
+        }
+    }
+    else
+    {
+        // do necessary copying
+    }
+
+err_goto:
+    return error;
+}

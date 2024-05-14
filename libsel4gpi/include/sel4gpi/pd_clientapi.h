@@ -195,13 +195,22 @@ void pd_client_exit(pd_client_context_t *conn);
 void pd_client_bench_ipc(pd_client_context_t *conn, seL4_CPtr dummy_send_cap, seL4_CPtr dummy_recv_cap, bool cap_transfer);
 
 /**
- * @brief (WIP) creates a new PD based on the given configuration of resources
+ * @brief (WIP) creates a new PD based on the given configuration of VMR and CPU resources
  * NOTE: creates a shared message frame to encode the resource config, and cleans it up afterwards
+ * (XXX) Linh:
+ * - configure RDEs as well? Or done separately?
+ * - for other resource servers, we may need to make separate API calls, but they could be encapsulated in another util function
  *
  * @param pd_rde the RDE for creating new PDs
  * @param to_copy the source PD to copy resources from
+ * @param new_ads the address space to copy VMR resources into, if configured
  * @param free_slot slot to receive the new PD cap
  * @param cfg specifies how resources from the given PD are shared
  * @param ret_copied returns the new PD with a CSpace copied from to_copy
  */
-int pd_client_clone(seL4_CPtr pd_rde, pd_client_context_t *to_copy, seL4_CPtr free_slot, pd_resource_config_t *cfg, pd_client_context_t *ret_copied);
+int pd_client_clone(seL4_CPtr pd_rde,
+                    pd_client_context_t *to_copy,
+                    ads_client_context_t *new_ads,
+                    seL4_CPtr free_slot,
+                    pd_resource_config_t *cfg,
+                    pd_client_context_t *ret_copied);
