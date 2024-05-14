@@ -13,24 +13,24 @@
  * - The DEBUG_ID and SERVER_ID values must be defined
  */
 
-#define GOTO_IF_ERR(err, msg, ...)      \
-    do                                  \
-    {                                   \
-        if ((err))                      \
-        {                               \
-            printf(msg, ##__VA_ARGS__); \
-            goto err_goto;              \
-        }                               \
+#define GOTO_IF_ERR(err, msg, ...)                       \
+    do                                                   \
+    {                                                    \
+        if ((err))                                       \
+        {                                                \
+            printf("%s: " msg, __func__, ##__VA_ARGS__); \
+            goto err_goto;                               \
+        }                                                \
     } while (0)
 
-#define GOTO_IF_COND(c, msg, ...)       \
-    do                                  \
-    {                                   \
-        if ((c))                        \
-        {                               \
-            printf(msg, ##__VA_ARGS__); \
-            goto err_goto;              \
-        }                               \
+#define GOTO_IF_COND(c, msg, ...)                        \
+    do                                                   \
+    {                                                    \
+        if ((c))                                         \
+        {                                                \
+            printf("%s: " msg, __func__, ##__VA_ARGS__); \
+            goto err_goto;                               \
+        }                                                \
     } while (0)
 
 // (XXX) Arya: Occasionally I see a weird issue

@@ -513,8 +513,11 @@ static seL4_MessageInfo_t handle_clone_req(seL4_Word sender_badge, seL4_MessageI
                                         (resource_server_registry_node_t **)&new_entry, &ret_cap);
     new_entry->pd.pd_cap_in_RT = ret_cap;
     SERVER_GOTO_IF_ERR(error, "Failed to allocate a new PD\n");
+    seL4_SetCap(0, ret_cap);
 
-    vspace_unmap_pages(get_pd_component()->server_vspace, (void *)resource_cfgs, 1, seL4_PageBits, get_pd_component()->server_vka);
+    seL4_Word target_ads_badge = seL4_GetBadge(2);
+    // ads_component_registry_entry_t *target_ads_data = ads_component_registry_get_entry_by_badge()
+    // ads_configure_resources()
 
 err_goto:
     tag = seL4_MessageInfo_new(error, 0, 0, PDMSGREG_CLONE_ACK_END);

@@ -135,15 +135,18 @@ int ads_client_testing(ads_client_context_t *conn, vka_t *vka,
                        ads_client_context_t *ads_conn_clone2,
                        ads_client_context_t *ads_conn_clone3);
 
-/* might be removed */
 // /**
-//  * @brief (WIP) retrieves all VMRs in a given ADS
+//  * @brief (WIP) creates a new ADS based on the given source ADS following the given configuration
 //  *
-//  * @param ads the ADS to get VMRs from
-//  * @param shared_message memory object that will hold the list of VMRs (allocated by caller)
-//  * @return int 0 on success, 1 on failure.
+//  * @param src_ads the source ADS
+//  * @param free_slot a free slot to put the new ADS into
+//  * @param cfg an ADS configuration describing how the new ADS should be set up
+//  * @param ret_ads the newly created ADS
+//  * @return int 0 on success, 1 on failure
 //  */
-// int ads_client_get_vmrs(ads_client_context_t *ads, mo_client_context_t *shared_message);
+// int ads_client_clone(ads_client_context_t *src_ads, seL4_CPtr free_slot, ads_resource_config_t *cfg, ads_client_context_t *ret_ads);
+
+// int ads_client_shallow_copy_vmr(ads_client_context_t *src_ads, ads_client_context_t *dst_ads, )
 
 /* ======================================= CONVENIENCE FUNCTIONS (NOT PART OF FRAMEWORK) ================================================= */
 

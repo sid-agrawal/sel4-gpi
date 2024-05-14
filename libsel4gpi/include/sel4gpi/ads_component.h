@@ -179,8 +179,8 @@ enum ads_component_msgregs
 /* TEMPORARY: hardcoded PD configurations until we can decide on something else */
 enum _ads_setup_type
 {
-    ADS_PROC = 1,
-    ADS_THREAD
+    ADS_RUNTIME_SETUP = 1,
+    ADS_TLS_SETUP
 };
 typedef enum _ads_setup_type ads_setup_type_t;
 

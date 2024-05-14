@@ -564,8 +564,9 @@ static int ads_copy_reservation(ads_t *src_ads,
     mo_t *old_mo;
     if (old_attach_node->mo_attached)
     {
-        old_mo = &mo_component_registry_get_entry_by_id(old_attach_node->mo_id)->mo;
-        SERVER_GOTO_IF_COND(old_mo == NULL, "Failed to find the MO (%ld) for vaddr: %p\n", old_attach_node->mo_id, (void *)start);
+        mo_component_registry_entry_t *old_mo_reg_entry = (mo_component_registry_entry_t *)resource_component_registry_get_by_id(get_mo_component(), old_attach_node->mo_id);
+        SERVER_GOTO_IF_COND(old_mo_reg_entry == NULL, "Failed to find the MO (%ld) for vaddr: %p\n", old_attach_node->mo_id, (void *)start);
+        old_mo = &old_mo_reg_entry->mo;
     }
 
     *ret_old_attach_node = old_attach_node;
@@ -594,7 +595,7 @@ static int ads_deep_copy(ads_t *dst_ads, mo_t *src_mo, int num_pages, attach_nod
     // The "client" to hold this MO is the root task
     mo_component_registry_entry_t *mo_entry;
     seL4_CPtr mo_cap; // Not used since we are not giving this MO away
-    error = mo_component_allocate_mo(get_gpi_server()->rt_pd_id, false, num_pages, &mo_entry, &mo_cap);
+    error = resource_component_allocate(get_mo_component(), get_gpi_server()->rt_pd_id, false, (void *)num_pages, (resource_server_registry_node_t **)&mo_entry, &mo_cap);
     SERVER_GOTO_IF_ERR(error, "Failed to allocate a new MO for deep copy\n");
 
     // Attach the new MO in the new ADS
@@ -618,6 +619,31 @@ err_goto:
     vspace_unmap_pages(loader, new_mo_va, num_pages, MO_PAGE_BITS, VSPACE_FREE);
 
     return error;
+}
+
+/**
+ * @brief finds a reservation for a VMR by the type
+ *
+ * @param src_ads ADS to find the reservation in
+ * @param vmr_type the type of VMR to look for
+ * @return sel4utils_res_t* returns the reservation data, or NULL if no such VMR exists
+ */
+static sel4utils_res_t *ads_find_reservation_by_type(ads_t *src_ads, sel4utils_reservation_type_t vmr_type)
+{
+    sel4utils_alloc_data_t *vmr_data = get_alloc_data(src_ads->vspace);
+    sel4utils_res_t *curr_res = vmr_data->reservation_head;
+
+    while (curr_res != NULL)
+    {
+        if (curr_res->type == vmr_type)
+        {
+            return curr_res;
+        }
+
+        curr_res = curr_res->next;
+    }
+
+    return NULL;
 }
 
 int ads_shallow_copy(vspace_t *loader,
@@ -962,6 +988,8 @@ int ads_configure_resources(ads_t *from_ads, ads_t *to_ads, ads_resource_config_
     {
     case GPI_SHARED:
         // shallow copy
+        // find code region
+        sel4utils_res_t *elf_vmr = ads_find_reservation_by_type(from_ads, SEL4UTILS_RES_TYPE_ELF);
         break;
     case GPI_COPY:
         // deep copy

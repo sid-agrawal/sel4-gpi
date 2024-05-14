@@ -237,8 +237,8 @@ int sel4gpi_spawn_process(sel4gpi_process_t *proc, int argc, seL4_Word *args)
 {
     int error;
     void *init_stack;
-    error = ads_client_pd_setup(&proc->ads, &proc->pd, proc->stack, proc->stack_pages, argc, args, ADS_PROC, &init_stack);
-    GOTO_IF_ERR(error, "failed to prepare stack\n");
+    error = ads_client_pd_setup(&proc->ads, &proc->pd, proc->stack, proc->stack_pages, argc, args, ADS_RUNTIME_SETUP, &init_stack);
+    GOTO_IF_ERR(error, "failed to prepare stack");
 
     error = cpu_client_start(&proc->cpu, proc->entry_point, init_stack, 0);
     GOTO_IF_ERR(error, "failed to start CPU\n");
@@ -249,25 +249,127 @@ err_goto:
     return error;
 }
 
-// static int configure_vmr_resource(resource_config_t *cfg_item)
-// {
-// }
+int sel4gpi_configure_pd(pd_resource_config_t *cfg, pd_client_context_t *src_pd, pd_client_context_t *dst_pd, int argc, seL4_Word *args, sel4gpi_pd_t *ret_pd)
+{
+    int error;
+    seL4_CPtr free_slot;
+    pd_client_context_t self_pd_cap;
+    self_pd_cap.badged_server_ep_cspath.capPtr = sel4gpi_get_pd_cap();
 
-// int sel4gpi_configure_pd(resource_config_t *cfg)
-// {
-//     int error = 0;
-//     for (int i = 0; i < MAX_RESOURCE_CONFIGS; i++)
-//     {
-//         switch (cfg[i].type)
-//         {
-//         case GPICAP_TYPE_ADS: // this is really the VMR type
-//             error = configure_vmr_resource(&cfg[i]);
-//             break;
+    // (XXX) Linh: for now, we'll just assume we always need a new CPU resource, configuration is TBD
+    seL4_CPtr cpu_rde = sel4gpi_get_rde(GPICAP_TYPE_CPU);
+    error = pd_client_next_slot(&self_pd_cap, &free_slot);
+    GOTO_IF_ERR(error, "failed to allocate next slot");
 
-//         default:
-//             break;
-//         }
-//     }
+    cpu_client_context_t new_cpu;
+    error = cpu_component_client_connect(cpu_rde, free_slot, &new_cpu);
+    GOTO_IF_ERR(error, "failed to allocate a new CPU");
+    seL4_Word cnode_guard = api_make_guard_skip_word(seL4_WordBits - TEST_PROCESS_CSPACE_SIZE_BITS);
 
-//     return error;
-// }
+    ads_client_context_t new_ads = {0};
+    void *entry_point = NULL;
+    void *init_stack = NULL;
+
+    // check ADS config
+    if (cfg->ads_cfg.src_ads == NULL)
+    {
+    }
+    else
+    {
+        seL4_CPtr ads_rde = sel4gpi_get_rde(GPICAP_TYPE_ADS);
+        void *stack = NULL;
+        void *heap = NULL;
+        void *ipc_buf = NULL;
+        mo_client_context_t ipc_mo;
+
+        /* new ADS */
+        error = pd_client_next_slot(&self_pd_cap, &free_slot);
+        GOTO_IF_ERR(error, "failed to allocate next slot");
+
+        error = ads_component_client_connect(ads_rde, free_slot, &new_ads);
+        GOTO_IF_ERR(error, "failed to allocate a new ADS");
+
+        ads_client_context_t new_ads_rde = {.badged_server_ep_cspath.capPtr = sel4gpi_get_rde_by_ns_id(new_ads.id, GPICAP_TYPE_ADS)};
+
+        switch (cfg->ads_cfg.code_shared)
+        {
+        case GPI_SHARED:
+            // shallow copy
+            printf("Not implemented yet!\n");
+            break;
+        case GPI_COPY:
+            // deep copy
+            printf("Not implemented yet!\n");
+            break;
+        case GPI_DISJOINT:
+            // elf load
+            error = ads_client_load_elf(&new_ads, dst_pd, cfg->ads_cfg.image_name, &entry_point);
+            GOTO_IF_ERR(error, "failed to load elf to ADS");
+            break;
+        default:
+            break;
+        }
+
+        if (cfg->ads_cfg.stack_shared == GPI_DISJOINT)
+        {
+            stack = sel4gpi_new_sized_stack(&new_ads_rde, cfg->ads_cfg.stack_pages);
+            GOTO_IF_ERR(stack == NULL, "failed to allocate a new stack");
+        }
+
+        if (cfg->ads_cfg.heap_shared == GPI_DISJOINT)
+        {
+            heap = sel4gpi_get_vmr(&new_ads_rde, cfg->ads_cfg.heap_pages, (void *)PD_HEAP_LOC, SEL4UTILS_RES_TYPE_HEAP, NULL);
+            GOTO_IF_ERR(heap == NULL, "failed to allocate a new heap");
+        }
+
+        if (cfg->ads_cfg.ipc_buf_shared == GPI_DISJOINT)
+        {
+            ipc_buf = sel4gpi_get_vmr(&new_ads_rde, 1, NULL, SEL4UTILS_RES_TYPE_IPC_BUF, &ipc_mo);
+            GOTO_IF_ERR(ipc_buf == NULL, "failed to allocate a new IPC buf");
+        }
+
+        error = cpu_client_config(&new_cpu, &new_ads, ipc_buf == NULL ? NULL : &ipc_mo, dst_pd, cnode_guard, seL4_CapNull, (seL4_Word)ipc_buf);
+        GOTO_IF_ERR(error, "failed to configure CPU");
+
+        // (XXX) Linh required that this happens after all the other setup, we can do better if we refactor the sel4utils structs out of the PD component
+        if (cfg->ads_cfg.stack_shared)
+        {
+            ads_setup_type_t setup_mode = cfg->ads_cfg.code_shared == GPI_DISJOINT ? ADS_RUNTIME_SETUP : ADS_TLS_SETUP;
+            error = ads_client_pd_setup(&new_ads, dst_pd, stack, cfg->ads_cfg.stack_pages, argc, args, setup_mode, &init_stack);
+            GOTO_IF_ERR(error, "failed to prepare stack");
+        }
+    }
+
+    // TODO loop through other VMR regions
+
+    error = cpu_client_start(&new_cpu, entry_point, init_stack, 0);
+    GOTO_IF_ERR(error, "failed to start CPU");
+
+    if (ret_pd)
+    {
+        ret_pd->cpu = new_cpu;
+        ret_pd->ads = new_ads;
+    }
+
+err_goto:
+    // TODO cleanup things we've allocated
+    return error;
+}
+
+pd_resource_config_t *sel4gpi_generate_proc_config(char *image_name)
+{
+    pd_resource_config_t *proc_cfg = malloc(sizeof(pd_resource_config_t));
+    ads_resource_config_t proc_ads_cfg = {
+        .code_shared = GPI_DISJOINT,
+        .stack_shared = GPI_DISJOINT,
+        .heap_shared = GPI_DISJOINT,
+        .ipc_buf_shared = GPI_DISJOINT,
+        .stack_pages = DEFAULT_STACK_PAGES,
+        .heap_pages = DEFAULT_HEAP_PAGES,
+        .image_name = image_name,
+        .n_vmr_shared = 0};
+
+    proc_cfg->ads_cfg = proc_ads_cfg;
+
+    return proc_cfg;
+}

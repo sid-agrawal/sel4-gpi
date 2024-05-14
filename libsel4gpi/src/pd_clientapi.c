@@ -275,7 +275,12 @@ void pd_client_bench_ipc(pd_client_context_t *conn, seL4_CPtr dummy_send_cap, se
 }
 
 /* WIP */
-int pd_client_clone(seL4_CPtr pd_rde, pd_client_context_t *to_copy, ads_client_context_t *new_ads, seL4_CPtr free_slot, pd_resource_config_t *cfg, pd_client_context_t *ret_copied)
+int pd_client_clone(pd_client_context_t *src_pd,
+                    ads_client_context_t *src_ads,
+                    ads_client_context_t *dst_ads,
+                    seL4_CPtr free_slot,
+                    pd_resource_config_t *cfg,
+                    pd_client_context_t *ret_copied)
 {
     int error = 0;
     /* create message frame */
@@ -290,11 +295,12 @@ int pd_client_clone(seL4_CPtr pd_rde, pd_client_context_t *to_copy, ads_client_c
                            /* This works coz we have a single level cnode with no guard.*/
                            seL4_WordBits); /* Depth i.e. how many bits of free_slot to interpret*/
 
-    seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 2, PDMSGREG_CLONE_REQ_END);
-    seL4_SetCap(0, to_copy->badged_server_ep_cspath.capPtr);
+    seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 3, PDMSGREG_CLONE_REQ_END);
+    seL4_SetCap(0, src_ads->badged_server_ep_cspath.capPtr);
     seL4_SetCap(1, shared_mo.badged_server_ep_cspath.capPtr);
+    seL4_SetCap(2, dst_ads->badged_server_ep_cspath.capPtr);
 
-    tag = seL4_Call(pd_rde, tag);
+    tag = seL4_Call(src_pd->badged_server_ep_cspath.capPtr, tag);
 
     ret_copied->badged_server_ep_cspath.capPtr = free_slot;
     ads_client_context_t curr_ads_obj = {.badged_server_ep_cspath.capPtr = sel4gpi_get_ads_cap()};

@@ -28,6 +28,14 @@ typedef struct _sel4gpi_process
     void *entry_point;
 } sel4gpi_process_t;
 
+// holds the components that make up one PD
+typedef struct _sel4gpi_pd
+{
+    pd_client_context_t pd;
+    ads_client_context_t ads;
+    cpu_client_context_t cpu;
+} sel4gpi_pd_t;
+
 /*
  * Get the osmosis pd cap from the env
  */
@@ -118,10 +126,24 @@ int sel4gpi_configure_process(const char *image_name,
  */
 int sel4gpi_spawn_process(sel4gpi_process_t *proc, int argc, seL4_Word *args);
 
-// /**
-//  * @brief (WIP) create a new PD based on the given configuration of resources
-//  *
-//  * @param cfg
-//  * @return int
-//  */
-// int sel4gpi_configure_pd(resource_config_t *cfg);
+/**
+ * @brief configures a dst_pd and prepares it for execution (via cpu_start)
+ *
+ * @param cfg the configuration of resources to follow, NOTE: currently does not prevent invalid configurations
+ * @param src_pd the PD to base configurations on, currently unused
+ * @param dst_pd the PD to be configured
+ * @param argc the number of arguments to pass to the PD
+ * @param args the arguments
+ * @param ret_pd returns the necessary components making up the PD
+ * @return int returns 0 on success, 1 on failure
+ */
+int sel4gpi_configure_pd(pd_resource_config_t *cfg, pd_client_context_t *src_pd, pd_client_context_t *dst_pd, int argc, seL4_Word *args, sel4gpi_pd_t *ret_pd);
+
+/* helpers to get commonly used PD configurations */
+/**
+ * @brief generates a PD configuration that describes a process
+ *
+ * @param image_name the name of the process's image
+ * @return pd_resource_config_t* returns a filled in config struct, caller is responsbile for freeing
+ */
+pd_resource_config_t *sel4gpi_generate_proc_config(char *image_name);

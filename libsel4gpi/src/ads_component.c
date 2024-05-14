@@ -338,6 +338,7 @@ static seL4_MessageInfo_t handle_pd_setup_req(seL4_Word sender_badge, seL4_Messa
 
     /* parse the arguments */
     int argc = seL4_GetMR(ADSMSGREG_PD_SETUP_REQ_ARGC);
+    void *init_stack;
 
     // These brackets limit the scope of argc/argv so we may goto err_goto
     {
@@ -373,20 +374,29 @@ static seL4_MessageInfo_t handle_pd_setup_req(seL4_Word sender_badge, seL4_Messa
 
         target_pd->pd.proc.thread.stack_top = (void *)seL4_GetMR(ADSMSGREG_PD_SETUP_REQ_STACK);
         target_pd->pd.proc.thread.stack_size = seL4_GetMR(ADSMSGREG_PD_SETUP_REQ_STACK_SZ);
+        ads_setup_type_t setup_mode = (ads_setup_type_t)seL4_GetMR(ADSMSGREG_PD_SETUP_REQ_TYPE);
 
-        void *init_stack;
-        error = ads_proc_setup(&target_pd->pd.proc,
-                               (void *)target_pd->pd.init_data_in_PD,
-                               get_gpi_server()->server_vka,
-                               get_pd_component()->server_vspace,
-                               argc,
-                               argv,
-                               &init_stack);
-
-        seL4_SetMR(ADSMSGREG_PD_SETUP_ACK_INIT_STACK, (seL4_Word)init_stack);
-    }
+        switch (setup_mode)
+        {
+        case ADS_RUNTIME_SETUP:
+            error = ads_proc_setup(&target_pd->pd.proc,
+                                   (void *)target_pd->pd.init_data_in_PD,
+                                   get_gpi_server()->server_vka,
+                                   get_pd_component()->server_vspace,
+                                   argc,
+                                   argv,
+                                   &init_stack);
+            break;
+        case ADS_TLS_SETUP:
+        default:
+            error = 1;
+            OSDB_PRINTERR("Invalid PD setup mode specified\n");
+            break;
+        }
+        }
 
     SERVER_GOTO_IF_ERR(error, "Failed to setup process stack\n");
+    seL4_SetMR(ADSMSGREG_PD_SETUP_ACK_INIT_STACK, (seL4_Word)init_stack);
 
 err_goto:
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(error, 0, 0, ADSMSGREG_PD_SETUP_ACK_END);

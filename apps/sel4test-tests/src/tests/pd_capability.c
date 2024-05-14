@@ -34,17 +34,39 @@ int test_new_process_osmosis_shmem(env_t env)
 {
     int error;
     printf("------------------STARTING: %s------------------\n", __func__);
-    // pd_client_context_t self_pd = { .badged_server_ep_cspath.capPtr = sel4gpi_get_pd_cap() };
+    seL4_CPtr pd_rde = sel4gpi_get_rde(GPICAP_TYPE_PD);
+    pd_client_context_t self_pd_cap;
+    self_pd_cap.badged_server_ep_cspath.capPtr = sel4gpi_get_pd_cap();
 
-    // pd_client_shallow_copy(sel4gpi_get_rde(GPICAP_TYPE_PD), &self_pd, )
+    ads_client_context_t self_ads_cap;
+    self_ads_cap.badged_server_ep_cspath.capPtr = sel4gpi_get_ads_cap();
+
+    /* new PD */
+    seL4_CPtr slot;
+    error = pd_client_next_slot(&self_pd_cap, &slot);
+    test_error_eq(error, 0);
+
+    pd_client_context_t new_pd;
+    error = pd_component_client_connect(pd_rde, slot, &new_pd);
+    test_error_eq(error, 0);
 
     seL4_Word arg0 = 1;
-    sel4gpi_process_t proc;
-    error = sel4gpi_configure_process("hello", DEFAULT_STACK_PAGES, DEFAULT_HEAP_PAGES, &proc);
+    pd_resource_config_t *proc_cfg = sel4gpi_generate_proc_config("hello");
+    test_assert(proc_cfg != NULL);
+    proc_cfg->ads_cfg.src_ads = &self_ads_cap;
+
+    sel4gpi_pd_t pd_tuple;
+    error = sel4gpi_configure_pd(proc_cfg, &self_pd_cap, &new_pd, 1, &arg0, &pd_tuple);
     test_error_eq(error, 0);
 
-    error = sel4gpi_spawn_process(&proc, 1, &arg0);
-    test_error_eq(error, 0);
+    free(proc_cfg);
+
+    // sel4gpi_process_t proc;
+    // error = sel4gpi_configure_process("hello", DEFAULT_STACK_PAGES, DEFAULT_HEAP_PAGES, &proc);
+    // test_error_eq(error, 0);
+
+    // error = sel4gpi_spawn_process(&proc, 1, &arg0);
+    // test_error_eq(error, 0);
 #if 0
     pd_client_context_t test_pd_os_cap;
     test_pd_os_cap.badged_server_ep_cspath.capPtr = sel4gpi_get_pd_cap();

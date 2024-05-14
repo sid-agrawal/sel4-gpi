@@ -189,21 +189,6 @@ int ads_client_testing(ads_client_context_t *conn, vka_t *vka,
     return seL4_MessageInfo_get_label(tag);
 }
 
-/* might be removed */
-// int ads_client_get_vmrs(ads_client_context_t *ads, mo_client_context_t *shared_message)
-// {
-//     int error = 0;
-//     seL4_SetMR(ADSMSGREG_FUNC, ADS_FUNC_GET_VMRS_REQ);
-
-//     seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 1,
-//                                                   ADSMSGREG_GET_VMRS_REQ_END);
-
-//     seL4_SetCap(0, shared_message->badged_server_ep_cspath.capPtr);
-
-//     tag = seL4_Call(ads->badged_server_ep_cspath.capPtr, tag);
-//     return seL4_MessageInfo_get_label(tag);
-// }
-
 /* ======================================= CONVENIENCE FUNCTIONS (NOT PART OF FRAMEWORK) ================================================= */
 
 /**
