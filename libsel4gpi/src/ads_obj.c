@@ -536,6 +536,7 @@ void ads_dump_rr(ads_t *ads, model_state_t *ms, gpi_model_node_t *pd_node)
  * @param ret_old_attach_node returns the original attach node from src_ads
  * @param ret_new_attach_node returns the created attach node for dst_ads
  * @param ret_mo if MO was attached in src_ads's reservation, returns the MO, otherwise NULL
+ * @param ret_n_pages returns the number of pages in the reservation
  * @return 0 on success, 1 on failure
  */
 static int ads_copy_reservation(ads_t *src_ads,
@@ -545,7 +546,8 @@ static int ads_copy_reservation(ads_t *src_ads,
                                 sel4utils_reservation_type_t vmr_type,
                                 attach_node_t **ret_old_attach_node,
                                 attach_node_t **ret_new_attach_node,
-                                mo_t **ret_mo)
+                                mo_t **ret_mo,
+                                int *ret_n_pages)
 {
     int error = 0;
     int num_pages = (end - start) / (SIZE_BITS_TO_BYTES(MO_PAGE_BITS));
@@ -569,11 +571,53 @@ static int ads_copy_reservation(ads_t *src_ads,
     *ret_old_attach_node = old_attach_node;
     *ret_new_attach_node = new_attach_node;
     *ret_mo = old_mo;
-
-    return 0;
+    *ret_n_pages = num_pages;
 
 err_goto:
-    return 1;
+    return error;
+}
+
+/**
+ * @brief deep copies the contents of src_mo to dst_ads, a reservation for the VMR in dst_ads must already exist
+ *
+ * @param dst_ads ADS to copy MO contents into
+ * @param src_mo MO of data to be copied
+ * @param num_pages number of pages in the source reservation
+ * @param new_attach_node the attach node in dst_ads for the reservation
+ * @param old_attach_node the original attach node for src_mo
+ * @return int 0 on success, 1 on failure
+ */
+static int ads_deep_copy(ads_t *dst_ads, mo_t *src_mo, int num_pages, attach_node_t *new_attach_node, attach_node_t *old_attach_node)
+{
+    int error = 0;
+    // Make a new MO
+    // The "client" to hold this MO is the root task
+    mo_component_registry_entry_t *mo_entry;
+    seL4_CPtr mo_cap; // Not used since we are not giving this MO away
+    error = mo_component_allocate_mo(get_gpi_server()->rt_pd_id, false, num_pages, &mo_entry, &mo_cap);
+    SERVER_GOTO_IF_ERR(error, "Failed to allocate a new MO for deep copy\n");
+
+    // Attach the new MO in the new ADS
+    mo_t *new_mo = &mo_entry->mo;
+    error = ads_attach_to_res(dst_ads, get_ads_component()->server_vka, new_attach_node, old_attach_node->mo_offset, new_mo);
+    SERVER_GOTO_IF_ERR(error, "Failed to attach pages to region\n");
+
+    // Temporarily map the pages of both MO to current vspace and copy data
+    // (XXX) Arya: no ADS for RT so just manually map the pages
+    vspace_t *loader = get_ads_component()->server_vspace;
+    void *old_mo_va = vspace_map_pages(loader, src_mo->frame_caps_in_root_task, NULL, seL4_AllRights, num_pages, MO_PAGE_BITS, 1);
+    SERVER_GOTO_IF_COND(old_mo_va == NULL, "Failed to map old MO for deep copy\n");
+
+    void *new_mo_va = vspace_map_pages(loader, new_mo->frame_caps_in_root_task, NULL, seL4_AllRights, num_pages, MO_PAGE_BITS, 1);
+    SERVER_GOTO_IF_COND(new_mo_va == NULL, "Failed to map new MO for deep copy\n");
+
+    memcpy(new_mo_va, old_mo_va, num_pages * SIZE_BITS_TO_BYTES(MO_PAGE_BITS));
+
+err_goto:
+    vspace_unmap_pages(loader, old_mo_va, num_pages, MO_PAGE_BITS, VSPACE_FREE);
+    vspace_unmap_pages(loader, new_mo_va, num_pages, MO_PAGE_BITS, VSPACE_FREE);
+
+    return error;
 }
 
 int ads_shallow_copy(vspace_t *loader,
@@ -615,7 +659,7 @@ int ads_shallow_copy(vspace_t *loader,
         attach_node_t *new_attach_node;
         attach_node_t *old_attach_node; // original attach node
         mo_t *old_mo;                   // original MO
-        error = ads_copy_reservation(src_ads, dst_ads, from_sel4_res->start, from_sel4_res->end, from_sel4_res->type, &old_attach_node, &new_attach_node, &old_mo);
+        error = ads_copy_reservation(src_ads, dst_ads, from_sel4_res->start, from_sel4_res->end, from_sel4_res->type, &old_attach_node, &new_attach_node, &old_mo, &num_pages);
         SERVER_GOTO_IF_ERR(error, "Copying reservation failed\n");
 
         if (!old_attach_node->mo_attached)
@@ -653,51 +697,8 @@ int ads_shallow_copy(vspace_t *loader,
                         (void *)from_sel4_res->start, (void *)from_sel4_res->end,
                         human_readable_size(from_sel4_res->end - from_sel4_res->start));
 
-            // Make a new MO
-            // The "client" to hold this MO is the root task
-            mo_component_registry_entry_t *mo_entry;
-            seL4_CPtr mo_cap; // Not used since we are not giving this MO away
-            error = resource_component_allocate(get_mo_component(), get_gpi_server()->rt_pd_id, false, (void *)num_pages,
-                                                (resource_server_registry_node_t **)&mo_entry, &mo_cap);
-
-            if (error)
-            {
-                ZF_LOGE("Failed to allocate a new MO for deep copy\n");
-                goto err_goto;
-            }
-
-            // Attach the new MO in the new ADS
-            mo_t *new_mo = &mo_entry->mo;
-            error = ads_attach_to_res(dst_ads, vka, new_attach_node, old_attach_node->mo_offset, new_mo);
-
-            if (error)
-            {
-                ZF_LOGE("Failed to attach pages to region\n");
-                return 1;
-            }
-
-            // Temporarily map the pages of both MO to current vspace and copy data
-            // (XXX) Arya: no ADS for RT so just manually map the pages
-            void *old_mo_va = vspace_map_pages(loader, old_mo->frame_caps_in_root_task, NULL, seL4_AllRights, num_pages, MO_PAGE_BITS, 1);
-
-            if (old_mo_va == NULL)
-            {
-                ZF_LOGE("Failed to map old MO for deep copy\n");
-                goto err_goto;
-            }
-
-            void *new_mo_va = vspace_map_pages(loader, new_mo->frame_caps_in_root_task, NULL, seL4_AllRights, num_pages, MO_PAGE_BITS, 1);
-
-            if (new_mo_va == NULL)
-            {
-                ZF_LOGE("Failed to map new MO for deep copy\n");
-                goto err_goto;
-            }
-
-            memcpy(new_mo_va, old_mo_va, num_pages * SIZE_BITS_TO_BYTES(MO_PAGE_BITS));
-
-            vspace_unmap_pages(loader, old_mo_va, num_pages, MO_PAGE_BITS, VSPACE_FREE);
-            vspace_unmap_pages(loader, new_mo_va, num_pages, MO_PAGE_BITS, VSPACE_FREE);
+            error = ads_deep_copy(dst_ads, old_mo, num_pages, new_attach_node, old_attach_node);
+            SERVER_GOTO_IF_ERR(error, "Failed to deep copy reservation\n");
         }
 
         // Move to next node.
