@@ -216,63 +216,14 @@ out:
 }
 
 /**
- * @brief deals with all requests that require allocating resources
- * if NS ID = 0, we want to allocate an entirely new resource not belonging to any NS
- * else we're allocating a resource for a specific NS
- */
-void handle_allocation_request(seL4_MessageInfo_t tag,
-                               seL4_Word sender_badge,
-                               cspacepath_t *received_cap_path,
-                               seL4_MessageInfo_t *reply_tag)
-{
-    gpi_cap_t req_cap_type = get_ns_id_from_badge(sender_badge) == 0 ? seL4_GetMR(0) : get_cap_type_from_badge(sender_badge);
-    OSDB_PRINTF("handle_allocation_request: Got request for cap type %s\n",
-                cap_type_to_str(req_cap_type));
-
-    switch (req_cap_type)
-    {
-    case GPICAP_TYPE_ADS:
-        resource_component_handle(&get_gpi_server()->ads_component,
-                                  tag,
-                                  sender_badge,
-                                  received_cap_path);
-        break;
-    case GPICAP_TYPE_VMR:
-        resource_component_handle(&get_gpi_server()->ads_component,
-                                  tag,
-                                  sender_badge,
-                                  received_cap_path);
-        break;
-    case GPICAP_TYPE_MO:
-        mo_handle_allocation_request(
-            sender_badge,
-            reply_tag); /*unused*/
-        break;
-    case GPICAP_TYPE_CPU:
-        resource_component_handle(&get_gpi_server()->cpu_component,
-                                  tag,
-                                  sender_badge,
-                                  received_cap_path);
-        break;
-    case GPICAP_TYPE_PD:
-        pd_handle_allocation_request(
-            sender_badge,
-            reply_tag); /*unused*/
-        break;
-    default:
-        gpi_panic(GPISERVS "handle_allocation_request: Unknown request type.\n", req_cap_type);
-        break;
-    }
-}
-
-/**
  * @brief The starting point for the gpi server's thread.
  *
  */
 void gpi_server_main()
 {
+    int error = 0;
     seL4_MessageInfo_t tag;
-    seL4_Error error = 0;
+    cspacepath_t received_cap_path;
 
     /* The Parent will seL4_Call() to us, the Server, right after spawning us.
      * It will expect us to seL4_Reply() with an error status code - we will
@@ -299,18 +250,18 @@ void gpi_server_main()
         seL4_TCB_Suspend(get_gpi_server()->server_thread.tcb.cptr);
     }
 
+    // Allocate an initial receive path
+    error = vka_cspace_alloc_path(get_gpi_server()->server_vka, &received_cap_path);
+    assert(error == 0);
+
     OSDB_PRINTF("main: Entering main loop and accepting requests.\n");
 
     while (1)
     {
         /* Pre */
         cspacepath_t received_cap_path;
-        int error = 0;
-        /* Get the frame cap from the message */
-        error = vka_cspace_alloc_path(get_gpi_server()->server_vka, &received_cap_path);
-        assert(error == 0);
 
-        // (XXX) Arya: these slots will be wasted when sent caps are unwrapped
+        // The resource components allocate a new receive path if necessary
         seL4_SetCapReceivePath(
             /* _service */ received_cap_path.root,
             /* index */ received_cap_path.capPtr,
@@ -320,60 +271,35 @@ void gpi_server_main()
         OSDB_PRINTF("Got message on EP with ");
         badge_print(sender_badge);
 
-        seL4_MessageInfo_t reply_tag;
-        if (sender_badge == 0 ||
-            get_object_id_from_badge(sender_badge) == BADGE_OBJ_ID_NULL)
-        {
-            // PDs will have badged GPI caps with null object ID
-            OSDB_PRINTF("Got an allocation request\n");
-            handle_allocation_request(tag,
-                                      sender_badge,
-                                      &received_cap_path,
-                                      &reply_tag); /*unused*/
-        }
-        else
-        { /* Handle Typed Request */
-            gpi_cap_t cap_type = get_cap_type_from_badge(sender_badge);
+        gpi_cap_t cap_type = get_cap_type_from_badge(sender_badge);
 
-            switch (cap_type)
-            {
-            case GPICAP_TYPE_ADS:
-                resource_component_handle(&get_gpi_server()->ads_component,
-                                          tag,
-                                          sender_badge,
-                                          &received_cap_path);
-                break;
-            case GPICAP_TYPE_VMR:
-                resource_component_handle(&get_gpi_server()->ads_component,
-                                          tag,
-                                          sender_badge,
-                                          &received_cap_path);
-                break;
-            case GPICAP_TYPE_MO:
-                mo_component_handle(tag,
-                                    sender_badge,
-                                    &received_cap_path,
-                                    &reply_tag); /*unused*/
-                break;
-            case GPICAP_TYPE_CPU:
-                resource_component_handle(&get_gpi_server()->cpu_component,
-                                          tag,
-                                          sender_badge,
-                                          &received_cap_path);
-                break;
-            case GPICAP_TYPE_PD:
-                pd_component_handle(tag,
-                                    sender_badge,
-                                    &received_cap_path,
-                                    &reply_tag); /*unused*/
-                break;
-            default:
-                gpi_panic("gpi_server_main: Unknown cap type.", cap_type);
-                break;
-            }
+        resource_component_context_t *component;
+        switch (cap_type)
+        {
+        case GPICAP_TYPE_ADS:
+            component = &get_gpi_server()->ads_component;
+            break;
+        case GPICAP_TYPE_VMR:
+            component = &get_gpi_server()->ads_component;
+            break;
+        case GPICAP_TYPE_MO:
+            component = &get_gpi_server()->mo_component;
+            break;
+        case GPICAP_TYPE_CPU:
+            component = &get_gpi_server()->cpu_component;
+            break;
+        case GPICAP_TYPE_PD:
+            component = &get_gpi_server()->pd_component;
+            break;
+        default:
+            gpi_panic("gpi_server_main: Unknown cap type.", cap_type);
+            break;
         }
-        // Send a reply, but for now let the handlers handle it.
-        // reply(reply_tag);
+
+        resource_component_handle(component,
+                                  tag,
+                                  sender_badge,
+                                  &received_cap_path);
     }
 
     // serial_server_func_kill();

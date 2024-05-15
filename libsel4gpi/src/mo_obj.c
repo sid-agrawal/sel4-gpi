@@ -18,50 +18,40 @@
 #include <sel4gpi/mo_obj.h>
 #include <sel4gpi/debug.h>
 #include <sel4gpi/model_exporting.h>
+#include <sel4gpi/error_handle.h>
 
 #define DEBUG_ID MO_DEBUG
 #define SERVER_ID MOSERVS
 
 int mo_new(mo_t *mo,
-           seL4_CPtr *caps,
-           vka_object_t *vka_objects,
-           uint32_t num_caps,
-           vka_t *vka)
+           vka_t *vka,
+           vspace_t *vspace,
+           int num_pages)
 {
-    assert(caps != NULL);
+    int error = 0;
 
-    mo->frame_caps_in_root_task = malloc(num_caps * sizeof(seL4_CPtr));
-    mo->frame_paddrs = malloc(num_caps * sizeof(uintptr_t));
+    mo->num_pages = num_pages;
+    mo->frame_caps_in_root_task = malloc(num_pages * sizeof(seL4_CPtr));
+    mo->frame_paddrs = malloc(num_pages * sizeof(uintptr_t));
+    mo->vka_objects = malloc(num_pages * sizeof(vka_object_t));
+    GOTO_IF_COND(mo->frame_caps_in_root_task == NULL || mo->frame_paddrs == NULL || mo->vka_objects == NULL,
+                 "malloc ran out of memory to allocate MO with %d frames\n", num_pages);
 
-    if (vka_objects)
+    /* Allocate frames */
+    for (int i = 0; i < num_pages; i++)
     {
-        mo->vka_objects = malloc(num_caps * sizeof(vka_object_t));
-    } else {
-        mo->vka_objects = NULL;
+        error = vka_alloc_frame_maybe_device(get_mo_component()->server_vka,
+                                             seL4_PageBits,
+                                             false,
+                                             &mo->vka_objects[i]);
+        assert(error == 0);
+        GOTO_IF_COND(error, "failed to allocate page for MO\n");
+        mo->frame_caps_in_root_task[i] = mo->vka_objects[i].cptr;
+        mo->frame_paddrs[i] = vka_object_paddr(vka, &mo->vka_objects[i]);
     }
 
-    assert(mo->frame_caps_in_root_task != NULL);
-
-    for (int i = 0; i < num_caps; i++)
-    {
-        // We cannot assert this, may be forging an MO from a reservation
-        // that is not fully backed
-        // assert(caps[i] != seL4_CapNull);
-
-        mo->frame_caps_in_root_task[i] = caps[i];
-
-        // (XXX) Arya: Should we have a non-debug function for this?
-        mo->frame_paddrs[i] = seL4_DebugCapPaddr(caps[i]);
-
-        if (vka_objects)
-        {
-            mo->vka_objects[i] = vka_objects[i];
-        }
-    }
-
-    mo->num_pages = num_caps;
-
-    return 0;
+err_goto:
+    return error;
 }
 
 void mo_dump_rr(mo_t *mo, model_state_t *ms, gpi_model_node_t *pd_node)

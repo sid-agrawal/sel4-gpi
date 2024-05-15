@@ -255,7 +255,8 @@ static void pd_held_resource_on_delete(resource_server_registry_node_t *node_gen
 
 int pd_new(pd_t *pd,
            vka_t *server_vka,
-           vspace_t *server_vspace)
+           vspace_t *server_vspace,
+           void *arg0)
 {
     int error;
 
@@ -295,7 +296,7 @@ int pd_new(pd_t *pd,
     error = pd_setup_cspace(pd, get_pd_component()->server_vka);
     assert(error == 0);
 
-    return 0;
+    return error;
 }
 
 void pd_destroy(pd_t *pd, vka_t *server_vka, vspace_t *server_vspace)
@@ -465,10 +466,9 @@ int pd_bootstrap_allocator(pd_t *pd,
                            size_t guard_bits)
 {
     int error;
+    cspace_single_level_t *cspace = calloc(1, sizeof(cspace_single_level_t));
     allocman_t *allocator = bootstrap_create_allocman(PD_ALLOCATOR_STATIC_POOL_SIZE,
                                                       pd->allocator_mem_pool);
-
-    cspace_single_level_t *cspace = malloc(sizeof(cspace_single_level_t));
 
     error = cspace_single_level_create(allocator, cspace, (struct cspace_single_level_config){.cnode = root, .cnode_size_bits = size_bits,
                                                                                               //.cnode_guard_bits = seL4_WordBits - pd->cspace_size_bits,
@@ -633,7 +633,12 @@ int pd_send_cap(pd_t *to_pd,
     /*
         (XXX): Need to handle how sending OSM caps would leand to additional data tracking.
     */
-    assert(cap != 0);
+
+    if (cap == 0) {
+        OSDB_PRINTERR("pd_send_cap got a null cap to send\n");
+        return 1;
+    }
+
     OSDB_PRINTF("pd_send_cap: Sending cap %ld(badge:%lx) to pd %p\n", cap, badge, to_pd);
 
     seL4_Word new_badge;
@@ -669,7 +674,7 @@ int pd_send_cap(pd_t *to_pd,
             break;
         case GPICAP_TYPE_MO:
             server_vka = get_mo_component()->server_vka;
-            server_src_cap = get_mo_component()->server_ep_obj.cptr;
+            server_src_cap = get_mo_component()->server_ep;
             // Increment the counter in the mo_t object.
             mo_component_registry_entry_t *mo_reg = mo_component_registry_get_entry_by_badge(badge);
             assert(mo_reg != NULL);
@@ -677,7 +682,7 @@ int pd_send_cap(pd_t *to_pd,
             // Copying the resource, so increase the reference count
             if (inc_refcount)
             {
-                resource_server_registry_inc(&get_mo_component()->mo_registry, (resource_server_registry_node_t *)mo_reg);
+                resource_server_registry_inc(&get_mo_component()->registry, (resource_server_registry_node_t *)mo_reg);
             }
 
             res_id = mo_reg->mo.id;
@@ -700,7 +705,7 @@ int pd_send_cap(pd_t *to_pd,
             break;
         case GPICAP_TYPE_PD:
             server_vka = get_pd_component()->server_vka;
-            server_src_cap = get_pd_component()->server_ep_obj.cptr;
+            server_src_cap = get_pd_component()->server_ep;
 
             pd_component_registry_entry_t *pd_reg = pd_component_registry_get_entry_by_badge(badge);
             assert(pd_reg != NULL);
@@ -708,7 +713,7 @@ int pd_send_cap(pd_t *to_pd,
             // Copying the resource, so increase the reference count
             if (inc_refcount)
             {
-                resource_server_registry_inc(&get_pd_component()->pd_registry, (resource_server_registry_node_t *)pd_reg);
+                resource_server_registry_inc(&get_pd_component()->registry, (resource_server_registry_node_t *)pd_reg);
             }
 
             res_id = pd_reg->pd.id;

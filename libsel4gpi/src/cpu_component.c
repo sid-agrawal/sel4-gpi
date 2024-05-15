@@ -67,7 +67,8 @@ static seL4_MessageInfo_t handle_cpu_allocation(seL4_Word sender_badge)
     cpu_component_registry_entry_t *new_entry;
     uint32_t client_id = get_client_id_from_badge(sender_badge);
 
-    error = resource_component_allocate(get_cpu_component(), client_id, false, (resource_server_registry_node_t **)&new_entry, &ret_cap);
+    error = resource_component_allocate(get_cpu_component(), client_id, false, NULL,
+                                        (resource_server_registry_node_t **)&new_entry, &ret_cap);
     SERVER_GOTO_IF_ERR(error, "Failed to allocate new CPU object\n");
 
     seL4_SetCap(0, ret_cap);
@@ -262,7 +263,7 @@ int cpu_component_initialize(simple_t *server_simple,
     resource_component_initialize(get_cpu_component(),
                                   GPICAP_TYPE_CPU,
                                   cpu_component_handle,
-                                  (int (*)(resource_component_object_t *, vka_t *, vspace_t *))cpu_new,
+                                  (int (*)(resource_component_object_t *, vka_t *, vspace_t *, void *))cpu_new,
                                   on_cpu_registry_delete,
                                   sizeof(cpu_component_registry_entry_t),
                                   server_simple,
@@ -288,7 +289,8 @@ int forge_cpu_cap_from_tcb(sel4utils_process_t *process, // Change this to the s
     cpu_component_registry_entry_t *new_entry;
 
     /* Allocate the CPU object */
-    error = resource_component_allocate(get_cpu_component(), client_id, false, (resource_server_registry_node_t **)&new_entry, &ret_cap);
+    error = resource_component_allocate(get_cpu_component(), client_id, false, NULL,
+                                        (resource_server_registry_node_t **)&new_entry, &ret_cap);
     SERVER_GOTO_IF_ERR(error, "Failed to allocate new CPU object for forge\n");
 
     /* Update the CPU object from TCB */

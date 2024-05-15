@@ -13,7 +13,7 @@
 
 #include <sel4gpi/mo_obj.h>
 #include <sel4gpi/ads_obj.h>
-#include <sel4gpi/resource_server_utils.h>
+#include <sel4gpi/resource_server_rt_utils.h>
 
 /** @file APIs for managing and interacting with the serial server thread.
  *
@@ -78,20 +78,7 @@ typedef struct _mo_component_registry_entry
 } mo_component_registry_entry_t;
 
 /* State maintained by the server. */
-typedef struct _mo_component_context
-{
-    simple_t *server_simple;
-    vka_t *server_vka;
-    seL4_CPtr server_cspace;
-    vspace_t *server_vspace;
-    sel4utils_thread_t server_thread;
-
-    // The server listens on this endpoint.
-    vka_object_t server_ep_obj;
-
-    // Registry
-    resource_server_registry_t mo_registry;
-} mo_component_context_t;
+typedef resource_component_context_t mo_component_context_t;
 
 /**
  * To initialize the mo component at the beginning of execution
@@ -103,13 +90,10 @@ int mo_component_initialize(simple_t *server_simple,
                             sel4utils_thread_t server_thread,
                             vka_object_t server_ep_obj);
 
-/**
- * Internal library function: acts as the main() for the server thread.
- **/
-void mo_component_handle(seL4_MessageInfo_t tag,
-                         seL4_Word badge,
-                         cspacepath_t *received_cap,
-                         seL4_MessageInfo_t *reply_tag);
+static seL4_MessageInfo_t mo_component_handle(seL4_MessageInfo_t tag,
+                                              seL4_Word sender_badge,
+                                              seL4_CPtr received_cap,
+                                              bool *need_new_recv_cap);
 
 /* Global server instance accessor functions. */
 mo_component_context_t *get_mo_component(void);

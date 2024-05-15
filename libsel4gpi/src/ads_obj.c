@@ -35,7 +35,8 @@ extern char _cpio_archive_end[];
 
 int ads_new(ads_t *ads,
             vka_t *vka,
-            vspace_t *loader)
+            vspace_t *loader,
+            void *arg0)
 {
     int error = 0;
 
@@ -179,7 +180,7 @@ int ads_reserve(ads_t *ads,
     attach_node->map_entry = attach_node_map_entry;
     attach_node->type = vmr_type;
     attach_node->n_pages = num_pages;
-    attach_node->gen.object_id = (uint64_t) vaddr;
+    attach_node->gen.object_id = (uint64_t)vaddr;
     resource_server_registry_insert(&ads->attach_registry, (resource_server_registry_node_t *)attach_node);
 
     *ret_node = attach_node;
@@ -563,7 +564,7 @@ int ads_shallow_copy(vspace_t *loader,
         num_pages = (from_sel4_res->end - from_sel4_res->start) / (SIZE_BITS_TO_BYTES(MO_PAGE_BITS));
 
         attach_node_t *new_attach_node;
-        error = ads_reserve(dst_ads, (void *) from_sel4_res->start, num_pages, MO_PAGE_BITS, from_sel4_res->type, &new_attach_node);
+        error = ads_reserve(dst_ads, (void *)from_sel4_res->start, num_pages, MO_PAGE_BITS, from_sel4_res->type, &new_attach_node);
 
         if (error)
         {
@@ -631,7 +632,8 @@ int ads_shallow_copy(vspace_t *loader,
             // The "client" to hold this MO is the root task
             mo_component_registry_entry_t *mo_entry;
             seL4_CPtr mo_cap; // Not used since we are not giving this MO away
-            error = mo_component_allocate_mo(get_gpi_server()->rt_pd_id, false, num_pages, &mo_entry, &mo_cap);
+            error = resource_component_allocate(get_mo_component(), get_gpi_server()->rt_pd_id, true, (void *)num_pages,
+                                                (resource_server_registry_node_t **)&mo_entry, &mo_cap);
 
             if (error)
             {

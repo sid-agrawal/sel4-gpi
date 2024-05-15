@@ -17,7 +17,7 @@ int resource_component_initialize(
     resource_component_context_t *component,
     gpi_cap_t resource_type,
     seL4_MessageInfo_t (*request_handler)(seL4_MessageInfo_t, seL4_Word, seL4_CPtr, bool *),
-    int (*new_obj)(resource_component_object_t *, vka_t *, vspace_t *),
+    int (*new_obj)(resource_component_object_t *, vka_t *, vspace_t *, void *),
     void (*on_registry_delete)(resource_server_registry_node_t *),
     size_t reg_entry_size,
     simple_t *server_simple,
@@ -70,6 +70,7 @@ void resource_component_handle(resource_component_context_t *component,
 int resource_component_allocate(resource_component_context_t *component,
                                 uint64_t client_id,
                                 bool forge,
+                                void *arg0,
                                 resource_server_registry_node_t **ret_entry,
                                 seL4_CPtr *ret_cap)
 {
@@ -86,7 +87,7 @@ int resource_component_allocate(resource_component_context_t *component,
     /* Create the object */
     if (!forge)
     {
-        error = component->new_obj(&reg_entry->object, component->server_vka, component->server_vspace);
+        error = component->new_obj(&reg_entry->object, component->server_vka, component->server_vspace, arg0);
         GOTO_IF_ERR(error, "Failed to initialize new %s object\n", cap_type_to_str(component->resource_type));
     }
 

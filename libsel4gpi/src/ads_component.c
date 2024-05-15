@@ -62,7 +62,7 @@ static seL4_MessageInfo_t handle_ads_allocation(seL4_Word sender_badge)
     ads_component_registry_entry_t *new_entry;
     uint32_t client_id = get_client_id_from_badge(sender_badge);
 
-    error = resource_component_allocate(get_ads_component(), client_id, false,
+    error = resource_component_allocate(get_ads_component(), client_id, false, NULL,
                                         (resource_server_registry_node_t **)&new_entry, &ret_cap);
     SERVER_GOTO_IF_ERR(error, "Failed to allocate new ADS\n");
 
@@ -235,7 +235,7 @@ static seL4_MessageInfo_t handle_shallow_copy_req(seL4_Word sender_badge)
 
     /* Make a new ADS */
     ads_component_registry_entry_t *new_ads_entry;
-    error = resource_component_allocate(get_ads_component(), client_id, false,
+    error = resource_component_allocate(get_ads_component(), client_id, false, NULL,
                                         (resource_server_registry_node_t **)&new_ads_entry, &ret_cap);
 
     SERVER_GOTO_IF_ERR(error, "Failed to allocate new ADs for copy\n");
@@ -506,7 +506,7 @@ int ads_component_initialize(simple_t *server_simple,
     resource_component_initialize(get_ads_component(),
                                   GPICAP_TYPE_ADS,
                                   ads_component_handle,
-                                  (int (*)(resource_component_object_t *, vka_t *, vspace_t *))ads_new,
+                                  (int (*)(resource_component_object_t *, vka_t *, vspace_t *, void *))ads_new,
                                   on_ads_registry_delete,
                                   sizeof(ads_component_registry_entry_t),
                                   server_simple,
@@ -527,7 +527,7 @@ int forge_ads_cap_from_vspace(vspace_t *vspace, vka_t *vka, uint32_t client_pd_i
     seL4_CPtr ret_cap;
     ads_component_registry_entry_t *new_entry;
 
-    error = error = resource_component_allocate(get_ads_component(), client_pd_id, false,
+    error = error = resource_component_allocate(get_ads_component(), client_pd_id, false, NULL,
                                                 (resource_server_registry_node_t **)&new_entry, &ret_cap);
     SERVER_GOTO_IF_ERR(error, "Failed to allocate ADS for forging\n");
 

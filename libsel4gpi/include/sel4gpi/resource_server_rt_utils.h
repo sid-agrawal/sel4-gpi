@@ -54,7 +54,7 @@ typedef struct _resource_component_context
     seL4_MessageInfo_t (*request_handler)(seL4_MessageInfo_t, seL4_Word, seL4_CPtr, bool *);
 
     // Run to allocate a new obj
-    int (*new_obj)(resource_component_object_t *, vka_t *, vspace_t *);
+    int (*new_obj)(resource_component_object_t *, vka_t *, vspace_t *, void *);
 
     // Registry of the component's resources
     resource_server_registry_t registry;
@@ -94,7 +94,7 @@ int resource_component_initialize(
     resource_component_context_t *component,
     gpi_cap_t resource_type,
     seL4_MessageInfo_t (*request_handler)(seL4_MessageInfo_t, seL4_Word, seL4_CPtr, bool *),
-    int (*new_obj)(resource_component_object_t *, vka_t *, vspace_t *),
+    int (*new_obj)(resource_component_object_t *, vka_t *, vspace_t *, void *),
     void (*on_registry_delete)(resource_server_registry_node_t *),
     size_t reg_entry_size,
     simple_t *server_simple,
@@ -125,12 +125,14 @@ void resource_component_handle(resource_component_context_t *component,
  * @param component
  * @param client_id the PD ID of the client requesting the allocation
  * @param forge if true, does not allocate a new object, only the badge and registry entry
+ * @param arg0 optional, passed as last argument to the new_obj function
  * @param ret_entry returns the new registry entry for the object
  * @param ret_cap returns the new badged endpoint for the object
  */
 int resource_component_allocate(resource_component_context_t *component,
                                 uint64_t client_id,
                                 bool forge,
+                                void *arg0,
                                 resource_server_registry_node_t **ret_entry,
                                 seL4_CPtr *ret_cap);
 

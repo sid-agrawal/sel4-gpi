@@ -27,20 +27,18 @@ typedef struct _mo
 } mo_t;
 
 /**
- * @brief Create a new cpu object
+ * @brief Create a new MO object
  *
  * @param mo mo object
- * @param caps array of frame caps to be stored in the mo object
- * @param vka_objects (optional) vka objects for the frames, for freeing the frames later
- * @param num_caps number of caps in the array
- * @param vka vka object
- * @return int 0 on success, -1 on failure.
+ * @param vka vka object to allocate frames from
+ * @param vspace unused
+ * @param num_pages number of pages to allocate
+ * @return int 0 on success, 1 on failure.
  */
 int mo_new(mo_t *mo,
-           seL4_CPtr *frame_caps,
-           vka_object_t *vka_objects,
-           uint32_t num_caps,
-           vka_t *vka);
+           vka_t *vka,
+           vspace_t *vspace,
+           int num_pages);
 
 /**
  * @param mo mo object to dump the RR for

@@ -161,7 +161,8 @@ typedef struct _pd
 
 int pd_new(pd_t *pd,
            vka_t *server_vka,
-           vspace_t *server_vspace);
+           vspace_t *server_vspace,
+           void *arg0);
 
 int pd_configure(pd_t *pd,
                  const char *image_path,
@@ -172,13 +173,13 @@ int pd_dump(pd_t *pd);
 
 /**
  * Send a cap to another PD
- * 
+ *
  * @param pd the target PD
  * @param cap the cap to send
  * @param the badge of the cap to send
  * @param slot returns the slot of the cap in the target PD
  * @param inc_refcount if true, increments the refcount of the corresponding resource
-*/
+ */
 int pd_send_cap(pd_t *pd,
                 seL4_CPtr cap,
                 seL4_Word badge,
@@ -258,7 +259,7 @@ void print_pd_osm_rde_info(osmosis_rde_t *o);
 /**
  * Add a resource that the PD holds
  * Does not insert if the resource ID is a duplicate
- * 
+ *
  * @param type the resource type
  * @param res_id the resource ID
  * @param ns_id the resource's namespace ID

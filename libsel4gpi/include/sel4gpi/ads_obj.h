@@ -66,11 +66,13 @@ typedef struct _ads
  * @param ads pointer to ads structure
  * @param vka vka object to allocate cspace slots and PT from
  * @param loader vspace of the function running this
+ * @param arg0 unused
  * @return int 0 on success, 1 on failure.
  */
 int ads_new(ads_t *ads,
             vka_t *vka,
-            vspace_t *loader);
+            vspace_t *loader,
+            void *arg0);
 
 /**
  * Reserve a region of the ADS
