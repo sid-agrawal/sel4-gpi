@@ -127,30 +127,3 @@ int cpu_component_initialize(simple_t *server_simple,
 cpu_component_context_t *get_cpu_component(void);
 
 int forge_cpu_cap_from_tcb(sel4utils_process_t *proc, vka_t *vka, uint32_t client_id, seL4_CPtr *cap_ret, uint32_t *id_ret);
-
-// (XXX) Arya: These are exposed for the PD obj, can they be decoupled?
-
-/**
- * @brief Lookup the client registry entry for the given badge.
- *
- * @param badge
- * @return cpu_component_registry_entry_t*
- */
-cpu_component_registry_entry_t *cpu_component_registry_get_entry_by_badge(seL4_Word badge);
-
-/**
- * @brief Lookup the client registry entry for the given id.
- *
- * @param badge
- * @return cpu_component_registry_entry_t*
- */
-cpu_component_registry_entry_t *cpu_component_registry_get_entry_by_id(seL4_Word object_id);
-
-/**
- * Decrement the reference count to a VCPU
- * If the count reaches zero, the VCPU is destroyed
- * Note: Only useable from the root task
- * 
- * @param cpu_id ID of the CPU
-*/
-int cpu_component_dec(uint64_t cpu_id);

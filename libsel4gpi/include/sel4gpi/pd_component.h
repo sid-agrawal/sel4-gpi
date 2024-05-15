@@ -271,15 +271,8 @@ int pd_component_initialize(simple_t *server_simple,
                             sel4utils_thread_t server_thread,
                             vka_object_t server_ep_obj);
 
-static seL4_MessageInfo_t pd_component_handle(seL4_MessageInfo_t tag,
-                                              seL4_Word sender_badge,
-                                              seL4_CPtr received_cap,
-                                              bool *need_new_recv_cap);
-
 /* Global server instance accessor functions. */
 pd_component_context_t *get_pd_component(void);
-
-void pd_handle_allocation_request(seL4_Word sender_badge, seL4_MessageInfo_t *reply_tag);
 
 // Creates a dummy PD object for the root task
 void forge_pd_for_root_task(uint64_t *rt_id);
@@ -307,14 +300,6 @@ void destroy_test_pd(void);
 int pd_component_resource_manager_insert(pd_component_resource_manager_entry_t *new_node);
 
 /**
- * @brief Lookup the client registry entry for the given badge.
- *
- * @param badge
- * @return pd_component_registry_entry_t*
- */
-pd_component_registry_entry_t *pd_component_registry_get_entry_by_badge(seL4_Word badge);
-
-/**
  * @brief Lookup the resource server registry entry for the given object id.
  * (XXX) Arya: This needs to be exposed for pd_obj to use it. Is there a better way?
  *
@@ -322,15 +307,6 @@ pd_component_registry_entry_t *pd_component_registry_get_entry_by_badge(seL4_Wor
  * @return pd_component_resource_manager_entry_t*
  */
 pd_component_resource_manager_entry_t *pd_component_resource_manager_get_entry_by_id(seL4_Word manager_id);
-
-/**
- * @brief Lookup the pd registry entry for the given object id.
- * (XXX) Arya: This needs to be exposed for pd_obj to use it. Is there a better way?
- *
- * @param object_id
- * @return pd_component_registry_entry_t*
- */
-pd_component_registry_entry_t *pd_component_registry_get_entry_by_id(seL4_Word object_id);
 
 /**
  * Add a resource to a PD

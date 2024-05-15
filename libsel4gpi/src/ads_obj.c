@@ -585,7 +585,10 @@ int ads_shallow_copy(vspace_t *loader,
         mo_t *old_mo;
         if (old_attach_node->mo_attached)
         {
-            old_mo = &mo_component_registry_get_entry_by_id(old_attach_node->mo_id)->mo;
+            mo_component_registry_entry_t *old_mo_entry = (mo_component_registry_entry_t *)
+                resource_component_registry_get_by_id(get_mo_component(), old_attach_node->mo_id);
+
+            old_mo = &old_mo_entry->mo;
 
             if (error)
             {

@@ -69,7 +69,8 @@ static seL4_MessageInfo_t handle_ads_allocation(seL4_Word sender_badge)
     /* Add the RDE for the client */
 
     // (XXX) Linh: this is not very nice as we're coupling the PD and ADS components
-    pd_component_registry_entry_t *client_pd_data = pd_component_registry_get_entry_by_id(client_id);
+    pd_component_registry_entry_t *client_pd_data = (pd_component_registry_entry_t *)
+        resource_component_registry_get_by_id(get_pd_component(), client_id);
     SERVER_GOTO_IF_COND(client_pd_data == NULL, "Couldn't find PD (%d)\n", client_id);
 
     rde_type_t type = {.type = GPICAP_TYPE_ADS};
@@ -168,7 +169,8 @@ static seL4_MessageInfo_t handle_attach_to_reserve_req(seL4_Word sender_badge, s
     /* Find the ADS, MO, and reservation */
     ads_component_registry_entry_t *client_data = (ads_component_registry_entry_t *)
         resource_component_registry_get_by_id(get_ads_component(), ads_id);
-    mo_component_registry_entry_t *mo_reg = mo_component_registry_get_entry_by_id(mo_id);
+    mo_component_registry_entry_t *mo_reg = (mo_component_registry_entry_t *)
+        resource_component_registry_get_by_id(get_mo_component(), mo_id);
     attach_node_t *reservation = ads_get_res_by_id(&client_data->ads, reservation_id);
 
     SERVER_GOTO_IF_COND(client_data == NULL, "Couldn't find ADS (%ld)\n", ads_id);
@@ -228,7 +230,8 @@ static seL4_MessageInfo_t handle_shallow_copy_req(seL4_Word sender_badge)
     /* Find the client */
     ads_component_registry_entry_t *old_ads_entry = (ads_component_registry_entry_t *)
         resource_component_registry_get_by_badge(get_ads_component(), sender_badge);
-    pd_component_registry_entry_t *pd_data = pd_component_registry_get_entry_by_id(client_id);
+    pd_component_registry_entry_t *pd_data = (pd_component_registry_entry_t *)
+        resource_component_registry_get_by_id(get_pd_component(), client_id);
 
     SERVER_GOTO_IF_COND(old_ads_entry == NULL, "Couldn't find source ADS (%ld)\n", get_object_id_from_badge(sender_badge));
     SERVER_GOTO_IF_COND(pd_data == NULL, "Couldn't find PD (%ld)\n", client_id);
@@ -275,7 +278,8 @@ static seL4_MessageInfo_t handle_load_elf_request(seL4_Word sender_badge, seL4_M
 
     ads_component_registry_entry_t *target_ads = (ads_component_registry_entry_t *)
         resource_component_registry_get_by_badge(get_ads_component(), sender_badge);
-    pd_component_registry_entry_t *target_pd = pd_component_registry_get_entry_by_id(get_object_id_from_badge(seL4_GetBadge(0)));
+    pd_component_registry_entry_t *target_pd = (pd_component_registry_entry_t *)
+        resource_component_registry_get_by_id(get_pd_component(), get_object_id_from_badge(seL4_GetBadge(0)));
     SERVER_GOTO_IF_COND(target_ads == NULL, "Couldn't find target ADS (%ld)\n", get_object_id_from_badge(sender_badge));
     SERVER_GOTO_IF_COND(target_pd == NULL, "Couldn't find target PD (%ld)\n", get_object_id_from_badge(seL4_GetBadge(0)));
 
@@ -313,7 +317,9 @@ static seL4_MessageInfo_t handle_pd_setup_req(seL4_Word sender_badge, seL4_Messa
 
     ads_component_registry_entry_t *target_ads = (ads_component_registry_entry_t *)
         resource_component_registry_get_by_badge(get_ads_component(), sender_badge);
-    pd_component_registry_entry_t *target_pd = pd_component_registry_get_entry_by_id(get_object_id_from_badge(seL4_GetBadge(0)));
+    pd_component_registry_entry_t *target_pd = (pd_component_registry_entry_t *)
+        resource_component_registry_get_by_id(get_pd_component(), get_object_id_from_badge(seL4_GetBadge(0)));
+
     SERVER_GOTO_IF_COND(target_ads == NULL, "Couldn't find target ADS (%ld)\n", get_object_id_from_badge(sender_badge));
     SERVER_GOTO_IF_COND(target_pd == NULL, "Couldn't find target PD (%ld)\n", get_object_id_from_badge(seL4_GetBadge(0)));
 
@@ -560,7 +566,8 @@ int ads_component_attach(uint64_t ads_id, uint64_t mo_id, sel4utils_reservation_
     SERVER_GOTO_IF_COND(client_data == NULL, "Couldn't find ADS (%ld)\n", ads_id);
 
     /* Find the MO */
-    mo_component_registry_entry_t *mo_reg = mo_component_registry_get_entry_by_id(mo_id);
+    mo_component_registry_entry_t *mo_reg = (mo_component_registry_entry_t *)
+        resource_component_registry_get_by_id(get_mo_component(), mo_id);
     SERVER_GOTO_IF_COND(mo_reg == NULL, "Couldn't find MO (%ld)\n", mo_id);
 
     /* Attach the MO */

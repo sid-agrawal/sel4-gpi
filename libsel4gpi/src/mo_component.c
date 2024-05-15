@@ -51,28 +51,6 @@ static void on_mo_registry_delete(resource_server_registry_node_t *node_gen)
     mo_destroy(&node->mo, get_mo_component()->server_vka);
 }
 
-/**
- * @brief Lookup the client registry entry for the give badge.
- *
- * @param badge
- * @return mo_component_registry_entry_t*
- */
-mo_component_registry_entry_t *mo_component_registry_get_entry_by_badge(seL4_Word badge)
-{
-    return (mo_component_registry_entry_t *)resource_server_registry_get_by_badge(&get_mo_component()->registry, badge);
-}
-
-/**
- * @brief Lookup the client registry entry for the given objectID
- *
- * @param res_id
- * @return ads_component_registry_entry_t*
- */
-mo_component_registry_entry_t *mo_component_registry_get_entry_by_id(seL4_Word object_id)
-{
-    return (mo_component_registry_entry_t *)resource_server_registry_get_by_id(&get_mo_component()->registry, object_id);
-}
-
 static seL4_MessageInfo_t handle_mo_allocation_request(seL4_Word sender_badge)
 {
     OSDB_PRINTF("Got MO allocation request from %lx\n", sender_badge);
@@ -196,21 +174,6 @@ int forge_mo_cap_from_frames(seL4_CPtr *frame_caps,
                 (int)*cap_ret, new_entry->mo.num_pages);
 
     *mo_ret = &new_entry->mo;
-
-err_goto:
-    return error;
-}
-
-int mo_component_dec(uint64_t mo_id)
-{
-    int error = 0;
-
-    mo_component_registry_entry_t *client_data = mo_component_registry_get_entry_by_id(mo_id);
-    SERVER_GOTO_IF_COND(client_data == NULL, "Couldn't find MO (%ld)\n", mo_id);
-
-    OSDB_PRINTF("Decrementing MO (%ld), refcount %d\n", mo_id, client_data->gen.count);
-
-    resource_server_registry_dec(&get_mo_component()->registry, (resource_server_registry_node_t *)client_data);
 
 err_goto:
     return error;

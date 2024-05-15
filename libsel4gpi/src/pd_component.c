@@ -48,14 +48,16 @@ pd_component_context_t *get_pd_component(void)
     return &get_gpi_server()->pd_component;
 }
 
-pd_component_registry_entry_t *pd_component_registry_get_entry_by_id(seL4_Word object_id)
+static pd_component_registry_entry_t *pd_component_registry_get_entry_by_id(seL4_Word object_id)
 {
-    return (pd_component_registry_entry_t *)resource_server_registry_get_by_id(&get_pd_component()->registry, object_id);
+    return (pd_component_registry_entry_t *)
+        resource_component_registry_get_by_id(get_pd_component(), object_id);
 }
 
-pd_component_registry_entry_t *pd_component_registry_get_entry_by_badge(seL4_Word badge)
+static pd_component_registry_entry_t *pd_component_registry_get_entry_by_badge(seL4_Word badge)
 {
-    return (pd_component_registry_entry_t *)resource_server_registry_get_by_badge(&get_pd_component()->registry, badge);
+    return (pd_component_registry_entry_t *)
+        resource_component_registry_get_by_badge(get_pd_component(), badge);
 }
 
 // Called when an item from the CPU registry is deleted
@@ -523,7 +525,9 @@ static seL4_MessageInfo_t handle_clone_req(seL4_Word sender_badge, seL4_MessageI
     SERVER_GOTO_IF_COND_BG(src_pd_data == NULL, src_pd_badge, "Couldn't find src PD with badge: ");
 
     seL4_Word shared_msg_mo_badge = seL4_GetBadge(1);
-    mo_component_registry_entry_t *shared_msg_mo_data = mo_component_registry_get_entry_by_badge(shared_msg_mo_badge);
+    mo_component_registry_entry_t *shared_msg_mo_data = (mo_component_registry_entry_t *)
+        resource_component_registry_get_by_badge(get_mo_component(), shared_msg_mo_badge);
+
     SERVER_GOTO_IF_COND_BG(shared_msg_mo_data == NULL, shared_msg_mo_badge, "Couldn't find MO holding shared message, MO badge: ");
 
     // sel4utils_map_page(get_pd_component()->server_vka, )
@@ -705,10 +709,10 @@ void forge_pd_cap_from_init_data(test_init_data_t *init_data, sel4utils_process_
     pd->pd_cap_in_RT = ret_cap;
 
     /* Update the PD object from init data */
-    //pd_new(pd,
-    //       get_pd_component()->server_vka,
-    //       get_pd_component()->server_vspace,
-     //      NULL);
+    // pd_new(pd,
+    //        get_pd_component()->server_vka,
+    //        get_pd_component()->server_vspace,
+    //       NULL);
 
     // Split the test process' cspace and initialize a vka with half
     seL4_CPtr mid_slot = DIV_ROUND_UP(init_data->free_slots.start + init_data->free_slots.end, 2);

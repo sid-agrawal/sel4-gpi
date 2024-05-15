@@ -90,15 +90,8 @@ int mo_component_initialize(simple_t *server_simple,
                             sel4utils_thread_t server_thread,
                             vka_object_t server_ep_obj);
 
-static seL4_MessageInfo_t mo_component_handle(seL4_MessageInfo_t tag,
-                                              seL4_Word sender_badge,
-                                              seL4_CPtr received_cap,
-                                              bool *need_new_recv_cap);
-
 /* Global server instance accessor functions. */
 mo_component_context_t *get_mo_component(void);
-
-void mo_handle_allocation_request(seL4_Word sender_badge, seL4_MessageInfo_t *reply_tag);
 
 int forge_mo_cap_from_frames(seL4_CPtr *frame_caps,
                              uint32_t num_pages,
@@ -106,27 +99,3 @@ int forge_mo_cap_from_frames(seL4_CPtr *frame_caps,
                              uint32_t client_pd_id,
                              seL4_CPtr *cap_ret,
                              mo_t **mo_ref);
-
-mo_component_registry_entry_t *mo_component_registry_get_entry_by_badge(seL4_Word badge);
-
-mo_component_registry_entry_t *mo_component_registry_get_entry_by_id(seL4_Word objectID);
-
-/**
- * Allocate a new MO object and add it to the registry
- * Exposed for use by the ADS component during ADS copy
- * 
- * @param client_id PD id of the recipient of the MO
- * @param forge true if this function should not actually allocate an MO with frames, use for forging
- * @param ret_entry registry entry of the new MO
- * @param ret_cap the badged endpoint capability for the new MO
-*/
-int mo_component_allocate_mo(uint64_t client_id, bool forge, int num_pages, mo_component_registry_entry_t **ret_entry, seL4_CPtr *ret_cap);
-
-/**
- * Decrement the reference count to an MO
- * If the count reaches zero, the MO is destroyed
- * Note: Only useable from the root task
- * 
- * @param mo_id ID of the MO
-*/
-int mo_component_dec(uint64_t mo_id);

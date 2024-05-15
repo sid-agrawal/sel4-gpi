@@ -227,10 +227,10 @@ static void pd_held_resource_on_delete(resource_server_registry_node_t *node_gen
         error = resource_component_dec(get_ads_component(), node->res_id);
         break;
     case GPICAP_TYPE_CPU:
-        error = cpu_component_dec(node->res_id);
+        error = resource_component_dec(get_cpu_component(), node->res_id);
         break;
     case GPICAP_TYPE_MO:
-        error = mo_component_dec(node->res_id);
+        error = resource_component_dec(get_mo_component(), node->res_id);
         break;
     case GPICAP_TYPE_PD:
         // (XXX) Arya: I think we do not want to destroy a PD when the refcount reaches zero
@@ -634,7 +634,8 @@ int pd_send_cap(pd_t *to_pd,
         (XXX): Need to handle how sending OSM caps would leand to additional data tracking.
     */
 
-    if (cap == 0) {
+    if (cap == 0)
+    {
         OSDB_PRINTERR("pd_send_cap got a null cap to send\n");
         return 1;
     }
@@ -675,25 +676,18 @@ int pd_send_cap(pd_t *to_pd,
         case GPICAP_TYPE_MO:
             server_vka = get_mo_component()->server_vka;
             server_src_cap = get_mo_component()->server_ep;
-            // Increment the counter in the mo_t object.
-            mo_component_registry_entry_t *mo_reg = mo_component_registry_get_entry_by_badge(badge);
-            assert(mo_reg != NULL);
 
             // Copying the resource, so increase the reference count
             if (inc_refcount)
             {
-                resource_server_registry_inc(&get_mo_component()->registry, (resource_server_registry_node_t *)mo_reg);
+                resource_component_inc(get_mo_component(), get_object_id_from_badge(badge));
             }
 
-            res_id = mo_reg->mo.id;
+            res_id = get_object_id_from_badge(badge);
             break;
         case GPICAP_TYPE_CPU:
             server_vka = get_cpu_component()->server_vka;
             server_src_cap = get_cpu_component()->server_ep;
-
-            cpu_component_registry_entry_t *cpu_reg = (cpu_component_registry_entry_t *)
-                resource_component_registry_get_by_badge(get_cpu_component(), badge);
-            assert(cpu_reg != NULL);
 
             // Copying the resource, so increase the reference count
             if (inc_refcount)
@@ -707,16 +701,13 @@ int pd_send_cap(pd_t *to_pd,
             server_vka = get_pd_component()->server_vka;
             server_src_cap = get_pd_component()->server_ep;
 
-            pd_component_registry_entry_t *pd_reg = pd_component_registry_get_entry_by_badge(badge);
-            assert(pd_reg != NULL);
-
             // Copying the resource, so increase the reference count
             if (inc_refcount)
             {
-                resource_server_registry_inc(&get_pd_component()->registry, (resource_server_registry_node_t *)pd_reg);
+                resource_component_inc(get_pd_component(), get_object_id_from_badge(badge));
             }
 
-            res_id = pd_reg->pd.id;
+            res_id = get_object_id_from_badge(badge);
             break;
         default:
             // ZF_LOGF("Unknown cap type in %s", __FUNCTION__);
@@ -869,12 +860,14 @@ static int res_dump(pd_t *pd, model_state_t *ms, pd_hold_node_t *current_cap,
         ads_dump_rr(&ads_data->ads, ms, pd_node);
         break;
     case GPICAP_TYPE_MO:
-        mo_component_registry_entry_t *mo_data = mo_component_registry_get_entry_by_id(current_cap->res_id);
+        mo_component_registry_entry_t *mo_data = (mo_component_registry_entry_t *)
+            resource_component_registry_get_by_id(get_mo_component(), current_cap->res_id);
         assert(mo_data != NULL);
         mo_dump_rr(&mo_data->mo, ms, pd_node);
         break;
     case GPICAP_TYPE_CPU:
-        cpu_component_registry_entry_t *cpu_data = cpu_component_registry_get_entry_by_id(current_cap->res_id);
+        cpu_component_registry_entry_t *cpu_data = (cpu_component_registry_entry_t *)
+            resource_component_registry_get_by_id(get_cpu_component(), current_cap->res_id);
         assert(cpu_data != NULL);
         cpu_dump_rr(&cpu_data->cpu, ms, pd_node);
         break;
@@ -895,7 +888,9 @@ static int res_dump(pd_t *pd, model_state_t *ms, pd_hold_node_t *current_cap,
     case GPICAP_TYPE_PD:
         if (current_cap->res_id != pd->id)
         {
-            pd_component_registry_entry_t *pd_data = pd_component_registry_get_entry_by_id(current_cap->res_id);
+            pd_component_registry_entry_t *pd_data = (pd_component_registry_entry_t *)
+                resource_component_registry_get_by_id(get_pd_component(), current_cap->res_id);
+
             assert(pd_data != NULL);
             // pd_dump(&pd_data->pd);
             pd_dump_internal(&pd_data->pd, ms, rr_frame_path, rr_local_vaddr);
@@ -1029,7 +1024,9 @@ int pd_dump(pd_t *pd)
     gpi_model_node_t *rt_node = get_root_node(ms);
 
     /* Add caps from RT (not all caps, just specially tracked ones) */
-    pd_component_registry_entry_t *rt_entry = pd_component_registry_get_entry_by_id(get_gpi_server()->rt_pd_id);
+    pd_component_registry_entry_t *rt_entry = (pd_component_registry_entry_t *)
+        resource_component_registry_get_by_id(get_pd_component(), get_gpi_server()->rt_pd_id);
+
     assert(rt_entry != NULL);
     pd_t *rt_pd = &rt_entry->pd;
 

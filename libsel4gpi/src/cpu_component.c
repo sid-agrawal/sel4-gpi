@@ -52,11 +52,6 @@ static void on_cpu_registry_delete(resource_server_registry_node_t *node_gen)
     cpu_destroy(&node->cpu);
 }
 
-cpu_component_registry_entry_t *cpu_component_registry_get_entry_by_id(seL4_Word object_id)
-{
-    return (cpu_component_registry_entry_t *)resource_server_registry_get_by_id(&get_cpu_component()->registry, object_id);
-}
-
 static seL4_MessageInfo_t handle_cpu_allocation(seL4_Word sender_badge)
 {
     OSDB_PRINTF("Got CPU allocation request from %lx\n", sender_badge);
@@ -119,7 +114,8 @@ static seL4_MessageInfo_t handle_config_req(seL4_Word sender_badge,
         resource_component_registry_get_by_badge(get_cpu_component(), sender_badge);
     SERVER_GOTO_IF_COND(client_data == NULL, "Couldn't find CPU (%ld)\n", get_object_id_from_badge(sender_badge));
 
-    pd_component_registry_entry_t *pd_data = pd_component_registry_get_entry_by_badge(seL4_GetBadge(0));
+    pd_component_registry_entry_t *pd_data = (pd_component_registry_entry_t *)
+        resource_component_registry_get_by_badge(get_pd_component(), seL4_GetBadge(0));
     SERVER_GOTO_IF_COND(client_data == NULL, "Couldn't find PD (%ld)\n", get_object_id_from_badge(seL4_GetBadge(0)));
 
     /* Get Fault EP */
@@ -141,7 +137,9 @@ static seL4_MessageInfo_t handle_config_req(seL4_Word sender_badge,
 
     /* Find the IPC MO, if it exists (OK if it doesn't exist) */
     seL4_Word ipc_buf_mo_badge = seL4_GetBadge(2);
-    mo_component_registry_entry_t *ipc_mo_data = mo_component_registry_get_entry_by_badge(ipc_buf_mo_badge);
+    mo_component_registry_entry_t *ipc_mo_data = (mo_component_registry_entry_t *)
+        resource_component_registry_get_by_badge(get_mo_component(), ipc_buf_mo_badge);
+
     seL4_CPtr ipc_buf_frame = ipc_mo_data == NULL ? seL4_CapNull : ipc_mo_data->mo.frame_caps_in_root_task[0];
 
     /* Configure the vspace */
@@ -190,7 +188,8 @@ static seL4_MessageInfo_t handle_change_vspace_req(seL4_Word sender_badge,
     SERVER_GOTO_IF_COND(client_data == NULL, "Couldn't find CPU (%ld)\n", get_object_id_from_badge(sender_badge));
 
     /* Find the PD */
-    pd_component_registry_entry_t *pd_data = pd_component_registry_get_entry_by_id(get_client_id_from_badge(sender_badge));
+    pd_component_registry_entry_t *pd_data = (pd_component_registry_entry_t *)
+        resource_component_registry_get_by_id(get_pd_component(), sender_badge);
     SERVER_GOTO_IF_COND(pd_data == NULL, "Couldn't find PD (%ld)\n", get_client_id_from_badge(sender_badge));
 
     /* Find the ADS */
@@ -304,21 +303,6 @@ int forge_cpu_cap_from_tcb(sel4utils_process_t *process, // Change this to the s
     {
         *id_ret = new_entry->cpu.id;
     }
-
-err_goto:
-    return error;
-}
-
-int cpu_component_dec(uint64_t cpu_id)
-{
-    int error = 0;
-
-    cpu_component_registry_entry_t *client_data = cpu_component_registry_get_entry_by_id(cpu_id);
-    SERVER_GOTO_IF_COND(client_data == NULL, "Couldn't find CPU (%ld)\n", cpu_id);
-
-    OSDB_PRINTF("Decrementing CPU (%ld), refcount %d\n", cpu_id, client_data->gen.count);
-
-    resource_server_registry_dec(&get_cpu_component()->registry, (resource_server_registry_node_t *)client_data);
 
 err_goto:
     return error;
