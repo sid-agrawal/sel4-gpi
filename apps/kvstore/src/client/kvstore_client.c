@@ -64,6 +64,8 @@ static int configure_separate_ads()
         return swap_err;
     }
 
+    printf("TEMPA kvserv_ads cap %d\n", kvserv_ads.badged_server_ep_cspath.capPtr);
+
     self_cpu_conn.badged_server_ep_cspath.capPtr = sel4gpi_get_cpu_cap();
     swap_err = cpu_client_change_vspace(&self_cpu_conn, &kvserv_ads);
     if (swap_err)

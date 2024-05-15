@@ -141,7 +141,8 @@ xv6fs_client_init(void)
   XV6FS_PRINTF("Initializing client of FS server\n");
 
   // Do not re-initialize
-  if (get_xv6fs_client()->shared_mem_vaddr != NULL) {
+  if (get_xv6fs_client()->shared_mem_vaddr != NULL)
+  {
     return 0;
   }
 
@@ -166,12 +167,14 @@ xv6fs_client_init(void)
                                       get_xv6fs_client()->shared_mem);
   CHECK_ERROR(error, "failed to allocate shared mem page");
 
+  printf("TEMPA fs client self ads conn ID %d, %d\n", sel4gpi_get_binded_ads_id(),
+         sel4gpi_get_rde_by_ns_id(sel4gpi_get_binded_ads_id(), GPICAP_TYPE_ADS));
   error = ads_client_attach(get_xv6fs_client()->ads_conn,
                             NULL,
                             get_xv6fs_client()->shared_mem,
                             SEL4UTILS_RES_TYPE_SHARED_FRAMES,
                             &get_xv6fs_client()->shared_mem_vaddr);
-  CHECK_ERROR(error, "failed to map shared mem page");
+  CHECK_ERROR(error, "failed to map shared mem page for fs client");
 
   /* Setup local FD data structure */
   fd_init();

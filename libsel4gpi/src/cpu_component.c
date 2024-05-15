@@ -189,7 +189,7 @@ static seL4_MessageInfo_t handle_change_vspace_req(seL4_Word sender_badge,
 
     /* Find the PD */
     pd_component_registry_entry_t *pd_data = (pd_component_registry_entry_t *)
-        resource_component_registry_get_by_id(get_pd_component(), sender_badge);
+        resource_component_registry_get_by_id(get_pd_component(), get_client_id_from_badge(sender_badge));
     SERVER_GOTO_IF_COND(pd_data == NULL, "Couldn't find PD (%ld)\n", get_client_id_from_badge(sender_badge));
 
     /* Find the ADS */

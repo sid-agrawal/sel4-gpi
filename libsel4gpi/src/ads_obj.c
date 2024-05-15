@@ -635,7 +635,7 @@ int ads_shallow_copy(vspace_t *loader,
             // The "client" to hold this MO is the root task
             mo_component_registry_entry_t *mo_entry;
             seL4_CPtr mo_cap; // Not used since we are not giving this MO away
-            error = resource_component_allocate(get_mo_component(), get_gpi_server()->rt_pd_id, true, (void *)num_pages,
+            error = resource_component_allocate(get_mo_component(), get_gpi_server()->rt_pd_id, false, (void *)num_pages,
                                                 (resource_server_registry_node_t **)&mo_entry, &mo_cap);
 
             if (error)

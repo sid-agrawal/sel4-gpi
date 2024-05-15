@@ -66,7 +66,6 @@ int ads_client_attach(ads_client_context_t *conn,
                 conn->badged_server_ep_cspath.capPtr);
     tag = seL4_Call(conn->badged_server_ep_cspath.capPtr, tag);
     *ret_vaddr = (void *)seL4_GetMR(ADSMSGREG_ATTACH_ACK_VA);
-    assert(*ret_vaddr != NULL);
 
     return seL4_MessageInfo_get_label(tag);
 }
@@ -146,7 +145,7 @@ int ads_client_shallow_copy(ads_client_context_t *conn, seL4_CPtr free_slot, voi
     OSDB_PRINTF("Sending clone request to server via EP: %lu.\n",
                 conn->badged_server_ep_cspath.capPtr);
     tag = seL4_Call(conn->badged_server_ep_cspath.capPtr, tag);
-    assert(seL4_MessageInfo_get_extraCaps(tag) == 1);
+
     ret_conn->badged_server_ep_cspath.capPtr = free_slot;
     return seL4_MessageInfo_get_label(tag);
 }

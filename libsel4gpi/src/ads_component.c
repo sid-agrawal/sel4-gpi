@@ -53,6 +53,23 @@ static void on_ads_registry_delete(resource_server_registry_node_t *node_gen)
     ads_destroy(&node->ads);
 }
 
+// Add an ADS as an RDE to a pd
+static int add_ads_rde(uint32_t client_id, uint32_t ads_id)
+{
+    int error = 0;
+    // (XXX) Linh: this is not very nice as we're coupling the PD and ADS components
+    pd_component_registry_entry_t *client_pd_data = (pd_component_registry_entry_t *)
+        resource_component_registry_get_by_id(get_pd_component(), client_id);
+    SERVER_GOTO_IF_COND(client_pd_data == NULL, "Couldn't find PD (%d)\n", client_id);
+
+    rde_type_t type = {.type = GPICAP_TYPE_ADS};
+    error = pd_add_rde(&client_pd_data->pd, type, get_gpi_server()->ads_manager_id, ads_id, get_ads_component()->server_ep);
+    SERVER_GOTO_IF_ERR(error, "Couldn't find add ADS to PD (%d)'s RDE\n", client_id);
+
+err_goto:
+    return error;
+}
+
 static seL4_MessageInfo_t handle_ads_allocation(seL4_Word sender_badge)
 {
     OSDB_PRINTF("Got ADS allocation request from %lx\n", sender_badge);
@@ -67,15 +84,8 @@ static seL4_MessageInfo_t handle_ads_allocation(seL4_Word sender_badge)
     SERVER_GOTO_IF_ERR(error, "Failed to allocate new ADS\n");
 
     /* Add the RDE for the client */
-
-    // (XXX) Linh: this is not very nice as we're coupling the PD and ADS components
-    pd_component_registry_entry_t *client_pd_data = (pd_component_registry_entry_t *)
-        resource_component_registry_get_by_id(get_pd_component(), client_id);
-    SERVER_GOTO_IF_COND(client_pd_data == NULL, "Couldn't find PD (%d)\n", client_id);
-
-    rde_type_t type = {.type = GPICAP_TYPE_ADS};
-    error = pd_add_rde(&client_pd_data->pd, type, get_gpi_server()->ads_manager_id, new_entry->ads.id, get_ads_component()->server_ep);
-    SERVER_GOTO_IF_ERR(error, "Couldn't find add ADS to PD (%d)'s RDE\n", client_id);
+    error = add_ads_rde(client_id, new_entry->ads.id);
+    SERVER_GOTO_IF_ERR(error, "Failed to add RDE for ADS (%d) to PD (%d)\n", new_entry->ads.id, client_id);
 
     OSDB_PRINTF("Successfully allocated a new ads.\n");
 
@@ -242,6 +252,9 @@ static seL4_MessageInfo_t handle_shallow_copy_req(seL4_Word sender_badge)
                                         (resource_server_registry_node_t **)&new_ads_entry, &ret_cap);
 
     SERVER_GOTO_IF_ERR(error, "Failed to allocate new ADs for copy\n");
+
+    error = add_ads_rde(client_id, new_ads_entry->ads.id);
+    SERVER_GOTO_IF_ERR(error, "Failed to add RDE for ADS (%d) to PD (%d)\n", new_ads_entry->ads.id, client_id);
 
     /* Copy memory regions */
     void *omit_vaddr = (void *)seL4_GetMR(ADSMSGREG_SHALLOW_COPY_REQ_OMIT_VA);
@@ -533,8 +546,8 @@ int forge_ads_cap_from_vspace(vspace_t *vspace, vka_t *vka, uint32_t client_pd_i
     seL4_CPtr ret_cap;
     ads_component_registry_entry_t *new_entry;
 
-    error = error = resource_component_allocate(get_ads_component(), client_pd_id, false, NULL,
-                                                (resource_server_registry_node_t **)&new_entry, &ret_cap);
+    error = resource_component_allocate(get_ads_component(), client_pd_id, false, NULL,
+                                        (resource_server_registry_node_t **)&new_entry, &ret_cap);
     SERVER_GOTO_IF_ERR(error, "Failed to allocate ADS for forging\n");
 
     /* Update the ADS object with the vspace data */
