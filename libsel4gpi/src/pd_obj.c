@@ -34,6 +34,7 @@
 #include <sel4gpi/resource_server_clientapi.h>
 #include <sel4gpi/pd_utils.h>
 #include <sel4gpi/resource_space_component.h>
+#include <sel4gpi/error_handle.h>
 
 #define CSPACE_SIZE_BITS 17
 #define ELF_LIB_DATA_SECTION ".lib_data"
@@ -502,14 +503,11 @@ static int pd_setup_cspace(pd_t *pd, vka_t *vka)
     pd->cnode_guard = api_make_guard_skip_word(seL4_WordBits - size_bits);
 
     error = vka_alloc_endpoint(vka, &pd->proc.fault_endpoint);
-    ZF_LOGE_IFERR(error, "Failed to create PD's fault endpoint");
+    SERVER_GOTO_IF_ERR(error, "Failed to create PD %d's fault endpoint", pd->id);
 
     error = vka_alloc_cnode_object(vka, size_bits, &pd->proc.cspace);
-    ZF_LOGE_IFERR(error, "Failed to create cspace");
-    if (error)
-    {
-        goto error;
-    }
+    SERVER_GOTO_IF_ERR(error, "Failed to create PD %d's cspace", pd->id);
+
     pd->proc.cspace_size = size_bits;
     /* first slot is always 1, never allocate 0 as a cslot */
     pd->proc.cspace_next_free = 1;
@@ -520,34 +518,19 @@ static int pd_setup_cspace(pd_t *pd, vka_t *vka)
     vka_cspace_make_path(vka, pd->proc.cspace.cptr, &src);
     cspacepath_t dest = {.capPtr = pd->proc.cspace_next_free, .root = src.capPtr, .capDepth = pd->proc.cspace_size};
     error = vka_cnode_mint(&dest, &src, seL4_AllRights, pd->cnode_guard);
-    ZF_LOGE_IFERR(error, "Failed to mint PD's cnode into its cspace");
+    SERVER_GOTO_IF_ERR(error, "Failed to mint PD %d's cnode into its cspace\n");
     pd->proc.cspace_next_free++;
 
-    /* copy over initial caps to PD (XXX) Linh: disabling for now bc unclear if we need this */
-#if 0
-    /* copy fault endpoint cap into process cspace */
-    vka_cspace_make_path(vka, fault_ep.cptr, &src);
-    error = vka_cnode_copy(&dest, &src, seL4_AllRights);
-    ZF_LOGE_IFERR("Failed to copy PD's fault EP to its cspace");
-    cspace_next_free++;
+    /* Initialize a vka for the PD's cspace */
+    error = pd_bootstrap_allocator(pd, pd->proc.cspace.cptr, pd->proc.cspace_next_free,
+                                   BIT(CSPACE_SIZE_BITS), CSPACE_SIZE_BITS, 0);
+    SERVER_GOTO_IF_ERR(error, "Failed to setup allocator for PD %d\n", pd->id);
 
-    /* copy page directory cap into process cspace */
-    vka_cspace_make_path(vka, process->pd.cptr, &src);
-    error = vka_cnode_copy(&dest, &src, seL4_AllRights);
-    ZF_LOGE_IFERR(error, "Failed to copy PD's page directory cap to its cspace");
-    cspace_next_free++;
+    OSDB_PRINTF("PD next free slot: %ld\n", pd->proc.cspace_next_free);
 
-    if (!config_set(CONFIG_X86_64))
-    {
-        vka_cspace_make_path(vka, seL4_CapInitThreadASIDPool, &src);
-        error = vka_cnode_copy(&dest, &src, seL4_AllRights);
-        ZF_LOGE_IFERR(error, "Failed to copy ASID pool cap to PD");
-    }
-    cspace_next_free++;
-#endif
     return 0;
 
-error:
+err_goto:
     /* try to clean up */
     if (pd->proc.fault_endpoint.cptr != 0)
     {
@@ -568,7 +551,7 @@ error:
         }
     }
 
-    return -1;
+    return 1;
 }
 
 int pd_configure(pd_t *pd,
@@ -584,11 +567,6 @@ int pd_configure(pd_t *pd,
     /* The RT manages this ADS */
     // (XXX) Arya: is this necessary?
     pd_add_resource_by_id(get_gpi_server()->rt_pd_id, GPICAP_TYPE_ADS, target_ads->id, NSID_DEFAULT, seL4_CapNull, seL4_CapNull, seL4_CapNull);
-
-    /* Initialize a vka for the PD's cspace */
-    error = pd_bootstrap_allocator(pd, pd->proc.cspace.cptr, pd->proc.cspace_next_free,
-                                   BIT(CSPACE_SIZE_BITS), CSPACE_SIZE_BITS, 0);
-    assert(error == 0);
 
     // the ADS cap is both a resource manager and a resource
     seL4_Word badge = gpi_new_badge(GPICAP_TYPE_ADS, 0x00, pd->id, target_ads->id, target_ads->id);
@@ -641,7 +619,7 @@ int pd_send_cap(pd_t *to_pd,
         return 1;
     }
 
-    OSDB_PRINTF("pd_send_cap: Sending cap %ld(badge:%lx) to pd %p\n", cap, badge, to_pd);
+    OSDB_PRINTF("pd_send_cap: Sending cap %ld(badge:%lx), to pd %d\n", cap, badge, to_pd->id);
 
     seL4_Word new_badge;
     int error = 0;
@@ -1086,12 +1064,3 @@ inline void print_pd_osm_rde_info(osmosis_rde_t *o)
                cap_type_to_str(o->type.type));
     }
 }
-
-// WIP thread resource sharing
-// int pd_clone(pd_t *src, pd_t *dest)
-// {
-//     for (osmosis_pd_cap_t *current_cap = src->has_access_to; current_cap != NULL; current_cap = current_cap->hh.next)
-//     {
-//         // copy resources from src to dest pd
-//     }
-// }

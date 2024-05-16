@@ -43,25 +43,26 @@ int start_resource_server_pd(uint64_t rde_id,
     error = pd_client_alloc_ep(&current_pd, &ep);
     CHECK_ERROR(error, "failed to allocate endpoint");
 
-    sel4gpi_process_t proc;
-    error = sel4gpi_configure_process(image_name, DEFAULT_STACK_PAGES, DEFAULT_HEAP_PAGES, &proc);
+    pd_client_context_t server_pd;
+    pd_resource_config_t *cfg = sel4gpi_configure_process(image_name, DEFAULT_STACK_PAGES, DEFAULT_HEAP_PAGES, &server_pd);
+    error = cfg == NULL;
     CHECK_ERROR(error, "failed to configure process");
 
     if (server_pd_cap)
     {
-        *server_pd_cap = proc.pd.badged_server_ep_cspath.capPtr;
+        *server_pd_cap = server_pd.badged_server_ep_cspath.capPtr;
     }
 
     // Copy the parent ep to the new PD
     seL4_Word parent_ep_slot;
-    error = pd_client_send_cap(&proc.pd, ep, &parent_ep_slot);
+    error = pd_client_send_cap(&server_pd, ep, &parent_ep_slot);
     CHECK_ERROR(error, "failed to send parent's ep cap to pd");
 
     // Copy the RDE to the new PD
     if (rde_pd_cap > 0)
     {
         RESOURCE_SERVER_PRINTF("SENDING RDE\n");
-        error = pd_client_add_rde(&proc.pd, rde_pd_cap, rde_id, NSID_DEFAULT);
+        error = pd_client_add_rde(&server_pd, rde_pd_cap, rde_id, NSID_DEFAULT);
         CHECK_ERROR(error, "failed to send rde to pd");
     }
 
@@ -71,7 +72,8 @@ int start_resource_server_pd(uint64_t rde_id,
     args[0] = parent_ep_slot;
 
     // Start it
-    error = sel4gpi_spawn_process(&proc, argc, args);
+    sel4gpi_runnable_t runnable = {.pd = server_pd};
+    error = sel4gpi_start_pd(cfg, &runnable, argc, args);
     CHECK_ERROR(error, "failed to start pd");
 
     // Wait for it to finish starting
@@ -89,6 +91,7 @@ int start_resource_server_pd(uint64_t rde_id,
     // Cleanup temporary endpoint
     // (XXX) Arya: why does this free cause future allocs to break?
     // vka_free_object(vka, &ep_object);
+    free(cfg);
 
     return 0;
 }

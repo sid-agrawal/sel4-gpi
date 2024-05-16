@@ -135,19 +135,6 @@ int ads_client_testing(ads_client_context_t *conn, vka_t *vka,
                        ads_client_context_t *ads_conn_clone2,
                        ads_client_context_t *ads_conn_clone3);
 
-// /**
-//  * @brief (WIP) creates a new ADS based on the given source ADS following the given configuration
-//  *
-//  * @param src_ads the source ADS
-//  * @param free_slot a free slot to put the new ADS into
-//  * @param cfg an ADS configuration describing how the new ADS should be set up
-//  * @param ret_ads the newly created ADS
-//  * @return int 0 on success, 1 on failure
-//  */
-// int ads_client_clone(ads_client_context_t *src_ads, seL4_CPtr free_slot, ads_resource_config_t *cfg, ads_client_context_t *ret_ads);
-
-// int ads_client_shallow_copy_vmr(ads_client_context_t *src_ads, ads_client_context_t *dst_ads, )
-
 /* ======================================= CONVENIENCE FUNCTIONS (NOT PART OF FRAMEWORK) ================================================= */
 
 /**
@@ -175,4 +162,12 @@ int ads_client_load_elf(ads_client_context_t *loadee_ads, pd_client_context_t *l
  * @param ret_init_stack the position of the initial stack pointer after setup
  * @return int 0 on success
  */
-int ads_client_pd_setup(ads_client_context_t *target_ads, pd_client_context_t *target_pd, void *stack_top, int stack_size, int argc, seL4_Word *args, ads_setup_type_t setup_type, void **ret_init_stack);
+int ads_client_pd_setup(ads_client_context_t *target_ads,
+                        pd_client_context_t *target_pd,
+                        cpu_client_context_t *target_cpu,
+                        void *stack_top,
+                        int stack_size,
+                        int argc,
+                        seL4_Word *args,
+                        ads_setup_type_t setup_type,
+                        void **ret_init_stack);

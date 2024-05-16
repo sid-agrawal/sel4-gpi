@@ -71,17 +71,18 @@ typedef struct _vmr_config
 // Configuration of an entire ADS
 typedef struct _ads_resource_config
 {
-   ads_client_context_t *src_ads; // the source ADS to generate the new ADS, if NULL, then this config describes the current ADS
-   char *image_name; // only used if code_shared == GPI_DISJOINT
+   bool same_ads;                 // whether this config is for the same ADS as the current one
+   ads_client_context_t *src_ads; // the source ADS to generate the new ADS, only used if same_ads == false
+   char *image_name;              // only used if code_shared == GPI_DISJOINT
    /* special ADS regions */
    gpi_share_degree_t code_shared;
    gpi_share_degree_t stack_shared;
    gpi_share_degree_t heap_shared;
    gpi_share_degree_t ipc_buf_shared;
-   int stack_pages;
-   int heap_pages;
+   size_t stack_pages;
+   size_t heap_pages;
    /* list of vaddrs to VMRs that should be shared */
-   int n_vmr_shared;
+   size_t n_vmr_shared;
    vmr_config_t shared_vmrs[MAX_SHARED_VMRS];
 } ads_resource_config_t;
 

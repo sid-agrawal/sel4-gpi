@@ -14,6 +14,7 @@
 #include <sel4utils/process.h>
 #include <sel4gpi/model_exporting.h>
 #include <sel4gpi/mo_obj.h>
+#include <sel4gpi/cpu_obj.h>
 #include <sel4gpi/resource_server_utils.h>
 #include <sel4gpi/gpi_client.h>
 
@@ -246,7 +247,7 @@ int ads_load_elf(vspace_t *loadee_vspace, sel4utils_process_t *proc, char *image
 
 /**
  * @brief slightly modified version of the sel4utils process spawn function
- * sets up the stack, but doesn't actually start the process
+ * sets up the stack with arguments for setting up the C runtime
  *
  * @param process the process struct holding info after an ELF has been loaded
  * @param osm_init_data initial OSmosis data for the PD
@@ -257,29 +258,22 @@ int ads_load_elf(vspace_t *loadee_vspace, sel4utils_process_t *proc, char *image
  * @param ret_init_stack the position of the initial stack pointer after setup
  * @return 0 on success, 1 on failure
  */
-int ads_proc_setup(sel4utils_process_t *process,
-                   void *osm_init_data,
-                   vka_t *vka,
-                   vspace_t *vspace,
-                   int argc,
-                   char *argv[],
-                   void **ret_init_stack);
+int ads_runtime_setup(sel4utils_process_t *process,
+                      void *osm_init_data,
+                      vka_t *vka,
+                      vspace_t *vspace,
+                      int argc,
+                      char *argv[],
+                      void **ret_init_stack);
 
 /**
- * @brief (WIP) setup the stack to allow a thread to run
+ * @brief setup the TLS on the stack
  *
- * @param stack_top pointer to the top of the stack (in the thread's VSpace)
+ * @param target_ads the ADS where the stack resides
+ * @param target_cpu the CPU that will use this stack
+ * @param stack_top pointer to the top of the stack in the target ADS
+ * @param stack_size the size of the stack, in pages, NOT including the one guard page
  * @param ret_init_stack returns the pointer to the stack position after it's been initialized
  * @return 0 on success, 1 on failure
  */
-int ads_thread_setup(void *stack_top, void **ret_init_stack);
-
-/**
- * @brief (WIP) share or create new VMR resources based on the given config
- *
- * @param from_ads the ADS to copy resources from
- * @param to_ads the ADS to copy resources to
- * @param cfg a single config item
- * @return int 0 on success, 1 on failure
- */
-int ads_configure_resources(ads_t *from_ads, ads_t *to_ads, ads_resource_config_t *cfg);
+int ads_tls_setup(ads_t *target_ads, cpu_t *target_cpu, void *stack_top, size_t stack_size, void **ret_init_stack);

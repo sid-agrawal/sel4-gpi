@@ -90,36 +90,35 @@ static int start_kvstore_server(seL4_CPtr *kvstore_ep, uint64_t fs_nsid, uint64_
 {
     int error;
 
-    sel4gpi_process_t kvserver_proc;
-    error = sel4gpi_configure_process(KVSTORE_SERVER_APP, DEFAULT_STACK_PAGES, DEFAULT_HEAP_PAGES, &kvserver_proc);
-    test_assert(error == 0);
-    *kvstore_pd = kvserver_proc.pd;
+    pd_resource_config_t *cfg = sel4gpi_configure_process(KVSTORE_SERVER_APP, DEFAULT_STACK_PAGES, DEFAULT_HEAP_PAGES, kvstore_pd);
+    test_assert(cfg != NULL);
 
     // Setup the hello PD's args
     int argc = 1;
     seL4_Word args[argc];
 
     // Copy the parent ep
-    error = pd_client_send_cap(&kvserver_proc.pd, self_ep, &args[0]);
+    error = pd_client_send_cap(kvstore_pd, self_ep, &args[0]);
     test_assert(error == 0);
 
     // Give the FS RDE
     if (fs_pd_cap)
     {
         // Share a new FS RDE
-        error = pd_client_add_rde(&kvserver_proc.pd, fs_pd_cap, fs_manager_id, fs_nsid);
+        error = pd_client_add_rde(kvstore_pd, fs_pd_cap, fs_manager_id, fs_nsid);
         test_assert(error == 0);
     }
     else
     {
         // Share our own FS RDE
-        error = pd_client_share_rde(&kvserver_proc.pd, GPICAP_TYPE_FILE, fs_nsid);
+        error = pd_client_share_rde(kvstore_pd, GPICAP_TYPE_FILE, fs_nsid);
         test_assert(error == 0);
     }
 
     // Start it
-    error = sel4gpi_spawn_process(&kvserver_proc, argc, args);
-    test_assert(error == 0);
+    sel4gpi_runnable_t runnable = {.pd = *kvstore_pd};
+    error = sel4gpi_start_pd(cfg, &runnable, argc, args);
+    test_error_eq(error, 0);
 
     // Wait for it to finish starting
     seL4_CPtr receive_slot;
@@ -134,6 +133,7 @@ static int start_kvstore_server(seL4_CPtr *kvstore_ep, uint64_t fs_nsid, uint64_
 
     *kvstore_ep = receive_slot;
 
+    free(cfg);
     return 0;
 }
 
@@ -160,12 +160,11 @@ static int start_hello_kvstore(kvstore_mode_t kvstore_mode,
     int argc = 3;
     seL4_Word args[argc];
 
-    sel4gpi_process_t hello_proc;
-    error = sel4gpi_configure_process(HELLO_KVSTORE_APP, DEFAULT_STACK_PAGES, DEFAULT_HEAP_PAGES, &hello_proc);
-    *hello_pd = hello_proc.pd;
+    pd_resource_config_t *cfg = sel4gpi_configure_process(HELLO_KVSTORE_APP, DEFAULT_STACK_PAGES, DEFAULT_HEAP_PAGES, hello_pd);
+    test_assert(cfg != NULL);
 
     // Copy the parent ep
-    error = pd_client_send_cap(&hello_proc.pd, self_ep, &args[0]);
+    error = pd_client_send_cap(hello_pd, self_ep, &args[0]);
     test_assert(error == 0);
 
     args[2] = kvstore_mode;
@@ -173,7 +172,7 @@ static int start_hello_kvstore(kvstore_mode_t kvstore_mode,
     // Copy the kvstore ep, if applicable
     if (kvstore_mode == SEPARATE_PROC)
     {
-        error = pd_client_send_cap(&hello_proc.pd, kvstore_ep, &args[1]);
+        error = pd_client_send_cap(hello_pd, kvstore_ep, &args[1]);
         test_assert(error == 0);
     }
     else
@@ -182,32 +181,34 @@ static int start_hello_kvstore(kvstore_mode_t kvstore_mode,
     }
 
     // Give the CPU RDE (for thread example)
-    error = pd_client_share_rde(&hello_proc.pd, GPICAP_TYPE_CPU, NSID_DEFAULT);
+    error = pd_client_share_rde(hello_pd, GPICAP_TYPE_CPU, NSID_DEFAULT);
     test_assert(error == 0);
 
     // Give the FS RDE
     if (fs_pd_cap)
     {
         // Share a new FS RDE
-        error = pd_client_add_rde(&hello_proc.pd, fs_pd_cap, fs_manager_id, fs_nsid);
+        error = pd_client_add_rde(hello_pd, fs_pd_cap, fs_manager_id, fs_nsid);
         test_assert(error == 0);
     }
     else
     {
         // Share our own FS RDE
-        error = pd_client_share_rde(&hello_proc.pd, GPICAP_TYPE_FILE, fs_nsid);
+        error = pd_client_share_rde(hello_pd, GPICAP_TYPE_FILE, fs_nsid);
         test_assert(error == 0);
     }
 
     if (kvstore_mode == SEPARATE_ADS)
     {
-        error = pd_client_share_rde(&hello_proc.pd, GPICAP_TYPE_ADS, NSID_DEFAULT);
+        error = pd_client_share_rde(hello_pd, GPICAP_TYPE_ADS, NSID_DEFAULT);
     }
 
     // Start it
-    error = sel4gpi_spawn_process(&hello_proc, argc, args);
-    test_assert(error == 0);
+    sel4gpi_runnable_t runnable = {.pd = *hello_pd};
+    error = sel4gpi_start_pd(cfg, &runnable, argc, args);
+    test_error_eq(error, 0);
 
+    free(cfg);
     return 0;
 }
 

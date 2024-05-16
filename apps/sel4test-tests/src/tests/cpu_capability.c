@@ -60,8 +60,10 @@ int test_separate_threads(env_t env)
     error = pd_component_client_connect(pd_rde, slot, &thread_pd);
     test_error_eq(error, 0);
 
-    // pd_client_clone(pd_rde, &thread_pd, )
+    pd_resource_config_t *thread_cfg = sel4gpi_generate_thread_config();
+    test_assert(thread_cfg == NULL);
 
+    free(thread_cfg);
 #if 0
     /* Create a new CPU obj */
     error = pd_client_next_slot(&test_pd_os_cap, &slot);

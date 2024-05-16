@@ -23,6 +23,7 @@
 #include <cpio/cpio.h>
 #include <sel4utils/helpers.h>
 #include <sel4runtime/auxv.h>
+#include <sel4runtime.h>
 
 #define MAX_MO_RR 10000
 
@@ -816,13 +817,13 @@ error:
     }
 }
 
-int ads_proc_setup(sel4utils_process_t *process,
-                   void *osm_init_data,
-                   vka_t *vka,
-                   vspace_t *vspace,
-                   int argc,
-                   char *argv[],
-                   void **ret_init_stack)
+int ads_runtime_setup(sel4utils_process_t *process,
+                      void *osm_init_data,
+                      vka_t *vka,
+                      vspace_t *vspace,
+                      int argc,
+                      char *argv[],
+                      void **ret_init_stack)
 {
     assert(vspace != NULL);
     assert(&process->vspace != NULL);
@@ -976,46 +977,28 @@ int ads_proc_setup(sel4utils_process_t *process,
     return 0;
 }
 
-/* WIP */
-// int ads_thread_setup(void *stack_top, void **ret_init_stack)
-// {
-// }
-
-int ads_configure_resources(ads_t *from_ads, ads_t *to_ads, ads_resource_config_t *cfg)
+int ads_tls_setup(ads_t *target_ads, cpu_t *target_cpu, void *stack_top, size_t stack_size, void **ret_init_stack)
 {
-    int error = 0;
-    switch (cfg->code_shared)
-    {
-    case GPI_SHARED:
-        // shallow copy
-        // find code region
-        sel4utils_res_t *elf_vmr = ads_find_reservation_by_type(from_ads, SEL4UTILS_RES_TYPE_ELF);
-        break;
-    case GPI_COPY:
-        // deep copy
-        break;
-    case GPI_DISJOINT:
-        // elf load
-        break;
-    default:
-        break;
-    }
+    /* WIP */
+    int error;
+    size_t tls_size = sel4runtime_get_tls_size();
+    uintptr_t tls_base = (uintptr_t)stack_top - tls_size;
 
-    if (cfg->stack_shared == GPI_DISJOINT)
-    {
-        if (cfg->code_shared == GPI_DISJOINT)
-        {
-            // full C runtime setup
-        }
-        else
-        {
-            // only TLS setup
-        }
-    }
-    else
-    {
-        // do necessary copying
-    }
+    size_t stack_bytes = stack_size * (SIZE_BITS_TO_BYTES(MO_PAGE_BITS));
+    uintptr_t stack_bottom = (uintptr_t)stack_top - stack_bytes;
+    attach_node_t *stack_attach_node = ads_get_res_by_vaddr(target_ads, stack_bottom);
+    SERVER_GOTO_IF_COND(1, "stack_attach_node null? %d\n", stack_attach_node == NULL);
+    // vspace_map_pages(get_ads_component()->server_vspace, )
+
+    target_cpu->tls_base = (uintptr_t)sel4runtime_write_tls_image((void *)tls_base);
+    target_cpu->thread.stack_top = ALIGN_UP(tls_base, STACK_CALL_ALIGNMENT);
+
+    error = seL4_TCB_SetTLSBase(target_cpu->thread.tcb.cptr, target_cpu->tls_base);
+    assert(error == 0);
+
+    /* Write context and registers */
+    // sel4utils_arch_init_local_context((void *)entry_point, (void *)arg0,
+    //                                   (void *)target_cpu->tls_base, (void *)target_cpu->thread.ipc_buffer_addr, target_cpu->thread.stack_top, &regs);
 
 err_goto:
     return error;

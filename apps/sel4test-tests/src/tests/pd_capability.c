@@ -34,31 +34,43 @@ int test_new_process_osmosis_shmem(env_t env)
 {
     int error;
     printf("------------------STARTING: %s------------------\n", __func__);
-    seL4_CPtr pd_rde = sel4gpi_get_rde(GPICAP_TYPE_PD);
-    pd_client_context_t self_pd_cap;
-    self_pd_cap.badged_server_ep_cspath.capPtr = sel4gpi_get_pd_cap();
+    // seL4_CPtr pd_rde = sel4gpi_get_rde(GPICAP_TYPE_PD);
+    // pd_client_context_t self_pd_cap;
+    // self_pd_cap.badged_server_ep_cspath.capPtr = sel4gpi_get_pd_cap();
 
-    ads_client_context_t self_ads_cap;
-    self_ads_cap.badged_server_ep_cspath.capPtr = sel4gpi_get_ads_cap();
+    // /* new PD */
+    // seL4_CPtr slot;
+    // error = pd_client_next_slot(&self_pd_cap, &slot);
+    // test_error_eq(error, 0);
 
-    /* new PD */
-    seL4_CPtr slot;
-    error = pd_client_next_slot(&self_pd_cap, &slot);
-    test_error_eq(error, 0);
+    // error = pd_component_client_connect(pd_rde, slot, &new_pd);
+    // test_error_eq(error, 0);
 
+    // pd_resource_config_t *proc_cfg = sel4gpi_generate_proc_config("hello");
+    // test_assert(proc_cfg != NULL);
     pd_client_context_t new_pd;
-    error = pd_component_client_connect(pd_rde, slot, &new_pd);
-    test_error_eq(error, 0);
-
-    seL4_Word arg0 = 1;
-    pd_resource_config_t *proc_cfg = sel4gpi_generate_proc_config("hello");
+    pd_resource_config_t *proc_cfg = sel4gpi_configure_process("hello", DEFAULT_STACK_PAGES, DEFAULT_HEAP_PAGES, &new_pd);
     test_assert(proc_cfg != NULL);
-    proc_cfg->ads_cfg.src_ads = &self_ads_cap;
 
-    sel4gpi_pd_t pd_tuple;
-    error = sel4gpi_configure_pd(proc_cfg, &self_pd_cap, &new_pd, 1, &arg0, &pd_tuple);
+    vka_object_t ep;
+    error = vka_alloc_endpoint(&env->vka, &ep);
     test_error_eq(error, 0);
 
+    seL4_CPtr slot;
+    error = pd_client_send_cap(&new_pd, ep.cptr, &slot);
+    test_error_eq(error, 0);
+
+    sel4gpi_runnable_t runnable = {.pd = new_pd};
+    error = sel4gpi_start_pd(proc_cfg, &runnable, 1, &slot);
+    test_error_eq(error, 0);
+
+    seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0, 0);
+    cspacepath_t ipc_cap;
+    error = vka_cspace_alloc_path(&env->vka, &ipc_cap);
+    test_error_eq(error, 0);
+
+    seL4_SetCapReceivePath(ipc_cap.root, ipc_cap.capPtr, ipc_cap.capDepth);
+    tag = seL4_Recv(ep.cptr, NULL);
     free(proc_cfg);
 
     // sel4gpi_process_t proc;

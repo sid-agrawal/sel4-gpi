@@ -17,7 +17,7 @@
  * Utility functions for non-RT PDs that serve GPI resources
  */
 
-#define RESOURCE_SERVER_DEBUG 0
+#define RESOURCE_SERVER_DEBUG 1
 
 /**
  * Generic resource server context

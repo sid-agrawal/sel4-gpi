@@ -188,7 +188,7 @@ int pd_client_share_rde(pd_client_context_t *conn,
     seL4_SetMR(PDMSGREG_FUNC, PD_FUNC_SHARE_RDE_REQ);
     seL4_SetMR(PDMSGREG_SHARE_RDE_REQ_TYPE, cap_type);
     seL4_SetMR(PDMSGREG_SHARE_RDE_REQ_NS, ns_id);
-    seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 1,
+    seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0,
                                                   PDMSGREG_SHARE_RDE_REQ_END);
     tag = seL4_Call(conn->badged_server_ep_cspath.capPtr, tag);
 

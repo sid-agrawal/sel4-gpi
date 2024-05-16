@@ -477,6 +477,7 @@ static seL4_MessageInfo_t handle_ipc_bench_req(void)
 }
 
 /**
+ * WIP: will either be removed or heavily changed
  * @brief clones a given PD into another PD, based on the resource configurations
  * (XXX) Linh: this function highly couples all of the various GPI components, can we do any better?
  */
@@ -516,8 +517,6 @@ static seL4_MessageInfo_t handle_clone_req(seL4_Word sender_badge, seL4_MessageI
     seL4_SetCap(0, ret_cap);
 
     seL4_Word target_ads_badge = seL4_GetBadge(2);
-    // ads_component_registry_entry_t *target_ads_data = ads_component_registry_get_entry_by_badge()
-    // ads_configure_resources()
 
 err_goto:
     tag = seL4_MessageInfo_new(error, 0, 0, PDMSGREG_CLONE_ACK_END);

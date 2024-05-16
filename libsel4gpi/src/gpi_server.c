@@ -266,14 +266,10 @@ void gpi_server_main()
     // Allocate an initial receive path
     error = vka_cspace_alloc_path(get_gpi_server()->server_vka, &received_cap_path);
     assert(error == 0);
-
     OSDB_PRINTF("main: Entering main loop and accepting requests.\n");
 
     while (1)
     {
-        /* Pre */
-        cspacepath_t received_cap_path;
-
         // The resource components allocate a new receive path if necessary
         seL4_SetCapReceivePath(
             /* _service */ received_cap_path.root,

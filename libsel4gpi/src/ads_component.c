@@ -330,11 +330,15 @@ static seL4_MessageInfo_t handle_pd_setup_req(seL4_Word sender_badge, seL4_Messa
 
     ads_component_registry_entry_t *target_ads = (ads_component_registry_entry_t *)
         resource_component_registry_get_by_badge(get_ads_component(), sender_badge);
+    SERVER_GOTO_IF_COND(target_ads == NULL, "Couldn't find target ADS (%ld)\n", get_object_id_from_badge(sender_badge));
+
     pd_component_registry_entry_t *target_pd = (pd_component_registry_entry_t *)
         resource_component_registry_get_by_id(get_pd_component(), get_object_id_from_badge(seL4_GetBadge(0)));
-
-    SERVER_GOTO_IF_COND(target_ads == NULL, "Couldn't find target ADS (%ld)\n", get_object_id_from_badge(sender_badge));
     SERVER_GOTO_IF_COND(target_pd == NULL, "Couldn't find target PD (%ld)\n", get_object_id_from_badge(seL4_GetBadge(0)));
+
+    cpu_component_registry_entry_t *target_cpu = (cpu_component_registry_entry_t *)
+        resource_component_registry_get_by_id(get_cpu_component(), get_object_id_from_badge(seL4_GetBadge(1)));
+    SERVER_GOTO_IF_COND(target_cpu == NULL, "Couldn't find target CPU (%ld)\n", get_object_id_from_badge(seL4_GetBadge(1)));
 
     /* parse the arguments */
     int argc = seL4_GetMR(ADSMSGREG_PD_SETUP_REQ_ARGC);
@@ -372,22 +376,26 @@ static seL4_MessageInfo_t handle_pd_setup_req(seL4_Word sender_badge, seL4_Messa
             snprintf(argv[i], WORD_STRING_SIZE, "%" PRIuPTR "", args[i]);
         }
 
-        target_pd->pd.proc.thread.stack_top = (void *)seL4_GetMR(ADSMSGREG_PD_SETUP_REQ_STACK);
-        target_pd->pd.proc.thread.stack_size = seL4_GetMR(ADSMSGREG_PD_SETUP_REQ_STACK_SZ);
+        void *stack_top = (void *)seL4_GetMR(ADSMSGREG_PD_SETUP_REQ_STACK);
+        size_t stack_size = seL4_GetMR(ADSMSGREG_PD_SETUP_REQ_STACK_SZ);
+        target_pd->pd.proc.thread.stack_top = stack_top;
+        target_pd->pd.proc.thread.stack_size = stack_size;
         ads_setup_type_t setup_mode = (ads_setup_type_t)seL4_GetMR(ADSMSGREG_PD_SETUP_REQ_TYPE);
 
         switch (setup_mode)
         {
         case ADS_RUNTIME_SETUP:
-            error = ads_proc_setup(&target_pd->pd.proc,
-                                   (void *)target_pd->pd.init_data_in_PD,
-                                   get_gpi_server()->server_vka,
-                                   get_pd_component()->server_vspace,
-                                   argc,
-                                   argv,
-                                   &init_stack);
+            error = ads_runtime_setup(&target_pd->pd.proc,
+                                      (void *)target_pd->pd.init_data_in_PD,
+                                      get_gpi_server()->server_vka,
+                                      get_pd_component()->server_vspace,
+                                      argc,
+                                      argv,
+                                      &init_stack);
             break;
         case ADS_TLS_SETUP:
+            error = ads_tls_setup(&target_ads->ads, &target_cpu->cpu, stack_top, stack_size, &init_stack);
+            break;
         default:
             error = 1;
             OSDB_PRINTERR("Invalid PD setup mode specified\n");

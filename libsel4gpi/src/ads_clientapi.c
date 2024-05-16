@@ -227,6 +227,7 @@ int ads_client_load_elf(ads_client_context_t *loadee_ads,
 
 int ads_client_pd_setup(ads_client_context_t *target_ads,
                         pd_client_context_t *target_pd,
+                        cpu_client_context_t *target_cpu,
                         void *stack_top,
                         int stack_size,
                         int argc,
@@ -237,13 +238,14 @@ int ads_client_pd_setup(ads_client_context_t *target_ads,
     int error = 0;
     seL4_SetMR(ADSMSGREG_FUNC, ADS_FUNC_PD_SETUP_REQ);
     seL4_SetCap(0, target_pd->badged_server_ep_cspath.capPtr);
+    seL4_SetCap(1, target_cpu->badged_server_ep_cspath.capPtr);
 
-    seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 1,
+    seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 2,
                                                   ADSMSGREG_PD_SETUP_REQ_END);
 
     seL4_SetMR(ADSMSGREG_PD_SETUP_REQ_ARGC, argc);
 
-    OSDB_PRINTF("Setting up process with args: [");
+    OSDB_PRINTF("Setting up process with %d args: [", argc);
     for (int i = 0; i < argc; i++)
     {
         OSDB_PRINTF("%ld, ", args[i]);

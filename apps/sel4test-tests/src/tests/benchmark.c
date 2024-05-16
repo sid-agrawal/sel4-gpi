@@ -23,6 +23,7 @@
 #include <utils/uthash.h>
 #include <sel4gpi/pd_utils.h>
 #include <sel4gpi/bench_utils.h>
+#include <sel4gpi/gpi_client.h>
 #include <fs_client.h>
 #include <ramdisk_client.h>
 #include <fcntl.h>
@@ -126,9 +127,9 @@ static int spawn_pd_osm(env_t env)
 {
     int error;
 
-    sel4gpi_process_t proc;
-    error = sel4gpi_configure_process("hello_benchmark", DEFAULT_STACK_PAGES, DEFAULT_HEAP_PAGES, &proc);
-    test_error_eq(error, 0);
+    pd_client_context_t proc;
+    pd_resource_config_t *cfg = sel4gpi_configure_process("hello_benchmark", DEFAULT_STACK_PAGES, DEFAULT_HEAP_PAGES, &proc);
+    test_assert(cfg != NULL);
 
     error = vka_alloc_endpoint(&env->vka, &hello_ep);
     test_error_eq(error, 0);
@@ -137,11 +138,16 @@ static int spawn_pd_osm(env_t env)
     error = pd_client_send_cap(&osm_pd, hello_ep.cptr, &slot);
     test_error_eq(error, 0);
     // Start the CPU.
-    seL4_Word args[2] = {slot, 0};
+    int argc = 2;
+    seL4_Word args[argc];
+    args[0] = slot;
+    args[1] = 0;
 
-    error = sel4gpi_spawn_process(&proc, 2, args);
+    sel4gpi_runnable_t runnable = {.pd = proc};
+    error = sel4gpi_start_pd(cfg, &runnable, argc, args);
     test_error_eq(error, 0);
 
+    free(cfg);
     return 0;
 }
 
