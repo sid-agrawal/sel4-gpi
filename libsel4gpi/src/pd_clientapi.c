@@ -20,7 +20,7 @@
 
 // Defined for utility printing macros
 #define DEBUG_ID PD_DEBUG
-#define SERVER_ID PDSERVS
+#define SERVER_ID PDSERVC
 
 int pd_component_client_connect(seL4_CPtr server_ep_cap,
                                 seL4_CPtr free_slot,
@@ -191,22 +191,6 @@ int pd_client_share_rde(pd_client_context_t *conn,
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 1,
                                                   PDMSGREG_SHARE_RDE_REQ_END);
     tag = seL4_Call(conn->badged_server_ep_cspath.capPtr, tag);
-
-    return seL4_MessageInfo_ptr_get_label(&tag);
-}
-
-int pd_client_register_resource_manager(pd_client_context_t *conn,
-                                        gpi_cap_t resource_type,
-                                        seL4_CPtr server_ep,
-                                        seL4_Word *manager_id)
-{
-    seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 1,
-                                                  PDMSGREG_REGISTER_SERV_REQ_END);
-    seL4_SetMR(PDMSGREG_FUNC, PD_FUNC_REGISTER_SERV_REQ);
-    seL4_SetMR(PDMSGREG_REGISTER_SERV_REQ_TYPE, resource_type);
-    seL4_SetCap(0, server_ep);
-    tag = seL4_Call(conn->badged_server_ep_cspath.capPtr, tag);
-    *manager_id = seL4_GetMR(PDMSGREG_REGISTER_SERV_ACK_ID);
 
     return seL4_MessageInfo_ptr_get_label(&tag);
 }

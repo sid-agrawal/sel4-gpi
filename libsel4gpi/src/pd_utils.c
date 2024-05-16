@@ -204,8 +204,13 @@ int sel4gpi_configure_process(const char *image_name, int stack_pages, int heap_
     error = cpu_client_config(&new_cpu, &new_ads, &ipc_mo, &new_pd, cnode_guard, seL4_CapNull, (seL4_Word)ipc_buf);
     GOTO_IF_ERR(error, "failed to configure CPU\n");
 
+    // Share MO RDE by default
     error = pd_client_share_rde(&new_pd, GPICAP_TYPE_MO, NSID_DEFAULT);
-    GOTO_IF_ERR(error, "failed to share RDE\n");
+    GOTO_IF_ERR(error, "failed to share MO RDE\n");
+
+    // Share resource space RDE by default
+    error = pd_client_share_rde(&new_pd, GPICAP_TYPE_RESSPC, NSID_DEFAULT);
+    GOTO_IF_ERR(error, "failed to share resource space RDE\n");
 
     // error = cpu_client_start(&new_cpu, entry_point, init_stack, 0);
     // GOTO_IF_ERR(error);

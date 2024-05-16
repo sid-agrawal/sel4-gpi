@@ -5,13 +5,14 @@
 
 #include <sel4/sel4.h>
 
-#define NO_DEBUG 0
-#define PD_DEBUG 1
-#define CPU_DEBUG 2
-#define ADS_DEBUG 4
-#define MO_DEBUG 8
-#define GPI_DEBUG 16
-#define ALL_DEBUG 0x1f
+#define NO_DEBUG 0x0
+#define PD_DEBUG 0x1
+#define CPU_DEBUG 0x2
+#define ADS_DEBUG 0x4
+#define MO_DEBUG 0x8
+#define RESSPC_DEBUG 0x10
+#define GPI_DEBUG 0x20
+#define ALL_DEBUG 0x3f
 #define OSMOSIS_DEBUG NO_DEBUG // selectively enable component debug e.g. (PD_DEBUG | ADS_DEBUG)
 #define OSMOSIS_ERROR ALL_DEBUG // selectively enable component error messages e.g. (PD_DEBUG | ADS_DEBUG)
 

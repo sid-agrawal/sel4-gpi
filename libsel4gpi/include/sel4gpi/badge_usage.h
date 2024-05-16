@@ -25,7 +25,7 @@ typedef enum GPICAP_TYPE
     GPICAP_TYPE_CPU,
     GPICAP_TYPE_PCPU,
     GPICAP_TYPE_PD,
-    GPICAP_TYPE_RS, // resource space
+    GPICAP_TYPE_RESSPC, // resource space
     GPICAP_TYPE_seL4,
 
     // Non-core cap types

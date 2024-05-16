@@ -38,7 +38,7 @@
 
 static int forge_ads_attachments_from_vspace(ads_t *ads, uint32_t client_pd_id);
 
-ads_component_context_t *get_ads_component(void)
+resource_component_context_t *get_ads_component(void)
 {
     return &get_gpi_server()->ads_component;
 }

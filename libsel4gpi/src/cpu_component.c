@@ -37,7 +37,7 @@
 #define DEBUG_ID CPU_DEBUG
 #define SERVER_ID CPUSERVS
 
-cpu_component_context_t *get_cpu_component(void)
+resource_component_context_t *get_cpu_component(void)
 {
     return &get_gpi_server()->cpu_component;
 }

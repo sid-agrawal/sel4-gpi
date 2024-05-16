@@ -80,9 +80,6 @@ enum pd_component_funcs
     PD_FUNC_SHARE_RDE_REQ,
     PD_FUNC_SHARE_RDE_ACK,
 
-    PD_FUNC_REGISTER_SERV_REQ,
-    PD_FUNC_REGISTER_SERV_ACK,
-
     PD_FUNC_REGISTER_NS_REQ,
     PD_FUNC_REGISTER_NS_ACK,
 
@@ -200,13 +197,6 @@ enum pd_component_msgregs
 
     PDMSGREG_ADD_RDE_ACK_END = PDMSGREG_LABEL0,
 
-    /* Register Resource Manager */
-    PDMSGREG_REGISTER_SERV_REQ_TYPE = PDMSGREG_LABEL0,
-    PDMSGREG_REGISTER_SERV_REQ_END,
-
-    PDMSGREG_REGISTER_SERV_ACK_ID = PDMSGREG_LABEL0,
-    PDMSGREG_REGISTER_SERV_ACK_END,
-
     /* Register Namespace */
     PDMSGREG_REGISTER_NS_REQ_MANAGER_ID = PDMSGREG_LABEL0,
     PDMSGREG_REGISTER_NS_REQ_CLIENT_ID,
@@ -258,9 +248,6 @@ typedef struct _pd_component_registry_entry
     pd_t pd;
 } pd_component_registry_entry_t;
 
-/* State maintained by the server. */
-typedef resource_component_context_t pd_component_context_t;
-
 /**
  * To initialize the pd component at the beginning of execution
  */
@@ -272,7 +259,7 @@ int pd_component_initialize(simple_t *server_simple,
                             vka_object_t server_ep_obj);
 
 /* Global server instance accessor functions. */
-pd_component_context_t *get_pd_component(void);
+resource_component_context_t *get_pd_component(void);
 
 // Creates a dummy PD object for the root task
 void forge_pd_for_root_task(uint64_t *rt_id);
@@ -290,23 +277,6 @@ void forge_pd_cap_from_init_data(test_init_data_t *init_data, sel4utils_process_
  * To be called to cleanup a forged test PD object
 */
 void destroy_test_pd(void);
-
-/**
- * @brief Insert a new resource manager into the resource manager registry Linked List.
- * Returns a new ID assigned to the resource manager
- *
- * @param new_node
- */
-int pd_component_resource_manager_insert(pd_component_resource_manager_entry_t *new_node);
-
-/**
- * @brief Lookup the resource server registry entry for the given object id.
- * (XXX) Arya: This needs to be exposed for pd_obj to use it. Is there a better way?
- *
- * @param object_id
- * @return pd_component_resource_manager_entry_t*
- */
-pd_component_resource_manager_entry_t *pd_component_resource_manager_get_entry_by_id(seL4_Word manager_id);
 
 /**
  * Add a resource to a PD

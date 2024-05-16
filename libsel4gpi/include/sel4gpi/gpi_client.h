@@ -10,6 +10,12 @@ static const char *pd_images[PD_N_IMAGES] = {"hello", "hello_kvstore", "ramdisk_
 
 #define PD_MAX_ARGC 4
 
+typedef struct _resspc_client_context
+{
+   cspacepath_t badged_server_ep_cspath;
+   uint64_t id;
+} resspc_client_context_t;
+
 typedef struct _cpu_client_context
 {
    cspacepath_t badged_server_ep_cspath;

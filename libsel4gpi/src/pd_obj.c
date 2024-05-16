@@ -33,6 +33,7 @@
 #include <sel4gpi/resource_server_utils.h>
 #include <sel4gpi/resource_server_clientapi.h>
 #include <sel4gpi/pd_utils.h>
+#include <sel4gpi/resource_space_component.h>
 
 #define CSPACE_SIZE_BITS 17
 #define ELF_LIB_DATA_SECTION ".lib_data"
@@ -775,14 +776,14 @@ static int request_remote_rr(pd_t *pd, model_state_t *ms, uint64_t server_id, ui
 {
     int error;
 
-    pd_component_resource_manager_entry_t *server_entry = pd_component_resource_manager_get_entry_by_id(server_id);
+    resspc_component_registry_entry_t *server_entry = resource_space_get_entry_by_id(server_id);
 
     if (server_entry == NULL)
     {
         OSDB_PRINTF("Failed to find resource server with ID 0x%lx\n", server_id);
         return -1;
     }
-    seL4_CPtr server_cap = server_entry->server_ep;
+    seL4_CPtr server_cap = server_entry->space.server_ep;
     model_state_t *ms2;
 
     OSDB_PRINTF("Resource ID 0x%x, server ID 0x%lx, server EP at %d\n", obj_id, server_id, (int)server_cap);
@@ -803,7 +804,7 @@ static int request_remote_rr(pd_t *pd, model_state_t *ms, uint64_t server_id, ui
         return -1;
     }
 
-    void *rr_remote_vaddr = vspace_map_pages(&server_entry->pd->proc.vspace, &rr_frame_copy_path.capPtr, NULL,
+    void *rr_remote_vaddr = vspace_map_pages(&server_entry->space.pd->proc.vspace, &rr_frame_copy_path.capPtr, NULL,
                                              seL4_AllRights, 1, seL4_LargePageBits, 1);
     if (rr_remote_vaddr == NULL)
     {
@@ -813,7 +814,7 @@ static int request_remote_rr(pd_t *pd, model_state_t *ms, uint64_t server_id, ui
 
     // Get RR from remote resource server
     error = resource_server_client_get_rr(server_cap, obj_id, pd->id,
-                                          server_entry->pd->id,
+                                          server_entry->space.pd->id,
                                           rr_remote_vaddr, rr_local_vaddr,
                                           SIZE_BITS_TO_BYTES(seL4_LargePageBits), &ms2);
 
@@ -838,7 +839,7 @@ static int request_remote_rr(pd_t *pd, model_state_t *ms, uint64_t server_id, ui
     combine_model_states(ms, ms2);
 
     // Remove remotely-mapped memory
-    vspace_unmap_pages(&server_entry->pd->proc.vspace, rr_remote_vaddr, 1, seL4_LargePageBits, NULL);
+    vspace_unmap_pages(&server_entry->space.pd->proc.vspace, rr_remote_vaddr, 1, seL4_LargePageBits, NULL);
     vka_cnode_delete(&rr_frame_copy_path);
 }
 
@@ -926,7 +927,7 @@ static int pd_dump_internal(pd_t *pd, model_state_t *ms, cspacepath_t rr_frame_p
 
             if (rde.type.type != GPICAP_TYPE_NONE)
             {
-                pd_component_resource_manager_entry_t *rm = pd_component_resource_manager_get_entry_by_id(rde.manager_id);
+                resspc_component_registry_entry_t *rm = resource_space_get_entry_by_id(rde.manager_id);
 
                 if (rm == NULL)
                 {
@@ -946,7 +947,7 @@ static int pd_dump_internal(pd_t *pd, model_state_t *ms, cspacepath_t rr_frame_p
 #endif
 
                 /* Add the resource server PD node */
-                int server_pd_id = rm->pd ? rm->pd->id : 0;
+                int server_pd_id = rm->space.pd ? rm->space.pd->id : 0;
                 gpi_model_node_t *resource_manager_pd = add_pd_node(ms, NULL, server_pd_id);
                 add_request_edge(ms, pd_node, resource_manager_pd, rde.type.type);
 

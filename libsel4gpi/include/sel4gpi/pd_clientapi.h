@@ -139,21 +139,7 @@ int pd_client_add_rde(pd_client_context_t *conn,
                       uint64_t ns_id);
 
 /* -- Resource Manager Functions -- */
-// (XXX) Arya: Should these be part of a different component?
-
-/**
- * To be called by a resource manager when it starts running
- * It will use the given manager_id to allocate resources in the future
- *
- * @param conn the resource server's pd connection
- * @param resource_type the resource type the manager provides
- * @param server_ep unbadged ep the resource server listens on
- * @param manager_id returns the resource manager's unique ID
- */
-int pd_client_register_resource_manager(pd_client_context_t *conn,
-                                        gpi_cap_t resource_type,
-                                        seL4_CPtr server_ep,
-                                        seL4_Word *manager_id);
+// (XXX) Arya: In the process of moving these to a separate component
 
 /**
  * To be called by a resource manager to allocate a new namespace
@@ -173,7 +159,7 @@ int pd_client_register_namespace(pd_client_context_t *conn,
  * To be called by a resource manager when it creates a new resource
  *
  * @param conn the resource server's pd connection
- * @param manager_id the resource manager id, given by pd_client_register_resource_manager
+ * @param manager_id the resource manager id, given by resspc_client_connect
  * @param resource_id id of the resource (local id to the resource manager)
  */
 int pd_client_create_resource(pd_client_context_t *conn,
@@ -185,7 +171,7 @@ int pd_client_create_resource(pd_client_context_t *conn,
  * a resource to another PD
  *
  * @param conn the resource server's pd connection
- * @param manager_id the resource manager id, given by pd_client_register_resource_manager
+ * @param manager_id the resource manager id, given by resspc_client_connect
  * @param ns_id the namespace ID being allocated from, given by pd_client_register_namespace
  * @param recipient_id the recipient PD's ID
  * @param resource_id id of the resource (local id to the resource manager)

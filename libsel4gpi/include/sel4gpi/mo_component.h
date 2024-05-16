@@ -77,9 +77,6 @@ typedef struct _mo_component_registry_entry
     mo_t mo;
 } mo_component_registry_entry_t;
 
-/* State maintained by the server. */
-typedef resource_component_context_t mo_component_context_t;
-
 /**
  * To initialize the mo component at the beginning of execution
  */
@@ -91,7 +88,7 @@ int mo_component_initialize(simple_t *server_simple,
                             vka_object_t server_ep_obj);
 
 /* Global server instance accessor functions. */
-mo_component_context_t *get_mo_component(void);
+resource_component_context_t *get_mo_component(void);
 
 int forge_mo_cap_from_frames(seL4_CPtr *frame_caps,
                              uint32_t num_pages,

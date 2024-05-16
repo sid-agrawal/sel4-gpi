@@ -191,9 +191,6 @@ typedef struct _ads_component_registry_entry
     ads_t ads;
 } ads_component_registry_entry_t;
 
-/* State maintained by the server. */
-typedef resource_component_context_t ads_component_context_t;
-
 /**
  * To initialize the ads component at the beginning of execution
  */
@@ -205,7 +202,7 @@ int ads_component_initialize(simple_t *server_simple,
                              vka_object_t server_ep_obj);
 
 /* Global server instance accessor functions. */
-ads_component_context_t *get_ads_component(void);
+resource_component_context_t *get_ads_component(void);
 
 /**
  * @brief Given a vspace_t insert it into the ADS server's metadata and return a cap to it.

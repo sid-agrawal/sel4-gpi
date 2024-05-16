@@ -187,6 +187,9 @@ char *cap_type_to_str(gpi_cap_t cap_type)
     case GPICAP_TYPE_FILE:
         return "FILE";
         break;
+    case GPICAP_TYPE_RESSPC:
+        return "RESSPC";
+        break;
     case GPICAP_TYPE_NONE:
         return "NONE";
         break;

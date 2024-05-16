@@ -247,7 +247,7 @@ seL4_MessageInfo_t ramdisk_request_handler(seL4_MessageInfo_t tag, seL4_Word sen
             // Send the reply
             seL4_MessageInfo_ptr_set_length(&reply_tag, RDMSGREG_CREATE_ACK_END);
             seL4_SetMR(RDMSGREG_CREATE_ACK_DEST, dest);
-            seL4_SetMR(RDMSGREG_CREATE_ACK_ID, get_global_object_id_from_local(get_ramdisk_server()->gen.server_id, blockno));
+            seL4_SetMR(RDMSGREG_CREATE_ACK_ID, get_global_object_id_from_local(get_ramdisk_server()->gen.default_space.id, blockno));
             seL4_SetMR(RDMSGREG_FUNC, RD_FUNC_CREATE_ACK);
 
             RAMDISK_PRINTF("Resource is in dest slot %d\n", (int)dest);

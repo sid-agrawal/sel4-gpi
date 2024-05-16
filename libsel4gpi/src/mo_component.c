@@ -36,7 +36,7 @@
 #define DEBUG_ID MO_DEBUG
 #define SERVER_ID MOSERVS
 
-mo_component_context_t *get_mo_component(void)
+resource_component_context_t *get_mo_component(void)
 {
     return &get_gpi_server()->mo_component;
 }

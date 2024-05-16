@@ -82,10 +82,11 @@ typedef struct _gpi_server_context
     cspacepath_t _badged_server_ep_cspath;
 
     /* Per-client context maintained by the server. */
-    ads_component_context_t ads_component;
-    mo_component_context_t mo_component;
-    cpu_component_context_t cpu_component;
-    pd_component_context_t pd_component;
+    resource_component_context_t ads_component;
+    resource_component_context_t mo_component;
+    resource_component_context_t cpu_component;
+    resource_component_context_t pd_component;
+    resource_component_context_t resspc_component;
 
     osmosis_cap_t *osm_caps;
     osmosis_cap_t *osm_caps_tail;

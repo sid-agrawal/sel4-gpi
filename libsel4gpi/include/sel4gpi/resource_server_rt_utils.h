@@ -10,7 +10,6 @@
 
 #include <sel4gpi/badge_usage.h>
 #include <sel4gpi/debug.h>
-#include <sel4gpi/resource_space_clientapi.h>
 #include <sel4gpi/resource_server_utils.h>
 
 /** @file

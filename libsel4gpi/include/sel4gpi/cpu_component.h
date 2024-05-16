@@ -110,9 +110,6 @@ typedef struct _cpu_component_registry_entry
     cpu_t cpu;
 } cpu_component_registry_entry_t;
 
-/* State maintained by the server. */
-typedef resource_component_context_t cpu_component_context_t;
-
 /**
  * To initialize the cpu component at the beginning of execution
  */
@@ -124,6 +121,6 @@ int cpu_component_initialize(simple_t *server_simple,
                              vka_object_t server_ep_obj);
 
 /* Global server instance accessor functions. */
-cpu_component_context_t *get_cpu_component(void);
+resource_component_context_t *get_cpu_component(void);
 
 int forge_cpu_cap_from_tcb(sel4utils_process_t *proc, vka_t *vka, uint32_t client_id, seL4_CPtr *cap_ret, uint32_t *id_ret);

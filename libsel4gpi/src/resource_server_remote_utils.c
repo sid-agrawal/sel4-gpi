@@ -31,7 +31,7 @@
     {                                     \
         if ((check) != seL4_NoError)      \
         {                                 \
-            ZF_LOGE(SERVER_UTILS "%s"     \
+            ZF_LOGE(SERVER_UTILS ": %s"     \
                                  ", %d.", \
                     msg,                  \
                     check);               \
@@ -51,14 +51,16 @@ int resource_server_start(resource_server_context_t *context,
     context->resource_type = server_type;
     context->request_handler = request_handler;
     context->mo_ep = sel4gpi_get_rde(GPICAP_TYPE_MO);
+    context->resspc_ep = sel4gpi_get_rde(GPICAP_TYPE_RESSPC);
     context->ads_conn.badged_server_ep_cspath.capPtr = sel4gpi_get_rde_by_ns_id(sel4gpi_get_binded_ads_id(), GPICAP_TYPE_ADS);
     context->pd_conn.badged_server_ep_cspath.capPtr = sel4gpi_get_pd_cap();
     context->parent_ep = parent_ep;
     context->init_fn = init_fn;
 
-    printf("Ramdisk: ADS_CAP: %ld\n", (seL4_Word)context->ads_conn.badged_server_ep_cspath.capPtr);
-    printf("Ramdisk: PD_CAP: %ld\n", (seL4_Word)context->pd_conn.badged_server_ep_cspath.capPtr);
-    printf("Ramdisk: MO ep: %ld\n", (seL4_Word)context->mo_ep);
+    printf("Resource server ADS_CAP: %ld\n", (seL4_Word)context->ads_conn.badged_server_ep_cspath.capPtr);
+    printf("Resource server PD_CAP: %ld\n", (seL4_Word)context->pd_conn.badged_server_ep_cspath.capPtr);
+    printf("Resource server MO ep: %ld\n", (seL4_Word)context->mo_ep);
+    printf("Resource server RESSPC ep: %ld\n", (seL4_Word)context->resspc_ep);
 
     /* Allocate the Endpoint that the server will be listening on. */
     error = pd_client_alloc_ep(&context->pd_conn, &context->server_ep);
@@ -112,10 +114,13 @@ int resource_server_main(void *context_v)
     received_cap_path.capDepth = PD_CAP_DEPTH;
 
     // Register the resource server with the PD component
-    RESOURCE_SERVER_PRINTF("Registering the resource server with the PD component\n");
-    error = pd_client_register_resource_manager(&context->pd_conn, context->resource_type, context->server_ep, &context->server_id);
-    CHECK_ERROR_GOTO(error, "failed to register resource server", exit_main);
-    RESOURCE_SERVER_PRINTF("Registered resource server, ID is 0x%lx\n", context->server_id);
+    // This is done by creating a default resource space
+    seL4_CPtr free_slot;
+    error = resource_server_next_slot(context, &free_slot);
+    CHECK_ERROR_GOTO(error, "failed to get next slot", exit_main);
+    error = resspc_client_connect(context->resspc_ep, free_slot, context->resource_type, context->server_ep, &context->default_space);
+    CHECK_ERROR_GOTO(error, "failed to register default resource space for server", exit_main);
+    RESOURCE_SERVER_PRINTF("Registered resource server, default space ID is 0x%lx\n", context->default_space.id);
 
     // Perform any server-specific initialization
     if (context->init_fn != NULL)
@@ -135,10 +140,10 @@ int resource_server_main(void *context_v)
         received_cap_path.capPtr,
         received_cap_path.capDepth);
 
-    // Send our ep to the parent process
-    RESOURCE_SERVER_PRINTF("Messaging parent process at slot %d, sending ID %d\n", (int)context->parent_ep, context->server_id);
+    // Send our space ID to the parent process
+    RESOURCE_SERVER_PRINTF("Messaging parent process at slot %d, sending space ID %d\n", (int)context->parent_ep, context->default_space.id);
     tag = seL4_MessageInfo_new(0, 0, 0, 1);
-    seL4_SetMR(0, context->server_id);
+    seL4_SetMR(0, context->default_space.id);
     seL4_Send(context->parent_ep, tag);
 
     while (1)
@@ -244,7 +249,7 @@ int resource_server_create_resource(resource_server_context_t *context,
     RESOURCE_SERVER_PRINTF("Creating resource with ID 0x%lx\n", resource_id);
 
     error = pd_client_create_resource(&context->pd_conn,
-                                      context->server_id,
+                                      context->default_space.id,
                                       resource_id);
 
     return error;
@@ -261,7 +266,7 @@ int resource_server_give_resource(resource_server_context_t *context,
     RESOURCE_SERVER_PRINTF("Giving resource to client, resource ID 0x%lx, client ID 0x%lx\n", resource_id, client_id);
 
     error = pd_client_give_resource(&context->pd_conn,
-                                    context->server_id,
+                                    context->default_space.id,
                                     ns_id,
                                     client_id,
                                     resource_id,
@@ -278,7 +283,7 @@ int resource_server_new_ns(resource_server_context_t *context,
 
     RESOURCE_SERVER_PRINTF("Creating new NS\n");
 
-    error = pd_client_register_namespace(&context->pd_conn, context->server_id, client_id, ns_id);
+    error = pd_client_register_namespace(&context->pd_conn, context->default_space.id, client_id, ns_id);
 
     return error;
 }

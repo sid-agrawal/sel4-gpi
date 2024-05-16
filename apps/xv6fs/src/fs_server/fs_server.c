@@ -259,7 +259,7 @@ seL4_MessageInfo_t xv6fs_request_handler(seL4_MessageInfo_t tag, seL4_Word sende
       gpi_model_node_t *client_pd_node = add_pd_node(model_state, NULL, pd_id);
 
       /* Add the file resource space node */
-      gpi_model_node_t *file_space_node = add_resource_space_node(model_state, GPICAP_TYPE_FILE, get_xv6fs_server()->gen.server_id);
+      gpi_model_node_t *file_space_node = add_resource_space_node(model_state, GPICAP_TYPE_FILE, get_xv6fs_server()->gen.default_space.id);
       add_edge(model_state, GPI_EDGE_TYPE_HOLD, self_pd_node, file_space_node);
 
       /* Add the block resource space node */
@@ -276,7 +276,7 @@ seL4_MessageInfo_t xv6fs_request_handler(seL4_MessageInfo_t tag, seL4_Word sende
         XV6FS_PRINTF("Get RR for fileno %ld\n", inums[i]);
 
         /* Add the file resource node */
-        gpi_model_node_t *file_node = add_resource_node(model_state, GPICAP_TYPE_FILE, get_xv6fs_server()->gen.server_id, inums[i]);
+        gpi_model_node_t *file_node = add_resource_node(model_state, GPICAP_TYPE_FILE, get_xv6fs_server()->gen.default_space.id, inums[i]);
         add_edge(model_state, GPI_EDGE_TYPE_HOLD, self_pd_node, file_node);
         add_edge(model_state, GPI_EDGE_TYPE_HOLD, client_pd_node, file_node);
         add_edge(model_state, GPI_EDGE_TYPE_SUBSET, file_node, file_space_node);

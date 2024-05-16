@@ -25,7 +25,9 @@
 typedef struct _resource_server_context
 {
     gpi_cap_t resource_type;
-    uint64_t server_id;
+
+    // Connection to the default resource space
+    resspc_client_context_t default_space;
 
     // Run to serve requests
     seL4_MessageInfo_t (*request_handler)(seL4_MessageInfo_t, seL4_Word, seL4_CPtr, bool *);
@@ -36,6 +38,7 @@ typedef struct _resource_server_context
     // RDEs and other EPs
     seL4_CPtr parent_ep;
     seL4_CPtr mo_ep;
+    seL4_CPtr resspc_ep;
     ads_client_context_t ads_conn;
     pd_client_context_t pd_conn;
 

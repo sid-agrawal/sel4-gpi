@@ -23,6 +23,7 @@
 #include <sel4gpi/gpi_server.h>
 #include <sel4gpi/ads_component.h>
 #include <sel4gpi/cpu_component.h>
+#include <sel4gpi/resource_space_component.h>
 #include <sel4gpi/badge_usage.h>
 #include <sel4gpi/debug.h>
 
@@ -91,41 +92,53 @@ gpi_server_parent_spawn_thread(simple_t *parent_simple, vka_t *parent_vka,
 
     *server_ep_cap = get_gpi_server()->server_ep_obj.cptr;
 
+    resspc_component_registry_entry_t *space_entry;
+    // (XXX) Arya: not using this, should at least free the caps
+    seL4_CPtr res_space_cap;
+
+    /* Setup the Resource Space Component */
+    resspc_component_initialize(parent_simple, parent_vka, parent_cspace_cspath.root, parent_vspace,
+                                get_gpi_server()->server_thread, get_gpi_server()->server_ep_obj);
+
     /* Setup the PD Component */
     pd_component_initialize(parent_simple, parent_vka, parent_cspace_cspath.root, parent_vspace,
                             get_gpi_server()->server_thread, get_gpi_server()->server_ep_obj);
 
-    pd_component_resource_manager_entry_t *manager_entry = malloc(sizeof(pd_component_resource_manager_entry_t));
-    manager_entry->resource_type = GPICAP_TYPE_PD;
-    manager_entry->server_ep = get_gpi_server()->server_ep_obj.cptr;
-    get_gpi_server()->pd_manager_id = pd_component_resource_manager_insert(manager_entry);
+    // Create the default PD resource space
+    resspc_config_t resspc_config = {
+        .type = GPICAP_TYPE_PD,
+        .ep = get_gpi_server()->server_ep_obj.cptr,
+    };
+
+    resource_component_allocate(get_resspc_component(), 0, false, (void *) &resspc_config, (resource_server_registry_node_t **)&space_entry, &res_space_cap);
+    get_gpi_server()->pd_manager_id = space_entry->space.id;
 
     /* Setup the ADS Component */
     ads_component_initialize(parent_simple, parent_vka, parent_cspace_cspath.root, parent_vspace,
                              get_gpi_server()->server_thread, get_gpi_server()->server_ep_obj);
 
-    manager_entry = malloc(sizeof(pd_component_resource_manager_entry_t));
-    manager_entry->resource_type = GPICAP_TYPE_ADS;
-    manager_entry->server_ep = get_gpi_server()->server_ep_obj.cptr;
-    get_gpi_server()->ads_manager_id = pd_component_resource_manager_insert(manager_entry);
+    // Create the default ADS resource space
+    resspc_config.type = GPICAP_TYPE_ADS;
+    resource_component_allocate(get_resspc_component(), 0, false, (void *) &resspc_config, (resource_server_registry_node_t **)&space_entry, &res_space_cap);
+    get_gpi_server()->ads_manager_id = space_entry->space.id;
 
     /* Setup MO Component */
     mo_component_initialize(parent_simple, parent_vka, parent_cspace_cspath.root, parent_vspace,
                             get_gpi_server()->server_thread, get_gpi_server()->server_ep_obj);
 
-    manager_entry = malloc(sizeof(pd_component_resource_manager_entry_t));
-    manager_entry->resource_type = GPICAP_TYPE_MO;
-    manager_entry->server_ep = get_gpi_server()->server_ep_obj.cptr;
-    get_gpi_server()->mo_manager_id = pd_component_resource_manager_insert(manager_entry);
+    // Create the default MO resource space
+    resspc_config.type = GPICAP_TYPE_MO;
+    resource_component_allocate(get_resspc_component(), 0, false, (void *) &resspc_config, (resource_server_registry_node_t **)&space_entry, &res_space_cap);
+    get_gpi_server()->mo_manager_id = space_entry->space.id;
 
     /* Setup the CPU Component */
     cpu_component_initialize(parent_simple, parent_vka, parent_cspace_cspath.root, parent_vspace,
                              get_gpi_server()->server_thread, get_gpi_server()->server_ep_obj);
 
-    manager_entry = malloc(sizeof(pd_component_resource_manager_entry_t));
-    manager_entry->resource_type = GPICAP_TYPE_CPU;
-    manager_entry->server_ep = get_gpi_server()->server_ep_obj.cptr;
-    get_gpi_server()->cpu_manager_id = pd_component_resource_manager_insert(manager_entry);
+    // Create the default CPU resource space
+    resspc_config.type = GPICAP_TYPE_CPU;
+    resource_component_allocate(get_resspc_component(), 0, false, (void *) &resspc_config, (resource_server_registry_node_t **)&space_entry, &res_space_cap);
+    get_gpi_server()->cpu_manager_id = space_entry->space.id;
 
     /* Initialize the root task's PD resource */
     forge_pd_for_root_task(&get_gpi_server()->rt_pd_id);
@@ -290,6 +303,9 @@ void gpi_server_main()
             break;
         case GPICAP_TYPE_PD:
             component = &get_gpi_server()->pd_component;
+            break;
+        case GPICAP_TYPE_RESSPC:
+            component = &get_gpi_server()->resspc_component;
             break;
         default:
             gpi_panic("gpi_server_main: Unknown cap type.", cap_type);
