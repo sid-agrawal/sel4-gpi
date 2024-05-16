@@ -59,10 +59,14 @@ int test_separate_threads(env_t env)
     error = pd_component_client_connect(pd_rde, slot, &thread_pd);
     test_error_eq(error, 0);
 
-    pd_resource_config_t *thread_cfg = sel4gpi_generate_thread_config();
-    test_assert(thread_cfg == NULL);
+    pd_resource_config_t *cfg = sel4gpi_generate_thread_config();
+    test_assert(cfg != NULL);
 
-    free(thread_cfg);
+    sel4gpi_runnable_t runnable = {.pd = thread_pd};
+
+    seL4_Word arg0 = 1;
+    error = sel4gpi_start_pd(cfg, &runnable, 1, &arg0);
+    free(cfg);
 #if 0
     /* Create a new CPU obj */
     error = pd_client_next_slot(&test_pd_os_cap, &slot);

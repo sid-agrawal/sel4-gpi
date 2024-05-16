@@ -18,6 +18,18 @@
 #define PD_CAP_DEPTH seL4_WordBits
 #define PD_CSPACE_SIZE_BITS 17
 
+#define PD_UTIL_DBG 1
+
+#ifdef PD_UTIL_DBG
+#define PD_UTIL_PRINT(msg, ...)                                  \
+    do                                                           \
+    {                                                            \
+        printf("PD UTILS %s():\t" msg, __func__, ##__VA_ARGS__); \
+    } while (0)
+#else
+#define PD_UTIL_PRINT(...)
+#endif // PD_UTIL_DBG
+
 // holds the components for a runnable entity
 typedef struct _sel4gpi_runnable
 {

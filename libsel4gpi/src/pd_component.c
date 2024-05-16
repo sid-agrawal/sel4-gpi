@@ -122,7 +122,7 @@ err_goto:
 static seL4_MessageInfo_t handle_next_slot_req(seL4_Word sender_badge,
                                                seL4_MessageInfo_t old_tag)
 {
-    OSDB_PRINTF("Got next slot request from client badge %lx.\n", sender_badge);
+    // OSDB_PRINTF("Got next slot request from client badge %lx.\n", sender_badge);
     int error = 0;
 
     pd_component_registry_entry_t *client_data = pd_component_registry_get_entry_by_badge(sender_badge);
@@ -144,14 +144,14 @@ err_goto:
 static seL4_MessageInfo_t handle_free_slot_req(seL4_Word sender_badge,
                                                seL4_MessageInfo_t old_tag)
 {
-    OSDB_PRINTF("Got free slot request from client badge %lx.\n", sender_badge);
+    // OSDB_PRINTF("Got free slot request from client badge %lx.\n", sender_badge);
     int error = 0;
 
     pd_component_registry_entry_t *client_data = pd_component_registry_get_entry_by_badge(sender_badge);
     SERVER_GOTO_IF_COND(client_data == NULL, "Couldn't find PD (%ld)\n", get_object_id_from_badge(sender_badge));
 
     seL4_Word slot = seL4_GetMR(PDMSGREG_FREE_SLOT_REQ_SLOT);
-    OSDB_PRINTF("Freeing PD's slot %d.\n", (int)slot);
+    // OSDB_PRINTF("Freeing PD's slot %d.\n", (int)slot);
 
     error = pd_free_slot(&client_data->pd, slot);
 
@@ -306,7 +306,7 @@ err_goto:
 
 static seL4_MessageInfo_t handle_create_resource_req(seL4_Word sender_badge, seL4_MessageInfo_t old_tag)
 {
-    OSDB_PRINTF("Got create resource request from client badge %lx.\n", sender_badge);
+    // OSDB_PRINTF("Got create resource request from client badge %lx.\n", sender_badge);
     int error = 0;
 
     seL4_Word server_id = get_object_id_from_badge(sender_badge);
@@ -320,8 +320,8 @@ static seL4_MessageInfo_t handle_create_resource_req(seL4_Word sender_badge, seL
 
     gpi_cap_t resource_type = resource_space_data->space.resource_type;
 
-    OSDB_PRINTF("resource server %ld creates resource in space %ld with ID %ld\n",
-                server_id, space_id, resource_id);
+    // OSDB_PRINTF("resource server %ld creates resource in space %ld with ID %ld\n",
+    //             server_id, space_id, resource_id);
 
     error = pd_add_resource(&server_data->pd, resource_type, space_id, resource_id, seL4_CapNull, seL4_CapNull, seL4_CapNull);
 
@@ -341,8 +341,8 @@ static seL4_MessageInfo_t handle_give_resource_req(seL4_Word sender_badge, seL4_
     seL4_Word space_id = seL4_GetMR(PDMSGREG_GIVE_RES_REQ_SPACE_ID);
     seL4_Word resource_id = seL4_GetMR(PDMSGREG_GIVE_RES_REQ_RES_ID);
 
-    OSDB_PRINTF("Got give resource request from client badge %lx, space ID %ld, resource ID %ld.\n",
-                sender_badge, space_id, resource_id);
+    // OSDB_PRINTF("Got give resource request from client badge %lx, space ID %ld, resource ID %ld.\n",
+    //             sender_badge, space_id, resource_id);
 
     pd_component_registry_entry_t *server_data = pd_component_registry_get_entry_by_id(server_id);
     pd_component_registry_entry_t *recipient_data = pd_component_registry_get_entry_by_id(recipient_id);
@@ -356,8 +356,8 @@ static seL4_MessageInfo_t handle_give_resource_req(seL4_Word sender_badge, seL4_
     pd_hold_node_t *resource_data = (pd_hold_node_t *)resource_server_registry_get_by_id(&server_data->pd.hold_registry, res_node_id);
     SERVER_GOTO_IF_COND(resource_data == NULL, "Couldn't find resource (%lx)\n", res_node_id);
 
-    OSDB_PRINTF("resource server %ld gives resource in space %ld with ID %ld to client %ld\n",
-                server_id, space_id, resource_id, recipient_id);
+    // OSDB_PRINTF("resource server %ld gives resource in space %ld with ID %ld to client %ld\n",
+    //             server_id, space_id, resource_id, recipient_id);
 
     /* Create a new badged EP for the resource */
     seL4_CPtr dest = resource_server_make_badged_ep(get_pd_component()->server_vka, &recipient_data->pd.pd_vka,

@@ -73,6 +73,19 @@ seL4_CPtr sel4gpi_get_rde_by_space_id(uint32_t space_id, gpi_cap_t type)
     return seL4_CapNull;
 }
 
+void sel4gpi_debug_print_rde(void)
+{
+    osm_pd_init_data_t *init_data = ((osm_pd_init_data_t *)sel4runtime_get_osm_init_data());
+    printf("RDEs ------------------------------------ \n");
+    for (int i = GPICAP_TYPE_NONE + 1; i < GPICAP_TYPE_MAX; i++)
+    {
+        for (int j = 0; j < MAX_NS_PER_RDE; j++)
+        {
+            printf("type:\t %d \t", init_data->rde[i][j].type.type);
+        }
+    }
+}
+
 static void sel4gpi_exit_cb(int code)
 {
     /* Notify the pd component to destruct this PD */
@@ -209,83 +222,149 @@ int sel4gpi_start_pd(pd_resource_config_t *cfg, sel4gpi_runnable_t *runnable, in
     runnable->cpu = new_cpu;
     seL4_Word cnode_guard = api_make_guard_skip_word(seL4_WordBits - TEST_PROCESS_CSPACE_SIZE_BITS);
 
-    ads_client_context_t new_ads = {0};
+    ads_client_context_t target_ads = {0};
+    ads_client_context_t vmr_rde = {0};
+    mo_client_context_t ipc_mo = {0};
     void *entry_point = NULL;
     void *init_stack = NULL;
+    void *stack = NULL;
+    void *heap = NULL;
+    void *ipc_buf = NULL;
+
+    // TODO check in config is valid
 
     // check ADS config
     if (cfg->ads_cfg.same_ads)
     {
+        printf("binded ads id: %d\n", sel4gpi_get_binded_ads_id());
+        vmr_rde.badged_server_ep_cspath.capPtr = sel4gpi_get_rde_by_space_id(sel4gpi_get_binded_ads_id(), GPICAP_TYPE_VMR);
     }
     else
     {
+        PD_UTIL_PRINT("Making new ADS\n");
+        // create a new ADS
         seL4_CPtr ads_rde = sel4gpi_get_rde(GPICAP_TYPE_ADS);
-        void *stack = NULL;
-        void *heap = NULL;
-        void *ipc_buf = NULL;
-        mo_client_context_t ipc_mo;
 
         /* new ADS */
         error = pd_client_next_slot(&self_pd_cap, &free_slot);
         GOTO_IF_ERR(error, "failed to allocate next slot");
 
-        error = ads_component_client_connect(ads_rde, free_slot, &new_ads);
+        error = ads_component_client_connect(ads_rde, free_slot, &target_ads);
         GOTO_IF_ERR(error, "failed to allocate a new ADS");
-        runnable->ads = new_ads;
+        runnable->ads = target_ads;
 
-        ads_client_context_t new_ads_rde = {.badged_server_ep_cspath.capPtr = sel4gpi_get_rde_by_space_id(new_ads.id, GPICAP_TYPE_VMR)};
+        vmr_rde.badged_server_ep_cspath.capPtr = sel4gpi_get_rde_by_space_id(target_ads.id, GPICAP_TYPE_VMR);
+    }
 
-        switch (cfg->ads_cfg.code_shared)
+    switch (cfg->ads_cfg.code_shared)
+    {
+    case GPI_SHARED:
+        // shallow copy
+        if (!cfg->ads_cfg.same_ads)
         {
-        case GPI_SHARED:
-            // shallow copy
-            printf("Not implemented yet!\n");
-            break;
-        case GPI_COPY:
-            // deep copy
-            printf("Not implemented yet!\n");
-            break;
-        case GPI_DISJOINT:
-            // elf load
-            error = ads_client_load_elf(&new_ads, &runnable->pd, cfg->ads_cfg.image_name, &entry_point);
-            GOTO_IF_ERR(error, "failed to load elf to ADS");
-            break;
-        default:
-            break;
+            GOTO_IF_ERR(1, "Not implemented yet!\n");
         }
+        break;
+    case GPI_COPY:
+        // deep copy
+        GOTO_IF_ERR(1, "Not implemented yet!\n");
+        break;
+    case GPI_DISJOINT:
+        // elf load
+        PD_UTIL_PRINT("Loading Elf\n");
+        error = ads_client_load_elf(&target_ads, &runnable->pd, cfg->ads_cfg.image_name, &entry_point);
+        GOTO_IF_ERR(error, "failed to load elf to ADS");
+        break;
+    case GPI_OMIT:
+        break;
+    default:
+        GOTO_IF_ERR(1, "Invalid sharing degree specified (%d) for code region\n", cfg->ads_cfg.code_shared);
+        break;
+    }
 
-        if (cfg->ads_cfg.stack_shared == GPI_DISJOINT)
+    switch (cfg->ads_cfg.stack_shared)
+    {
+    case GPI_SHARED:
+        if (!cfg->ads_cfg.same_ads)
         {
-            stack = sel4gpi_new_sized_stack(&new_ads_rde, cfg->ads_cfg.stack_pages);
-            GOTO_IF_ERR(stack == NULL, "failed to allocate a new stack");
+            GOTO_IF_ERR(1, "Not implemented yet!\n");
         }
+        break;
+    case GPI_COPY:
+        GOTO_IF_ERR(1, "Not implemented yet!\n");
+        break;
+    case GPI_DISJOINT:
+        PD_UTIL_PRINT("Allocating stack, vmr_rde cap: %ld\n", vmr_rde.badged_server_ep_cspath.capPtr);
+        stack = sel4gpi_new_sized_stack(&vmr_rde, cfg->ads_cfg.stack_pages);
+        GOTO_IF_ERR(stack == NULL, "failed to allocate a new stack");
+        break;
+    case GPI_OMIT:
+        break;
+    default:
+        GOTO_IF_ERR(1, "Invalid sharing degree specified (%d) for stack region\n", cfg->ads_cfg.stack_shared);
+        break;
+    }
 
-        if (cfg->ads_cfg.heap_shared == GPI_DISJOINT)
+    switch (cfg->ads_cfg.heap_shared)
+    {
+    case GPI_SHARED:
+        if (!cfg->ads_cfg.same_ads)
         {
-            heap = sel4gpi_get_vmr(&new_ads_rde, cfg->ads_cfg.heap_pages, (void *)PD_HEAP_LOC, SEL4UTILS_RES_TYPE_HEAP, NULL);
-            GOTO_IF_ERR(heap == NULL, "failed to allocate a new heap");
+            GOTO_IF_ERR(1, "Not implemented yet!\n");
         }
+        break;
+    case GPI_COPY:
+        GOTO_IF_ERR(1, "Not implemented yet!\n");
+        break;
+    case GPI_DISJOINT:
+        PD_UTIL_PRINT("Allocating heap\n");
+        heap = sel4gpi_get_vmr(&vmr_rde, cfg->ads_cfg.heap_pages, (void *)PD_HEAP_LOC, SEL4UTILS_RES_TYPE_HEAP, NULL);
+        GOTO_IF_ERR(heap == NULL, "failed to allocate a new heap");
+        break;
+    case GPI_OMIT:
+        break;
+    default:
+        GOTO_IF_ERR(1, "Invalid sharing degree specified (%d) for heap region\n", cfg->ads_cfg.heap_shared);
+        break;
+    }
 
-        if (cfg->ads_cfg.ipc_buf_shared == GPI_DISJOINT)
+    switch (cfg->ads_cfg.ipc_buf_shared)
+    {
+    case GPI_SHARED:
+        if (!cfg->ads_cfg.same_ads)
         {
-            ipc_buf = sel4gpi_get_vmr(&new_ads_rde, 1, NULL, SEL4UTILS_RES_TYPE_IPC_BUF, &ipc_mo);
-            GOTO_IF_ERR(ipc_buf == NULL, "failed to allocate a new IPC buf");
+            GOTO_IF_ERR(1, "Not implemented yet!\n");
         }
+        break;
+    case GPI_COPY:
+        GOTO_IF_ERR(1, "Not implemented yet!\n");
+        break;
+    case GPI_DISJOINT:
+        PD_UTIL_PRINT("Allocating IPC Buffer\n");
+        ipc_buf = sel4gpi_get_vmr(&vmr_rde, 1, NULL, SEL4UTILS_RES_TYPE_IPC_BUF, &ipc_mo);
+        GOTO_IF_ERR(ipc_buf == NULL, "failed to allocate a new ipc buf");
+        break;
+    case GPI_OMIT:
+        break;
+    default:
+        GOTO_IF_ERR(1, "Invalid sharing degree specified (%d) for ipc buf region\n", cfg->ads_cfg.ipc_buf_shared);
+        break;
+    }
 
-        error = cpu_client_config(&new_cpu, &new_ads, ipc_buf == NULL ? NULL : &ipc_mo, &runnable->pd, cnode_guard, seL4_CapNull, (seL4_Word)ipc_buf);
-        GOTO_IF_ERR(error, "failed to configure CPU");
+    PD_UTIL_PRINT("Configuring CPU Object\n");
+    error = cpu_client_config(&new_cpu, &target_ads, ipc_buf == NULL ? NULL : &ipc_mo, &runnable->pd, cnode_guard, seL4_CapNull, (seL4_Word)ipc_buf);
+    GOTO_IF_ERR(error, "failed to configure CPU");
 
-        // (XXX) Linh required that this happens after all the other setup, we can do better if we refactor the sel4utils structs out of the PD component
-        if (cfg->ads_cfg.stack_shared)
-        {
-            ads_setup_type_t setup_mode = cfg->ads_cfg.code_shared == GPI_DISJOINT ? ADS_RUNTIME_SETUP : ADS_TLS_SETUP;
-            error = ads_client_pd_setup(&new_ads, &runnable->pd, &new_cpu, stack, cfg->ads_cfg.stack_pages, argc, args, setup_mode, &init_stack);
-            GOTO_IF_ERR(error, "failed to prepare stack");
-        }
+    // (XXX) Linh required that this happens after all the other setup, we can do better if we refactor the sel4utils structs out of the PD component
+    if (cfg->ads_cfg.stack_shared)
+    {
+        ads_setup_type_t setup_mode = cfg->ads_cfg.code_shared == GPI_DISJOINT ? ADS_RUNTIME_SETUP : ADS_TLS_SETUP;
+        error = ads_client_pd_setup(&target_ads, &runnable->pd, &new_cpu, stack, cfg->ads_cfg.stack_pages, argc, args, setup_mode, &init_stack);
+        GOTO_IF_ERR(error, "failed to prepare stack");
     }
 
     // TODO loop through other VMR regions
-
+    PD_UTIL_PRINT("Starting CPU\n");
     error = cpu_client_start(&new_cpu, entry_point, init_stack, 0);
     GOTO_IF_ERR(error, "failed to start CPU");
 
@@ -321,10 +400,12 @@ pd_resource_config_t *sel4gpi_generate_thread_config(void)
         .code_shared = GPI_SHARED,
         .stack_shared = GPI_DISJOINT,
         .heap_shared = GPI_SHARED,
-        .ipc_buf_shared = GPI_SHARED,
+        .ipc_buf_shared = GPI_DISJOINT,
         .stack_pages = DEFAULT_STACK_PAGES,
         .heap_pages = DEFAULT_HEAP_PAGES,
         .n_vmr_shared = 0};
 
     thread_cfg->ads_cfg = thread_ads_cfg;
+
+    return thread_cfg;
 }
