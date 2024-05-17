@@ -121,17 +121,6 @@ int pd_client_share_rde(pd_client_context_t *conn,
 // (XXX) Arya: In the process of moving these to a separate component
 
 /**
- * To be called by a resource space when it creates a new resource
- *
- * @param conn the resource server's pd connection
- * @param res_space_id the resource space id
- * @param resource_id unique id of the resource within the resource space
- */
-int pd_client_create_resource(pd_client_context_t *conn,
-                              seL4_Word res_space_id,
-                              seL4_Word resource_id);
-
-/**
  * To be called by a resource server when it allocates
  * a resource to another PD
  *

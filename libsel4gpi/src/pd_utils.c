@@ -193,6 +193,7 @@ pd_resource_config_t *sel4gpi_configure_process(const char *image_name, int stac
     error = pd_client_share_rde(ret_pd, GPICAP_TYPE_MO, RESSPC_ID_NULL);
     GOTO_IF_ERR(error, "Failed give MO RDE to new PD\n");
 
+    // (XXX) Arya: remove this
     // Share VMR RDE by default
     error = pd_client_share_rde(ret_pd, GPICAP_TYPE_VMR, RESSPC_ID_NULL);
     GOTO_IF_ERR(error, "failed to share VMR RDE\n");

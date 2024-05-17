@@ -46,6 +46,7 @@ static seL4_MessageInfo_t handle_resspc_allocation_request(seL4_Word sender_badg
 {
     OSDB_PRINTF("Got register server request from client badge %lx.\n", sender_badge);
     int error = 0;
+    seL4_MessageInfo_t reply_tag;
 
     gpi_cap_t type = seL4_GetMR(RESSPCMSGREG_CONNECT_REQ_TYPE);
     uint64_t client_id = seL4_GetMR(RESSPCMSGREG_CONNECT_REQ_CLIENT_ID);
@@ -69,16 +70,13 @@ static seL4_MessageInfo_t handle_resspc_allocation_request(seL4_Word sender_badg
         .ep = received_cap,
         .pd = &server_pd->pd};
 
-    error = resource_component_allocate(get_resspc_component(), client_id, BADGE_OBJ_ID_NULL, false, (void *)&resspc_config,
+    error = resource_component_allocate(get_resspc_component(), server_pd->pd.id, BADGE_OBJ_ID_NULL, false, (void *)&resspc_config,
                                         (resource_server_registry_node_t **)&space_entry, &space_cap);
     SERVER_GOTO_IF_ERR(error, "Failed to allocate a new resource space\n");
 
     OSDB_PRINTF("Registered resource space, server cap is at %ld.\n", space_entry->space.server_ep);
 
     uint64_t space_id = space_entry->gen.object_id;
-    seL4_SetMR(RESSPCMSGREG_CONNECT_ACK_ID, space_id);
-    // seL4_SetMR(RESSPCMSGREG_CONNECT_ACK_SLOT, space_entry->gen.object_id);
-    seL4_SetCap(0, space_cap);
 
     // Add the RDE to the client PD
     rde_type_t rde_type = {
@@ -87,10 +85,49 @@ static seL4_MessageInfo_t handle_resspc_allocation_request(seL4_Word sender_badg
     error = pd_add_rde(&client_pd->pd, rde_type, space_id, received_cap);
     SERVER_GOTO_IF_ERR(error, "Failed to add RDE to new resource space\n");
 
+    seL4_SetMR(PDMSGREG_FUNC, RESSPC_FUNC_CONNECT_ACK);
+    seL4_SetMR(RESSPCMSGREG_CONNECT_ACK_ID, space_id);
+    seL4_SetCap(0, space_cap);
+    reply_tag = seL4_MessageInfo_new(error, 0, 1,
+                                                  RESSPCMSGREG_CONNECT_ACK_END);
+    return reply_tag;
+
 err_goto:
     seL4_SetMR(PDMSGREG_FUNC, RESSPC_FUNC_CONNECT_ACK);
-    seL4_MessageInfo_t tag = seL4_MessageInfo_new(error, 0, 0,
+    reply_tag = seL4_MessageInfo_new(error, 0, 0,
                                                   RESSPCMSGREG_CONNECT_ACK_END);
+    return reply_tag;
+}
+
+static seL4_MessageInfo_t handle_create_resource_request(seL4_Word sender_badge)
+{
+    OSDB_PRINTF("Got create resource request from client badge %lx.\n", sender_badge);
+    int error = 0;
+
+    uint64_t res_id = seL4_GetMR(RESSPCMSGREG_CREATE_RES_REQ_RES_ID);
+
+    // Find the resource space
+    resspc_component_registry_entry_t *space_entry = (resspc_component_registry_entry_t *)
+        resource_component_registry_get_by_id(get_resspc_component(), get_object_id_from_badge(sender_badge));
+    SERVER_GOTO_IF_COND(space_entry == NULL, "Couldn't find resource space (%ld)\n", get_object_id_from_badge(sender_badge));
+
+    // Find the resource server PD
+    pd_component_registry_entry_t *server_pd = (pd_component_registry_entry_t *)
+        resource_component_registry_get_by_id(get_pd_component(), get_client_id_from_badge(sender_badge));
+    SERVER_GOTO_IF_COND(server_pd == NULL, "Couldn't find resource server PD (%ld)\n", get_client_id_from_badge(sender_badge));
+
+    gpi_cap_t resource_type = space_entry->space.resource_type;
+
+    OSDB_PRINTF("resource server %ld creates resource in space %ld with ID %ld\n",
+                server_pd->pd.id, space_entry->space.id, res_id);
+
+    // Resource does not exist as a cap anywhere yet
+    error = pd_add_resource(&server_pd->pd, resource_type, space_entry->space.id, res_id, seL4_CapNull, seL4_CapNull, seL4_CapNull);
+
+err_goto:
+    seL4_SetMR(PDMSGREG_FUNC, RESSPC_FUNC_CREATE_RES_ACK);
+    seL4_MessageInfo_t tag = seL4_MessageInfo_new(error, 0, 0,
+                                                  RESSPCMSGREG_CREATE_RES_ACK_END);
     return tag;
 }
 
@@ -111,6 +148,9 @@ static seL4_MessageInfo_t resspc_component_handle(seL4_MessageInfo_t tag,
     {
         switch (func)
         {
+        case RESSPC_FUNC_CREATE_RES_REQ:
+            reply_tag = handle_create_resource_request(sender_badge);
+            break;
         default:
             gpi_panic(MOSERVS "Unknown func type.", (seL4_Word)func);
             break;

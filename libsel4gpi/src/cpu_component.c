@@ -58,6 +58,7 @@ static seL4_MessageInfo_t handle_cpu_allocation(seL4_Word sender_badge)
     badge_print(sender_badge);
 
     int error = 0;
+    seL4_MessageInfo_t reply_tag;
     seL4_CPtr ret_cap;
     cpu_component_registry_entry_t *new_entry;
     uint32_t client_id = get_client_id_from_badge(sender_badge);
@@ -70,9 +71,12 @@ static seL4_MessageInfo_t handle_cpu_allocation(seL4_Word sender_badge)
 
     OSDB_PRINTF("Allocated new CPU (%d)\n", new_entry->cpu.id);
 
+    reply_tag = seL4_MessageInfo_new(error, 0, 1, CPUMSGREG_CONNECT_ACK_END);
+    return reply_tag;
+
 err_goto:
-    seL4_MessageInfo_t tag = seL4_MessageInfo_new(error, 0, 1, CPUMSGREG_CONNECT_ACK_END);
-    return tag;
+    reply_tag = seL4_MessageInfo_new(error, 0, 0, CPUMSGREG_CONNECT_ACK_END);
+    return reply_tag;
 }
 
 static seL4_MessageInfo_t handle_start_req(seL4_Word sender_badge, seL4_MessageInfo_t old_tag)

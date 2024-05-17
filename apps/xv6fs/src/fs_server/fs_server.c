@@ -389,7 +389,7 @@ seL4_MessageInfo_t xv6fs_request_handler(seL4_MessageInfo_t tag, seL4_Word sende
         resource_server_registry_insert(&get_xv6fs_server()->file_registry, (resource_server_registry_node_t *)reg_entry);
 
         // Notify the PD component about the new reousrce
-        error = resource_server_create_resource(&get_xv6fs_server()->gen, file->id);
+        error = resource_server_create_resource(&get_xv6fs_server()->gen, NULL, file->id);
         CHECK_ERROR_GOTO(error, "Failed to create the resource", error, done);
       }
       else

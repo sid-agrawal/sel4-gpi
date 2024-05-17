@@ -57,6 +57,7 @@ static seL4_MessageInfo_t handle_mo_allocation_request(seL4_Word sender_badge)
     badge_print(sender_badge);
 
     int error = 0;
+    seL4_MessageInfo_t reply_tag;
     seL4_CPtr ret_cap;
     mo_component_registry_entry_t *new_entry;
     uint32_t client_id = get_client_id_from_badge(sender_badge);
@@ -74,10 +75,14 @@ static seL4_MessageInfo_t handle_mo_allocation_request(seL4_Word sender_badge)
     seL4_SetCap(0, ret_cap);
     seL4_SetMR(MOMSGREG_CONNECT_ACK_ID, new_entry->mo.id);
 
+    seL4_SetMR(MOMSGREG_FUNC, MO_FUNC_CONNECT_ACK);
+    reply_tag = seL4_MessageInfo_new(error, 0, 1, MOMSGREG_CONNECT_ACK_END);
+    return reply_tag;
+
 err_goto:
     seL4_SetMR(MOMSGREG_FUNC, MO_FUNC_CONNECT_ACK);
-    seL4_MessageInfo_t tag = seL4_MessageInfo_new(error, 0, 1, MOMSGREG_CONNECT_ACK_END);
-    return tag;
+    reply_tag = seL4_MessageInfo_new(error, 0, 0, MOMSGREG_CONNECT_ACK_END);
+    return reply_tag;
 }
 
 static seL4_MessageInfo_t mo_component_handle(seL4_MessageInfo_t tag,

@@ -221,7 +221,7 @@ int pd_add_rde(pd_t *pd,
 
     pd->init_data->rde[type.type][idx].slot_in_PD = dest.capPtr;
 
-    OSDB_PRINTF("Added new RDE of type %d to PD %d, in slot %d, with badge %lx\n", type.type, client_id, (int)dest.capPtr, badge_val);
+    OSDB_PRINTF("Added new RDE of type %s to PD %d, in slot %d, with badge %lx\n", cap_type_to_str(type.type), client_id, (int)dest.capPtr, badge_val);
 
     pd->init_data->rde_count++;
     return 0;

@@ -115,7 +115,7 @@ int ads_client_attach_to_reserve(ads_vmr_context_t *reservation,
 
     seL4_SetCap(0, mo->badged_server_ep_cspath.capPtr);
 
-    seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 2,
+    seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 1,
                                                   ADSMSGREG_ATTACH_RESERVE_REQ_END);
 
     OSDB_PRINTF("Sending attach-to-reserve request to server via EP: %lu.\n",

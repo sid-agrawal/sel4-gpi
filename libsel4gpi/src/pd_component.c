@@ -75,24 +75,28 @@ static seL4_MessageInfo_t handle_pd_allocation(seL4_Word sender_badge)
 {
     OSDB_PRINTF("Got connect request from badge %lx\n", sender_badge);
     int error = 0;
+    seL4_MessageInfo_t reply_tag;
     seL4_CPtr ret_cap;
     pd_component_registry_entry_t *new_entry;
     uint32_t client_id = get_client_id_from_badge(sender_badge);
 
     error = resource_component_allocate(get_pd_component(), client_id, BADGE_OBJ_ID_NULL, false, NULL,
                                         (resource_server_registry_node_t **)&new_entry, &ret_cap);
+    SERVER_GOTO_IF_ERR(error, "failed to allocat a PD\n");
     new_entry->pd.pd_cap_in_RT = ret_cap;
 
-    if (error == 0)
-    {
-        OSDB_PRINTF("Successfully allocated a new PD.\n");
-    }
+    OSDB_PRINTF("Successfully allocated a new PD.\n");
 
     /* Return this badged end point in the return message. */
     seL4_SetCap(0, ret_cap);
     seL4_SetMR(PDMSGREG_FUNC, PD_FUNC_CONNECT_ACK);
-    seL4_MessageInfo_t tag = seL4_MessageInfo_new(error, 0, 1, PDMSGREG_CONNECT_ACK_END);
-    return tag;
+    reply_tag= seL4_MessageInfo_new(error, 0, 1, PDMSGREG_CONNECT_ACK_END);
+    return reply_tag;
+
+err_goto:
+    seL4_SetMR(PDMSGREG_FUNC, PD_FUNC_CONNECT_ACK);
+    reply_tag = seL4_MessageInfo_new(error, 0, 0, PDMSGREG_CONNECT_ACK_END);
+    return reply_tag;
 }
 
 static seL4_MessageInfo_t handle_disconnect_req(seL4_Word sender_badge,
@@ -304,34 +308,6 @@ err_goto:
     return tag;
 }
 
-static seL4_MessageInfo_t handle_create_resource_req(seL4_Word sender_badge, seL4_MessageInfo_t old_tag)
-{
-    // OSDB_PRINTF("Got create resource request from client badge %lx.\n", sender_badge);
-    int error = 0;
-
-    seL4_Word server_id = get_object_id_from_badge(sender_badge);
-    seL4_Word space_id = seL4_GetMR(PDMSGREG_CREATE_RES_REQ_SPACE_ID);
-    seL4_Word resource_id = seL4_GetMR(PDMSGREG_CREATE_RES_REQ_RES_ID);
-
-    pd_component_registry_entry_t *server_data = pd_component_registry_get_entry_by_id(server_id);
-    resspc_component_registry_entry_t *resource_space_data = resource_space_get_entry_by_id(space_id);
-    SERVER_GOTO_IF_COND(server_data == NULL, "Couldn't find client PD (%ld)\n", get_object_id_from_badge(sender_badge));
-    SERVER_GOTO_IF_COND(resource_space_data == NULL, "Couldn't find resource space (%ld)\n", space_id);
-
-    gpi_cap_t resource_type = resource_space_data->space.resource_type;
-
-    // OSDB_PRINTF("resource server %ld creates resource in space %ld with ID %ld\n",
-    //             server_id, space_id, resource_id);
-
-    error = pd_add_resource(&server_data->pd, resource_type, space_id, resource_id, seL4_CapNull, seL4_CapNull, seL4_CapNull);
-
-err_goto:
-    seL4_SetMR(PDMSGREG_FUNC, PD_FUNC_CREATE_RES_ACK);
-    seL4_MessageInfo_t tag = seL4_MessageInfo_new(error, 0, 0,
-                                                  PDMSGREG_CREATE_RES_ACK_END);
-    return tag;
-}
-
 static seL4_MessageInfo_t handle_give_resource_req(seL4_Word sender_badge, seL4_MessageInfo_t old_tag)
 {
     int error = 0;
@@ -499,9 +475,6 @@ static seL4_MessageInfo_t pd_component_handle(seL4_MessageInfo_t tag,
             break;
         case PD_FUNC_SHARE_RDE_REQ:
             reply_tag = handle_share_rde_req(sender_badge, tag);
-            break;
-        case PD_FUNC_CREATE_RES_REQ:
-            reply_tag = handle_create_resource_req(sender_badge, tag);
             break;
         case PD_FUNC_GIVE_RES_REQ:
             reply_tag = handle_give_resource_req(sender_badge, tag);

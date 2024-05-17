@@ -115,7 +115,7 @@ int ramdisk_init()
     for (int i = 0; i < server->free_blocks->n_blocks; i++)
     {
         // Local resource ID is the block ID
-        resource_server_create_resource(&server->gen, i);
+        resource_server_create_resource(&server->gen, NULL, i);
     }
 
     return error;

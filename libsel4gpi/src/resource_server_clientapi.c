@@ -111,7 +111,7 @@ int resource_server_client_get_rr(seL4_CPtr server_ep,
     RESOURCE_SERVER_PRINTF("Shared mem local addr: %p, remote addr: %p\n", local_vaddr, remote_vaddr);
 
     // Send IPC to resource server
-    seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 1, RSMSGREG_EXTRACT_RR_REQ_END);
+    seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0, RSMSGREG_EXTRACT_RR_REQ_END);
     seL4_SetMR(RSMSGREG_FUNC, RS_FUNC_GET_RR_REQ);
     seL4_SetMR(RSMSGREG_EXTRACT_RR_REQ_VADDR, (seL4_Word)remote_vaddr);
     seL4_SetMR(RSMSGREG_EXTRACT_RR_REQ_SIZE, size);

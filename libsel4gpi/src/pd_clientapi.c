@@ -155,7 +155,7 @@ int pd_client_badge_ep(pd_client_context_t *conn,
 {
     int error;
     seL4_SetMR(PDMSGREG_FUNC, PD_FUNC_BADGE_EP_REQ);
-    seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 1,
+    seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0,
                                                   PDMSGREG_BADGE_EP_REQ_END);
     seL4_SetMR(PDMSGREG_BADGE_EP_REQ_BADGE, badge);
     seL4_SetMR(PDMSGREG_BADGE_EP_REQ_SRC, src_ep);
@@ -174,20 +174,6 @@ int pd_client_share_rde(pd_client_context_t *conn,
     seL4_SetMR(PDMSGREG_SHARE_RDE_REQ_SPACE_ID, space_id);
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0,
                                                   PDMSGREG_SHARE_RDE_REQ_END);
-    tag = seL4_Call(conn->badged_server_ep_cspath.capPtr, tag);
-
-    return seL4_MessageInfo_ptr_get_label(&tag);
-}
-
-int pd_client_create_resource(pd_client_context_t *conn,
-                              seL4_Word res_space_id,
-                              seL4_Word resource_id)
-{
-    seL4_SetMR(PDMSGREG_FUNC, PD_FUNC_CREATE_RES_REQ);
-    seL4_SetMR(PDMSGREG_CREATE_RES_REQ_SPACE_ID, res_space_id);
-    seL4_SetMR(PDMSGREG_CREATE_RES_REQ_RES_ID, resource_id);
-    seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0,
-                                                  PDMSGREG_CREATE_RES_REQ_END);
     tag = seL4_Call(conn->badged_server_ep_cspath.capPtr, tag);
 
     return seL4_MessageInfo_ptr_get_label(&tag);

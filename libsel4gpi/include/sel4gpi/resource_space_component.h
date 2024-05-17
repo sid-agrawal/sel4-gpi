@@ -37,11 +37,14 @@ enum res_space_component_errors
 /* IPC Message register values */
 enum res_space_component_funcs
 {
-    RESSPC_FUNC_CONNECT_REQ,
+    RESSPC_FUNC_CONNECT_REQ = 0,
     RESSPC_FUNC_CONNECT_ACK,
 
     RESSPC_FUNC_DISCONNECT_REQ,
     RESSPC_FUNC_DISCONNECT_ACK,
+
+    RESSPC_FUNC_CREATE_RES_REQ,
+    RESSPC_FUNC_CREATE_RES_ACK,
 };
 
 /* Designated purposes of each message register in the mini-protocol. */
@@ -60,6 +63,12 @@ enum res_space_component_msgregs
     RESSPCMSGREG_CONNECT_ACK_ID = RESSPCMSGREG_LABEL0,
     RESSPCMSGREG_CONNECT_ACK_SLOT,
     RESSPCMSGREG_CONNECT_ACK_END,
+
+    /* Create Resource */
+    RESSPCMSGREG_CREATE_RES_REQ_RES_ID = RESSPCMSGREG_LABEL0,
+    RESSPCMSGREG_CREATE_RES_REQ_END,
+
+    RESSPCMSGREG_CREATE_RES_ACK_END,
 
     /* Disconnect / Delete*/
     RESSPCMSGREG_DISCONNECT_REQ_END = RESSPCMSGREG_LABEL0,

@@ -423,7 +423,7 @@ static int xv6fs_libc_close(int fd)
   }
 
   // Send IPC to fs server
-  seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 1, FS_FUNC_CLOSE_REQ);
+  seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0, FS_FUNC_CLOSE_REQ);
   seL4_SetMR(FSMSGREG_FUNC, FS_FUNC_CLOSE_REQ);
   tag = seL4_Call(file->badged_server_ep_cspath.capPtr, tag);
 
@@ -604,6 +604,7 @@ static int xv6fs_libc_unlink(const char *pathname)
   // Send IPC to fs server
   seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 1, FSMSGREG_UNLINK_REQ_END);
   seL4_SetMR(FSMSGREG_FUNC, FS_FUNC_UNLINK_REQ);
+  seL4_SetCap(0, get_xv6fs_client()->shared_mem->badged_server_ep_cspath.capPtr);
   tag = seL4_Call(get_xv6fs_client()->fs_ep, tag);
 
   if (seL4_MessageInfo_get_label(tag) != seL4_NoError)

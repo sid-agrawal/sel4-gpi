@@ -82,7 +82,7 @@ int cpu_client_change_vspace(cpu_client_context_t *conn,
     /* Send the badged endpoint cap of the ads client as a cap */
     seL4_SetCap(0, ads_conn->badged_server_ep_cspath.capPtr); /*vspace*/
 
-    seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 2,
+    seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 1,
                                                   CPUMSGREG_CHANGE_VSPACE_REQ_END);
 
     tag = seL4_Call(conn->badged_server_ep_cspath.capPtr, tag);

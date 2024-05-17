@@ -92,6 +92,7 @@ static seL4_MessageInfo_t handle_ads_allocation(seL4_Word sender_badge)
     OSDB_PRINTF("Got ADS allocation request from %lx\n", sender_badge);
 
     int error = 0;
+    seL4_MessageInfo_t reply_tag;
     seL4_CPtr ret_cap;
     ads_component_registry_entry_t *new_entry;
     uint32_t client_id = get_client_id_from_badge(sender_badge);
@@ -112,15 +113,19 @@ static seL4_MessageInfo_t handle_ads_allocation(seL4_Word sender_badge)
     seL4_SetCap(0, ret_cap);
     seL4_SetMR(ADSMSGREG_CONNECT_ACK_VMR_SPACE_ID, space_entry->space.id);
 
+    reply_tag = seL4_MessageInfo_new(error, 0, 1, ADSMSGREG_CONNECT_ACK_END);
+    return reply_tag;
+
 err_goto:
-    seL4_MessageInfo_t tag = seL4_MessageInfo_new(error, 0, 1, ADSMSGREG_CONNECT_ACK_END);
-    return tag;
+    reply_tag = seL4_MessageInfo_new(error, 0, 0, ADSMSGREG_CONNECT_ACK_END);
+    return reply_tag;
 }
 
 static seL4_MessageInfo_t handle_reserve_req(seL4_Word sender_badge, seL4_MessageInfo_t old_tag)
 {
     OSDB_PRINTF("Got ADS reserve request from %lx\n", sender_badge);
     int error = 0;
+    seL4_MessageInfo_t reply_tag;
 
     uint32_t client_id = get_client_id_from_badge(sender_badge);
     void *vaddr = (void *)seL4_GetMR(ADSMSGREG_RESERVE_REQ_VA);
@@ -152,10 +157,14 @@ static seL4_MessageInfo_t handle_reserve_req(seL4_Word sender_badge, seL4_Messag
     seL4_SetMR(ADSMSGREG_RESERVE_ACK_VA, (seL4_Word)reservation->vaddr);
     seL4_SetCap(0, ret_cap);
 
+    seL4_SetMR(ADSMSGREG_FUNC, ADS_FUNC_RESERVE_ACK);
+    reply_tag = seL4_MessageInfo_new(error, 0, 1, ADSMSGREG_CONNECT_ACK_END);
+    return reply_tag;
+
 err_goto:
     seL4_SetMR(ADSMSGREG_FUNC, ADS_FUNC_RESERVE_ACK);
-    seL4_MessageInfo_t tag = seL4_MessageInfo_new(error, 0, 1, ADSMSGREG_RESERVE_ACK_END);
-    return tag;
+    reply_tag = seL4_MessageInfo_new(error, 0, 0, ADSMSGREG_RESERVE_ACK_END);
+    return reply_tag;
 }
 
 static seL4_MessageInfo_t handle_attach_req(seL4_Word sender_badge, seL4_MessageInfo_t old_tag, seL4_CPtr mo_cap)
@@ -256,6 +265,7 @@ static seL4_MessageInfo_t handle_shallow_copy_req(seL4_Word sender_badge)
     OSDB_PRINTF("Got Shallow copy request from client badge %lx.\n", sender_badge);
 
     int error = 0;
+    seL4_MessageInfo_t reply_tag;
     seL4_CPtr ret_cap;
     seL4_Word client_id = get_client_id_from_badge(sender_badge);
 
@@ -298,12 +308,17 @@ static seL4_MessageInfo_t handle_shallow_copy_req(seL4_Word sender_badge)
         // Cleanup the dst_ads
     }
 
-err_goto:
     /* Return the new ADS */
     seL4_SetCap(0, ret_cap);
     seL4_SetMR(ADSMSGREG_FUNC, ADS_FUNC_SHALLOW_COPY_ACK);
-    seL4_MessageInfo_t tag = seL4_MessageInfo_new(error, 0, 1, ADSMSGREG_SHALLOW_COPY_ACK_END);
-    return tag;
+    reply_tag = seL4_MessageInfo_new(error, 0, 1, ADSMSGREG_SHALLOW_COPY_ACK_END);
+    return reply_tag;
+
+err_goto:
+    /* Return the new ADS */
+    seL4_SetMR(ADSMSGREG_FUNC, ADS_FUNC_SHALLOW_COPY_ACK);
+    reply_tag = seL4_MessageInfo_new(error, 0, 0, ADSMSGREG_SHALLOW_COPY_ACK_END);
+    return reply_tag;
 }
 
 static seL4_MessageInfo_t handle_load_elf_request(seL4_Word sender_badge, seL4_MessageInfo_t old_tag)
@@ -425,7 +440,7 @@ static seL4_MessageInfo_t handle_pd_setup_req(seL4_Word sender_badge, seL4_Messa
             OSDB_PRINTERR("Invalid PD setup mode specified\n");
             break;
         }
-        }
+    }
 
     SERVER_GOTO_IF_ERR(error, "Failed to setup process stack\n");
     seL4_SetMR(ADSMSGREG_PD_SETUP_ACK_INIT_STACK, (seL4_Word)init_stack);
@@ -486,7 +501,7 @@ static int forge_ads_attachments_from_vspace(ads_t *ads, uint32_t client_pd_id)
                                              &cap_ret,
                                              (mo_t **)&res->mo_ref);
             SERVER_GOTO_IF_ERR(error, "Failed to forge MO cap while forging ADS attach\n");
-        
+
             // Add the attach node for this region
             error = ads_forge_attach(ads, res, res->mo_ref);
             SERVER_GOTO_IF_ERR(error, "Failed to forge ADS attach\n");

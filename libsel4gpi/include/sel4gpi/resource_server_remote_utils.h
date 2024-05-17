@@ -123,9 +123,11 @@ int resource_server_unattach(resource_server_context_t *context,
  * given to a client PD
  *
  * @param resource_id ID of the resource, needs to be unique within this server
+ * @param space_conn Connection to the resource space, or NULL to use the server default
  * @param dest Returns the slot of the badged copy in the recipient's cspace
  */
 int resource_server_create_resource(resource_server_context_t *context,
+                                    resspc_client_context_t *space_conn,
                                     uint64_t resource_id);
 
 /**

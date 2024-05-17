@@ -21,3 +21,13 @@ int resspc_client_connect(seL4_CPtr server_ep,
                           seL4_CPtr resource_server_ep,
                           seL4_CPtr client_id,
                           resspc_client_context_t *ret_conn);
+
+/**
+ *
+ * Create a new resource in a resource space
+ *
+ * @param conn the resource space connection
+ * @param resource_id unique id of the new resource within the resource space
+ */
+int resspc_client_create_resource(resspc_client_context_t *conn,
+                                  seL4_Word resource_id);

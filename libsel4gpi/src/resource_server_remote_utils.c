@@ -239,15 +239,18 @@ int resource_server_unattach(resource_server_context_t *context,
 }
 
 int resource_server_create_resource(resource_server_context_t *context,
+                                    resspc_client_context_t *space_conn,
                                     uint64_t resource_id)
 {
     int error;
 
     RESOURCE_SERVER_PRINTF("Creating resource with ID 0x%lx\n", resource_id);
 
-    error = pd_client_create_resource(&context->pd_conn,
-                                      context->default_space.id,
-                                      resource_id);
+    if (space_conn == NULL) {
+        space_conn = &context->default_space;
+    }
+    
+    error = resspc_client_create_resource(space_conn, resource_id);
 
     return error;
 }
