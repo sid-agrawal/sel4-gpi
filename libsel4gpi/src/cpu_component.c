@@ -160,7 +160,7 @@ static seL4_MessageInfo_t handle_config_req(seL4_Word sender_badge,
     client_data->cpu.binded_ads_id = asre->ads.id;
 
     /* Configure the vspace */
-    error = pd_configure(&pd_data->pd, "", &asre->ads, &client_data->cpu);
+    error = pd_configure(&pd_data->pd, "TEMP", &asre->ads, &client_data->cpu);
     SERVER_GOTO_IF_ERR(error, "Failed to configure PD\n");
 
     OSDB_PRINTF("Finished configuring CPU\n");

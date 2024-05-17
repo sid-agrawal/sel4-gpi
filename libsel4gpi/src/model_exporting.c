@@ -387,7 +387,7 @@ gpi_model_node_t *add_resource_space_node(model_state_t *model_state, gpi_cap_t 
 }
 
 // Add a PD to the model state
-gpi_model_node_t *add_pd_node(model_state_t *model_state, char *pd_name, uint64_t pd_id)
+gpi_model_node_t *add_pd_node(model_state_t *model_state, const char *pd_name, uint64_t pd_id)
 {
     char node_id[CSV_MAX_STRING_SIZE];
     get_pd_id(pd_id, node_id);

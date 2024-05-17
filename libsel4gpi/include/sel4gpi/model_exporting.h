@@ -147,7 +147,7 @@ gpi_model_node_t *add_resource_space_node(model_state_t *model_state, gpi_cap_t 
  * @param pd_id unique ID of the PD
  * @return The model node for the PD
  */
-gpi_model_node_t *add_pd_node(model_state_t *model_state, char *pd_name, uint64_t pd_id);
+gpi_model_node_t *add_pd_node(model_state_t *model_state, const char *pd_name, uint64_t pd_id);
 
 /**
  * Returns the root node of the model state (the root task PD)

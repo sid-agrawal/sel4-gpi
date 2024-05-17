@@ -338,7 +338,6 @@ void pd_destroy(pd_t *pd, vka_t *server_vka, vspace_t *server_vspace)
     sel4utils_clean_up_thread(vka, &process->vspace, &process->thread);
 
     /* ADS component destroys the vspace */
-
     /* destroy the endpoint */
     if (process->own_ep && process->fault_endpoint.cptr != 0)
     {
@@ -362,12 +361,6 @@ void pd_destroy(pd_t *pd, vka_t *server_vka, vspace_t *server_vspace)
         free(process->elf_phdrs);
     }
     /* end copied from sel4utils_destroy_process */
-
-    /* Clean up metadata */
-    if (pd->image_name)
-    {
-        free(pd->image_name);
-    }
 
     // Hash table of holding resources
     // (XXX) Arya: This can trigger sys_munmap which is not supported
@@ -575,7 +568,7 @@ int pd_configure(pd_t *pd,
                  cpu_t *target_cpu)
 {
     int error = 0;
-    pd->image_name = (char *)image_path;
+    pd->image_name = image_path;
     memcpy(&pd->proc.pd, target_ads->root_page_dir, sizeof(vka_object_t));
     pd->proc.thread = target_cpu->thread;
 

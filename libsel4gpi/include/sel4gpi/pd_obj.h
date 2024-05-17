@@ -115,7 +115,7 @@ typedef struct _pd
     uint32_t id;
 
     /* This is only for model extraction purposes */
-    char *image_name;
+    const char *image_name;
 
     /* Keeping this, since there's no point in duplicating fields from it in here*/
     sel4utils_process_t proc;
