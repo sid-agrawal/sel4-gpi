@@ -190,7 +190,7 @@ static int benchmark_ipc_rt(env_t env, bool cap_transfer, bool print)
     test_error_eq(error, 0);
 
     SEL4BENCH_READ_CCNT(ipc_start);
-    pd_client_context_t self_pd_conn = {.badged_server_ep_cspath.capPtr = sel4gpi_get_pd_cap()};
+    pd_client_context_t self_pd_conn = sel4gpi_get_pd_conn();
     pd_client_bench_ipc(&self_pd_conn, slot_send, slot_recv, cap_transfer);
     SEL4BENCH_READ_CCNT(ipc_end);
     if (print)
@@ -336,7 +336,7 @@ static int benchmark_ads_attach(env_t env, bool native)
     }
     else
     {
-        ads_client_context_t osm_pd_ads_rde = {.badged_server_ep_cspath.capPtr = sel4gpi_get_rde_by_ns_id(osm_pd_ads_ns_id, GPICAP_TYPE_ADS)};
+        ads_client_context_t osm_pd_ads_rde = {.badged_server_ep_cspath.capPtr = sel4gpi_get_rde_by_space_id(osm_pd_ads_ns_id, GPICAP_TYPE_VMR)};
         error = ads_client_attach(&osm_pd_ads_rde, NULL, &bench_mo, SEL4UTILS_RES_TYPE_GENERIC, &mapped_vaddr);
         test_error_eq(error, 0);
     }
@@ -419,13 +419,8 @@ static int benchmark_fs(env_t env)
 {
     int error;
 
-    /* Initialize the ADS */
-    ads_client_context_t ads_conn;
-    vka_cspace_make_path(&env->vka, sel4gpi_get_rde_by_ns_id(sel4gpi_get_binded_ads_id(), GPICAP_TYPE_ADS), &ads_conn.badged_server_ep_cspath);
-
     /* Initialize the PD */
-    pd_client_context_t pd_conn;
-    vka_cspace_make_path(&env->vka, sel4gpi_get_pd_cap(), &pd_conn.badged_server_ep_cspath);
+    pd_client_context_t pd_conn = sel4gpi_get_pd_conn();
 
     /* Create a memory object for the RR dump */
     seL4_CPtr slot;
@@ -440,12 +435,10 @@ static int benchmark_fs(env_t env)
     /* Start fs server process */
     uint64_t fs_id;
     seL4_CPtr fs_pd_cap;
-    error = start_xv6fs_pd(ramdisk_id, ramdisk_pd_cap, &fs_pd_cap, &fs_id);
+    error = start_xv6fs_pd(ramdisk_id, &fs_pd_cap, &fs_id);
     test_assert(error == 0);
 
     // Add FS ep to RDE
-    error = pd_client_add_rde(&pd_conn, fs_pd_cap, fs_id, NSID_DEFAULT);
-    test_assert(error == 0);
     seL4_CPtr fs_client_ep = sel4gpi_get_rde(GPICAP_TYPE_FILE);
 
     // The libc fs ops should go to the xv6fs server

@@ -9,6 +9,7 @@
  * Utility functions for all servers of GPI resources, both in RT and other PDs
  */
 
+#define RESOURCE_SERVER_DEBUG 0
 #define SERVER_UTILS "SERVER_UTILS"
 
 // Could use the server's debug function instead
@@ -133,11 +134,11 @@ uint64_t resource_server_registry_insert_new_id(resource_server_registry_t *regi
  * @param src_vka vka for the source endpoint
  * @param dst_vka vka for the destination (or NULL, to use src vka for destination)
  * @param src_ep source endpoint to badge
- * @param res_id ID of the resource, unique given type and ns_id
  * @param resource_type type of resource
- * @param ns_id namespace the resource is from
+ * @param space_id ID of the resource space
+ * @param res_id ID of the resource, unique to the resource space
  * @param client_id client the badge is meant for
  * @return the new resource badge
  */
-seL4_CPtr resource_server_make_badged_ep(vka_t *src_vka, vka_t *dst_vka, seL4_CPtr src_ep, uint64_t res_id,
-                                         gpi_cap_t resource_type, uint64_t ns_id, uint64_t client_id);
+seL4_CPtr resource_server_make_badged_ep(vka_t *src_vka, vka_t *dst_vka, seL4_CPtr src_ep,
+                                         gpi_cap_t resource_type, uint64_t space_id, uint64_t res_id, uint64_t client_id);

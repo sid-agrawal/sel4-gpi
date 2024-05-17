@@ -192,6 +192,10 @@ int ads_reserve(ads_t *ads,
 attach_node_t *ads_get_res_by_id(ads_t *ads, uint64_t res_id)
 {
     attach_node_map_t *map_entry = (attach_node_map_t *)resource_server_registry_get_by_id(&ads->attach_id_to_vaddr_map, res_id);
+    if (map_entry == NULL)
+    {
+        return NULL;
+    }
     return ads_get_res_by_vaddr(ads, map_entry->vaddr);
 }
 
@@ -592,11 +596,12 @@ err_goto:
 static int ads_deep_copy(ads_t *dst_ads, mo_t *src_mo, int num_pages, attach_node_t *new_attach_node, attach_node_t *old_attach_node)
 {
     int error = 0;
+
     // Make a new MO
     // The "client" to hold this MO is the root task
     mo_component_registry_entry_t *mo_entry;
     seL4_CPtr mo_cap; // Not used since we are not giving this MO away
-    error = resource_component_allocate(get_mo_component(), get_gpi_server()->rt_pd_id, false, (void *)num_pages, (resource_server_registry_node_t **)&mo_entry, &mo_cap);
+    error = resource_component_allocate(get_mo_component(), get_gpi_server()->rt_pd_id, BADGE_OBJ_ID_NULL, false, (void *)num_pages, (resource_server_registry_node_t **)&mo_entry, &mo_cap);
     SERVER_GOTO_IF_ERR(error, "Failed to allocate a new MO for deep copy\n");
 
     // Attach the new MO in the new ADS

@@ -40,8 +40,9 @@ int main(int argc, char **argv)
     printf("FS: RAMDISK EP: %ld\n", (seL4_Word)ramdisk_ep);
 
     /* parse args */
-    assert(argc == 1);
+    assert(argc == 2);
     seL4_CPtr parent_ep = (seL4_CPtr)atol(argv[0]);
+    uint64_t parent_pd_id = (uint64_t)atol(argv[1]);
 
     get_xv6fs_server()->rd_ep = ramdisk_ep;
 
@@ -50,5 +51,6 @@ int main(int argc, char **argv)
         GPICAP_TYPE_FILE,
         xv6fs_request_handler,
         parent_ep,
+        parent_pd_id,
         xv6fs_init);
 }

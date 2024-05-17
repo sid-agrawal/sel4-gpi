@@ -12,8 +12,9 @@
 #include <sel4/types.h>
 
 #include <sel4gpi/resource_server_remote_utils.h>
-#include <ramdisk_client.h>
+#include <sel4gpi/resource_space_clientapi.h>
 
+#include <ramdisk_client.h>
 #include <fs_shared.h>
 
 #define XV6FS_S "xv6fs Server: "
@@ -36,6 +37,7 @@ typedef struct _file_registry_entry
 typedef struct _fs_namespace_entry
 {
     resource_server_registry_node_t gen;
+    resspc_client_context_t res_space_conn;
     char ns_prefix[MAXPATH]; // prefix of this namespace in the default ns
 } fs_namespace_entry_t;
 

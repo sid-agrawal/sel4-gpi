@@ -21,7 +21,6 @@
 #define TEST_FNAME "somefile"
 #define TEST_FNAME_2 "longfile"
 #define TEST_FNAME_3 "somefile2"
-#define TEST_FNAME_IN_NS "ns2/somefile"
 #define RR_MO_N_PAGES 2
 
 int test_fs(env_t env)
@@ -33,11 +32,10 @@ int test_fs(env_t env)
 
     /* Initialize the ADS */
     ads_client_context_t ads_conn;
-    vka_cspace_make_path(&env->vka, sel4gpi_get_rde_by_ns_id(sel4gpi_get_binded_ads_id(), GPICAP_TYPE_ADS), &ads_conn.badged_server_ep_cspath);
+    vka_cspace_make_path(&env->vka, sel4gpi_get_rde_by_space_id(sel4gpi_get_binded_ads_id(), GPICAP_TYPE_VMR), &ads_conn.badged_server_ep_cspath);
 
     /* Initialize the PD */
-    pd_client_context_t pd_conn;
-    vka_cspace_make_path(&env->vka, sel4gpi_get_pd_cap(), &pd_conn.badged_server_ep_cspath);
+    pd_client_context_t pd_conn = sel4gpi_get_pd_conn();
 
     /* Create a memory object for the RR dump */
     seL4_CPtr slot;
@@ -60,13 +58,12 @@ int test_fs(env_t env)
     /* Start fs server process */
     uint64_t fs_id;
     seL4_CPtr fs_pd_cap;
-    error = start_xv6fs_pd(ramdisk_id, ramdisk_pd_cap, &fs_pd_cap, &fs_id);
+    error = start_xv6fs_pd(ramdisk_id, &fs_pd_cap, &fs_id);
     test_assert(error == 0);
 
     // Add FS ep to RDE
-    error = pd_client_add_rde(&pd_conn, fs_pd_cap, fs_id, NSID_DEFAULT);
-    test_assert(error == 0);
     seL4_CPtr fs_client_ep = sel4gpi_get_rde(GPICAP_TYPE_FILE);
+    test_assert(fs_client_ep != seL4_CapNull);
 
     printf("------------------STARTING TESTS: %s------------------\n", __func__);
 
@@ -197,7 +194,7 @@ int test_fs(env_t env)
     test_assert(error == 0);
     test_assert(ns_id != 0);
 
-    seL4_CPtr fs_client_ep_ns1 = sel4gpi_get_rde_by_ns_id(ns_id, GPICAP_TYPE_FILE);
+    seL4_CPtr fs_client_ep_ns1 = sel4gpi_get_rde_by_space_id(ns_id, GPICAP_TYPE_FILE);
     assert(fs_client_ep_ns1 != seL4_CapNull);
 
     // Test a file within namespace
@@ -221,10 +218,12 @@ int test_fs(env_t env)
     test_assert(error == 0);
 
     // Check the file exists in global NS
-    error = xv6fs_client_set_namespace(NSID_DEFAULT);
+    error = xv6fs_client_set_namespace(fs_id);
     test_assert(error == 0);
 
-    f = open(TEST_FNAME_IN_NS, O_RDWR);
+    char fname[16];
+    sprintf(fname, "/ns%ld/%s", ns_id, TEST_FNAME);
+    f = open(fname, O_RDWR);
     test_assert(f > 0);
 
     nbytes = read(f, buf, strlen(TEST_STR_3) + 1);

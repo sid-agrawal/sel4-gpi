@@ -17,7 +17,6 @@
  * Utility functions for non-RT PDs that serve GPI resources
  */
 
-#define RESOURCE_SERVER_DEBUG 1
 
 /**
  * Generic resource server context
@@ -34,6 +33,9 @@ typedef struct _resource_server_context
 
     // Run once when the server is started
     int (*init_fn)();
+
+    // Client ID of the parent PD
+    uint64_t parent_pd_id;
 
     // RDEs and other EPs
     seL4_CPtr parent_ep;
@@ -60,6 +62,7 @@ typedef struct _resource_server_context
  *                  param: seL4_CPtr cap, the received cap
  *                  return: seL4_MessageInfo_t reply info
  * @param parent_ep Endpoint of the parent process
+ * @param parent_pd_id the PD ID of the parent, so we can create an RDE 
  * @param init_fn To run at the beginning of main thread execution
  * @return 0 on successful exit, nonzero otherwise
  */
@@ -67,6 +70,7 @@ int resource_server_start(resource_server_context_t *context,
                           gpi_cap_t server_type,
                           seL4_MessageInfo_t (*request_handler)(seL4_MessageInfo_t, seL4_Word, seL4_CPtr, bool *),
                           seL4_CPtr parent_ep,
+                          uint64_t parent_pd_id,
                           int (*init_fn)());
 
 /**
@@ -128,23 +132,24 @@ int resource_server_create_resource(resource_server_context_t *context,
  * Notifies the PD component to create a badged copy of the server's endpoint
  * as a new resource in the recipient's cspace
  *
- * @param ns_id ID of the namespace being allocated from
+ * @param space_id ID of the resource space being allocated from
  * @param resource_id ID of the resource, needs to be unique within this server
  * @param client_id ID of the client PD
  * @param dest Returns the slot of the badged copy in the recipient's cspace
  */
 int resource_server_give_resource(resource_server_context_t *context,
-                                  uint64_t ns_id,
+                                  uint64_t space_id,
                                   uint64_t resource_id,
                                   uint64_t client_id,
                                   seL4_CPtr *dest);
 
 /**
- * Creates a new namespace ID for this resource server
+ * Creates a new namespace resource space for this resource server
  *
- * @param client_id Client ID of the client that requested the new NS
- * @param ns_id returns the newly allocated NS ID
+ * @param context
+ * @param client_id ID of the client PD that should get an RDE to the resource space
+ * @param ret_conn returns the newly allocated resource space
  */
-int resource_server_new_ns(resource_server_context_t *context,
-                           uint64_t client_id,
-                           uint64_t *ns_id);
+int resource_server_new_res_space(resource_server_context_t *context,
+                                  uint64_t client_id,
+                                  resspc_client_context_t *ret_conn);

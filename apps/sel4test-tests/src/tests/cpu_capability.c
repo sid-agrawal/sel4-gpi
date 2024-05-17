@@ -40,11 +40,10 @@ int test_separate_threads(env_t env)
     int error;
     printf("------------------STARTING: %s------------------\n", __func__);
 
-    pd_client_context_t test_pd_os_cap;
-    test_pd_os_cap.badged_server_ep_cspath.capPtr = sel4gpi_get_pd_cap();
+    pd_client_context_t test_pd_os_cap = sel4gpi_get_pd_conn();
 
     ads_client_context_t test_ads_os_cap;
-    test_ads_os_cap.badged_server_ep_cspath.capPtr = sel4gpi_get_rde_by_ns_id(sel4gpi_get_binded_ads_id(), GPICAP_TYPE_ADS);
+    test_ads_os_cap.badged_server_ep_cspath.capPtr = sel4gpi_get_rde_by_space_id(sel4gpi_get_binded_ads_id(), GPICAP_TYPE_VMR);
 
     seL4_CPtr ads_rde = sel4gpi_get_rde(GPICAP_TYPE_ADS);
     seL4_CPtr pd_rde = sel4gpi_get_rde(GPICAP_TYPE_PD);

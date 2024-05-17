@@ -19,11 +19,12 @@
 #define RESSPC_SERVS "ResSpace Component: "
 #define RESSPC_SERVC "ResSpace Client   : "
 
-/**
- * Default "space" for resource spaces to be part of, to prevent circular definition
- * of resource space
-*/
+// Default "space" for resource spaces to be part of, to prevent circular definition
+// of resource space
 #define RESSPC_SPACE_ID 0x1
+
+// Null resource space ID
+#define RESSPC_ID_NULL 0xFF
 
 /* IPC values returned in the "label" message header. */
 enum res_space_component_errors
@@ -53,6 +54,7 @@ enum res_space_component_msgregs
 
     /* Connect / New */
     RESSPCMSGREG_CONNECT_REQ_TYPE = RESSPCMSGREG_LABEL0,
+    RESSPCMSGREG_CONNECT_REQ_CLIENT_ID,
     RESSPCMSGREG_CONNECT_REQ_END,
 
     RESSPCMSGREG_CONNECT_ACK_ID = RESSPCMSGREG_LABEL0,
@@ -71,8 +73,8 @@ typedef struct _resspc_component_registry_entry
     res_space_t space;
 } resspc_component_registry_entry_t;
 
-/** 
- * Configuration options for a resource space 
+/**
+ * Configuration options for a resource space
  * Pass as arg0 to resource_component_allocate
  **/
 typedef struct _resspc_config
@@ -80,6 +82,7 @@ typedef struct _resspc_config
     gpi_cap_t type;
     seL4_CPtr ep;
     pd_t *pd;
+    void *data; // Field for some generic data
 } resspc_config_t;
 
 /**
@@ -97,7 +100,7 @@ resource_component_context_t *get_resspc_component(void);
 
 /**
  * Find a resource space by id
- * 
+ *
  * @param space_id the resource space id
-*/
+ */
 resspc_component_registry_entry_t *resource_space_get_entry_by_id(seL4_Word space_id);

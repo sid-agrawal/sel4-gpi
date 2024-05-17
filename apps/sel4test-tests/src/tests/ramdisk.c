@@ -30,13 +30,11 @@ int test_ramdisk(env_t env)
 
     /* Initialize the ADS */
     ads_client_context_t ads_conn;
-    vka_cspace_make_path(&env->vka, sel4gpi_get_rde_by_ns_id(sel4gpi_get_binded_ads_id(), GPICAP_TYPE_ADS), &ads_conn.badged_server_ep_cspath);
+    vka_cspace_make_path(&env->vka, sel4gpi_get_rde_by_space_id(sel4gpi_get_binded_ads_id(), GPICAP_TYPE_VMR), &ads_conn.badged_server_ep_cspath);
     test_assert(error == 0);
 
     /* Initialize the PD */
-    pd_client_context_t pd_conn;
-    vka_cspace_make_path(&env->vka, sel4gpi_get_pd_cap(), &pd_conn.badged_server_ep_cspath);
-    test_assert(error == 0);
+    pd_client_context_t pd_conn = sel4gpi_get_pd_conn();
 
     /* Create a memory object for the buffer */
     seL4_CPtr slot;
@@ -63,8 +61,6 @@ int test_ramdisk(env_t env)
     test_assert(error == 0);
 
     /* Add the ramdisk to local RD */
-    error = pd_client_add_rde(&pd_conn, ramdisk_pd_cap, ramdisk_id, NSID_DEFAULT);
-    test_assert(error == 0);
     seL4_CPtr ramdisk_client_ep = sel4gpi_get_rde(GPICAP_TYPE_BLOCK);
 
     printf("------------------STARTING TESTS: %s------------------\n", __func__);

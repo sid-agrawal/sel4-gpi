@@ -62,7 +62,7 @@ static seL4_MessageInfo_t handle_cpu_allocation(seL4_Word sender_badge)
     cpu_component_registry_entry_t *new_entry;
     uint32_t client_id = get_client_id_from_badge(sender_badge);
 
-    error = resource_component_allocate(get_cpu_component(), client_id, false, NULL,
+    error = resource_component_allocate(get_cpu_component(), client_id, BADGE_OBJ_ID_NULL, false, NULL,
                                         (resource_server_registry_node_t **)&new_entry, &ret_cap);
     SERVER_GOTO_IF_ERR(error, "Failed to allocate new CPU object\n");
 
@@ -207,7 +207,8 @@ static seL4_MessageInfo_t handle_change_vspace_req(seL4_Word sender_badge,
     SERVER_GOTO_IF_ERR(error, "Failed to change vspace\n");
 
     // Update the PD object with the new ADS
-    pd_data->pd.init_data->binded_ads_ns_id = ads_data->ads.id;
+    // (XXX) Arya: update the ads_conn cap?
+    pd_data->pd.init_data->ads_conn.id = ads_data->ads.id;
     client_data->cpu.binded_ads_id = ads_data->ads.id;
 
 err_goto:
@@ -259,8 +260,24 @@ int cpu_component_initialize(simple_t *server_simple,
                              sel4utils_thread_t server_thread,
                              vka_object_t server_ep_obj)
 {
+    int error = 0;
+
+    // Create the default CPU resource space
+    resspc_component_registry_entry_t *space_entry;
+
+    resspc_config_t resspc_config = {
+        .type = GPICAP_TYPE_CPU,
+        .ep = get_gpi_server()->server_ep_obj.cptr,
+    };
+
+    error = resource_component_allocate(get_resspc_component(), get_gpi_server()->rt_pd_id, BADGE_OBJ_ID_NULL, false, (void *)&resspc_config,
+                                        (resource_server_registry_node_t **)&space_entry, NULL);
+    assert(error == 0);
+
+    // Initialize the component
     resource_component_initialize(get_cpu_component(),
                                   GPICAP_TYPE_CPU,
+                                  space_entry->space.id,
                                   cpu_component_handle,
                                   (int (*)(resource_component_object_t *, vka_t *, vspace_t *, void *))cpu_new,
                                   on_cpu_registry_delete,
@@ -288,7 +305,7 @@ int forge_cpu_cap_from_tcb(sel4utils_process_t *process, // Change this to the s
     cpu_component_registry_entry_t *new_entry;
 
     /* Allocate the CPU object */
-    error = resource_component_allocate(get_cpu_component(), client_id, false, NULL,
+    error = resource_component_allocate(get_cpu_component(), client_id, BADGE_OBJ_ID_NULL, false, NULL,
                                         (resource_server_registry_node_t **)&new_entry, &ret_cap);
     SERVER_GOTO_IF_ERR(error, "Failed to allocate new CPU object for forge\n");
 

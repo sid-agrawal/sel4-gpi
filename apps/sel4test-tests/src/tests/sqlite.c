@@ -177,9 +177,7 @@ int test_sqlite(env_t env)
     printf("------------------STARTING SETUP: %s------------------\n", __func__);
 
     /* Initialize the PD */
-    pd_client_context_t pd_conn;
-    vka_cspace_make_path(&env->vka, sel4gpi_get_pd_cap(), &pd_conn.badged_server_ep_cspath);
-    test_assert(error == 0);
+    pd_client_context_t pd_conn = sel4gpi_get_pd_conn();
 
     /* Start ramdisk server process */
     uint64_t ramdisk_id;
@@ -190,12 +188,10 @@ int test_sqlite(env_t env)
     /* Start fs server process */
     uint64_t fs_id;
     seL4_CPtr fs_pd_cap;
-    error = start_xv6fs_pd(ramdisk_id, ramdisk_pd_cap, &fs_pd_cap, &fs_id);
+    error = start_xv6fs_pd(ramdisk_id, &fs_pd_cap, &fs_id);
     test_assert(error == 0);
 
     // Add FS ep to RDE
-    error = pd_client_add_rde(&pd_conn, fs_pd_cap, fs_id, NSID_DEFAULT);
-    test_assert(error == 0);
     seL4_CPtr fs_client_ep = sel4gpi_get_rde(GPICAP_TYPE_FILE);
 
     printf("------------------STARTING TESTS: %s------------------\n", __func__);

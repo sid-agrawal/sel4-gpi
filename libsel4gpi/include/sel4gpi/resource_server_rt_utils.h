@@ -55,6 +55,9 @@ typedef struct _resource_component_context
     // Run to allocate a new obj
     int (*new_obj)(resource_component_object_t *, vka_t *, vspace_t *, void *);
 
+    // Component's default resource space ID
+    uint64_t space_id;
+
     // Registry of the component's resources
     resource_server_registry_t registry;
     size_t reg_entry_size;
@@ -78,6 +81,7 @@ typedef struct _resource_component_context
  *
  * @param component the component to initialize
  * @param resource_type the type of resource served by the component
+ * @param space_id ID of the resource space this component manages
  * @param request_handler handler for requests to this component
  * @param new_obj function called to allocate a new object from the component
  * @param on_registry_delete function to be called when registry entry is deleted
@@ -92,6 +96,7 @@ typedef struct _resource_component_context
 int resource_component_initialize(
     resource_component_context_t *component,
     gpi_cap_t resource_type,
+    uint64_t space_id,
     seL4_MessageInfo_t (*request_handler)(seL4_MessageInfo_t, seL4_Word, seL4_CPtr, bool *),
     int (*new_obj)(resource_component_object_t *, vka_t *, vspace_t *, void *),
     void (*on_registry_delete)(resource_server_registry_node_t *),
@@ -123,13 +128,16 @@ void resource_component_handle(resource_component_context_t *component,
  *
  * @param component
  * @param client_id the PD ID of the client requesting the allocation
+ * @param object_id ID to use for the object, or BADGE_OBJ_ID_NULL to allocate a new ID
  * @param forge if true, does not allocate a new object, only the badge and registry entry
  * @param arg0 optional, passed as last argument to the new_obj function
  * @param ret_entry returns the new registry entry for the object
  * @param ret_cap returns the new badged endpoint for the object
+ *                if NULL, does not make a badged endpoint
  */
 int resource_component_allocate(resource_component_context_t *component,
                                 uint64_t client_id,
+                                uint64_t object_id,
                                 bool forge,
                                 void *arg0,
                                 resource_server_registry_node_t **ret_entry,

@@ -16,6 +16,7 @@ static void resource_component_reply(resource_component_context_t *component, se
 int resource_component_initialize(
     resource_component_context_t *component,
     gpi_cap_t resource_type,
+    uint64_t space_id,
     seL4_MessageInfo_t (*request_handler)(seL4_MessageInfo_t, seL4_Word, seL4_CPtr, bool *),
     int (*new_obj)(resource_component_object_t *, vka_t *, vspace_t *, void *),
     void (*on_registry_delete)(resource_server_registry_node_t *),
@@ -28,6 +29,7 @@ int resource_component_initialize(
     seL4_CPtr server_ep)
 {
     component->resource_type = resource_type;
+    component->space_id = space_id;
     component->request_handler = request_handler;
     component->new_obj = new_obj;
     component->reg_entry_size = reg_entry_size;
@@ -39,8 +41,8 @@ int resource_component_initialize(
     component->server_ep = server_ep;
 
     resource_server_initialize_registry(&component->registry, on_registry_delete);
-    // (XXX) Arya: Dirty hack to prevent overlap with ADS NS ID, will be fixed when I add resource spaces
-    component->registry.n_entries = NSID_DEFAULT;
+
+    OSDB_PRINTF("Initialized resource component %s\n", cap_type_to_str(resource_type));
 }
 
 void resource_component_handle(resource_component_context_t *component,
@@ -69,6 +71,7 @@ void resource_component_handle(resource_component_context_t *component,
 
 int resource_component_allocate(resource_component_context_t *component,
                                 uint64_t client_id,
+                                uint64_t object_id,
                                 bool forge,
                                 void *arg0,
                                 resource_server_registry_node_t **ret_entry,
@@ -80,7 +83,14 @@ int resource_component_allocate(resource_component_context_t *component,
     resource_component_registry_entry_t *reg_entry = calloc(1, component->reg_entry_size);
     GOTO_IF_COND(reg_entry == NULL, "Couldn't allocate new %s reg entry\n", cap_type_to_str(component->resource_type));
 
-    uint64_t resource_id = resource_server_registry_insert_new_id(&component->registry, (resource_server_registry_node_t *)reg_entry);
+    uint64_t resource_id;
+    if (object_id == BADGE_OBJ_ID_NULL) {
+        resource_id = resource_server_registry_insert_new_id(&component->registry, (resource_server_registry_node_t *)reg_entry);
+    } else {
+        resource_id = object_id;
+        reg_entry->gen.object_id = object_id;
+        resource_server_registry_insert(&component->registry, (resource_server_registry_node_t *)reg_entry);
+    }
     *ret_entry = (resource_server_registry_node_t *)reg_entry;
     reg_entry->object.id = resource_id;
 
@@ -91,14 +101,23 @@ int resource_component_allocate(resource_component_context_t *component,
         GOTO_IF_ERR(error, "Failed to initialize new %s object\n", cap_type_to_str(component->resource_type));
     }
 
-    /* Create the badged endpoint */
-    *ret_cap = resource_server_make_badged_ep(component->server_vka, NULL, component->server_ep,
-                                              resource_id, component->resource_type, NSID_DEFAULT, client_id);
-    GOTO_IF_COND(ret_cap == seL4_CapNull, "Failed to make badged ep for new %s\n", cap_type_to_str(component->resource_type));
+    if (ret_cap != NULL)
+    {
+        /* Create the badged endpoint */
+        *ret_cap = resource_server_make_badged_ep(component->server_vka, NULL, component->server_ep,
+                                                  component->resource_type, component->space_id, resource_id, client_id);
+        GOTO_IF_COND(ret_cap == seL4_CapNull, "Failed to make badged ep for new %s\n", cap_type_to_str(component->resource_type));
+    }
 
-    /* Add the resource to the client */
-    error = pd_add_resource_by_id(client_id, component->resource_type, resource_id, NSID_DEFAULT, *ret_cap, seL4_CapNull, *ret_cap);
-    GOTO_IF_ERR(error, "Failed to add %s  esource to PD\n", cap_type_to_str(component->resource_type));
+    // (XXX) Arya:
+    // Can't add a resource space resource to the root task since the PD component may not be initialized
+    // These hold edges (from root task to core component resource spaces) will be reflected at extraction time
+    if (!(client_id == get_gpi_server()->rt_pd_id && component->resource_type == GPICAP_TYPE_RESSPC))
+    {
+        /* Add the resource to the client */
+        error = pd_add_resource_by_id(client_id, component->resource_type, component->space_id, resource_id, *ret_cap, seL4_CapNull, *ret_cap);
+        GOTO_IF_ERR(error, "Failed to add %s  esource to PD\n", cap_type_to_str(component->resource_type));
+    }
 
 err_goto:
     return error;

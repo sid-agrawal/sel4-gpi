@@ -25,18 +25,17 @@
             return error;          \
         }                          \
     } while (0);
-    
-int start_resource_server_pd(uint64_t rde_id,
-                             seL4_CPtr rde_pd_cap,
+
+int start_resource_server_pd(gpi_cap_t rde_type,
+                             uint64_t rde_id,
                              char *image_name,
                              seL4_CPtr *server_pd_cap,
-                             uint64_t *resource_manager_id)
+                             uint64_t *space_id)
 {
     int error;
 
     // Current pd
-    pd_client_context_t current_pd;
-    current_pd.badged_server_ep_cspath.capPtr = sel4gpi_get_pd_cap();
+    pd_client_context_t current_pd = sel4gpi_get_pd_conn();
 
     // Create a temporary endpoint for the parent to listen on
     seL4_CPtr ep;
@@ -59,17 +58,19 @@ int start_resource_server_pd(uint64_t rde_id,
     CHECK_ERROR(error, "failed to send parent's ep cap to pd");
 
     // Copy the RDE to the new PD
-    if (rde_pd_cap > 0)
+    if (rde_id != 0)
     {
+
         RESOURCE_SERVER_PRINTF("SENDING RDE\n");
-        error = pd_client_add_rde(&server_pd, rde_pd_cap, rde_id, NSID_DEFAULT);
+        error = pd_client_share_rde(&server_pd, rde_type, rde_id);
         CHECK_ERROR(error, "failed to send rde to pd");
     }
 
     // Setup the args
-    int argc = 1;
+    int argc = 2;
     seL4_Word args[argc];
     args[0] = parent_ep_slot;
+    args[1] = current_pd.id;
 
     // Start it
     sel4gpi_runnable_t runnable = {.pd = server_pd};
@@ -83,9 +84,9 @@ int start_resource_server_pd(uint64_t rde_id,
     error = seL4_MessageInfo_get_label(tag);
     CHECK_ERROR(error, "message from server is a failure");
 
-    if (resource_manager_id)
+    if (space_id)
     {
-        *resource_manager_id = seL4_GetMR(0);
+        *space_id = seL4_GetMR(0);
     }
 
     // Cleanup temporary endpoint
@@ -97,6 +98,7 @@ int start_resource_server_pd(uint64_t rde_id,
 }
 
 int resource_server_client_get_rr(seL4_CPtr server_ep,
+                                  seL4_Word space_id,
                                   seL4_Word res_id,
                                   seL4_Word pd_id,
                                   seL4_Word server_pd_id,
@@ -113,6 +115,7 @@ int resource_server_client_get_rr(seL4_CPtr server_ep,
     seL4_SetMR(RSMSGREG_FUNC, RS_FUNC_GET_RR_REQ);
     seL4_SetMR(RSMSGREG_EXTRACT_RR_REQ_VADDR, (seL4_Word)remote_vaddr);
     seL4_SetMR(RSMSGREG_EXTRACT_RR_REQ_SIZE, size);
+    seL4_SetMR(RSMSGREG_EXTRACT_RR_REQ_SPACE, space_id);
     seL4_SetMR(RSMSGREG_EXTRACT_RR_REQ_ID, res_id);
     seL4_SetMR(RSMSGREG_EXTRACT_RR_REQ_PD_ID, pd_id);
     seL4_SetMR(RSMSGREG_EXTRACT_RR_REQ_RS_PD_ID, server_pd_id);

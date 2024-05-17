@@ -47,27 +47,45 @@ static seL4_MessageInfo_t handle_resspc_allocation_request(seL4_Word sender_badg
     OSDB_PRINTF("Got register server request from client badge %lx.\n", sender_badge);
     int error = 0;
 
-    pd_component_registry_entry_t *client_data = (pd_component_registry_entry_t *)
+    gpi_cap_t type = seL4_GetMR(RESSPCMSGREG_CONNECT_REQ_TYPE);
+    uint64_t client_id = seL4_GetMR(RESSPCMSGREG_CONNECT_REQ_CLIENT_ID);
+
+    // Find the resource server PD
+    pd_component_registry_entry_t *server_pd = (pd_component_registry_entry_t *)
         resource_component_registry_get_by_id(get_pd_component(), get_client_id_from_badge(sender_badge));
+    SERVER_GOTO_IF_COND(server_pd == NULL, "Couldn't find resource server PD (%ld)\n", get_object_id_from_badge(sender_badge));
 
-    SERVER_GOTO_IF_COND(client_data == NULL, "Couldn't find target PD (%ld)\n", get_object_id_from_badge(sender_badge));
+    // Find the client PD (to receive the resource space RDE)
+    pd_component_registry_entry_t *client_pd = (pd_component_registry_entry_t *)
+        resource_component_registry_get_by_id(get_pd_component(), client_id);
+    SERVER_GOTO_IF_COND(client_pd == NULL, "Couldn't find client PD (%ld)\n", get_object_id_from_badge(sender_badge));
 
+    // Allocate the resource space
     resspc_component_registry_entry_t *space_entry;
     seL4_CPtr space_cap;
 
     resspc_config_t resspc_config = {
-        .type = seL4_GetMR(RESSPCMSGREG_CONNECT_REQ_TYPE),
+        .type = type,
         .ep = received_cap,
-        .pd = &client_data->pd};
+        .pd = &server_pd->pd};
 
-    error = resource_component_allocate(get_resspc_component(), 0, false, (void *)&resspc_config, (resource_server_registry_node_t **)&space_entry, &space_cap);
+    error = resource_component_allocate(get_resspc_component(), client_id, BADGE_OBJ_ID_NULL, false, (void *)&resspc_config,
+                                        (resource_server_registry_node_t **)&space_entry, &space_cap);
     SERVER_GOTO_IF_ERR(error, "Failed to allocate a new resource space\n");
 
-    OSDB_PRINTF("Registered server, cap is at %ld.\n", space_entry->space.server_ep);
+    OSDB_PRINTF("Registered resource space, server cap is at %ld.\n", space_entry->space.server_ep);
 
-    seL4_SetMR(RESSPCMSGREG_CONNECT_ACK_ID, space_entry->gen.object_id);
+    uint64_t space_id = space_entry->gen.object_id;
+    seL4_SetMR(RESSPCMSGREG_CONNECT_ACK_ID, space_id);
     // seL4_SetMR(RESSPCMSGREG_CONNECT_ACK_SLOT, space_entry->gen.object_id);
     seL4_SetCap(0, space_cap);
+
+    // Add the RDE to the client PD
+    rde_type_t rde_type = {
+        .type = type,
+    };
+    error = pd_add_rde(&client_pd->pd, rde_type, space_id, received_cap);
+    SERVER_GOTO_IF_ERR(error, "Failed to add RDE to new resource space\n");
 
 err_goto:
     seL4_SetMR(PDMSGREG_FUNC, RESSPC_FUNC_CONNECT_ACK);
@@ -81,7 +99,7 @@ static seL4_MessageInfo_t resspc_component_handle(seL4_MessageInfo_t tag,
                                                   seL4_CPtr received_cap,
                                                   bool *need_new_recv_cap)
 {
-    enum mo_component_funcs func = seL4_GetMR(MOMSGREG_FUNC);
+    enum mo_component_funcs func = seL4_GetMR(RESSPCMSGREG_FUNC);
     seL4_MessageInfo_t reply_tag;
 
     if (get_object_id_from_badge(sender_badge) == BADGE_OBJ_ID_NULL)
@@ -113,8 +131,8 @@ static int resspc_new(res_space_t *res_space,
 
     res_space->resource_type = config->type;
     res_space->server_ep = config->ep;
-    res_space->ns_index = NSID_DEFAULT;
     res_space->pd = config->pd;
+    res_space->data = config->data;
 
     // (XXX) Arya: todo, allow new type creation
 
@@ -128,8 +146,10 @@ int resspc_component_initialize(simple_t *server_simple,
                                 sel4utils_thread_t server_thread,
                                 vka_object_t server_ep_obj)
 {
+    // Initialize the component
     resource_component_initialize(get_resspc_component(),
                                   GPICAP_TYPE_RESSPC,
+                                  RESSPC_SPACE_ID,
                                   resspc_component_handle,
                                   (int (*)(resource_component_object_t *, vka_t *, vspace_t *, void *))resspc_new,
                                   on_resspc_registry_delete,

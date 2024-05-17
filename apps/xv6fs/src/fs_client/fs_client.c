@@ -124,11 +124,10 @@ global_xv6fs_client_context_t *get_xv6fs_client(void)
 }
 
 int start_xv6fs_pd(uint64_t rd_id,
-                   seL4_CPtr rd_pd_cap,
                    seL4_CPtr *fs_pd_cap,
                    uint64_t *fs_id)
 {
-  int error = start_resource_server_pd(rd_id, rd_pd_cap,
+  int error = start_resource_server_pd(GPICAP_TYPE_BLOCK, rd_id,
                                        FS_APP, fs_pd_cap, fs_id);
   CHECK_ERROR(error, "failed to start file resource server\n");
   XV6FS_PRINTF("Successfully started file system server\n");
@@ -151,9 +150,9 @@ xv6fs_client_init(void)
   get_xv6fs_client()->fs_ep = sel4gpi_get_rde(GPICAP_TYPE_FILE);
   get_xv6fs_client()->mo_ep = sel4gpi_get_rde(GPICAP_TYPE_MO);
   get_xv6fs_client()->ads_conn = malloc(sizeof(ads_client_context_t));
-  get_xv6fs_client()->ads_conn->badged_server_ep_cspath.capPtr = sel4gpi_get_rde_by_ns_id(sel4gpi_get_binded_ads_id(), GPICAP_TYPE_ADS);
+  get_xv6fs_client()->ads_conn->badged_server_ep_cspath.capPtr = sel4gpi_get_rde_by_space_id(sel4gpi_get_binded_ads_id(), GPICAP_TYPE_VMR);
   get_xv6fs_client()->pd_conn = malloc(sizeof(pd_client_context_t));
-  get_xv6fs_client()->pd_conn->badged_server_ep_cspath.capPtr = sel4gpi_get_pd_cap();
+  *get_xv6fs_client()->pd_conn = sel4gpi_get_pd_conn();
 
   /* Allocate the TEMP shared memory object */
   get_xv6fs_client()->shared_mem = malloc(sizeof(mo_client_context_t));
@@ -167,8 +166,6 @@ xv6fs_client_init(void)
                                       get_xv6fs_client()->shared_mem);
   CHECK_ERROR(error, "failed to allocate shared mem page");
 
-  printf("TEMPA fs client self ads conn ID %d, %d\n", sel4gpi_get_binded_ads_id(),
-         sel4gpi_get_rde_by_ns_id(sel4gpi_get_binded_ads_id(), GPICAP_TYPE_ADS));
   error = ads_client_attach(get_xv6fs_client()->ads_conn,
                             NULL,
                             get_xv6fs_client()->shared_mem,
@@ -189,7 +186,7 @@ int xv6fs_client_set_namespace(uint64_t ns_id)
 {
   XV6FS_PRINTF("Client of FS server will use namespace %ld\n", ns_id);
 
-  seL4_CPtr ep = sel4gpi_get_rde_by_ns_id(ns_id, GPICAP_TYPE_FILE);
+  seL4_CPtr ep = sel4gpi_get_rde_by_space_id(ns_id, GPICAP_TYPE_FILE);
 
   if (ep == seL4_CapNull)
   {

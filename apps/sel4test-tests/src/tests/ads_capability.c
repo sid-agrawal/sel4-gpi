@@ -25,7 +25,7 @@ int test_ads_attach(env_t env)
 {
     // Initialize the ADS
     ads_client_context_t ads_conn;
-    vka_cspace_make_path(&env->vka, sel4gpi_get_rde_by_ns_id(sel4gpi_get_binded_ads_id(), GPICAP_TYPE_ADS), &ads_conn.badged_server_ep_cspath);
+    vka_cspace_make_path(&env->vka, sel4gpi_get_rde_by_space_id(sel4gpi_get_binded_ads_id(), GPICAP_TYPE_VMR), &ads_conn.badged_server_ep_cspath);
 
     // allocate a new MO
     int n_pages = 5;
@@ -64,7 +64,7 @@ int test_ads_rm(env_t env)
 {
     // Initialize the ADS
     ads_client_context_t ads_conn;
-    vka_cspace_make_path(&env->vka, sel4gpi_get_rde_by_ns_id(sel4gpi_get_binded_ads_id(), GPICAP_TYPE_ADS), &ads_conn.badged_server_ep_cspath);
+    vka_cspace_make_path(&env->vka, sel4gpi_get_rde_by_space_id(sel4gpi_get_binded_ads_id(), GPICAP_TYPE_VMR), &ads_conn.badged_server_ep_cspath);
 
     // allocate a new MO
     int n_pages = 5;

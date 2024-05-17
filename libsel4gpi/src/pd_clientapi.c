@@ -165,29 +165,13 @@ int pd_client_badge_ep(pd_client_context_t *conn,
     return seL4_MessageInfo_ptr_get_label(&tag);
 }
 
-int pd_client_add_rde(pd_client_context_t *conn,
-                      seL4_CPtr server_pd,
-                      uint64_t manager_id,
-                      uint64_t ns_id)
-{
-    seL4_SetMR(PDMSGREG_FUNC, PD_FUNC_ADD_RDE_REQ);
-    seL4_SetMR(PDMSGREG_ADD_RDE_REQ_MANAGER_ID, manager_id);
-    seL4_SetMR(PDMSGREG_ADD_RDE_REQ_NSID, ns_id);
-    seL4_SetCap(0, server_pd);
-    seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 1,
-                                                  PDMSGREG_ADD_RDE_REQ_END);
-    tag = seL4_Call(conn->badged_server_ep_cspath.capPtr, tag);
-
-    return seL4_MessageInfo_ptr_get_label(&tag);
-}
-
 int pd_client_share_rde(pd_client_context_t *conn,
                         gpi_cap_t cap_type,
-                        uint64_t ns_id)
+                        uint64_t space_id)
 {
     seL4_SetMR(PDMSGREG_FUNC, PD_FUNC_SHARE_RDE_REQ);
     seL4_SetMR(PDMSGREG_SHARE_RDE_REQ_TYPE, cap_type);
-    seL4_SetMR(PDMSGREG_SHARE_RDE_REQ_NS, ns_id);
+    seL4_SetMR(PDMSGREG_SHARE_RDE_REQ_SPACE_ID, space_id);
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0,
                                                   PDMSGREG_SHARE_RDE_REQ_END);
     tag = seL4_Call(conn->badged_server_ep_cspath.capPtr, tag);
@@ -195,28 +179,12 @@ int pd_client_share_rde(pd_client_context_t *conn,
     return seL4_MessageInfo_ptr_get_label(&tag);
 }
 
-int pd_client_register_namespace(pd_client_context_t *conn,
-                                 seL4_Word manager_id,
-                                 seL4_Word client_id,
-                                 seL4_Word *ns_id)
-{
-    seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0,
-                                                  PDMSGREG_REGISTER_NS_REQ_END);
-    seL4_SetMR(PDMSGREG_FUNC, PD_FUNC_REGISTER_NS_REQ);
-    seL4_SetMR(PDMSGREG_REGISTER_NS_REQ_MANAGER_ID, manager_id);
-    seL4_SetMR(PDMSGREG_REGISTER_NS_REQ_CLIENT_ID, client_id);
-    tag = seL4_Call(conn->badged_server_ep_cspath.capPtr, tag);
-    *ns_id = seL4_GetMR(PDMSGREG_REGISTER_NS_ACK_NSID);
-
-    return seL4_MessageInfo_ptr_get_label(&tag);
-}
-
 int pd_client_create_resource(pd_client_context_t *conn,
-                              gpi_cap_t manager_id,
+                              seL4_Word res_space_id,
                               seL4_Word resource_id)
 {
     seL4_SetMR(PDMSGREG_FUNC, PD_FUNC_CREATE_RES_REQ);
-    seL4_SetMR(PDMSGREG_CREATE_RES_REQ_MANAGER_ID, manager_id);
+    seL4_SetMR(PDMSGREG_CREATE_RES_REQ_SPACE_ID, res_space_id);
     seL4_SetMR(PDMSGREG_CREATE_RES_REQ_RES_ID, resource_id);
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0,
                                                   PDMSGREG_CREATE_RES_REQ_END);
@@ -226,15 +194,13 @@ int pd_client_create_resource(pd_client_context_t *conn,
 }
 
 int pd_client_give_resource(pd_client_context_t *conn,
-                            seL4_Word manager_id,
-                            seL4_Word ns_id,
+                            seL4_Word res_space_id,
                             seL4_Word recipient_id,
                             seL4_Word resource_id,
                             seL4_CPtr *dest)
 {
     seL4_SetMR(PDMSGREG_FUNC, PD_FUNC_GIVE_RES_REQ);
-    seL4_SetMR(PDMSGREG_GIVE_RES_REQ_MANAGER_ID, manager_id);
-    seL4_SetMR(PDMSGREG_GIVE_RES_REQ_NS_ID, ns_id);
+    seL4_SetMR(PDMSGREG_GIVE_RES_REQ_SPACE_ID, res_space_id);
     seL4_SetMR(PDMSGREG_GIVE_RES_REQ_CLIENT_ID, recipient_id);
     seL4_SetMR(PDMSGREG_GIVE_RES_REQ_RES_ID, resource_id);
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0,
@@ -284,7 +250,7 @@ int pd_client_clone(pd_client_context_t *src_pd,
 {
     int error = 0;
     /* create message frame */
-    ads_client_context_t curr_vmr_rde = {.badged_server_ep_cspath.capPtr = sel4gpi_get_rde_by_ns_id(sel4gpi_get_binded_ads_id(), GPICAP_TYPE_ADS)};
+    ads_client_context_t curr_vmr_rde = {.badged_server_ep_cspath.capPtr = sel4gpi_get_rde_by_space_id(sel4gpi_get_binded_ads_id(), GPICAP_TYPE_VMR)};
     mo_client_context_t shared_mo;
     void *msg = sel4gpi_get_vmr(&curr_vmr_rde, 1, NULL, SEL4UTILS_RES_TYPE_SHARED_FRAMES, &shared_mo);
     SERVER_GOTO_IF_COND(msg == NULL, "Couldn't create VMR for shared message\n");
@@ -303,7 +269,7 @@ int pd_client_clone(pd_client_context_t *src_pd,
     tag = seL4_Call(src_pd->badged_server_ep_cspath.capPtr, tag);
 
     ret_copied->badged_server_ep_cspath.capPtr = free_slot;
-    ads_client_context_t curr_ads_obj = {.badged_server_ep_cspath.capPtr = sel4gpi_get_ads_cap()};
+    ads_client_context_t curr_ads_obj = sel4gpi_get_ads_conn();
     error = ads_client_rm(&curr_ads_obj, msg);
     SERVER_PRINT_IF_ERR(error, "Failed to unmap shared message frame\n");
     // TODO: free MO

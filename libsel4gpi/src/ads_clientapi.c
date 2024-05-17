@@ -35,6 +35,7 @@ int ads_component_client_connect(seL4_CPtr server_ep_cap,
     OSDB_PRINTF("Set a receive path for the badged ep: %d\n", (int)free_slot);
 
     /* Set request type */
+    seL4_SetMR(ADSMSGREG_FUNC, ADS_FUNC_CONNECT_REQ);
     seL4_SetMR(0, GPICAP_TYPE_ADS);
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0, 1);
 
@@ -42,7 +43,7 @@ int ads_component_client_connect(seL4_CPtr server_ep_cap,
     assert(seL4_MessageInfo_get_extraCaps(tag) == 1);
 
     ret_conn->badged_server_ep_cspath.capPtr = free_slot;
-    ret_conn->id = seL4_GetMR(ADSMSGREG_CONNECT_ACK_ADS_NS);
+    ret_conn->id = seL4_GetMR(ADSMSGREG_CONNECT_ACK_VMR_SPACE_ID);
     // OSDB_PRINTF(ADS_DEBUG, ADSSERVC"Received badged endpoint and it was kept in:");
     // debug_cap_identify(ADSSERVC, ret_conn->badged_server_ep_cspath.capPtr);
     return seL4_MessageInfo_get_label(tag);
@@ -98,12 +99,11 @@ int ads_client_reserve(ads_client_context_t *conn,
     ret_conn->badged_server_ep_cspath.capPtr = free_slot;
 
     *ret_vaddr = (void *)seL4_GetMR(ADSMSGREG_RESERVE_ACK_VA);
-    assert(*ret_vaddr != NULL);
 
     OSDB_PRINTF("Finished reserve request, result in slot: %lu.\n",
                 free_slot);
 
-    return seL4_MessageInfo_get_label(tag);
+    return seL4_MessageInfo_get_label(tag) || (*ret_vaddr == NULL);
 }
 
 int ads_client_attach_to_reserve(ads_vmr_context_t *reservation,

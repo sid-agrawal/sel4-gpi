@@ -64,23 +64,15 @@ typedef struct osmosis_rde
         But let's keep track of slot_in* (above) for now.
     */
 
-    /* OSmosis generated resource manager ID for RDE */
-    uint32_t id;
-    uint32_t manager_id;
-    uint32_t ns_id;
-
-    /* Info about what the RDE is for ?*/
-    rde_type_t type;
-
-    // This is indexed like so:
-    //   0:GPICAP_TYPE_MAX - 1 = RDEs in their default namespaces, e.g. ns_id = 0
-    //   GPICAP_TYPE_MAX: GPICAP_TYPE_MAX + (MAX_NS_PER_RDE - 1) = namespaces for the first RDE type
-    //   ... continues in the same order as labeled in the gpi_cap_t enum
+    /* RDE is for a particular resource space */
+    rde_type_t type; // (XXX) Arya: This may be redundant given the space id
+    uint32_t space_id;
 } osmosis_rde_t;
 
 // Tracks a resource that a PD holds
 typedef struct _pd_hold_node
 {
+    // UTHash key is a badge constructed from type, space_id, and res_id
     resource_server_registry_node_t gen;
 
     // The slot of the cap as per seL4
@@ -90,22 +82,14 @@ typedef struct _pd_hold_node
     seL4_Word slot_in_ServerPD_Debug; // For instance in case of file.
 
     /*
-        I think that type+res_id should be all we need
+        I think that type+space_id+res_id should be all we need
         to find out when OSM resources are shared.
         But let's keep track of slot_in* (above) for now.
     */
-    uint32_t res_id; // key to uthash
-
-    /*
-        Type is PD/MO/CPU/ADS then look locally, else
-        Copy the cap from PD to RT and then calls RR on it.
-    */
     gpi_cap_t type;
+    uint32_t space_id;
+    uint32_t res_id;
 
-    /**
-     * (XXX) Arya: not sure yet if we need this field
-     */
-    uint64_t ns_id;
 } pd_hold_node_t;
 
 /**
@@ -113,13 +97,10 @@ typedef struct _pd_hold_node
  */
 typedef struct _osm_pd_init_data
 {
-    // PD's own core resources
-    seL4_CPtr pd_cap;
-    seL4_CPtr ads_cap;
-    seL4_CPtr cpu_cap;
-
-    // ADS ID of the PD's current binded ADS
-    uint32_t binded_ads_ns_id;
+    // Connection to the PD's own core resources
+    pd_client_context_t pd_conn;
+    ads_client_context_t ads_conn;
+    cpu_client_context_t cpu_conn;
 
     // PD's cspace
     seL4_CPtr cspace_root;
@@ -261,8 +242,8 @@ void print_pd_osm_rde_info(osmosis_rde_t *o);
  * Does not insert if the resource ID is a duplicate
  *
  * @param type the resource type
- * @param res_id the resource ID
- * @param ns_id the resource's namespace ID
+ * @param space_id the resource space ID
+ * @param res_id the resource ID (unique within the space)
  * @param slot_in_RT for debugging purposes, may be removed
  * @param slot_in_PD for debugging purposes, may be removed
  * @param slot_in_serverPD for debugging purposes, may be removed
@@ -270,8 +251,8 @@ void print_pd_osm_rde_info(osmosis_rde_t *o);
  */
 int pd_add_resource(pd_t *pd,
                     gpi_cap_t type,
+                    uint32_t space_id,
                     uint32_t res_id,
-                    uint32_t ns_id,
                     seL4_CPtr slot_in_RT,
                     seL4_CPtr slot_in_PD,
                     seL4_CPtr slot_in_serverPD);
@@ -283,13 +264,12 @@ int pd_add_resource(pd_t *pd,
  *
  * @param pd The target PD to add an RDE to
  * @param type the type of the RDE
- * @param manager_id the resource manager ID of this RDE
- * @param server_ep the raw endpoint of the resource manager
+ * @param space_id the resource space of this RDE
+ * @param server_ep the raw endpoint of the resource space
  */
 int pd_add_rde(pd_t *pd,
                rde_type_t type,
-               uint32_t manager_id,
-               uint32_t ns_id,
+               uint32_t space_id,
                seL4_CPtr server_ep);
 
 /**
@@ -305,17 +285,18 @@ int copy_cap_to_pd(pd_t *to_pd,
 
 /**
  * Gets the entry of the PD's RDE corresponding
- * to the type and namespace id
+ * to the type and space id
  * (XXX) Arya: Maybe poor design that we need this at all
  *
+ * @param pd the target PD
  * @param type The RDE type
- * @param ns_id The namespace id, or NS_DEFAULT for the default
+ * @param space_id The space id, or RESSPC_ID_NULL for the default
  * @return The seL4_CPtr of the RDE in the current cspace,
  *         or seL4_CapNull if not found
  */
 osmosis_rde_t *pd_rde_get(pd_t *pd,
                           gpi_cap_t type,
-                          uint32_t ns_id);
+                          uint32_t space_id);
 
 /**
  * Destroys a PD object

@@ -145,8 +145,7 @@ int kvstore_server_main(seL4_CPtr parent_ep)
     seL4_CPtr fs_ep = sel4gpi_get_rde(GPICAP_TYPE_FILE);
     printf("kvstore-server main: parent ep (%d), fs ep(%d) \n", (int)parent_ep, (int)fs_ep);
 
-    pd_client_context_t pd_conn;
-    pd_conn.badged_server_ep_cspath.capPtr = sel4gpi_get_pd_cap();
+    pd_client_context_t pd_conn = sel4gpi_get_pd_conn();
 
     /* initialize server */
     error = kvstore_server_init();
@@ -229,11 +228,8 @@ int kvstore_server_start_thread(seL4_CPtr *kvstore_ep)
 {
     int error;
 
-    seL4_CPtr self_pd_cap = sel4gpi_get_pd_cap();
-    pd_client_context_t self_pd_conn = {.badged_server_ep_cspath.capPtr = self_pd_cap};
-
-    seL4_CPtr self_ads_cap = sel4gpi_get_ads_cap();
-    ads_client_context_t self_ads_conn = {.badged_server_ep_cspath.capPtr = self_ads_cap};
+    pd_client_context_t self_pd_conn = sel4gpi_get_pd_conn();
+    ads_client_context_t self_ads_conn = sel4gpi_get_ads_conn();
 
     seL4_CPtr ads_rde = sel4gpi_get_rde(GPICAP_TYPE_ADS);
     seL4_CPtr pd_rde = sel4gpi_get_rde(GPICAP_TYPE_PD);

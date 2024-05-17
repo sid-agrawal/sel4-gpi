@@ -49,17 +49,17 @@ uint64_t set_perms_to_badge(seL4_Word badge, uint64_t perms)
     return (badge & 0xFF00FFFFFFFFFFFF) | (perms << 48);
 }
 
-// Bits: 47:40 are for the nameserver IDs. Total of 8 bits, so 255 nameservers
-uint64_t get_ns_id_from_badge(seL4_Word badge)
+// Bits: 47:40 are for the resource space ID. Total of 8 bits, so 255 resource spaces
+uint64_t get_space_id_from_badge(seL4_Word badge)
 {
     return (badge >> 40) & 0xFF;
 }
 
-// Bits: 47:40 are for the nameserver IDs. Total of 8 bits, so 255 nameservers
-uint64_t set_ns_id_to_badge(seL4_Word badge, uint64_t ns_id)
+// Bits: 47:40 are for the resource space ID. Total of 8 bits, so 255 resource spaces
+uint64_t set_space_id_to_badge(seL4_Word badge, uint64_t space_id)
 {
-    assert(ns_id <= 0xFF);
-    return (badge & 0xFFFF00FFFFFFFFFF) | (ns_id << 40);
+    assert(space_id <= 0xFF);
+    return (badge & 0xFFFF00FFFFFFFFFF) | (space_id << 40);
 }
 
 // Bits: 39:20 are for the client id. Total of 20 bits, so 2^20 clients.
@@ -88,46 +88,10 @@ uint64_t set_object_id_to_badge(seL4_Word badge, uint64_t object_id)
     return (badge & 0xFFFFFFFFFFF00000) | object_id;
 }
 
-// Bits: 19:16 are for the server id. Total of 4 bits, so 16 resource servers.
-uint64_t set_server_id_to_badge(seL4_Word badge, uint64_t server_id)
-{
-    assert(server_id <= 0xF);
-    return (badge & 0xFFFFFFFFFFF0FFFF) | (server_id << 16);
-}
-
-// Bits: 19:16 are for the server id. Total of 4 bits, so 16 resource servers.
-uint64_t get_server_id_from_badge(seL4_Word badge)
-{
-    return (badge & 0xF0000) >> 16;
-}
-
-// Sets local object ID, unique to a given server, but not unique globally
-// 2^16 objects per server.
-uint64_t set_local_object_id_to_badge(seL4_Word badge, uint64_t object_id)
-{
-    assert(object_id <= 0xFFFF);
-    return (badge & 0xFFFFFFFFFFFF0000) | object_id;
-}
-
-// Gets local object ID, unique to a given server, but not unique globally
-// 2^16 objects per server
-uint64_t get_local_object_id_from_badge(seL4_Word badge)
-{
-    return (badge & 0xFFFF);
-}
-
-// Combine server id and local object id to get global object id
-uint64_t get_global_object_id_from_local(uint64_t server_id, uint64_t object_id)
-{
-    assert(server_id <= 0xF);
-    assert(object_id <= 0xFFFF);
-    return (server_id << 16) | object_id;
-}
-
 uint64_t gpi_new_badge(gpi_cap_t cap_type,
                        uint64_t perms,
                        uint64_t client_id,
-                       uint64_t ns_id,
+                       uint64_t space_id,
                        uint64_t object_id)
 {
     uint64_t badge_value = 0;
@@ -135,24 +99,7 @@ uint64_t gpi_new_badge(gpi_cap_t cap_type,
     badge_value = set_perms_to_badge(badge_value, perms);
     badge_value = set_object_id_to_badge(badge_value, object_id);
     badge_value = set_client_id_to_badge(badge_value, client_id);
-    badge_value = set_ns_id_to_badge(badge_value, ns_id);
-    return badge_value;
-}
-
-uint64_t gpi_new_badge_server(gpi_cap_t cap_type,
-                              uint64_t perms,
-                              uint64_t client_id,
-                              uint64_t server_id,
-                              uint64_t ns_id,
-                              uint64_t object_id)
-{
-    uint64_t badge_value = 0;
-    badge_value = set_cap_type_to_badge(badge_value, cap_type);
-    badge_value = set_perms_to_badge(badge_value, perms);
-    badge_value = set_server_id_to_badge(badge_value, server_id);
-    badge_value = set_local_object_id_to_badge(badge_value, object_id);
-    badge_value = set_client_id_to_badge(badge_value, client_id);
-    badge_value = set_ns_id_to_badge(badge_value, ns_id);
+    badge_value = set_space_id_to_badge(badge_value, space_id);
     return badge_value;
 }
 
@@ -204,7 +151,7 @@ void badge_print(seL4_Word badge)
     OSDB_PRINTF_2(GPI_DEBUG, "BG: %lx\t", badge);
     OSDB_PRINTF_2(GPI_DEBUG, "CapType: %s\t", cap_type_to_str(get_cap_type_from_badge(badge)));
     OSDB_PRINTF_2(GPI_DEBUG, "Perms: %lu\t", get_perms_from_badge(badge));
-    OSDB_PRINTF_2(GPI_DEBUG, "NSID: %lu\t", get_ns_id_from_badge(badge));
+    OSDB_PRINTF_2(GPI_DEBUG, "SpaceID: %lu\t", get_space_id_from_badge(badge));
     OSDB_PRINTF_2(GPI_DEBUG, "CID: %lu\t", get_client_id_from_badge(badge));
     OSDB_PRINTF_2(GPI_DEBUG, "OID: %lu\n", get_object_id_from_badge(badge));
 }
@@ -217,11 +164,11 @@ void gpi_panic(char *reason, uint64_t code)
 
 void badge_sprint(char *dest, seL4_Word badge)
 {
-    sprintf(dest, "BG: %lx\tCapType: %s\tPerms: %lu\tNSID: %lu\tCID: %lu\tOID: %lu",
+    sprintf(dest, "BG: %lx\tCapType: %s\tPerms: %lu\tSpaceID: %lu\tCID: %lu\tOID: %lu",
             badge,
             cap_type_to_str(get_cap_type_from_badge(badge)),
             get_perms_from_badge(badge),
-            get_ns_id_from_badge(badge),
+            get_space_id_from_badge(badge),
             get_client_id_from_badge(badge),
             get_object_id_from_badge(badge));
 }

@@ -28,7 +28,6 @@ typedef struct _ads_client_context
 {
    cspacepath_t badged_server_ep_cspath;
    uint64_t id;
-   // cspacepath_t public_server_ep_cspath;
 } ads_client_context_t;
 
 typedef struct _ads_vmr_context
@@ -39,7 +38,7 @@ typedef struct _ads_vmr_context
 typedef struct _pd_client_context
 {
    cspacepath_t badged_server_ep_cspath;
-   // cspacepath_t public_server_ep_cspath;
+   uint64_t id;
 } pd_client_context_t;
 
 typedef struct _mo_client_context

@@ -139,8 +139,7 @@ seL4_MessageInfo_t ramdisk_request_handler(seL4_MessageInfo_t tag, seL4_Word sen
         case RS_FUNC_GET_RR_REQ:
             *need_new_recv_cap = false;
 
-            uint64_t resource_id = seL4_GetMR(RSMSGREG_EXTRACT_RR_REQ_ID);
-            uint64_t blockno = get_local_object_id_from_badge(resource_id);
+            uint64_t blockno = seL4_GetMR(RSMSGREG_EXTRACT_RR_REQ_ID);
             uint64_t pd_id = seL4_GetMR(RSMSGREG_EXTRACT_RR_REQ_PD_ID);
             uint64_t rd_pd_id = seL4_GetMR(RSMSGREG_EXTRACT_RR_REQ_RS_PD_ID);
 
@@ -238,7 +237,7 @@ seL4_MessageInfo_t ramdisk_request_handler(seL4_MessageInfo_t tag, seL4_Word sen
             // Create the resource endpoint
             seL4_CPtr dest;
             error = resource_server_give_resource(&get_ramdisk_server()->gen,
-                                                  get_ns_id_from_badge(sender_badge),
+                                                  get_space_id_from_badge(sender_badge),
                                                   blockno,
                                                   get_client_id_from_badge(sender_badge),
                                                   &dest);
@@ -247,7 +246,8 @@ seL4_MessageInfo_t ramdisk_request_handler(seL4_MessageInfo_t tag, seL4_Word sen
             // Send the reply
             seL4_MessageInfo_ptr_set_length(&reply_tag, RDMSGREG_CREATE_ACK_END);
             seL4_SetMR(RDMSGREG_CREATE_ACK_DEST, dest);
-            seL4_SetMR(RDMSGREG_CREATE_ACK_ID, get_global_object_id_from_local(get_ramdisk_server()->gen.default_space.id, blockno));
+            seL4_SetMR(RDMSGREG_CREATE_ACK_SPACE_ID, get_ramdisk_server()->gen.default_space.id);
+            seL4_SetMR(RDMSGREG_CREATE_ACK_RES_ID, blockno);
             seL4_SetMR(RDMSGREG_FUNC, RD_FUNC_CREATE_ACK);
 
             RAMDISK_PRINTF("Resource is in dest slot %d\n", (int)dest);
@@ -266,7 +266,7 @@ seL4_MessageInfo_t ramdisk_request_handler(seL4_MessageInfo_t tag, seL4_Word sen
         gpi_cap_t cap_type = get_cap_type_from_badge(sender_badge);
         CHECK_ERROR_GOTO(cap_type != GPICAP_TYPE_BLOCK, "ramdisk server got invalid captype in badged EP",
                          RD_SERVER_ERROR_UNKNOWN, done);
-        uint64_t blockno = get_local_object_id_from_badge(obj_id);
+        uint64_t blockno = obj_id;
         uint64_t client_id = get_client_id_from_badge(sender_badge);
         RAMDISK_PRINTF("Got op for blockno %ld\n", blockno);
 

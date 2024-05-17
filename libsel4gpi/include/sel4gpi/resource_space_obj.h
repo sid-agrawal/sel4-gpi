@@ -13,6 +13,6 @@ typedef struct _res_space
     uint32_t id;
     gpi_cap_t resource_type;
     seL4_CPtr server_ep;
-    pd_t *pd;
-    uint64_t ns_index; // Tracks the last allocated namespace ID
+    pd_t *pd; // (XXX) Arya: this should probably be a pd ID
+    void *data; // Generic field for additional resource space data
 } res_space_t;

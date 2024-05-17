@@ -54,6 +54,7 @@ typedef struct _attach_node
 typedef struct _ads
 {
     uint32_t id;
+
     vspace_t *vspace;
     vka_object_t *root_page_dir;
     sel4utils_process_t *process_for_cookies;

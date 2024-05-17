@@ -62,11 +62,11 @@ uint64_t get_perms_from_badge(seL4_Word badge);
 // Bits: 55:40 are for the permisions. Total of 16 bits, as a bit-mask so 16 permissions.
 uint64_t set_perms_to_badge(seL4_Word badge, uint64_t perms);
 
-// Bits: 55:40 are for the permisions. Total of 16 bits, as a bit-mask so 16 permissions.
-uint64_t get_ns_id_from_badge(seL4_Word badge);
+// Bits: 47:40 are for the resource space ID. Total of 8 bits, so 255 resource spaces
+uint64_t get_space_id_from_badge(seL4_Word badge);
 
-// Bits: 55:40 are for the permisions. Total of 16 bits, as a bit-mask so 16 permissions.
-uint64_t set_ns_id_to_badge(seL4_Word badge, uint64_t ns_id);
+// Bits: 47:40 are for the resource space ID. Total of 8 bits, so 255 resource spaces
+uint64_t set_space_id_to_badge(seL4_Word badge, uint64_t space_id);
 
 // Bits: 39:20 are for the client id. Total of 20 bits, so 2^20 clients.
 uint64_t get_client_id_from_badge(seL4_Word badge);
@@ -80,36 +80,11 @@ uint64_t get_object_id_from_badge(seL4_Word badge);
 // Bits: 19:0 are for the object id. Total of 20 bits, so 2^20 objects.
 uint64_t set_object_id_to_badge(seL4_Word badge, uint64_t object_id);
 
-// Bits: 19:16 are for the server id. Total of 4 bits, so 16 resource servers.
-uint64_t set_server_id_to_badge(seL4_Word badge, uint64_t server_id);
-
-// Bits: 19:16 are for the server id. Total of 4 bits, so 16 resource servers.
-uint64_t get_server_id_from_badge(seL4_Word badge);
-
-// Sets local object ID, unique to a given server, but not unique globally
-// 2^16 objects per server.
-uint64_t set_local_object_id_to_badge(seL4_Word badge, uint64_t object_id);
-
-// Gets local object ID, unique to a given server, but not unique globally
-// 2^16 objects per server
-uint64_t get_local_object_id_from_badge(seL4_Word badge);
-
-// Combine server id and local object id to get global object id
-uint64_t get_global_object_id_from_local(uint64_t server_id, uint64_t object_id);
-
 uint64_t gpi_new_badge(gpi_cap_t cap_type,
                        uint64_t perms,
                        uint64_t client_id,
-                       uint64_t ns_id,
+                       uint64_t space_id,
                        uint64_t object_id);
-
-// Badges an endpoint for a resource server, with server id
-uint64_t gpi_new_badge_server(gpi_cap_t cap_type,
-                              uint64_t perms,
-                              uint64_t client_id,
-                              uint64_t server_id,
-                              uint64_t ns_id,
-                              uint64_t object_id);
 
 void badge_print(seL4_Word badge);
 

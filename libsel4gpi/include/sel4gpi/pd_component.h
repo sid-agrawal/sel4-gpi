@@ -73,14 +73,8 @@ enum pd_component_funcs
     PD_FUNC_DISCONNECT_REQ,
     PD_FUNC_DISCONNECT_ACK,
 
-    PD_FUNC_ADD_RDE_REQ,
-    PD_FUNC_ADD_RDE_ACK,
-
     PD_FUNC_SHARE_RDE_REQ,
     PD_FUNC_SHARE_RDE_ACK,
-
-    PD_FUNC_REGISTER_NS_REQ,
-    PD_FUNC_REGISTER_NS_ACK,
 
     PD_FUNC_CREATE_RES_REQ,
     PD_FUNC_CREATE_RES_ACK,
@@ -184,28 +178,13 @@ enum pd_component_msgregs
 
     /* Share RDE */
     PDMSGREG_SHARE_RDE_REQ_TYPE = PDMSGREG_LABEL0,
-    PDMSGREG_SHARE_RDE_REQ_NS,
+    PDMSGREG_SHARE_RDE_REQ_SPACE_ID,
     PDMSGREG_SHARE_RDE_REQ_END,
 
     PDMSGREG_SHARE_RDE_ACK_END = PDMSGREG_LABEL0,
 
-    /* Add RDE */
-    PDMSGREG_ADD_RDE_REQ_MANAGER_ID = PDMSGREG_LABEL0,
-    PDMSGREG_ADD_RDE_REQ_NSID,
-    PDMSGREG_ADD_RDE_REQ_END,
-
-    PDMSGREG_ADD_RDE_ACK_END = PDMSGREG_LABEL0,
-
-    /* Register Namespace */
-    PDMSGREG_REGISTER_NS_REQ_MANAGER_ID = PDMSGREG_LABEL0,
-    PDMSGREG_REGISTER_NS_REQ_CLIENT_ID,
-    PDMSGREG_REGISTER_NS_REQ_END,
-
-    PDMSGREG_REGISTER_NS_ACK_NSID = PDMSGREG_LABEL0,
-    PDMSGREG_REGISTER_NS_ACK_END,
-
     /* Create Resource */
-    PDMSGREG_CREATE_RES_REQ_MANAGER_ID = PDMSGREG_LABEL0,
+    PDMSGREG_CREATE_RES_REQ_SPACE_ID = PDMSGREG_LABEL0,
     PDMSGREG_CREATE_RES_REQ_RES_ID,
     PDMSGREG_CREATE_RES_REQ_END,
 
@@ -213,8 +192,7 @@ enum pd_component_msgregs
     PDMSGREG_CREATE_RES_ACK_END,
 
     /* Give Resource */
-    PDMSGREG_GIVE_RES_REQ_MANAGER_ID = PDMSGREG_LABEL0,
-    PDMSGREG_GIVE_RES_REQ_NS_ID,
+    PDMSGREG_GIVE_RES_REQ_SPACE_ID = PDMSGREG_LABEL0,
     PDMSGREG_GIVE_RES_REQ_CLIENT_ID,
     PDMSGREG_GIVE_RES_REQ_RES_ID,
     PDMSGREG_GIVE_RES_REQ_END,
@@ -253,7 +231,7 @@ int pd_component_initialize(simple_t *server_simple,
 resource_component_context_t *get_pd_component(void);
 
 // Creates a dummy PD object for the root task
-void forge_pd_for_root_task(uint64_t *rt_id);
+void forge_pd_for_root_task(uint64_t rt_id);
 
 /**
  * Only used to forge the test process' PD cap
@@ -266,15 +244,17 @@ void forge_pd_cap_from_init_data(test_init_data_t *init_data, sel4utils_process_
 
 /**
  * To be called to cleanup a forged test PD object
-*/
+ */
 void destroy_test_pd(void);
 
 /**
  * Add a resource to a PD
  * (XXX) Arya: Exposed for the cpu and mo components. Is there a better way?
  */
-int pd_add_resource_by_id(uint32_t pd_id, gpi_cap_t cap_type,
-                          uint32_t res_id, uint32_t ns_id,
+int pd_add_resource_by_id(uint32_t pd_id,
+                          gpi_cap_t cap_type,
+                          uint32_t space_id,
+                          uint32_t res_id,
                           seL4_CPtr slot_in_RT,
                           seL4_CPtr slot_in_PD,
                           seL4_CPtr slot_in_serverPD);

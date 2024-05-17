@@ -43,10 +43,12 @@ enum rs_msgregs
     /* Extract RR */
     RSMSGREG_EXTRACT_RR_REQ_SIZE = RSMSGREG_LABEL0,
     RSMSGREG_EXTRACT_RR_REQ_VADDR,
+    RSMSGREG_EXTRACT_RR_REQ_SPACE,
     RSMSGREG_EXTRACT_RR_REQ_ID,
     RSMSGREG_EXTRACT_RR_REQ_PD_ID,
     RSMSGREG_EXTRACT_RR_REQ_RS_PD_ID,
     RSMSGREG_EXTRACT_RR_REQ_END,
+
     RSMSGREG_EXTRACT_RR_ACK_END = RSMSGREG_LABEL0,
 
     /* New NS */
@@ -57,23 +59,24 @@ enum rs_msgregs
 
 /**
  * Starts a resource server in a new PD
- * @param rde_id Manager ID of RDE to add, optionsl
- * @param rde_pd_cap PD resource for RDE to add, optional
+ * @param rde_type cap type of RDE to add, optional
+ * @param rde_id space ID of RDE to add, optional
  * @param image_name name of the resource server's image
  * @param server_pd_cap returns the PD resource of the started server
- * @param resource_manager_id returns the resource manager ID of the started server
+ * @param space_id returns the default resource space ID of the started server
  */
-int start_resource_server_pd(uint64_t rde_id,
-                             seL4_CPtr rde_pd_cap,
+int start_resource_server_pd(gpi_cap_t rde_type,
+                             uint64_t rde_id,
                              char *image_name,
                              seL4_CPtr *server_pd_cap,
-                             uint64_t *resource_manager_id);
+                             uint64_t *space_id);
                              
 /**
  * Request a resource server to dump resource relations
  *
  * @param server_ep Unbadged ep of the resource server
- * @param res_id The id of the resource to dump relations for
+ * @param space_id The space ID of the resource to dump relations for
+ * @param res_id The ID of the resource to dump relations for
  * @param pd_id The id of the pd that has the resource (for the has_access_to row)
  * @param server_pd_id The id of the server pd
  * @param remote_vaddr location of shared memory in the resource server
@@ -87,6 +90,7 @@ int start_resource_server_pd(uint64_t rde_id,
  *      + Error codes for the respective resource server
  */
 int resource_server_client_get_rr(seL4_CPtr server_ep,
+seL4_Word space_id,
                            seL4_Word res_id,
                            seL4_Word pd_id,
                            seL4_Word server_pd_id,

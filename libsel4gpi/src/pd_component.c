@@ -79,7 +79,7 @@ static seL4_MessageInfo_t handle_pd_allocation(seL4_Word sender_badge)
     pd_component_registry_entry_t *new_entry;
     uint32_t client_id = get_client_id_from_badge(sender_badge);
 
-    error = resource_component_allocate(get_pd_component(), client_id, false, NULL,
+    error = resource_component_allocate(get_pd_component(), client_id, BADGE_OBJ_ID_NULL, false, NULL,
                                         (resource_server_registry_node_t **)&new_entry, &ret_cap);
     new_entry->pd.pd_cap_in_RT = ret_cap;
 
@@ -268,49 +268,15 @@ err_goto:
     return tag;
 }
 
-static seL4_MessageInfo_t handle_add_rde_req(seL4_Word sender_badge, seL4_MessageInfo_t old_tag)
-{
-    OSDB_PRINTF("add_rde_req: Got request from client badge %lx.\n", sender_badge);
-    int error = 0;
-
-    seL4_Word server_badge = seL4_GetBadge(0);
-    seL4_Word manager_id = seL4_GetMR(PDMSGREG_ADD_RDE_REQ_MANAGER_ID);
-    seL4_Word ns_id = seL4_GetMR(PDMSGREG_ADD_RDE_REQ_NSID);
-    pd_component_registry_entry_t *target_data = pd_component_registry_get_entry_by_badge(sender_badge);
-    pd_component_registry_entry_t *server_data = pd_component_registry_get_entry_by_badge(server_badge);
-    resspc_component_registry_entry_t *resource_manager_data = resource_space_get_entry_by_id(manager_id);
-
-    SERVER_GOTO_IF_COND(target_data == NULL, "Couldn't find target PD (%ld)\n", get_object_id_from_badge(sender_badge));
-    SERVER_GOTO_IF_COND(server_data == NULL, "Couldn't find server PD (%ld)\n", get_object_id_from_badge(server_badge));
-    SERVER_GOTO_IF_COND(resource_manager_data == NULL, "Couldn't find resource_manager_data (%ld)\n", manager_id);
-    SERVER_GOTO_IF_COND(server_data->pd.id != resource_manager_data->space.pd->id,
-                        "add_rde_req: wrong server PD (%d) provided for resource manager in PD (%d)\n",
-                        server_data->pd.id,
-                        resource_manager_data->space.pd->id);
-
-    rde_type_t rde_type = {.type = resource_manager_data->space.resource_type};
-    error = pd_add_rde(&target_data->pd,
-                       rde_type,
-                       resource_manager_data->gen.object_id,
-                       ns_id,
-                       resource_manager_data->space.server_ep);
-
-err_goto:
-    seL4_SetMR(PDMSGREG_FUNC, PD_FUNC_ADD_RDE_ACK);
-    seL4_MessageInfo_t tag = seL4_MessageInfo_new(error, 0, 0,
-                                                  PDMSGREG_ADD_RDE_ACK_END);
-    return tag;
-}
-
 static seL4_MessageInfo_t handle_share_rde_req(seL4_Word sender_badge, seL4_MessageInfo_t old_tag)
 {
     int error = 0;
 
     seL4_Word type = seL4_GetMR(PDMSGREG_SHARE_RDE_REQ_TYPE);
-    seL4_Word ns_id = seL4_GetMR(PDMSGREG_SHARE_RDE_REQ_NS);
+    seL4_Word space_id = seL4_GetMR(PDMSGREG_SHARE_RDE_REQ_SPACE_ID);
 
-    OSDB_PRINTF("share_rde_req: Got request from client badge %lx for RDE type %ld with NS %ld.\n",
-                sender_badge, type, ns_id);
+    OSDB_PRINTF("share_rde_req: Got request from client badge %lx for RDE type %ld with space %ld.\n",
+                sender_badge, type, space_id);
 
     seL4_Word client_id = get_client_id_from_badge(sender_badge);
     pd_component_registry_entry_t *target_data = pd_component_registry_get_entry_by_badge(sender_badge);
@@ -319,60 +285,22 @@ static seL4_MessageInfo_t handle_share_rde_req(seL4_Word sender_badge, seL4_Mess
     SERVER_GOTO_IF_COND(target_data == NULL, "Couldn't find target PD (%ld)\n", get_object_id_from_badge(sender_badge));
     SERVER_GOTO_IF_COND(client_data == NULL, "Couldn't find client PD (%ld)\n", client_id);
 
-    osmosis_rde_t *rde = pd_rde_get(&client_data->pd, type, ns_id);
-    SERVER_GOTO_IF_COND(rde == NULL, "share_rde_req: Failed to find RDE for type %ld and NS_ID %ld.\n", type, ns_id);
+    osmosis_rde_t *rde = pd_rde_get(&client_data->pd, type, space_id);
+    SERVER_GOTO_IF_COND(rde == NULL, "share_rde_req: Failed to find RDE for type %ld and space %ld.\n", type, space_id);
 
-    resspc_component_registry_entry_t *resource_manager_data = resource_space_get_entry_by_id(rde->manager_id);
-    SERVER_GOTO_IF_COND(resource_manager_data == NULL, "share_rde_req: Failed to find resource manager ID %d.\n", rde->manager_id);
+    resspc_component_registry_entry_t *resource_space_data = resource_space_get_entry_by_id(rde->space_id);
+    SERVER_GOTO_IF_COND(resource_space_data == NULL, "share_rde_req: Failed to find resource space ID %d.\n", rde->space_id);
 
     rde_type_t rde_type = {.type = type};
     error = pd_add_rde(&target_data->pd,
                        rde_type,
-                       resource_manager_data->gen.object_id,
-                       ns_id,
-                       resource_manager_data->space.server_ep);
+                       rde->space_id,
+                       resource_space_data->space.server_ep);
 
 err_goto:
     seL4_SetMR(PDMSGREG_FUNC, PD_FUNC_SHARE_RDE_ACK);
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(error, 0, 0,
                                                   PDMSGREG_SHARE_RDE_ACK_END);
-    return tag;
-}
-
-static seL4_MessageInfo_t handle_register_namespace_req(seL4_Word sender_badge, seL4_MessageInfo_t old_tag)
-{
-    OSDB_PRINTF("Got register namespace request from client badge %lx.\n", sender_badge);
-    int error = 0;
-
-    seL4_Word manager_id = seL4_GetMR(PDMSGREG_REGISTER_NS_REQ_MANAGER_ID);
-    seL4_Word target_id = seL4_GetMR(PDMSGREG_REGISTER_NS_REQ_CLIENT_ID);
-
-    pd_component_registry_entry_t *client_data = pd_component_registry_get_entry_by_badge(sender_badge);
-    pd_component_registry_entry_t *target_data = pd_component_registry_get_entry_by_id(target_id);
-    resspc_component_registry_entry_t *resource_manager_data = resource_space_get_entry_by_id(manager_id);
-
-    SERVER_GOTO_IF_COND(client_data == NULL, "Couldn't find client PD (%ld)\n", get_object_id_from_badge(sender_badge));
-    SERVER_GOTO_IF_COND(target_data == NULL, "Couldn't find target PD (%ld)\n", target_id);
-    SERVER_GOTO_IF_COND(resource_manager_data == NULL, "Couldn't find resource manager (%ld)\n", manager_id);
-    SERVER_GOTO_IF_COND(resource_manager_data->space.pd->id != get_client_id_from_badge(sender_badge),
-                        "resource manager PD (%d) and client PD (%ld) do not match.\n",
-                        resource_manager_data->space.pd->id, get_client_id_from_badge(sender_badge));
-
-    resource_manager_data->space.ns_index++;
-    uint64_t ns_id = resource_manager_data->space.ns_index;
-
-    // Add the RDE for the NS to the target PD
-    rde_type_t rde_type = {.type = resource_manager_data->space.resource_type};
-    pd_add_rde(&target_data->pd, rde_type, manager_id,
-               ns_id, resource_manager_data->space.server_ep);
-
-    OSDB_PRINTF("Registered namespace, ID is %ld.\n", ns_id);
-    seL4_SetMR(PDMSGREG_REGISTER_NS_ACK_NSID, ns_id);
-
-err_goto:
-    seL4_SetMR(PDMSGREG_FUNC, PD_FUNC_REGISTER_NS_ACK);
-    seL4_MessageInfo_t tag = seL4_MessageInfo_new(error, 0, 0,
-                                                  PDMSGREG_REGISTER_NS_ACK_END);
     return tag;
 }
 
@@ -382,20 +310,20 @@ static seL4_MessageInfo_t handle_create_resource_req(seL4_Word sender_badge, seL
     int error = 0;
 
     seL4_Word server_id = get_object_id_from_badge(sender_badge);
-    seL4_Word manager_id = seL4_GetMR(PDMSGREG_CREATE_RES_REQ_MANAGER_ID);
-    seL4_Word resource_id = get_global_object_id_from_local(manager_id, seL4_GetMR(PDMSGREG_CREATE_RES_REQ_RES_ID));
+    seL4_Word space_id = seL4_GetMR(PDMSGREG_CREATE_RES_REQ_SPACE_ID);
+    seL4_Word resource_id = seL4_GetMR(PDMSGREG_CREATE_RES_REQ_RES_ID);
 
     pd_component_registry_entry_t *server_data = pd_component_registry_get_entry_by_id(server_id);
-    resspc_component_registry_entry_t *resource_manager_data = resource_space_get_entry_by_id(manager_id);
+    resspc_component_registry_entry_t *resource_space_data = resource_space_get_entry_by_id(space_id);
     SERVER_GOTO_IF_COND(server_data == NULL, "Couldn't find client PD (%ld)\n", get_object_id_from_badge(sender_badge));
-    SERVER_GOTO_IF_COND(resource_manager_data == NULL, "Couldn't find resource manager (%ld)\n", manager_id);
+    SERVER_GOTO_IF_COND(resource_space_data == NULL, "Couldn't find resource space (%ld)\n", space_id);
 
-    gpi_cap_t resource_type = resource_manager_data->space.resource_type;
+    gpi_cap_t resource_type = resource_space_data->space.resource_type;
 
-    OSDB_PRINTF("resource manager %ld creates resource with ID %ld\n",
-                manager_id, resource_id);
+    OSDB_PRINTF("resource server %ld creates resource in space %ld with ID %ld\n",
+                server_id, space_id, resource_id);
 
-    error = pd_add_resource(&server_data->pd, resource_type, resource_id, NSID_DEFAULT, seL4_CapNull, seL4_CapNull, seL4_CapNull);
+    error = pd_add_resource(&server_data->pd, resource_type, space_id, resource_id, seL4_CapNull, seL4_CapNull, seL4_CapNull);
 
 err_goto:
     seL4_SetMR(PDMSGREG_FUNC, PD_FUNC_CREATE_RES_ACK);
@@ -406,40 +334,41 @@ err_goto:
 
 static seL4_MessageInfo_t handle_give_resource_req(seL4_Word sender_badge, seL4_MessageInfo_t old_tag)
 {
-    OSDB_PRINTF("Got give resource request from client badge %lx, resource ID %ld.\n",
-                sender_badge, seL4_GetMR(PDMSGREG_GIVE_RES_REQ_RES_ID));
     int error = 0;
 
     seL4_Word server_id = get_object_id_from_badge(sender_badge);
     seL4_Word recipient_id = seL4_GetMR(PDMSGREG_GIVE_RES_REQ_CLIENT_ID);
-    seL4_Word manager_id = seL4_GetMR(PDMSGREG_GIVE_RES_REQ_MANAGER_ID);
-    seL4_Word ns_id = seL4_GetMR(PDMSGREG_GIVE_RES_REQ_NS_ID);
-    seL4_Word resource_id = get_global_object_id_from_local(manager_id, seL4_GetMR(PDMSGREG_GIVE_RES_REQ_RES_ID));
+    seL4_Word space_id = seL4_GetMR(PDMSGREG_GIVE_RES_REQ_SPACE_ID);
+    seL4_Word resource_id = seL4_GetMR(PDMSGREG_GIVE_RES_REQ_RES_ID);
+
+    OSDB_PRINTF("Got give resource request from client badge %lx, space ID %ld, resource ID %ld.\n",
+                sender_badge, space_id, resource_id);
+
     pd_component_registry_entry_t *server_data = pd_component_registry_get_entry_by_id(server_id);
     pd_component_registry_entry_t *recipient_data = pd_component_registry_get_entry_by_id(recipient_id);
-    resspc_component_registry_entry_t *resource_manager_data = resource_space_get_entry_by_id(manager_id);
+    resspc_component_registry_entry_t *resource_space_data = resource_space_get_entry_by_id(space_id);
 
     SERVER_GOTO_IF_COND(server_data == NULL, "Couldn't find server PD (%ld)\n", server_id);
     SERVER_GOTO_IF_COND(recipient_data == NULL, "Couldn't find target PD (%ld)\n", recipient_id);
-    SERVER_GOTO_IF_COND(resource_manager_data == NULL, "Couldn't find resource manager (%ld)\n", manager_id);
+    SERVER_GOTO_IF_COND(resource_space_data == NULL, "Couldn't find resource space (%ld)\n", space_id);
 
-    uint64_t res_node_id = gpi_new_badge(resource_manager_data->space.resource_type, 0, 0, ns_id, resource_id);
+    uint64_t res_node_id = gpi_new_badge(resource_space_data->space.resource_type, 0, 0, space_id, resource_id);
     pd_hold_node_t *resource_data = (pd_hold_node_t *)resource_server_registry_get_by_id(&server_data->pd.hold_registry, res_node_id);
     SERVER_GOTO_IF_COND(resource_data == NULL, "Couldn't find resource (%lx)\n", res_node_id);
 
-    OSDB_PRINTF("resource manager %ld gives resource ID %ld to client %ld\n",
-                manager_id, resource_id, recipient_id);
+    OSDB_PRINTF("resource server %ld gives resource in space %ld with ID %ld to client %ld\n",
+                server_id, space_id, resource_id, recipient_id);
 
     /* Create a new badged EP for the resource */
     seL4_CPtr dest = resource_server_make_badged_ep(get_pd_component()->server_vka, &recipient_data->pd.pd_vka,
-                                                    resource_manager_data->space.server_ep, resource_id,
-                                                    resource_manager_data->space.resource_type, ns_id, recipient_id);
+                                                    resource_space_data->space.server_ep, resource_space_data->space.resource_type,
+                                                    space_id, resource_id, recipient_id);
     seL4_SetMR(PDMSGREG_GIVE_RES_ACK_DEST, dest);
 
     // Add the resource to the PD object
     // (XXX) Arya: How to handle duplicate entries to the same resource?
     // The hash table is keyed by resource ID
-    error = pd_add_resource(&recipient_data->pd, resource_manager_data->space.resource_type, resource_id, ns_id,
+    error = pd_add_resource(&recipient_data->pd, resource_space_data->space.resource_type, space_id, resource_id,
                             seL4_CapNull, dest, seL4_CapNull);
     SERVER_GOTO_IF_ERR(error, "Failed to add resource to PD (%ld)\n", recipient_id);
 
@@ -510,7 +439,7 @@ static seL4_MessageInfo_t handle_clone_req(seL4_Word sender_badge, seL4_MessageI
 
     pd_component_registry_entry_t *new_entry;
     seL4_CPtr ret_cap;
-    error = resource_component_allocate(get_pd_component(), get_client_id_from_badge(sender_badge), false, NULL,
+    error = resource_component_allocate(get_pd_component(), get_client_id_from_badge(sender_badge), BADGE_OBJ_ID_NULL, false, NULL,
                                         (resource_server_registry_node_t **)&new_entry, &ret_cap);
     new_entry->pd.pd_cap_in_RT = ret_cap;
     SERVER_GOTO_IF_ERR(error, "Failed to allocate a new PD\n");
@@ -568,14 +497,8 @@ static seL4_MessageInfo_t pd_component_handle(seL4_MessageInfo_t tag,
         case PD_FUNC_DUMP_REQ:
             reply_tag = handle_dump_cap_req(sender_badge, tag);
             break;
-        case PD_FUNC_ADD_RDE_REQ:
-            reply_tag = handle_add_rde_req(sender_badge, tag);
-            break;
         case PD_FUNC_SHARE_RDE_REQ:
             reply_tag = handle_share_rde_req(sender_badge, tag);
-            break;
-        case PD_FUNC_REGISTER_NS_REQ:
-            reply_tag = handle_register_namespace_req(sender_badge, tag);
             break;
         case PD_FUNC_CREATE_RES_REQ:
             reply_tag = handle_create_resource_req(sender_badge, tag);
@@ -610,8 +533,24 @@ int pd_component_initialize(simple_t *server_simple,
                             sel4utils_thread_t server_thread,
                             vka_object_t server_ep_obj)
 {
+    int error = 0;
+
+    // Create the default PD resource space
+    resspc_component_registry_entry_t *space_entry;
+
+    resspc_config_t resspc_config = {
+        .type = GPICAP_TYPE_PD,
+        .ep = get_gpi_server()->server_ep_obj.cptr,
+    };
+
+    error = resource_component_allocate(get_resspc_component(), get_gpi_server()->rt_pd_id, BADGE_OBJ_ID_NULL, false, (void *)&resspc_config,
+                                        (resource_server_registry_node_t **)&space_entry, NULL);
+    assert(error == 0);
+
+    // Initialize the component
     resource_component_initialize(get_pd_component(),
                                   GPICAP_TYPE_PD,
+                                  space_entry->space.id,
                                   pd_component_handle,
                                   (int (*)(resource_component_object_t *, vka_t *, vspace_t *, void *))pd_new,
                                   on_pd_registry_delete,
@@ -626,10 +565,12 @@ int pd_component_initialize(simple_t *server_simple,
     resource_server_initialize_registry(&server_registry, NULL);
 }
 
-void forge_pd_for_root_task(uint64_t *rt_id)
+void forge_pd_for_root_task(uint64_t rt_id)
 {
     pd_component_registry_entry_t *rt_entry = malloc(sizeof(pd_component_registry_entry_t));
-    *rt_id = resource_server_registry_insert_new_id(&get_pd_component()->registry, (resource_server_registry_node_t *)rt_entry);
+    rt_entry->gen.object_id = rt_id;
+    rt_entry->pd.id = rt_id;
+    resource_server_registry_insert(&get_pd_component()->registry, (resource_server_registry_node_t *)rt_entry);
 }
 
 // (XXX) Arya: hack to store the test PD ID for destroying it later
@@ -644,13 +585,14 @@ void forge_pd_cap_from_init_data(test_init_data_t *init_data, sel4utils_process_
     pd_component_registry_entry_t *new_entry;
 
     /* Allocate the PD object */
-    error = resource_component_allocate(get_pd_component(), get_gpi_server()->rt_pd_id, false, NULL,
+    error = resource_component_allocate(get_pd_component(), get_gpi_server()->rt_pd_id, BADGE_OBJ_ID_NULL, false, NULL,
                                         (resource_server_registry_node_t **)&new_entry, &ret_cap);
     ZF_LOGF_IFERR(error, "Failed to allocate PD for forging");
     assert(error == 0);
     pd_t *pd = &new_entry->pd;
     test_pd_id = pd->id;
     pd->pd_cap_in_RT = ret_cap;
+    pd->init_data->pd_conn.id = test_pd_id;
 
     /* Update the PD object from init data */
     // pd_new(pd,
@@ -670,26 +612,26 @@ void forge_pd_cap_from_init_data(test_init_data_t *init_data, sel4utils_process_
 
     // Add the basic RDEs
     rde_type_t resspc_type = {.type = GPICAP_TYPE_RESSPC};
-    pd_add_rde(pd, resspc_type, RESSPC_SPACE_ID, NSID_DEFAULT, get_gpi_server()->server_ep_obj.cptr);
+    pd_add_rde(pd, resspc_type, RESSPC_SPACE_ID, get_gpi_server()->server_ep_obj.cptr);
 
     rde_type_t ads_type = {.type = GPICAP_TYPE_ADS};
-    pd_add_rde(pd, ads_type, get_gpi_server()->ads_manager_id, NSID_DEFAULT, get_gpi_server()->server_ep_obj.cptr);
+    pd_add_rde(pd, ads_type, get_ads_component()->space_id, get_gpi_server()->server_ep_obj.cptr);
 
     rde_type_t cpu_type = {.type = GPICAP_TYPE_CPU};
-    pd_add_rde(pd, cpu_type, get_gpi_server()->cpu_manager_id, NSID_DEFAULT, get_gpi_server()->server_ep_obj.cptr);
+    pd_add_rde(pd, cpu_type, get_cpu_component()->space_id, get_gpi_server()->server_ep_obj.cptr);
 
     rde_type_t mo_type = {.type = GPICAP_TYPE_MO};
-    pd_add_rde(pd, mo_type, get_gpi_server()->mo_manager_id, NSID_DEFAULT, get_gpi_server()->server_ep_obj.cptr);
+    pd_add_rde(pd, mo_type, get_mo_component()->space_id, get_gpi_server()->server_ep_obj.cptr);
 
     rde_type_t pd_type = {.type = GPICAP_TYPE_PD};
-    pd_add_rde(pd, pd_type, get_gpi_server()->pd_manager_id, NSID_DEFAULT, get_gpi_server()->server_ep_obj.cptr);
+    pd_add_rde(pd, pd_type, get_pd_component()->space_id, get_gpi_server()->server_ep_obj.cptr);
 
     // Forge ADS cap
     seL4_CPtr child_as_cap_in_parent;
     uint32_t ads_id;
     error = forge_ads_cap_from_vspace(&test_process->vspace, get_pd_component()->server_vka, pd->id, &child_as_cap_in_parent, &ads_id);
     ZF_LOGF_IFERR(error, "Failed to forge child's as cap");
-    pd->init_data->binded_ads_ns_id = ads_id;
+    pd->init_data->ads_conn.id = ads_id;
 
     // Forge CPU cap
     seL4_CPtr child_cpu_cap_in_parent;
@@ -699,17 +641,20 @@ void forge_pd_cap_from_init_data(test_init_data_t *init_data, sel4utils_process_
 
     // Copy the ADS/CPU/PD caps to the test process
     // The refcount of each is 1
-    error = copy_cap_to_pd(pd, child_as_cap_in_parent, &pd->init_data->ads_cap);
+    error = copy_cap_to_pd(pd, child_as_cap_in_parent, &pd->init_data->ads_conn.badged_server_ep_cspath.capPtr);
     assert(error == 0);
-    pd_add_resource(pd, GPICAP_TYPE_ADS, ads_id, NSID_DEFAULT, child_as_cap_in_parent, pd->init_data->ads_cap, child_as_cap_in_parent);
+    pd_add_resource(pd, GPICAP_TYPE_ADS, get_ads_component()->space_id, ads_id,
+                    child_as_cap_in_parent, pd->init_data->ads_conn.badged_server_ep_cspath.capPtr, child_as_cap_in_parent);
 
-    error = copy_cap_to_pd(pd, pd->pd_cap_in_RT, &pd->init_data->pd_cap);
+    error = copy_cap_to_pd(pd, pd->pd_cap_in_RT, &pd->init_data->pd_conn.badged_server_ep_cspath.capPtr);
     assert(error == 0);
-    pd_add_resource(pd, GPICAP_TYPE_PD, pd->id, NSID_DEFAULT, pd->pd_cap_in_RT, pd->init_data->pd_cap, pd->pd_cap_in_RT);
+    pd_add_resource(pd, GPICAP_TYPE_PD, get_pd_component()->space_id, pd->id,
+                    pd->pd_cap_in_RT, pd->init_data->pd_conn.badged_server_ep_cspath.capPtr, pd->pd_cap_in_RT);
 
-    error = copy_cap_to_pd(pd, child_cpu_cap_in_parent, &pd->init_data->cpu_cap);
+    error = copy_cap_to_pd(pd, child_cpu_cap_in_parent, &pd->init_data->cpu_conn.badged_server_ep_cspath.capPtr);
     assert(error == 0);
-    pd_add_resource(pd, GPICAP_TYPE_CPU, cpu_id, NSID_DEFAULT, child_cpu_cap_in_parent, pd->init_data->cpu_cap, child_cpu_cap_in_parent);
+    pd_add_resource(pd, GPICAP_TYPE_CPU, get_cpu_component()->space_id, cpu_id,
+                    child_cpu_cap_in_parent, pd->init_data->cpu_conn.badged_server_ep_cspath.capPtr, child_cpu_cap_in_parent);
 
     // Attach the init data to test PD
     void *init_data_vaddr = (void *)0x50000000;
@@ -737,22 +682,20 @@ err_goto:
     ZF_LOGF("Failed to cleanup test PD\n");
 }
 
-int pd_add_resource_by_id(uint32_t pd_id, gpi_cap_t cap_type,
-                          uint32_t res_id, uint32_t ns_id,
+int pd_add_resource_by_id(uint32_t pd_id,
+                          gpi_cap_t cap_type,
+                          uint32_t space_id,
+                          uint32_t res_id,
                           seL4_CPtr slot_in_RT,
                           seL4_CPtr slot_in_PD,
                           seL4_CPtr slot_in_serverPD)
 {
     int error = 0;
 
-    // (XXX) Arya: Why are we treating the test process specially? Can we remove this?
-    if (pd_id != 0) // only test processes would have no client ID
-    {
-        pd_component_registry_entry_t *client_pd_data = pd_component_registry_get_entry_by_id(pd_id);
-        SERVER_GOTO_IF_COND(client_pd_data == NULL, "Couldn't find PD (%d) to add resource \n", pd_id);
+    pd_component_registry_entry_t *client_pd_data = pd_component_registry_get_entry_by_id(pd_id);
+    SERVER_GOTO_IF_COND(client_pd_data == NULL, "Couldn't find PD (%d) to add resource \n", pd_id);
 
-        error = pd_add_resource(&client_pd_data->pd, cap_type, res_id, ns_id, slot_in_RT, slot_in_PD, slot_in_serverPD);
-    }
+    error = pd_add_resource(&client_pd_data->pd, cap_type, space_id, res_id, slot_in_RT, slot_in_PD, slot_in_serverPD);
 
 err_goto:
     return error;

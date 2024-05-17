@@ -50,13 +50,12 @@ static int configure_separate_ads()
     int error;
     int swap_err;
 
-    seL4_CPtr self_pd_cap = sel4gpi_get_pd_cap();
-    pd_client_context_t self_pd_conn = {.badged_server_ep_cspath.capPtr = self_pd_cap};
+    pd_client_context_t self_pd_conn = sel4gpi_get_pd_conn();
     seL4_CPtr slot;
     pd_client_next_slot(&self_pd_conn, &slot);
 
-    seL4_CPtr ads_rde = sel4gpi_get_rde_by_ns_id(NSID_DEFAULT, GPICAP_TYPE_ADS);
-    ads_client_context_t self_ads_conn = {.badged_server_ep_cspath.capPtr = sel4gpi_get_ads_cap()};
+    seL4_CPtr ads_rde = sel4gpi_get_rde(GPICAP_TYPE_ADS);
+    ads_client_context_t self_ads_conn = sel4gpi_get_ads_conn();
     swap_err = ads_client_shallow_copy(&self_ads_conn, slot, NULL, &kvserv_ads);
     if (swap_err)
     {
@@ -64,9 +63,7 @@ static int configure_separate_ads()
         return swap_err;
     }
 
-    printf("TEMPA kvserv_ads cap %d\n", kvserv_ads.badged_server_ep_cspath.capPtr);
-
-    self_cpu_conn.badged_server_ep_cspath.capPtr = sel4gpi_get_cpu_cap();
+    self_cpu_conn = sel4gpi_get_cpu_conn();
     swap_err = cpu_client_change_vspace(&self_cpu_conn, &kvserv_ads);
     if (swap_err)
     {
@@ -79,9 +76,9 @@ static int configure_separate_ads()
     error = kvstore_server_init();
     ZF_LOGE_IF(error, "Failed to initialize kvstore");
 
-    client_ads_conn.badged_server_ep_cspath.capPtr = sel4gpi_get_ads_cap();
     // need to set this variable twice since we're in a different vspace
-    self_cpu_conn.badged_server_ep_cspath.capPtr = sel4gpi_get_cpu_cap();
+    client_ads_conn = sel4gpi_get_ads_conn();
+    self_cpu_conn = sel4gpi_get_cpu_conn();
     swap_err = cpu_client_change_vspace(&self_cpu_conn, &client_ads_conn);
     ZF_LOGF_IF(swap_err, "Failed to switch back to client ADS"); // fatal because we can't continue in the wrong ADS
 

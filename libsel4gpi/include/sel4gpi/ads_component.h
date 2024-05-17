@@ -42,7 +42,10 @@ enum ads_component_errors
 /* IPC Message register values for SSMSGREG_FUNC */
 enum ads_component_funcs
 {
-    ADS_FUNC_ATTACH_REQ = 0,
+    ADS_FUNC_CONNECT_REQ = 0,
+    ADS_FUNC_CONNECT_ACK,
+    
+    ADS_FUNC_ATTACH_REQ,
     ADS_FUNC_ATTACH_ACK,
 
     ADS_FUNC_RESERVE_REQ,
@@ -87,7 +90,7 @@ enum ads_component_msgregs
     /* Connect / New */
     ADSMSGREG_CONNECT_REQ_END = ADSMSGREG_LABEL0,
 
-    ADSMSGREG_CONNECT_ACK_ADS_NS = ADSMSGREG_LABEL0,
+    ADSMSGREG_CONNECT_ACK_VMR_SPACE_ID = ADSMSGREG_LABEL0,
     ADSMSGREG_CONNECT_ACK_END,
 
     /* Get ID */

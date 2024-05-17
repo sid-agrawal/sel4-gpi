@@ -37,7 +37,7 @@ resource_server_registry_node_t *resource_server_registry_get_by_id(resource_ser
 
 resource_server_registry_node_t *resource_server_registry_get_by_badge(resource_server_registry_t *registry, seL4_Word badge)
 {
-    resource_server_registry_get_by_id(registry, get_local_object_id_from_badge(badge));
+    resource_server_registry_get_by_id(registry, get_object_id_from_badge(badge));
 }
 
 void resource_server_registry_delete(resource_server_registry_t *registry, resource_server_registry_node_t *node)
@@ -75,7 +75,8 @@ uint64_t resource_server_registry_insert_new_id(resource_server_registry_t *regi
     return new_id;
 }
 
-seL4_CPtr resource_server_make_badged_ep(vka_t *src_vka, vka_t *dst_vka, seL4_CPtr src_ep, uint64_t res_id, gpi_cap_t resource_type, uint64_t ns_id, uint64_t client_id)
+seL4_CPtr resource_server_make_badged_ep(vka_t *src_vka, vka_t *dst_vka, seL4_CPtr src_ep,
+                                         gpi_cap_t resource_type, uint64_t space_id, uint64_t res_id, uint64_t client_id)
 {
     int error = 0;
 
@@ -83,7 +84,7 @@ seL4_CPtr resource_server_make_badged_ep(vka_t *src_vka, vka_t *dst_vka, seL4_CP
     seL4_Word badge = gpi_new_badge(resource_type,
                                     0x00,
                                     client_id,
-                                    ns_id,
+                                    space_id,
                                     res_id);
 
     assert(badge != 0);

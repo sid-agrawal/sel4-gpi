@@ -33,13 +33,15 @@ int main(int argc, char **argv)
     sel4gpi_set_exit_cb();
     printf("Ramdisk main!\n");
     /* parse args */
-    assert(argc == 1);
+    assert(argc == 2);
     seL4_CPtr parent_ep = (seL4_CPtr)atol(argv[0]);
+    uint64_t parent_pd_id = (uint64_t)atol(argv[1]);
 
     return resource_server_start(
         &get_ramdisk_server()->gen,
         GPICAP_TYPE_BLOCK,
         ramdisk_request_handler,
         parent_ep,
+        parent_pd_id,
         ramdisk_init);
 }

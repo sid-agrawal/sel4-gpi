@@ -105,65 +105,30 @@ int pd_client_dump(pd_client_context_t *conn,
 /**
  * @brief Share an RDE with another PD
  * This shares an RDE from the client PD with the target PD
- * The RDE is keyed by cap type
+ * The RDE is keyed by cap type and resource space ID
  * Must call this AFTER the pd has been loaded
- * (XXX) Arya: Assumes only one RDE per cap type
  *
  * @param conn client connection object
- * @param server_type key of the RDE to share
- * @param ns_id namespace to share (optional, set to 0 for default namespace)
+ * @param server_type resource type of the RDE to share
+ * @param space_id resource space to share (optional, set to RESSPC_ID_NULL to share this PD's default space)
  * @return int 0 on success, -1 on failure.
  */
 int pd_client_share_rde(pd_client_context_t *conn,
                         gpi_cap_t cap_type,
-                        uint64_t ns_id);
-
-/**
- * @brief Add a new RDE to the PD
- * This creates a new RDE for a resource manager in a freshly-started PD
- * There are up to 3 PDs involved in this operation:
- * - Client PD: Has created a resource server PD, calls this function
- * - Target PD: The PD to add an RDE in, the PD resource sent through conn
- * - Resource Manager PD: The PD that hosts a resource manager,
- *                        which the target PD's new RDE will point to
- *
- * @param conn client connection object
- * @param server_pd PD resource for the resource manager PD
- * @param manager_id Resource manager ID
- * @param ns_id Namespace ID, or NSID_DEFAULT
- * @return int 0 on success, -1 on failure.
- */
-int pd_client_add_rde(pd_client_context_t *conn,
-                      seL4_CPtr server_pd,
-                      uint64_t manager_id,
-                      uint64_t ns_id);
+                        uint64_t space_id);
 
 /* -- Resource Manager Functions -- */
 // (XXX) Arya: In the process of moving these to a separate component
 
 /**
- * To be called by a resource manager to allocate a new namespace
- * It will use the given ns_id to refer to the ns in the future
+ * To be called by a resource space when it creates a new resource
  *
  * @param conn the resource server's pd connection
- * @param manager_id manager ID
- * @param client_id PD ID of the client who requested the namespace
- * @param ns_id returns the namespace ID
- */
-int pd_client_register_namespace(pd_client_context_t *conn,
-                                 seL4_Word manager_id,
-                                 seL4_Word client_id,
-                                 seL4_Word *ns_id);
-
-/**
- * To be called by a resource manager when it creates a new resource
- *
- * @param conn the resource server's pd connection
- * @param manager_id the resource manager id, given by resspc_client_connect
- * @param resource_id id of the resource (local id to the resource manager)
+ * @param res_space_id the resource space id
+ * @param resource_id unique id of the resource within the resource space
  */
 int pd_client_create_resource(pd_client_context_t *conn,
-                              gpi_cap_t manager_id,
+                              seL4_Word res_space_id,
                               seL4_Word resource_id);
 
 /**
@@ -171,15 +136,13 @@ int pd_client_create_resource(pd_client_context_t *conn,
  * a resource to another PD
  *
  * @param conn the resource server's pd connection
- * @param manager_id the resource manager id, given by resspc_client_connect
- * @param ns_id the namespace ID being allocated from, given by pd_client_register_namespace
+ * @param res_space_id the resource space ID
  * @param recipient_id the recipient PD's ID
- * @param resource_id id of the resource (local id to the resource manager)
+ * @param resource_id unique ID of the resource within the resource space
  * @param dest returns the destination slot in the recipient PD
  */
 int pd_client_give_resource(pd_client_context_t *conn,
-                            seL4_Word manager_id,
-                            seL4_Word ns_id,
+                            seL4_Word res_space_id,
                             seL4_Word recipient_id,
                             seL4_Word resource_id,
                             seL4_CPtr *dest);

@@ -118,7 +118,7 @@ int test_new_process_osmosis_shmem(env_t env)
     error = ads_client_load_elf(&ads_os_cap, &pd_os_cap, "hello", &entry_point);
     test_error_eq(error, 0);
 
-    ads_client_context_t new_ads_rde = {.badged_server_ep_cspath.capPtr = sel4gpi_get_rde_by_ns_id(new_ads_id, GPICAP_TYPE_ADS)};
+    ads_client_context_t new_ads_rde = {.badged_server_ep_cspath.capPtr = sel4gpi_get_rde_by_space_id(new_ads_id, GPICAP_TYPE_VMR)};
     void *stack = sel4gpi_new_sized_stack(&new_ads_rde, 16);
     test_assert(stack != NULL);
 
@@ -138,7 +138,7 @@ int test_new_process_osmosis_shmem(env_t env)
     error = ads_client_pd_setup(&ads_os_cap, &pd_os_cap, stack, 16, 1, &arg0, &init_stack);
     test_error_eq(error, 0);
 
-    error = pd_client_share_rde(&pd_os_cap, GPICAP_TYPE_MO, NSID_DEFAULT);
+    error = pd_client_share_rde(&pd_os_cap, GPICAP_TYPE_MO, RESSPC_ID_NULL);
     test_error_eq(error, 0);
 
     error = cpu_client_start(&cpu_os_cap, entry_point, init_stack, 0);
@@ -149,7 +149,7 @@ int test_new_process_osmosis_shmem(env_t env)
     test_error_eq(error, 0);
     printf("Loaded hello\n");
 
-    error = pd_client_share_rde(&pd_os_cap, GPICAP_TYPE_MO, NSID_DEFAULT);
+    error = pd_client_share_rde(&pd_os_cap, GPICAP_TYPE_MO, RESSPC_ID_NULL);
     test_error_eq(error, 0);
 
     // Make a new MO cap
@@ -166,7 +166,7 @@ int test_new_process_osmosis_shmem(env_t env)
 
     // Attach it to current AS
     ads_client_context_t test_ads_cap;
-    test_ads_cap.badged_server_ep_cspath.capPtr = sel4gpi_get_rde_by_ns_id(sel4gpi_get_binded_ads_id(), GPICAP_TYPE_ADS);
+    test_ads_cap.badged_server_ep_cspath.capPtr = sel4gpi_get_rde_by_space_id(sel4gpi_get_binded_ads_id(), GPICAP_TYPE_VMR);
 
     void *vaddr;
     error = ads_client_attach(&test_ads_cap,
@@ -244,8 +244,7 @@ int test_pd_dump(env_t env)
     printf("------------------STARTING: %s------------------\n", __func__);
 
     // Check that PD dump works on self, more than once
-    pd_client_context_t pd_conn;
-    vka_cspace_make_path(&env->vka, sel4gpi_get_pd_cap(), &pd_conn.badged_server_ep_cspath);
+    pd_client_context_t pd_conn = sel4gpi_get_pd_conn();
 
     error = pd_client_dump(&pd_conn, NULL, 0);
     test_assert(error == 0);

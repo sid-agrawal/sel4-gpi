@@ -47,10 +47,10 @@ int start_ramdisk_pd(seL4_CPtr *ramdisk_pd_cap,
                      uint64_t *ramdisk_id)
 {
     int error;
-    error = start_resource_server_pd(0, 0, RAMDISK_APP,
+    error = start_resource_server_pd(GPICAP_TYPE_NONE, 0, RAMDISK_APP,
                                      ramdisk_pd_cap, ramdisk_id);
     CHECK_ERROR(error, "failed to start ramdisk server\n");
-    RAMDISK_PRINTF("Successfully started ramdisk server, resource manager ID is %d\n",
+    RAMDISK_PRINTF("Successfully started ramdisk server, resource space ID is %d\n",
                    (int)*ramdisk_id);
     return 0;
 }
@@ -90,7 +90,9 @@ int ramdisk_client_alloc_block(seL4_CPtr server_ep_cap,
     CHECK_ERROR(error, "failed to get block from ramdisk server\n");
 
     ret_conn->badged_server_ep_cspath.capPtr = seL4_GetMR(RDMSGREG_CREATE_ACK_DEST);
-    ret_conn->id = seL4_GetMR(RDMSGREG_CREATE_ACK_ID);
+    ret_conn->space_id = seL4_GetMR(RDMSGREG_CREATE_ACK_SPACE_ID);
+    ret_conn->res_id = seL4_GetMR(RDMSGREG_CREATE_ACK_RES_ID);
+
     return 0;
 }
 

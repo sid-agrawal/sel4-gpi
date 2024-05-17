@@ -84,16 +84,16 @@ int copy_cap_to_pd(pd_t *to_pd,
     return 0;
 }
 
-int pd_add_resource(pd_t *pd, gpi_cap_t type, uint32_t res_id, uint32_t ns_id,
+int pd_add_resource(pd_t *pd, gpi_cap_t type, uint32_t space_id, uint32_t res_id,
                     seL4_CPtr slot_in_RT, seL4_CPtr slot_in_PD, seL4_CPtr slot_in_serverPD)
 {
-    // Unique resource ID is the badge with the following fields: type, ns_id, res_id
-    uint64_t res_node_id = gpi_new_badge(type, 0, 0, ns_id, res_id);
+    // Unique resource ID is the badge with the following fields: type, space_id, res_id
+    uint64_t res_node_id = gpi_new_badge(type, 0, 0, space_id, res_id);
     pd_hold_node_t *node = (pd_hold_node_t *)resource_server_registry_get_by_id(&pd->hold_registry, res_node_id);
 
     if (node != NULL)
     {
-        OSDB_PRINTF("Warning: adding resource with existing ID (%ld), do not insert again\n", res_node_id);
+        OSDB_PRINTF("Warning: adding resource with existing ID (%lx), do not insert again\n", res_node_id);
         badge_print(res_node_id);
     }
     else
@@ -101,7 +101,7 @@ int pd_add_resource(pd_t *pd, gpi_cap_t type, uint32_t res_id, uint32_t ns_id,
         node = calloc(1, sizeof(pd_hold_node_t));
         node->type = type;
         node->res_id = res_id;
-        node->ns_id = ns_id;
+        node->space_id = space_id;
         node->slot_in_RT_Debug = slot_in_RT;
         node->slot_in_PD_Debug = slot_in_PD;
         node->slot_in_ServerPD_Debug = slot_in_serverPD;
@@ -115,20 +115,32 @@ int pd_add_resource(pd_t *pd, gpi_cap_t type, uint32_t res_id, uint32_t ns_id,
 
 static int pd_rde_find_idx(pd_t *pd,
                            gpi_cap_t type,
-                           uint32_t ns_id)
+                           uint32_t space_id)
 {
     int idx = -1;
 
-    for (int i = 0; i < MAX_NS_PER_RDE; i++)
+    if (space_id == RESSPC_ID_NULL)
     {
-        if (pd->init_data->rde[type][i].type.type == GPICAP_TYPE_NONE)
+        // check if a default entry for this type exists
+        if (pd->init_data->rde[type][0].type.type != GPICAP_TYPE_NONE)
         {
-            break;
+            idx = 0;
         }
-        else if (pd->init_data->rde[type][i].ns_id == ns_id)
+    }
+    else
+    {
+        // search within the entries for this type and space id
+        for (int i = 0; i < MAX_NS_PER_RDE; i++)
         {
-            idx = i;
-            break;
+            if (pd->init_data->rde[type][i].type.type == GPICAP_TYPE_NONE)
+            {
+                break;
+            }
+            else if (pd->init_data->rde[type][i].space_id == space_id)
+            {
+                idx = i;
+                break;
+            }
         }
     }
 
@@ -137,9 +149,9 @@ static int pd_rde_find_idx(pd_t *pd,
 
 osmosis_rde_t *pd_rde_get(pd_t *pd,
                           gpi_cap_t type,
-                          uint32_t ns_id)
+                          uint32_t space_id)
 {
-    int idx = pd_rde_find_idx(pd, type, ns_id);
+    int idx = pd_rde_find_idx(pd, type, space_id);
 
     if (idx == -1)
     {
@@ -153,10 +165,10 @@ osmosis_rde_t *pd_rde_get(pd_t *pd,
 
 int pd_add_rde(pd_t *pd,
                rde_type_t type,
-               uint32_t manager_id,
-               uint32_t ns_id,
+               uint32_t space_id,
                seL4_CPtr server_ep)
 {
+    // Add the RDE to the init data structure
     int idx = -1;
 
     for (int i = 0; i < MAX_NS_PER_RDE; i++)
@@ -174,11 +186,12 @@ int pd_add_rde(pd_t *pd,
         return 1;
     }
 
-    pd->init_data->rde[type.type][idx].manager_id = manager_id;
+    pd->init_data->rde[type.type][idx].space_id = space_id;
     /* we don't really need to keep this if we index by type, but let's just keep it around for now */
     pd->init_data->rde[type.type][idx].type = type;
     pd->init_data->rde[type.type][idx].slot_in_RT = server_ep;
-    pd->init_data->rde[type.type][idx].ns_id = ns_id;
+
+    // Badge the endpoint into the client PD
     uint32_t client_id = pd->id;
 
     // Badge the raw endpoint for the client PD
@@ -194,7 +207,7 @@ int pd_add_rde(pd_t *pd,
     seL4_Word badge_val = gpi_new_badge(type.type,
                                         0x00,
                                         client_id,
-                                        ns_id,
+                                        space_id,
                                         BADGE_OBJ_ID_NULL);
 
     error = vka_cnode_mint(&dest,
@@ -219,7 +232,7 @@ static void pd_held_resource_on_delete(resource_server_registry_node_t *node_gen
     int error = 0;
     pd_hold_node_t *node = (pd_hold_node_t *)node_gen;
 
-    OSDB_PRINTF("Freeing resource %s_%d_%d\n", cap_type_to_str(node->type), node->ns_id, node->res_id);
+    OSDB_PRINTF("Freeing resource %s_%d_%d\n", cap_type_to_str(node->type), node->space_id, node->res_id);
 
     // If the resource is a core resource, free it directly
     // Decrement the registry entry's count, and if it reaches zero, the resource will be freed
@@ -240,7 +253,7 @@ static void pd_held_resource_on_delete(resource_server_registry_node_t *node_gen
         break;
     case GPICAP_TYPE_VMR:
         // NS ID is the ADS, res ID is the VMR
-        error = ads_component_rm_by_id(node->ns_id, node->res_id);
+        error = ads_component_rm_by_id(node->space_id, node->res_id);
         break;
     default:
         // Otherwise, call the manager PD
@@ -288,13 +301,15 @@ int pd_new(pd_t *pd,
     }
 
     // Track the init data MO in RT only
-    pd_add_resource_by_id(get_gpi_server()->rt_pd_id, GPICAP_TYPE_MO, rde_mo_obj->id, NSID_DEFAULT,
+    pd_add_resource_by_id(get_gpi_server()->rt_pd_id, GPICAP_TYPE_MO, get_mo_component()->space_id, rde_mo_obj->id,
                           pd->init_data_mo.badged_server_ep_cspath.capPtr, seL4_CapNull, pd->init_data_mo.badged_server_ep_cspath.capPtr);
 
     // Setup init data
     pd->init_data->rde_count = 0;
     memset(pd->init_data->rde, 0, sizeof(osmosis_rde_t) * MAX_PD_OSM_RDE);
+    pd->init_data->pd_conn.id = pd->id;
 
+    // Setup the cspace
     error = pd_setup_cspace(pd, get_pd_component()->server_vka);
     assert(error == 0);
 
@@ -566,34 +581,35 @@ int pd_configure(pd_t *pd,
 
     /* The RT manages this ADS */
     // (XXX) Arya: is this necessary?
-    pd_add_resource_by_id(get_gpi_server()->rt_pd_id, GPICAP_TYPE_ADS, target_ads->id, NSID_DEFAULT, seL4_CapNull, seL4_CapNull, seL4_CapNull);
+    pd_add_resource_by_id(get_gpi_server()->rt_pd_id, GPICAP_TYPE_ADS, get_ads_component()->space_id, target_ads->id,
+                          seL4_CapNull, seL4_CapNull, seL4_CapNull);
 
-    // the ADS cap is both a resource manager and a resource
-    seL4_Word badge = gpi_new_badge(GPICAP_TYPE_ADS, 0x00, pd->id, target_ads->id, target_ads->id);
-    error = pd_send_cap(pd, get_ads_component()->server_ep, badge, &pd->init_data->ads_cap, true);
+    // the ADS cap is both a resource space and a resource
+    seL4_Word badge = gpi_new_badge(GPICAP_TYPE_ADS, 0x00, pd->id, get_ads_component()->space_id, target_ads->id);
+    error = pd_send_cap(pd, get_ads_component()->server_ep, badge, &pd->init_data->ads_conn.badged_server_ep_cspath.capPtr, true);
     ZF_LOGF_IFERR(error, "Failed to send ADS resource cap to PD");
-
-    // the ADS cap also acts an as RDE, however since its object ID is set, a PD can never
-    // make a new ADS from this EP
-    rde_type_t ads_rde_type = {.type = GPICAP_TYPE_ADS};
-    error = pd_add_rde(pd, ads_rde_type, get_gpi_server()->ads_manager_id, target_ads->id, get_ads_component()->server_ep);
-    ZF_LOGE_IFERR(error, "Failed to add ADS RDE to PD");
-    pd->init_data->binded_ads_ns_id = target_ads->id;
+    pd->init_data->ads_conn.id = target_ads->id;
     target_cpu->binded_ads_id = target_ads->id;
 
-    badge = gpi_new_badge(GPICAP_TYPE_CPU, 0x00, pd->id, NSID_DEFAULT, target_cpu->id);
-    error = pd_send_cap(pd, get_cpu_component()->server_ep, badge, &pd->init_data->cpu_cap, true);
+    // the ADS cap also acts an a VMR RDE
+    rde_type_t ads_rde_type = {.type = GPICAP_TYPE_VMR};
+    error = pd_add_rde(pd, ads_rde_type, target_ads->id, get_ads_component()->server_ep);
+    ZF_LOGE_IFERR(error, "Failed to add ADS RDE to PD");
+
+    // Send the PD's CPU resource
+    badge = gpi_new_badge(GPICAP_TYPE_CPU, 0x00, pd->id, get_cpu_component()->space_id, target_cpu->id);
+    error = pd_send_cap(pd, get_cpu_component()->server_ep, badge, &pd->init_data->cpu_conn.badged_server_ep_cspath.capPtr, true);
     ZF_LOGF_IFERR(error, "Failed to send CPU cap to PD");
 
     memcpy(&pd->proc.vspace, target_ads->vspace, sizeof(vspace_t));
 
     // Send the PD's PD resource
-    badge = gpi_new_badge(GPICAP_TYPE_PD, 0x00, pd->id, NSID_DEFAULT, pd->id);
-    error = pd_send_cap(pd, pd->pd_cap_in_RT, badge, &pd->init_data->pd_cap, true);
+    badge = gpi_new_badge(GPICAP_TYPE_PD, 0x00, pd->id, get_pd_component()->space_id, pd->id);
+    error = pd_send_cap(pd, pd->pd_cap_in_RT, badge, &pd->init_data->pd_conn.badged_server_ep_cspath.capPtr, true);
     ZF_LOGF_IFERR(error, "Failed to send PD cap to PD");
 
     // Map init data to the PD
-    error = ads_component_attach(pd->init_data->binded_ads_ns_id, pd->init_data_mo_id, SEL4UTILS_RES_TYPE_OTHER, NULL, (void **)&pd->init_data_in_PD);
+    error = ads_component_attach(pd->init_data->ads_conn.id, pd->init_data_mo_id, SEL4UTILS_RES_TYPE_OTHER, NULL, (void **)&pd->init_data_in_PD);
     if (error)
     {
         ZF_LOGF("Failed to attach init data to child PD");
@@ -634,7 +650,6 @@ int pd_send_cap(pd_t *to_pd,
     if (badge)
     {
         gpi_cap_t cap_type = get_cap_type_from_badge(badge);
-        uint32_t res_id;
         vka_t *server_vka;
         seL4_CPtr server_src_cap;
 
@@ -649,8 +664,6 @@ int pd_send_cap(pd_t *to_pd,
             {
                 resource_component_inc(get_ads_component(), get_object_id_from_badge(badge));
             }
-
-            res_id = get_object_id_from_badge(badge);
             break;
         case GPICAP_TYPE_MO:
             server_vka = get_mo_component()->server_vka;
@@ -661,8 +674,6 @@ int pd_send_cap(pd_t *to_pd,
             {
                 resource_component_inc(get_mo_component(), get_object_id_from_badge(badge));
             }
-
-            res_id = get_object_id_from_badge(badge);
             break;
         case GPICAP_TYPE_CPU:
             server_vka = get_cpu_component()->server_vka;
@@ -673,8 +684,6 @@ int pd_send_cap(pd_t *to_pd,
             {
                 resource_component_inc(get_cpu_component(), get_object_id_from_badge(badge));
             }
-
-            res_id = get_object_id_from_badge(badge);
             break;
         case GPICAP_TYPE_PD:
             server_vka = get_pd_component()->server_vka;
@@ -685,8 +694,6 @@ int pd_send_cap(pd_t *to_pd,
             {
                 resource_component_inc(get_pd_component(), get_object_id_from_badge(badge));
             }
-
-            res_id = get_object_id_from_badge(badge);
             break;
         default:
             // ZF_LOGF("Unknown cap type in %s", __FUNCTION__);
@@ -707,7 +714,7 @@ int pd_send_cap(pd_t *to_pd,
             new_badge = gpi_new_badge(cap_type,
                                       get_perms_from_badge(badge),
                                       to_pd->id, /* Client ID */
-                                      get_ns_id_from_badge(badge),
+                                      get_space_id_from_badge(badge),
                                       get_object_id_from_badge(badge));
 
             vka_cspace_make_path(server_vka, server_src_cap, &src);
@@ -726,7 +733,7 @@ int pd_send_cap(pd_t *to_pd,
             }
 
             cap = dest_cptr;
-            pd_add_resource(to_pd, cap_type, res_id, NSID_DEFAULT, src.capPtr, cap, src.capPtr);
+            pd_add_resource(to_pd, cap_type, get_space_id_from_badge(badge), get_object_id_from_badge(badge), src.capPtr, cap, src.capPtr);
         }
         // do the same copy as above
     }
@@ -749,22 +756,22 @@ int pd_send_cap(pd_t *to_pd,
     return 0;
 }
 
-static int request_remote_rr(pd_t *pd, model_state_t *ms, uint64_t server_id, uint32_t obj_id,
+static int request_remote_rr(pd_t *pd, model_state_t *ms, uint64_t space_id, uint32_t obj_id,
                              cspacepath_t rr_frame_path, void *rr_local_vaddr)
 {
     int error;
 
-    resspc_component_registry_entry_t *server_entry = resource_space_get_entry_by_id(server_id);
+    resspc_component_registry_entry_t *server_entry = resource_space_get_entry_by_id(space_id);
 
     if (server_entry == NULL)
     {
-        OSDB_PRINTF("Failed to find resource server with ID 0x%lx\n", server_id);
+        OSDB_PRINTF("Failed to find resource server with ID 0x%lx\n", space_id);
         return -1;
     }
     seL4_CPtr server_cap = server_entry->space.server_ep;
     model_state_t *ms2;
 
-    OSDB_PRINTF("Resource ID 0x%x, server ID 0x%lx, server EP at %d\n", obj_id, server_id, (int)server_cap);
+    OSDB_PRINTF("Resource ID 0x%x, space ID 0x%lx, server EP at %d\n", obj_id, space_id, (int)server_cap);
 
     // Pre-map the memory so resource server does not need to call root task
     cspacepath_t rr_frame_copy_path;
@@ -791,7 +798,7 @@ static int request_remote_rr(pd_t *pd, model_state_t *ms, uint64_t server_id, ui
     }
 
     // Get RR from remote resource server
-    error = resource_server_client_get_rr(server_cap, obj_id, pd->id,
+    error = resource_server_client_get_rr(server_cap, space_id, obj_id, pd->id,
                                           server_entry->space.pd->id,
                                           rr_remote_vaddr, rr_local_vaddr,
                                           SIZE_BITS_TO_BYTES(seL4_LargePageBits), &ms2);
@@ -856,11 +863,7 @@ static int res_dump(pd_t *pd, model_state_t *ms, pd_hold_node_t *current_cap,
     case GPICAP_TYPE_BLOCK:
         OSDB_PRINTF("Calling another PD to get the info for resource with ID 0x%x\n", current_cap->res_id);
 
-        // Find the server that created this resource based on the resource id
-        uint64_t obj_id = current_cap->res_id;
-        uint64_t server_id = get_server_id_from_badge(obj_id);
-
-        error = request_remote_rr(pd, ms, server_id, obj_id, rr_frame_path, rr_local_vaddr);
+        error = request_remote_rr(pd, ms, current_cap->space_id, current_cap->res_id, rr_frame_path, rr_local_vaddr);
         assert(error == 0);
 
         break;
@@ -874,6 +877,12 @@ static int res_dump(pd_t *pd, model_state_t *ms, pd_hold_node_t *current_cap,
             // pd_dump(&pd_data->pd);
             pd_dump_internal(&pd_data->pd, ms, rr_frame_path, rr_local_vaddr);
         }
+        break;
+    case GPICAP_TYPE_RESSPC:
+        ZF_LOGE("Resource space dump not yet implemented\n");
+        break;
+    case GPICAP_TYPE_VMR:
+        ZF_LOGE("VMR dump not yet implemented\n");
         break;
     case GPICAP_TYPE_FILE:
         // (XXX) Arya: dump files by NS instead
@@ -905,24 +914,14 @@ static int pd_dump_internal(pd_t *pd, model_state_t *ms, cspacepath_t rr_frame_p
 
             if (rde.type.type != GPICAP_TYPE_NONE)
             {
-                resspc_component_registry_entry_t *rm = resource_space_get_entry_by_id(rde.manager_id);
+                resspc_component_registry_entry_t *rm = resource_space_get_entry_by_id(rde.space_id);
 
                 if (rm == NULL)
                 {
-                    ZF_LOGF("Couldn't find resource manager with ID %d\n", rde.manager_id);
+                    ZF_LOGF("Couldn't find resource space with ID %d\n", rde.space_id);
                 }
 
-/* (XXX) Arya: Not capturing NS data temporarily, will be captured again with resource spaces */
-#if 0
-                if (rde.ns_id != NSID_DEFAULT)
-                {
-                    snprintf(ns_id, CSV_MAX_STRING_SIZE, "NS%d", rde.ns_id);
-                }
-                else
-                {
-                    snprintf(ns_id, CSV_MAX_STRING_SIZE, "GLOBAL");
-                }
-#endif
+                // (XXX) Arya: Update model extraction to include resource spaces
 
                 /* Add the resource server PD node */
                 int server_pd_id = rm->space.pd ? rm->space.pd->id : 0;
@@ -931,14 +930,14 @@ static int pd_dump_internal(pd_t *pd, model_state_t *ms, cspacepath_t rr_frame_p
 
                 /**
                  *  For files, walk the file system now
-                 *  (XXX) Arya: should there be a general pre-fetch stage for all resource managers?
+                 *  (XXX) Arya: should there be a general pre-fetch stage for all resource spaces?
                  **/
                 if (rde.type.type == GPICAP_TYPE_FILE)
                 {
                     // (XXX) Arya: Workaround to get all files in the file system
                     // Find the server that created this resource based on the resource id
-                    uint64_t obj_id = rde.ns_id;
-                    uint64_t server_id = rde.manager_id;
+                    uint64_t obj_id = rde.space_id;
+                    uint64_t server_id = rde.space_id;
 
                     error = request_remote_rr(pd, ms, server_id, obj_id, rr_frame_path, rr_local_vaddr);
                     assert(error == 0);
@@ -1057,10 +1056,10 @@ inline void print_pd_osm_rde_info(osmosis_rde_t *o)
 {
     if (o)
     {
-        printf("RDE: PD_ID: %u\t Slot_RT:%lu\t Slot_PD: %lu\t T: %s\n",
-               o->id,
+        printf("RDE: Slot_RT:%lu\t Slot_PD: %lu\t T: %s\t SpaceID: %u\n",
                o->slot_in_RT,
                o->slot_in_PD,
-               cap_type_to_str(o->type.type));
+               cap_type_to_str(o->type.type),
+               o->space_id);
     }
 }

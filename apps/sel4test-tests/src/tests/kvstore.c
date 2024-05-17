@@ -52,22 +52,20 @@ static int setup(env_t env)
     int error;
 
     /* Initialize the ADS */
-    vka_cspace_make_path(&env->vka, sel4gpi_get_rde_by_ns_id(sel4gpi_get_binded_ads_id(), GPICAP_TYPE_ADS), &ads_conn.badged_server_ep_cspath);
+    vka_cspace_make_path(&env->vka, sel4gpi_get_rde_by_space_id(sel4gpi_get_binded_ads_id(), GPICAP_TYPE_VMR), &ads_conn.badged_server_ep_cspath);
 
     /* Initialize the PD */
-    vka_cspace_make_path(&env->vka, sel4gpi_get_pd_cap(), &pd_conn.badged_server_ep_cspath);
+    pd_conn = sel4gpi_get_pd_conn();
 
     /* Start ramdisk server process */
     error = start_ramdisk_pd(&ramdisk_pd.badged_server_ep_cspath.capPtr, &ramdisk_id);
     test_assert(error == 0);
 
-    /* Start fs server process */
-    error = start_xv6fs_pd(ramdisk_id, ramdisk_pd.badged_server_ep_cspath.capPtr, &fs_pd.badged_server_ep_cspath.capPtr, &fs_id);
+    /* Start FS server process */
+    error = start_xv6fs_pd(ramdisk_id, &fs_pd.badged_server_ep_cspath.capPtr, &fs_id);
     test_assert(error == 0);
 
     /* Add FS ep to RDE */
-    error = pd_client_add_rde(&pd_conn, fs_pd.badged_server_ep_cspath.capPtr, fs_id, NSID_DEFAULT);
-    test_assert(error == 0);
     seL4_CPtr fs_client_ep = sel4gpi_get_rde(GPICAP_TYPE_FILE);
 
     /* Create EP to listen for test results */
@@ -82,11 +80,9 @@ static int setup(env_t env)
  *
  * @param kvstore_ep returns the kvstore server's ep
  * @param fs_nsid namespace ID of fs to share
- * @param fs_manager_id set to a special fs manager id that is not in the current RD (optional)
- * @param fs_pd_cap set to a special fs_ep that is not in the current RD (optional)
  * @param kvstore_pd  returns the pd resource for the kvstore process
  */
-static int start_kvstore_server(seL4_CPtr *kvstore_ep, uint64_t fs_nsid, uint64_t fs_manager_id, seL4_CPtr fs_pd_cap, pd_client_context_t *kvstore_pd)
+static int start_kvstore_server(seL4_CPtr *kvstore_ep, uint64_t fs_nsid, pd_client_context_t *kvstore_pd)
 {
     int error;
 
@@ -101,19 +97,9 @@ static int start_kvstore_server(seL4_CPtr *kvstore_ep, uint64_t fs_nsid, uint64_
     error = pd_client_send_cap(kvstore_pd, self_ep, &args[0]);
     test_assert(error == 0);
 
-    // Give the FS RDE
-    if (fs_pd_cap)
-    {
-        // Share a new FS RDE
-        error = pd_client_add_rde(kvstore_pd, fs_pd_cap, fs_manager_id, fs_nsid);
-        test_assert(error == 0);
-    }
-    else
-    {
-        // Share our own FS RDE
-        error = pd_client_share_rde(kvstore_pd, GPICAP_TYPE_FILE, fs_nsid);
-        test_assert(error == 0);
-    }
+    // Share an FS RDE
+    error = pd_client_share_rde(kvstore_pd, GPICAP_TYPE_FILE, fs_nsid);
+    test_assert(error == 0);
 
     // Start it
     sel4gpi_runnable_t runnable = {.pd = *kvstore_pd};
@@ -144,15 +130,11 @@ static int start_kvstore_server(seL4_CPtr *kvstore_ep, uint64_t fs_nsid, uint64_
  * @param kvstore_ep ep to use for remote kvstore (optional)
  * @param hello_pd returns the pd resource for the hello process
  * @param fs_nsid namespace ID of fs to share
- * @param fs_manager_id set to a special fs manager id that is not in the current RD (optional)
- * @param fs_pd_cap set to a special fs_ep that is not in the current RD (optional)
  */
 static int start_hello_kvstore(kvstore_mode_t kvstore_mode,
                                seL4_CPtr kvstore_ep,
                                pd_client_context_t *hello_pd,
-                               uint64_t fs_nsid,
-                               uint64_t fs_manager_id,
-                               seL4_CPtr fs_pd_cap)
+                               uint64_t fs_nsid)
 {
     int error;
 
@@ -181,26 +163,16 @@ static int start_hello_kvstore(kvstore_mode_t kvstore_mode,
     }
 
     // Give the CPU RDE (for thread example)
-    error = pd_client_share_rde(hello_pd, GPICAP_TYPE_CPU, NSID_DEFAULT);
+    error = pd_client_share_rde(hello_pd, GPICAP_TYPE_CPU, RESSPC_ID_NULL);
     test_assert(error == 0);
 
-    // Give the FS RDE
-    if (fs_pd_cap)
-    {
-        // Share a new FS RDE
-        error = pd_client_add_rde(hello_pd, fs_pd_cap, fs_manager_id, fs_nsid);
-        test_assert(error == 0);
-    }
-    else
-    {
-        // Share our own FS RDE
-        error = pd_client_share_rde(hello_pd, GPICAP_TYPE_FILE, fs_nsid);
-        test_assert(error == 0);
-    }
+    // Share an FS RDE
+    error = pd_client_share_rde(hello_pd, GPICAP_TYPE_FILE, fs_nsid);
+    test_assert(error == 0);
 
     if (kvstore_mode == SEPARATE_ADS)
     {
-        error = pd_client_share_rde(hello_pd, GPICAP_TYPE_ADS, NSID_DEFAULT);
+        error = pd_client_share_rde(hello_pd, GPICAP_TYPE_ADS, RESSPC_ID_NULL);
     }
 
     // Start it
@@ -223,7 +195,7 @@ int test_kvstore_lib_in_same_pd(env_t env)
 
     /* Start the combined app/lib PD */
     pd_client_context_t hello_pd;
-    error = start_hello_kvstore(SAME_THREAD, 0, &hello_pd, NSID_DEFAULT, 0, 0);
+    error = start_hello_kvstore(SAME_THREAD, 0, &hello_pd, RESSPC_ID_NULL);
 
     /* Wait for test result */
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0, 0);
@@ -257,12 +229,12 @@ int test_kvstore_lib_in_diff_pd(env_t env)
     /* Start the kvstore PD */
     pd_client_context_t kvstore_pd;
     seL4_CPtr kvstore_ep;
-    error = start_kvstore_server(&kvstore_ep, NSID_DEFAULT, 0, 0, &kvstore_pd);
+    error = start_kvstore_server(&kvstore_ep, RESSPC_ID_NULL, &kvstore_pd);
     test_assert(error == 0);
 
     /* Start the app PD */
     pd_client_context_t hello_pd;
-    error = start_hello_kvstore(SEPARATE_PROC, kvstore_ep, &hello_pd, NSID_DEFAULT, 0, 0);
+    error = start_hello_kvstore(SEPARATE_PROC, kvstore_ep, &hello_pd, RESSPC_ID_NULL);
 
     /* Wait for test result */
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0, 0);
@@ -308,12 +280,12 @@ int test_kvstore_diff_namespace(env_t env)
     /* Start the kvstore PD */
     seL4_CPtr kvstore_ep;
     pd_client_context_t kvstore_pd;
-    error = start_kvstore_server(&kvstore_ep, nsid_1, 0, 0, &kvstore_pd);
+    error = start_kvstore_server(&kvstore_ep, nsid_1, &kvstore_pd);
     test_assert(error == 0);
 
     /* Start the app PD */
     pd_client_context_t hello_pd;
-    error = start_hello_kvstore(SEPARATE_PROC, kvstore_ep, &hello_pd, nsid_2, 0, 0);
+    error = start_hello_kvstore(SEPARATE_PROC, kvstore_ep, &hello_pd, nsid_2);
     test_assert(error == 0);
 
     /* Wait for test result */
@@ -348,18 +320,18 @@ int test_kvstore_diff_fs(env_t env)
     test_assert(error == 0);
 
     /* Start second fs server process */
-    error = start_xv6fs_pd(ramdisk_id, ramdisk_pd.badged_server_ep_cspath.capPtr, &fs_2_pd.badged_server_ep_cspath.capPtr, &fs_2_id);
+    error = start_xv6fs_pd(ramdisk_id, &fs_2_pd.badged_server_ep_cspath.capPtr, &fs_2_id);
     test_assert(error == 0);
 
     /* Start the kvstore PD */
     seL4_CPtr kvstore_ep;
     pd_client_context_t kvstore_pd;
-    error = start_kvstore_server(&kvstore_ep, NSID_DEFAULT, 0, 0, &kvstore_pd);
+    error = start_kvstore_server(&kvstore_ep, RESSPC_ID_NULL, &kvstore_pd);
     test_assert(error == 0);
 
     /* Start the app PD */
     pd_client_context_t hello_pd;
-    error = start_hello_kvstore(SEPARATE_PROC, kvstore_ep, &hello_pd, NSID_DEFAULT, fs_2_id, fs_2_pd.badged_server_ep_cspath.capPtr);
+    error = start_hello_kvstore(SEPARATE_PROC, kvstore_ep, &hello_pd, fs_2_id);
     test_assert(error == 0);
 
     /* Wait for test result */
@@ -397,7 +369,7 @@ int test_kvstore_lib_same_pd_diff_ads(env_t env)
 
     // /* Start the combined app/lib PD */
     pd_client_context_t hello_pd;
-    error = start_hello_kvstore(SEPARATE_ADS, 0, &hello_pd, NSID_DEFAULT, 0, 0);
+    error = start_hello_kvstore(SEPARATE_ADS, 0, &hello_pd, RESSPC_ID_NULL);
 
     /* Wait for test result */
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0, 0);
@@ -430,7 +402,7 @@ int test_kvstore_diff_threads(env_t env)
 
     /* Start the combined app/lib PD */
     pd_client_context_t hello_pd;
-    error = start_hello_kvstore(SEPARATE_THREAD, 0, &hello_pd, NSID_DEFAULT, 0, 0);
+    error = start_hello_kvstore(SEPARATE_THREAD, 0, &hello_pd, RESSPC_ID_NULL);
 
     /* Wait for test result */
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0, 0);
@@ -464,22 +436,22 @@ int test_kvstore_two_sets(env_t env)
     /* Start the kvstore PD 1 */
     seL4_CPtr kvstore_ep_1;
     pd_client_context_t kvstore_pd_1;
-    error = start_kvstore_server(&kvstore_ep_1, NSID_DEFAULT, 0, 0, &kvstore_pd_1);
+    error = start_kvstore_server(&kvstore_ep_1, RESSPC_ID_NULL, &kvstore_pd_1);
     test_assert(error == 0);
 
     /* Start the kvstore PD 2 */
     seL4_CPtr kvstore_ep_2;
     pd_client_context_t kvstore_pd_2;
-    error = start_kvstore_server(&kvstore_ep_2, NSID_DEFAULT, 0, 0, &kvstore_pd_2);
+    error = start_kvstore_server(&kvstore_ep_2, RESSPC_ID_NULL, &kvstore_pd_2);
     test_assert(error == 0);
 
     /* Start the app PD 1 */
     pd_client_context_t hello_pd_1;
-    error = start_hello_kvstore(SEPARATE_PROC, kvstore_ep_1, &hello_pd_1, NSID_DEFAULT, 0, 0);
+    error = start_hello_kvstore(SEPARATE_PROC, kvstore_ep_1, &hello_pd_1, RESSPC_ID_NULL);
 
     /* Start the app PD 2 */
     pd_client_context_t hello_pd_2;
-    error = start_hello_kvstore(SEPARATE_PROC, kvstore_ep_2, &hello_pd_2, NSID_DEFAULT, 0, 0);
+    error = start_hello_kvstore(SEPARATE_PROC, kvstore_ep_2, &hello_pd_2, RESSPC_ID_NULL);
 
     /* Wait for test result 1 */
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0, 0);

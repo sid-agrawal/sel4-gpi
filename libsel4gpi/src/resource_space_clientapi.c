@@ -24,7 +24,8 @@
 int resspc_client_connect(seL4_CPtr server_ep,
                           seL4_CPtr free_slot,
                           gpi_cap_t resource_type,
-                          seL4_CPtr client_ep,
+                          seL4_CPtr resource_server_ep,
+                          seL4_CPtr client_id,
                           resspc_client_context_t *ret_conn)
 {
     // (XXX) Arya: Eventually we can replace all of this "free slot" business with the server allocating the next slot
@@ -35,7 +36,9 @@ int resspc_client_connect(seL4_CPtr server_ep,
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 1, RESSPCMSGREG_CONNECT_REQ_END);
     seL4_SetMR(RESSPCMSGREG_FUNC, RESSPC_FUNC_CONNECT_REQ);
     seL4_SetMR(RESSPCMSGREG_CONNECT_REQ_TYPE, resource_type);
-    seL4_SetCap(0, client_ep);
+    seL4_SetMR(RESSPCMSGREG_CONNECT_REQ_CLIENT_ID, client_id);
+    seL4_SetCap(0, resource_server_ep);
+    
     tag = seL4_Call(server_ep, tag);
 
     ret_conn->badged_server_ep_cspath.capPtr = free_slot;

@@ -201,7 +201,7 @@ seL4_MessageInfo_t xv6fs_request_handler(seL4_MessageInfo_t tag, seL4_Word sende
   *need_new_recv_cap = true; // (XXX) Arya: todo, find the cases when we actually need this
   unsigned int op = seL4_GetMR(FSMSGREG_FUNC);
   uint64_t obj_id = get_object_id_from_badge(sender_badge);
-
+  
   seL4_MessageInfo_t reply_tag = seL4_MessageInfo_new(0, 0, 0, 0);
 
   if (sender_badge == 0)
@@ -215,20 +215,20 @@ seL4_MessageInfo_t xv6fs_request_handler(seL4_MessageInfo_t tag, seL4_Word sende
 
       uint64_t pd_id = seL4_GetMR(RSMSGREG_EXTRACT_RR_REQ_PD_ID);
       uint64_t fs_pd_id = seL4_GetMR(RSMSGREG_EXTRACT_RR_REQ_RS_PD_ID);
+      uint64_t ns_id = seL4_GetMR(RSMSGREG_EXTRACT_RR_REQ_ID);
 
       void *mem_vaddr = (void *)seL4_GetMR(RSMSGREG_EXTRACT_RR_REQ_VADDR);
       model_state_t *model_state = (model_state_t *)mem_vaddr;
       void *free_mem = mem_vaddr + sizeof(model_state_t);
       size_t free_size = seL4_GetMR(RSMSGREG_EXTRACT_RR_REQ_SIZE) - sizeof(model_state_t);
 
-      uint64_t ns_id = seL4_GetMR(RSMSGREG_EXTRACT_RR_REQ_ID);
       XV6FS_PRINTF("Get RR for ns %d\n", ns_id);
 
       /* Update pathname for namespace */
       char path[MAXPATH];
       strcpy(path, ROOT_DIR);
 
-      if (ns_id != NSID_DEFAULT)
+      if (ns_id != get_xv6fs_server()->gen.default_space.id)
       {
         fs_namespace_entry_t *ns = (fs_namespace_entry_t *) resource_server_registry_get_by_id(&get_xv6fs_server()->ns_registry, ns_id);
 
@@ -263,13 +263,13 @@ seL4_MessageInfo_t xv6fs_request_handler(seL4_MessageInfo_t tag, seL4_Word sende
       add_edge(model_state, GPI_EDGE_TYPE_HOLD, self_pd_node, file_space_node);
 
       /* Add the block resource space node */
-      // (XXX) Arya: Assumes there is only one block space, and it is space 1. To fix.
-      int block_space_id = 1;
+      // (XXX) Arya: Assumes all blocks belong to the same block space
+      uint64_t block_space_id = get_xv6fs_server()->naive_blocks[0].space_id;
       gpi_model_node_t *block_space_node = add_resource_space_node(model_state, GPICAP_TYPE_BLOCK, block_space_id);
       add_edge(model_state, GPI_EDGE_TYPE_MAP, file_space_node, block_space_node);
 
       /* Add nodes for all files and blocks */
-      int n_blocknos = 100; // (XXX) Arya: what if there are more blocks?
+      int n_blocknos = 100; // (XXX) Arya: assumes there are no more than 100 blocks per file
       int *blocknos = malloc(sizeof(int) * n_blocknos);
       for (int i = 0; i < n_files; i++)
       {
@@ -286,9 +286,10 @@ seL4_MessageInfo_t xv6fs_request_handler(seL4_MessageInfo_t tag, seL4_Word sende
         CHECK_ERROR_GOTO(error, "Failed to get blocknos for file", FS_SERVER_ERROR_UNKNOWN, done);
         XV6FS_PRINTF("File has %d blocks\n", n_blocknos);
 
+        uint64_t block_id;
         for (int j = 0; j < n_blocknos; j++)
         {
-          uint64_t block_id = get_xv6fs_server()->naive_blocks[blocknos[j]].id;
+          block_id = get_xv6fs_server()->naive_blocks[blocknos[j]].res_id;
 
           gpi_model_node_t *block_node = add_resource_node(model_state, GPICAP_TYPE_BLOCK, block_space_id, block_id);
           add_edge(model_state, GPI_EDGE_TYPE_MAP, file_node, block_node);
@@ -316,16 +317,20 @@ seL4_MessageInfo_t xv6fs_request_handler(seL4_MessageInfo_t tag, seL4_Word sende
     case RS_FUNC_NEW_NS_REQ:
       XV6FS_PRINTF("Got request for new namespace\n");
 
+      resspc_client_context_t resspc_conn;
       uint64_t ns_id;
 
-      // Register NS and get new ID
-      error = resource_server_new_ns(&get_xv6fs_server()->gen, get_client_id_from_badge(sender_badge), &ns_id);
-      XV6FS_PRINTF("Registered new namespace with ID %ld\n", ns_id);
+      // Register a new resource space for the NS
+      error = resource_server_new_res_space(&get_xv6fs_server()->gen, get_client_id_from_badge(sender_badge), &resspc_conn);
+      CHECK_ERROR_GOTO(error, "Failed to create a new resource space for namespace\n", FS_SERVER_ERROR_UNKNOWN, done);
+      XV6FS_PRINTF("Registered new namespace with ID %ld\n", resspc_conn.id);
+      ns_id = resspc_conn.id;
 
       // Bookkeeping the NS
       fs_namespace_entry_t *ns_entry = malloc(sizeof(fs_namespace_entry_t));
       ns_entry->gen.object_id = ns_id;
-      make_ns_prefix(ns_entry->ns_prefix, ns_id);
+      ns_entry->res_space_conn = resspc_conn;
+      make_ns_prefix(ns_entry->ns_prefix, resspc_conn.id);
       resource_server_registry_insert(&get_xv6fs_server()->ns_registry, (resource_server_registry_node_t *)ns_entry);
 
       // Create directory in global FS
@@ -345,8 +350,8 @@ seL4_MessageInfo_t xv6fs_request_handler(seL4_MessageInfo_t tag, seL4_Word sende
       pathname = (char *)mo_vaddr;
 
       /* Update pathname if within a namespace */
-      ns_id = get_ns_id_from_badge(sender_badge);
-      if (ns_id != NSID_DEFAULT)
+      ns_id = get_space_id_from_badge(sender_badge);
+      if (ns_id != get_xv6fs_server()->gen.default_space.id)
       {
         fs_namespace_entry_t *ns = (fs_namespace_entry_t *) resource_server_registry_get_by_id(&get_xv6fs_server()->ns_registry, ns_id);
         if (ns == NULL)
@@ -406,9 +411,13 @@ seL4_MessageInfo_t xv6fs_request_handler(seL4_MessageInfo_t tag, seL4_Word sende
 #endif
 
       // Create the resource endpoint
+      // (XXX) Arya: There is only a file object, which belongs to the default space
+      // so we have to give the resource in the default space
+      // If we add file name resources, they would actually belong to a namespace
       seL4_CPtr dest;
       error = resource_server_give_resource(&get_xv6fs_server()->gen,
-                                            get_ns_id_from_badge(sender_badge),
+                                            //get_space_id_from_badge(sender_badge),
+                                            get_xv6fs_server()->gen.default_space.id,
                                             file->id,
                                             get_client_id_from_badge(sender_badge),
                                             &dest);
@@ -430,8 +439,8 @@ seL4_MessageInfo_t xv6fs_request_handler(seL4_MessageInfo_t tag, seL4_Word sende
       pathname = (char *)mo_vaddr;
 
       /* Update pathname if within a namespace */
-      ns_id = get_ns_id_from_badge(sender_badge);
-      if (ns_id != NSID_DEFAULT)
+      ns_id = get_space_id_from_badge(sender_badge);
+      if (ns_id != get_xv6fs_server()->gen.default_space.id)
       {
         fs_namespace_entry_t *ns = (fs_namespace_entry_t *) resource_server_registry_get_by_id(&get_xv6fs_server()->ns_registry, ns_id);
         if (ns == NULL)
@@ -471,8 +480,8 @@ seL4_MessageInfo_t xv6fs_request_handler(seL4_MessageInfo_t tag, seL4_Word sende
       pathname = (char *)mo_vaddr;
 
       /* Update pathname if within a namespace */
-      ns_id = get_ns_id_from_badge(sender_badge);
-      if (ns_id != NSID_DEFAULT)
+      ns_id = get_space_id_from_badge(sender_badge);
+      if (ns_id != get_xv6fs_server()->gen.default_space.id)
       {
         fs_namespace_entry_t *ns = (fs_namespace_entry_t *) resource_server_registry_get_by_id(&get_xv6fs_server()->ns_registry, ns_id);
         if (ns == NULL)

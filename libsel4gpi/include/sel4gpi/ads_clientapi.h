@@ -19,8 +19,7 @@
  *
  * @param server_ep_cap Well known server endpoint cap.
  * @param free_slot a slot to receive a cap in
- * @param ret_conn client's connection object
- * @param ret_ads_ns the NS ID of the ADS resource, for access to its RDE, can be NULL
+ * @param ret_conn returns the client connection object
  * @return int 0 on success, 1 on failure.
  */
 int ads_component_client_connect(seL4_CPtr server_ep_cap,

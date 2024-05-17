@@ -31,6 +31,9 @@
 #define DEBUG_ID GPI_DEBUG
 #define SERVER_ID GPISERVS
 
+// Default ID of the root task's PD
+#define RT_PD_ID 0
+
 static gpi_server_context_t gpi_server;
 
 gpi_server_context_t *get_gpi_server(void)
@@ -80,6 +83,7 @@ gpi_server_parent_spawn_thread(simple_t *parent_simple, vka_t *parent_vka,
     get_gpi_server()->server_vka = parent_vka;
     get_gpi_server()->server_cspace = parent_cspace_cspath.root;
     get_gpi_server()->server_vspace = parent_vspace;
+    get_gpi_server()->rt_pd_id = RT_PD_ID;
 
     /* Allocate the Endpoint that the server will be listening on. */
     error = vka_alloc_endpoint(parent_vka, &get_gpi_server()->server_ep_obj);
@@ -92,11 +96,8 @@ gpi_server_parent_spawn_thread(simple_t *parent_simple, vka_t *parent_vka,
 
     *server_ep_cap = get_gpi_server()->server_ep_obj.cptr;
 
-    resspc_component_registry_entry_t *space_entry;
-    // (XXX) Arya: not using this, should at least free the caps
-    seL4_CPtr res_space_cap;
-
     /* Setup the Resource Space Component */
+    // This must be initialized first so that the other components can make their own resource spaces
     resspc_component_initialize(parent_simple, parent_vka, parent_cspace_cspath.root, parent_vspace,
                                 get_gpi_server()->server_thread, get_gpi_server()->server_ep_obj);
 
@@ -104,44 +105,20 @@ gpi_server_parent_spawn_thread(simple_t *parent_simple, vka_t *parent_vka,
     pd_component_initialize(parent_simple, parent_vka, parent_cspace_cspath.root, parent_vspace,
                             get_gpi_server()->server_thread, get_gpi_server()->server_ep_obj);
 
-    // Create the default PD resource space
-    resspc_config_t resspc_config = {
-        .type = GPICAP_TYPE_PD,
-        .ep = get_gpi_server()->server_ep_obj.cptr,
-    };
-
-    resource_component_allocate(get_resspc_component(), 0, false, (void *) &resspc_config, (resource_server_registry_node_t **)&space_entry, &res_space_cap);
-    get_gpi_server()->pd_manager_id = space_entry->space.id;
-
     /* Setup the ADS Component */
     ads_component_initialize(parent_simple, parent_vka, parent_cspace_cspath.root, parent_vspace,
                              get_gpi_server()->server_thread, get_gpi_server()->server_ep_obj);
-
-    // Create the default ADS resource space
-    resspc_config.type = GPICAP_TYPE_ADS;
-    resource_component_allocate(get_resspc_component(), 0, false, (void *) &resspc_config, (resource_server_registry_node_t **)&space_entry, &res_space_cap);
-    get_gpi_server()->ads_manager_id = space_entry->space.id;
 
     /* Setup MO Component */
     mo_component_initialize(parent_simple, parent_vka, parent_cspace_cspath.root, parent_vspace,
                             get_gpi_server()->server_thread, get_gpi_server()->server_ep_obj);
 
-    // Create the default MO resource space
-    resspc_config.type = GPICAP_TYPE_MO;
-    resource_component_allocate(get_resspc_component(), 0, false, (void *) &resspc_config, (resource_server_registry_node_t **)&space_entry, &res_space_cap);
-    get_gpi_server()->mo_manager_id = space_entry->space.id;
-
     /* Setup the CPU Component */
     cpu_component_initialize(parent_simple, parent_vka, parent_cspace_cspath.root, parent_vspace,
                              get_gpi_server()->server_thread, get_gpi_server()->server_ep_obj);
 
-    // Create the default CPU resource space
-    resspc_config.type = GPICAP_TYPE_CPU;
-    resource_component_allocate(get_resspc_component(), 0, false, (void *) &resspc_config, (resource_server_registry_node_t **)&space_entry, &res_space_cap);
-    get_gpi_server()->cpu_manager_id = space_entry->space.id;
-
     /* Initialize the root task's PD resource */
-    forge_pd_for_root_task(&get_gpi_server()->rt_pd_id);
+    forge_pd_for_root_task(get_gpi_server()->rt_pd_id);
 
     /* And also allocate a badged copy of the Server's endpoint that the Parent
      * can use to send to the Server. This is used to allow the Server to report

@@ -20,14 +20,17 @@ Context of the client
 typedef struct _ramdisk_client_context
 {
     cspacepath_t badged_server_ep_cspath;
-    uint64_t id; // Needed only for RR dump
+
+    // Needed only for RR dump
+    uint64_t space_id;
+    uint64_t res_id;
 } ramdisk_client_context_t;
 
 /**
  * Starts the ramdisk server in a new process
  *
  * @param ramdisk_pd_cap returns the PD resource of the new ramdisk server
- * @param ramdisk_id returns the resource manager ID of the ramdisk
+ * @param ramdisk_id returns the resource space ID of the ramdisk
  * @return 0 on success, or -1 otherwise
  */
 int start_ramdisk_pd(seL4_CPtr *ramdisk_pd_cap,

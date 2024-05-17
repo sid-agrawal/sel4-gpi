@@ -553,7 +553,7 @@ void *main_continued(void *arg UNUSED)
     }
 
     /* Start core services */
-    printf(GPISERVP "Starting GPI server...");
+    printf(GPISERVP "Starting GPI server...\n");
     error = gpi_server_parent_spawn_thread(&env.simple,
                                            &env.vka,
                                            &env.vspace,

@@ -42,18 +42,12 @@ int main(int argc, char **argv)
 
     int error;
 
-    seL4_CPtr pd_cap = sel4gpi_get_pd_cap();
-    seL4_CPtr ads_cap = sel4gpi_get_rde_by_ns_id(sel4gpi_get_binded_ads_id(), GPICAP_TYPE_ADS);
-    assert(ads_cap != seL4_CapNull);
-
-    printf("Hello: ADS_CAP: %ld\n", (seL4_Word)ads_cap);
-    printf("Hello: PD_CAP: %ld\n", (seL4_Word)pd_cap);
-
     ads_client_context_t ads_conn;
-    ads_conn.badged_server_ep_cspath.capPtr = ads_cap;
+    ads_conn.badged_server_ep_cspath.capPtr = sel4gpi_get_rde_by_space_id(sel4gpi_get_binded_ads_id(), GPICAP_TYPE_VMR);
+    pd_client_context_t pd_conn = sel4gpi_get_pd_conn();
 
-    pd_client_context_t pd_conn;
-    pd_conn.badged_server_ep_cspath.capPtr = pd_cap;
+    printf("Hello: ADS_CAP: %ld\n", (seL4_Word)ads_conn.badged_server_ep_cspath.capPtr);
+    printf("Hello: PD_CAP: %ld\n", (seL4_Word)pd_conn.badged_server_ep_cspath.capPtr);
 
     seL4_CPtr mo_server_ep = sel4gpi_get_rde(GPICAP_TYPE_MO);
     assert(mo_server_ep != seL4_CapNull);

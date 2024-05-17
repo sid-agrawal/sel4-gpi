@@ -27,44 +27,49 @@ typedef struct _sel4gpi_runnable
 } sel4gpi_runnable_t;
 
 /*
- * Get the osmosis pd cap from the env
+ * Get the current PD's connection object from the env
  */
-seL4_CPtr sel4gpi_get_pd_cap(void);
+pd_client_context_t sel4gpi_get_pd_conn(void);
 
 /*
- * Get the osmosis ads cap from the env
+ * Get the current PD's bound ADS connection object from the env
  */
-seL4_CPtr sel4gpi_get_ads_cap(void);
+ads_client_context_t sel4gpi_get_ads_conn(void);
 
 /*
- * Get the osmosis cpu cap from the env
+ * Get the current PD's CPU connection object from the env
  */
-seL4_CPtr sel4gpi_get_cpu_cap(void);
+cpu_client_context_t sel4gpi_get_cpu_conn(void);
+
+/**
+ * Get the ID of the currently bound ADS
+*/
+uint64_t sel4gpi_get_binded_ads_id(void);
 
 /*
  * Get the cspace root cap from the env
  */
 seL4_CPtr sel4gpi_get_cspace_root(void);
 
-/*
+// (XXX) Arya: TODO, modify the "get rde" functions to return a connection object
+
+/**
  * Get an osmosis RDE from the env
+ * Returns the default resource space for the provided type
+ * 
  * @param type gpi_cap_t type of the RDE
  */
 seL4_CPtr sel4gpi_get_rde(int type);
 
 /**
- * Get the ID of the currently bound ADS
- */
-uint64_t sel4gpi_get_binded_ads_id(void);
-
-/**
- * @brief finds an RDE given its NS ID and type
+ * Get an osmosis RDE from the env
+ * Tries to find the RDE for the given type and resource space id
  *
- * @param ns_id
- * @param type
+ * @param space_id resource space ID to find
+ * @param type type of the RDE
  * @return null cap if the RDE cannot be found
  */
-seL4_CPtr sel4gpi_get_rde_by_ns_id(uint32_t ns_id, gpi_cap_t type);
+seL4_CPtr sel4gpi_get_rde_by_space_id(uint32_t space_id, gpi_cap_t type);
 
 /**
  * Set the exit callback to the default GPI exit handler

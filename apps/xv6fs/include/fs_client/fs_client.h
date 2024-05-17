@@ -21,14 +21,12 @@
 /**
  * Starts the fs server in a new process
  *
- * @param rd_id resource manager ID of the ramdisk server
- * @param rd_pd_cap PD resource of the ramdisk server
+ * @param rd_id space ID of the ramdisk server's block space
  * @param fs_pd_cap returns the PD resource of the new fs server
- * @param fs_id returns the resource manager ID of the new fs server
+ * @param fs_id returns the resource space ID of the new fs server
  * @return 0 on success, or -1 otherwise
  */
 int start_xv6fs_pd(uint64_t rd_id,
-                   seL4_CPtr rd_pd_cap,
                    seL4_CPtr *fs_pd_cap,
                    uint64_t *fs_id);
 

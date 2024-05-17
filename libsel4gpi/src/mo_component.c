@@ -64,7 +64,7 @@ static seL4_MessageInfo_t handle_mo_allocation_request(seL4_Word sender_badge)
 
     OSDB_PRINTF("Got connect request for %ld pages\n", num_pages);
 
-    error = resource_component_allocate(get_mo_component(), client_id, false, (void *) num_pages,
+    error = resource_component_allocate(get_mo_component(), client_id, BADGE_OBJ_ID_NULL, false, (void *)num_pages,
                                         (resource_server_registry_node_t **)&new_entry, &ret_cap);
     SERVER_GOTO_IF_ERR(error, "Failed to allocate new MO object\n");
 
@@ -112,8 +112,24 @@ int mo_component_initialize(simple_t *server_simple,
                             sel4utils_thread_t server_thread,
                             vka_object_t server_ep_obj)
 {
+    int error = 0;
+
+    // Create the default MO resource space
+    resspc_component_registry_entry_t *space_entry;
+
+    resspc_config_t resspc_config = {
+        .type = GPICAP_TYPE_MO,
+        .ep = get_gpi_server()->server_ep_obj.cptr,
+    };
+
+    error = resource_component_allocate(get_resspc_component(), get_gpi_server()->rt_pd_id, BADGE_OBJ_ID_NULL, false, (void *)&resspc_config,
+                                        (resource_server_registry_node_t **)&space_entry, NULL);
+    assert(error == 0);
+
+    // Initialize the component
     resource_component_initialize(get_mo_component(),
                                   GPICAP_TYPE_MO,
+                                  space_entry->space.id,
                                   mo_component_handle,
                                   (int (*)(resource_component_object_t *, vka_t *, vspace_t *, void *))mo_new,
                                   on_mo_registry_delete,
@@ -143,7 +159,7 @@ int forge_mo_cap_from_frames(seL4_CPtr *frame_caps,
     mo_component_registry_entry_t *new_entry;
 
     /* Allocate the MO object */
-    error = resource_component_allocate(get_mo_component(), client_pd_id, true, NULL,
+    error = resource_component_allocate(get_mo_component(), client_pd_id, BADGE_OBJ_ID_NULL, true, NULL,
                                         (resource_server_registry_node_t **)&new_entry, cap_ret);
     SERVER_GOTO_IF_ERR(error, "Failed to allocate new MO object for forge\n");
     mo_t *mo = &new_entry->mo;
