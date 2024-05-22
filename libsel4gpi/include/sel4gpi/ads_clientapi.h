@@ -147,26 +147,3 @@ int ads_client_testing(ads_client_context_t *conn, vka_t *vka,
  * @return int 0 on success
  */
 int ads_client_load_elf(ads_client_context_t *loadee_ads, pd_client_context_t *loadee_pd, const char *image_name, void **ret_entry_point);
-
-/**
- * @brief sets up the stack in a given ADS so that the given PD can be executed
- *
- * @param target_ads the ADS where the stack resides
- * @param target_pd the process PD which will use this stack
- * @param stack_top vaddr to the top of the stack in the target ADS
- * @param stack_size size of the stack (in pages)
- * @param argc the number of arguments to place on the stack
- * @param args the arguments
- * @param setup_type the type of PD to setup (thread, process, etc.) - this is a temporary field until PD configuration is finalized
- * @param ret_init_stack the position of the initial stack pointer after setup
- * @return int 0 on success
- */
-int ads_client_pd_setup(ads_client_context_t *target_ads,
-                        pd_client_context_t *target_pd,
-                        cpu_client_context_t *target_cpu,
-                        void *stack_top,
-                        int stack_size,
-                        int argc,
-                        seL4_Word *args,
-                        ads_setup_type_t setup_type,
-                        void **ret_init_stack);

@@ -166,3 +166,32 @@ int pd_client_clone(pd_client_context_t *src_pd,
                     seL4_CPtr free_slot,
                     pd_resource_config_t *cfg,
                     pd_client_context_t *ret_copied);
+
+/**
+ * @brief makes necessary preprations so that the (PD, ADS, CPU) combination can start running
+ * with a set of arguments, at a certain entry point
+ *
+ * @param target_ads the ADS where the stack resides
+ * @param target_pd the process PD which will use this stack
+ * @param target_cpu the CPU which will execute in this ADS and PD
+ * @param stack_top vaddr to the top of the stack in the target ADS
+ * @param stack_size size of the stack (in pages)
+ * @param argc the number of arguments to place on the stack
+ * @param args the arguments
+ * @param entry_point the address of the instruction to start executing at (in the target ADS)
+ * @param ipc_buf_addr the address of the IPC buffer for the (PD, ADS, CPU)
+ * @param setup_type the type of setup (see pd_setup_type for details)
+ * @param ret_init_stack the position of the initial stack pointer after setup
+ * @return int 0 on success
+ */
+int pd_client_runtime_setup(pd_client_context_t *target_pd,
+                            ads_client_context_t *target_ads,
+                            cpu_client_context_t *target_cpu,
+                            void *stack_top,
+                            int stack_size,
+                            int argc,
+                            seL4_Word *args,
+                            void *entry_point,
+                            void *ipc_buf_addr,
+                            pd_setup_type_t setup_type,
+                            void **ret_init_stack);

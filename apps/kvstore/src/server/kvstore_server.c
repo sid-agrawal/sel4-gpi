@@ -277,7 +277,7 @@ int kvstore_server_start_thread(seL4_CPtr *kvstore_ep)
     /* configure cpu */
     seL4_Word cnode_guard = api_make_guard_skip_word(seL4_WordBits - PD_CSPACE_SIZE_BITS);
 
-    error = cpu_client_config(&new_cpu, &self_ads_conn, &ipc_buf_mo, NULL, cnode_guard, 0, (seL4_Word)ipc_buf_addr_in_new_cpu);
+    error = cpu_client_config(&new_cpu, &self_ads_conn, NULL, &ipc_buf_mo, cnode_guard, 0, (seL4_Word)ipc_buf_addr_in_new_cpu);
     CHECK_ERROR(error, "failed to configure cpu for thread", KVSTORE_ERROR_UNKNOWN);
 
     /* allocate temp endpoint */
@@ -288,7 +288,7 @@ int kvstore_server_start_thread(seL4_CPtr *kvstore_ep)
     /* start the thread */
     // uintptr_t aligned_stack_pointer = sel4gpi_setup_thread_stack(stack_addr_in_new_cpu, 16);
     void *stack_top = stack_addr_in_new_cpu + stack_pages * SIZE_BITS_TO_BYTES(seL4_PageBits);
-    error = cpu_client_start(&new_cpu, &kvstore_server_main_thread, stack_top, temp_ep);
+    error = cpu_client_start(&new_cpu);
     CHECK_ERROR(error, "failed to start cpu for thread", KVSTORE_ERROR_UNKNOWN);
 
     // Wait for it to finish starting

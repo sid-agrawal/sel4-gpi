@@ -53,6 +53,9 @@ enum cpu_component_funcs
 
     CPU_FUNC_DISCONNECT_REQ,
     CPU_FUNC_DISCONNECT_ACK,
+
+    CPU_FUNC_SET_TLS_REQ,
+    CPU_FUNC_SET_TLS_ACK
 };
 
 /* Designated purposes of each message register in the mini-protocol. */
@@ -74,10 +77,7 @@ enum cpu_component_msgregs
     CPUMSGREG_SPAWN_SYNC_ACK_END = CPUMSGREG_LABEL0,
 
     /* Start */
-    CPUMSGREG_START_FUNC_VADDR = CPUMSGREG_LABEL0,
-    CPUMSGREG_START_INIT_STACK_ADDR,
-    CPUMSGREG_START_ARG0,
-    CPUMSGREG_START_REQ_END,
+    CPUMSGREG_START_REQ_END = CPUMSGREG_LABEL0,
 
     CPUMSGREG_START_ACK_END = CPUMSGREG_LABEL0,
 
@@ -100,6 +100,13 @@ enum cpu_component_msgregs
     CPUMSGREG_DISCONNECT_REQ_END = CPUMSGREG_LABEL0,
 
     CPUMSGREG_DISCONNECT_ACK_END = CPUMSGREG_LABEL0,
+
+    /* Set TLS Base */
+    CPUMSGREG_SET_TLS_REQ_BASE = CPUMSGREG_LABEL0,
+    CPUMSGREG_SET_TLS_REQ_END,
+
+    CPUMSGREG_SET_TLS_ACK_SP = CPUMSGREG_LABEL0,
+    CPUMSGREG_SET_TLS_ACK_END
 };
 
 /* Per-client context maintained by the server. */

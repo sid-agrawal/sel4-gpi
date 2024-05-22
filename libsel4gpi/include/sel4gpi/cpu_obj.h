@@ -21,23 +21,19 @@ typedef struct _cpu
     sel4utils_thread_t thread; // storage for some commonly used fields
     uint64_t binded_ads_id;
     void *tls_base;
-    // the currently binded cspace, could potentially change if reconfigured
-    seL4_CPtr cspace;
+    seL4_CPtr cspace; // the currently binded cspace, could potentially change if reconfigured
     seL4_Word cspace_guard;
     seL4_CPtr fault_ep;
+    seL4_UserContext *reg_ctx;
 } cpu_t;
 
 /**
- * @brief Start the given CPU
+ * @brief Start the given CPU. Assumes that the user context (reg_ctx) struct has already been populated
  *
  * @param cpu cpu object
- * @param entry_point the entry point for the CPU, does not need to be a function
- * @param init_stack pointer to the starting position of the stack ASSUMES that it has already been set up with arguments
- * @return int 0 on success, -1 on failure.
+ * @return int 0 on success, 1 on failure.
  */
-int cpu_start(cpu_t *cpu,
-              void *entry_point,
-              void *init_stack);
+int cpu_start(cpu_t *cpu);
 
 /**
  * @brief
@@ -100,3 +96,42 @@ void cpu_dump_rr(cpu_t *cpu, model_state_t *ms, gpi_model_node_t *pd_node);
  * @param cpu the cpu object
  */
 void cpu_destroy(cpu_t *cpu);
+
+/**
+ * @brief sets the TLS base and the stack pointer
+ *
+ * @param cpu the target CPU object
+ * @param tls_base address of the TLS base in the ADS configured for this CPU
+ * @param ret_init_stack returns the starting address of the stack
+ * @return int returns 0 on success, 1 on failure
+ */
+int cpu_set_tls_stack_top(cpu_t *cpu, uintptr_t tls_base, void **ret_init_stack);
+
+/**
+ * @brief sets the CPU object's register values with the given arguments and entry point
+ * intended usage: the entry point is a function which the CPU can jump directly to in its binded ADS,
+ *                 and arguments to the function can be put in registers
+ *
+ * @param cpu the target CPU
+ * @param entry_point address of instruction to start execution at
+ * @param arg0 the first argument
+ * @param arg1 the second argument
+ * @param ipc_buf_addr address of the IPC buffer (OPTIONAL)
+ * @param stack_top the top of the stack in the target CPU's binded ADS
+ * @return int returns 0 on success, 1 on failure
+ */
+int cpu_set_local_context(cpu_t *cpu, void *entry_point,
+                          void *arg0, void *arg1,
+                          void *ipc_buf_addr, void *stack_top);
+
+/**
+ * @brief sets the CPU object's register values to the given entry point
+ * intended usage: the entry point is not necessarily a function, arguments for whatever is
+ *                 required during execution must be placed on the stack
+ *
+ * @param cpu the target CPU
+ * @param entry_point address of instruction to start execution at
+ * @param stack_top the top of the stack in the target CPU's binded ADS
+ * @return int returns 0 on success, 1 on failure
+ */
+int cpu_set_remote_context(cpu_t *cpu, void *entry_point, void *stack_top);

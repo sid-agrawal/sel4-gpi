@@ -206,6 +206,29 @@ err_goto:
     return proc_cfg;
 }
 
+static int setup_tls_in_stack(void *dest_stack, size_t stack_pages, void *ipc_buffer_addr)
+{
+    int error = 0;
+    size_t tls_size = sel4runtime_get_tls_size();
+    /* make sure we're not going to use too much of the stack */
+    GOTO_IF_COND(tls_size > stack_pages * PAGE_SIZE_4K / 8, "TLS would use more than 1/8th of the application stack %zu/%zu", tls_size, stack_pages);
+
+    uintptr_t tls_base = (uintptr_t)dest_stack - tls_size;
+    uintptr_t tp = (uintptr_t)sel4runtime_write_tls_image((void *)tls_base);
+    seL4_IPCBuffer *ipc_buf = ipc_buffer_addr;
+    sel4runtime_set_tls_variable(tp, __sel4_ipc_buffer, ipc_buf);
+
+    // uintptr_t aligned_stack_pointer = ALIGN_DOWN(tls_base, STACK_CALL_ALIGNMENT);
+
+    // int error = sel4utils_arch_init_local_context(entry_point, arg0, arg1,
+    //                                               (void *) thread->ipc_buffer_addr,
+    //                                               (void *) aligned_stack_pointer,
+    //                                               &context);
+
+err_goto:
+    return error;
+}
+
 int sel4gpi_start_pd(pd_resource_config_t *cfg, sel4gpi_runnable_t *runnable, int argc, seL4_Word *args)
 {
     int error;
@@ -226,19 +249,26 @@ int sel4gpi_start_pd(pd_resource_config_t *cfg, sel4gpi_runnable_t *runnable, in
     ads_client_context_t target_ads = {0};
     ads_client_context_t vmr_rde = {0};
     mo_client_context_t ipc_mo = {0};
-    void *entry_point = NULL;
+    seL4_CPtr fault_ep_in_pd;
+    void *entry_point = cfg->ads_cfg.entry_point;
     void *init_stack = NULL;
     void *stack = NULL;
     void *heap = NULL;
     void *ipc_buf = NULL;
-
+    PD_UTIL_PRINT("A\n");
     // TODO check in config is valid
+    if (cfg->fault_ep != seL4_CapNull)
+    {
+        PD_UTIL_PRINT("B\n");
+        error = pd_client_send_cap(&runnable->pd, cfg->fault_ep, &fault_ep_in_pd);
+        GOTO_IF_ERR(error, "Failed to send fault EP to PD\n");
+    }
 
     // check ADS config
     if (cfg->ads_cfg.same_ads)
     {
-        printf("binded ads id: %d\n", sel4gpi_get_binded_ads_id());
         vmr_rde.badged_server_ep_cspath.capPtr = sel4gpi_get_rde_by_space_id(sel4gpi_get_binded_ads_id(), GPICAP_TYPE_VMR);
+        target_ads = sel4gpi_get_ads_conn();
     }
     else
     {
@@ -295,7 +325,7 @@ int sel4gpi_start_pd(pd_resource_config_t *cfg, sel4gpi_runnable_t *runnable, in
         GOTO_IF_ERR(1, "Not implemented yet!\n");
         break;
     case GPI_DISJOINT:
-        PD_UTIL_PRINT("Allocating stack, vmr_rde cap: %ld\n", vmr_rde.badged_server_ep_cspath.capPtr);
+        PD_UTIL_PRINT("Allocating stack\n");
         stack = sel4gpi_new_sized_stack(&vmr_rde, cfg->ads_cfg.stack_pages);
         GOTO_IF_ERR(stack == NULL, "failed to allocate a new stack");
         break;
@@ -352,21 +382,22 @@ int sel4gpi_start_pd(pd_resource_config_t *cfg, sel4gpi_runnable_t *runnable, in
         break;
     }
 
-    PD_UTIL_PRINT("Configuring CPU Object\n");
-    error = cpu_client_config(&new_cpu, &target_ads, ipc_buf == NULL ? NULL : &ipc_mo, &runnable->pd, cnode_guard, seL4_CapNull, (seL4_Word)ipc_buf);
-    GOTO_IF_ERR(error, "failed to configure CPU");
+    PD_UTIL_PRINT("Configuring CPU Object, fault_ep: %lx\n", fault_ep_in_pd);
+    error = cpu_client_config(&new_cpu, &target_ads, &runnable->pd, &ipc_mo, cnode_guard, fault_ep_in_pd, (seL4_Word)ipc_buf);
+    GOTO_IF_ERR(error, "failed to configure CPU\n");
 
     // (XXX) Linh required that this happens after all the other setup, we can do better if we refactor the sel4utils structs out of the PD component
-    if (cfg->ads_cfg.stack_shared)
+    if (cfg->ads_cfg.stack_shared == GPI_DISJOINT)
     {
-        ads_setup_type_t setup_mode = cfg->ads_cfg.code_shared == GPI_DISJOINT ? ADS_RUNTIME_SETUP : ADS_TLS_SETUP;
-        error = ads_client_pd_setup(&target_ads, &runnable->pd, &new_cpu, stack, cfg->ads_cfg.stack_pages, argc, args, setup_mode, &init_stack);
+        PD_UTIL_PRINT("Setting up stack\n");
+        pd_setup_type_t setup_mode = cfg->ads_cfg.code_shared == GPI_DISJOINT ? PD_RUNTIME_SETUP : PD_REGISTER_SETUP;
+        error = pd_client_runtime_setup(&runnable->pd, &target_ads, &new_cpu, stack, cfg->ads_cfg.stack_pages, argc, args, entry_point, ipc_buf, setup_mode, &init_stack);
         GOTO_IF_ERR(error, "failed to prepare stack");
     }
 
     // TODO loop through other VMR regions
     PD_UTIL_PRINT("Starting CPU\n");
-    error = cpu_client_start(&new_cpu, entry_point, init_stack, 0);
+    error = cpu_client_start(&new_cpu);
     GOTO_IF_ERR(error, "failed to start CPU");
 
 err_goto:
@@ -374,9 +405,9 @@ err_goto:
     return error;
 }
 
-pd_resource_config_t *sel4gpi_generate_proc_config(char *image_name, size_t stack_pages, size_t heap_pages)
+pd_resource_config_t *sel4gpi_generate_proc_config(const char *image_name, size_t stack_pages, size_t heap_pages)
 {
-    pd_resource_config_t *proc_cfg = malloc(sizeof(pd_resource_config_t));
+    pd_resource_config_t *proc_cfg = calloc(1, sizeof(pd_resource_config_t));
     ads_resource_config_t proc_ads_cfg = {
         .same_ads = false,
         .code_shared = GPI_DISJOINT,
@@ -393,11 +424,13 @@ pd_resource_config_t *sel4gpi_generate_proc_config(char *image_name, size_t stac
     return proc_cfg;
 }
 
-pd_resource_config_t *sel4gpi_generate_thread_config(void)
+pd_resource_config_t *sel4gpi_generate_thread_config(void *thread_fn, seL4_CPtr fault_ep)
 {
-    pd_resource_config_t *thread_cfg = malloc(sizeof(pd_resource_config_t));
+    pd_resource_config_t *thread_cfg = calloc(1, sizeof(pd_resource_config_t));
+    thread_cfg->fault_ep = fault_ep;
     ads_resource_config_t thread_ads_cfg = {
         .same_ads = true,
+        .entry_point = thread_fn,
         .code_shared = GPI_SHARED,
         .stack_shared = GPI_DISJOINT,
         .heap_shared = GPI_SHARED,

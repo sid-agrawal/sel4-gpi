@@ -85,7 +85,10 @@ enum pd_component_funcs
     PD_FUNC_BENCH_IPC_ACK,
 
     PD_FUNC_CLONE_REQ,
-    PD_FUNC_CLONE_ACK
+    PD_FUNC_CLONE_ACK,
+
+    PD_FUNC_SETUP_REQ,
+    PD_FUNC_SETUP_ACK
 };
 
 /* Designated purposes of each message register in the mini-protocol. */
@@ -197,7 +200,31 @@ enum pd_component_msgregs
     PDMSGREG_BENCH_IPC_REQ_END,
 
     PDMSGREG_BENCH_IPC_ACK_END = PDMSGREG_LABEL0,
+
+    /* PD runtime setup */
+    /* (XXX) For now,  we only pass upt to 4 args, which may need fixing */
+    PDMSGREG_SETUP_REQ_ARGC = PDMSGREG_LABEL0,
+    PDMSGREG_SETUP_REQ_ARG0,
+    PDMSGREG_SETUP_REQ_ARG1,
+    PDMSGREG_SETUP_REQ_ARG2,
+    PDMSGREG_SETUP_REQ_ARG3,
+    PDMSGREG_SETUP_REQ_STACK,
+    PDMSGREG_SETUP_REQ_STACK_SZ,
+    PDMSGREG_SETUP_REQ_ENTRY_POINT,
+    PDMSGREG_SETUP_REQ_IPC_BUF,
+    PDMSGREG_SETUP_REQ_TYPE,
+    PDMSGREG_SETUP_REQ_END,
+
+    PDMSGREG_SETUP_ACK_INIT_STACK = PDMSGREG_LABEL0,
+    PDMSGREG_SETUP_ACK_END,
 };
+
+enum _pd_setup_type
+{
+    PD_RUNTIME_SETUP = 1, // sets up the entire C runtime from scratch, writes any arguments onto the stack
+    PD_REGISTER_SETUP     // writes a limited number of arguments into registers only
+};
+typedef enum _pd_setup_type pd_setup_type_t;
 
 // Registry of PDs maintained by the server
 typedef struct _pd_component_registry_entry

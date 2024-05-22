@@ -21,10 +21,10 @@
 #define PD_UTIL_DBG 1
 
 #ifdef PD_UTIL_DBG
-#define PD_UTIL_PRINT(msg, ...)                                  \
-    do                                                           \
-    {                                                            \
-        printf("PD UTILS %s():\t" msg, __func__, ##__VA_ARGS__); \
+#define PD_UTIL_PRINT(msg, ...)                         \
+    do                                                  \
+    {                                                   \
+        printf("%s():\t" msg, __func__, ##__VA_ARGS__); \
     } while (0)
 #else
 #define PD_UTIL_PRINT(...)
@@ -139,11 +139,11 @@ int sel4gpi_start_pd(pd_resource_config_t *cfg, sel4gpi_runnable_t *runnable, in
  * @param image_name the name of the process's image
  * @return pd_resource_config_t* returns a filled in config struct, caller is responsbile for freeing
  */
-pd_resource_config_t *sel4gpi_generate_proc_config(char *image_name, size_t stack_pages, size_t heap_pages);
+pd_resource_config_t *sel4gpi_generate_proc_config(const char *image_name, size_t stack_pages, size_t heap_pages);
 
 /**
  * @brief (WIP)
  *
  * @return pd_resource_config_t*
  */
-pd_resource_config_t *sel4gpi_generate_thread_config(void);
+pd_resource_config_t *sel4gpi_generate_thread_config(void *thread_fn, seL4_CPtr fault_ep);

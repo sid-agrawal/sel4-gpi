@@ -435,6 +435,102 @@ err_goto:
     return tag;
 }
 
+static seL4_MessageInfo_t handle_runtime_setup_req(seL4_Word sender_badge, seL4_MessageInfo_t old_tag)
+{
+    OSDB_PRINTF("Got runtime setup request from client badge: ");
+    badge_print(sender_badge);
+
+    int error = 0;
+
+    SERVER_GOTO_IF_COND(seL4_MessageInfo_get_capsUnwrapped(old_tag) < 1, "Missing cap for target PD in capsUnwrapped\n");
+
+    pd_component_registry_entry_t *target_pd = (pd_component_registry_entry_t *)
+        resource_component_registry_get_by_badge(get_pd_component(), sender_badge);
+    SERVER_GOTO_IF_COND(target_pd == NULL, "Couldn't find target PD (%ld)\n", get_object_id_from_badge(sender_badge));
+
+    ads_component_registry_entry_t *target_ads = (ads_component_registry_entry_t *)
+        resource_component_registry_get_by_id(get_ads_component(), get_object_id_from_badge(seL4_GetBadge(0)));
+    SERVER_GOTO_IF_COND(target_ads == NULL, "Couldn't find target ADS (%ld)\n", get_object_id_from_badge(seL4_GetBadge(0)));
+
+    cpu_component_registry_entry_t *target_cpu = (cpu_component_registry_entry_t *)
+        resource_component_registry_get_by_id(get_cpu_component(), get_object_id_from_badge(seL4_GetBadge(1)));
+    SERVER_GOTO_IF_COND(target_cpu == NULL, "Couldn't find target CPU (%ld)\n", get_object_id_from_badge(seL4_GetBadge(1)));
+
+    /* parse the arguments */
+    int argc = seL4_GetMR(PDMSGREG_SETUP_REQ_ARGC);
+    void *init_stack;
+
+    // These brackets limit the scope of argc/argv so we may goto err_goto
+    {
+        seL4_Word args[argc];
+
+        for (int i = 0; i < argc; i++)
+        {
+            switch (i)
+            {
+            case 0:
+                args[i] = seL4_GetMR(PDMSGREG_SETUP_REQ_ARG0);
+                break;
+            case 1:
+                args[i] = seL4_GetMR(PDMSGREG_SETUP_REQ_ARG1);
+                break;
+            case 2:
+                args[i] = seL4_GetMR(PDMSGREG_SETUP_REQ_ARG2);
+                break;
+            case 3:
+                args[i] = seL4_GetMR(PDMSGREG_SETUP_REQ_ARG3);
+                break;
+            }
+        }
+
+        char string_args[argc][WORD_STRING_SIZE];
+        char *argv[argc];
+
+        for (int i = 0; i < argc; i++)
+        {
+            argv[i] = string_args[i];
+            snprintf(argv[i], WORD_STRING_SIZE, "%" PRIuPTR "", args[i]);
+        }
+
+        void *stack_top = (void *)seL4_GetMR(PDMSGREG_SETUP_REQ_STACK);
+        size_t stack_size = seL4_GetMR(PDMSGREG_SETUP_REQ_STACK_SZ);
+        target_pd->pd.proc.thread.stack_top = stack_top;
+        target_pd->pd.proc.thread.stack_size = stack_size;
+        void *entry_point = (void *)seL4_GetMR(PDMSGREG_SETUP_REQ_ENTRY_POINT);
+        void *ipc_buf_addr = (void *)seL4_GetMR(PDMSGREG_SETUP_REQ_IPC_BUF);
+        pd_setup_type_t setup_mode = (pd_setup_type_t)seL4_GetMR(PDMSGREG_SETUP_REQ_TYPE);
+
+        switch (setup_mode)
+        {
+        case PD_RUNTIME_SETUP:
+            error = ads_write_arguments(&target_pd->pd.proc,
+                                        (void *)target_pd->pd.init_data_in_PD,
+                                        get_gpi_server()->server_vka,
+                                        get_pd_component()->server_vspace,
+                                        argc,
+                                        argv,
+                                        &init_stack);
+            if (!error)
+            {
+                error = cpu_set_remote_context(&target_cpu->cpu, entry_point, init_stack);
+            }
+            break;
+        default:
+            error = 1;
+            OSDB_PRINTERR("Invalid PD setup mode specified\n");
+            break;
+        }
+    }
+
+    SERVER_GOTO_IF_ERR(error, "Failed to setup PD\n");
+    seL4_SetMR(PDMSGREG_SETUP_ACK_INIT_STACK, (seL4_Word)init_stack);
+
+err_goto:
+    seL4_MessageInfo_t tag = seL4_MessageInfo_new(error, 0, 0, PDMSGREG_SETUP_ACK_END);
+    seL4_SetMR(PDMSGREG_FUNC, PD_FUNC_SETUP_ACK);
+    return tag;
+}
+
 static seL4_MessageInfo_t pd_component_handle(seL4_MessageInfo_t tag,
                                               seL4_Word sender_badge,
                                               seL4_CPtr received_cap,
@@ -487,6 +583,9 @@ static seL4_MessageInfo_t pd_component_handle(seL4_MessageInfo_t tag,
             break;
         case PD_FUNC_CLONE_REQ:
             reply_tag = handle_clone_req(sender_badge, tag);
+            break;
+        case PD_FUNC_SETUP_REQ:
+            reply_tag = handle_runtime_setup_req(sender_badge, tag);
             break;
         default:
             gpi_panic(PDSERVS "Unknown func type.", (seL4_Word)func);

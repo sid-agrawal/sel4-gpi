@@ -18,6 +18,7 @@
 #include <sel4gpi/cpu_obj.h>
 #include <sel4gpi/debug.h>
 #include <sel4gpi/model_exporting.h>
+#include <sel4gpi/error_handle.h>
 #include <sel4/sel4.h>
 #include <sel4runtime.h>
 
@@ -25,37 +26,10 @@
 #define DEBUG_ID CPU_DEBUG
 #define SERVER_ID CPUSERVS
 
-int cpu_start(cpu_t *cpu, void *entry_point, void *init_stack)
+int cpu_start(cpu_t *cpu)
 {
-    OSDB_PRINTF("cpu_start: starting CPU at entry point %p\n", entry_point);
-    int error;
-    seL4_UserContext regs = {0};
-    // void *stack_top = init_stack == 0 ? cpu->thread.stack_top : init_stack;
-    // OSDB_PRINTF(CPU_DEBUG, "init_stack %lx\n", stack_top);
-
-    // /* Initialize the TLS */
-    // size_t tls_size = sel4runtime_get_tls_size();
-    // uintptr_t tls_base = (uintptr_t)stack_top - tls_size;
-    // cpu->tls_base = (uintptr_t)sel4runtime_write_tls_image((void *)tls_base);
-    // cpu->thread.stack_top = ALIGN_UP(tls_base, STACK_CALL_ALIGNMENT);
-
-    // error = seL4_TCB_SetTLSBase(cpu->thread.tcb.cptr, cpu->tls_base);
-    // assert(error == 0);
-
-    // /* Write context and registers */
-    // sel4utils_arch_init_local_context((void *)entry_point, (void *)arg0,
-    //                                   (void *)cpu->tls_base, (void *)cpu->thread.ipc_buffer_addr, cpu->thread.stack_top, &regs);
-
-    // assert(error == 0);
-    // sel4utils_arch_init_context(entry_point)
-    error = sel4utils_arch_init_context(entry_point, init_stack, &regs);
-    if (error)
-    {
-        return error;
-    }
-
-    error = seL4_TCB_WriteRegisters(cpu->thread.tcb.cptr, 1, 0, sizeof(regs) / sizeof(seL4_Word), &regs);
-    return error;
+    OSDB_PRINTF("cpu_start: starting CPU at PC: 0x%lx\n", cpu->reg_ctx->pc);
+    return seL4_TCB_WriteRegisters(cpu->thread.tcb.cptr, 1, 0, sizeof(seL4_UserContext) / sizeof(seL4_Word), cpu->reg_ctx);
 }
 
 int cpu_config_vspace(cpu_t *cpu,
@@ -78,6 +52,7 @@ int cpu_config_vspace(cpu_t *cpu,
     cpu->thread.ipc_buffer_addr = ipc_buf_addr;
     cpu->thread.ipc_buffer = ipc_buffer_frame;
 
+    OSDB_PRINTF("fault_ep: %lx\n", fault_ep);
     int error = seL4_TCB_Configure(cpu->thread.tcb.cptr,
                                    fault_ep,   // fault endpoint
                                    root_cnode, // root cnode
@@ -121,18 +96,13 @@ int cpu_new(cpu_t *cpu,
             void *arg0)
 {
     int error = vka_alloc_tcb(vka, &cpu->thread.tcb);
-    assert(error == 0);
+    SERVER_GOTO_IF_ERR(error, "Couldn't allocate TCB\n");
 
-    /*
-            sel4utils_thread_config_t thread_config;
-        sel4utils_thread_t thread_obj;
-        uint64_t id;
-        vka_object_t *tcb;
-        void *stack_top;
-        void *tls_base;
-        void *ipc_buffer_addr;
-        seL4_CPtr ipc_buffer_frame;
-    */
+    cpu->reg_ctx = calloc(1, sizeof(seL4_UserContext));
+    SERVER_GOTO_IF_COND(cpu->reg_ctx == NULL, "Couldn't malloc CPU's register context\n");
+
+err_goto:
+    return error;
 }
 
 void cpu_dump_rr(cpu_t *cpu, model_state_t *ms, gpi_model_node_t *pd_node)
@@ -166,7 +136,30 @@ void cpu_dump_rr(cpu_t *cpu, model_state_t *ms, gpi_model_node_t *pd_node)
 
 void cpu_destroy(cpu_t *cpu)
 {
-    // (XXX) Arya: What is there to destroy here? 
-    // Thread/cspace/fault ep, etc. are all destroyed with the PD
+    // (XXX) Linh: Ideally, we can destroy the thread struct here rather than in pd_destroy
+    free(cpu->reg_ctx);
     return;
+}
+
+int cpu_set_tls_stack_top(cpu_t *cpu, uintptr_t tls_base, void **ret_init_stack)
+{
+    int error = 0;
+    cpu->tls_base = (void *)tls_base;
+    cpu->thread.stack_top = (void *)ALIGN_DOWN(tls_base, STACK_CALL_ALIGNMENT);
+    *ret_init_stack = cpu->thread.stack_top;
+
+    error = seL4_TCB_SetTLSBase(cpu->thread.tcb.cptr, (seL4_Word)cpu->tls_base);
+    return error;
+}
+
+int cpu_set_local_context(cpu_t *cpu, void *entry_point,
+                          void *arg0, void *arg1,
+                          void *ipc_buf_addr, void *stack_top)
+{
+    return sel4utils_arch_init_local_context(entry_point, arg0, arg1, ipc_buf_addr, stack_top, cpu->reg_ctx);
+}
+
+int cpu_set_remote_context(cpu_t *cpu, void *entry_point, void *stack_top)
+{
+    return sel4utils_arch_init_context(entry_point, stack_top, cpu->reg_ctx);
 }

@@ -81,7 +81,8 @@ err_goto:
 
 static seL4_MessageInfo_t handle_start_req(seL4_Word sender_badge, seL4_MessageInfo_t old_tag)
 {
-    OSDB_PRINTF("Got start request from client badge %lx.\n", sender_badge);
+    OSDB_PRINTF("Got CPU start req: ");
+    badge_print(sender_badge);
 
     int error = 0;
     /* Find the client */
@@ -89,12 +90,7 @@ static seL4_MessageInfo_t handle_start_req(seL4_Word sender_badge, seL4_MessageI
         resource_component_registry_get_by_badge(get_cpu_component(), sender_badge);
     SERVER_GOTO_IF_COND(client_data == NULL, "Couldn't find CPU (%ld)\n", get_object_id_from_badge(sender_badge));
 
-    seL4_Word init_stack = seL4_GetMR(CPUMSGREG_START_INIT_STACK_ADDR);
-    seL4_Word arg0 = seL4_GetMR(CPUMSGREG_START_ARG0);
-
-    error = cpu_start(&client_data->cpu,
-                      (void *)seL4_GetMR(CPUMSGREG_START_FUNC_VADDR),
-                      (void *)init_stack);
+    error = cpu_start(&client_data->cpu);
     SERVER_GOTO_IF_ERR(error, "Failed to start CPU\n");
 
 err_goto:
@@ -211,13 +207,34 @@ static seL4_MessageInfo_t handle_change_vspace_req(seL4_Word sender_badge,
     SERVER_GOTO_IF_ERR(error, "Failed to change vspace\n");
 
     // Update the PD object with the new ADS
-    // (XXX) Arya: update the ads_conn cap?
+    // (XXX) Arya: update the ads_conn cap? need to find the badged EP for the given ADS
     pd_data->pd.init_data->ads_conn.id = ads_data->ads.id;
     client_data->cpu.binded_ads_id = ads_data->ads.id;
 
 err_goto:
     seL4_SetMR(CPUMSGREG_FUNC, CPU_FUNC_CONFIG_ACK);
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(error, 0, 0, CPUMSGREG_CHANGE_VSPACE_ACK_END);
+    return tag;
+}
+
+static seL4_MessageInfo_t handle_set_tls_req(seL4_Word sender_badge, seL4_MessageInfo_t old_tag)
+{
+    int error = 0;
+    OSDB_PRINTF("Got set TLS base and stack request: ");
+    badge_print(sender_badge);
+
+    cpu_component_registry_entry_t *cpu_data = (cpu_component_registry_entry_t *)resource_component_registry_get_by_badge(get_cpu_component(), sender_badge);
+    SERVER_GOTO_IF_COND_BG(cpu_data == NULL, sender_badge, "Couldn't find CPU data\n");
+    uintptr_t tls_base = (uintptr_t)seL4_GetMR(CPUMSGREG_SET_TLS_REQ_BASE);
+
+    void *init_stack;
+    error = cpu_set_tls_stack_top(&cpu_data->cpu, tls_base, &init_stack);
+    SERVER_GOTO_IF_ERR(error, "Failed to set TLS and stack pointer\n");
+    seL4_SetMR(CPUMSGREG_SET_TLS_ACK_SP, (seL4_Word)init_stack);
+
+err_goto:
+    seL4_SetMR(CPUMSGREG_FUNC, CPU_FUNC_SET_TLS_ACK);
+    seL4_MessageInfo_t tag = seL4_MessageInfo_new(error, 0, 0, CPUMSGREG_SET_TLS_ACK_END);
     return tag;
 }
 
@@ -247,6 +264,9 @@ static seL4_MessageInfo_t cpu_component_handle(seL4_MessageInfo_t tag,
         case CPU_FUNC_CHANGE_VSPACE_REQ:
             reply_tag = handle_change_vspace_req(sender_badge, tag, received_cap);
             *need_new_recv_cap = true;
+            break;
+        case CPU_FUNC_SET_TLS_REQ:
+            reply_tag = handle_set_tls_req(sender_badge, tag);
             break;
         default:
             gpi_panic(CPUSERVS "Unknown func type.", (seL4_Word)func);

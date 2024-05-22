@@ -72,7 +72,8 @@ typedef struct _ads_resource_config
 {
    bool same_ads;                 // whether this config is for the same ADS as the current one
    ads_client_context_t *src_ads; // the source ADS to generate the new ADS, only used if same_ads == false
-   char *image_name;              // only used if code_shared == GPI_DISJOINT
+   const char *image_name;        // only used if code_shared == GPI_DISJOINT
+   void *entry_point;             // only used if code_share != GPI_DISJOINT
 
    /* special ADS regions */
    /*  if we're in the same ADS, configuring any of these as GPI_SHARED has no effect */
@@ -91,6 +92,7 @@ typedef struct _ads_resource_config
 // For creating new PDs: defines the level of sharing between a given source PD and the new PD
 typedef struct _pd_resource_config
 {
+   seL4_CPtr fault_ep; // supply a fault-endpoint for the PD, if NULL, will create a new one
    ads_resource_config_t ads_cfg;
    // add configs for other resources here as needed
 } pd_resource_config_t;

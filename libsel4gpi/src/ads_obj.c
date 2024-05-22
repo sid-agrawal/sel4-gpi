@@ -204,6 +204,27 @@ attach_node_t *ads_get_res_by_vaddr(ads_t *ads, void *vaddr)
     return (attach_node_t *)resource_server_registry_get_by_id(&ads->attach_registry, (uint64_t)vaddr);
 }
 
+static int copy_frame_caps_for_mapping(seL4_CPtr *src_caps, seL4_CPtr *dest_caps, size_t num_pages)
+{
+    int error = 0;
+
+    cspacepath_t from_path, to_path;
+    for (size_t i = 0; i < num_pages; i++)
+    {
+        vka_cspace_make_path(get_ads_component()->server_vka, src_caps[i], &from_path);
+        error = vka_cspace_alloc_path(get_ads_component()->server_vka, &to_path);
+        SERVER_GOTO_IF_ERR(error, "Failed to allocate slot\n");
+
+        error = vka_cnode_copy(&to_path, &from_path, seL4_AllRights);
+        SERVER_GOTO_IF_ERR(error, "Failed to copy cap\n");
+
+        dest_caps[i] = to_path.capPtr;
+    }
+
+err_goto:
+    return error;
+}
+
 int ads_attach_to_res(ads_t *ads,
                       vka_t *vka,
                       attach_node_t *reservation,
@@ -218,58 +239,59 @@ int ads_attach_to_res(ads_t *ads,
                 offset);
 
     /* Make a copy of the frame caps for this new mapping */
-    seL4_CPtr frame_caps[mo->num_pages];
-    for (int i = 0; i < mo->num_pages; i++)
-    {
-        cspacepath_t from_path, to_path;
-        vka_cspace_make_path(vka, mo->frame_caps_in_root_task[i], &from_path);
+    // seL4_CPtr frame_caps[mo->num_pages];
+    // for (int i = 0; i < mo->num_pages; i++)
+    // {
+    //     cspacepath_t from_path, to_path;
+    //     vka_cspace_make_path(vka, mo->frame_caps_in_root_task[i], &from_path);
 
-        /* allocate a path for the copy*/
-        int error = vka_cspace_alloc_path(vka, &to_path);
-        if (error)
-        {
-            OSDB_PRINTF("main: Failed to allocate slot in root cspace, error: %d", error);
-            return 1;
-        }
+    //     /* allocate a path for the copy*/
+    //     int error = vka_cspace_alloc_path(vka, &to_path);
+    //     if (error)
+    //     {
+    //         OSDB_PRINTF("main: Failed to allocate slot in root cspace, error: %d", error);
+    //         return 1;
+    //     }
 
-        /* copy the frame cap */
-        error = vka_cnode_copy(&to_path, &from_path, seL4_AllRights);
-        if (error)
-        {
-            OSDB_PRINTF("main: Failed to copy cap, error: %d", error);
-            return 1;
-        }
+    //     /* copy the frame cap */
+    //     error = vka_cnode_copy(&to_path, &from_path, seL4_AllRights);
+    //     if (error)
+    //     {
+    //         OSDB_PRINTF("main: Failed to copy cap, error: %d", error);
+    //         return 1;
+    //     }
 
-        frame_caps[i] = to_path.capPtr;
+    //     frame_caps[i] = to_path.capPtr;
 
-        // void *frame_paddr = (void *)seL4_DebugCapPaddr(attach_node->frame_caps[i]);
-        // OSDB_PRINTF("paddr of frame to map: %p\n", frame_paddr);
-    }
+    //     // void *frame_paddr = (void *)seL4_DebugCapPaddr(attach_node->frame_caps[i]);
+    //     // OSDB_PRINTF("paddr of frame to map: %p\n", frame_paddr);
+    // }
+
+    reservation->frame_caps = malloc(sizeof(seL4_CPtr) * mo->num_pages);
+
+    error = copy_frame_caps_for_mapping(mo->frame_caps_in_root_task, reservation->frame_caps, mo->num_pages);
+    SERVER_GOTO_IF_ERR(error, "Failed to copy frame caps for attachment\n");
 
     /* Map the frame caps into the vspace */
     error = sel4utils_map_pages_at_vaddr(ads->vspace,
-                                         frame_caps,
+                                         reservation->frame_caps,
                                          NULL,
                                          reservation->vaddr + offset,
                                          mo->num_pages,
                                          MO_PAGE_BITS,
                                          reservation->res);
 
-    if (error)
-    {
-        ZF_LOGE("Failed to map pages\n");
-        return 1;
-    }
+    SERVER_GOTO_IF_ERR(error, "Failed to map pages\n");
 
     /* Track the attachment */
     reservation->mo_attached = true;
     reservation->mo_offset = offset;
     reservation->mo_id = mo->id;
     reservation->n_frames = mo->num_pages;
-    reservation->frame_caps = malloc(sizeof(seL4_CPtr) * mo->num_pages);
-    memcpy(reservation->frame_caps, frame_caps, sizeof(seL4_CPtr) * mo->num_pages);
+    // memcpy(reservation->frame_caps, frame_caps, sizeof(seL4_CPtr) * mo->num_pages);
 
-    return 0;
+err_goto:
+    return error;
 }
 
 int ads_attach(ads_t *ads,
@@ -773,7 +795,7 @@ void ads_destroy(ads_t *ads)
 
 int ads_load_elf(vspace_t *loadee_vspace,
                  sel4utils_process_t *proc,
-                 char *image_name,
+                 const char *image_name,
                  void **ret_entry_point)
 {
     int error;
@@ -822,13 +844,13 @@ error:
     }
 }
 
-int ads_runtime_setup(sel4utils_process_t *process,
-                      void *osm_init_data,
-                      vka_t *vka,
-                      vspace_t *vspace,
-                      int argc,
-                      char *argv[],
-                      void **ret_init_stack)
+int ads_write_arguments(sel4utils_process_t *process,
+                        void *osm_init_data,
+                        vka_t *vka,
+                        vspace_t *vspace,
+                        int argc,
+                        char *argv[],
+                        void **ret_init_stack)
 {
     assert(vspace != NULL);
     assert(&process->vspace != NULL);
@@ -875,8 +897,6 @@ int ads_runtime_setup(sel4utils_process_t *process,
         auxv[7].a_un.a_val = process->sysinfo;
         auxc++;
     }
-
-    seL4_UserContext context = {0};
 
     uintptr_t dest_argv[argc];
     uintptr_t dest_envp[envc];
@@ -970,41 +990,8 @@ int ads_runtime_setup(sel4utils_process_t *process,
     }
 
     assert(initial_stack_pointer % (2 * sizeof(seL4_Word)) == 0);
-    error = sel4utils_arch_init_context(process->entry_point, (void *)initial_stack_pointer, &context);
-    if (error)
-    {
-        printf("sel4utils_arch_init_context error\n");
-        return error;
-    }
 
     process->thread.initial_stack_pointer = (void *)initial_stack_pointer;
     *ret_init_stack = (void *)initial_stack_pointer;
     return 0;
-}
-
-int ads_tls_setup(ads_t *target_ads, cpu_t *target_cpu, void *stack_top, size_t stack_size, void **ret_init_stack)
-{
-    /* WIP */
-    int error;
-    size_t tls_size = sel4runtime_get_tls_size();
-    uintptr_t tls_base = (uintptr_t)stack_top - tls_size;
-
-    size_t stack_bytes = stack_size * (SIZE_BITS_TO_BYTES(MO_PAGE_BITS));
-    uintptr_t stack_bottom = (uintptr_t)stack_top - stack_bytes;
-    attach_node_t *stack_attach_node = ads_get_res_by_vaddr(target_ads, stack_bottom);
-    SERVER_GOTO_IF_COND(1, "stack_attach_node null? %d\n", stack_attach_node == NULL);
-    // vspace_map_pages(get_ads_component()->server_vspace, )
-
-    target_cpu->tls_base = (uintptr_t)sel4runtime_write_tls_image((void *)tls_base);
-    target_cpu->thread.stack_top = ALIGN_UP(tls_base, STACK_CALL_ALIGNMENT);
-
-    error = seL4_TCB_SetTLSBase(target_cpu->thread.tcb.cptr, target_cpu->tls_base);
-    assert(error == 0);
-
-    /* Write context and registers */
-    // sel4utils_arch_init_local_context((void *)entry_point, (void *)arg0,
-    //                                   (void *)target_cpu->tls_base, (void *)target_cpu->thread.ipc_buffer_addr, target_cpu->thread.stack_top, &regs);
-
-err_goto:
-    return error;
 }

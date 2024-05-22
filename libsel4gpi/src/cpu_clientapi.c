@@ -43,10 +43,10 @@ int cpu_component_client_connect(seL4_CPtr server_ep_cap,
     return seL4_MessageInfo_ptr_get_label(&tag);
 }
 
-int cpu_client_config(cpu_client_context_t *conn,
-                      ads_client_context_t *ads_conn,
-                      mo_client_context_t *ipc_buf_mo,
+int cpu_client_config(cpu_client_context_t *cpu,
+                      ads_client_context_t *ads,
                       pd_client_context_t *pd,
+                      mo_client_context_t *ipc_buf_mo,
                       seL4_Word cnode_guard,
                       seL4_CPtr fault_ep_position,
                       seL4_Word ipc_buf_addr)
@@ -59,8 +59,8 @@ int cpu_client_config(cpu_client_context_t *conn,
     /* Send the badged endpoint cap of the ads client as a cap */
     seL4_Uint64 extraCaps = 2;
     seL4_SetCap(0, pd->badged_server_ep_cspath.capPtr);       /*cspace*/
-    seL4_SetCap(1, ads_conn->badged_server_ep_cspath.capPtr); /*vspace*/
-    if (ipc_buf_mo)
+    seL4_SetCap(1, ads->badged_server_ep_cspath.capPtr);      /*vspace*/
+    if (ipc_buf_mo && ipc_buf_mo->badged_server_ep_cspath.capPtr != 0)
     {
         seL4_SetCap(2, ipc_buf_mo->badged_server_ep_cspath.capPtr); /* ipc buffer */
         extraCaps = 3;
@@ -69,7 +69,7 @@ int cpu_client_config(cpu_client_context_t *conn,
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, extraCaps,
                                                   CPUMSGREG_CONFIG_REQ_END);
 
-    tag = seL4_Call(conn->badged_server_ep_cspath.capPtr, tag);
+    tag = seL4_Call(cpu->badged_server_ep_cspath.capPtr, tag);
 
     return seL4_MessageInfo_ptr_get_label(&tag);
 }
@@ -90,18 +90,28 @@ int cpu_client_change_vspace(cpu_client_context_t *conn,
     return seL4_MessageInfo_ptr_get_label(&tag);
 }
 
-int cpu_client_start(cpu_client_context_t *conn,
-                     void *entry_point,
-                     void *initial_stack,
-                     seL4_Word arg0)
+int cpu_client_start(cpu_client_context_t *conn)
 {
     seL4_SetMR(CPUMSGREG_FUNC, CPU_FUNC_START_REQ);
-    seL4_SetMR(CPUMSGREG_START_FUNC_VADDR, (seL4_Word)entry_point);
-    seL4_SetMR(CPUMSGREG_START_INIT_STACK_ADDR, (seL4_Word)initial_stack);
-    seL4_SetMR(CPUMSGREG_START_ARG0, arg0);
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0,
                                                   CPUMSGREG_START_REQ_END);
     tag = seL4_Call(conn->badged_server_ep_cspath.capPtr, tag);
+
+    return seL4_MessageInfo_ptr_get_label(&tag);
+}
+
+int cpu_client_set_tls_stack_top(cpu_client_context_t *cpu, void *tls_base, void **ret_init_stack)
+{
+    seL4_SetMR(CPUMSGREG_FUNC, CPU_FUNC_SET_TLS_REQ);
+    seL4_SetMR(CPUMSGREG_SET_TLS_REQ_BASE, (seL4_Word)tls_base);
+    seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0,
+                                                  CPUMSGREG_SET_TLS_REQ_END);
+    tag = seL4_Call(cpu->badged_server_ep_cspath.capPtr, tag);
+
+    if (ret_init_stack)
+    {
+        *ret_init_stack = (void *)seL4_GetMR(CPUMSGREG_SET_TLS_ACK_SP);
+    }
 
     return seL4_MessageInfo_ptr_get_label(&tag);
 }

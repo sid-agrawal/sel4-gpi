@@ -244,7 +244,7 @@ static seL4_CPtr assign_asid_pool(seL4_CPtr asid_pool, seL4_CPtr pd)
  * @param image_name name of the ELF image to load
  * @return 0 on success, 1 on failure
  */
-int ads_load_elf(vspace_t *loadee_vspace, sel4utils_process_t *proc, char *image_name, void **ret_entry_point);
+int ads_load_elf(vspace_t *loadee_vspace, sel4utils_process_t *proc, const char *image_name, void **ret_entry_point);
 
 /**
  * @brief slightly modified version of the sel4utils process spawn function
@@ -259,22 +259,10 @@ int ads_load_elf(vspace_t *loadee_vspace, sel4utils_process_t *proc, char *image
  * @param ret_init_stack the position of the initial stack pointer after setup
  * @return 0 on success, 1 on failure
  */
-int ads_runtime_setup(sel4utils_process_t *process,
-                      void *osm_init_data,
-                      vka_t *vka,
-                      vspace_t *vspace,
-                      int argc,
-                      char *argv[],
-                      void **ret_init_stack);
-
-/**
- * @brief setup the TLS on the stack
- *
- * @param target_ads the ADS where the stack resides
- * @param target_cpu the CPU that will use this stack
- * @param stack_top pointer to the top of the stack in the target ADS
- * @param stack_size the size of the stack, in pages, NOT including the one guard page
- * @param ret_init_stack returns the pointer to the stack position after it's been initialized
- * @return 0 on success, 1 on failure
- */
-int ads_tls_setup(ads_t *target_ads, cpu_t *target_cpu, void *stack_top, size_t stack_size, void **ret_init_stack);
+int ads_write_arguments(sel4utils_process_t *process,
+                        void *osm_init_data,
+                        vka_t *vka,
+                        vspace_t *vspace,
+                        int argc,
+                        char *argv[],
+                        void **ret_init_stack);
