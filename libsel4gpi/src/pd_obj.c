@@ -313,6 +313,8 @@ int pd_new(pd_t *pd,
     error = pd_setup_cspace(pd, get_pd_component()->server_vka);
     assert(error == 0);
 
+    pd->image_name = "PD"; // default name, since if a PD isn't a process, this never gets set
+
     return error;
 }
 
@@ -563,12 +565,10 @@ err_goto:
 }
 
 int pd_configure(pd_t *pd,
-                 const char *image_path,
                  ads_t *target_ads,
                  cpu_t *target_cpu)
 {
     int error = 0;
-    pd->image_name = image_path;
     memcpy(&pd->proc.pd, target_ads->root_page_dir, sizeof(vka_object_t));
     pd->proc.thread = target_cpu->thread;
 
@@ -1055,4 +1055,23 @@ inline void print_pd_osm_rde_info(osmosis_rde_t *o)
                cap_type_to_str(o->type.type),
                o->space_id);
     }
+}
+
+inline void pd_set_image_name(pd_t *pd, const char *image_name)
+{
+    pd->image_name = image_name;
+}
+
+/**
+ * bad functions that are only here because of our cursed sel4utils struct dependencies
+ * for setting fields in the sel4utils_process_t struct from outside the PD component
+ */
+void pd_proc_set_page_dir(pd_t *pd, ads_t *target_ads)
+{
+    memcpy(&pd->proc.pd, target_ads->root_page_dir, sizeof(vka_object_t));
+}
+
+void pd_proc_set_thread(pd_t *pd, cpu_t *target_cpu)
+{
+    pd->proc.thread = target_cpu->thread;
 }

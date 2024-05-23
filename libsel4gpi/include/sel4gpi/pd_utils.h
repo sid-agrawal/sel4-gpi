@@ -15,6 +15,9 @@
 #define PD_CAP_DEPTH seL4_WordBits
 #define PD_CSPACE_SIZE_BITS 17
 
+/* OSmosis data on the TLS */
+extern __thread void *__sel4gpi_osm_data;
+
 /*
  * Get the current PD's connection object from the env
  */

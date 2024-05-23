@@ -21,6 +21,7 @@ char _cpio_archive_end[1];
 #include <sel4gpi/ads_clientapi.h>
 #include <sel4gpi/pd_clientapi.h>
 #include <sel4gpi/pd_utils.h>
+#include <utils/ansi_color.h>
 
 /* Initialization for static morecore */
 #define APP_MALLOC_SIZE (PAGE_SIZE_4K)
@@ -28,6 +29,7 @@ char *morecore_area = (char *) PD_HEAP_LOC;
 size_t morecore_size = APP_MALLOC_SIZE;
 uintptr_t morecore_base = (uintptr_t) PD_HEAP_LOC;
 uintptr_t morecore_top = (uintptr_t) (PD_HEAP_LOC + APP_MALLOC_SIZE);
+extern __thread void *__sel4gpi_osm_data;
 
 void calculateSD(float data[], float *mean, float *sd,
                  int start, int end);
@@ -48,6 +50,7 @@ int main(int argc, char **argv)
 
     printf("Hello: ADS_CAP: %ld\n", (seL4_Word)ads_conn.badged_server_ep_cspath.capPtr);
     printf("Hello: PD_CAP: %ld\n", (seL4_Word)pd_conn.badged_server_ep_cspath.capPtr);
+    // printf(COLORIZE("osm data: %p\n", CYAN), __sel4gpi_osm_data);
 
     seL4_CPtr mo_server_ep = sel4gpi_get_rde(GPICAP_TYPE_MO);
     assert(mo_server_ep != seL4_CapNull);

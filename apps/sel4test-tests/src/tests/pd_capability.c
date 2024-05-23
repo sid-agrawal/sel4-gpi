@@ -36,7 +36,7 @@ int test_new_process_osmosis_shmem(env_t env)
     int error;
     printf("------------------STARTING: %s------------------\n", __func__);
     pd_client_context_t new_pd;
-    pd_resource_config_t *proc_cfg = sel4gpi_configure_process("hello", DEFAULT_STACK_PAGES, DEFAULT_HEAP_PAGES, &new_pd);
+    pd_config_t *proc_cfg = sel4gpi_configure_process("hello", DEFAULT_STACK_PAGES, DEFAULT_HEAP_PAGES, &new_pd);
     test_assert(proc_cfg != NULL);
 
     vka_object_t ep;

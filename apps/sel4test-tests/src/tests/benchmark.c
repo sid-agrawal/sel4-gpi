@@ -129,7 +129,7 @@ static int spawn_pd_osm(env_t env)
     int error;
 
     pd_client_context_t proc;
-    pd_resource_config_t *cfg = sel4gpi_configure_process("hello_benchmark", DEFAULT_STACK_PAGES, DEFAULT_HEAP_PAGES, &proc);
+    pd_config_t *cfg = sel4gpi_configure_process("hello_benchmark", DEFAULT_STACK_PAGES, DEFAULT_HEAP_PAGES, &proc);
     test_assert(cfg != NULL);
 
     error = vka_alloc_endpoint(&env->vka, &hello_ep);
@@ -403,7 +403,7 @@ static int benchmark_cpu(env_t env, bool native)
         test_error_eq(error, 0);
 
         SEL4BENCH_READ_CCNT(cpu_bind_start);
-        error = cpu_client_config(&new_cpu, &new_ads, NULL, NULL, 0, seL4_CapNull, 0);
+        error = cpu_client_config(&new_cpu, &new_ads, NULL, NULL, 0, seL4_CapNull, 0, NULL);
         test_error_eq(error, 0);
         SEL4BENCH_READ_CCNT(cpu_bind_end);
     }

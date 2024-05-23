@@ -117,7 +117,7 @@ typedef struct _pd
     /* This is only for model extraction purposes */
     const char *image_name;
 
-    /* Keeping this, since there's no point in duplicating fields from it in here*/
+    /* this is only used if the PD is a process */
     sel4utils_process_t proc;
 
     /* cnode guard for this PD's cspace */
@@ -146,7 +146,6 @@ int pd_new(pd_t *pd,
            void *arg0);
 
 int pd_configure(pd_t *pd,
-                 const char *image_path,
                  ads_t *target_ads,
                  cpu_t *target_cpu);
 
@@ -311,3 +310,19 @@ osmosis_rde_t *pd_rde_get(pd_t *pd,
  * @param server_vspace
  */
 void pd_destroy(pd_t *pd, vka_t *server_vka, vspace_t *server_vspace);
+
+/**
+ * @brief sets the PD's (process) image name for model exporting purposes
+ *
+ * @param pd the target PD
+ * @param image_name name of ELF image
+ */
+void pd_set_image_name(pd_t *pd, const char *image_name);
+
+/**
+ * bad functions that are only here because of our cursed sel4utils struct dependencies
+ * for setting fields in the sel4utils_process_t struct from outside the PD component
+ */
+void pd_proc_set_page_dir(pd_t *pd, ads_t *target_ads);
+
+void pd_proc_set_thread(pd_t *pd, cpu_t *target_cpu);

@@ -29,7 +29,7 @@
 int cpu_start(cpu_t *cpu)
 {
     OSDB_PRINTF("cpu_start: starting CPU at PC: 0x%lx\n", cpu->reg_ctx->pc);
-    return seL4_TCB_WriteRegisters(cpu->thread.tcb.cptr, 1, 0, sizeof(seL4_UserContext) / sizeof(seL4_Word), cpu->reg_ctx);
+    return seL4_TCB_Resume(cpu->thread.tcb.cptr);
 }
 
 int cpu_config_vspace(cpu_t *cpu,
@@ -141,25 +141,48 @@ void cpu_destroy(cpu_t *cpu)
     return;
 }
 
-int cpu_set_tls_stack_top(cpu_t *cpu, uintptr_t tls_base, void **ret_init_stack)
+int cpu_set_tls_base(cpu_t *cpu, void *tls_base, bool write_reg)
 {
     int error = 0;
+    OSDB_PRINTF("Setting TLS base (0x%lx) for CPU %d\n", tls_base, cpu->id);
     cpu->tls_base = (void *)tls_base;
-    cpu->thread.stack_top = (void *)ALIGN_DOWN(tls_base, STACK_CALL_ALIGNMENT);
-    *ret_init_stack = cpu->thread.stack_top;
 
-    error = seL4_TCB_SetTLSBase(cpu->thread.tcb.cptr, (seL4_Word)cpu->tls_base);
+    error = sel4utils_arch_init_context_tls_base(cpu->reg_ctx, tls_base);
+    SERVER_GOTO_IF_ERR(error, "failed to set TLS base in user context\n");
+
+    if (write_reg)
+    {
+        error = seL4_TCB_SetTLSBase(cpu->thread.tcb.cptr, (seL4_Word)tls_base);
+        SERVER_GOTO_IF_ERR(error, "Failed to write the TLS base register\n");
+    }
+
+err_goto:
     return error;
 }
 
 int cpu_set_local_context(cpu_t *cpu, void *entry_point,
                           void *arg0, void *arg1,
-                          void *ipc_buf_addr, void *stack_top)
+                          void *arg2, void *init_stack)
 {
-    return sel4utils_arch_init_local_context(entry_point, arg0, arg1, ipc_buf_addr, stack_top, cpu->reg_ctx);
+    int error = 0;
+    OSDB_PRINTF("Setting local context with args: [%p, %p, %p]\n", arg0, arg1, arg2);
+    error = sel4utils_arch_init_local_context(entry_point, arg0, arg1, arg2, init_stack, cpu->reg_ctx);
+    SERVER_GOTO_IF_ERR(error, "failed to set CPU context\n");
+
+    error = seL4_TCB_WriteRegisters(cpu->thread.tcb.cptr, 0, 0, sizeof(seL4_UserContext) / sizeof(seL4_Word), cpu->reg_ctx);
+    SERVER_GOTO_IF_ERR(error, "failed to write TCB registers\n");
+err_goto:
+    return error;
 }
 
-int cpu_set_remote_context(cpu_t *cpu, void *entry_point, void *stack_top)
+int cpu_set_remote_context(cpu_t *cpu, void *entry_point, void *init_stack)
 {
-    return sel4utils_arch_init_context(entry_point, stack_top, cpu->reg_ctx);
+    int error = 0;
+    error = sel4utils_arch_init_context(entry_point, init_stack, cpu->reg_ctx);
+    SERVER_GOTO_IF_ERR(error, "failed to set CPU context\n");
+
+    error = seL4_TCB_WriteRegisters(cpu->thread.tcb.cptr, 0, 0, sizeof(seL4_UserContext) / sizeof(seL4_Word), cpu->reg_ctx);
+    SERVER_GOTO_IF_ERR(error, "failed to write TCB registers\n");
+err_goto:
+    return error;
 }

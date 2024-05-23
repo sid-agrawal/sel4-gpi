@@ -25,7 +25,7 @@
 #include <sel4gpi/pd_creation.h>
 #include <sel4runtime.h>
 
-extern __thread int __sel4gpi_osm_data;
+extern __thread void *__sel4gpi_osm_data;
 
 #define TEST_LOG(msg, ...)                                  \
     do                                                      \
@@ -33,11 +33,9 @@ extern __thread int __sel4gpi_osm_data;
         printf("%s(): " msg "\n", __func__, ##__VA_ARGS__); \
     } while (0)
 
-static void test_thread(void *arg0, void *arg1, void *ipc_buf)
+static void test_thread(void *arg0, void *arg1, void *arg2)
 {
-    sel4gpi_set_exit_cb();
-    printf("In test thread: arg0: %ld\n", (int64_t)arg0);
-    // printf("osm_data from TLS: %u\n", __sel4gpi_osm_data);
+    printf("In test thread, arg0: %ld, arg1: %ld, arg2: %ld\n", (uint64_t)arg0, (uint64_t)arg1, (uint64_t)arg2);
     printf("goodbye!\n");
 }
 
@@ -61,8 +59,6 @@ int test_osm_threads(env_t env)
     int error;
     printf("------------------STARTING: %s------------------\n", __func__);
 
-    // printf("osm_data: %d\n", __sel4gpi_osm_data);
-
     pd_client_context_t test_pd_os_cap = sel4gpi_get_pd_conn();
     seL4_CPtr pd_rde = sel4gpi_get_rde(GPICAP_TYPE_PD);
 
@@ -75,7 +71,7 @@ int test_osm_threads(env_t env)
     error = pd_component_client_connect(pd_rde, slot, &thread_pd);
     test_error_eq(error, 0);
 
-    pd_resource_config_t *cfg = sel4gpi_generate_thread_config(test_thread, env->endpoint);
+    pd_config_t *cfg = sel4gpi_generate_thread_config(test_thread, env->endpoint);
     test_assert(cfg != NULL);
 
     sel4gpi_runnable_t runnable = {.pd = thread_pd};

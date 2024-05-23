@@ -87,7 +87,7 @@ static int start_kvstore_server(seL4_CPtr *kvstore_ep, uint64_t fs_nsid, pd_clie
 {
     int error;
 
-    pd_resource_config_t *cfg = sel4gpi_configure_process(KVSTORE_SERVER_APP, DEFAULT_STACK_PAGES, DEFAULT_HEAP_PAGES, kvstore_pd);
+    pd_config_t *cfg = sel4gpi_configure_process(KVSTORE_SERVER_APP, DEFAULT_STACK_PAGES, DEFAULT_HEAP_PAGES, kvstore_pd);
     test_assert(cfg != NULL);
 
     // Setup the hello PD's args
@@ -143,7 +143,7 @@ static int start_hello_kvstore(kvstore_mode_t kvstore_mode,
     int argc = 3;
     seL4_Word args[argc];
 
-    pd_resource_config_t *cfg = sel4gpi_configure_process(HELLO_KVSTORE_APP, DEFAULT_STACK_PAGES, DEFAULT_HEAP_PAGES, hello_pd);
+    pd_config_t *cfg = sel4gpi_configure_process(HELLO_KVSTORE_APP, DEFAULT_STACK_PAGES, DEFAULT_HEAP_PAGES, hello_pd);
     test_assert(cfg != NULL);
 
     // Copy the parent ep
@@ -163,7 +163,10 @@ static int start_hello_kvstore(kvstore_mode_t kvstore_mode,
         args[1] = 0;
     }
 
-    // Give the CPU RDE (for thread example)
+    // Give the PD and CPU RDE (for thread example)
+    error = pd_client_share_rde(hello_pd, GPICAP_TYPE_PD, RESSPC_ID_NULL);
+    test_assert(error == 0);
+
     error = pd_client_share_rde(hello_pd, GPICAP_TYPE_CPU, RESSPC_ID_NULL);
     test_assert(error == 0);
 
@@ -171,6 +174,7 @@ static int start_hello_kvstore(kvstore_mode_t kvstore_mode,
     error = pd_client_share_rde(hello_pd, GPICAP_TYPE_FILE, fs_nsid);
     test_assert(error == 0);
 
+    // share the ADS RDE if we're to make new ADSes
     if (kvstore_mode == SEPARATE_ADS)
     {
         error = pd_client_share_rde(hello_pd, GPICAP_TYPE_ADS, RESSPC_ID_NULL);

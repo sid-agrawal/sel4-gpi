@@ -46,6 +46,8 @@ int cpu_client_start(cpu_client_context_t *conn);
 
 /**
  * @brief Configures a CPU object by binding it to the given ADS and PD
+ * (XXX) Linh: this currently returns the osm_pd_init_data address for threads to set their TLS,
+ *             is there a better way to do this?
  *
  * @param cpu the CPU object to configure
  * @param ads the ADS object to bind
@@ -54,6 +56,7 @@ int cpu_client_start(cpu_client_context_t *conn);
  * @param cnode_guard guard configured for the PD's croot
  * @param fault_ep_position w.r.t the PD's cspace, the fault endpoint (OPTIONAL)
  * @param ipc_buf_addr w.r.t the given ADS, address to IPC buf (OPTIONAL)
+ * @param ret_osm_init_data_addr returns the location of the osm_pd_init_data_t structure in the given ADS (OPTIONAL)
  * @return int returns 0 on success, 1 on failure
  */
 int cpu_client_config(cpu_client_context_t *cpu,
@@ -62,7 +65,8 @@ int cpu_client_config(cpu_client_context_t *cpu,
                       mo_client_context_t *ipc_buf_mo,
                       seL4_Word cnode_guard,
                       seL4_CPtr fault_ep_position,
-                      seL4_Word ipc_buf_addr);
+                      seL4_Word ipc_buf_addr,
+                      void **ret_osm_init_data_addr);
 
 /**
  * @brief Change just the vspace of the CPU object
@@ -76,12 +80,18 @@ int cpu_client_change_vspace(cpu_client_context_t *conn,
 
 /* ======================================= CONVENIENCE FUNCTIONS (NOT PART OF FRAMEWORK) ================================================= */
 /**
- * @brief sets the TLS base for a CPU obj. The given TLS base should be w.r.t the CPU's ADS
- * The returned stack pointer is also the one set within the CPU object's metadata
+ * @brief sets the TLS base for a CPU obj. The given address should be w.r.t the CPU's ADS
  *
  * @param cpu the target CPU object
  * @param tls_base the TLS base in the target CPU's ADS
- * @param ret_init_stack returns the position of the initial stack pointer (OPTIONAL)
  * @return int returns 0 on success, 1 on failure
  */
-int cpu_client_set_tls_stack_top(cpu_client_context_t *cpu, void *tls_base, void **ret_init_stack);
+int cpu_client_set_tls_base(cpu_client_context_t *cpu, void *tls_base);
+
+/**
+ * @brief suspends the CPU
+ *
+ * @param cpu target CPU object
+ * @return 0 on success
+ */
+int cpu_client_suspend(cpu_client_context_t *cpu);

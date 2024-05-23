@@ -160,9 +160,10 @@ static seL4_MessageInfo_t handle_config_req(seL4_Word sender_badge,
     client_data->cpu.binded_ads_id = asre->ads.id;
 
     /* Configure the vspace */
-    error = pd_configure(&pd_data->pd, "TEMP", &asre->ads, &client_data->cpu);
+    error = pd_configure(&pd_data->pd, &asre->ads, &client_data->cpu);
     SERVER_GOTO_IF_ERR(error, "Failed to configure PD\n");
 
+    seL4_SetMR(CPUMSGREG_CONFIG_ACK_OSM_DATA_ADDR, (seL4_Word)pd_data->pd.init_data_in_PD);
     OSDB_PRINTF("Finished configuring CPU\n");
 
 err_goto:
@@ -225,12 +226,10 @@ static seL4_MessageInfo_t handle_set_tls_req(seL4_Word sender_badge, seL4_Messag
 
     cpu_component_registry_entry_t *cpu_data = (cpu_component_registry_entry_t *)resource_component_registry_get_by_badge(get_cpu_component(), sender_badge);
     SERVER_GOTO_IF_COND_BG(cpu_data == NULL, sender_badge, "Couldn't find CPU data\n");
-    uintptr_t tls_base = (uintptr_t)seL4_GetMR(CPUMSGREG_SET_TLS_REQ_BASE);
+    void *tls_base = (void *)seL4_GetMR(CPUMSGREG_SET_TLS_REQ_BASE);
 
-    void *init_stack;
-    error = cpu_set_tls_stack_top(&cpu_data->cpu, tls_base, &init_stack);
+    error = cpu_set_tls_base(&cpu_data->cpu, tls_base, false);
     SERVER_GOTO_IF_ERR(error, "Failed to set TLS and stack pointer\n");
-    seL4_SetMR(CPUMSGREG_SET_TLS_ACK_SP, (seL4_Word)init_stack);
 
 err_goto:
     seL4_SetMR(CPUMSGREG_FUNC, CPU_FUNC_SET_TLS_ACK);

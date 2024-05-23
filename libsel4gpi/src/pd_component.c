@@ -411,7 +411,7 @@ static seL4_MessageInfo_t handle_clone_req(seL4_Word sender_badge, seL4_MessageI
     SERVER_GOTO_IF_COND_BG(shared_msg_mo_data == NULL, shared_msg_mo_badge, "Couldn't find MO holding shared message, MO badge: ");
 
     /* we have to do this because there is no ADS obj for the RT */
-    pd_resource_config_t *resource_cfgs = (pd_resource_config_t *)vspace_map_pages(get_pd_component()->server_vspace, &shared_msg_mo_data->mo.frame_caps_in_root_task[0], NULL, seL4_AllRights, 1, seL4_PageBits, 1);
+    pd_config_t *resource_cfgs = (pd_config_t *)vspace_map_pages(get_pd_component()->server_vspace, &shared_msg_mo_data->mo.frame_caps_in_root_task[0], NULL, seL4_AllRights, 1, seL4_PageBits, 1);
     SERVER_GOTO_IF_COND(resource_cfgs == NULL, "Couldn't map in resource configs\n");
 
     pd_component_registry_entry_t *new_entry;
@@ -492,10 +492,14 @@ static seL4_MessageInfo_t handle_runtime_setup_req(seL4_Word sender_badge, seL4_
             snprintf(argv[i], WORD_STRING_SIZE, "%" PRIuPTR "", args[i]);
         }
 
+        // (XXX) Linh: stack_top meaning differs depending on what PD we're starting, should fix as this is not so nice
         void *stack_top = (void *)seL4_GetMR(PDMSGREG_SETUP_REQ_STACK);
         size_t stack_size = seL4_GetMR(PDMSGREG_SETUP_REQ_STACK_SZ);
+
+        // these fields only matter if PD is a process
         target_pd->pd.proc.thread.stack_top = stack_top;
         target_pd->pd.proc.thread.stack_size = stack_size;
+
         void *entry_point = (void *)seL4_GetMR(PDMSGREG_SETUP_REQ_ENTRY_POINT);
         void *ipc_buf_addr = (void *)seL4_GetMR(PDMSGREG_SETUP_REQ_IPC_BUF);
         pd_setup_type_t setup_mode = (pd_setup_type_t)seL4_GetMR(PDMSGREG_SETUP_REQ_TYPE);
@@ -517,7 +521,12 @@ static seL4_MessageInfo_t handle_runtime_setup_req(seL4_Word sender_badge, seL4_
             }
             break;
         case PD_REGISTER_SETUP:
-            error = cpu_set_local_context(&target_cpu->cpu, entry_point, argc > 0 ? (void *)args[0] : NULL, argc > 1 ? (void *)args[1] : NULL, ipc_buf_addr, stack_top);
+            error = cpu_set_local_context(&target_cpu->cpu,
+                                          entry_point,
+                                          argc > 0 ? (void *)args[0] : NULL,
+                                          argc > 1 ? (void *)args[1] : NULL,
+                                          argc > 2 ? (void *)args[2] : NULL,
+                                          stack_top);
             break;
         default:
             error = 1;

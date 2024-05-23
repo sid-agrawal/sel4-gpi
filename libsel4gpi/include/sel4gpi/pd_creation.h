@@ -12,7 +12,7 @@
 
 #define DEFAULT_STACK_PAGES 16
 #define DEFAULT_HEAP_PAGES 100
-#define MAX_SHARED_VMRS 100
+#define MAX_CFGS 100
 
 #define PD_CREATION_DBG 1
 
@@ -55,12 +55,12 @@ typedef struct _vmr_config
 } vmr_config_t;
 
 // Configuration of an entire ADS
-typedef struct _ads_resource_config
+typedef struct _ads_config
 {
     bool same_ads;                 // whether this config is for the same ADS as the current one
     ads_client_context_t *src_ads; // the source ADS to generate the new ADS, only used if same_ads == false
     const char *image_name;        // only used if code_shared == GPI_DISJOINT
-    void *entry_point;             // only used if code_share != GPI_DISJOINT
+    void *entry_point;             // if specified, will take precedence over any automatically found ones
 
     /* special ADS regions */
     /*  if we're in the same ADS, configuring any of these as GPI_SHARED has no effect */
@@ -73,16 +73,25 @@ typedef struct _ads_resource_config
     /* if we're in the same ADS, configuring any of these as GPI_SHARED has no effect */
     /* the heap should be specified here */
     size_t n_vmr_cfg;
-    vmr_config_t vmr_cfgs[MAX_SHARED_VMRS];
-} ads_resource_config_t;
+    vmr_config_t vmr_cfgs[MAX_CFGS];
+} ads_config_t;
+
+// defines what RDE type, and which resource space to share with the new PD
+typedef struct _rde_config
+{
+    gpi_cap_t type;
+    uint32_t space_id;
+} rde_config_t;
 
 // For creating new PDs: defines the level of sharing between a given source PD and the new PD
-typedef struct _pd_resource_config
+typedef struct _pd_config
 {
     seL4_CPtr fault_ep; // supply a fault-endpoint for the PD, if NULL, will create a new one
-    ads_resource_config_t ads_cfg;
-    // add configs for other resources here as needed
-} pd_resource_config_t;
+    ads_config_t ads_cfg;
+    rde_config_t rde_cfg[MAX_CFGS];
+    size_t n_rde_cfg;
+    // ongoing: add configs for other resources here as needed
+} pd_config_t;
 
 /**
  * @brief creates a new PD, and generates a configuration that can start a process
@@ -92,9 +101,9 @@ typedef struct _pd_resource_config
  * @param stack_pages size of stack, in pages
  * @param heap_pages size of heap, in pages
  * @param ret_pd returns the newly created PD context
- * @return pd_resource_config_t* returns the PD configuration, NULL on failure. Caller is responsbile for freeing the config.
+ * @return pd_config_t* returns the PD configuration, NULL on failure. Caller is responsbile for freeing the config.
  */
-pd_resource_config_t *sel4gpi_configure_process(const char *image_name, int stack_pages, int heap_pages, pd_client_context_t *ret_pd);
+pd_config_t *sel4gpi_configure_process(const char *image_name, int stack_pages, int heap_pages, pd_client_context_t *ret_pd);
 
 /**
  * @brief configures a runnable entity given a created PD and prepares it for execution (via cpu_start)
@@ -105,20 +114,20 @@ pd_resource_config_t *sel4gpi_configure_process(const char *image_name, int stac
  * @param args the arguments
  * @return int returns 0 on success, 1 on failure
  */
-int sel4gpi_start_pd(pd_resource_config_t *cfg, sel4gpi_runnable_t *runnable, int argc, seL4_Word *args);
+int sel4gpi_start_pd(pd_config_t *cfg, sel4gpi_runnable_t *runnable, int argc, seL4_Word *args);
 
 /* helpers to get commonly used PD configurations */
 /**
  * @brief generates a PD configuration that describes a process
  *
  * @param image_name the name of the process's image
- * @return pd_resource_config_t* returns a filled in config struct, caller is responsbile for freeing
+ * @return pd_config_t* returns a filled in config struct, caller is responsbile for freeing
  */
-pd_resource_config_t *sel4gpi_generate_proc_config(const char *image_name, size_t stack_pages, size_t heap_pages);
+pd_config_t *sel4gpi_generate_proc_config(const char *image_name, size_t stack_pages, size_t heap_pages);
 
 /**
  * @brief (WIP)
  *
- * @return pd_resource_config_t*
+ * @return pd_config_t*
  */
-pd_resource_config_t *sel4gpi_generate_thread_config(void *thread_fn, seL4_CPtr fault_ep);
+pd_config_t *sel4gpi_generate_thread_config(void *thread_fn, seL4_CPtr fault_ep);

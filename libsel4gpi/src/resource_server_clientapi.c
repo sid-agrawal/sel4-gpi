@@ -44,7 +44,7 @@ int start_resource_server_pd(gpi_cap_t rde_type,
     CHECK_ERROR(error, "failed to allocate endpoint");
 
     pd_client_context_t server_pd;
-    pd_resource_config_t *cfg = sel4gpi_configure_process(image_name, DEFAULT_STACK_PAGES, DEFAULT_HEAP_PAGES, &server_pd);
+    pd_config_t *cfg = sel4gpi_configure_process(image_name, DEFAULT_STACK_PAGES, DEFAULT_HEAP_PAGES, &server_pd);
     error = cfg == NULL;
     CHECK_ERROR(error, "failed to configure process");
 

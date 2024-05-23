@@ -98,14 +98,15 @@ void cpu_dump_rr(cpu_t *cpu, model_state_t *ms, gpi_model_node_t *pd_node);
 void cpu_destroy(cpu_t *cpu);
 
 /**
- * @brief sets the TLS base and the stack pointer
+ * @brief sets the TLS base for the CPU
+ *
  *
  * @param cpu the target CPU object
  * @param tls_base address of the TLS base in the ADS configured for this CPU
- * @param ret_init_stack returns the starting address of the stack
+ * @param write_reg if true, write the TLS base value into the appropriate register immediately, otherwise only the CPU's user context metadata will be set
  * @return int returns 0 on success, 1 on failure
  */
-int cpu_set_tls_stack_top(cpu_t *cpu, uintptr_t tls_base, void **ret_init_stack);
+int cpu_set_tls_base(cpu_t *cpu, void *tls_base, bool write_reg);
 
 /**
  * @brief sets the CPU object's register values with the given arguments and entry point
@@ -116,22 +117,22 @@ int cpu_set_tls_stack_top(cpu_t *cpu, uintptr_t tls_base, void **ret_init_stack)
  * @param entry_point address of instruction to start execution at
  * @param arg0 the first argument
  * @param arg1 the second argument
- * @param ipc_buf_addr address of the IPC buffer (OPTIONAL)
- * @param stack_top the top of the stack in the target CPU's binded ADS
+ * @param arg2 the third argument
+ * @param init_stack the starting position in the stack (w.r.t CPU's binded ADS)
  * @return int returns 0 on success, 1 on failure
  */
 int cpu_set_local_context(cpu_t *cpu, void *entry_point,
                           void *arg0, void *arg1,
-                          void *ipc_buf_addr, void *stack_top);
+                          void *arg2, void *init_stack);
 
 /**
  * @brief sets the CPU object's register values to the given entry point
  * intended usage: the entry point is not necessarily a function, arguments for whatever is
  *                 required during execution must be placed on the stack
- *
+
  * @param cpu the target CPU
  * @param entry_point address of instruction to start execution at
- * @param stack_top the top of the stack in the target CPU's binded ADS
+ * @param init_stack the starting position in the stack (w.r.t CPU's binded ADS)
  * @return int returns 0 on success, 1 on failure
  */
-int cpu_set_remote_context(cpu_t *cpu, void *entry_point, void *stack_top);
+int cpu_set_remote_context(cpu_t *cpu, void *entry_point, void *init_stack);

@@ -13,6 +13,7 @@ void *sel4gpi_new_sized_stack(ads_client_context_t *ads_rde, size_t n_pages)
     pd_client_context_t self_pd = sel4gpi_get_pd_conn();
 
     seL4_CPtr mo_rde = sel4gpi_get_rde(GPICAP_TYPE_MO);
+    GOTO_IF_COND(mo_rde == seL4_CapNull, "Can't allocate stack, no MO RDE\n");
 
     /* reserve one extra page for the guard */
     void *vaddr;
@@ -46,12 +47,14 @@ err_goto:
     return NULL;
 }
 
-pd_resource_config_t *sel4gpi_configure_process(const char *image_name, int stack_pages, int heap_pages, pd_client_context_t *ret_pd)
+pd_config_t *sel4gpi_configure_process(const char *image_name, int stack_pages, int heap_pages, pd_client_context_t *ret_pd)
 {
     int error;
-    pd_resource_config_t *proc_cfg = NULL;
+    pd_config_t *proc_cfg = NULL;
 
     seL4_CPtr pd_rde = sel4gpi_get_rde(GPICAP_TYPE_PD);
+    GOTO_IF_COND(pd_rde == seL4_CapNull, "No PD RDE\n");
+
     pd_client_context_t self_pd_cap = sel4gpi_get_pd_conn();
 
     /* new PD */
@@ -84,13 +87,15 @@ err_goto:
 /**
  * @brief given the local stack, set up the TLS for it.
  *
- * @param dest_stack address of dest_stack in the current ADS
+ * @param dest_stack address of the top of dest_stack in the current ADS
  * @param stack_pages number of pages in the stack (NOT including guard)
  * @param ipc_buffer_addr address of the ipc buffer (OPTIONAL)
+ * @param osm_init_data address of the osm_pd_init_data_t struct
  * @param ret_sp returns the stack pointer after alignment
+ * @param ret_tp returns the thread pointer after writing to the TLS
  * @return int returns 0 on success, 1 on failure
  */
-static int setup_tls_in_stack(void *dest_stack, size_t stack_pages, void *ipc_buffer_addr, void **ret_sp)
+static int setup_tls_in_stack(void *dest_stack, size_t stack_pages, void *ipc_buffer_addr, void *osm_init_data, void **ret_sp, void **ret_tp)
 {
     int error = 0;
     size_t tls_size = sel4runtime_get_tls_size();
@@ -106,68 +111,51 @@ static int setup_tls_in_stack(void *dest_stack, size_t stack_pages, void *ipc_bu
         sel4runtime_set_tls_variable(tp, __sel4_ipc_buffer, ipc_buf);
     }
 
-    *ret_sp = (void *)ALIGN_DOWN(tls_base, STACK_CALL_ALIGNMENT);
+    sel4runtime_set_tls_variable(tp, __sel4gpi_osm_data, osm_init_data);
 
+    *ret_sp = (void *)ALIGN_DOWN(tls_base, STACK_CALL_ALIGNMENT);
+    *ret_tp = (void *)tp;
+
+    PD_CREATION_PRINT("tls base: %lx, tp: %lx, ipc_buf: %p\n", tls_base, tp, ipc_buffer_addr);
 err_goto:
     return error;
 }
 
-int sel4gpi_start_pd(pd_resource_config_t *cfg, sel4gpi_runnable_t *runnable, int argc, seL4_Word *args)
+static int ads_configure(pd_config_t *cfg,
+                         sel4gpi_runnable_t *runnable,
+                         void **ret_stack,
+                         void **ret_ipc_buf,
+                         void **ret_entry_point,
+                         mo_client_context_t *ret_ipc_buf_mo)
 {
-    int error;
-    seL4_CPtr free_slot;
-    pd_client_context_t self_pd_cap = sel4gpi_get_pd_conn();
-
-    // (XXX) Linh: for now, we'll just assume we always need a new CPU resource, configuration is TBD
-    seL4_CPtr cpu_rde = sel4gpi_get_rde(GPICAP_TYPE_CPU);
-    error = pd_client_next_slot(&self_pd_cap, &free_slot);
-    GOTO_IF_ERR(error, "failed to allocate next slot");
-
-    cpu_client_context_t new_cpu;
-    error = cpu_component_client_connect(cpu_rde, free_slot, &new_cpu);
-    GOTO_IF_ERR(error, "failed to allocate a new CPU");
-    runnable->cpu = new_cpu;
-    seL4_Word cnode_guard = api_make_guard_skip_word(seL4_WordBits - TEST_PROCESS_CSPACE_SIZE_BITS);
-
-    ads_client_context_t target_ads = {0};
+    int error = 0;
     ads_client_context_t vmr_rde = {0};
-    mo_client_context_t ipc_mo = {0};
-    seL4_CPtr fault_ep_in_pd;
-    void *entry_point = cfg->ads_cfg.entry_point;
-    void *stack = NULL;
-    void *heap = NULL;
-    void *ipc_buf = NULL;
+    pd_client_context_t self_pd_cap = sel4gpi_get_pd_conn();
+    seL4_CPtr free_slot;
 
-    // TODO check in config is valid
-    if (cfg->fault_ep != seL4_CapNull)
-    {
-        error = pd_client_send_cap(&runnable->pd, cfg->fault_ep, &fault_ep_in_pd);
-        GOTO_IF_ERR(error, "Failed to send fault EP to PD\n");
-    }
-
-    // check ADS config
     if (cfg->ads_cfg.same_ads)
     {
         vmr_rde.badged_server_ep_cspath.capPtr = sel4gpi_get_rde_by_space_id(sel4gpi_get_binded_ads_id(), GPICAP_TYPE_VMR);
-        target_ads = sel4gpi_get_ads_conn();
+        runnable->ads = sel4gpi_get_ads_conn();
     }
     else
     {
         PD_CREATION_PRINT("Making new ADS\n");
         // create a new ADS
         seL4_CPtr ads_rde = sel4gpi_get_rde(GPICAP_TYPE_ADS);
+        GOTO_IF_COND(ads_rde == seL4_CapNull, "Can't make new ADS, no ADS RDE\n");
 
         /* new ADS */
         error = pd_client_next_slot(&self_pd_cap, &free_slot);
         GOTO_IF_ERR(error, "failed to allocate next slot");
 
-        error = ads_component_client_connect(ads_rde, free_slot, &target_ads);
+        error = ads_component_client_connect(ads_rde, free_slot, &runnable->ads);
         GOTO_IF_ERR(error, "failed to allocate a new ADS");
-        runnable->ads = target_ads;
 
-        vmr_rde.badged_server_ep_cspath.capPtr = sel4gpi_get_rde_by_space_id(target_ads.id, GPICAP_TYPE_VMR);
+        vmr_rde.badged_server_ep_cspath.capPtr = sel4gpi_get_rde_by_space_id(runnable->ads.id, GPICAP_TYPE_VMR);
     }
 
+    void *auto_entry_point = NULL;
     switch (cfg->ads_cfg.code_shared)
     {
     case GPI_SHARED:
@@ -184,7 +172,7 @@ int sel4gpi_start_pd(pd_resource_config_t *cfg, sel4gpi_runnable_t *runnable, in
     case GPI_DISJOINT:
         // elf load
         PD_CREATION_PRINT("Loading Elf\n");
-        error = ads_client_load_elf(&target_ads, &runnable->pd, cfg->ads_cfg.image_name, &entry_point);
+        error = ads_client_load_elf(&runnable->ads, &runnable->pd, cfg->ads_cfg.image_name, &auto_entry_point);
         GOTO_IF_ERR(error, "failed to load elf to ADS");
         break;
     case GPI_OMIT:
@@ -193,6 +181,18 @@ int sel4gpi_start_pd(pd_resource_config_t *cfg, sel4gpi_runnable_t *runnable, in
         GOTO_IF_ERR(1, "Invalid sharing degree specified (%d) for code region\n", cfg->ads_cfg.code_shared);
         break;
     }
+
+    if (cfg->ads_cfg.entry_point)
+    {
+        *ret_entry_point = cfg->ads_cfg.entry_point;
+        PRINT_IF_COND(auto_entry_point != NULL, COLORIZE("Warning:", CYAN) "Overriding automatically found entry point (%p) with given one (%p)\n", auto_entry_point, cfg->ads_cfg.entry_point);
+    }
+    else
+    {
+        *ret_entry_point = auto_entry_point;
+    }
+
+    GOTO_IF_COND(*ret_entry_point == NULL, "PD has no entry point (either it was not found or was not given)\n");
 
     vmr_config_t vmr;
     for (size_t i = 0; i < cfg->ads_cfg.n_vmr_cfg; i++)
@@ -211,8 +211,8 @@ int sel4gpi_start_pd(pd_resource_config_t *cfg, sel4gpi_runnable_t *runnable, in
             break;
         case GPI_DISJOINT:
             PD_CREATION_PRINT("Allocating VMR (%s) with %lu pages at %p\n", human_readable_va_res_type(vmr.type), vmr.region_pages, vmr.start);
-            heap = sel4gpi_get_vmr(&vmr_rde, vmr.region_pages, vmr.start, vmr.type, NULL);
-            GOTO_IF_ERR(heap == NULL, "failed to allocate VMR (%p)\n", vmr.start);
+            void *vmr_addr = sel4gpi_get_vmr(&vmr_rde, vmr.region_pages, vmr.start, vmr.type, NULL);
+            GOTO_IF_ERR(vmr_addr == NULL, "failed to allocate VMR (%p)\n", vmr.start);
             break;
         case GPI_OMIT:
             break;
@@ -235,8 +235,8 @@ int sel4gpi_start_pd(pd_resource_config_t *cfg, sel4gpi_runnable_t *runnable, in
         break;
     case GPI_DISJOINT:
         PD_CREATION_PRINT("Allocating stack\n");
-        stack = sel4gpi_new_sized_stack(&vmr_rde, cfg->ads_cfg.stack_pages);
-        GOTO_IF_ERR(stack == NULL, "failed to allocate a new stack");
+        *ret_stack = sel4gpi_new_sized_stack(&vmr_rde, cfg->ads_cfg.stack_pages);
+        GOTO_IF_ERR(*ret_stack == NULL, "failed to allocate a new stack");
         break;
     case GPI_OMIT:
         break;
@@ -258,8 +258,8 @@ int sel4gpi_start_pd(pd_resource_config_t *cfg, sel4gpi_runnable_t *runnable, in
         break;
     case GPI_DISJOINT:
         PD_CREATION_PRINT("Allocating IPC Buffer\n");
-        ipc_buf = sel4gpi_get_vmr(&vmr_rde, 1, NULL, SEL4UTILS_RES_TYPE_IPC_BUF, &ipc_mo);
-        GOTO_IF_ERR(ipc_buf == NULL, "failed to allocate a new ipc buf");
+        *ret_ipc_buf = sel4gpi_get_vmr(&vmr_rde, 1, NULL, SEL4UTILS_RES_TYPE_IPC_BUF, ret_ipc_buf_mo);
+        GOTO_IF_ERR(*ret_ipc_buf == NULL, "failed to allocate a new ipc buf");
         break;
     case GPI_OMIT:
         break;
@@ -268,11 +268,56 @@ int sel4gpi_start_pd(pd_resource_config_t *cfg, sel4gpi_runnable_t *runnable, in
         break;
     }
 
+err_goto:
+    return error;
+}
+
+int sel4gpi_start_pd(pd_config_t *cfg, sel4gpi_runnable_t *runnable, int argc, seL4_Word *args)
+{
+    int error;
+    seL4_CPtr free_slot;
+    pd_client_context_t self_pd_cap = sel4gpi_get_pd_conn();
+
+    // (XXX) Linh: for now, we'll just assume we always need a new CPU resource, configuration is TBD
+    seL4_CPtr cpu_rde = sel4gpi_get_rde(GPICAP_TYPE_CPU);
+    GOTO_IF_COND(cpu_rde == seL4_CapNull, "No CPU RDE\n");
+
+    error = pd_client_next_slot(&self_pd_cap, &free_slot);
+    GOTO_IF_ERR(error, "failed to allocate next slot");
+
+    error = cpu_component_client_connect(cpu_rde, free_slot, &runnable->cpu);
+    GOTO_IF_ERR(error, "failed to allocate a new CPU");
+    seL4_Word cnode_guard = api_make_guard_skip_word(seL4_WordBits - TEST_PROCESS_CSPACE_SIZE_BITS);
+
+    mo_client_context_t ipc_mo = {0};
+    seL4_CPtr fault_ep_in_pd;
+    void *entry_point = NULL;
+    void *stack = NULL;
+    void *ipc_buf = NULL;
+    void *osm_init_data = NULL;
+
+    error = ads_configure(cfg, runnable, &stack, &ipc_buf, &entry_point, &ipc_mo);
+    GOTO_IF_ERR(error, "Failed to configure ADS\n");
+
+    // TODO check in config is valid
+    if (cfg->fault_ep != seL4_CapNull)
+    {
+        PD_CREATION_PRINT("Sending fault EP (0x%lx) to PD\n", cfg->fault_ep);
+        error = pd_client_send_cap(&runnable->pd, cfg->fault_ep, &fault_ep_in_pd);
+        GOTO_IF_ERR(error, "Failed to send fault EP to PD\n");
+    }
+    else
+    {
+        error = pd_client_alloc_ep(&runnable->pd, &fault_ep_in_pd);
+        PD_CREATION_PRINT("Allocated new fault EP at 0x%lx\n", fault_ep_in_pd);
+        GOTO_IF_ERR(error, "Couldn't allocate fault EP for PD\n");
+    }
+
     PD_CREATION_PRINT("Configuring CPU Object, fault_ep: %lx\n", fault_ep_in_pd);
-    error = cpu_client_config(&new_cpu, &target_ads, &runnable->pd, &ipc_mo, cnode_guard, fault_ep_in_pd, (seL4_Word)ipc_buf);
+    error = cpu_client_config(&runnable->cpu, &runnable->ads, &runnable->pd, &ipc_mo, cnode_guard, fault_ep_in_pd, (seL4_Word)ipc_buf, &osm_init_data);
     GOTO_IF_ERR(error, "failed to configure CPU\n");
 
-    // (XXX) Linh required that this happens after all the other setup, we can do better if we refactor the sel4utils structs out of the PD component
+    // (XXX) Linh required that this happens after cpu_client_config specifically due to dependency between the sel4util structs in the GPI components
     if (cfg->ads_cfg.stack_shared == GPI_DISJOINT)
     {
         PD_CREATION_PRINT("Setting up runtime\n");
@@ -281,16 +326,20 @@ int sel4gpi_start_pd(pd_resource_config_t *cfg, sel4gpi_runnable_t *runnable, in
         if (setup_mode == PD_REGISTER_SETUP)
         {
             PD_CREATION_PRINT("C Runtime already initialized, setup the TLS ourselves\n");
-            error = setup_tls_in_stack(stack, cfg->ads_cfg.stack_pages, ipc_buf, &stack);
+            void *tp = NULL;
+            error = setup_tls_in_stack(stack, cfg->ads_cfg.stack_pages, ipc_buf, osm_init_data, &stack, &tp);
             GOTO_IF_ERR(error, "failed to write TLS\n");
+
+            error = cpu_client_set_tls_base(&runnable->cpu, tp);
+            GOTO_IF_ERR(error, "failed to set TLS base\n");
         }
 
-        error = pd_client_runtime_setup(&runnable->pd, &target_ads, &new_cpu, stack, cfg->ads_cfg.stack_pages, argc, args, entry_point, ipc_buf, setup_mode);
+        error = pd_client_runtime_setup(&runnable->pd, &runnable->ads, &runnable->cpu, stack, cfg->ads_cfg.stack_pages, argc, args, entry_point, ipc_buf, setup_mode);
         GOTO_IF_ERR(error, "failed to prepare runtime");
     }
 
     PD_CREATION_PRINT("Starting CPU\n");
-    error = cpu_client_start(&new_cpu);
+    error = cpu_client_start(&runnable->cpu);
     GOTO_IF_ERR(error, "failed to start CPU");
 
 err_goto:
@@ -298,30 +347,35 @@ err_goto:
     return error;
 }
 
-pd_resource_config_t *sel4gpi_generate_proc_config(const char *image_name, size_t stack_pages, size_t heap_pages)
+pd_config_t *sel4gpi_generate_proc_config(const char *image_name, size_t stack_pages, size_t heap_pages)
 {
-    pd_resource_config_t *proc_cfg = calloc(1, sizeof(pd_resource_config_t));
-    ads_resource_config_t proc_ads_cfg = {
+    pd_config_t *proc_cfg = calloc(1, sizeof(pd_config_t));
+    ads_config_t proc_ads_cfg = {
         .same_ads = false,
         .code_shared = GPI_DISJOINT,
         .ipc_buf_shared = GPI_DISJOINT,
         .stack_shared = GPI_DISJOINT,
         .stack_pages = stack_pages,
-        .image_name = image_name,
-        .n_vmr_cfg = 1};
+        .image_name = image_name};
 
     vmr_config_t heap_vmr = {.start = (void *)PD_HEAP_LOC, .region_pages = heap_pages, .type = SEL4UTILS_RES_TYPE_HEAP, .share_mode = GPI_DISJOINT};
-    proc_ads_cfg.vmr_cfgs[0] = heap_vmr;
+    proc_ads_cfg.vmr_cfgs[proc_ads_cfg.n_vmr_cfg++] = heap_vmr;
     proc_cfg->ads_cfg = proc_ads_cfg;
+
+    rde_config_t mo_rde_cfg = {.space_id = RESSPC_ID_NULL, .type = GPICAP_TYPE_MO};
+    rde_config_t resspc_rde_cfg = {.space_id = RESSPC_ID_NULL, .type = GPICAP_TYPE_RESSPC};
+
+    proc_cfg->rde_cfg[proc_cfg->n_rde_cfg++] = mo_rde_cfg;
+    proc_cfg->rde_cfg[proc_cfg->n_rde_cfg++] = resspc_rde_cfg;
 
     return proc_cfg;
 }
 
-pd_resource_config_t *sel4gpi_generate_thread_config(void *thread_fn, seL4_CPtr fault_ep)
+pd_config_t *sel4gpi_generate_thread_config(void *thread_fn, seL4_CPtr fault_ep)
 {
-    pd_resource_config_t *thread_cfg = calloc(1, sizeof(pd_resource_config_t));
+    pd_config_t *thread_cfg = calloc(1, sizeof(pd_config_t));
     thread_cfg->fault_ep = fault_ep;
-    ads_resource_config_t thread_ads_cfg = {
+    ads_config_t thread_ads_cfg = {
         .same_ads = true,
         .entry_point = thread_fn,
         .code_shared = GPI_SHARED,

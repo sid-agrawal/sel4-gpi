@@ -9,7 +9,8 @@
 #include <fs_client.h>
 #include <kvstore_server.h>
 #include <sel4gpi/pd_utils.h>
-
+#include <sel4gpi/pd_creation.h>
+#include <sel4gpi/error_handle.h>
 #include <sel4runtime.h>
 
 #define KVSTORE_DB_FILE_FORMAT "kvstore_%d.db"
@@ -212,22 +213,46 @@ main_exit:
     seL4_Send(parent_ep, tag);
 }
 
-static void kvstore_server_main_thread(void *arg0, void *tls_base, void *ipc_buf)
+static void kvstore_server_main_thread(void *arg0, void *arg1, void *arg2)
 {
     seL4_CPtr parent_ep = (seL4_CPtr)arg0;
     printf("kvstore-server: in thread, parent ep (%d) \n", (int)parent_ep);
 
-    printf("tls_base %p, stack arg0 %p ipc_buf %p\n", tls_base, &arg0, &ipc_buf);
+    printf("arg0 %p, arg1 %p arg2 %p\n", arg0, arg1, arg2);
 
-    sel4runtime_set_tls_base((uintptr_t)tls_base);
-    seL4_SetIPCBuffer((seL4_IPCBuffer *)ipc_buf);
     kvstore_server_main(parent_ep);
 }
 
 int kvstore_server_start_thread(seL4_CPtr *kvstore_ep)
 {
     int error;
+    pd_client_context_t self_pd_conn = sel4gpi_get_pd_conn();
+    seL4_CPtr pd_rde = sel4gpi_get_rde(GPICAP_TYPE_PD);
+    GOTO_IF_COND(pd_rde == seL4_CapNull, "Can't start thread, no PD RDE\n");
 
+    /* new PD as the thread */
+    seL4_CPtr slot;
+    error = pd_client_next_slot(&self_pd_conn, &slot);
+    GOTO_IF_ERR(error, "Failed to allocate a slot\n");
+
+    pd_client_context_t thread_pd;
+    error = pd_component_client_connect(pd_rde, slot, &thread_pd);
+    GOTO_IF_ERR(error, "Failed to allocate a PD\n");
+
+    pd_config_t *cfg = sel4gpi_generate_thread_config(kvstore_server_main_thread, seL4_CapNull);
+    GOTO_IF_COND(cfg == NULL, "Failed to generate a thread config\n");
+
+    sel4gpi_runnable_t runnable = {.pd = thread_pd};
+
+    seL4_CPtr temp_ep;
+    error = pd_client_alloc_ep(&self_pd_conn, &temp_ep);
+    GOTO_IF_ERR(error, "failed to allocate ep\n");
+
+    error = sel4gpi_start_pd(cfg, &runnable, 1, (seL4_Word *)&temp_ep);
+    GOTO_IF_ERR(error, "Failed to start PD\n");
+
+    free(cfg);
+#if 0
     pd_client_context_t self_pd_conn = sel4gpi_get_pd_conn();
     ads_client_context_t self_ads_conn = sel4gpi_get_ads_conn();
 
@@ -277,7 +302,7 @@ int kvstore_server_start_thread(seL4_CPtr *kvstore_ep)
     /* configure cpu */
     seL4_Word cnode_guard = api_make_guard_skip_word(seL4_WordBits - PD_CSPACE_SIZE_BITS);
 
-    error = cpu_client_config(&new_cpu, &self_ads_conn, NULL, &ipc_buf_mo, cnode_guard, 0, (seL4_Word)ipc_buf_addr_in_new_cpu);
+    error = cpu_client_config(&new_cpu, &self_ads_conn, NULL, &ipc_buf_mo, cnode_guard, 0, (seL4_Word)ipc_buf_addr_in_new_cpu, NULL);
     CHECK_ERROR(error, "failed to configure cpu for thread", KVSTORE_ERROR_UNKNOWN);
 
     /* allocate temp endpoint */
@@ -306,6 +331,8 @@ int kvstore_server_start_thread(seL4_CPtr *kvstore_ep)
     KVSTORE_PRINTF("Started thread, ep (%d)\n", (int)receive_slot);
 
     // (XXX) Arya: free the temp ep
+#endif
+err_goto:
     return error;
 }
 

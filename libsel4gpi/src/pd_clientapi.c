@@ -229,7 +229,7 @@ void pd_client_bench_ipc(pd_client_context_t *conn, seL4_CPtr dummy_send_cap, se
 int pd_client_runtime_setup(pd_client_context_t *target_pd,
                             ads_client_context_t *target_ads,
                             cpu_client_context_t *target_cpu,
-                            void *stack_top,
+                            void *stack_pos,
                             int stack_size,
                             int argc,
                             seL4_Word *args,
@@ -270,7 +270,7 @@ int pd_client_runtime_setup(pd_client_context_t *target_pd,
     }
     OSDB_PRINTF("]\n");
 
-    seL4_SetMR(PDMSGREG_SETUP_REQ_STACK, (seL4_Word)stack_top);
+    seL4_SetMR(PDMSGREG_SETUP_REQ_STACK, (seL4_Word)stack_pos);
     seL4_SetMR(PDMSGREG_SETUP_REQ_STACK_SZ, stack_size);
     seL4_SetMR(PDMSGREG_SETUP_REQ_ENTRY_POINT, (seL4_Word)entry_point);
     seL4_SetMR(PDMSGREG_SETUP_REQ_IPC_BUF, (seL4_Word)ipc_buf_addr);
@@ -287,7 +287,7 @@ int pd_client_clone(pd_client_context_t *src_pd,
                     ads_client_context_t *src_ads,
                     ads_client_context_t *dst_ads,
                     seL4_CPtr free_slot,
-                    pd_resource_config_t *cfg,
+                    pd_config_t *cfg,
                     pd_client_context_t *ret_copied)
 {
     int error = 0;
@@ -296,7 +296,7 @@ int pd_client_clone(pd_client_context_t *src_pd,
     mo_client_context_t shared_mo;
     void *msg = sel4gpi_get_vmr(&curr_vmr_rde, 1, NULL, SEL4UTILS_RES_TYPE_SHARED_FRAMES, &shared_mo);
     SERVER_GOTO_IF_COND(msg == NULL, "Couldn't create VMR for shared message\n");
-    memcpy(msg, cfg, sizeof(pd_resource_config_t));
+    memcpy(msg, cfg, sizeof(pd_config_t));
 
     seL4_SetCapReceivePath(SEL4UTILS_CNODE_SLOT, /* Position of the cap to the CNODE */
                            free_slot,            /* CPTR in this CSPACE */
