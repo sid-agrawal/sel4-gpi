@@ -3,6 +3,7 @@
 #include <stdint.h>
 #include <utils/page.h>
 #include <vka/vka.h>
+#include <sel4utils/vspace.h>
 #include <sel4gpi/badge_usage.h>
 
 /* (XXX) Arya: temp definition of supported images */
@@ -63,6 +64,7 @@ typedef enum _gpi_share_degree
 typedef struct _vmr_config
 {
    gpi_share_degree_t share_mode;
+   sel4utils_reservation_type_t type;
    void *start;           // vaddr to start of the VMR
    uint64_t region_pages; // number of pages in this VMR
 } vmr_config_t;
@@ -79,14 +81,14 @@ typedef struct _ads_resource_config
    /*  if we're in the same ADS, configuring any of these as GPI_SHARED has no effect */
    gpi_share_degree_t code_shared;
    gpi_share_degree_t stack_shared;
-   gpi_share_degree_t heap_shared;
    gpi_share_degree_t ipc_buf_shared;
    size_t stack_pages;
-   size_t heap_pages;
 
-   /* list of vaddrs to non-contiguous VMRs that should be shared */
-   size_t n_vmr_shared;
-   vmr_config_t shared_vmrs[MAX_SHARED_VMRS];
+   /* list of vaddrs to non-contiguous VMRs to configure */
+   /* if we're in the same ADS, configuring any of these as GPI_SHARED has no effect */
+   /* the heap should be specified here */
+   size_t n_vmr_cfg;
+   vmr_config_t vmr_cfgs[MAX_SHARED_VMRS];
 } ads_resource_config_t;
 
 // For creating new PDs: defines the level of sharing between a given source PD and the new PD

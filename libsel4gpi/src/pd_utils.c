@@ -255,11 +255,10 @@ int sel4gpi_start_pd(pd_resource_config_t *cfg, sel4gpi_runnable_t *runnable, in
     void *stack = NULL;
     void *heap = NULL;
     void *ipc_buf = NULL;
-    PD_UTIL_PRINT("A\n");
+
     // TODO check in config is valid
     if (cfg->fault_ep != seL4_CapNull)
     {
-        PD_UTIL_PRINT("B\n");
         error = pd_client_send_cap(&runnable->pd, cfg->fault_ep, &fault_ep_in_pd);
         GOTO_IF_ERR(error, "Failed to send fault EP to PD\n");
     }
@@ -313,6 +312,34 @@ int sel4gpi_start_pd(pd_resource_config_t *cfg, sel4gpi_runnable_t *runnable, in
         break;
     }
 
+    vmr_config_t vmr;
+    for (size_t i = 0; i < cfg->ads_cfg.n_vmr_cfg; i++)
+    {
+        vmr = cfg->ads_cfg.vmr_cfgs[i];
+        switch (vmr.share_mode)
+        {
+        case GPI_SHARED:
+            if (!cfg->ads_cfg.same_ads)
+            {
+                GOTO_IF_ERR(1, "Not implemented yet!\n");
+            }
+            break;
+        case GPI_COPY:
+            GOTO_IF_ERR(1, "Not implemented yet!\n");
+            break;
+        case GPI_DISJOINT:
+            PD_UTIL_PRINT("Allocating VMR (%s) with %lu pages at %p\n", human_readable_va_res_type(vmr.type), vmr.region_pages, vmr.start);
+            heap = sel4gpi_get_vmr(&vmr_rde, vmr.region_pages, vmr.start, vmr.type, NULL);
+            GOTO_IF_ERR(heap == NULL, "failed to allocate VMR (%p)\n", vmr.start);
+            break;
+        case GPI_OMIT:
+            break;
+        default:
+            GOTO_IF_ERR(1, "Invalid sharing degree specified (%d) for VMR (%p)\n", vmr.share_mode);
+            break;
+        }
+    }
+
     switch (cfg->ads_cfg.stack_shared)
     {
     case GPI_SHARED:
@@ -333,29 +360,6 @@ int sel4gpi_start_pd(pd_resource_config_t *cfg, sel4gpi_runnable_t *runnable, in
         break;
     default:
         GOTO_IF_ERR(1, "Invalid sharing degree specified (%d) for stack region\n", cfg->ads_cfg.stack_shared);
-        break;
-    }
-
-    switch (cfg->ads_cfg.heap_shared)
-    {
-    case GPI_SHARED:
-        if (!cfg->ads_cfg.same_ads)
-        {
-            GOTO_IF_ERR(1, "Not implemented yet!\n");
-        }
-        break;
-    case GPI_COPY:
-        GOTO_IF_ERR(1, "Not implemented yet!\n");
-        break;
-    case GPI_DISJOINT:
-        PD_UTIL_PRINT("Allocating heap\n");
-        heap = sel4gpi_get_vmr(&vmr_rde, cfg->ads_cfg.heap_pages, (void *)PD_HEAP_LOC, SEL4UTILS_RES_TYPE_HEAP, NULL);
-        GOTO_IF_ERR(heap == NULL, "failed to allocate a new heap");
-        break;
-    case GPI_OMIT:
-        break;
-    default:
-        GOTO_IF_ERR(1, "Invalid sharing degree specified (%d) for heap region\n", cfg->ads_cfg.heap_shared);
         break;
     }
 
@@ -389,13 +393,20 @@ int sel4gpi_start_pd(pd_resource_config_t *cfg, sel4gpi_runnable_t *runnable, in
     // (XXX) Linh required that this happens after all the other setup, we can do better if we refactor the sel4utils structs out of the PD component
     if (cfg->ads_cfg.stack_shared == GPI_DISJOINT)
     {
-        PD_UTIL_PRINT("Setting up stack\n");
+        PD_UTIL_PRINT("Setting up runtime\n");
         pd_setup_type_t setup_mode = cfg->ads_cfg.code_shared == GPI_DISJOINT ? PD_RUNTIME_SETUP : PD_REGISTER_SETUP;
+
+        if (setup_mode == PD_REGISTER_SETUP)
+        {
+            PD_UTIL_PRINT("C Runtime already initialized, so we can setup the TLS ourselves\n");
+            error = setup_tls_in_stack(stack, cfg->ads_cfg.stack_pages, ipc_buf);
+            GOTO_IF_ERR(error, "failed to write TLS\n");
+        }
+
         error = pd_client_runtime_setup(&runnable->pd, &target_ads, &new_cpu, stack, cfg->ads_cfg.stack_pages, argc, args, entry_point, ipc_buf, setup_mode, &init_stack);
-        GOTO_IF_ERR(error, "failed to prepare stack");
+        GOTO_IF_ERR(error, "failed to prepare runtime");
     }
 
-    // TODO loop through other VMR regions
     PD_UTIL_PRINT("Starting CPU\n");
     error = cpu_client_start(&new_cpu);
     GOTO_IF_ERR(error, "failed to start CPU");
@@ -412,13 +423,13 @@ pd_resource_config_t *sel4gpi_generate_proc_config(const char *image_name, size_
         .same_ads = false,
         .code_shared = GPI_DISJOINT,
         .stack_shared = GPI_DISJOINT,
-        .heap_shared = GPI_DISJOINT,
         .ipc_buf_shared = GPI_DISJOINT,
         .stack_pages = stack_pages,
-        .heap_pages = heap_pages,
         .image_name = image_name,
-        .n_vmr_shared = 0};
+        .n_vmr_cfg = 1};
 
+    vmr_config_t heap_vmr = {.start = (void *)PD_HEAP_LOC, .region_pages = heap_pages, .type = SEL4UTILS_RES_TYPE_HEAP, .share_mode = GPI_DISJOINT};
+    proc_ads_cfg.vmr_cfgs[0] = heap_vmr;
     proc_cfg->ads_cfg = proc_ads_cfg;
 
     return proc_cfg;
@@ -433,11 +444,9 @@ pd_resource_config_t *sel4gpi_generate_thread_config(void *thread_fn, seL4_CPtr 
         .entry_point = thread_fn,
         .code_shared = GPI_SHARED,
         .stack_shared = GPI_DISJOINT,
-        .heap_shared = GPI_SHARED,
         .ipc_buf_shared = GPI_DISJOINT,
         .stack_pages = DEFAULT_STACK_PAGES,
-        .heap_pages = DEFAULT_HEAP_PAGES,
-        .n_vmr_shared = 0};
+        .n_vmr_cfg = 0};
 
     thread_cfg->ads_cfg = thread_ads_cfg;
 

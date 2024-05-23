@@ -515,6 +515,10 @@ static seL4_MessageInfo_t handle_runtime_setup_req(seL4_Word sender_badge, seL4_
                 error = cpu_set_remote_context(&target_cpu->cpu, entry_point, init_stack);
             }
             break;
+        case PD_REGISTER_SETUP:
+            error = cpu_set_local_context(&target_cpu->cpu, entry_point, argc > 0 ? args[0] : NULL, argc > 1 ? args[1] : NULL, ipc_buf_addr, stack_top);
+            init_stack = stack_top; // the stack pointer was not changed, but the caller may be reading this value for the ACK anyway
+            break;
         default:
             error = 1;
             OSDB_PRINTERR("Invalid PD setup mode specified\n");

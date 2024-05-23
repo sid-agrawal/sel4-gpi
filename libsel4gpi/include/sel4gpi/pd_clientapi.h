@@ -169,7 +169,7 @@ int pd_client_clone(pd_client_context_t *src_pd,
 
 /**
  * @brief makes necessary preprations so that the (PD, ADS, CPU) combination can start running
- * with a set of arguments, at a certain entry point
+ *        with a set of arguments, at a certain entry point
  *
  * @param target_ads the ADS where the stack resides
  * @param target_pd the process PD which will use this stack
@@ -179,7 +179,7 @@ int pd_client_clone(pd_client_context_t *src_pd,
  * @param argc the number of arguments to place on the stack
  * @param args the arguments
  * @param entry_point the address of the instruction to start executing at (in the target ADS)
- * @param ipc_buf_addr the address of the IPC buffer for the (PD, ADS, CPU)
+ * @param ipc_buf_addr the address of the IPC buffer for the (PD, ADS, CPU) combination
  * @param setup_type the type of setup (see pd_setup_type for details)
  * @param ret_init_stack the position of the initial stack pointer after setup
  * @return int 0 on success
