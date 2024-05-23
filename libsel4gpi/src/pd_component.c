@@ -34,6 +34,7 @@
 #include <sel4gpi/badge_usage.h>
 #include <sel4gpi/debug.h>
 #include <sel4gpi/gpi_client.h>
+#include <sel4gpi/pd_creation.h>
 #include <sel4gpi/error_handle.h>
 #include <sel4gpi/resource_space_component.h>
 
@@ -458,7 +459,6 @@ static seL4_MessageInfo_t handle_runtime_setup_req(seL4_Word sender_badge, seL4_
 
     /* parse the arguments */
     int argc = seL4_GetMR(PDMSGREG_SETUP_REQ_ARGC);
-    void *init_stack;
 
     // These brackets limit the scope of argc/argv so we may goto err_goto
     {
@@ -503,6 +503,7 @@ static seL4_MessageInfo_t handle_runtime_setup_req(seL4_Word sender_badge, seL4_
         switch (setup_mode)
         {
         case PD_RUNTIME_SETUP:
+            void *init_stack;
             error = ads_write_arguments(&target_pd->pd.proc,
                                         (void *)target_pd->pd.init_data_in_PD,
                                         get_gpi_server()->server_vka,
@@ -516,8 +517,7 @@ static seL4_MessageInfo_t handle_runtime_setup_req(seL4_Word sender_badge, seL4_
             }
             break;
         case PD_REGISTER_SETUP:
-            error = cpu_set_local_context(&target_cpu->cpu, entry_point, argc > 0 ? args[0] : NULL, argc > 1 ? args[1] : NULL, ipc_buf_addr, stack_top);
-            init_stack = stack_top; // the stack pointer was not changed, but the caller may be reading this value for the ACK anyway
+            error = cpu_set_local_context(&target_cpu->cpu, entry_point, argc > 0 ? (void *)args[0] : NULL, argc > 1 ? (void *)args[1] : NULL, ipc_buf_addr, stack_top);
             break;
         default:
             error = 1;
@@ -527,8 +527,6 @@ static seL4_MessageInfo_t handle_runtime_setup_req(seL4_Word sender_badge, seL4_
     }
 
     SERVER_GOTO_IF_ERR(error, "Failed to setup PD\n");
-    seL4_SetMR(PDMSGREG_SETUP_ACK_INIT_STACK, (seL4_Word)init_stack);
-
 err_goto:
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(error, 0, 0, PDMSGREG_SETUP_ACK_END);
     seL4_SetMR(PDMSGREG_FUNC, PD_FUNC_SETUP_ACK);

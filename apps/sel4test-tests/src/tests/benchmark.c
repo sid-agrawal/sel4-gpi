@@ -24,6 +24,7 @@
 #include <sel4gpi/pd_utils.h>
 #include <sel4gpi/bench_utils.h>
 #include <sel4gpi/gpi_client.h>
+#include <sel4gpi/pd_creation.h>
 #include <fs_client.h>
 #include <ramdisk_client.h>
 #include <fcntl.h>

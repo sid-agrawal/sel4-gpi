@@ -22,6 +22,7 @@
 #include <sel4bench/arch/sel4bench.h>
 #include <utils/uthash.h>
 #include <sel4gpi/pd_utils.h>
+#include <sel4gpi/pd_creation.h>
 #include <sel4runtime.h>
 
 extern __thread int __sel4gpi_osm_data;
@@ -36,7 +37,7 @@ static void test_thread(void *arg0, void *arg1, void *ipc_buf)
 {
     sel4gpi_set_exit_cb();
     printf("In test thread: arg0: %ld\n", (int64_t)arg0);
-    printf("osm_data from TLS: %u\n", __sel4gpi_osm_data);
+    // printf("osm_data from TLS: %u\n", __sel4gpi_osm_data);
     printf("goodbye!\n");
 }
 
@@ -48,10 +49,9 @@ int test_native_threads(env_t env)
     sel4utils_thread_config_t t_cfg = thread_config_default(&env->simple, env->cspace_root, api_make_guard_skip_word(seL4_WordBits - TEST_PROCESS_CSPACE_SIZE_BITS), env->endpoint, seL4_MaxPrio);
     error = sel4utils_configure_thread_config(&env->vka, &env->vspace, &env->vspace, t_cfg, &thread);
 
-    // error = sel4utils_configure_thread(&env->vka, &env->vspace, &env->vspace, &env->endpoint, &env->cspace_root, api_make_guard_skip_word(seL4_WordBits - TEST_PROCESS_CSPACE_SIZE_BITS), &thread);
     test_error_eq(error, 0);
 
-    error = sel4utils_start_thread(&thread, test_thread, 1, 2, 1);
+    error = sel4utils_start_thread(&thread, test_thread, (void *)1, (void *)2, 1);
     test_error_eq(error, 0);
     return sel4test_get_result();
 }
@@ -61,7 +61,7 @@ int test_osm_threads(env_t env)
     int error;
     printf("------------------STARTING: %s------------------\n", __func__);
 
-    printf("osm_data: %d\n", __sel4gpi_osm_data);
+    // printf("osm_data: %d\n", __sel4gpi_osm_data);
 
     pd_client_context_t test_pd_os_cap = sel4gpi_get_pd_conn();
     seL4_CPtr pd_rde = sel4gpi_get_rde(GPICAP_TYPE_PD);

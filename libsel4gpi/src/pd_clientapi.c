@@ -235,8 +235,7 @@ int pd_client_runtime_setup(pd_client_context_t *target_pd,
                             seL4_Word *args,
                             void *entry_point,
                             void *ipc_buf_addr,
-                            pd_setup_type_t setup_type,
-                            void **ret_init_stack)
+                            pd_setup_type_t setup_type)
 {
     int error = 0;
     seL4_SetMR(PDMSGREG_FUNC, PD_FUNC_SETUP_REQ);
@@ -280,7 +279,6 @@ int pd_client_runtime_setup(pd_client_context_t *target_pd,
     tag = seL4_Call(target_pd->badged_server_ep_cspath.capPtr, tag);
     assert(seL4_MessageInfo_get_label(tag) == 0);
 
-    *ret_init_stack = (void *)seL4_GetMR(PDMSGREG_SETUP_ACK_INIT_STACK);
     return seL4_MessageInfo_get_label(tag);
 }
 

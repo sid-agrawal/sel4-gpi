@@ -11,6 +11,7 @@
 
 #include <sel4gpi/ads_clientapi.h>
 #include <sel4gpi/pd_utils.h>
+#include <sel4gpi/pd_creation.h>
 
 #include <ramdisk_client.h>
 #include <fs_client.h>

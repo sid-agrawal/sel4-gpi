@@ -23,6 +23,7 @@
 #include <sel4bench/arch/sel4bench.h>
 #include <utils/uthash.h>
 #include <sel4gpi/pd_utils.h>
+#include <sel4gpi/pd_creation.h>
 
 #define TEST_LOG(msg, ...)                                  \
     do                                                      \

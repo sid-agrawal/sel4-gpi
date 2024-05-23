@@ -9,34 +9,11 @@
 #include <stdint.h>
 #include <sel4/types.h>
 #include <sel4gpi/badge_usage.h>
-#include <sel4gpi/resource_space_clientapi.h>
 
 #define PD_HEAP_LOC 0x5000000000
-#define DEFAULT_STACK_PAGES 16
-#define DEFAULT_HEAP_PAGES 100
 #define PD_CAP_ROOT SEL4UTILS_CNODE_SLOT
 #define PD_CAP_DEPTH seL4_WordBits
 #define PD_CSPACE_SIZE_BITS 17
-
-#define PD_UTIL_DBG 1
-
-#ifdef PD_UTIL_DBG
-#define PD_UTIL_PRINT(msg, ...)                         \
-    do                                                  \
-    {                                                   \
-        printf("%s():\t" msg, __func__, ##__VA_ARGS__); \
-    } while (0)
-#else
-#define PD_UTIL_PRINT(...)
-#endif // PD_UTIL_DBG
-
-// holds the components for a runnable entity
-typedef struct _sel4gpi_runnable
-{
-    pd_client_context_t pd;
-    ads_client_context_t ads;
-    cpu_client_context_t cpu;
-} sel4gpi_runnable_t;
 
 /*
  * Get the current PD's connection object from the env
@@ -108,42 +85,3 @@ void *sel4gpi_get_vmr(ads_client_context_t *ads_rde, int num_pages, void *vaddr,
  * @return the top of the stack in the given ADS (NOT the current one)
  */
 void *sel4gpi_new_sized_stack(ads_client_context_t *ads, size_t n_pages);
-
-/**
- * @brief creates a new PD, and generates a configuration that can start a process
- * by default, gives the new process the MO and RESSPC RDE
- *
- * @param image_name ELF image for the process
- * @param stack_pages size of stack, in pages
- * @param heap_pages size of heap, in pages
- * @param ret_pd returns the newly created PD context
- * @return pd_resource_config_t* returns the PD configuration, NULL on failure. Caller is responsbile for freeing the config.
- */
-pd_resource_config_t *sel4gpi_configure_process(const char *image_name, int stack_pages, int heap_pages, pd_client_context_t *ret_pd);
-
-/**
- * @brief configures a runnable entity given a created PD and prepares it for execution (via cpu_start)
- *
- * @param cfg the configuration of resources to follow, NOTE: currently does not prevent invalid configurations
- * @param runnable a runnable struct with only the PD context populated, the ADS and CPU contexts will be populated on return
- * @param argc the number of arguments to pass to the PD
- * @param args the arguments
- * @return int returns 0 on success, 1 on failure
- */
-int sel4gpi_start_pd(pd_resource_config_t *cfg, sel4gpi_runnable_t *runnable, int argc, seL4_Word *args);
-
-/* helpers to get commonly used PD configurations */
-/**
- * @brief generates a PD configuration that describes a process
- *
- * @param image_name the name of the process's image
- * @return pd_resource_config_t* returns a filled in config struct, caller is responsbile for freeing
- */
-pd_resource_config_t *sel4gpi_generate_proc_config(const char *image_name, size_t stack_pages, size_t heap_pages);
-
-/**
- * @brief (WIP)
- *
- * @return pd_resource_config_t*
- */
-pd_resource_config_t *sel4gpi_generate_thread_config(void *thread_fn, seL4_CPtr fault_ep);

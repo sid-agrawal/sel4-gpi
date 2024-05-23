@@ -10,6 +10,7 @@
 #include <vka/capops.h>
 
 #include <sel4gpi/pd_utils.h>
+#include <sel4gpi/pd_creation.h>
 #include <sel4gpi/resource_server_utils.h>
 #include <sel4gpi/resource_server_remote_utils.h>
 

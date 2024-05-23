@@ -12,7 +12,7 @@
 #include <vspace/vspace.h>
 
 #include <sel4gpi/pd_component.h>
-#include <sel4gpi/gpi_client.h>
+#include <sel4gpi/pd_creation.h>
 
 /**
  * @brief   Initialize the pd client.
@@ -181,7 +181,6 @@ int pd_client_clone(pd_client_context_t *src_pd,
  * @param entry_point the address of the instruction to start executing at (in the target ADS)
  * @param ipc_buf_addr the address of the IPC buffer for the (PD, ADS, CPU) combination
  * @param setup_type the type of setup (see pd_setup_type for details)
- * @param ret_init_stack the position of the initial stack pointer after setup
  * @return int 0 on success
  */
 int pd_client_runtime_setup(pd_client_context_t *target_pd,
@@ -193,5 +192,4 @@ int pd_client_runtime_setup(pd_client_context_t *target_pd,
                             seL4_Word *args,
                             void *entry_point,
                             void *ipc_buf_addr,
-                            pd_setup_type_t setup_type,
-                            void **ret_init_stack);
+                            pd_setup_type_t setup_type);

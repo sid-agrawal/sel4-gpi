@@ -11,7 +11,6 @@
 static const char *pd_images[PD_N_IMAGES] = {"hello", "hello_kvstore", "ramdisk_server", "fs_server", "kvstore_server", "hello_benchmark"};
 
 #define PD_MAX_ARGC 4
-#define MAX_SHARED_VMRS 100
 
 typedef struct _resspc_client_context
 {
@@ -48,55 +47,5 @@ typedef struct _mo_client_context
    // cspacepath_t public_server_ep_cspath;
    uint64_t id; // Needed only for RR dump
 } mo_client_context_t;
-
-// Configuration types for creating new PDs: for a given resource, defines the level of sharing between a given source PD and the new PD
-
-// describes sharing between 2 PDs
-typedef enum _gpi_share_degree
-{
-   GPI_SHARED = 1, // this resource is directly shared with the other PD, e.g. virt pages that map to the same phys page
-   GPI_COPY,       // this resource is copied into the other PD, e.g. virt pages with separate phys pages with contents copied
-   GPI_DISJOINT,   // this resource exists in the other PD, but has no relation with the source PD
-   GPI_OMIT        // this resource will not exist in the other PD
-} gpi_share_degree_t;
-
-// configuration of a particular VMR, do not use for the stack and ELF regions
-typedef struct _vmr_config
-{
-   gpi_share_degree_t share_mode;
-   sel4utils_reservation_type_t type;
-   void *start;           // vaddr to start of the VMR
-   uint64_t region_pages; // number of pages in this VMR
-} vmr_config_t;
-
-// Configuration of an entire ADS
-typedef struct _ads_resource_config
-{
-   bool same_ads;                 // whether this config is for the same ADS as the current one
-   ads_client_context_t *src_ads; // the source ADS to generate the new ADS, only used if same_ads == false
-   const char *image_name;        // only used if code_shared == GPI_DISJOINT
-   void *entry_point;             // only used if code_share != GPI_DISJOINT
-
-   /* special ADS regions */
-   /*  if we're in the same ADS, configuring any of these as GPI_SHARED has no effect */
-   gpi_share_degree_t code_shared;
-   gpi_share_degree_t stack_shared;
-   gpi_share_degree_t ipc_buf_shared;
-   size_t stack_pages;
-
-   /* list of vaddrs to non-contiguous VMRs to configure */
-   /* if we're in the same ADS, configuring any of these as GPI_SHARED has no effect */
-   /* the heap should be specified here */
-   size_t n_vmr_cfg;
-   vmr_config_t vmr_cfgs[MAX_SHARED_VMRS];
-} ads_resource_config_t;
-
-// For creating new PDs: defines the level of sharing between a given source PD and the new PD
-typedef struct _pd_resource_config
-{
-   seL4_CPtr fault_ep; // supply a fault-endpoint for the PD, if NULL, will create a new one
-   ads_resource_config_t ads_cfg;
-   // add configs for other resources here as needed
-} pd_resource_config_t;
 
 int sel4gpi_image_name_to_id(const char *image_name);
