@@ -79,10 +79,7 @@ Context of the client for this process
 typedef struct _global_xv6fs_client_context_t
 {
     vka_t *client_vka;
-    seL4_CPtr fs_ep;
-    seL4_CPtr mo_ep;
-    ads_client_context_t *ads_conn;
-    pd_client_context_t *pd_conn;
+    uint32_t space_id;
 
     // Temporary fields for naive implementation
     mo_client_context_t *shared_mem;

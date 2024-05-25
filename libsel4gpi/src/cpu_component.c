@@ -221,7 +221,7 @@ err_goto:
 static seL4_MessageInfo_t handle_set_tls_req(seL4_Word sender_badge, seL4_MessageInfo_t old_tag)
 {
     int error = 0;
-    OSDB_PRINTF("Got set TLS base and stack request: ");
+    OSDB_PRINTF("Got set TLS base request:");
     badge_print(sender_badge);
 
     cpu_component_registry_entry_t *cpu_data = (cpu_component_registry_entry_t *)resource_component_registry_get_by_badge(get_cpu_component(), sender_badge);
@@ -229,7 +229,7 @@ static seL4_MessageInfo_t handle_set_tls_req(seL4_Word sender_badge, seL4_Messag
     void *tls_base = (void *)seL4_GetMR(CPUMSGREG_SET_TLS_REQ_BASE);
 
     error = cpu_set_tls_base(&cpu_data->cpu, tls_base, false);
-    SERVER_GOTO_IF_ERR(error, "Failed to set TLS and stack pointer\n");
+    SERVER_GOTO_IF_ERR(error, "Failed to set TLS \n");
 
 err_goto:
     seL4_SetMR(CPUMSGREG_FUNC, CPU_FUNC_SET_TLS_ACK);

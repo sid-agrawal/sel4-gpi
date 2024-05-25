@@ -104,16 +104,15 @@ int pd_client_dump(pd_client_context_t *conn,
 
 /**
  * @brief Share an RDE with another PD
- * This shares an RDE from the client PD with the target PD
+ * This shares an RDE from the client PD with the target PD (client PD is the PD which created the target PD)
  * The RDE is keyed by cap type and resource space ID
- * Must call this AFTER the pd has been loaded
  *
- * @param conn client connection object
+ * @param target_pd the PD to share the RDE with
  * @param server_type resource type of the RDE to share
  * @param space_id resource space to share (optional, set to RESSPC_ID_NULL to share this PD's default space)
  * @return int 0 on success, -1 on failure.
  */
-int pd_client_share_rde(pd_client_context_t *conn,
+int pd_client_share_rde(pd_client_context_t *target_pd,
                         gpi_cap_t cap_type,
                         uint64_t space_id);
 
@@ -147,30 +146,8 @@ void pd_client_exit(pd_client_context_t *conn);
 void pd_client_bench_ipc(pd_client_context_t *conn, seL4_CPtr dummy_send_cap, seL4_CPtr dummy_recv_cap, bool cap_transfer);
 
 /**
- * @brief (WIP) creates a new PD based on the given configuration of VMR and CPU resources
- * NOTE: creates a shared message frame to encode the resource config, and cleans it up afterwards
- * (XXX) Linh:
- * - configure RDEs as well? Or done separately?
- * - for other resource servers, we may need to make separate API calls, but they could be encapsulated in another util function
- *
- * @param src_pd the source PD to copy resources from
- * @param src_ads the address space to copy VMR resources from
- * @param dst_ads the address space to copy VMR resources into
- * @param free_slot slot to receive the new PD cap
- * @param cfg specifies how resources from the given PD are shared
- * @param ret_copied returns the new PD with a CSpace copied from to_copy
- */
-int pd_client_clone(pd_client_context_t *src_pd,
-                    ads_client_context_t *src_ads,
-                    ads_client_context_t *dst_ads,
-                    seL4_CPtr free_slot,
-                    pd_config_t *cfg,
-                    pd_client_context_t *ret_copied);
-
-/**
  * @brief (WIP) prepares the (PD, ADS, CPU) combination with the given arguments, entry point, stack, and IPC buffer
- * if setup_type is:
- * - PD_RUNTIME_SETUP, the
+ * TODO Linh: better explain what differs between setup types
  *
  * @param target_ads the ADS where the stack resides
  * @param target_pd the process PD which will use this stack

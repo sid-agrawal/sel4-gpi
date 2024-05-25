@@ -43,6 +43,15 @@
         }                               \
     } while (0)
 
+#define PRINT_IF_ERR(err, msg, ...)     \
+    do                                  \
+    {                                   \
+        if ((err))                      \
+        {                               \
+            printf(msg, ##__VA_ARGS__); \
+        }                               \
+    } while (0)
+
 // (XXX) Arya: Occasionally I see a weird issue
 // where depending on the number of VA_ARGS, there
 // will be a page fault if the inner printf gets compiled

@@ -30,6 +30,9 @@ size_t morecore_size = APP_MALLOC_SIZE;
 uintptr_t morecore_base = (uintptr_t)PD_HEAP_LOC;
 uintptr_t morecore_top = (uintptr_t)(PD_HEAP_LOC + APP_MALLOC_SIZE);
 
+// (XXX) Linh: TO BE REMOVED: terrible hack for threads - only one thread can use the fs client at a time
+extern global_xv6fs_client_context_t xv6fs_client;
+
 #define CHECK_ERROR(check, msg)                \
     do                                         \
     {                                          \
@@ -102,12 +105,16 @@ int main(int argc, char **argv)
     seL4_CPtr fs_ep = sel4gpi_get_rde(GPICAP_TYPE_FILE);
     seL4_CPtr mo_ep = sel4gpi_get_rde(GPICAP_TYPE_MO);
 
-    printf("hello-kvstore: parent ep (%d), kvstore ep (%d), separate_ads? %d, fs ep(%d), mo ep(%d) \n", (int)parent_ep, (int)kvstore_ep, mode == SEPARATE_ADS, (int)fs_ep, (int)mo_ep);
+    printf("hello-kvstore: parent ep (%d), kvstore ep (%d), mode (%d), fs ep(%d), mo ep(%d) \n", (int)parent_ep, (int)kvstore_ep, (int)mode, (int)fs_ep, (int)mo_ep);
 
     /* initialize */
-    error = xv6fs_client_init();
-    CHECK_ERROR(error, "Failed to initialize file system");
-    printf("hello-kvstore: Initialized file system client\n");
+    // (XXX) Linh: TO BE REMOVED, terrible hack so that our separate threads test runs - only one thread can use the fs client at a time
+    if (mode != SEPARATE_THREAD)
+    {
+        error = xv6fs_client_init();
+        CHECK_ERROR(error, "Failed to initialize file system");
+        printf("hello-kvstore: Initialized file system client\n");
+    }
 
     /* run kvstore tests */
     bool use_remote_server = kvstore_ep != 0;
@@ -121,6 +128,14 @@ int main(int argc, char **argv)
     if (mode == SEPARATE_ADS)
     {
         kvstore_client_swap_ads_lib();
+    }
+
+    // (XXX) Linh: TO BE REMOVED, terrible hack so that our separate threads test runs - only one thread can use the fs client at a time
+    if (mode == SEPARATE_THREAD)
+    {
+        memset(&xv6fs_client, 0, sizeof(global_xv6fs_client_context_t));
+        error = xv6fs_client_init();
+        CHECK_ERROR(error, "Failed to initialize file system");
     }
     error = sqlite_tests();
     CHECK_ERROR(error, "Failed sqlite tests");

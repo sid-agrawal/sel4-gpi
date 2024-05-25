@@ -165,7 +165,7 @@ int pd_client_badge_ep(pd_client_context_t *conn,
     return seL4_MessageInfo_ptr_get_label(&tag);
 }
 
-int pd_client_share_rde(pd_client_context_t *conn,
+int pd_client_share_rde(pd_client_context_t *target_pd,
                         gpi_cap_t cap_type,
                         uint64_t space_id)
 {
@@ -174,7 +174,7 @@ int pd_client_share_rde(pd_client_context_t *conn,
     seL4_SetMR(PDMSGREG_SHARE_RDE_REQ_SPACE_ID, space_id);
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0,
                                                   PDMSGREG_SHARE_RDE_REQ_END);
-    tag = seL4_Call(conn->badged_server_ep_cspath.capPtr, tag);
+    tag = seL4_Call(target_pd->badged_server_ep_cspath.capPtr, tag);
 
     return seL4_MessageInfo_ptr_get_label(&tag);
 }
@@ -280,44 +280,4 @@ int pd_client_runtime_setup(pd_client_context_t *target_pd,
     assert(seL4_MessageInfo_get_label(tag) == 0);
 
     return seL4_MessageInfo_get_label(tag);
-}
-
-/* WIP */
-int pd_client_clone(pd_client_context_t *src_pd,
-                    ads_client_context_t *src_ads,
-                    ads_client_context_t *dst_ads,
-                    seL4_CPtr free_slot,
-                    pd_config_t *cfg,
-                    pd_client_context_t *ret_copied)
-{
-    int error = 0;
-    /* create message frame */
-    ads_client_context_t curr_vmr_rde = {.badged_server_ep_cspath.capPtr = sel4gpi_get_rde_by_space_id(sel4gpi_get_binded_ads_id(), GPICAP_TYPE_VMR)};
-    mo_client_context_t shared_mo;
-    void *msg = sel4gpi_get_vmr(&curr_vmr_rde, 1, NULL, SEL4UTILS_RES_TYPE_SHARED_FRAMES, &shared_mo);
-    SERVER_GOTO_IF_COND(msg == NULL, "Couldn't create VMR for shared message\n");
-    memcpy(msg, cfg, sizeof(pd_config_t));
-
-    seL4_SetCapReceivePath(SEL4UTILS_CNODE_SLOT, /* Position of the cap to the CNODE */
-                           free_slot,            /* CPTR in this CSPACE */
-                           /* This works coz we have a single level cnode with no guard.*/
-                           seL4_WordBits); /* Depth i.e. how many bits of free_slot to interpret*/
-
-    seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 3, PDMSGREG_CLONE_REQ_END);
-    seL4_SetCap(0, src_ads->badged_server_ep_cspath.capPtr);
-    seL4_SetCap(1, shared_mo.badged_server_ep_cspath.capPtr);
-    seL4_SetCap(2, dst_ads->badged_server_ep_cspath.capPtr);
-
-    tag = seL4_Call(src_pd->badged_server_ep_cspath.capPtr, tag);
-
-    ret_copied->badged_server_ep_cspath.capPtr = free_slot;
-    ads_client_context_t curr_ads_obj = sel4gpi_get_ads_conn();
-    error = ads_client_rm(&curr_ads_obj, msg);
-    SERVER_PRINT_IF_ERR(error, "Failed to unmap shared message frame\n");
-    // TODO: free MO
-
-    return seL4_MessageInfo_get_label(tag);
-
-err_goto:
-    return 1;
 }

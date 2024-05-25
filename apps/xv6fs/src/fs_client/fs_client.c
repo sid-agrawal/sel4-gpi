@@ -147,26 +147,23 @@ xv6fs_client_init(void)
 
   int error;
 
-  get_xv6fs_client()->fs_ep = sel4gpi_get_rde(GPICAP_TYPE_FILE);
-  get_xv6fs_client()->mo_ep = sel4gpi_get_rde(GPICAP_TYPE_MO);
-  get_xv6fs_client()->ads_conn = malloc(sizeof(ads_client_context_t));
-  get_xv6fs_client()->ads_conn->badged_server_ep_cspath.capPtr = sel4gpi_get_rde_by_space_id(sel4gpi_get_binded_ads_id(), GPICAP_TYPE_VMR);
-  get_xv6fs_client()->pd_conn = malloc(sizeof(pd_client_context_t));
-  *get_xv6fs_client()->pd_conn = sel4gpi_get_pd_conn();
+  get_xv6fs_client()->space_id = RESSPC_ID_NULL;
 
   /* Allocate the TEMP shared memory object */
   get_xv6fs_client()->shared_mem = malloc(sizeof(mo_client_context_t));
   seL4_CPtr free_slot;
-  error = pd_client_next_slot(get_xv6fs_client()->pd_conn, &free_slot);
+  pd_client_context_t pd_conn = sel4gpi_get_pd_conn();
+  error = pd_client_next_slot(&pd_conn, &free_slot);
   CHECK_ERROR(error, "failed to get next cspace slot");
 
-  error = mo_component_client_connect(get_xv6fs_client()->mo_ep,
+  error = mo_component_client_connect(sel4gpi_get_rde(GPICAP_TYPE_MO),
                                       free_slot,
                                       1,
                                       get_xv6fs_client()->shared_mem);
   CHECK_ERROR(error, "failed to allocate shared mem page");
 
-  error = ads_client_attach(get_xv6fs_client()->ads_conn,
+  ads_client_context_t vmr_rde = {.badged_server_ep_cspath.capPtr = sel4gpi_get_rde_by_space_id(sel4gpi_get_binded_ads_id(), GPICAP_TYPE_VMR)};
+  error = ads_client_attach(&vmr_rde,
                             NULL,
                             get_xv6fs_client()->shared_mem,
                             SEL4UTILS_RES_TYPE_SHARED_FRAMES,
@@ -186,14 +183,14 @@ int xv6fs_client_set_namespace(uint64_t ns_id)
 {
   XV6FS_PRINTF("Client of FS server will use namespace %ld\n", ns_id);
 
-  seL4_CPtr ep = sel4gpi_get_rde_by_space_id(ns_id, GPICAP_TYPE_FILE);
+  // seL4_CPtr ep = sel4gpi_get_rde_by_space_id(ns_id, GPICAP_TYPE_FILE);
 
-  if (ep == seL4_CapNull)
-  {
-    return -1;
-  }
+  // if (ep == seL4_CapNull)
+  // {
+  //   return -1;
+  // }
 
-  get_xv6fs_client()->fs_ep = ep;
+  get_xv6fs_client()->space_id = ns_id;
   return 0;
 }
 
@@ -227,7 +224,7 @@ int xv6fs_client_link_file(seL4_CPtr file, const char *path)
   seL4_SetCap(0, get_xv6fs_client()->shared_mem->badged_server_ep_cspath.capPtr);
   seL4_SetCap(1, file);
 
-  tag = seL4_Call(get_xv6fs_client()->fs_ep, tag);
+  tag = seL4_Call(sel4gpi_get_rde_by_space_id(get_xv6fs_client()->space_id, GPICAP_TYPE_FILE), tag);
 
   return seL4_MessageInfo_get_label(tag);
 }
@@ -256,7 +253,7 @@ static int xv6fs_libc_open(const char *pathname, int flags, int modes)
   // (XXX) Currently ignore modes
 
   // Alloc received cap ep
-  tag = seL4_Call(get_xv6fs_client()->fs_ep, tag);
+  tag = seL4_Call(sel4gpi_get_rde_by_space_id(get_xv6fs_client()->space_id, GPICAP_TYPE_FILE), tag);
 
   if (seL4_MessageInfo_get_label(tag) != seL4_NoError)
   {
@@ -605,7 +602,7 @@ static int xv6fs_libc_unlink(const char *pathname)
   seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 1, FSMSGREG_UNLINK_REQ_END);
   seL4_SetMR(FSMSGREG_FUNC, FS_FUNC_UNLINK_REQ);
   seL4_SetCap(0, get_xv6fs_client()->shared_mem->badged_server_ep_cspath.capPtr);
-  tag = seL4_Call(get_xv6fs_client()->fs_ep, tag);
+  tag = seL4_Call(sel4gpi_get_rde_by_space_id(get_xv6fs_client()->space_id, GPICAP_TYPE_FILE), tag);
 
   if (seL4_MessageInfo_get_label(tag) != seL4_NoError)
   {

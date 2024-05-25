@@ -179,7 +179,7 @@ static seL4_MessageInfo_t handle_attach_req(seL4_Word sender_badge, seL4_Message
     uint64_t mo_id = get_object_id_from_badge(mo_badge);
     uint64_t ads_id = get_space_id_from_badge(sender_badge);
 
-    SERVER_GOTO_IF_COND(get_cap_type_from_badge(mo_badge) != GPICAP_TYPE_MO, "Bad attach request, given MO EP is not an MO\n");
+    SERVER_GOTO_IF_COND(get_cap_type_from_badge(mo_badge) != GPICAP_TYPE_MO, "Bad attach request, expected MO but got %s instead: %lx\n", cap_type_to_str(get_cap_type_from_badge(mo_badge)), mo_badge);
 
     error = ads_component_attach(ads_id, mo_id, vmr_type, vaddr, &vaddr);
 

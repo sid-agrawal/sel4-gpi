@@ -86,7 +86,7 @@ static seL4_MessageInfo_t handle_pd_allocation(seL4_Word sender_badge)
     SERVER_GOTO_IF_ERR(error, "failed to allocat a PD\n");
     new_entry->pd.pd_cap_in_RT = ret_cap;
 
-    OSDB_PRINTF("Successfully allocated a new PD.\n");
+    OSDB_PRINTF("Successfully allocated a new PD %d.\n", new_entry->pd.id);
 
     /* Return this badged end point in the return message. */
     seL4_SetCap(0, ret_cap);
@@ -293,6 +293,13 @@ static seL4_MessageInfo_t handle_share_rde_req(seL4_Word sender_badge, seL4_Mess
     osmosis_rde_t *rde = pd_rde_get(&client_data->pd, type, space_id);
     SERVER_GOTO_IF_COND(rde == NULL, "share_rde_req: Failed to find RDE for type %ld and space %ld.\n", type, space_id);
 
+    osmosis_rde_t *target_pd_rde = pd_rde_get(&target_data->pd, type, space_id);
+    if (target_pd_rde != NULL)
+    {
+        printf("RDE already exists in target PD\n");
+        goto err_goto;
+    }
+
     resspc_component_registry_entry_t *resource_space_data = resource_space_get_entry_by_id(rde->space_id);
     SERVER_GOTO_IF_COND(resource_space_data == NULL, "share_rde_req: Failed to find resource space ID %d.\n", rde->space_id);
 
@@ -379,60 +386,6 @@ static seL4_MessageInfo_t handle_ipc_bench_req(void)
     }
 
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, num_caps, PDMSGREG_BENCH_IPC_ACK_END);
-    return tag;
-}
-
-/**
- * WIP: will either be removed or heavily changed
- * @brief clones a given PD into another PD, based on the resource configurations
- * (XXX) Linh: this function highly couples all of the various GPI components, can we do any better?
- */
-static seL4_MessageInfo_t handle_clone_req(seL4_Word sender_badge, seL4_MessageInfo_t old_tag)
-{
-    OSDB_PRINTF("Got clone request from client badge: ");
-    badge_print(sender_badge);
-
-    seL4_SetMR(PDMSGREG_FUNC, PD_FUNC_CLONE_REQ);
-    int error = 0;
-
-    // TODO: this might need to be under an allocation request
-    seL4_MessageInfo_t tag;
-    pd_component_registry_entry_t *sender_pd_data = pd_component_registry_get_entry_by_badge(sender_badge);
-    SERVER_GOTO_IF_COND_BG(sender_pd_data == NULL, sender_badge, "Couldn't find sender PD with badge: ");
-
-    seL4_Word src_pd_badge = seL4_GetBadge(0);
-    pd_component_registry_entry_t *src_pd_data = pd_component_registry_get_entry_by_badge(src_pd_badge);
-    SERVER_GOTO_IF_COND_BG(src_pd_data == NULL, src_pd_badge, "Couldn't find src PD with badge: ");
-
-    seL4_Word shared_msg_mo_badge = seL4_GetBadge(1);
-    mo_component_registry_entry_t *shared_msg_mo_data = (mo_component_registry_entry_t *)
-        resource_component_registry_get_by_badge(get_mo_component(), shared_msg_mo_badge);
-
-    SERVER_GOTO_IF_COND_BG(shared_msg_mo_data == NULL, shared_msg_mo_badge, "Couldn't find MO holding shared message, MO badge: ");
-
-    /* we have to do this because there is no ADS obj for the RT */
-    pd_config_t *resource_cfgs = (pd_config_t *)vspace_map_pages(get_pd_component()->server_vspace, &shared_msg_mo_data->mo.frame_caps_in_root_task[0], NULL, seL4_AllRights, 1, seL4_PageBits, 1);
-    SERVER_GOTO_IF_COND(resource_cfgs == NULL, "Couldn't map in resource configs\n");
-
-    pd_component_registry_entry_t *new_entry;
-    seL4_CPtr ret_cap;
-    error = resource_component_allocate(get_pd_component(), get_client_id_from_badge(sender_badge), BADGE_OBJ_ID_NULL, false, NULL,
-                                        (resource_server_registry_node_t **)&new_entry, &ret_cap);
-    new_entry->pd.pd_cap_in_RT = ret_cap;
-    SERVER_GOTO_IF_ERR(error, "Failed to allocate a new PD\n");
-    seL4_SetCap(0, ret_cap);
-
-    seL4_Word target_ads_badge = seL4_GetBadge(2);
-
-err_goto:
-    tag = seL4_MessageInfo_new(error, 0, 0, PDMSGREG_CLONE_ACK_END);
-    seL4_SetMR(PDMSGREG_FUNC, PD_FUNC_CLONE_REQ);
-
-    if (resource_cfgs)
-    {
-        vspace_unmap_pages(get_pd_component()->server_vspace, (void *)resource_cfgs, 1, seL4_PageBits, get_pd_component()->server_vka);
-    }
-
     return tag;
 }
 
@@ -591,9 +544,6 @@ static seL4_MessageInfo_t pd_component_handle(seL4_MessageInfo_t tag,
             break;
         case PD_FUNC_BENCH_IPC_REQ:
             reply_tag = handle_ipc_bench_req();
-            break;
-        case PD_FUNC_CLONE_REQ:
-            reply_tag = handle_clone_req(sender_badge, tag);
             break;
         case PD_FUNC_SETUP_REQ:
             reply_tag = handle_runtime_setup_req(sender_badge, tag);

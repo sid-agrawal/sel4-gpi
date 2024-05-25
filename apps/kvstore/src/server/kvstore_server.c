@@ -248,90 +248,26 @@ int kvstore_server_start_thread(seL4_CPtr *kvstore_ep)
     error = pd_client_alloc_ep(&self_pd_conn, &temp_ep);
     GOTO_IF_ERR(error, "failed to allocate ep\n");
 
-    error = sel4gpi_start_pd(cfg, &runnable, 1, (seL4_Word *)&temp_ep);
+    seL4_CPtr temp_ep_in_PD;
+    pd_client_send_cap(&thread_pd, temp_ep, &temp_ep_in_PD);
+
+    error = sel4gpi_start_pd(cfg, &runnable, 1, (seL4_Word *)&temp_ep_in_PD);
     GOTO_IF_ERR(error, "Failed to start PD\n");
 
-    free(cfg);
-#if 0
-    pd_client_context_t self_pd_conn = sel4gpi_get_pd_conn();
-    ads_client_context_t self_ads_conn = sel4gpi_get_ads_conn();
-
-    seL4_CPtr ads_rde = sel4gpi_get_rde(GPICAP_TYPE_ADS);
-    seL4_CPtr pd_rde = sel4gpi_get_rde(GPICAP_TYPE_PD);
-    seL4_CPtr mo_rde = sel4gpi_get_rde(GPICAP_TYPE_MO);
-    seL4_CPtr cpu_rde = sel4gpi_get_rde(GPICAP_TYPE_CPU);
-
-    ads_client_context_t ads_rde_conn = {.badged_server_ep_cspath.capPtr = ads_rde};
-
-    /* Create a new CPU obj */
-    seL4_CPtr slot;
-    error = pd_client_next_slot(&self_pd_conn, &slot);
-    CHECK_ERROR(error, "failed to get next slot", KVSTORE_ERROR_UNKNOWN);
-
-    cpu_client_context_t new_cpu;
-    error = cpu_component_client_connect(cpu_rde, slot, &new_cpu);
-    CHECK_ERROR(error, "failed to allocate cpu", KVSTORE_ERROR_UNKNOWN);
-
-    /* allocate stack frame */
-    error = pd_client_next_slot(&self_pd_conn, &slot);
-    CHECK_ERROR(error, "failed to get next slot", KVSTORE_ERROR_UNKNOWN);
-
-    mo_client_context_t stack_mo;
-    int stack_pages = 16;
-    error = mo_component_client_connect(mo_rde, slot, stack_pages, &stack_mo);
-    CHECK_ERROR(error, "failed to allocate stack", KVSTORE_ERROR_UNKNOWN);
-
-    /* attach stack to cpu */
-    void *stack_addr_in_new_cpu;
-    error = ads_client_attach(&ads_rde_conn, NULL, &stack_mo, SEL4UTILS_RES_TYPE_STACK, &stack_addr_in_new_cpu);
-    CHECK_ERROR(error, "failed to attach stack", KVSTORE_ERROR_UNKNOWN);
-
-    /* allocate ipc buf */
-    error = pd_client_next_slot(&self_pd_conn, &slot);
-    CHECK_ERROR(error, "failed to get next slot", KVSTORE_ERROR_UNKNOWN);
-
-    mo_client_context_t ipc_buf_mo;
-    error = mo_component_client_connect(mo_rde, slot, 1, &ipc_buf_mo);
-    CHECK_ERROR(error, "failed to allocate ipc buf", KVSTORE_ERROR_UNKNOWN);
-
-    /* attach ipc buf */
-    void *ipc_buf_addr_in_new_cpu;
-    error = ads_client_attach(&ads_rde_conn, NULL, &ipc_buf_mo, SEL4UTILS_RES_TYPE_IPC_BUF, &ipc_buf_addr_in_new_cpu);
-    CHECK_ERROR(error, "failed to attach ipc buf", KVSTORE_ERROR_UNKNOWN);
-
-    /* configure cpu */
-    seL4_Word cnode_guard = api_make_guard_skip_word(seL4_WordBits - PD_CSPACE_SIZE_BITS);
-
-    error = cpu_client_config(&new_cpu, &self_ads_conn, NULL, &ipc_buf_mo, cnode_guard, 0, (seL4_Word)ipc_buf_addr_in_new_cpu, NULL);
-    CHECK_ERROR(error, "failed to configure cpu for thread", KVSTORE_ERROR_UNKNOWN);
-
-    /* allocate temp endpoint */
-    seL4_CPtr temp_ep;
-    error = pd_client_alloc_ep(&self_pd_conn, &temp_ep);
-    CHECK_ERROR(error, "failed to allocate ep", KVSTORE_ERROR_UNKNOWN);
-
-    /* start the thread */
-    // uintptr_t aligned_stack_pointer = sel4gpi_setup_thread_stack(stack_addr_in_new_cpu, 16);
-    void *stack_top = stack_addr_in_new_cpu + stack_pages * SIZE_BITS_TO_BYTES(seL4_PageBits);
-    error = cpu_client_start(&new_cpu);
-    CHECK_ERROR(error, "failed to start cpu for thread", KVSTORE_ERROR_UNKNOWN);
-
-    // Wait for it to finish starting
     seL4_CPtr receive_slot;
     error = pd_client_next_slot(&self_pd_conn, &receive_slot);
     seL4_SetCapReceivePath(PD_CAP_ROOT, receive_slot, PD_CAP_DEPTH);
 
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0, 0);
     tag = seL4_Recv(temp_ep, NULL);
-    int n_caps = seL4_MessageInfo_get_extraCaps(tag);
     error = seL4_MessageInfo_get_label(tag);
     CHECK_ERROR(error, "kvstore thread setup failed", KVSTORE_ERROR_UNKNOWN);
 
     *kvstore_ep = receive_slot;
     KVSTORE_PRINTF("Started thread, ep (%d)\n", (int)receive_slot);
 
-    // (XXX) Arya: free the temp ep
-#endif
+    free(cfg);
+
 err_goto:
     return error;
 }

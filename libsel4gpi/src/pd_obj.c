@@ -285,7 +285,7 @@ int pd_new(pd_t *pd,
     error = vka_alloc_frame(server_vka, seL4_PageBits, &frame);
     if (error)
     {
-        ZF_LOGE("Couldn't allocate frame to hold PD's init data\n");
+        ZF_LOGE("Couldn't allocate frame to hold PD %ld's init data\n", pd->id);
     }
     pd->init_data_frame = frame.cptr;
     pd->init_data = (osm_pd_init_data_t *)vspace_map_pages(server_vspace, &frame.cptr, NULL, seL4_AllRights, 1, seL4_PageBits, 1);

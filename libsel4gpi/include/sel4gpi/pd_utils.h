@@ -10,6 +10,7 @@
 #include <sel4/types.h>
 #include <sel4gpi/badge_usage.h>
 
+/* We define a specific address for our static heap since we want the flexibility of allocating an MO for it (rather than it being part of the ELF data) */
 #define PD_HEAP_LOC 0x5000000000
 #define PD_CAP_ROOT SEL4UTILS_CNODE_SLOT
 #define PD_CAP_DEPTH seL4_WordBits
@@ -56,12 +57,19 @@ seL4_CPtr sel4gpi_get_rde(int type);
 /**
  * Get an osmosis RDE from the env
  * Tries to find the RDE for the given type and resource space id
+ * If the given space id == RESSPC_ID_NULL, this is identical to calling sel4gpi_get_rde(type)
  *
  * @param space_id resource space ID to find
  * @param type type of the RDE
  * @return null cap if the RDE cannot be found
  */
 seL4_CPtr sel4gpi_get_rde_by_space_id(uint32_t space_id, gpi_cap_t type);
+
+/**
+ * @brief print all RDEs for debugging
+ *
+ */
+void sel4gpi_debug_print_rde(void);
 
 /**
  * Set the exit callback to the default GPI exit handler

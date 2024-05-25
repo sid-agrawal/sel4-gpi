@@ -13,7 +13,7 @@
 #define RESSPC_DEBUG 0x10
 #define GPI_DEBUG 0x20
 #define ALL_DEBUG 0x3f
-#define OSMOSIS_DEBUG CPU_DEBUG // selectively enable component debug e.g. (PD_DEBUG | ADS_DEBUG)
+#define OSMOSIS_DEBUG NO_DEBUG // selectively enable component debug e.g. (PD_DEBUG | ADS_DEBUG)
 #define OSMOSIS_ERROR ALL_DEBUG // selectively enable component error messages e.g. (PD_DEBUG | ADS_DEBUG)
 
 #if OSMOSIS_DEBUG

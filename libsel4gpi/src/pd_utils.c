@@ -52,6 +52,11 @@ seL4_CPtr sel4gpi_get_rde_by_space_id(uint32_t space_id, gpi_cap_t type)
     assert(type != GPICAP_TYPE_NONE && type != GPICAP_TYPE_MAX);
     osm_pd_init_data_t *init_data = ((osm_pd_init_data_t *)sel4runtime_get_osm_init_data());
 
+    if (space_id == RESSPC_ID_NULL)
+    {
+        return sel4gpi_get_rde(type);
+    }
+
     int idx = -1;
 
     for (int i = 0; i < MAX_NS_PER_RDE; i++)
@@ -81,7 +86,10 @@ void sel4gpi_debug_print_rde(void)
     {
         for (int j = 0; j < MAX_NS_PER_RDE; j++)
         {
-            printf("type:\t %d \t", init_data->rde[i][j].type.type);
+            if (init_data->rde[i][j].type.type != GPICAP_TYPE_NONE)
+            {
+                printf("type:%s \tid: %d\n", cap_type_to_str(init_data->rde[i][j].type.type), init_data->rde[i][j].space_id);
+            }
         }
     }
 }

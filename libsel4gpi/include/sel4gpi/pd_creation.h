@@ -126,8 +126,10 @@ int sel4gpi_start_pd(pd_config_t *cfg, sel4gpi_runnable_t *runnable, int argc, s
 pd_config_t *sel4gpi_generate_proc_config(const char *image_name, size_t stack_pages, size_t heap_pages);
 
 /**
- * @brief (WIP)
+ * @brief generates a PD configuration that describes a thread
  *
+ * @param thread_fn the thread's entry function
+ * @param fault_ep the fault endpoint for the thread (OPTIONAL, if not specified, a new one will be allocated)
  * @return pd_config_t*
  */
 pd_config_t *sel4gpi_generate_thread_config(void *thread_fn, seL4_CPtr fault_ep);

@@ -55,30 +55,17 @@ pd_config_t *sel4gpi_configure_process(const char *image_name, int stack_pages, 
     seL4_CPtr pd_rde = sel4gpi_get_rde(GPICAP_TYPE_PD);
     GOTO_IF_COND(pd_rde == seL4_CapNull, "No PD RDE\n");
 
-    pd_client_context_t self_pd_cap = sel4gpi_get_pd_conn();
+    pd_client_context_t self_pd_conn = sel4gpi_get_pd_conn();
 
     /* new PD */
     seL4_CPtr slot;
-    error = pd_client_next_slot(&self_pd_cap, &slot);
+    error = pd_client_next_slot(&self_pd_conn, &slot);
     GOTO_IF_ERR(error, "Failed to allocate slot for new PD\n");
 
     error = pd_component_client_connect(pd_rde, slot, ret_pd);
     GOTO_IF_ERR(error, "Failed to create new PD\n");
 
     proc_cfg = sel4gpi_generate_proc_config(image_name, DEFAULT_STACK_PAGES, DEFAULT_HEAP_PAGES);
-
-    // share MO RDE by default
-    error = pd_client_share_rde(ret_pd, GPICAP_TYPE_MO, RESSPC_ID_NULL);
-    GOTO_IF_ERR(error, "Failed give MO RDE to new PD\n");
-
-    // (XXX) Arya: remove this
-    // Share VMR RDE by default
-    error = pd_client_share_rde(ret_pd, GPICAP_TYPE_VMR, RESSPC_ID_NULL);
-    GOTO_IF_ERR(error, "failed to share VMR RDE\n");
-
-    // Share resource space RDE by default
-    error = pd_client_share_rde(ret_pd, GPICAP_TYPE_RESSPC, RESSPC_ID_NULL);
-    GOTO_IF_ERR(error, "failed to share resource space RDE\n");
 
 err_goto:
     return proc_cfg;
@@ -130,7 +117,7 @@ static int ads_configure(pd_config_t *cfg,
 {
     int error = 0;
     ads_client_context_t vmr_rde = {0};
-    pd_client_context_t self_pd_cap = sel4gpi_get_pd_conn();
+    pd_client_context_t self_pd_conn = sel4gpi_get_pd_conn();
     seL4_CPtr free_slot;
 
     if (cfg->ads_cfg.same_ads)
@@ -146,7 +133,7 @@ static int ads_configure(pd_config_t *cfg,
         GOTO_IF_COND(ads_rde == seL4_CapNull, "Can't make new ADS, no ADS RDE\n");
 
         /* new ADS */
-        error = pd_client_next_slot(&self_pd_cap, &free_slot);
+        error = pd_client_next_slot(&self_pd_conn, &free_slot);
         GOTO_IF_ERR(error, "failed to allocate next slot");
 
         error = ads_component_client_connect(ads_rde, free_slot, &runnable->ads);
@@ -234,7 +221,7 @@ static int ads_configure(pd_config_t *cfg,
         GOTO_IF_ERR(1, "Not implemented yet!\n");
         break;
     case GPI_DISJOINT:
-        PD_CREATION_PRINT("Allocating stack\n");
+        PD_CREATION_PRINT("Allocating stack (%zu pages)\n", cfg->ads_cfg.stack_pages);
         *ret_stack = sel4gpi_new_sized_stack(&vmr_rde, cfg->ads_cfg.stack_pages);
         GOTO_IF_ERR(*ret_stack == NULL, "failed to allocate a new stack");
         break;
@@ -272,17 +259,36 @@ err_goto:
     return error;
 }
 
+static int rde_configure(pd_config_t *cfg, sel4gpi_runnable_t *runnable)
+{
+    int error = 0;
+    pd_client_context_t self_pd_conn = sel4gpi_get_pd_conn();
+
+    for (int i = 0; i < cfg->n_rde_cfg; i++)
+    {
+        PD_CREATION_PRINT("Sharing RDE (type: %s, space ID: %d)\n", cap_type_to_str(cfg->rde_cfg[i].type), cfg->rde_cfg[i].space_id);
+        error = pd_client_share_rde(&runnable->pd, cfg->rde_cfg[i].type, cfg->rde_cfg[i].space_id);
+        PRINT_IF_ERR(error, "Couldn't share RDE (type: %s, space ID: %d)\n", cap_type_to_str(cfg->rde_cfg[i].type), cfg->rde_cfg[i].space_id);
+    }
+
+err_goto:
+    return error;
+}
+
 int sel4gpi_start_pd(pd_config_t *cfg, sel4gpi_runnable_t *runnable, int argc, seL4_Word *args)
 {
     int error;
+
+    GOTO_IF_COND(cfg == NULL || &runnable->pd == NULL, "Either no PD config given or PD to configure does not exist\n");
+
     seL4_CPtr free_slot;
-    pd_client_context_t self_pd_cap = sel4gpi_get_pd_conn();
+    pd_client_context_t self_pd_conn = sel4gpi_get_pd_conn();
 
     // (XXX) Linh: for now, we'll just assume we always need a new CPU resource, configuration is TBD
     seL4_CPtr cpu_rde = sel4gpi_get_rde(GPICAP_TYPE_CPU);
     GOTO_IF_COND(cpu_rde == seL4_CapNull, "No CPU RDE\n");
 
-    error = pd_client_next_slot(&self_pd_cap, &free_slot);
+    error = pd_client_next_slot(&self_pd_conn, &free_slot);
     GOTO_IF_ERR(error, "failed to allocate next slot");
 
     error = cpu_component_client_connect(cpu_rde, free_slot, &runnable->cpu);
@@ -298,6 +304,9 @@ int sel4gpi_start_pd(pd_config_t *cfg, sel4gpi_runnable_t *runnable, int argc, s
 
     error = ads_configure(cfg, runnable, &stack, &ipc_buf, &entry_point, &ipc_mo);
     GOTO_IF_ERR(error, "Failed to configure ADS\n");
+
+    error = rde_configure(cfg, runnable);
+    GOTO_IF_ERR(error, "Failed to configure RDEs\n");
 
     // TODO check in config is valid
     if (cfg->fault_ep != seL4_CapNull)
@@ -385,6 +394,21 @@ pd_config_t *sel4gpi_generate_thread_config(void *thread_fn, seL4_CPtr fault_ep)
         .n_vmr_cfg = 0};
 
     thread_cfg->ads_cfg = thread_ads_cfg;
+
+    osm_pd_init_data_t *init_data = ((osm_pd_init_data_t *)sel4runtime_get_osm_init_data());
+    sel4gpi_debug_print_rde();
+    for (int i = GPICAP_TYPE_NONE + 1; i < GPICAP_TYPE_MAX; i++)
+    {
+        for (int j = 0; j < MAX_NS_PER_RDE; j++)
+        {
+            if (init_data->rde[i][j].type.type != GPICAP_TYPE_NONE)
+            {
+                thread_cfg->rde_cfg[thread_cfg->n_rde_cfg].type = init_data->rde[i][j].type.type;
+                thread_cfg->rde_cfg[thread_cfg->n_rde_cfg].space_id = init_data->rde[i][j].space_id;
+                thread_cfg->n_rde_cfg++;
+            }
+        }
+    }
 
     return thread_cfg;
 }
