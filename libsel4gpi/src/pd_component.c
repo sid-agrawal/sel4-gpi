@@ -517,8 +517,13 @@ static seL4_MessageInfo_t handle_share_resource_type_req(seL4_Word sender_badge,
     SERVER_GOTO_IF_ERR(error, "Error occurred during resource sharing (some may still have been successful)\n");
 
     OSDB_PRINTF("Shared %s resources between PDs (%d -> %d)\n", cap_type_to_str(res_type), src_pd_data->pd.id, dst_pd_data->pd.id);
-    pd_debug_print_held(&dst_pd_data->pd);
+
 err_goto:
+    if (resources)
+    {
+        linked_list_destroy(resources);
+    }
+
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(error, 0, 0, PDMSGREG_SHARE_RES_TYPE_ACK_END);
     seL4_SetMR(PDMSGREG_FUNC, PD_FUNC_SHARE_RES_TYPE_ACK);
 

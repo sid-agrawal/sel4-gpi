@@ -93,7 +93,7 @@ int start_resource_server_pd(gpi_cap_t rde_type,
     // Cleanup temporary endpoint
     // (XXX) Arya: why does this free cause future allocs to break?
     // vka_free_object(vka, &ep_object);
-    free(cfg);
+    sel4gpi_config_destroy(cfg);
 
     return 0;
 }

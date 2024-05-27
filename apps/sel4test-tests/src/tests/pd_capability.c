@@ -74,7 +74,7 @@ int test_new_process_osmosis_shmem(env_t env)
     tag = seL4_MessageInfo_new(0, 0, 0, 1);
     seL4_ReplyRecv(ep.cptr, tag, NULL);
 
-    free(proc_cfg);
+    sel4gpi_config_destroy(proc_cfg);
 
     return sel4test_get_result();
 }

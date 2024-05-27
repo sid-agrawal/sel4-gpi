@@ -181,31 +181,34 @@ static int ads_configure(pd_config_t *cfg,
 
     GOTO_IF_COND(*ret_entry_point == NULL, "PD has no entry point (either it was not found or was not given)\n");
 
-    vmr_config_t vmr;
-    for (size_t i = 0; i < cfg->ads_cfg.n_vmr_cfg; i++)
+    if (cfg->ads_cfg.vmr_cfgs)
     {
-        vmr = cfg->ads_cfg.vmr_cfgs[i];
-        switch (vmr.share_mode)
+        vmr_config_t *vmr = NULL;
+        for (linked_list_node_t *curr = cfg->ads_cfg.vmr_cfgs->head; curr != NULL; curr = curr->next)
         {
-        case GPI_SHARED:
-            if (!cfg->ads_cfg.same_ads)
+            vmr = (vmr_config_t *)curr->data;
+            switch (vmr->share_mode)
             {
+            case GPI_SHARED:
+                if (!cfg->ads_cfg.same_ads)
+                {
+                    GOTO_IF_ERR(1, "Not implemented yet!\n");
+                }
+                break;
+            case GPI_COPY:
                 GOTO_IF_ERR(1, "Not implemented yet!\n");
+                break;
+            case GPI_DISJOINT:
+                PD_CREATION_PRINT("Allocating VMR (%s) with %lu pages at %p\n", human_readable_va_res_type(vmr->type), vmr->region_pages, vmr->start);
+                void *vmr_addr = sel4gpi_get_vmr(&vmr_rde, vmr->region_pages, vmr->start, vmr->type, NULL);
+                GOTO_IF_ERR(vmr_addr == NULL, "failed to allocate VMR (%p)\n", vmr->start);
+                break;
+            case GPI_OMIT:
+                break;
+            default:
+                GOTO_IF_ERR(1, "Invalid sharing degree specified (%d) for VMR (%p)\n", vmr->share_mode, vmr->start);
+                break;
             }
-            break;
-        case GPI_COPY:
-            GOTO_IF_ERR(1, "Not implemented yet!\n");
-            break;
-        case GPI_DISJOINT:
-            PD_CREATION_PRINT("Allocating VMR (%s) with %lu pages at %p\n", human_readable_va_res_type(vmr.type), vmr.region_pages, vmr.start);
-            void *vmr_addr = sel4gpi_get_vmr(&vmr_rde, vmr.region_pages, vmr.start, vmr.type, NULL);
-            GOTO_IF_ERR(vmr_addr == NULL, "failed to allocate VMR (%p)\n", vmr.start);
-            break;
-        case GPI_OMIT:
-            break;
-        default:
-            GOTO_IF_ERR(1, "Invalid sharing degree specified (%d) for VMR (%p)\n", vmr.share_mode, vmr.start);
-            break;
         }
     }
 
@@ -264,11 +267,16 @@ static int rde_configure(pd_config_t *cfg, sel4gpi_runnable_t *runnable)
     int error = 0;
     pd_client_context_t self_pd_conn = sel4gpi_get_pd_conn();
 
-    for (int i = 0; i < cfg->n_rde_cfg; i++)
+    rde_config_t *rde;
+    if (cfg->rde_cfg)
     {
-        PD_CREATION_PRINT("Sharing RDE (type: %s, space ID: %d)\n", cap_type_to_str(cfg->rde_cfg[i].type), cfg->rde_cfg[i].space_id);
-        error = pd_client_share_rde(&runnable->pd, cfg->rde_cfg[i].type, cfg->rde_cfg[i].space_id);
-        PRINT_IF_ERR(error, "Couldn't share RDE (type: %s, space ID: %d)\n", cap_type_to_str(cfg->rde_cfg[i].type), cfg->rde_cfg[i].space_id);
+        for (linked_list_node_t *curr = cfg->rde_cfg->head; curr != NULL; curr = curr->next)
+        {
+            rde = (rde_config_t *)curr->data;
+            PD_CREATION_PRINT("Sharing RDE (type: %s, space ID: %d)\n", cap_type_to_str(rde->type), rde->space_id);
+            error = pd_client_share_rde(&runnable->pd, rde->type, rde->space_id);
+            PRINT_IF_ERR(error, "Couldn't share RDE (type: %s, space ID: %d)\n", cap_type_to_str(rde->type), rde->space_id);
+        }
     }
 
 err_goto:
@@ -307,6 +315,17 @@ int sel4gpi_start_pd(pd_config_t *cfg, sel4gpi_runnable_t *runnable, int argc, s
 
     error = rde_configure(cfg, runnable);
     GOTO_IF_ERR(error, "Failed to configure RDEs\n");
+
+    if (cfg->gpi_res_type_cfg)
+    {
+        PD_CREATION_PRINT("Sharing Resources\n");
+        for (linked_list_node_t *curr = cfg->gpi_res_type_cfg->head; curr != NULL; curr = curr->next)
+        {
+            gpi_cap_t type = (gpi_cap_t)curr->data;
+            error = pd_client_share_resource_by_type(&self_pd_conn, &runnable->pd, type);
+            PRINT_IF_ERR(error, "Failed to share %s resources with PD\n", cap_type_to_str(type));
+        }
+    }
 
     // TODO check in config is valid
     if (cfg->fault_ep != seL4_CapNull)
@@ -359,23 +378,34 @@ err_goto:
 pd_config_t *sel4gpi_generate_proc_config(const char *image_name, size_t stack_pages, size_t heap_pages)
 {
     pd_config_t *proc_cfg = calloc(1, sizeof(pd_config_t));
-    ads_config_t proc_ads_cfg = {
-        .same_ads = false,
-        .code_shared = GPI_DISJOINT,
-        .ipc_buf_shared = GPI_DISJOINT,
-        .stack_shared = GPI_DISJOINT,
-        .stack_pages = stack_pages,
-        .image_name = image_name};
+    proc_cfg->ads_cfg.same_ads = false;
+    proc_cfg->ads_cfg.code_shared = GPI_DISJOINT;
+    proc_cfg->ads_cfg.ipc_buf_shared = GPI_DISJOINT;
+    proc_cfg->ads_cfg.stack_shared = GPI_DISJOINT;
+    proc_cfg->ads_cfg.stack_pages = stack_pages;
+    proc_cfg->ads_cfg.image_name = image_name;
 
-    vmr_config_t heap_vmr = {.start = (void *)PD_HEAP_LOC, .region_pages = heap_pages, .type = SEL4UTILS_RES_TYPE_HEAP, .share_mode = GPI_DISJOINT};
-    proc_ads_cfg.vmr_cfgs[proc_ads_cfg.n_vmr_cfg++] = heap_vmr;
-    proc_cfg->ads_cfg = proc_ads_cfg;
+    proc_cfg->ads_cfg.vmr_cfgs = linked_list_new();
+    vmr_config_t *heap_vmr = calloc(1, sizeof(vmr_config_t));
+    heap_vmr->start = (void *)PD_HEAP_LOC;
+    heap_vmr->type = SEL4UTILS_RES_TYPE_HEAP;
+    heap_vmr->region_pages = heap_pages;
+    heap_vmr->share_mode = GPI_DISJOINT;
 
-    rde_config_t mo_rde_cfg = {.space_id = RESSPC_ID_NULL, .type = GPICAP_TYPE_MO};
-    rde_config_t resspc_rde_cfg = {.space_id = RESSPC_ID_NULL, .type = GPICAP_TYPE_RESSPC};
+    linked_list_insert(proc_cfg->ads_cfg.vmr_cfgs, heap_vmr);
 
-    proc_cfg->rde_cfg[proc_cfg->n_rde_cfg++] = mo_rde_cfg;
-    proc_cfg->rde_cfg[proc_cfg->n_rde_cfg++] = resspc_rde_cfg;
+    proc_cfg->rde_cfg = linked_list_new();
+
+    rde_config_t *mo_rde_cfg = calloc(1, sizeof(rde_config_t));
+    mo_rde_cfg->space_id = RESSPC_ID_NULL;
+    mo_rde_cfg->type = GPICAP_TYPE_MO;
+
+    rde_config_t *resspc_rde_cfg = calloc(1, sizeof(rde_config_t));
+    resspc_rde_cfg->space_id = RESSPC_ID_NULL;
+    resspc_rde_cfg->type = GPICAP_TYPE_RESSPC;
+
+    linked_list_insert(proc_cfg->rde_cfg, mo_rde_cfg);
+    linked_list_insert(proc_cfg->rde_cfg, resspc_rde_cfg);
 
     return proc_cfg;
 }
@@ -390,25 +420,58 @@ pd_config_t *sel4gpi_generate_thread_config(void *thread_fn, seL4_CPtr fault_ep)
         .code_shared = GPI_SHARED,
         .ipc_buf_shared = GPI_DISJOINT,
         .stack_shared = GPI_DISJOINT,
-        .stack_pages = DEFAULT_STACK_PAGES,
-        .n_vmr_cfg = 0};
+        .stack_pages = DEFAULT_STACK_PAGES};
 
     thread_cfg->ads_cfg = thread_ads_cfg;
 
+    // give the thread PD all of our current RDEs
     osm_pd_init_data_t *init_data = ((osm_pd_init_data_t *)sel4runtime_get_osm_init_data());
-    sel4gpi_debug_print_rde();
+    thread_cfg->rde_cfg = linked_list_new();
     for (int i = GPICAP_TYPE_NONE + 1; i < GPICAP_TYPE_MAX; i++)
     {
         for (int j = 0; j < MAX_NS_PER_RDE; j++)
         {
             if (init_data->rde[i][j].type.type != GPICAP_TYPE_NONE)
             {
-                thread_cfg->rde_cfg[thread_cfg->n_rde_cfg].type = init_data->rde[i][j].type.type;
-                thread_cfg->rde_cfg[thread_cfg->n_rde_cfg].space_id = init_data->rde[i][j].space_id;
-                thread_cfg->n_rde_cfg++;
+                rde_config_t *rde = calloc(1, sizeof(rde_config_t));
+                rde->type = init_data->rde[i][j].type.type;
+                rde->space_id = init_data->rde[i][j].space_id;
+                linked_list_insert(thread_cfg->rde_cfg, rde);
             }
         }
     }
 
+    // since we're sharing address spaces, transfer all MO caps to the thread PD
+    thread_cfg->gpi_res_type_cfg = linked_list_new();
+    linked_list_insert(thread_cfg->gpi_res_type_cfg, (void *)GPICAP_TYPE_MO);
+
     return thread_cfg;
+}
+
+void sel4gpi_config_destroy(pd_config_t *cfg)
+{
+    if (cfg->ads_cfg.vmr_cfgs)
+    {
+        for (linked_list_node_t *curr = cfg->ads_cfg.vmr_cfgs->head; curr != NULL; curr = curr->next)
+        {
+            free((vmr_config_t *)curr->data);
+        }
+        linked_list_destroy(cfg->ads_cfg.vmr_cfgs);
+    }
+
+    if (cfg->rde_cfg)
+    {
+        for (linked_list_node_t *curr = cfg->rde_cfg->head; curr != NULL; curr = curr->next)
+        {
+            free((rde_config_t *)curr->data);
+        }
+        linked_list_destroy(cfg->rde_cfg);
+    }
+
+    if (cfg->gpi_res_type_cfg)
+    {
+        linked_list_destroy(cfg->gpi_res_type_cfg);
+    }
+
+    free(cfg);
 }

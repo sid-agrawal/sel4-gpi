@@ -265,9 +265,8 @@ int kvstore_server_start_thread(seL4_CPtr *kvstore_ep)
 
     *kvstore_ep = receive_slot;
     KVSTORE_PRINTF("Started thread, ep (%d)\n", (int)receive_slot);
-    sel4gpi_debug_print_rde();
 
-    free(cfg);
+    sel4gpi_config_destroy(cfg);
 
 err_goto:
     return error;

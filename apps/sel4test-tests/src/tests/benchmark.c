@@ -148,7 +148,7 @@ static int spawn_pd_osm(env_t env)
     error = sel4gpi_start_pd(cfg, &runnable, argc, args);
     test_error_eq(error, 0);
 
-    free(cfg);
+    sel4gpi_config_destroy(cfg);
     return 0;
 }
 

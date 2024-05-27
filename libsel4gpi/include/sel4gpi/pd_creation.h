@@ -1,4 +1,15 @@
 #pragma once
+/**
+ * @file pd_creation.h
+ * @author Linh Pham (phamhlinh01@gmail.com)
+ * @brief Describes configuration types for creating new PDs based on a source PD
+ *        Each configuration defines the level of sharing between the source PD and the new PD
+ * @version 0.1
+ * @date 2024-05-27
+ *
+ * @copyright Copyright (c) 2024
+ *
+ */
 
 #include <stdint.h>
 #include <sel4/types.h>
@@ -9,10 +20,10 @@
 #include <sel4gpi/cpu_clientapi.h>
 #include <sel4gpi/badge_usage.h>
 #include <sel4gpi/resource_space_clientapi.h>
+#include <sel4gpi/linked_list.h>
 
 #define DEFAULT_STACK_PAGES 16
 #define DEFAULT_HEAP_PAGES 100
-#define MAX_CFGS 100
 
 #define PD_CREATION_DBG 1
 
@@ -26,7 +37,9 @@
 #define PD_CREATION_PRINT(...)
 #endif // PD_CREATION_DBG
 
-// holds the components for a runnable entity
+/**
+ * @brief holds the components for a runnable entity
+ */
 typedef struct _sel4gpi_runnable
 {
     pd_client_context_t pd;
@@ -34,62 +47,79 @@ typedef struct _sel4gpi_runnable
     cpu_client_context_t cpu;
 } sel4gpi_runnable_t;
 
-// Configuration types for creating new PDs: for a given resource, defines the level of sharing between a given source PD and the new PD
-
-// describes sharing between 2 PDs
+/**
+ * @brief describes sharing between 2 PDs
+ */
 typedef enum _gpi_share_degree
 {
-    GPI_SHARED = 1, // this resource is directly shared with the other PD, e.g. virt pages that map to the same phys page
-    GPI_COPY,       // this resource is copied into the other PD, e.g. virt pages with separate phys pages with contents copied
-    GPI_DISJOINT,   // this resource exists in the other PD, but has no relation with the source PD
-    GPI_OMIT        // this resource will not exist in the other PD
+    /** this resource is directly shared with the other PD, e.g. virt pages that map to the same phys page */
+    GPI_SHARED = 1,
+    /** this resource is copied into the other PD, e.g. virt pages with separate phys pages with contents copied */
+    GPI_COPY,
+    /** this resource exists in the other PD, but has no relation with the source PD */
+    GPI_DISJOINT,
+    /** this resource will not exist in the other PD*/
+    GPI_OMIT
 } gpi_share_degree_t;
 
-// configuration of a particular VMR, do not use for the stack and ELF regions
+/**
+ * @brief configuration of a particular VMR, do not use for the stack and ELF regions
+ */
 typedef struct _vmr_config
 {
     gpi_share_degree_t share_mode;
     sel4utils_reservation_type_t type;
-    void *start;           // vaddr to start of the VMR
-    uint64_t region_pages; // number of pages in this VMR
+    /** vaddr to start of the VMR */
+    void *start;
+    /** number of pages in this VMR */
+    uint64_t region_pages;
 } vmr_config_t;
 
-// Configuration of an entire ADS
+/**
+ * @brief Configuration of an entire ADS
+ */
 typedef struct _ads_config
 {
-    bool same_ads;                 // whether this config is for the same ADS as the current one
-    ads_client_context_t *src_ads; // the source ADS to generate the new ADS, only used if same_ads == false
-    const char *image_name;        // only used if code_shared == GPI_DISJOINT
-    void *entry_point;             // if specified, will take precedence over any automatically found ones
+    /** whether this config is for the same ADS as the current one */
+    bool same_ads;
+    /** the source ADS to generate the new ADS, only used if same_ads == false */
+    ads_client_context_t *src_ads;
+    /** only used if code_shared == GPI_DISJOINT */
+    const char *image_name;
+    /** if specified, will take precedence over any automatically found ones */
+    void *entry_point;
 
-    /* special ADS regions */
-    /*  if we're in the same ADS, configuring any of these as GPI_SHARED has no effect */
+    /** if we're in the same ADS, configuring any of these as GPI_SHARED has no effect */
     gpi_share_degree_t code_shared;
     gpi_share_degree_t stack_shared;
     gpi_share_degree_t ipc_buf_shared;
     size_t stack_pages;
 
-    /* list of vaddrs to non-contiguous VMRs to configure */
-    /* if we're in the same ADS, configuring any of these as GPI_SHARED has no effect */
-    /* the heap should be specified here */
-    size_t n_vmr_cfg;
-    vmr_config_t vmr_cfgs[MAX_CFGS];
+    /** list of vaddrs to non-contiguous VMRs to configure, the heap should be specified here
+     *  if we're in the same ADS, configuring any of these as GPI_SHARED has no effect
+     */
+    linked_list_t *vmr_cfgs;
 } ads_config_t;
 
-// defines what RDE type, and which resource space to share with the new PD
+/**
+ * @brief defines what RDE type, and which resource space to share with the new PD
+ */
 typedef struct _rde_config
 {
     gpi_cap_t type;
     uint32_t space_id;
 } rde_config_t;
 
-// For creating new PDs: defines the level of sharing between a given source PD and the new PD
+/**
+ * @brief For creating new PDs: defines the level of sharing between a given source PD and the new PD
+ */
 typedef struct _pd_config
 {
-    seL4_CPtr fault_ep; // supply a fault-endpoint for the PD, if NULL, will create a new one
+    /** supply a fault-endpoint for the PD, if NULL, will create a new one */
+    seL4_CPtr fault_ep;
     ads_config_t ads_cfg;
-    rde_config_t rde_cfg[MAX_CFGS];
-    size_t n_rde_cfg;
+    linked_list_t *rde_cfg;
+    linked_list_t *gpi_res_type_cfg;
     // ongoing: add configs for other resources here as needed
 } pd_config_t;
 
@@ -133,3 +163,10 @@ pd_config_t *sel4gpi_generate_proc_config(const char *image_name, size_t stack_p
  * @return pd_config_t*
  */
 pd_config_t *sel4gpi_generate_thread_config(void *thread_fn, seL4_CPtr fault_ep);
+
+/**
+ * @brief frees all memory used by a config and the config itself
+ *
+ * @param cfg the config to destroy
+ */
+void sel4gpi_config_destroy(pd_config_t *cfg);

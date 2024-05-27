@@ -284,7 +284,7 @@ int pd_add_rde(pd_t *pd,
                seL4_CPtr server_ep);
 
 /**
- * @brief Send a cap to a PD's cspace
+ * @brief Send a cap to a PD's cspace without badging (does NOT add the cap to the PD's resources set)
  *
  * @param to_pd destination PD
  * @param cap the cap to send

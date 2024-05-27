@@ -253,15 +253,26 @@ linked_list_t *pd_get_resources_of_type(pd_t *pd, gpi_cap_t type)
 int pd_bulk_add_resource(pd_t *pd, linked_list_t *resources)
 {
     int error = 0;
-    int it_error = 0;
+    int in_error = 0;
     pd_hold_node_t *res;
-    for (linked_list_node_t *curr = resources->head; curr->next != NULL; curr = curr->next)
+    for (linked_list_node_t *curr = resources->head; curr != NULL; curr = curr->next)
     {
         res = (pd_hold_node_t *)curr->data;
-        // TODO find the endpoint for the resource, badge and mint
-        it_error = pd_add_resource(pd, res->type, res->space_id, res->res_id, res->slot_in_RT_Debug, seL4_CapNull, res->slot_in_ServerPD_Debug);
-        SERVER_PRINT_IF_ERR(error, "Warning: failed to add resource (type: %s, space_id: %d) to PD %d\n", cap_type_to_str(res->type), res->space_id, pd->id);
-        error = error || it_error;
+        resspc_component_registry_entry_t *resource_space_data = resource_space_get_entry_by_id(res->space_id);
+        seL4_CPtr copied_res = resource_server_make_badged_ep(get_pd_component()->server_vka, &pd->pd_vka,
+                                                              resource_space_data->space.server_ep, resource_space_data->space.resource_type,
+                                                              res->space_id, res->res_id, pd->id);
+        seL4_CPtr slot_in_PD;
+        in_error = copy_cap_to_pd(pd, copied_res, &slot_in_PD);
+        SERVER_PRINT_IF_ERR(in_error, "Warning: Could not mint resource endpoint\n");
+        error = error || in_error;
+
+        if (!in_error)
+        {
+            in_error = pd_add_resource(pd, res->type, res->space_id, res->res_id, res->slot_in_RT_Debug, slot_in_PD, res->slot_in_ServerPD_Debug);
+            SERVER_PRINT_IF_ERR(in_error, "Warning: failed to add resource (type: %s, space_id: %d) to PD %d\n", cap_type_to_str(res->type), res->space_id, pd->id);
+            error = error || in_error;
+        }
     }
 
     return error;
