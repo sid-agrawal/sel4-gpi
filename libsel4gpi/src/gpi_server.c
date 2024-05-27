@@ -190,8 +190,8 @@ gpi_server_parent_spawn_thread(simple_t *parent_simple, vka_t *parent_vka,
         goto out;
     }
 
-    OSDB_PRINTF_2(GPI_DEBUG, GPISERVP "spawn_thread: Server thread binded well. at public EP %lu\n",
-                  get_gpi_server()->server_ep_obj.cptr);
+    OSDB_PRINTF("spawn_thread: Server thread binded well. at public EP %lu\n",
+                get_gpi_server()->server_ep_obj.cptr);
     return 0;
 
 out:
@@ -255,7 +255,7 @@ void gpi_server_main()
         tag = recv(&sender_badge);
 
         OSDB_PRINTF("Got message on EP with ");
-        badge_print(sender_badge);
+        BADGE_PRINT(sender_badge);
 
         gpi_cap_t cap_type = get_cap_type_from_badge(sender_badge);
 

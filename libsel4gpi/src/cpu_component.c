@@ -55,7 +55,7 @@ static void on_cpu_registry_delete(resource_server_registry_node_t *node_gen)
 static seL4_MessageInfo_t handle_cpu_allocation(seL4_Word sender_badge)
 {
     OSDB_PRINTF("Got CPU allocation request from %lx\n", sender_badge);
-    badge_print(sender_badge);
+    BADGE_PRINT(sender_badge);
 
     int error = 0;
     seL4_MessageInfo_t reply_tag;
@@ -82,7 +82,7 @@ err_goto:
 static seL4_MessageInfo_t handle_start_req(seL4_Word sender_badge, seL4_MessageInfo_t old_tag)
 {
     OSDB_PRINTF("Got CPU start req: ");
-    badge_print(sender_badge);
+    BADGE_PRINT(sender_badge);
 
     int error = 0;
     /* Find the client */
@@ -222,7 +222,7 @@ static seL4_MessageInfo_t handle_set_tls_req(seL4_Word sender_badge, seL4_Messag
 {
     int error = 0;
     OSDB_PRINTF("Got set TLS base request:");
-    badge_print(sender_badge);
+    BADGE_PRINT(sender_badge);
 
     cpu_component_registry_entry_t *cpu_data = (cpu_component_registry_entry_t *)resource_component_registry_get_by_badge(get_cpu_component(), sender_badge);
     SERVER_GOTO_IF_COND_BG(cpu_data == NULL, sender_badge, "Couldn't find CPU data\n");

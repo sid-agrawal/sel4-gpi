@@ -39,6 +39,18 @@ typedef enum GPICAP_TYPE
 #define BADGE_OBJ_ID_NULL 0xfffff
 #define MAX_BADGE_STR_SIZE 512
 
+// requires that SERVER_ID and DEBUG_ID are defined
+#define BADGE_PRINT(badge)                                                                 \
+    do                                                                                     \
+    {                                                                                      \
+        OSDB_PRINTF_2("BG: %lx\t", (badge));                                               \
+        OSDB_PRINTF_2("CapType: %s\t", cap_type_to_str(get_cap_type_from_badge((badge)))); \
+        OSDB_PRINTF_2("Perms: %lu\t", get_perms_from_badge((badge)));                      \
+        OSDB_PRINTF_2("SpaceID: %lu\t", get_space_id_from_badge((badge)));                 \
+        OSDB_PRINTF_2("CID: %lu\t", get_client_id_from_badge((badge)));                    \
+        OSDB_PRINTF_2("OID: %lu\n", get_object_id_from_badge((badge)));                    \
+    } while (0)
+
 /*
  How we are using the badge.
  There are a total of 64 bits.
@@ -85,8 +97,6 @@ uint64_t gpi_new_badge(gpi_cap_t cap_type,
                        uint64_t client_id,
                        uint64_t space_id,
                        uint64_t object_id);
-
-void badge_print(seL4_Word badge);
 
 /**
  * @brief formats badge details into a string for printing

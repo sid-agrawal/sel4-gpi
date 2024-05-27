@@ -259,9 +259,7 @@ seL4_MessageInfo_t ramdisk_request_handler(seL4_MessageInfo_t tag, seL4_Word sen
     }
     else
     { /* Handle Typed Request */
-        RAMDISK_PRINTF("Got message on EP with badge:");
-        badge_print(sender_badge);
-        RAMDISK_PRINTF("\n");
+        RAMDISK_PRINTF("Got message on EP with badge: %lx\n", sender_badge);
 
         gpi_cap_t cap_type = get_cap_type_from_badge(sender_badge);
         CHECK_ERROR_GOTO(cap_type != GPICAP_TYPE_BLOCK, "ramdisk server got invalid captype in badged EP",

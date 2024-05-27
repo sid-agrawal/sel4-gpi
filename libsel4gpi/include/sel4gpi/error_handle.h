@@ -83,7 +83,7 @@
         if ((c))                                                                          \
         {                                                                                 \
             OSDB_PRINTERR(COLORIZE("[ERROR] %s():\t", RED) msg, __func__, ##__VA_ARGS__); \
-            badge_print((badge));                                                         \
+            BADGE_PRINT((badge));                                                         \
             error = 1;                                                                    \
             goto err_goto;                                                                \
         }                                                                                 \

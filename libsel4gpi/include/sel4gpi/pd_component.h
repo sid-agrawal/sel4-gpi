@@ -85,7 +85,10 @@ enum pd_component_funcs
     PD_FUNC_BENCH_IPC_ACK,
 
     PD_FUNC_SETUP_REQ,
-    PD_FUNC_SETUP_ACK
+    PD_FUNC_SETUP_ACK,
+
+    PD_FUNC_SHARE_RES_TYPE_REQ,
+    PD_FUNC_SHARE_RES_TYPE_ACK
 };
 
 /* Designated purposes of each message register in the mini-protocol. */
@@ -196,7 +199,13 @@ enum pd_component_msgregs
     PDMSGREG_SETUP_REQ_ARG3,
     PDMSGREG_SETUP_REQ_END,
 
-    PDMSGREG_SETUP_ACK_END = PDMSGREG_LABEL0
+    PDMSGREG_SETUP_ACK_END = PDMSGREG_LABEL0,
+
+    /* PD share resource type */
+    PDMSGREG_SHARE_RES_TYPE_REQ_TYPE = PDMSGREG_LABEL0,
+    PDMSGREG_SHARE_RES_TYPE_REQ_END,
+
+    PDMSGREG_SHARE_RES_TYPE_ACK_END = PDMSGREG_LABEL0,
 };
 
 enum _pd_setup_type

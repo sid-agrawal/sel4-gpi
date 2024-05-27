@@ -146,16 +146,6 @@ char *cap_type_to_str(gpi_cap_t cap_type)
     }
 }
 
-void badge_print(seL4_Word badge)
-{
-    OSDB_PRINTF_2(GPI_DEBUG, "BG: %lx\t", badge);
-    OSDB_PRINTF_2(GPI_DEBUG, "CapType: %s\t", cap_type_to_str(get_cap_type_from_badge(badge)));
-    OSDB_PRINTF_2(GPI_DEBUG, "Perms: %lu\t", get_perms_from_badge(badge));
-    OSDB_PRINTF_2(GPI_DEBUG, "SpaceID: %lu\t", get_space_id_from_badge(badge));
-    OSDB_PRINTF_2(GPI_DEBUG, "CID: %lu\t", get_client_id_from_badge(badge));
-    OSDB_PRINTF_2(GPI_DEBUG, "OID: %lu\n", get_object_id_from_badge(badge));
-}
-
 void gpi_panic(char *reason, uint64_t code)
 {
     printf("PANIC: %s. CODE: %ld\n", reason, code);

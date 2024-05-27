@@ -171,3 +171,13 @@ int pd_client_runtime_setup(pd_client_context_t *target_pd,
                             void *entry_point,
                             void *ipc_buf_addr,
                             pd_setup_type_t setup_type);
+
+/**
+ * @brief (WIP)
+ *
+ * @param src_pd
+ * @param dest_pd
+ * @param res_type
+ * @return int
+ */
+int pd_client_share_resource_by_type(pd_client_context_t *src_pd, pd_client_context_t *dest_pd, gpi_cap_t res_type);

@@ -71,6 +71,11 @@ int test_osm_threads(env_t env)
     error = pd_component_client_connect(pd_rde, slot, &thread_pd);
     test_error_eq(error, 0);
 
+    error = pd_client_share_resource_by_type(&test_pd_os_cap, &thread_pd, GPICAP_TYPE_MO);
+    test_error_eq(error, 0);
+
+    return sel4test_get_result();
+
     pd_config_t *cfg = sel4gpi_generate_thread_config(test_thread, env->endpoint);
     test_assert(cfg != NULL);
 

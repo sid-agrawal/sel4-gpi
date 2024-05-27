@@ -19,6 +19,7 @@
 #include <sel4gpi/ads_clientapi.h>
 #include <sel4gpi/cpu_obj.h>
 #include <sel4gpi/resource_server_utils.h>
+#include <sel4gpi/linked_list.h>
 
 #define TEST_NAME_MAX (64 - 4 * sizeof(seL4_Word))
 #define MAX_SYS_OSM_CAPS 5000
@@ -152,7 +153,7 @@ int pd_configure(pd_t *pd,
 int pd_dump(pd_t *pd);
 
 /**
- * Send a cap to another PD
+ * Send a cap to another PD's CSpace (badge and copy), and also adds it to the PD's resources set (if applicable)
  *
  * @param pd the target PD
  * @param cap the cap to send
@@ -165,13 +166,6 @@ int pd_send_cap(pd_t *pd,
                 seL4_Word badge,
                 seL4_Word *slot,
                 bool inc_refcount);
-
-int pd_start(pd_t *pd,
-             vka_t *vka,
-             seL4_CPtr pd_endpoint_in_root,
-             vspace_t *vspace,
-             int argc,
-             seL4_Word *args);
 
 int pd_next_slot(pd_t *pd,
                  seL4_CPtr *next_free_slot);
@@ -237,7 +231,7 @@ void print_pd_osm_cap_info(pd_hold_node_t *o);
 void print_pd_osm_rde_info(osmosis_rde_t *o);
 
 /**
- * Add a resource that the PD holds
+ * Add a resource that the PD holds in metadata only, the resource isn't actually minted into the PD's Cspace.
  * Does not insert if the resource ID is a duplicate
  *
  * @param type the resource type
@@ -255,6 +249,24 @@ int pd_add_resource(pd_t *pd,
                     seL4_CPtr slot_in_RT,
                     seL4_CPtr slot_in_PD,
                     seL4_CPtr slot_in_serverPD);
+
+/**
+ * @brief WIP
+ *
+ * @param pd
+ * @param resources
+ * @return int
+ */
+int pd_bulk_add_resource(pd_t *pd, linked_list_t *resources);
+
+/**
+ * @brief WIP
+ *
+ * @param pd
+ * @param type
+ * @return linked_list_t*
+ */
+linked_list_t *pd_get_resources_of_type(pd_t *pd, gpi_cap_t type);
 
 /**
  * @brief Add an RDE to a PD
@@ -318,6 +330,13 @@ void pd_destroy(pd_t *pd, vka_t *server_vka, vspace_t *server_vspace);
  * @param image_name name of ELF image
  */
 void pd_set_image_name(pd_t *pd, const char *image_name);
+
+/**
+ * @brief debug print of all the PD's resources
+ *
+ * @param pd target PD
+ */
+void pd_debug_print_held(pd_t *pd);
 
 /**
  * bad functions that are only here because of our cursed sel4utils struct dependencies

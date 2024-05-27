@@ -54,7 +54,7 @@ static void on_mo_registry_delete(resource_server_registry_node_t *node_gen)
 static seL4_MessageInfo_t handle_mo_allocation_request(seL4_Word sender_badge)
 {
     OSDB_PRINTF("Got MO allocation request from %lx\n", sender_badge);
-    badge_print(sender_badge);
+    BADGE_PRINT(sender_badge);
 
     int error = 0;
     seL4_MessageInfo_t reply_tag;

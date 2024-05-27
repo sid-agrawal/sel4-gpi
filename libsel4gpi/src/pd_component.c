@@ -392,7 +392,7 @@ static seL4_MessageInfo_t handle_ipc_bench_req(void)
 static seL4_MessageInfo_t handle_runtime_setup_req(seL4_Word sender_badge, seL4_MessageInfo_t old_tag)
 {
     OSDB_PRINTF("Got runtime setup request from client badge: ");
-    badge_print(sender_badge);
+    BADGE_PRINT(sender_badge);
 
     int error = 0;
 
@@ -495,6 +495,36 @@ err_goto:
     return tag;
 }
 
+static seL4_MessageInfo_t handle_share_resource_type_req(seL4_Word sender_badge, seL4_MessageInfo_t old_tag)
+{
+    int error = 0;
+    OSDB_PRINTF("Got Share Resource Type Request: ");
+    BADGE_PRINT(sender_badge);
+
+    pd_component_registry_entry_t *src_pd_data = (pd_component_registry_entry_t *)resource_component_registry_get_by_badge(get_pd_component(), sender_badge);
+    SERVER_GOTO_IF_COND_BG(src_pd_data == NULL, sender_badge, "Failed to find source PD data ");
+
+    seL4_Word dst_pd_badge = seL4_GetBadge(0);
+    pd_component_registry_entry_t *dst_pd_data = (pd_component_registry_entry_t *)resource_component_registry_get_by_badge(get_pd_component(), dst_pd_badge);
+    SERVER_GOTO_IF_COND_BG(dst_pd_data == NULL, dst_pd_badge, "Failed to find dest PD data ");
+
+    SERVER_GOTO_IF_COND(src_pd_data->pd.id == dst_pd_data->pd.id, "Invalid sharing of resources between the same PD (%d -> %d)\n", src_pd_data->pd.id, dst_pd_data->pd.id);
+
+    gpi_cap_t res_type = (gpi_cap_t)seL4_GetMR(PDMSGREG_SHARE_RES_TYPE_REQ_TYPE);
+    SERVER_GOTO_IF_COND(res_type != GPICAP_TYPE_MO && res_type != GPICAP_TYPE_FILE, "Sharing of resource type %s not permitted.\n", cap_type_to_str(res_type));
+    linked_list_t *resources = pd_get_resources_of_type(&src_pd_data->pd, res_type);
+    error = pd_bulk_add_resource(&dst_pd_data->pd, resources);
+    SERVER_GOTO_IF_ERR(error, "Error occurred during resource sharing (some may still have been successful)\n");
+
+    OSDB_PRINTF("Shared %s resources between PDs (%d -> %d)\n", cap_type_to_str(res_type), src_pd_data->pd.id, dst_pd_data->pd.id);
+    pd_debug_print_held(&dst_pd_data->pd);
+err_goto:
+    seL4_MessageInfo_t tag = seL4_MessageInfo_new(error, 0, 0, PDMSGREG_SHARE_RES_TYPE_ACK_END);
+    seL4_SetMR(PDMSGREG_FUNC, PD_FUNC_SHARE_RES_TYPE_ACK);
+
+    return tag;
+}
+
 static seL4_MessageInfo_t pd_component_handle(seL4_MessageInfo_t tag,
                                               seL4_Word sender_badge,
                                               seL4_CPtr received_cap,
@@ -547,6 +577,9 @@ static seL4_MessageInfo_t pd_component_handle(seL4_MessageInfo_t tag,
             break;
         case PD_FUNC_SETUP_REQ:
             reply_tag = handle_runtime_setup_req(sender_badge, tag);
+            break;
+        case PD_FUNC_SHARE_RES_TYPE_REQ:
+            reply_tag = handle_share_resource_type_req(sender_badge, tag);
             break;
         default:
             gpi_panic(PDSERVS "Unknown func type.", (seL4_Word)func);

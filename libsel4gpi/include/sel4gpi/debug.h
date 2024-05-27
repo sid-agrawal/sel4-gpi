@@ -13,7 +13,7 @@
 #define RESSPC_DEBUG 0x10
 #define GPI_DEBUG 0x20
 #define ALL_DEBUG 0x3f
-#define OSMOSIS_DEBUG NO_DEBUG // selectively enable component debug e.g. (PD_DEBUG | ADS_DEBUG)
+#define OSMOSIS_DEBUG (PD_DEBUG) // selectively enable component debug e.g. (PD_DEBUG | ADS_DEBUG)
 #define OSMOSIS_ERROR ALL_DEBUG // selectively enable component error messages e.g. (PD_DEBUG | ADS_DEBUG)
 
 #if OSMOSIS_DEBUG
@@ -27,13 +27,14 @@
         }                                  \
     } while (0)
 
-#define OSDB_PRINTF_2(component, ...)                   \
-    do                                                  \
-    {                                                   \
-        if ((OSMOSIS_DEBUG & (component)) == component) \
-        {                                               \
-            printf(__VA_ARGS__);                        \
-        }                                               \
+// same as above, but prints without pre-pending the server ID
+#define OSDB_PRINTF_2(...)              \
+    do                                  \
+    {                                   \
+        if (OSMOSIS_DEBUG & (DEBUG_ID)) \
+        {                               \
+            printf(__VA_ARGS__);        \
+        }                               \
     } while (0)
 #else
 #define OSDB_PRINTF(...)

@@ -237,7 +237,6 @@ int pd_client_runtime_setup(pd_client_context_t *target_pd,
                             void *ipc_buf_addr,
                             pd_setup_type_t setup_type)
 {
-    int error = 0;
     seL4_SetMR(PDMSGREG_FUNC, PD_FUNC_SETUP_REQ);
     seL4_SetCap(0, target_ads->badged_server_ep_cspath.capPtr);
     seL4_SetCap(1, target_cpu->badged_server_ep_cspath.capPtr);
@@ -250,7 +249,7 @@ int pd_client_runtime_setup(pd_client_context_t *target_pd,
     OSDB_PRINTF("Setting up process with %d args: [", argc);
     for (int i = 0; i < argc; i++)
     {
-        OSDB_PRINTF("%ld, ", args[i]);
+        OSDB_PRINTF_2("%ld, ", args[i]);
 
         switch (i)
         {
@@ -268,7 +267,7 @@ int pd_client_runtime_setup(pd_client_context_t *target_pd,
             break;
         }
     }
-    OSDB_PRINTF("]\n");
+    OSDB_PRINTF_2("]\n");
 
     seL4_SetMR(PDMSGREG_SETUP_REQ_STACK, (seL4_Word)stack_pos);
     seL4_SetMR(PDMSGREG_SETUP_REQ_STACK_SZ, stack_size);
@@ -277,7 +276,18 @@ int pd_client_runtime_setup(pd_client_context_t *target_pd,
     seL4_SetMR(PDMSGREG_SETUP_REQ_TYPE, setup_type);
 
     tag = seL4_Call(target_pd->badged_server_ep_cspath.capPtr, tag);
-    assert(seL4_MessageInfo_get_label(tag) == 0);
+
+    return seL4_MessageInfo_get_label(tag);
+}
+
+int pd_client_share_resource_by_type(pd_client_context_t *src_pd, pd_client_context_t *dest_pd, gpi_cap_t res_type)
+{
+    seL4_SetMR(PDMSGREG_FUNC, PD_FUNC_SHARE_RES_TYPE_REQ);
+    seL4_SetMR(PDMSGREG_SHARE_RES_TYPE_REQ_TYPE, res_type);
+    seL4_SetCap(0, dest_pd->badged_server_ep_cspath.capPtr);
+
+    seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 1, PDMSGREG_SHARE_RES_TYPE_REQ_END);
+    tag = seL4_Call(src_pd->badged_server_ep_cspath.capPtr, tag);
 
     return seL4_MessageInfo_get_label(tag);
 }

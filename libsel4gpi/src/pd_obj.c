@@ -35,6 +35,7 @@
 #include <sel4gpi/pd_utils.h>
 #include <sel4gpi/resource_space_component.h>
 #include <sel4gpi/error_handle.h>
+#include <sel4gpi/linked_list.h>
 
 #define CSPACE_SIZE_BITS 17
 #define ELF_LIB_DATA_SECTION ".lib_data"
@@ -94,7 +95,7 @@ int pd_add_resource(pd_t *pd, gpi_cap_t type, uint32_t space_id, uint32_t res_id
     if (node != NULL)
     {
         OSDB_PRINTF("Warning: adding resource with existing ID (%lx), do not insert again\n", res_node_id);
-        badge_print(res_node_id);
+        BADGE_PRINT(res_node_id);
     }
     else
     {
@@ -173,7 +174,14 @@ int pd_add_rde(pd_t *pd,
 
     for (int i = 0; i < MAX_NS_PER_RDE; i++)
     {
-        if (pd->init_data->rde[type.type][i].type.type == GPICAP_TYPE_NONE)
+        osmosis_rde_t rde = pd->init_data->rde[type.type][i];
+        if (rde.space_id == space_id && rde.type.type == type.type)
+        {
+            idx = -1;
+            break;
+        }
+
+        if (rde.type.type == GPICAP_TYPE_NONE)
         {
             idx = i;
             break;
@@ -182,7 +190,7 @@ int pd_add_rde(pd_t *pd,
 
     if (idx == -1)
     {
-        OSDB_PRINTF("No more RDE NS slots available for type %d\n", type.type);
+        OSDB_PRINTF("Either no more RDE NS slots available for type %d or RDE being added already exists\n", type.type);
         return 1;
     }
 
@@ -227,7 +235,40 @@ int pd_add_rde(pd_t *pd,
     return 0;
 }
 
-static void pd_held_resource_on_delete(resource_server_registry_node_t *node_gen)
+linked_list_t *pd_get_resources_of_type(pd_t *pd, gpi_cap_t type)
+{
+    linked_list_t *found = linked_list_new();
+
+    for (pd_hold_node_t *current_cap = (pd_hold_node_t *)pd->hold_registry.head; current_cap != NULL; current_cap = (pd_hold_node_t *)current_cap->gen.hh.next)
+    {
+        if (current_cap->type == type)
+        {
+            linked_list_insert(found, current_cap);
+        }
+    }
+
+    return found;
+}
+
+int pd_bulk_add_resource(pd_t *pd, linked_list_t *resources)
+{
+    int error = 0;
+    int it_error = 0;
+    pd_hold_node_t *res;
+    for (linked_list_node_t *curr = resources->head; curr->next != NULL; curr = curr->next)
+    {
+        res = (pd_hold_node_t *)curr->data;
+        // TODO find the endpoint for the resource, badge and mint
+        it_error = pd_add_resource(pd, res->type, res->space_id, res->res_id, res->slot_in_RT_Debug, seL4_CapNull, res->slot_in_ServerPD_Debug);
+        SERVER_PRINT_IF_ERR(error, "Warning: failed to add resource (type: %s, space_id: %d) to PD %d\n", cap_type_to_str(res->type), res->space_id, pd->id);
+        error = error || it_error;
+    }
+
+    return error;
+}
+
+static void
+pd_held_resource_on_delete(resource_server_registry_node_t *node_gen)
 {
     int error = 0;
     pd_hold_node_t *node = (pd_hold_node_t *)node_gen;
@@ -1054,6 +1095,14 @@ inline void print_pd_osm_rde_info(osmosis_rde_t *o)
                o->slot_in_PD,
                cap_type_to_str(o->type.type),
                o->space_id);
+    }
+}
+
+void pd_debug_print_held(pd_t *pd)
+{
+    for (pd_hold_node_t *current_cap = (pd_hold_node_t *)pd->hold_registry.head; current_cap != NULL; current_cap = (pd_hold_node_t *)current_cap->gen.hh.next)
+    {
+        print_pd_osm_cap_info(current_cap);
     }
 }
 
