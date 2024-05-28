@@ -90,11 +90,14 @@ static seL4_MessageInfo_t mo_component_handle(seL4_MessageInfo_t tag,
                                               seL4_CPtr received_cap,
                                               bool *need_new_recv_cap)
 {
+    int error = 0; // unused, to appease the error handling macros
     enum mo_component_funcs func = seL4_GetMR(MOMSGREG_FUNC);
     seL4_MessageInfo_t reply_tag;
 
     if (get_object_id_from_badge(sender_badge) == BADGE_OBJ_ID_NULL)
     {
+        SERVER_GOTO_IF_COND(func != MO_FUNC_CONNECT_REQ,
+                            "Received invalid request on the allocation endpoint\n");
         reply_tag = handle_mo_allocation_request(sender_badge);
     }
     else
@@ -102,12 +105,16 @@ static seL4_MessageInfo_t mo_component_handle(seL4_MessageInfo_t tag,
         switch (func)
         {
         default:
-            gpi_panic(MOSERVS "Unknown func type.", (seL4_Word)func);
+            SERVER_GOTO_IF_COND(1, "Unknown request received: %d\n", func);
             break;
         }
     }
 
     return reply_tag;
+
+err_goto:
+    seL4_MessageInfo_t err_tag = seL4_MessageInfo_set_label(reply_tag, 1);
+    return err_tag;
 }
 
 int mo_component_initialize(simple_t *server_simple,

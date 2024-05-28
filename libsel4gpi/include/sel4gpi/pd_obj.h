@@ -251,20 +251,20 @@ int pd_add_resource(pd_t *pd,
                     seL4_CPtr slot_in_serverPD);
 
 /**
- * @brief WIP
+ * @brief Adds all resources specified in the given list to a PD
  *
- * @param pd
- * @param resources
- * @return int
+ * @param pd the target PD
+ * @param resources resources to add to the PD
+ * @return int 0 on success, an indicated error may still have successfully added some resources
  */
 int pd_bulk_add_resource(pd_t *pd, linked_list_t *resources);
 
 /**
- * @brief WIP
+ * @brief gets all resources of the given type that belongs to the given PD
  *
- * @param pd
- * @param type
- * @return linked_list_t*
+ * @param pd the PD to find resources from
+ * @param type the type of resource to find
+ * @return linked_list_t* a list of all the found resources
  */
 linked_list_t *pd_get_resources_of_type(pd_t *pd, gpi_cap_t type);
 

@@ -10,7 +10,8 @@
 #include <sel4/types.h>
 #include <sel4gpi/badge_usage.h>
 
-/* We define a specific address for our static heap since we want the flexibility of allocating an MO for it (rather than it being part of the ELF data) */
+/* We define a specific address for our static heap since we want the flexibility of allocating an MO for it
+ * (rather than it being part of the ELF data) */
 #define PD_HEAP_LOC 0x5000000000
 #define PD_CAP_ROOT SEL4UTILS_CNODE_SLOT
 #define PD_CAP_DEPTH seL4_WordBits
@@ -79,14 +80,14 @@ void sel4gpi_set_exit_cb(void);
 /**
  * @brief obtains a new VMR by requesting an MO and then attaching it to the given ADS
  *
- * @param ads_rde the ADS which the VMR belongs to
+ * @param vmr_rde the ADS which the VMR belongs to
  * @param num_pages number of pages
  * @param vaddr OPTIONAL, address in which the VMR should be mapped
  * @param vmr_type type of VMR, e.g. stack, heap, IPC buffer, etc.
  * @param ret_mo OPTIONAL, returns a reference to the MO object for this VMR
  * @return virtual address of the VMR, if vaddr argument is specified, it should be the same (or NULL, on failure)
  */
-void *sel4gpi_get_vmr(ads_client_context_t *ads_rde, int num_pages, void *vaddr, sel4utils_reservation_type_t vmr_type, mo_client_context_t *ret_mo);
+void *sel4gpi_get_vmr(ads_client_context_t *vmr_rde, int num_pages, void *vaddr, sel4utils_reservation_type_t vmr_type, mo_client_context_t *ret_mo);
 
 /**
  * @brief creates a new stack with num_pages in the given ADS, it will NOT be mapped to the current one.

@@ -29,6 +29,7 @@
     {                                                                              \
         if ((c))                                                                   \
         {                                                                          \
+            error = 1;                                                             \
             printf(COLORIZE("[ERROR] %s():\t", RED) msg, __func__, ##__VA_ARGS__); \
             goto err_goto;                                                         \
         }                                                                          \
@@ -50,6 +51,16 @@
         {                               \
             printf(msg, ##__VA_ARGS__); \
         }                               \
+    } while (0)
+
+#define FATAL_IF_ERR(err, msg, ...)                              \
+    do                                                           \
+    {                                                            \
+        if ((err))                                               \
+        {                                                        \
+            printf(COLORIZE("FATAL: ", RED) msg, ##__VA_ARGS__); \
+            abort();                                             \
+        }                                                        \
     } while (0)
 
 // (XXX) Arya: Occasionally I see a weird issue

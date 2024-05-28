@@ -15,11 +15,6 @@
 #include <sel4/types.h>
 #include <utils/ansi_color.h>
 #include <sel4gpi/badge_usage.h>
-#include <sel4gpi/ads_clientapi.h>
-#include <sel4gpi/mo_clientapi.h>
-#include <sel4gpi/cpu_clientapi.h>
-#include <sel4gpi/badge_usage.h>
-#include <sel4gpi/resource_space_clientapi.h>
 #include <sel4gpi/linked_list.h>
 
 #define DEFAULT_STACK_PAGES 16
@@ -76,14 +71,12 @@ typedef struct _vmr_config
 } vmr_config_t;
 
 /**
- * @brief Configuration of an entire ADS
+ * @brief Configuration of an entire ADS, the type of sharing is w.r.t. the current ADS
  */
 typedef struct _ads_config
 {
     /** whether this config is for the same ADS as the current one */
     bool same_ads;
-    /** the source ADS to generate the new ADS, only used if same_ads == false */
-    ads_client_context_t *src_ads;
     /** only used if code_shared == GPI_DISJOINT */
     const char *image_name;
     /** if specified, will take precedence over any automatically found ones */
@@ -170,3 +163,30 @@ pd_config_t *sel4gpi_generate_thread_config(void *thread_fn, seL4_CPtr fault_ep)
  * @param cfg the config to destroy
  */
 void sel4gpi_config_destroy(pd_config_t *cfg);
+
+/**
+ * @brief convert a gpi_share_degree_t to human-readable string
+ *
+ * @param share_deg the share degree type
+ * @return char* string representation of the sharing degree
+ */
+char *sel4gpi_share_degree_to_str(gpi_share_degree_t share_deg);
+
+/**
+ * @brief set up an ADS given the configuration. Can be used as a standalone to configure a new ADS for an existing PD.
+ *
+ * @param cfg The ADS config options
+ * @param runnable an allocated runnable struct that can be empty, but typically with the PD context filled in
+ * @param ret_stack OPTIONAL: address of the allocated stack
+ * @param ret_ipc_buf OPTIONAL: address of the allocated IPC buffer
+ * @param ret_entry_point OPTIONAL: address of the entry point, if found. If an entry point is specified in the config,
+ *                        this will be the same
+ * @param ret_ipc_buf_mo OPTIONAL: the MO for the IPC buffer
+ * @return int 0 on success
+ */
+int sel4gpi_ads_configure(ads_config_t *cfg,
+                          sel4gpi_runnable_t *runnable,
+                          void **ret_stack,
+                          void **ret_ipc_buf,
+                          void **ret_entry_point,
+                          mo_client_context_t *ret_ipc_buf_mo);

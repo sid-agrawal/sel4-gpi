@@ -39,6 +39,18 @@ int test_new_process_osmosis_shmem(env_t env)
     pd_config_t *proc_cfg = sel4gpi_configure_process("hello", DEFAULT_STACK_PAGES, DEFAULT_HEAP_PAGES, &new_pd);
     test_assert(proc_cfg != NULL);
 
+    // ads_client_context_t vmr_rde = {.badged_server_ep_cspath.capPtr = sel4gpi_get_rde_by_space_id(sel4gpi_get_binded_ads_id(), GPICAP_TYPE_VMR)};
+    // void *vaddr = sel4gpi_get_vmr(&vmr_rde, 5, NULL, SEL4UTILS_RES_TYPE_GENERIC, NULL);
+    // printf("vaddr: %p\n", vaddr);
+    // test_assert(vaddr != NULL);
+
+    // vmr_config_t *test_cfg = calloc(1, sizeof(vmr_config_t));
+    // test_cfg->start = vaddr;
+    // test_cfg->region_pages = 5;
+    // test_cfg->type = SEL4UTILS_RES_TYPE_HEAP;
+    // test_cfg->share_mode = GPI_COPY;
+    // linked_list_insert(proc_cfg->ads_cfg.vmr_cfgs, test_cfg);
+
     vka_object_t ep;
     error = vka_alloc_endpoint(&env->vka, &ep);
     test_error_eq(error, 0);

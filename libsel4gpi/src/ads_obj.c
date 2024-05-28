@@ -204,6 +204,39 @@ attach_node_t *ads_get_res_by_vaddr(ads_t *ads, void *vaddr)
     return (attach_node_t *)resource_server_registry_get_by_id(&ads->attach_registry, (uint64_t)vaddr);
 }
 
+/**
+ * @brief finds a reservation for a VMR by the type
+ *
+ * @param src_ads ADS to find the reservation in
+ * @param vmr_type the type of VMR to look for
+ * @return attach_node_t* returns the attach node data, or NULL if no such VMR exists
+ */
+static attach_node_t *ads_get_res_by_type(ads_t *src_ads, sel4utils_reservation_type_t vmr_type)
+{
+    // sel4utils_alloc_data_t *vmr_data = get_alloc_data(src_ads->vspace);
+    // sel4utils_res_t *curr_res = vmr_data->reservation_head;
+
+    // while (curr_res != NULL)
+    // {
+    //     if (curr_res->type == vmr_type)
+    //     {
+    //         return curr_res;
+    //     }
+
+    //     curr_res = curr_res->next;
+    // }
+
+    for (attach_node_t *curr = (attach_node_t *)src_ads->attach_registry.head; curr != NULL; curr = curr->gen.hh.next)
+    {
+        if (curr->type == vmr_type)
+        {
+            return curr;
+        }
+    }
+
+    return NULL;
+}
+
 static int copy_frame_caps_for_mapping(seL4_CPtr *src_caps, seL4_CPtr *dest_caps, size_t num_pages)
 {
     int error = 0;
@@ -560,7 +593,7 @@ void ads_dump_rr(ads_t *ads, model_state_t *ms, gpi_model_node_t *pd_node)
  * @param start address of the start of the VMR
  * @param end address of the end of the VMR
  * @param vmr_type VMR type (e.g. stack, heap, etc.)
- * @param ret_old_attach_node returns the original attach node from src_ads
+ * @param src_attach_node the attach node to copy the reservation from
  * @param ret_new_attach_node returns the created attach node for dst_ads
  * @param ret_mo if MO was attached in src_ads's reservation, returns the MO, otherwise NULL
  * @param ret_n_pages returns the number of pages in the reservation
@@ -571,7 +604,7 @@ static int ads_copy_reservation(ads_t *src_ads,
                                 uintptr_t start,
                                 uintptr_t end,
                                 sel4utils_reservation_type_t vmr_type,
-                                attach_node_t **ret_old_attach_node,
+                                attach_node_t *src_attach_node,
                                 attach_node_t **ret_new_attach_node,
                                 mo_t **ret_mo,
                                 int *ret_n_pages)
@@ -583,20 +616,15 @@ static int ads_copy_reservation(ads_t *src_ads,
     error = ads_reserve(dst_ads, (void *)start, num_pages, MO_PAGE_BITS, vmr_type, &new_attach_node);
     SERVER_GOTO_IF_ERR(error, "Failed to reserve region\n");
 
-    // Find the original attach node
-    attach_node_t *old_attach_node = ads_get_res_by_vaddr(src_ads, (void *)start);
-    SERVER_GOTO_IF_COND(old_attach_node == NULL, "Failed to find the attach node for vaddr: %p\n", (void *)start);
-
     // Find the original MO
     mo_t *old_mo;
-    if (old_attach_node->mo_attached)
+    if (src_attach_node->mo_attached)
     {
-        mo_component_registry_entry_t *old_mo_reg_entry = (mo_component_registry_entry_t *)resource_component_registry_get_by_id(get_mo_component(), old_attach_node->mo_id);
-        SERVER_GOTO_IF_COND(old_mo_reg_entry == NULL, "Failed to find the MO (%ld) for vaddr: %p\n", old_attach_node->mo_id, (void *)start);
+        mo_component_registry_entry_t *old_mo_reg_entry = (mo_component_registry_entry_t *)resource_component_registry_get_by_id(get_mo_component(), src_attach_node->mo_id);
+        SERVER_GOTO_IF_COND(old_mo_reg_entry == NULL, "Failed to find the MO (%ld) for vaddr: %p\n", src_attach_node->mo_id, (void *)start);
         old_mo = &old_mo_reg_entry->mo;
     }
 
-    *ret_old_attach_node = old_attach_node;
     *ret_new_attach_node = new_attach_node;
     *ret_mo = old_mo;
     *ret_n_pages = num_pages;
@@ -649,56 +677,65 @@ err_goto:
     return error;
 }
 
-/**
- * @brief finds a reservation for a VMR by the type
- *
- * @param src_ads ADS to find the reservation in
- * @param vmr_type the type of VMR to look for
- * @return sel4utils_res_t* returns the reservation data, or NULL if no such VMR exists
- */
-static sel4utils_res_t *ads_find_reservation_by_type(ads_t *src_ads, sel4utils_reservation_type_t vmr_type)
+int ads_copy(vspace_t *loader,
+             vka_t *vka,
+             ads_t *src_ads,
+             ads_t *dst_ads,
+             vmr_config_t *cfg)
 {
-    sel4utils_alloc_data_t *vmr_data = get_alloc_data(src_ads->vspace);
-    sel4utils_res_t *curr_res = vmr_data->reservation_head;
+    int error = 0;
 
-    while (curr_res != NULL)
+    OSDB_PRINTF("%s VMR %p (type: %s, pages: %u) from ADS%d -> ADS%d\n",
+                sel4gpi_share_degree_to_str(cfg->share_mode),
+                cfg->start, human_readable_va_res_type(cfg->type),
+                cfg->region_pages, src_ads->id, dst_ads->id);
+
+    attach_node_t *src_attach_node;
+
+    if (cfg->start == NULL &&
+        cfg->type != SEL4UTILS_RES_TYPE_SHARED_FRAMES &&
+        cfg->type != SEL4UTILS_RES_TYPE_OTHER &&
+        cfg->type != SEL4UTILS_RES_TYPE_GENERIC)
     {
-        if (curr_res->type == vmr_type)
-        {
-            return curr_res;
-        }
-
-        curr_res = curr_res->next;
+        src_attach_node = ads_get_res_by_type(src_ads, cfg->type);
+        SERVER_GOTO_IF_COND(src_attach_node == NULL, "Given %s VMR config with no start address and no existing reservation\n",
+                            human_readable_va_res_type(cfg->type));
+    }
+    else
+    {
+        src_attach_node = ads_get_res_by_vaddr(src_ads, cfg->start);
+        SERVER_GOTO_IF_COND(src_attach_node == NULL, "Failed to find the attach node for vaddr: %p\n", cfg->start);
     }
 
-    return NULL;
-}
+    attach_node_t *new_attach_node;
+    mo_t *old_mo;                   // original MO
+    int num_pages;
 
-int ads_shallow_copy(vspace_t *loader,
-                     vka_t *vka,
-                     ads_t *src_ads,
-                     ads_t *dst_ads,
-                     void *omit_vaddr,
-                     void *pd_osm_data,
-                     bool shallow_copy)
-{
-    OSDB_PRINTF("Shallow copying ADS(%d)\n", src_ads->id);
+    uintptr_t region_end = (uintptr_t)cfg->start + (cfg->region_pages * SIZE_BITS_TO_BYTES(MO_PAGE_BITS));
 
-    int error = 0;
-    vspace_t *from = src_ads->vspace;
-    vspace_t *to = dst_ads->vspace;
+    error = ads_copy_reservation(src_ads, dst_ads, (uintptr_t)cfg->start, region_end, cfg->type,
+                                 src_attach_node, &new_attach_node, &old_mo, &num_pages);
+    SERVER_GOTO_IF_ERR(error, "Copying reservation failed\n");
+    SERVER_GOTO_IF_COND(!src_attach_node->mo_attached, "No MO attached for source VMR reservation\n");
 
-    assert(from != NULL);
-    assert(to != NULL);
+    switch (cfg->share_mode)
+    {
+    case GPI_SHARED:
+        error = ads_attach_to_res(dst_ads, vka, new_attach_node, src_attach_node->mo_offset, old_mo);
+        break;
+    case GPI_COPY:
+        error = ads_deep_copy(dst_ads, old_mo, num_pages, new_attach_node, src_attach_node);
+        break;
+    default:
+        SERVER_GOTO_IF_COND(1, "Invalid sharing mode specified: %s\n", sel4gpi_share_degree_to_str(cfg->share_mode));
+        break;
+    }
 
-    sel4utils_alloc_data_t *from_data = get_alloc_data(from);
-    sel4utils_res_t *from_sel4_res = from_data->reservation_head;
+    SERVER_GOTO_IF_ERR(error, "Failed to attach source MO (%d) to dst ADS (%d)\n", old_mo->id, dst_ads->id);
 
-    OSDB_PRINTF("=========== Start of ADS copy (%d -> %d) ================\n", src_ads->id, dst_ads->id);
-
+#if 0
     /* walk all the reservations */
     // (XXX) Arya: We may be able to just walk attach nodes instead of reservations (eventually?)
-    int num_pages;
     while (from_sel4_res != NULL)
     {
         OSDB_PRINTF("Reservation: %p\n", (void *)from_sel4_res->start);
@@ -762,9 +799,10 @@ int ads_shallow_copy(vspace_t *loader,
     // sel4utils_walk_vspace(to, NULL);
     // For each reservation: call share_mem_at_vaddr
     return 0;
-
+#endif
 err_goto:
-    return 1;
+    // TODO if error: cleanup reservation
+    return error;
 }
 
 void ads_destroy(ads_t *ads)

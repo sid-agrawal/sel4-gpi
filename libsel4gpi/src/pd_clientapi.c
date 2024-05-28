@@ -37,8 +37,8 @@ int pd_component_client_connect(seL4_CPtr server_ep_cap,
     OSDB_PRINTF("Set a receive path for the badged ep: %d\n", (int)free_slot);
 
     /* Set request type */
-    seL4_SetMR(0, GPICAP_TYPE_PD);
-    seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0, 1);
+    seL4_SetMR(PDMSGREG_FUNC, PD_FUNC_CONNECT_REQ);
+    seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0, PDMSGREG_CONNECT_REQ_END);
 
     tag = seL4_Call(server_ep_cap, tag);
     assert(seL4_MessageInfo_get_extraCaps(tag) == 1);

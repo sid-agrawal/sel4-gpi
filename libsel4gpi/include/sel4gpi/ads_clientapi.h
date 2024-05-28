@@ -13,6 +13,7 @@
 
 #include <sel4gpi/ads_component.h>
 #include <sel4gpi/gpi_client.h>
+#include <sel4gpi/pd_creation.h>
 
 /**
  * @brief   Initialize the ads client.
@@ -133,6 +134,20 @@ int ads_client_testing(ads_client_context_t *conn, vka_t *vka,
                        ads_client_context_t *ads_conn_clone1,
                        ads_client_context_t *ads_conn_clone2,
                        ads_client_context_t *ads_conn_clone3);
+
+/**
+ * @brief Given a VMR config that describes a virtual memory region, copies it from src_ads to dst_ads
+ * Copying method will depend on what's provided in the config. Currently, only shallow and deep copying are supported.
+ * For regions with type other than SEL4UTILS_RES_TYPE_GENERIC, SEL4UTILS_RES_TYPE_OTHER, and
+ * SEL4UTILS_RES_TYPE_SHARED_FRAMES, the config can omit a start address and region size,
+ * and the server will attempt to look for the special-typed VMR
+ *
+ * @param src_ads the ADS to copy from
+ * @param dst_ads the ADS to copy to
+ * @param vmr_vfg the config describing one VMR
+ * @return int 0 on success
+ */
+int ads_client_copy(ads_client_context_t *src_ads, ads_client_context_t *dst_ads, vmr_config_t *vmr_cfg);
 
 /* ======================================= CONVENIENCE FUNCTIONS (NOT PART OF FRAMEWORK) ================================================= */
 

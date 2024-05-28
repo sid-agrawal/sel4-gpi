@@ -30,7 +30,7 @@ int mo_component_client_connect(seL4_CPtr server_ep_cap,
                            /* This works coz we have a single level cnode with no guard.*/
                            seL4_WordBits); /* Depth i.e. how many bits of free_slot to interpret*/
 
-    seL4_SetMR(0, GPICAP_TYPE_MO);
+    seL4_SetMR(MOMSGREG_FUNC, MO_FUNC_CONNECT_REQ);
     seL4_SetMR(MOMSGREG_CONNECT_REQ_NUM_PAGES, num_pages);
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0, MOMSGREG_CONNECT_REQ_END);
     tag = seL4_Call(server_ep_cap, tag);

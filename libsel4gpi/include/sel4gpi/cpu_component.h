@@ -42,7 +42,10 @@ enum cpu_component_errors
 /* IPC Message register values for SSMSGREG_FUNC */
 enum cpu_component_funcs
 {
-    CPU_FUNC_START_REQ = 0,
+    CPU_FUNC_CONNECT_REQ = 0,
+    CPU_FUNC_CONNECT_ACK,
+
+    CPU_FUNC_START_REQ,
     CPU_FUNC_START_ACK,
 
     CPU_FUNC_CONFIG_REQ,

@@ -8,6 +8,7 @@
 #include <sel4utils/process.h>
 #include <sel4gpi/ads_clientapi.h>
 #include <sel4gpi/pd_clientapi.h>
+#include <sel4gpi/error_handle.h>
 
 #include <kvstore_shared.h>
 #include <kvstore_client.h>
@@ -47,42 +48,63 @@ int kvstore_client_swap_ads_app(void)
 
 static int configure_separate_ads()
 {
-    int error;
-    int swap_err;
+    int error = 0;
+    // int swap_err;
 
-    pd_client_context_t self_pd_conn = sel4gpi_get_pd_conn();
-    seL4_CPtr slot;
-    pd_client_next_slot(&self_pd_conn, &slot);
+    // pd_client_context_t self_pd_conn = sel4gpi_get_pd_conn();
+    // seL4_CPtr slot;
+    // pd_client_next_slot(&self_pd_conn, &slot);
 
-    seL4_CPtr ads_rde = sel4gpi_get_rde(GPICAP_TYPE_ADS);
-    ads_client_context_t self_ads_conn = sel4gpi_get_ads_conn();
-    swap_err = ads_client_shallow_copy(&self_ads_conn, slot, NULL, &kvserv_ads);
-    if (swap_err)
-    {
-        ZF_LOGE("failed to make a new ADS for kvstore server");
-        return swap_err;
-    }
+    // seL4_CPtr ads_rde = sel4gpi_get_rde(GPICAP_TYPE_ADS);
+    // ads_client_context_t self_ads_conn = sel4gpi_get_ads_conn();
+    // swap_err = ads_client_shallow_copy(&self_ads_conn, slot, NULL, &kvserv_ads);
+    // if (swap_err)
+    // {
+    //     ZF_LOGE("failed to make a new ADS for kvstore server");
+    //     return swap_err;
+    // }
+
+    /* WIP */
+    ads_config_t other_ads_cfg = {
+        .same_ads = false,
+        .code_shared = GPI_SHARED,
+        .stack_shared = GPI_SHARED,
+        .ipc_buf_shared = GPI_SHARED,
+        .stack_pages = DEFAULT_STACK_PAGES,
+    };
+
+    linked_list_t other_vmr_cfg = {0};
+    vmr_config_t heap_cfg = {
+        .start = (void *)PD_HEAP_LOC,
+        .region_pages = DEFAULT_HEAP_PAGES,
+        .type = SEL4UTILS_RES_TYPE_HEAP,
+        .share_mode = GPI_COPY};
+
+    linked_list_insert(&other_ads_cfg, (void *)&heap_cfg);
+    other_ads_cfg.vmr_cfgs = &other_vmr_cfg;
+
+    sel4gpi_runnable_t runnable = {0};
+    error = sel4gpi_ads_configure(&other_ads_cfg, &runnable, NULL, NULL, NULL, NULL);
+    GOTO_IF_ERR(error, "Failed to configure other ADS\n");
+    kvserv_ads = runnable.ads;
 
     self_cpu_conn = sel4gpi_get_cpu_conn();
-    swap_err = cpu_client_change_vspace(&self_cpu_conn, &kvserv_ads);
-    if (swap_err)
-    {
-        ZF_LOGE("failed to swap ADS to kvstore server");
-        return swap_err;
-    }
+    error = cpu_client_change_vspace(&self_cpu_conn, &kvserv_ads);
+    GOTO_IF_ERR(error, "failed to swap ADS to kvstore server\n");
 
     // we need to clear the FS client instance, so the lib starts with a fresh one
     memset(&xv6fs_client, 0, sizeof(global_xv6fs_client_context_t));
     error = kvstore_server_init();
-    ZF_LOGE_IF(error, "Failed to initialize kvstore");
+    GOTO_IF_ERR(error, "Failed to initialize kvstore\n");
 
     // need to set this variable twice since we're in a different vspace
     client_ads_conn = sel4gpi_get_ads_conn();
     self_cpu_conn = sel4gpi_get_cpu_conn();
-    swap_err = cpu_client_change_vspace(&self_cpu_conn, &client_ads_conn);
-    ZF_LOGF_IF(swap_err, "Failed to switch back to client ADS"); // fatal because we can't continue in the wrong ADS
+    error = cpu_client_change_vspace(&self_cpu_conn, &client_ads_conn);
+    FATAL_IF_ERR(error, "Failed to switch back to client ADS"); // fatal because we can't continue in the wrong ADS
 
-    return swap_err;
+err_goto:
+    return error;
 }
 
 int kvstore_client_configure(kvstore_mode_t kvstore_mode, seL4_CPtr ep)

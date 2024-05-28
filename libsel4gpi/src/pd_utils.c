@@ -107,7 +107,7 @@ void sel4gpi_set_exit_cb(void)
     sel4runtime_set_exit(sel4gpi_exit_cb);
 }
 
-void *sel4gpi_get_vmr(ads_client_context_t *ads_rde, int num_pages, void *vaddr, sel4utils_reservation_type_t vmr_type, mo_client_context_t *ret_mo)
+void *sel4gpi_get_vmr(ads_client_context_t *vmr_rde, int num_pages, void *vaddr, sel4utils_reservation_type_t vmr_type, mo_client_context_t *ret_mo)
 {
     int error;
 
@@ -124,7 +124,7 @@ void *sel4gpi_get_vmr(ads_client_context_t *ads_rde, int num_pages, void *vaddr,
     GOTO_IF_ERR(error, "failed to allocate MO\n");
 
     void *new_vaddr;
-    error = ads_client_attach(ads_rde, vaddr, &mo, vmr_type, &new_vaddr);
+    error = ads_client_attach(vmr_rde, vaddr, &mo, vmr_type, &new_vaddr);
     GOTO_IF_ERR(error, "failed to attach MO\n");
 
     if (ret_mo)

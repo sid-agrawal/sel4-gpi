@@ -535,11 +535,14 @@ static seL4_MessageInfo_t pd_component_handle(seL4_MessageInfo_t tag,
                                               seL4_CPtr received_cap,
                                               bool *need_new_recv_cap)
 {
+    int error = 0; // unused, to appease the error handling macros
     enum pd_component_funcs func = seL4_GetMR(PDMSGREG_FUNC);
     seL4_MessageInfo_t reply_tag;
 
     if (get_object_id_from_badge(sender_badge) == BADGE_OBJ_ID_NULL)
     {
+        SERVER_GOTO_IF_COND(func != PD_FUNC_CONNECT_REQ,
+                            "Received invalid request on the allocation endpoint: %d\n", func);
         reply_tag = handle_pd_allocation(sender_badge);
     }
     else
@@ -587,12 +590,16 @@ static seL4_MessageInfo_t pd_component_handle(seL4_MessageInfo_t tag,
             reply_tag = handle_share_resource_type_req(sender_badge, tag);
             break;
         default:
-            gpi_panic(PDSERVS "Unknown func type.", (seL4_Word)func);
+            SERVER_GOTO_IF_COND(1, "Unknown request received: %d\n", func);
             break;
         }
     }
 
     return reply_tag;
+
+err_goto:
+    seL4_MessageInfo_t err_tag = seL4_MessageInfo_set_label(reply_tag, 1);
+    return err_tag;
 }
 
 /** --- Functions callable by root task --- **/

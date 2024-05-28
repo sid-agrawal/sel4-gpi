@@ -136,11 +136,14 @@ static seL4_MessageInfo_t resspc_component_handle(seL4_MessageInfo_t tag,
                                                   seL4_CPtr received_cap,
                                                   bool *need_new_recv_cap)
 {
+    int error = 0;
     enum mo_component_funcs func = seL4_GetMR(RESSPCMSGREG_FUNC);
     seL4_MessageInfo_t reply_tag;
 
     if (get_object_id_from_badge(sender_badge) == BADGE_OBJ_ID_NULL)
     {
+        SERVER_GOTO_IF_COND(func != RESSPC_FUNC_CONNECT_REQ,
+                            "Received invalid request on the allocation endpoint\n");
         reply_tag = handle_resspc_allocation_request(sender_badge, received_cap);
         *need_new_recv_cap = true;
     }
@@ -152,11 +155,13 @@ static seL4_MessageInfo_t resspc_component_handle(seL4_MessageInfo_t tag,
             reply_tag = handle_create_resource_request(sender_badge);
             break;
         default:
-            gpi_panic(MOSERVS "Unknown func type.", (seL4_Word)func);
+            SERVER_GOTO_IF_COND(1, "Unknown request received: %d\n", func);
             break;
         }
     }
 
+err_goto:
+    reply_tag = seL4_MessageInfo_set_label(reply_tag, error);
     return reply_tag;
 }
 

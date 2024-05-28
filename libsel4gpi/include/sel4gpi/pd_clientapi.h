@@ -173,11 +173,11 @@ int pd_client_runtime_setup(pd_client_context_t *target_pd,
                             pd_setup_type_t setup_type);
 
 /**
- * @brief (WIP)
+ * @brief shares all resources of the given type from src_pd to dest_pd
  *
- * @param src_pd
- * @param dest_pd
- * @param res_type
- * @return int
+ * @param src_pd the source PD
+ * @param dest_pd the destination PD
+ * @param res_type the resource type to share
+ * @return int 0 on success
  */
 int pd_client_share_resource_by_type(pd_client_context_t *src_pd, pd_client_context_t *dest_pd, gpi_cap_t res_type);

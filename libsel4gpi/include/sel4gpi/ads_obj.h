@@ -17,6 +17,7 @@
 #include <sel4gpi/cpu_obj.h>
 #include <sel4gpi/resource_server_utils.h>
 #include <sel4gpi/gpi_client.h>
+#include <sel4gpi/pd_creation.h>
 
 // Used in a map from attach node ID to vaddr
 typedef struct _attach_node_map
@@ -190,8 +191,7 @@ int ads_bind(ads_t *ads, vka_t *vka, seL4_CPtr *cpu_cap);
  * @param shallow_copy if true, only copy the page table entries, do not copy the frames
  * @return int
  */
-int ads_shallow_copy(vspace_t *loader, vka_t *vka, ads_t *src_ads, ads_t *dst_ads, void *omit_vaddr,
-                     void *pd_osm_data, bool shallow_copy);
+int ads_copy(vspace_t *loader, vka_t *vka, ads_t *src_ads, ads_t *dst_ads, vmr_config_t *cfg);
 
 /**
  * @param ads ads object to dump the RR for

@@ -242,11 +242,14 @@ static seL4_MessageInfo_t cpu_component_handle(seL4_MessageInfo_t tag,
                                                seL4_CPtr received_cap,
                                                bool *need_new_recv_cap)
 {
+    int error = 0; // unused, to appease the error handling macros
     enum cpu_component_funcs func = seL4_GetMR(CPUMSGREG_FUNC);
     seL4_MessageInfo_t reply_tag;
 
     if (get_object_id_from_badge(sender_badge) == BADGE_OBJ_ID_NULL)
     {
+        SERVER_GOTO_IF_COND(func != CPU_FUNC_CONNECT_REQ,
+                            "Received invalid request on the allocation endpoint\n");
         reply_tag = handle_cpu_allocation(sender_badge);
     }
     else
@@ -268,12 +271,16 @@ static seL4_MessageInfo_t cpu_component_handle(seL4_MessageInfo_t tag,
             reply_tag = handle_set_tls_req(sender_badge, tag);
             break;
         default:
-            gpi_panic(CPUSERVS "Unknown func type.", (seL4_Word)func);
+            SERVER_GOTO_IF_COND(1, "Unknown request received: %d\n", func);
             break;
         }
     }
 
     return reply_tag;
+
+err_goto:
+    seL4_MessageInfo_t err_tag = seL4_MessageInfo_set_label(reply_tag, 1);
+    return err_tag;
 }
 
 int cpu_component_initialize(simple_t *server_simple,

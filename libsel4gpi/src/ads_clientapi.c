@@ -36,8 +36,7 @@ int ads_component_client_connect(seL4_CPtr server_ep_cap,
 
     /* Set request type */
     seL4_SetMR(ADSMSGREG_FUNC, ADS_FUNC_CONNECT_REQ);
-    seL4_SetMR(0, GPICAP_TYPE_ADS);
-    seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0, 1);
+    seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0, ADSMSGREG_CONNECT_REQ_END);
 
     tag = seL4_Call(server_ep_cap, tag);
     assert(seL4_MessageInfo_get_extraCaps(tag) == 1);
@@ -186,6 +185,25 @@ int ads_client_testing(ads_client_context_t *conn, vka_t *vka,
                                                   ADSMSGREG_TESTING_REQ_END);
 
     tag = seL4_Call(conn->badged_server_ep_cspath.capPtr, tag);
+    return seL4_MessageInfo_get_label(tag);
+}
+
+int ads_client_copy(ads_client_context_t *src_ads, ads_client_context_t *dst_ads, vmr_config_t *vmr_cfg)
+{
+    OSDB_PRINTF("%s request for VMR (%s) with %lu pages at %p\n",
+                sel4gpi_share_degree_to_str(vmr_cfg->share_mode), human_readable_va_res_type(vmr_cfg->type),
+                vmr_cfg->region_pages, vmr_cfg->start);
+    seL4_SetMR(ADSMSGREG_FUNC, ADS_FUNC_SHALLOW_COPY_REQ);
+    seL4_SetCap(0, dst_ads->badged_server_ep_cspath.capPtr);
+    seL4_SetMR(ADSMSGREG_SHALLOW_COPY_REQ_PAGES, vmr_cfg->region_pages);
+    seL4_SetMR(ADSMSGREG_SHALLOW_COPY_REQ_TYPE, (seL4_Word)vmr_cfg->type);
+    seL4_SetMR(ADSMSGREG_SHALLOW_COPY_REQ_VA, (seL4_Word)vmr_cfg->start);
+    seL4_SetMR(ADSMSGREG_SHALLOW_COPY_REQ_MODE, (seL4_Word)vmr_cfg->share_mode);
+
+    seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 1,
+                                                  ADSMSGREG_SHALLOW_COPY_REQ_END);
+
+    tag = seL4_Call(src_ads->badged_server_ep_cspath.capPtr, tag);
     return seL4_MessageInfo_get_label(tag);
 }
 

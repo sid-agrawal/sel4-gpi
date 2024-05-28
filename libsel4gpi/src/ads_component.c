@@ -89,7 +89,8 @@ err_goto:
 
 static seL4_MessageInfo_t handle_ads_allocation(seL4_Word sender_badge)
 {
-    OSDB_PRINTF("Got ADS allocation request from %lx\n", sender_badge);
+    OSDB_PRINTF("Got ADS allocation request from: ");
+    BADGE_PRINT(sender_badge);
 
     int error = 0;
     seL4_MessageInfo_t reply_tag;
@@ -260,9 +261,10 @@ static seL4_MessageInfo_t handle_testing_req(seL4_Word sender_badge, seL4_Messag
     return tag;
 }
 
-static seL4_MessageInfo_t handle_shallow_copy_req(seL4_Word sender_badge)
+static seL4_MessageInfo_t handle_copy_req(seL4_Word sender_badge)
 {
-    OSDB_PRINTF("Got Shallow copy request from client badge %lx.\n", sender_badge);
+    OSDB_PRINTF("Got copy request from client badge: ");
+    BADGE_PRINT(sender_badge);
 
     int error = 0;
     seL4_MessageInfo_t reply_tag;
@@ -270,52 +272,23 @@ static seL4_MessageInfo_t handle_shallow_copy_req(seL4_Word sender_badge)
     seL4_Word client_id = get_client_id_from_badge(sender_badge);
 
     /* Find the client */
-    ads_component_registry_entry_t *old_ads_entry = (ads_component_registry_entry_t *)
+    ads_component_registry_entry_t *src_ads_data = (ads_component_registry_entry_t *)
         resource_component_registry_get_by_badge(get_ads_component(), sender_badge);
-    pd_component_registry_entry_t *pd_data = (pd_component_registry_entry_t *)
-        resource_component_registry_get_by_id(get_pd_component(), client_id);
+    SERVER_GOTO_IF_COND_BG(src_ads_data == NULL, sender_badge, "Couldn't find source ADS: ");
 
-    SERVER_GOTO_IF_COND(old_ads_entry == NULL, "Couldn't find source ADS (%ld)\n", get_object_id_from_badge(sender_badge));
-    SERVER_GOTO_IF_COND(pd_data == NULL, "Couldn't find PD (%ld)\n", client_id);
+    seL4_Word dst_ads_badge = seL4_GetBadge(0);
+    ads_component_registry_entry_t *dst_ads_data = (ads_component_registry_entry_t *)
+        resource_component_registry_get_by_badge(get_ads_component(), dst_ads_badge);
+    SERVER_GOTO_IF_COND_BG(dst_ads_data == NULL, dst_ads_badge, "Couldn't find dst ADS: ");
 
-    /* Create the VMR space */
-    resspc_component_registry_entry_t *space_entry;
-    error = create_vmr_space(client_id, &space_entry);
-    SERVER_GOTO_IF_ERR(error, "Failed to allocate new VMR space\n");
+    vmr_config_t cfg = {.start = (void *)seL4_GetMR(ADSMSGREG_SHALLOW_COPY_REQ_VA),
+                        .region_pages = seL4_GetMR(ADSMSGREG_SHALLOW_COPY_REQ_PAGES),
+                        .share_mode = (gpi_share_degree_t)seL4_GetMR(ADSMSGREG_SHALLOW_COPY_REQ_MODE),
+                        .type = (sel4utils_reservation_type_t)seL4_GetMR(ADSMSGREG_SHALLOW_COPY_REQ_TYPE)};
 
-    /* Make a new ADS */
-    ads_component_registry_entry_t *new_ads_entry;
-    error = resource_component_allocate(get_ads_component(), client_id, space_entry->space.id, false, NULL,
-                                        (resource_server_registry_node_t **)&new_ads_entry, &ret_cap);
-
-    SERVER_GOTO_IF_ERR(error, "Failed to allocate new ADS for copy\n");
-
-    /* Copy memory regions */
-    void *omit_vaddr = (void *)seL4_GetMR(ADSMSGREG_SHALLOW_COPY_REQ_OMIT_VA);
-    ads_t *src_ads = &old_ads_entry->ads;
-    ads_t *dst_ads = &new_ads_entry->ads;
-
-    error = ads_shallow_copy(get_ads_component()->server_vspace,
-                             get_ads_component()->server_vka,
-                             src_ads,
-                             dst_ads,
-                             omit_vaddr,
-                             (void *)pd_data->pd.init_data_in_PD,
-                             false);
-
-    if (error != 0)
-    {
-        // Cleanup the dst_ads
-    }
-
-    /* Return the new ADS */
-    seL4_SetCap(0, ret_cap);
-    seL4_SetMR(ADSMSGREG_FUNC, ADS_FUNC_SHALLOW_COPY_ACK);
-    reply_tag = seL4_MessageInfo_new(error, 0, 1, ADSMSGREG_SHALLOW_COPY_ACK_END);
-    return reply_tag;
-
+    error = ads_copy(get_ads_component()->server_vspace, get_ads_component()->server_vka,
+                     &src_ads_data->ads, &dst_ads_data->ads, &cfg);
 err_goto:
-    /* Return the new ADS */
     seL4_SetMR(ADSMSGREG_FUNC, ADS_FUNC_SHALLOW_COPY_ACK);
     reply_tag = seL4_MessageInfo_new(error, 0, 0, ADSMSGREG_SHALLOW_COPY_ACK_END);
     return reply_tag;
@@ -435,11 +408,15 @@ static seL4_MessageInfo_t ads_component_handle(seL4_MessageInfo_t tag,
                                                seL4_CPtr received_cap,
                                                bool *need_new_recv_cap)
 {
+    int error = 0; // unused, to appease the error handling macros
     enum ads_component_funcs func = seL4_GetMR(ADSMSGREG_FUNC);
     seL4_MessageInfo_t reply_tag;
 
-    if (get_object_id_from_badge(sender_badge) == BADGE_OBJ_ID_NULL && get_space_id_from_badge(sender_badge) == get_ads_component()->space_id)
+    if (get_object_id_from_badge(sender_badge) == BADGE_OBJ_ID_NULL &&
+        get_space_id_from_badge(sender_badge) == get_ads_component()->space_id)
     {
+        SERVER_GOTO_IF_COND(func != ADS_FUNC_CONNECT_REQ,
+                            "Received invalid request on the allocation endpoint\n");
         reply_tag = handle_ads_allocation(sender_badge);
     }
     else
@@ -457,7 +434,7 @@ static seL4_MessageInfo_t ads_component_handle(seL4_MessageInfo_t tag,
             reply_tag = handle_reserve_req(sender_badge, tag);
             break;
         case ADS_FUNC_SHALLOW_COPY_REQ:
-            reply_tag = handle_shallow_copy_req(sender_badge);
+            reply_tag = handle_copy_req(sender_badge);
             break;
         case ADS_FUNC_TESTING_REQ:
             reply_tag = handle_testing_req(sender_badge, tag);
@@ -470,13 +447,16 @@ static seL4_MessageInfo_t ads_component_handle(seL4_MessageInfo_t tag,
             *need_new_recv_cap = true;
             break;
         default:
-            gpi_panic(ADSSERVS "Unknown func type.", (seL4_Word)func);
+            SERVER_GOTO_IF_COND(1, "Unknown request received: %d\n", func);
             break;
         }
     }
 
-    // To replace with real value
     return reply_tag;
+
+err_goto:
+    seL4_MessageInfo_t err_tag = seL4_MessageInfo_set_label(reply_tag, 1);
+    return err_tag;
 }
 
 int ads_component_initialize(simple_t *server_simple,

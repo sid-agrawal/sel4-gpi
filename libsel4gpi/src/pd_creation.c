@@ -1,6 +1,9 @@
 #include <sel4runtime.h>
 #include <sel4gpi/pd_clientapi.h>
 #include <sel4gpi/mo_clientapi.h>
+#include <sel4gpi/ads_clientapi.h>
+#include <sel4gpi/cpu_clientapi.h>
+#include <sel4gpi/resource_space_clientapi.h>
 #include <sel4gpi/error_handle.h>
 #include <sel4gpi/pd_creation.h>
 #include <sel4gpi/pd_utils.h>
@@ -108,19 +111,20 @@ err_goto:
     return error;
 }
 
-static int ads_configure(pd_config_t *cfg,
-                         sel4gpi_runnable_t *runnable,
-                         void **ret_stack,
-                         void **ret_ipc_buf,
-                         void **ret_entry_point,
-                         mo_client_context_t *ret_ipc_buf_mo)
+int sel4gpi_ads_configure(ads_config_t *cfg,
+                          sel4gpi_runnable_t *runnable,
+                          void **ret_stack,
+                          void **ret_ipc_buf,
+                          void **ret_entry_point,
+                          mo_client_context_t *ret_ipc_buf_mo)
 {
     int error = 0;
     ads_client_context_t vmr_rde = {0};
     pd_client_context_t self_pd_conn = sel4gpi_get_pd_conn();
+    ads_client_context_t self_ads_conn = sel4gpi_get_ads_conn();
     seL4_CPtr free_slot;
 
-    if (cfg->ads_cfg.same_ads)
+    if (cfg->same_ads)
     {
         vmr_rde.badged_server_ep_cspath.capPtr = sel4gpi_get_rde_by_space_id(sel4gpi_get_binded_ads_id(), GPICAP_TYPE_VMR);
         runnable->ads = sel4gpi_get_ads_conn();
@@ -143,118 +147,144 @@ static int ads_configure(pd_config_t *cfg,
     }
 
     void *auto_entry_point = NULL;
-    switch (cfg->ads_cfg.code_shared)
+    switch (cfg->code_shared)
     {
     case GPI_SHARED:
-        // shallow copy
-        if (!cfg->ads_cfg.same_ads)
-        {
-            GOTO_IF_ERR(1, "Not implemented yet!\n");
-        }
-        break;
     case GPI_COPY:
-        // deep copy
-        GOTO_IF_ERR(1, "Not implemented yet!\n");
+        /* shallow copying when we're in the same ADS doesn't make sense */
+        if (!(cfg->same_ads && cfg->code_shared == GPI_SHARED))
+        {
+            PD_CREATION_PRINT("Copying ELF to ADS rather than loading\n");
+            vmr_config_t code_cfg = {.start = NULL,
+                                     .region_pages = 0,
+                                     .type = SEL4UTILS_RES_TYPE_ELF,
+                                     .share_mode = cfg->code_shared};
+
+            error = ads_client_copy(&self_ads_conn, &runnable->ads, &code_cfg);
+            GOTO_IF_ERR(error, "failed to copy ELF to ADS\n");
+        }
         break;
     case GPI_DISJOINT:
         // elf load
         PD_CREATION_PRINT("Loading Elf\n");
-        error = ads_client_load_elf(&runnable->ads, &runnable->pd, cfg->ads_cfg.image_name, &auto_entry_point);
+        error = ads_client_load_elf(&runnable->ads, &runnable->pd, cfg->image_name, &auto_entry_point);
         GOTO_IF_ERR(error, "failed to load elf to ADS");
         break;
     case GPI_OMIT:
         break;
     default:
-        GOTO_IF_ERR(1, "Invalid sharing degree specified (%d) for code region\n", cfg->ads_cfg.code_shared);
+        GOTO_IF_COND(1, "Invalid sharing degree specified (%d) for code region\n", cfg->code_shared);
         break;
     }
 
-    if (cfg->ads_cfg.entry_point)
+    if (cfg->entry_point)
     {
-        *ret_entry_point = cfg->ads_cfg.entry_point;
-        PRINT_IF_COND(auto_entry_point != NULL, COLORIZE("Warning:", CYAN) "Overriding automatically found entry point (%p) with given one (%p)\n", auto_entry_point, cfg->ads_cfg.entry_point);
+        *ret_entry_point = cfg->entry_point;
+        PRINT_IF_COND(auto_entry_point != NULL,
+                      COLORIZE("Warning:", CYAN) "Overriding automatically found entry point (%p) with given one (%p)\n",
+                      auto_entry_point, cfg->entry_point);
     }
     else
     {
         *ret_entry_point = auto_entry_point;
     }
 
-    GOTO_IF_COND(*ret_entry_point == NULL, "PD has no entry point (either it was not found or was not given)\n");
+    PRINT_IF_COND(*ret_entry_point == NULL, "Warning: PD has no entry point (either it was not found or was not given)\n");
 
-    if (cfg->ads_cfg.vmr_cfgs)
+    if (cfg->vmr_cfgs)
     {
         vmr_config_t *vmr = NULL;
-        for (linked_list_node_t *curr = cfg->ads_cfg.vmr_cfgs->head; curr != NULL; curr = curr->next)
+        for (linked_list_node_t *curr = cfg->vmr_cfgs->head; curr != NULL; curr = curr->next)
         {
             vmr = (vmr_config_t *)curr->data;
             switch (vmr->share_mode)
             {
+            case GPI_COPY:
             case GPI_SHARED:
-                if (!cfg->ads_cfg.same_ads)
+                /* shallow copying when we're in the same ADS doesn't make sense */
+                if (!(cfg->same_ads && vmr->share_mode == GPI_SHARED))
                 {
-                    GOTO_IF_ERR(1, "Not implemented yet!\n");
+                    PD_CREATION_PRINT("%s VMR (%s) with %lu pages at %p\n",
+                                      sel4gpi_share_degree_to_str(vmr->share_mode),
+                                      human_readable_va_res_type(vmr->type),
+                                      vmr->region_pages, vmr->start);
+                    error = ads_client_copy(&self_ads_conn, &runnable->ads, vmr);
+                    GOTO_IF_ERR(error, "Failed to copy VMR (%p)\n", vmr->start);
                 }
                 break;
-            case GPI_COPY:
-                GOTO_IF_ERR(1, "Not implemented yet!\n");
-                break;
             case GPI_DISJOINT:
-                PD_CREATION_PRINT("Allocating VMR (%s) with %lu pages at %p\n", human_readable_va_res_type(vmr->type), vmr->region_pages, vmr->start);
+                PD_CREATION_PRINT("Allocating VMR (%s) with %lu pages at %p\n",
+                                  human_readable_va_res_type(vmr->type), vmr->region_pages, vmr->start);
                 void *vmr_addr = sel4gpi_get_vmr(&vmr_rde, vmr->region_pages, vmr->start, vmr->type, NULL);
                 GOTO_IF_ERR(vmr_addr == NULL, "failed to allocate VMR (%p)\n", vmr->start);
                 break;
             case GPI_OMIT:
                 break;
             default:
-                GOTO_IF_ERR(1, "Invalid sharing degree specified (%d) for VMR (%p)\n", vmr->share_mode, vmr->start);
+                GOTO_IF_COND(1, "Invalid sharing degree specified (%d) for VMR (%p)\n", vmr->share_mode, vmr->start);
                 break;
             }
         }
     }
 
-    switch (cfg->ads_cfg.stack_shared)
+    switch (cfg->stack_shared)
     {
     case GPI_SHARED:
-        if (!cfg->ads_cfg.same_ads)
+        if (!cfg->same_ads)
         {
-            GOTO_IF_ERR(1, "Not implemented yet!\n");
+            GOTO_IF_COND(1, "Not implemented yet!\n");
         }
         break;
     case GPI_COPY:
-        GOTO_IF_ERR(1, "Not implemented yet!\n");
+        GOTO_IF_COND(1, "Not implemented yet!\n");
         break;
     case GPI_DISJOINT:
-        PD_CREATION_PRINT("Allocating stack (%zu pages)\n", cfg->ads_cfg.stack_pages);
-        *ret_stack = sel4gpi_new_sized_stack(&vmr_rde, cfg->ads_cfg.stack_pages);
-        GOTO_IF_ERR(*ret_stack == NULL, "failed to allocate a new stack");
+        PD_CREATION_PRINT("Allocating stack (%zu pages)\n", cfg->stack_pages);
+        void *stack = sel4gpi_new_sized_stack(&vmr_rde, cfg->stack_pages);
+        if (ret_stack)
+        {
+            *ret_stack = stack;
+        }
+        GOTO_IF_ERR(stack == NULL, "failed to allocate a new stack");
         break;
     case GPI_OMIT:
         break;
     default:
-        GOTO_IF_ERR(1, "Invalid sharing degree specified (%d) for stack region\n", cfg->ads_cfg.stack_shared);
+        GOTO_IF_COND(1, "Invalid sharing degree specified (%d) for stack region\n", cfg->stack_shared);
         break;
     }
 
-    switch (cfg->ads_cfg.ipc_buf_shared)
+    switch (cfg->ipc_buf_shared)
     {
     case GPI_SHARED:
-        if (!cfg->ads_cfg.same_ads)
+        if (!cfg->same_ads)
         {
-            GOTO_IF_ERR(1, "Not implemented yet!\n");
+            GOTO_IF_COND(1, "Not implemented yet!\n");
         }
         break;
     case GPI_COPY:
-        GOTO_IF_ERR(1, "Not implemented yet!\n");
+        GOTO_IF_COND(1, "Not implemented yet!\n");
         break;
     case GPI_DISJOINT:
         PD_CREATION_PRINT("Allocating IPC Buffer\n");
-        *ret_ipc_buf = sel4gpi_get_vmr(&vmr_rde, 1, NULL, SEL4UTILS_RES_TYPE_IPC_BUF, ret_ipc_buf_mo);
-        GOTO_IF_ERR(*ret_ipc_buf == NULL, "failed to allocate a new ipc buf");
+        mo_client_context_t ipc_buf_mo = {0};
+        void *ipc_buf = sel4gpi_get_vmr(&vmr_rde, 1, NULL, SEL4UTILS_RES_TYPE_IPC_BUF, &ipc_buf_mo);
+        if (ret_ipc_buf)
+        {
+            *ret_ipc_buf = ipc_buf;
+        }
+
+        if (ret_ipc_buf_mo)
+        {
+            *ret_ipc_buf_mo = ipc_buf_mo;
+        }
+
+        GOTO_IF_ERR(ipc_buf == NULL, "failed to allocate a new ipc buf");
         break;
     case GPI_OMIT:
         break;
     default:
-        GOTO_IF_ERR(1, "Invalid sharing degree specified (%d) for ipc buf region\n", cfg->ads_cfg.ipc_buf_shared);
+        GOTO_IF_COND(1, "Invalid sharing degree specified (%d) for ipc buf region\n", cfg->ipc_buf_shared);
         break;
     }
 
@@ -310,7 +340,7 @@ int sel4gpi_start_pd(pd_config_t *cfg, sel4gpi_runnable_t *runnable, int argc, s
     void *ipc_buf = NULL;
     void *osm_init_data = NULL;
 
-    error = ads_configure(cfg, runnable, &stack, &ipc_buf, &entry_point, &ipc_mo);
+    error = sel4gpi_ads_configure(&cfg->ads_cfg, runnable, &stack, &ipc_buf, &entry_point, &ipc_mo);
     GOTO_IF_ERR(error, "Failed to configure ADS\n");
 
     error = rde_configure(cfg, runnable);
@@ -423,6 +453,7 @@ pd_config_t *sel4gpi_generate_thread_config(void *thread_fn, seL4_CPtr fault_ep)
         .stack_pages = DEFAULT_STACK_PAGES};
 
     thread_cfg->ads_cfg = thread_ads_cfg;
+    thread_cfg->ads_cfg.vmr_cfgs = linked_list_new();
 
     // give the thread PD all of our current RDEs
     osm_pd_init_data_t *init_data = ((osm_pd_init_data_t *)sel4runtime_get_osm_init_data());
@@ -474,4 +505,21 @@ void sel4gpi_config_destroy(pd_config_t *cfg)
     }
 
     free(cfg);
+}
+
+char *sel4gpi_share_degree_to_str(gpi_share_degree_t share_deg)
+{
+    switch (share_deg)
+    {
+    case GPI_SHARED:
+        return "Shallow Copy";
+    case GPI_COPY:
+        return "Deep Copy";
+    case GPI_DISJOINT:
+        return "Disjoint";
+    case GPI_OMIT:
+        return "Omitted";
+    default:
+        return "Invalid";
+    }
 }
