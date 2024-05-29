@@ -253,7 +253,7 @@ int test_fs(env_t env)
     test_assert(strcmp(buf, TEST_STR_3) == 0);
 
     // Print whole-pd model state
-    // error = pd_client_dump(&pd_conn, NULL, 0);
+    error = pd_client_dump(&pd_conn, NULL, 0);
 
     printf("------------------ENDING: %s------------------\n", __func__);
     return sel4test_get_result();

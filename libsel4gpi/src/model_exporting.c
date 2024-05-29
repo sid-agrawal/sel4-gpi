@@ -116,7 +116,7 @@ void export_model_state(model_state_t *model_state, char *buffer, size_t buf_len
 
     // Print the headers
     size_t buf_written = snprintf(buffer, buf_len - buf_written_total,
-                                  "%-*s,%-*s,%-*s,%-*s,%-*s,%-*s\n",
+                                  "%-*s,%-*s,%-*s,%-*s,%-*s,%-*s,%-*s\n",
                                   width,
                                   "NODE_TYPE",
                                   width,
@@ -128,7 +128,9 @@ void export_model_state(model_state_t *model_state, char *buffer, size_t buf_len
                                   width,
                                   "EDGE_FROM",
                                   width,
-                                  "EDGE_TO");
+                                  "EDGE_TO",
+                                  width,
+                                  "EXTRA");
 
     buffer += buf_written;
     buf_written_total += buf_written;
@@ -137,7 +139,7 @@ void export_model_state(model_state_t *model_state, char *buffer, size_t buf_len
     for (gpi_model_node_t *node = model_state->nodes; node != NULL; node = node->hh.next)
     {
         size_t buf_written = snprintf(buffer, buf_len - buf_written_total,
-                                      "%-*s,%-*s,%-*s,%-*s,%-*s,%-*s\n",
+                                      "%-*s,%-*s,%-*s,%-*s,%-*s,%-*s,%-*s\n",
                                       width,
                                       node_type_to_str(node->node_type),
                                       width,
@@ -149,7 +151,9 @@ void export_model_state(model_state_t *model_state, char *buffer, size_t buf_len
                                       width,
                                       "",
                                       width,
-                                      "");
+                                      "",
+                                      width,
+                                      node->data2);
 
         buffer += buf_written;
         buf_written_total += buf_written;
@@ -173,7 +177,9 @@ void export_model_state(model_state_t *model_state, char *buffer, size_t buf_len
                                       width,
                                       edge->k.from,
                                       width,
-                                      edge->k.to);
+                                      edge->k.to,
+                                      width,
+                                      "");
 
         buffer += buf_written;
         buf_written_total += buf_written;
@@ -190,7 +196,7 @@ void print_model_state(model_state_t *model_state)
     uint8_t width = 0;
 
     // Print the headers
-    printf("%-*s,%-*s,%-*s,%-*s,%-*s,%-*s\n",
+    printf("%-*s,%-*s,%-*s,%-*s,%-*s,%-*s,%-*s\n",
            width,
            "NODE_TYPE",
            width,
@@ -202,12 +208,14 @@ void print_model_state(model_state_t *model_state)
            width,
            "EDGE_FROM",
            width,
-           "EDGE_TO");
+           "EDGE_TO",
+           width,
+           "EXTRA");
 
     // Print the nodes
     for (gpi_model_node_t *node = model_state->nodes; node != NULL; node = node->hh.next)
     {
-        printf("%-*s,%-*s,%-*s,%-*s,%-*s,%-*s\n",
+        printf("%-*s,%-*s,%-*s,%-*s,%-*s,%-*s,%-*s\n",
                width,
                node_type_to_str(node->node_type),
                width,
@@ -219,7 +227,9 @@ void print_model_state(model_state_t *model_state)
                width,
                "",
                width,
-               "");
+               "",
+               width,
+               node->data2);
     }
 
     // Print the edges
@@ -237,7 +247,9 @@ void print_model_state(model_state_t *model_state)
                width,
                edge->k.from,
                width,
-               edge->k.to);
+               edge->k.to,
+               width,
+               "");
     }
 }
 
@@ -280,6 +292,7 @@ static gpi_model_node_t *add_node(model_state_t *model_state, gpi_node_type_t no
 
     assert(node != NULL);
     node->node_type = node_type;
+    memset(node->data2, 0, CSV_MAX_STRING_SIZE);
     memset(node->id, 0, CSV_MAX_STRING_SIZE);
     strncpy(node->id, id, CSV_MAX_STRING_SIZE);
 
@@ -292,6 +305,12 @@ static gpi_model_node_t *add_node(model_state_t *model_state, gpi_node_type_t no
     HASH_ADD_STR(model_state->nodes, id, node);
 
     return node;
+}
+
+void set_node_extra(gpi_model_node_t *node, char *extra)
+{
+    assert(strlen(extra) < CSV_MAX_STRING_SIZE);
+    strncpy(node->data2, extra, CSV_MAX_STRING_SIZE);
 }
 
 static void add_edge_by_id(model_state_t *model_state, gpi_edge_type_t type, char *from_id,

@@ -58,12 +58,16 @@ void mo_dump_rr(mo_t *mo, model_state_t *ms, gpi_model_node_t *pd_node)
 {
     gpi_model_node_t *root_node = get_root_node(ms);
 
+    // Add the MO resource space
+    gpi_model_node_t *mo_space_node = add_resource_space_node(ms, GPICAP_TYPE_MO, get_mo_component()->space_id);
+
     /* Add the MO node */
-    // (XXX) Arya: MO does not belong to a resource space! To fix
     gpi_model_node_t *mo_node = add_resource_node(ms, GPICAP_TYPE_MO, 1, mo->id);
     add_edge(ms, GPI_EDGE_TYPE_HOLD, pd_node, mo_node);
+    add_edge(ms, GPI_EDGE_TYPE_SUBSET, mo_node, mo_space_node);
 
     /* Add the page nodes and relations */
+    int num_pages = 0;
     for (int i = 0; i < mo->num_pages; i++)
     {
         if (mo->frame_caps_in_root_task[i] == 0)
@@ -71,14 +75,26 @@ void mo_dump_rr(mo_t *mo, model_state_t *ms, gpi_model_node_t *pd_node)
             /**
              * This can happen if there was an ADS deep copy of a region that did not
              * have backing pages for the entire region.
+             * (XXX) Arya: we should be able to remove this if we fix the ADS copy
              */
             continue;
         }
 
+        // (XXX) Arya: Do not add the physical pages as relations, just count them
+        // and store the count in the MO node
+#if 0
         gpi_model_node_t *pmr_node = add_resource_node(ms, GPICAP_TYPE_PMR, 1, mo->frame_paddrs[i]);
         add_edge(ms, GPI_EDGE_TYPE_MAP, mo_node, pmr_node);
         add_edge(ms, GPI_EDGE_TYPE_HOLD, root_node, pmr_node);
+#else
+        num_pages++;
+#endif
     }
+
+    // Set the number of pages as extra data on the MO
+    char num_pages_str[CSV_MAX_STRING_SIZE];
+    snprintf(num_pages_str, CSV_MAX_STRING_SIZE, "%d", num_pages);
+    set_node_extra(mo_node, num_pages_str);
 }
 
 void mo_destroy(mo_t *mo, vka_t *server_vka)

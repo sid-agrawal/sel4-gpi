@@ -924,10 +924,10 @@ static int res_dump(pd_t *pd, model_state_t *ms, pd_hold_node_t *current_cap,
         }
         break;
     case GPICAP_TYPE_RESSPC:
-        ZF_LOGE("Resource space dump not yet implemented\n");
+        // (XXX) Arya: do not dump resource space here, it will be dumped with resources
         break;
     case GPICAP_TYPE_VMR:
-        ZF_LOGE("VMR dump not yet implemented\n");
+        // (XXX) Arya: Do not need to dump VMR, handled in ADS component
         break;
     case GPICAP_TYPE_FILE:
         // (XXX) Arya: dump files by NS instead
@@ -946,6 +946,8 @@ static int res_dump(pd_t *pd, model_state_t *ms, pd_hold_node_t *current_cap,
 static int pd_dump_internal(pd_t *pd, model_state_t *ms, cspacepath_t rr_frame_path, void *rr_local_vaddr)
 {
     int error;
+
+    // Don't add the PD resource space, it is just an implementation detail but not part of the model
 
     /* Add the PD node */
     gpi_model_node_t *pd_node = add_pd_node(ms, pd->image_name, pd->id);

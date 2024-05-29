@@ -152,9 +152,9 @@ main_exit:
     tag = seL4_MessageInfo_new(error, 0, 0, 0);
     seL4_Send(parent_ep, tag);
 
-    //while(1) {
-        // (XXX) Arya: Do not exit
-    //}
+    while(1) {
+        // (XXX) Arya: Do not exit, so we can dump the model state
+    }
 
     return 0;
 }

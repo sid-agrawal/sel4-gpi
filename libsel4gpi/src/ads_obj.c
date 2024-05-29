@@ -462,45 +462,30 @@ static char *ads_res_type_to_str(sel4utils_reservation_type_t type)
 
 void ads_dump_rr(ads_t *ads, model_state_t *ms, gpi_model_node_t *pd_node)
 {
-    // (XXX) Arya: ADS does not belong to a resource space! To fix
+    // Add the ADS resource space
+    gpi_model_node_t *ads_space_node = add_resource_space_node(ms, GPICAP_TYPE_ADS, get_ads_component()->space_id);
+
+    // Add the ADS node
     gpi_model_node_t *ads_node = add_resource_node(ms, GPICAP_TYPE_ADS, 1, ads->id);
+    add_edge(ms, GPI_EDGE_TYPE_SUBSET, ads_node, ads_space_node);
 
     // (XXX) Arya: Do we want to only include the currently active ADS? Reintroduce the 'mapped' property?
     add_edge(ms, GPI_EDGE_TYPE_HOLD, pd_node, ads_node);
 
-    uint32_t added_mo_rrs[MAX_MO_RR];
-    int num_added_mo_rrs = 0;
-    bool skip = false;
     for (attach_node_t *res = (attach_node_t *)ads->attach_registry.head; res != NULL; res = (attach_node_t *)res->gen.hh.next)
     {
-        // Skip extra attaches of the same MO
-        for (int i = 0; i < num_added_mo_rrs; i++)
-        {
-            if (added_mo_rrs[i] == res->mo_id)
-            {
-                skip = true;
-                break;
-            }
-        }
-
-        if (skip)
-        {
-            continue;
-        }
-
-        assert(num_added_mo_rrs < MAX_MO_RR);
-        added_mo_rrs[num_added_mo_rrs] = res->mo_id;
-        num_added_mo_rrs++;
-
         /* Add the VMR node */
-        // (XXX) Arya: VMR is an implicit resource
+        // VMR is sometimes an implicit resource (eg. MO attached without reservation)
         gpi_model_node_t *vmr_node = add_resource_node(ms, GPICAP_TYPE_VMR, ads->id, (uint64_t)res->vaddr);
         add_edge(ms, GPI_EDGE_TYPE_SUBSET, vmr_node, ads_node);
         add_edge(ms, GPI_EDGE_TYPE_HOLD, pd_node, vmr_node);
 
-        /* Add the relation from VMR to MO node */
-        gpi_model_node_t *mo_node = add_resource_node(ms, GPICAP_TYPE_MO, 1, res->mo_id);
-        add_edge(ms, GPI_EDGE_TYPE_MAP, vmr_node, mo_node);
+        /* Add the relation from VMR to MO node, if there is one */
+        if (res->mo_attached)
+        {
+            gpi_model_node_t *mo_node = add_resource_node(ms, GPICAP_TYPE_MO, 1, res->mo_id);
+            add_edge(ms, GPI_EDGE_TYPE_MAP, vmr_node, mo_node);
+        }
     }
 
 #if 0

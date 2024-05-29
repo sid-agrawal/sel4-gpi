@@ -109,10 +109,13 @@ void cpu_dump_rr(cpu_t *cpu, model_state_t *ms, gpi_model_node_t *pd_node)
 {
     gpi_model_node_t *root_node = get_root_node(ms);
 
+    // Add the VCPU resource space
+    gpi_model_node_t *vcpu_space_node = add_resource_space_node(ms, GPICAP_TYPE_CPU, get_cpu_component()->space_id);
+
     /* Add the Virtual CPU node */
-    // (XXX) Arya: Virtual CPU does not belong to a resource space! To fix
     gpi_model_node_t *cpu_node = add_resource_node(ms, GPICAP_TYPE_CPU, 1, cpu->id);
     add_edge(ms, GPI_EDGE_TYPE_HOLD, pd_node, cpu_node);
+    add_edge(ms, GPI_EDGE_TYPE_SUBSET, cpu_node, vcpu_space_node);
 
     seL4_Word affinity = 0;
 #if CONFIG_MAX_NUM_NODES > 1

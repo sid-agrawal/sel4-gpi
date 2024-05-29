@@ -159,8 +159,8 @@ seL4_MessageInfo_t ramdisk_request_handler(seL4_MessageInfo_t tag, seL4_Word sen
             gpi_model_node_t *client_pd_node = add_pd_node(model_state, NULL, pd_id);
 
             /* Add the block resource space node */
-            // (XXX) Arya: Assumes there is only one block space, and it is space 1
-            gpi_model_node_t *block_space_node = add_resource_space_node(model_state, GPICAP_TYPE_BLOCK, 1);
+            gpi_model_node_t *block_space_node = add_resource_space_node(model_state, GPICAP_TYPE_BLOCK,
+                                                                         get_ramdisk_server()->gen.default_space.id);
             add_edge(model_state, GPI_EDGE_TYPE_HOLD, self_pd_node, block_space_node);
 
             /* Add the resource node */
@@ -209,7 +209,7 @@ seL4_MessageInfo_t ramdisk_request_handler(seL4_MessageInfo_t tag, seL4_Word sen
             break;
         case RD_FUNC_UNBIND_REQ:
             RAMDISK_PRINTF("Unbinding MO for client %ld\n", client_id);
-            
+
             /* Remove shared mem from server ADS */
             mo_vaddr = get_ramdisk_server()->shared_mem[client_id];
 

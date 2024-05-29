@@ -35,32 +35,29 @@ typedef struct _gpi_model_node
 {
     gpi_node_type_t node_type;
 
-    // Unique ID of the node (unique relative to the node type)
-    // Also UTHash key
-    char id[CSV_MAX_STRING_SIZE];
+    char id[CSV_MAX_STRING_SIZE]; ///< Unique ID of the node (unique relative to the node type)
+                                  ///< Also UTHash key
 
-    // Stores any additional data in the node
-    // Eg. the name of a PD node, or the type of a resource node
-    char data[CSV_MAX_STRING_SIZE];
+    char data[CSV_MAX_STRING_SIZE];  ///< Stores any additional data in the node
+                                     ///< Eg. the name of a PD node, or the type of a resource node
+    char data2[CSV_MAX_STRING_SIZE]; ///< Stores extra data for the node
 
     UT_hash_handle hh;
 } gpi_model_node_t;
 
 typedef struct
 {
-    // (XXX) Arya: currently doesn't capture the namespace,
-    // but this will be captured again when resource spaces are implemented
+    // (XXX) Arya: Include namespace here?
 
-    gpi_edge_type_t type;
-    gpi_cap_t req_type; // For request edges only
-    char from[CSV_MAX_STRING_SIZE];
-    char to[CSV_MAX_STRING_SIZE];
+    gpi_edge_type_t type;           ///< Type of edge
+    gpi_cap_t req_type;             ///< For request edges only, type of resource requested
+    char from[CSV_MAX_STRING_SIZE]; ///< Name of the 'from' node
+    char to[CSV_MAX_STRING_SIZE];   ///< Name of the 'to' node
 } gpi_model_edge_key_t;
 
 typedef struct _gpi_model_edge
 {
-    // Data is contained in the key
-    gpi_model_edge_key_t k;
+    gpi_model_edge_key_t k; ///< Data is contained in the key
 
     UT_hash_handle hh;
 } gpi_model_edge_t;
@@ -68,7 +65,7 @@ typedef struct _gpi_model_edge
 // Generic component storage for portable model states
 typedef struct _gpi_model_state_component
 {
-    gpi_model_component_type_t type;
+    gpi_model_component_type_t type; ///< Type of component, node or edge
 
     union
     {
@@ -80,16 +77,14 @@ typedef struct _gpi_model_state_component
 // Entire Model State
 typedef struct
 {
-    // UTHash table of nodes and edges
-    gpi_model_node_t *nodes;
-    gpi_model_edge_t *edges;
+    gpi_model_node_t *nodes; ///< UTHash table of nodes
+    gpi_model_edge_t *edges; ///< UTHash table of edges
 
-    // Tracks free memory for structures
-    // Used only for portable model states
-    // Otherwise, uses malloc for structures
-    gpi_model_state_component_t *mem_start;
-    gpi_model_state_component_t *mem_ptr;
-    gpi_model_state_component_t *mem_end;
+    gpi_model_state_component_t *mem_start; ///< Tracks free memory for structures
+                                            ///< Used only for portable model states
+                                            ///< Otherwise, uses malloc for structures
+    gpi_model_state_component_t *mem_ptr;   ///< Track the current position in the free memory
+    gpi_model_state_component_t *mem_end;   ///< Track the end of the free memory
 } model_state_t;
 
 /**
@@ -103,19 +98,39 @@ typedef struct
  */
 void init_model_state(model_state_t *model_state, void *free_ptr, size_t free_size);
 
-// Clean up any non-portable data of the model state before sharing with another process
+/**
+ * Clean up any non-portable data of the model state before sharing with another process
+ * 
+ * @param model_state
+*/
 void clean_model_state(model_state_t *model_state);
 
-// Frees the entire model state
+/**
+ * Frees the entire model state
+ * 
+ * @param model_state
+*/
 void destroy_model_state(model_state_t *model_state);
 
-// Export the model state to a buffer with CSV formatting
+/**
+ * Export the model state to a buffer with CSV formatting
+ * 
+ * @param model_state
+*/
 void export_model_state(model_state_t *model_state, char *buffer, size_t len);
 
-// Print the model state to a terminal with CSV formatting
+/**
+ * Print the model state to a terminal with CSV formatting
+ * 
+ * @param model_state
+*/
 void print_model_state(model_state_t *model_state);
 
-// Add any nodes and edges from source state to dest state
+/**
+ * Add any nodes and edges from source state to dest state
+ * 
+ * @param model_state
+*/
 void combine_model_states(model_state_t *dest, model_state_t *src);
 
 /**
@@ -128,6 +143,14 @@ void combine_model_states(model_state_t *dest, model_state_t *src);
  * @return The model node for the resource
  */
 gpi_model_node_t *add_resource_node(model_state_t *model_state, gpi_cap_t res_type, uint64_t res_space_id, uint64_t res_id);
+
+/**
+ * Add extra data to a node
+ * 
+ * @param node
+ * @param extra data to copy to the 'extra' field of the node
+ */
+void set_node_extra(gpi_model_node_t *node, char *extra);
 
 /**
  * Add a resource space to the model state

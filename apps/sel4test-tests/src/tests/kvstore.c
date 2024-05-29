@@ -18,7 +18,7 @@
 
 #define KVSTORE_SERVER_APP "kvstore_server"
 #define HELLO_KVSTORE_APP "hello_kvstore"
-#define DUMP_MODEL false
+#define DUMP_MODEL true
 
 static ads_client_context_t ads_conn;
 static pd_client_context_t pd_conn;
@@ -301,7 +301,9 @@ int test_kvstore_diff_namespace(env_t env)
 
     dump_model();
 
-    /* Cleanup servers */
+    /* Cleanup PDs */
+    error = pd_client_disconnect(&hello_pd);
+    test_assert(error == 0);
     error = pd_client_disconnect(&kvstore_pd);
     test_assert(error == 0);
     error = pd_client_disconnect(&fs_pd);
@@ -347,7 +349,9 @@ int test_kvstore_diff_fs(env_t env)
 
     dump_model();
 
-    /* Cleanup servers */
+    /* Cleanup PDs */
+    error = pd_client_disconnect(&hello_pd);
+    test_assert(error == 0);
     error = pd_client_disconnect(&kvstore_pd);
     test_assert(error == 0);
     error = pd_client_disconnect(&fs_pd);
@@ -384,7 +388,9 @@ int test_kvstore_lib_same_pd_diff_ads(env_t env)
 
     dump_model();
 
-    /* Cleanup servers */
+    /* Cleanup PDs */
+    error = pd_client_disconnect(&hello_pd);
+    test_assert(error == 0);
     error = pd_client_disconnect(&fs_pd);
     test_assert(error == 0);
     error = pd_client_disconnect(&ramdisk_pd);
@@ -417,7 +423,9 @@ int test_kvstore_diff_threads(env_t env)
 
     dump_model();
 
-    /* Cleanup servers */
+    /* Cleanup PDs */
+    error = pd_client_disconnect(&hello_pd);
+    test_assert(error == 0);
     error = pd_client_disconnect(&fs_pd);
     test_assert(error == 0);
     error = pd_client_disconnect(&ramdisk_pd);
@@ -471,7 +479,11 @@ int test_kvstore_two_sets(env_t env)
 
     dump_model();
 
-    /* Cleanup servers */
+    /* Cleanup PDs */
+    error = pd_client_disconnect(&hello_pd_1);
+    test_assert(error == 0);
+    error = pd_client_disconnect(&hello_pd_2);
+    test_assert(error == 0);
     error = pd_client_disconnect(&kvstore_pd_1);
     test_assert(error == 0);
     error = pd_client_disconnect(&kvstore_pd_2);
