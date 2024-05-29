@@ -81,6 +81,10 @@ static int create_vmr_space(uint32_t client_id, resspc_component_registry_entry_
     error = pd_add_rde(&client_pd_data->pd, type, space_entry->space.id, get_ads_component()->server_ep);
     SERVER_GOTO_IF_ERR(error, "Couldn't add VMR (%d) to PD (%d)'s RDE\n", space_entry->space.id, client_id);
 
+    /* Map the VMR space to the default MO space */
+    error = resspc_component_map_space(space_entry->space.id, get_mo_component()->space_id);
+    SERVER_GOTO_IF_ERR(error, "Failed to map new VMR space to MO space\n");
+    
     OSDB_PRINTF("Added new VMR (%d) RDE to PD (%d)\n", space_entry->space.id, client_id);
 
 err_goto:
@@ -187,7 +191,7 @@ static seL4_MessageInfo_t handle_attach_req(seL4_Word sender_badge, seL4_Message
 err_goto:
     seL4_SetMR(ADSMSGREG_FUNC, ADS_FUNC_ATTACH_ACK);
     seL4_SetMR(ADSMSGREG_ATTACH_ACK_VA, (seL4_Word)vaddr);
-    seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0, ADSMSGREG_ATTACH_ACK_END);
+    seL4_MessageInfo_t tag = seL4_MessageInfo_new(error, 0, 0, ADSMSGREG_ATTACH_ACK_END);
     return tag;
 }
 

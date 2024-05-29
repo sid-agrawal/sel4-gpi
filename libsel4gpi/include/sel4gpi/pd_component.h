@@ -79,6 +79,9 @@ enum pd_component_funcs
     PD_FUNC_GIVE_RES_REQ,
     PD_FUNC_GIVE_RES_ACK,
 
+    PD_FUNC_MAP_RES_REQ,
+    PD_FUNC_MAP_RES_ACK,
+
     PD_FUNC_EXIT_REQ,
 
     PD_FUNC_BENCH_IPC_REQ,
@@ -177,6 +180,13 @@ enum pd_component_msgregs
     PDMSGREG_GIVE_RES_ACK_DEST = PDMSGREG_LABEL0,
     PDMSGREG_GIVE_RES_ACK_END,
 
+    /* Map Resource */
+    PDMSGREG_MAP_RES_REQ_SRC_ID = PDMSGREG_LABEL0,
+    PDMSGREG_MAP_RES_REQ_DEST_ID,
+    PDMSGREG_MAP_RES_REQ_END,
+
+    PDMSGREG_MAP_RES_ACK_END = PDMSGREG_LABEL0,
+
     /* Exit PD */
     PDMSGREG_EXIT_REQ_END = PDMSGREG_LABEL0,
 
@@ -264,3 +274,14 @@ int pd_add_resource_by_id(uint32_t pd_id,
                           seL4_CPtr slot_in_RT,
                           seL4_CPtr slot_in_PD,
                           seL4_CPtr slot_in_serverPD);
+
+/***
+ * Map one resource to another
+ * (XXX) Arya: At the moment this does nothing but check that the mapping is valid
+ * 
+ * @param client_pd_id ID of the PD that is requesting the mapping
+ * @param src_res_id the universal ID of the source resource
+ * @param dest_res_id the universal ID of the destination resource
+ * @return 0 on success, error otherwise
+*/
+int pd_component_map_resources(uint32_t client_pd_id, uint64_t src_res_id, uint64_t dest_res_id);

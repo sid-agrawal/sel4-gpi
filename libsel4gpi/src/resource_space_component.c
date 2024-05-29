@@ -22,6 +22,7 @@
 #include <sel4gpi/badge_usage.h>
 #include <sel4gpi/debug.h>
 #include <sel4gpi/error_handle.h>
+#include <sel4gpi/linked_list.h>
 #include <sel4gpi/resource_space_component.h>
 
 // Defined for utility printing macros
@@ -49,17 +50,18 @@ static seL4_MessageInfo_t handle_resspc_allocation_request(seL4_Word sender_badg
     seL4_MessageInfo_t reply_tag;
 
     gpi_cap_t type = seL4_GetMR(RESSPCMSGREG_CONNECT_REQ_TYPE);
+    uint64_t caller_id = get_client_id_from_badge(sender_badge);
     uint64_t client_id = seL4_GetMR(RESSPCMSGREG_CONNECT_REQ_CLIENT_ID);
 
     // Find the resource server PD
     pd_component_registry_entry_t *server_pd = (pd_component_registry_entry_t *)
-        resource_component_registry_get_by_id(get_pd_component(), get_client_id_from_badge(sender_badge));
-    SERVER_GOTO_IF_COND(server_pd == NULL, "Couldn't find resource server PD (%ld)\n", get_object_id_from_badge(sender_badge));
+        resource_component_registry_get_by_id(get_pd_component(), caller_id);
+    SERVER_GOTO_IF_COND(server_pd == NULL, "Couldn't find resource server PD (%ld)\n", caller_id);
 
     // Find the client PD (to receive the resource space RDE)
     pd_component_registry_entry_t *client_pd = (pd_component_registry_entry_t *)
         resource_component_registry_get_by_id(get_pd_component(), client_id);
-    SERVER_GOTO_IF_COND(client_pd == NULL, "Couldn't find client PD (%ld)\n", get_object_id_from_badge(sender_badge));
+    SERVER_GOTO_IF_COND(client_pd == NULL, "Couldn't find client PD (%ld)\n", client_id);
 
     // Allocate the resource space
     resspc_component_registry_entry_t *space_entry;
@@ -70,7 +72,8 @@ static seL4_MessageInfo_t handle_resspc_allocation_request(seL4_Word sender_badg
         .ep = received_cap,
         .pd = &server_pd->pd};
 
-    error = resource_component_allocate(get_resspc_component(), server_pd->pd.id, BADGE_OBJ_ID_NULL, false, (void *)&resspc_config,
+    error = resource_component_allocate(get_resspc_component(), server_pd->pd.id, BADGE_OBJ_ID_NULL,
+                                        false, (void *)&resspc_config,
                                         (resource_server_registry_node_t **)&space_entry, &space_cap);
     SERVER_GOTO_IF_ERR(error, "Failed to allocate a new resource space\n");
 
@@ -89,13 +92,13 @@ static seL4_MessageInfo_t handle_resspc_allocation_request(seL4_Word sender_badg
     seL4_SetMR(RESSPCMSGREG_CONNECT_ACK_ID, space_id);
     seL4_SetCap(0, space_cap);
     reply_tag = seL4_MessageInfo_new(error, 0, 1,
-                                                  RESSPCMSGREG_CONNECT_ACK_END);
+                                     RESSPCMSGREG_CONNECT_ACK_END);
     return reply_tag;
 
 err_goto:
     seL4_SetMR(PDMSGREG_FUNC, RESSPC_FUNC_CONNECT_ACK);
     reply_tag = seL4_MessageInfo_new(error, 0, 0,
-                                                  RESSPCMSGREG_CONNECT_ACK_END);
+                                     RESSPCMSGREG_CONNECT_ACK_END);
     return reply_tag;
 }
 
@@ -104,17 +107,19 @@ static seL4_MessageInfo_t handle_create_resource_request(seL4_Word sender_badge)
     OSDB_PRINTF("Got create resource request from client badge %lx.\n", sender_badge);
     int error = 0;
 
+    uint64_t client_id = get_client_id_from_badge(sender_badge);
+    uint64_t space_id = get_object_id_from_badge(sender_badge);
     uint64_t res_id = seL4_GetMR(RESSPCMSGREG_CREATE_RES_REQ_RES_ID);
 
     // Find the resource space
     resspc_component_registry_entry_t *space_entry = (resspc_component_registry_entry_t *)
-        resource_component_registry_get_by_id(get_resspc_component(), get_object_id_from_badge(sender_badge));
-    SERVER_GOTO_IF_COND(space_entry == NULL, "Couldn't find resource space (%ld)\n", get_object_id_from_badge(sender_badge));
+        resource_component_registry_get_by_id(get_resspc_component(), space_id);
+    SERVER_GOTO_IF_COND(space_entry == NULL, "Couldn't find resource space (%ld)\n", space_id);
 
     // Find the resource server PD
     pd_component_registry_entry_t *server_pd = (pd_component_registry_entry_t *)
-        resource_component_registry_get_by_id(get_pd_component(), get_client_id_from_badge(sender_badge));
-    SERVER_GOTO_IF_COND(server_pd == NULL, "Couldn't find resource server PD (%ld)\n", get_client_id_from_badge(sender_badge));
+        resource_component_registry_get_by_id(get_pd_component(), client_id);
+    SERVER_GOTO_IF_COND(server_pd == NULL, "Couldn't find resource server PD (%ld)\n", client_id);
 
     gpi_cap_t resource_type = space_entry->space.resource_type;
 
@@ -122,13 +127,76 @@ static seL4_MessageInfo_t handle_create_resource_request(seL4_Word sender_badge)
                 server_pd->pd.id, space_entry->space.id, res_id);
 
     // Resource does not exist as a cap anywhere yet
-    error = pd_add_resource(&server_pd->pd, resource_type, space_entry->space.id, res_id, seL4_CapNull, seL4_CapNull, seL4_CapNull);
+    error = pd_add_resource(&server_pd->pd, resource_type, space_entry->space.id, res_id,
+                            seL4_CapNull, seL4_CapNull, seL4_CapNull);
 
 err_goto:
     seL4_SetMR(PDMSGREG_FUNC, RESSPC_FUNC_CREATE_RES_ACK);
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(error, 0, 0,
                                                   RESSPCMSGREG_CREATE_RES_ACK_END);
     return tag;
+}
+
+int resspc_component_map_space(uint64_t src_spc_id, uint64_t dest_spc_id)
+{
+    int error = 0;
+
+    OSDB_PRINTF("Mapping resource space (%d) to resource space (%d)\n", src_spc_id, dest_spc_id);
+
+    // Find the source resource space
+    resspc_component_registry_entry_t *src_space_entry = (resspc_component_registry_entry_t *)
+        resource_component_registry_get_by_id(get_resspc_component(), src_spc_id);
+    SERVER_GOTO_IF_COND(src_space_entry == NULL, "Couldn't find resource space (%ld)\n", src_spc_id);
+
+    // Find the destination resource space
+    resspc_component_registry_entry_t *dst_space_entry = (resspc_component_registry_entry_t *)
+        resource_component_registry_get_by_id(get_resspc_component(), dest_spc_id);
+    SERVER_GOTO_IF_COND(dst_space_entry == NULL, "Couldn't find resource space (%ld)\n", dest_spc_id);
+
+    // Track the mapping
+    linked_list_insert(src_space_entry->space.map_spaces, (void *)&dst_space_entry->space);
+
+err_goto:
+    return error;
+}
+
+static seL4_MessageInfo_t handle_map_space_request(seL4_Word sender_badge)
+{
+    OSDB_PRINTF("Got map space request from client badge %lx.\n", sender_badge);
+    int error = 0;
+
+    uint64_t src_spc_id = get_object_id_from_badge(sender_badge);
+    uint64_t dest_spc_id = seL4_GetMR(RESSPCMSGREG_MAP_SPACE_REQ_SPACE_ID);
+
+    error = resspc_component_map_space(src_spc_id, dest_spc_id);
+
+err_goto:
+    seL4_SetMR(PDMSGREG_FUNC, RESSPC_FUNC_MAP_SPACE_ACK);
+    seL4_MessageInfo_t tag = seL4_MessageInfo_new(error, 0, 0,
+                                                  RESSPCMSGREG_MAP_SPACE_ACK_END);
+    return tag;
+}
+
+int resspc_check_map(uint64_t src_space_id, uint64_t dest_space_id)
+{
+    int error = 0;
+
+    // Find the source resource space
+    resspc_component_registry_entry_t *src_space_entry = (resspc_component_registry_entry_t *)
+        resource_component_registry_get_by_id(get_resspc_component(), src_space_id);
+    SERVER_GOTO_IF_COND(src_space_entry == NULL, "Couldn't find resource space (%ld)\n", src_space_id);
+
+    // Check the mappings
+    for (linked_list_node_t *curr = src_space_entry->space.map_spaces->head; curr != NULL; curr = curr->next)
+    {
+        if (((res_space_t *)curr->data)->id == dest_space_id)
+        {
+            return 1;
+        }
+    }
+
+err_goto:
+    return 0;
 }
 
 static seL4_MessageInfo_t resspc_component_handle(seL4_MessageInfo_t tag,
@@ -154,6 +222,9 @@ static seL4_MessageInfo_t resspc_component_handle(seL4_MessageInfo_t tag,
         case RESSPC_FUNC_CREATE_RES_REQ:
             reply_tag = handle_create_resource_request(sender_badge);
             break;
+        case RESSPC_FUNC_MAP_SPACE_REQ:
+            reply_tag = handle_map_space_request(sender_badge);
+            break;
         default:
             SERVER_GOTO_IF_COND(1, "Unknown request received: %d\n", func);
             break;
@@ -178,6 +249,7 @@ static int resspc_new(res_space_t *res_space,
     res_space->server_ep = config->ep;
     res_space->pd = config->pd;
     res_space->data = config->data;
+    res_space->map_spaces = linked_list_new();
 
     // (XXX) Arya: todo, allow new type creation
 

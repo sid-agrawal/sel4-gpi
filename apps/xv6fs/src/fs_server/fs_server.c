@@ -13,6 +13,7 @@
 #include <vka/capops.h>
 #include <vspace/vspace.h>
 
+#include <sel4gpi/pd_utils.h>
 #include <sel4gpi/ads_clientapi.h>
 #include <sel4gpi/pd_clientapi.h>
 #include <sel4gpi/resource_server_remote_utils.h>
@@ -105,7 +106,7 @@ static void apply_prefix(char *prefix, char *path)
 static void ns_registry_entry_on_delete(resource_server_registry_node_t *node_gen)
 {
   fs_namespace_entry_t *node = (fs_namespace_entry_t *)node_gen;
-  
+
   // (XXX) Any cleanup necessary for NS
 }
 
@@ -175,6 +176,10 @@ int xv6fs_init()
   error = ramdisk_client_bind(get_xv6fs_server()->rd_ep, server->shared_mem);
   CHECK_ERROR(error, "failed to bind shared mem page");
 
+  /* Map the file space to the block space */
+  error = resspc_client_map_space(&get_xv6fs_server()->gen.default_space,
+                                  sel4gpi_get_default_space_id(GPICAP_TYPE_BLOCK));
+
   /* Initialize the blocks */
   error = init_naive_blocks();
   CHECK_ERROR(error, "failed to initialize the blocks");
@@ -201,7 +206,7 @@ seL4_MessageInfo_t xv6fs_request_handler(seL4_MessageInfo_t tag, seL4_Word sende
   *need_new_recv_cap = true; // (XXX) Arya: todo, find the cases when we actually need this
   unsigned int op = seL4_GetMR(FSMSGREG_FUNC);
   uint64_t obj_id = get_object_id_from_badge(sender_badge);
-  
+
   seL4_MessageInfo_t reply_tag = seL4_MessageInfo_new(0, 0, 0, 0);
 
   if (sender_badge == 0)
@@ -230,7 +235,7 @@ seL4_MessageInfo_t xv6fs_request_handler(seL4_MessageInfo_t tag, seL4_Word sende
 
       if (ns_id != get_xv6fs_server()->gen.default_space.id)
       {
-        fs_namespace_entry_t *ns = (fs_namespace_entry_t *) resource_server_registry_get_by_id(&get_xv6fs_server()->ns_registry, ns_id);
+        fs_namespace_entry_t *ns = (fs_namespace_entry_t *)resource_server_registry_get_by_id(&get_xv6fs_server()->ns_registry, ns_id);
 
         if (ns == NULL)
         {
@@ -353,7 +358,7 @@ seL4_MessageInfo_t xv6fs_request_handler(seL4_MessageInfo_t tag, seL4_Word sende
       ns_id = get_space_id_from_badge(sender_badge);
       if (ns_id != get_xv6fs_server()->gen.default_space.id)
       {
-        fs_namespace_entry_t *ns = (fs_namespace_entry_t *) resource_server_registry_get_by_id(&get_xv6fs_server()->ns_registry, ns_id);
+        fs_namespace_entry_t *ns = (fs_namespace_entry_t *)resource_server_registry_get_by_id(&get_xv6fs_server()->ns_registry, ns_id);
         if (ns == NULL)
         {
           XV6FS_PRINTF("Namespace did not exist\n");
@@ -378,7 +383,7 @@ seL4_MessageInfo_t xv6fs_request_handler(seL4_MessageInfo_t tag, seL4_Word sende
       }
 
       // Add to registry if not already present
-      file_registry_entry_t *reg_entry = (file_registry_entry_t *) resource_server_registry_get_by_id(&get_xv6fs_server()->file_registry, file->id);
+      file_registry_entry_t *reg_entry = (file_registry_entry_t *)resource_server_registry_get_by_id(&get_xv6fs_server()->file_registry, file->id);
 
       if (reg_entry == NULL)
       {
@@ -416,7 +421,7 @@ seL4_MessageInfo_t xv6fs_request_handler(seL4_MessageInfo_t tag, seL4_Word sende
       // If we add file name resources, they would actually belong to a namespace
       seL4_CPtr dest;
       error = resource_server_give_resource(&get_xv6fs_server()->gen,
-                                            //get_space_id_from_badge(sender_badge),
+                                            // get_space_id_from_badge(sender_badge),
                                             get_xv6fs_server()->gen.default_space.id,
                                             file->id,
                                             get_client_id_from_badge(sender_badge),
@@ -442,7 +447,7 @@ seL4_MessageInfo_t xv6fs_request_handler(seL4_MessageInfo_t tag, seL4_Word sende
       ns_id = get_space_id_from_badge(sender_badge);
       if (ns_id != get_xv6fs_server()->gen.default_space.id)
       {
-        fs_namespace_entry_t *ns = (fs_namespace_entry_t *) resource_server_registry_get_by_id(&get_xv6fs_server()->ns_registry, ns_id);
+        fs_namespace_entry_t *ns = (fs_namespace_entry_t *)resource_server_registry_get_by_id(&get_xv6fs_server()->ns_registry, ns_id);
         if (ns == NULL)
         {
           XV6FS_PRINTF("Namespace did not exist\n");
@@ -456,7 +461,7 @@ seL4_MessageInfo_t xv6fs_request_handler(seL4_MessageInfo_t tag, seL4_Word sende
       /* Find the file to link */
       seL4_Word file_badge = seL4_GetBadge(1);
 
-      reg_entry = (file_registry_entry_t *) resource_server_registry_get_by_badge(&get_xv6fs_server()->file_registry, file_badge);
+      reg_entry = (file_registry_entry_t *)resource_server_registry_get_by_badge(&get_xv6fs_server()->file_registry, file_badge);
 
       if (reg_entry == NULL)
       {
@@ -483,7 +488,7 @@ seL4_MessageInfo_t xv6fs_request_handler(seL4_MessageInfo_t tag, seL4_Word sende
       ns_id = get_space_id_from_badge(sender_badge);
       if (ns_id != get_xv6fs_server()->gen.default_space.id)
       {
-        fs_namespace_entry_t *ns = (fs_namespace_entry_t *) resource_server_registry_get_by_id(&get_xv6fs_server()->ns_registry, ns_id);
+        fs_namespace_entry_t *ns = (fs_namespace_entry_t *)resource_server_registry_get_by_id(&get_xv6fs_server()->ns_registry, ns_id);
         if (ns == NULL)
         {
           XV6FS_PRINTF("Namespace did not exist\n");
@@ -511,7 +516,7 @@ seL4_MessageInfo_t xv6fs_request_handler(seL4_MessageInfo_t tag, seL4_Word sende
     XV6FS_PRINTF("Received badged request with object id %lx\n", get_object_id_from_badge(sender_badge));
 
     int ret;
-    file_registry_entry_t *reg_entry = (file_registry_entry_t *) resource_server_registry_get_by_badge(&get_xv6fs_server()->file_registry, sender_badge);
+    file_registry_entry_t *reg_entry = (file_registry_entry_t *)resource_server_registry_get_by_badge(&get_xv6fs_server()->file_registry, sender_badge);
 
     if (reg_entry == NULL)
     {

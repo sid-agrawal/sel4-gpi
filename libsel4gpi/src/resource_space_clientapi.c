@@ -47,6 +47,18 @@ int resspc_client_connect(seL4_CPtr server_ep,
     return seL4_MessageInfo_ptr_get_label(&tag);
 }
 
+int resspc_client_map_space(resspc_client_context_t *conn,
+                            seL4_Word space_id)
+{
+    seL4_SetMR(RESSPCMSGREG_FUNC, RESSPC_FUNC_MAP_SPACE_REQ);
+    seL4_SetMR(RESSPCMSGREG_MAP_SPACE_REQ_SPACE_ID, space_id);
+    seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0,
+                                                  RESSPCMSGREG_MAP_SPACE_REQ_END);
+    tag = seL4_Call(conn->badged_server_ep_cspath.capPtr, tag);
+
+    return seL4_MessageInfo_ptr_get_label(&tag);
+}
+
 int resspc_client_create_resource(resspc_client_context_t *conn,
                                   seL4_Word resource_id)
 {

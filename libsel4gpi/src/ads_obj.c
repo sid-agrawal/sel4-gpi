@@ -12,6 +12,10 @@
 #include <stdio.h>
 
 #include <vka/capops.h>
+#include <cpio/cpio.h>
+#include <sel4utils/helpers.h>
+#include <sel4runtime/auxv.h>
+#include <sel4runtime.h>
 
 #include <sel4gpi/ads_obj.h>
 #include <sel4gpi/ads_component.h>
@@ -20,10 +24,7 @@
 #include <sel4gpi/gpi_server.h>
 #include <sel4gpi/model_exporting.h>
 #include <sel4gpi/error_handle.h>
-#include <cpio/cpio.h>
-#include <sel4utils/helpers.h>
-#include <sel4runtime/auxv.h>
-#include <sel4runtime.h>
+#include <sel4gpi/pd_component.h>
 
 #define MAX_MO_RR 10000
 
@@ -44,48 +45,30 @@ int ads_new(ads_t *ads,
 
     // Allocate a vspace
     ads->vspace = malloc(sizeof(vspace_t));
-    if (ads->vspace == NULL)
-    {
-        ZF_LOGE("Failed to allocate vspace\n");
-        goto error_exit;
-    }
+    SERVER_GOTO_IF_COND(ads->vspace == NULL, "Failed to allocate vspace\n");
 
     vspace_t *new_vspace = ads->vspace;
     assert(new_vspace != NULL);
 
     // Allocate process structure for cookies
     ads->process_for_cookies = malloc(sizeof(sel4utils_process_t));
-    if (ads->process_for_cookies == NULL)
-    {
-        ZF_LOGE("Failed to allocate process struct for cookies in ads_new\n");
-        goto error_exit;
-    }
+    SERVER_GOTO_IF_COND(ads->process_for_cookies == NULL, "Failed to allocate process struct for cookies in ads_new\n");
 
     // Give vspace root
     vka_object_t *vspace_root_object = malloc(sizeof(vka_object_t));
     assert(vspace_root_object != NULL);
 
     error = vka_alloc_vspace_root(vka, vspace_root_object);
-    if (error)
-    {
-        ZF_LOGE("Failed to allocate page directory for new process: %d\n", error);
-        goto error_exit;
-    }
+    SERVER_GOTO_IF_ERR(error, "Failed to allocate page directory for new process\n");
 
     // Allocate alloc data
     sel4utils_alloc_data_t *alloc_data = malloc(sizeof(sel4utils_alloc_data_t));
-    if (alloc_data == NULL)
-    {
-        ZF_LOGE("Failed to allocate memory for alloc data\n");
-        goto error_exit;
-    }
+    SERVER_GOTO_IF_COND(alloc_data == NULL, "Failed to allocate memory for alloc data\n");
 
     // Assign an asid pool
-    if (!config_set(CONFIG_X86_64) &&
-        assign_asid_pool(seL4_CapInitThreadASIDPool, vspace_root_object->cptr) != seL4_NoError)
-    {
-        goto error_exit;
-    }
+    SERVER_GOTO_IF_COND(!config_set(CONFIG_X86_64) &&
+                            assign_asid_pool(seL4_CapInitThreadASIDPool, vspace_root_object->cptr) != seL4_NoError,
+                        "Failed to allocate asid pool\n");
 
     // Create empty vspace
     error = sel4utils_get_vspace(
@@ -102,23 +85,26 @@ int ads_new(ads_t *ads,
         */
 
         &(ads->process_for_cookies));
-    if (error)
-    {
-        ZF_LOGE("Failed to get new vspace while making copy: %d\n in %s", error, __FUNCTION__);
-        goto error_exit;
-    }
+
+    SERVER_GOTO_IF_ERR(error, "Failed to get new vspace while making copy\n");
+
     ads->root_page_dir = vspace_root_object;
 
     // Initialize VMR registry
     resource_server_initialize_registry(&ads->attach_registry, NULL);
     resource_server_initialize_registry(&ads->attach_id_to_vaddr_map, NULL);
 
-    return 0;
+    /* The root task holds the ADS by default */
+    error = pd_add_resource_by_id(get_gpi_server()->rt_pd_id, GPICAP_TYPE_ADS, get_ads_component()->space_id, ads->id,
+                                  seL4_CapNull, seL4_CapNull, seL4_CapNull);
+    SERVER_GOTO_IF_ERR(error, "Failed to add new ADS to root task\n");
 
-error_exit:
+    return error;
+
+err_goto:
     free(alloc_data);
     free(ads->vspace);
-    return -1;
+    return error;
 }
 
 int ads_reserve(ads_t *ads,
@@ -128,6 +114,7 @@ int ads_reserve(ads_t *ads,
                 sel4utils_reservation_type_t vmr_type,
                 attach_node_t **ret_node)
 {
+    int error = 0;
     int cacheable = 1;
     vspace_t *target = ads->vspace;
 
@@ -151,11 +138,7 @@ int ads_reserve(ads_t *ads,
                                          rights, cacheable);
     }
 
-    if (res.res == NULL)
-    {
-        ZF_LOGE("Failed to reserve range\n");
-        return 1;
-    }
+    SERVER_GOTO_IF_COND(res.res == NULL, "Failed to reserve range\n");
 
     /* Set the reservation type */
     sel4utils_res_t *sel4utils_res = reservation_to_res(res);
@@ -165,11 +148,8 @@ int ads_reserve(ads_t *ads,
     attach_node_t *attach_node = malloc(sizeof(attach_node_t));
     attach_node_map_t *attach_node_map_entry = malloc(sizeof(attach_node_map_t));
 
-    if (attach_node == NULL || attach_node_map_entry == NULL)
-    {
-        OSDB_PRINTF("Failed to allocate registry entry for ADS reservation.\n");
-        return 1;
-    }
+    SERVER_GOTO_IF_COND(attach_node == NULL || attach_node_map_entry == NULL,
+                        "Failed to allocate registry entry for ADS reservation.\n");
 
     // Map a shorter attach node ID to vaddr
     attach_node_map_entry->vaddr = vaddr;
@@ -185,8 +165,16 @@ int ads_reserve(ads_t *ads,
     attach_node->gen.object_id = (uint64_t)vaddr;
     resource_server_registry_insert(&ads->attach_registry, (resource_server_registry_node_t *)attach_node);
 
+    // The root task holds the VMR by default
+    uint64_t vmr_id = attach_node_map_entry->gen.object_id;
+    error = pd_add_resource_by_id(get_gpi_server()->rt_pd_id, GPICAP_TYPE_VMR, ads->id, vmr_id,
+                                  seL4_CapNull, seL4_CapNull, seL4_CapNull);
+    SERVER_GOTO_IF_ERR(error, "Failed to add new VMR to root task\n");
+
     *ret_node = attach_node;
-    return 0;
+
+err_goto:
+    return error;
 }
 
 attach_node_t *ads_get_res_by_id(ads_t *ads, uint64_t res_id)
@@ -323,6 +311,12 @@ int ads_attach_to_res(ads_t *ads,
     reservation->n_frames = mo->num_pages;
     // memcpy(reservation->frame_caps, frame_caps, sizeof(seL4_CPtr) * mo->num_pages);
 
+    /* Map the VMR to the MO */
+    uint64_t vmr_universal_id = universal_res_id(GPICAP_TYPE_VMR, ads->id, reservation->map_entry->gen.object_id);
+    uint64_t mo_id = universal_res_id(GPICAP_TYPE_MO, get_mo_component()->space_id, mo->id);
+    error = pd_component_map_resources(get_gpi_server()->rt_pd_id, vmr_universal_id, mo_id);
+    SERVER_GOTO_IF_ERR(error, "Failed to map VMR to MO\n");
+
 err_goto:
     return error;
 }
@@ -343,6 +337,12 @@ int ads_attach(ads_t *ads,
     if (error)
     {
         ZF_LOGE("Failed to reserve region\n");
+        return 1;
+    }
+
+    if (error)
+    {
+        ZF_LOGE("Failed to map VMR resource to MO resource\n");
         return 1;
     }
 
@@ -693,7 +693,7 @@ int ads_copy(vspace_t *loader,
     }
 
     attach_node_t *new_attach_node;
-    mo_t *old_mo;                   // original MO
+    mo_t *old_mo; // original MO
     int num_pages;
 
     uintptr_t region_end = (uintptr_t)cfg->start + (cfg->region_pages * SIZE_BITS_TO_BYTES(MO_PAGE_BITS));

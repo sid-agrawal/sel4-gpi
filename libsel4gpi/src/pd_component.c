@@ -91,7 +91,7 @@ static seL4_MessageInfo_t handle_pd_allocation(seL4_Word sender_badge)
     /* Return this badged end point in the return message. */
     seL4_SetCap(0, ret_cap);
     seL4_SetMR(PDMSGREG_FUNC, PD_FUNC_CONNECT_ACK);
-    reply_tag= seL4_MessageInfo_new(error, 0, 1, PDMSGREG_CONNECT_ACK_END);
+    reply_tag = seL4_MessageInfo_new(error, 0, 1, PDMSGREG_CONNECT_ACK_END);
     return reply_tag;
 
 err_goto:
@@ -336,7 +336,7 @@ static seL4_MessageInfo_t handle_give_resource_req(seL4_Word sender_badge, seL4_
     SERVER_GOTO_IF_COND(recipient_data == NULL, "Couldn't find target PD (%ld)\n", recipient_id);
     SERVER_GOTO_IF_COND(resource_space_data == NULL, "Couldn't find resource space (%ld)\n", space_id);
 
-    uint64_t res_node_id = gpi_new_badge(resource_space_data->space.resource_type, 0, 0, space_id, resource_id);
+    uint64_t res_node_id = universal_res_id(resource_space_data->space.resource_type, space_id, resource_id);
     pd_hold_node_t *resource_data = (pd_hold_node_t *)resource_server_registry_get_by_id(&server_data->pd.hold_registry, res_node_id);
     SERVER_GOTO_IF_COND(resource_data == NULL, "Couldn't find resource (%lx)\n", res_node_id);
 
@@ -360,6 +360,61 @@ err_goto:
     seL4_SetMR(PDMSGREG_FUNC, PD_FUNC_GIVE_RES_ACK);
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(error, 0, 0,
                                                   PDMSGREG_GIVE_RES_ACK_END);
+    return tag;
+}
+
+int pd_component_map_resources(uint32_t client_pd_id, uint64_t src_res_id, uint64_t dest_res_id)
+{
+    int error = 0;
+
+    // Find the server PD
+    pd_component_registry_entry_t *server_data = pd_component_registry_get_entry_by_id(client_pd_id);
+    SERVER_GOTO_IF_COND(server_data == NULL, "Couldn't find server PD (%ld)\n", client_pd_id);
+
+    // Find the resources
+    pd_hold_node_t *src_res = (pd_hold_node_t *)resource_server_registry_get_by_id(&server_data->pd.hold_registry,
+                                                                                   src_res_id);
+    SERVER_GOTO_IF_COND(src_res == NULL, "Couldn't find resource (%lx)\n", src_res_id);
+    pd_hold_node_t *dest_res = (pd_hold_node_t *)resource_server_registry_get_by_id(&server_data->pd.hold_registry,
+                                                                                    dest_res_id);
+    SERVER_GOTO_IF_COND(dest_res == NULL, "Couldn't find resource (%lx)\n", dest_res_id);
+
+    // Find the source space
+    resspc_component_registry_entry_t *src_space_data = resource_space_get_entry_by_id(src_res->space_id);
+    SERVER_GOTO_IF_COND(src_space_data == NULL, "Couldn't find resource space (%ld)\n", src_res->space_id);
+
+    // Confirm the mapping is valid
+    SERVER_GOTO_IF_COND(client_pd_id != get_gpi_server()->rt_pd_id && src_space_data->space.pd->id != client_pd_id,
+                        "PD (%ld) can't map resource from a space (%ld) it doesn't manage.\n",
+                        client_pd_id, src_res->space_id);
+
+    SERVER_GOTO_IF_COND(resspc_check_map(src_res->space_id, dest_res->space_id) != 1,
+                        "Mapping a resource in space (%ld) to a resource in space (%ld) is not valid.\n",
+                        src_res->space_id, dest_res->space_id);
+
+    // (XXX) Arya: should we also track the mapping?
+
+err_goto:
+    return error;
+}
+
+static seL4_MessageInfo_t handle_map_resource_req(seL4_Word sender_badge, seL4_MessageInfo_t old_tag)
+{
+    int error = 0;
+
+    seL4_Word server_id = get_object_id_from_badge(sender_badge);
+    seL4_Word src_res_id = seL4_GetMR(PDMSGREG_MAP_RES_REQ_SRC_ID);
+    seL4_Word dest_res_id = seL4_GetMR(PDMSGREG_MAP_RES_REQ_DEST_ID);
+
+    OSDB_PRINTF("Got map resource request from client badge %lx, srd ID %lx, dest ID %lx.\n",
+                sender_badge, src_res_id, dest_res_id);
+
+    error = pd_component_map_resources(server_id, src_res_id, dest_res_id);
+
+err_goto:
+    seL4_SetMR(PDMSGREG_FUNC, PD_FUNC_MAP_RES_ACK);
+    seL4_MessageInfo_t tag = seL4_MessageInfo_new(error, 0, 0,
+                                                  PDMSGREG_MAP_RES_ACK_END);
     return tag;
 }
 
@@ -576,6 +631,9 @@ static seL4_MessageInfo_t pd_component_handle(seL4_MessageInfo_t tag,
             break;
         case PD_FUNC_GIVE_RES_REQ:
             reply_tag = handle_give_resource_req(sender_badge, tag);
+            break;
+        case PD_FUNC_MAP_RES_REQ:
+            reply_tag = handle_map_resource_req(sender_badge, tag);
             break;
         case PD_FUNC_EXIT_REQ:
             reply_tag = handle_exit_req(sender_badge, tag);

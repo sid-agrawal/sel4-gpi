@@ -19,6 +19,8 @@
 #include <sel4gpi/debug.h>
 #include <sel4gpi/model_exporting.h>
 #include <sel4gpi/error_handle.h>
+#include <sel4gpi/pd_component.h>
+#include <sel4gpi/gpi_server.h>
 
 #define DEBUG_ID MO_DEBUG
 #define SERVER_ID MOSERVS
@@ -49,6 +51,12 @@ int mo_new(mo_t *mo,
         mo->frame_caps_in_root_task[i] = mo->vka_objects[i].cptr;
         mo->frame_paddrs[i] = vka_object_paddr(vka, &mo->vka_objects[i]);
     }
+
+    /* The root task holds the MO by default */
+    error = pd_add_resource_by_id(get_gpi_server()->rt_pd_id, GPICAP_TYPE_MO, get_mo_component()->space_id, mo->id,
+                                  seL4_CapNull, seL4_CapNull, seL4_CapNull);
+
+    SERVER_GOTO_IF_ERR(error, "Failed to add new MO to root task\n");
 
 err_goto:
     return error;

@@ -43,6 +43,9 @@ enum res_space_component_funcs
     RESSPC_FUNC_DISCONNECT_REQ,
     RESSPC_FUNC_DISCONNECT_ACK,
 
+    RESSPC_FUNC_MAP_SPACE_REQ,
+    RESSPC_FUNC_MAP_SPACE_ACK,
+
     RESSPC_FUNC_CREATE_RES_REQ,
     RESSPC_FUNC_CREATE_RES_ACK,
 };
@@ -64,6 +67,12 @@ enum res_space_component_msgregs
     RESSPCMSGREG_CONNECT_ACK_SLOT,
     RESSPCMSGREG_CONNECT_ACK_END,
 
+    /* Map Space */
+    RESSPCMSGREG_MAP_SPACE_REQ_SPACE_ID = RESSPCMSGREG_LABEL0,
+    RESSPCMSGREG_MAP_SPACE_REQ_END,
+
+    RESSPCMSGREG_MAP_SPACE_ACK_END,
+
     /* Create Resource */
     RESSPCMSGREG_CREATE_RES_REQ_RES_ID = RESSPCMSGREG_LABEL0,
     RESSPCMSGREG_CREATE_RES_REQ_END,
@@ -78,8 +87,8 @@ enum res_space_component_msgregs
 /* Per-space context maintained by the server. */
 typedef struct _resspc_component_registry_entry
 {
-    resource_server_registry_node_t gen;
-    res_space_t space;
+    resource_server_registry_node_t gen; ///< Generic registry entry data
+    res_space_t space;                   ///< Resource space data
 } resspc_component_registry_entry_t;
 
 /**
@@ -88,10 +97,10 @@ typedef struct _resspc_component_registry_entry
  **/
 typedef struct _resspc_config
 {
-    gpi_cap_t type;
-    seL4_CPtr ep;
-    pd_t *pd;
-    void *data; // Field for some generic data
+    gpi_cap_t type; ///< Type of resources in the space
+    seL4_CPtr ep;   ///< Raw endpoint of the resource space manager
+    pd_t *pd;       ///< Handle to the manager PD
+    void *data;     ///< Field for some generic data (not used)
 } resspc_config_t;
 
 /**
@@ -113,3 +122,22 @@ resource_component_context_t *get_resspc_component(void);
  * @param space_id the resource space id
  */
 resspc_component_registry_entry_t *resource_space_get_entry_by_id(seL4_Word space_id);
+
+/**
+ * Add a map connection from one resource space to another
+ * This allows us to map a resource in the first space to a resource in the second space
+ * 
+ * @param src_spc_id ID of the source resource space
+ * @param dest_spc_id ID of the destination resource space
+ * @return 0 on success, error otherwise
+*/
+int resspc_component_map_space(uint64_t src_spc_id, uint64_t dest_spc_id);
+
+/**
+ * Check if the source resource space maps to the destination resource space
+ * 
+ * @param src_space_id ID of the source resource space
+ * @param dest_space_id ID of the destination resource space
+ * @return 1 if the mapping exists, 0 otherwise
+*/
+int resspc_check_map(uint64_t src_space_id, uint64_t dest_space_id);

@@ -197,6 +197,21 @@ int pd_client_give_resource(pd_client_context_t *conn,
     return seL4_MessageInfo_ptr_get_label(&tag);
 }
 
+int pd_client_map_resource(pd_client_context_t *conn,
+                           seL4_Word src_res_id,
+                           seL4_Word dest_res_id)
+{
+    seL4_SetMR(PDMSGREG_FUNC, PD_FUNC_MAP_RES_REQ);
+    seL4_SetMR(PDMSGREG_MAP_RES_REQ_SRC_ID, src_res_id);
+    seL4_SetMR(PDMSGREG_MAP_RES_REQ_DEST_ID, dest_res_id);
+
+    seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0,
+                                                  PDMSGREG_MAP_RES_REQ_END);
+    tag = seL4_Call(conn->badged_server_ep_cspath.capPtr, tag);
+
+    return seL4_MessageInfo_ptr_get_label(&tag);
+}
+
 void pd_client_exit(pd_client_context_t *conn)
 {
     seL4_SetMR(PDMSGREG_FUNC, PD_FUNC_EXIT_REQ);

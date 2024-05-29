@@ -245,7 +245,7 @@ int sel4gpi_ads_configure(ads_config_t *cfg,
         {
             *ret_stack = stack;
         }
-        GOTO_IF_ERR(stack == NULL, "failed to allocate a new stack");
+        GOTO_IF_COND(stack == NULL, "failed to allocate a new stack");
         break;
     case GPI_OMIT:
         break;

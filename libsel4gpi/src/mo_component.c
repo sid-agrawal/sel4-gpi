@@ -198,6 +198,12 @@ int forge_mo_cap_from_frames(seL4_CPtr *frame_caps,
 
     SERVER_GOTO_IF_ERR(error, "Failed to initialize new MO object for forge\n");
 
+    /* The root task holds the MO by default */
+    error = pd_add_resource_by_id(get_gpi_server()->rt_pd_id, GPICAP_TYPE_MO, get_mo_component()->space_id, mo->id,
+                                  seL4_CapNull, seL4_CapNull, seL4_CapNull);
+
+    SERVER_GOTO_IF_ERR(error, "Failed to add new MO to root task\n");
+
     OSDB_PRINTF("Forged a new MO cap(EP: %d) with %d pages.\n",
                 (int)*cap_ret, new_entry->mo.num_pages);
 

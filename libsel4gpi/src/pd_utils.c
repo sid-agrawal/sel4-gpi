@@ -47,6 +47,13 @@ seL4_CPtr sel4gpi_get_rde(int type)
     return slot;
 }
 
+uint64_t sel4gpi_get_default_space_id(int type)
+{
+    uint64_t space_id = ((osm_pd_init_data_t *)sel4runtime_get_osm_init_data())->rde[type][0].space_id;
+
+    return space_id;
+}
+
 seL4_CPtr sel4gpi_get_rde_by_space_id(uint32_t space_id, gpi_cap_t type)
 {
     assert(type != GPICAP_TYPE_NONE && type != GPICAP_TYPE_MAX);

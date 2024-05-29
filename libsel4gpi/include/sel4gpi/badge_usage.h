@@ -99,6 +99,15 @@ uint64_t gpi_new_badge(gpi_cap_t cap_type,
                        uint64_t object_id);
 
 /**
+ * Make a universal identifier for a resource
+ * 
+ * @param type the resource type
+ * @param space_id the resource space
+ * @param object_id the resource ID, unique within the space
+*/
+uint64_t universal_res_id(gpi_cap_t type, uint64_t space_id, uint64_t object_id);
+
+/**
  * @brief formats badge details into a string for printing
  *
  * @param dest string buffer

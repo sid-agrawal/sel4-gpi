@@ -45,15 +45,23 @@ uint64_t sel4gpi_get_binded_ads_id(void);
  */
 seL4_CPtr sel4gpi_get_cspace_root(void);
 
-// (XXX) Arya: TODO, modify the "get rde" functions to return a connection object
-
 /**
  * Get an osmosis RDE from the env
  * Returns the default resource space for the provided type
  * 
  * @param type gpi_cap_t type of the RDE
+ * @return the cptr to the RDE endpoint
  */
 seL4_CPtr sel4gpi_get_rde(int type);
+
+/**
+ * Get the resource space ID of the default RDE for the given type
+ * 
+ * @param type gpi_cap_t type of the RDE
+ * @return the resource space ID of the default RDE, 
+ *         or 0 if there is none for the given type
+ */
+uint64_t sel4gpi_get_default_space_id(int type);
 
 /**
  * Get an osmosis RDE from the env

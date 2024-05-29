@@ -29,7 +29,7 @@ int pd_component_client_connect(seL4_CPtr server_ep_cap,
 /**
  * @brief   Disconnect the pd client.
  * Destroys all internal metadata associated with the PD.
- * 
+ *
  * (XXX) Arya: Should this immediately delete the PD, or just decrement refcount?
  * (XXX) Arya: Should there be options to destroy resources
  * held by the PD?
@@ -116,13 +116,11 @@ int pd_client_share_rde(pd_client_context_t *target_pd,
                         gpi_cap_t cap_type,
                         uint64_t space_id);
 
-/* -- Resource Manager Functions -- */
-// (XXX) Arya: In the process of moving these to a separate component
-
 /**
  * To be called by a resource server when it allocates
  * a resource to another PD
  *
+ * (XXX) Arya: Replace space/resource id with universal_res_id
  * @param conn the resource server's pd connection
  * @param res_space_id the resource space ID
  * @param recipient_id the recipient PD's ID
@@ -136,11 +134,25 @@ int pd_client_give_resource(pd_client_context_t *conn,
                             seL4_CPtr *dest);
 
 /**
+ * To be called by a resource server when it maps a resource to another resource
+ * The server must be the managing PD of the source resource's resource space
+ * The source resource's resource space must map to the destination resource's space
+ * (XXX) Arya: WIP
+ *
+ * @param conn the resource server's pd connection
+ * @param src_res_id the universal ID of the source resource (universal_res_id)
+ * @param dest_res_id the universal ID of the destination resource (universal_res_id)
+ */
+int pd_client_map_resource(pd_client_context_t *conn,
+                           seL4_Word src_res_id,
+                           seL4_Word dest_res_id);
+
+/**
  * Called by a PD to notify that it is about to exit
  * This call has no reply
- * 
+ *
  * @param conn the connection of the PD that is exiting
-*/
+ */
 void pd_client_exit(pd_client_context_t *conn);
 
 void pd_client_bench_ipc(pd_client_context_t *conn, seL4_CPtr dummy_send_cap, seL4_CPtr dummy_recv_cap, bool cap_transfer);

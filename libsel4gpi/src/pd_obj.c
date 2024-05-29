@@ -89,7 +89,7 @@ int pd_add_resource(pd_t *pd, gpi_cap_t type, uint32_t space_id, uint32_t res_id
                     seL4_CPtr slot_in_RT, seL4_CPtr slot_in_PD, seL4_CPtr slot_in_serverPD)
 {
     // Unique resource ID is the badge with the following fields: type, space_id, res_id
-    uint64_t res_node_id = gpi_new_badge(type, 0, 0, space_id, res_id);
+    uint64_t res_node_id = universal_res_id(type, space_id, res_id);
     pd_hold_node_t *node = (pd_hold_node_t *)resource_server_registry_get_by_id(&pd->hold_registry, res_node_id);
 
     if (node != NULL)
@@ -351,10 +351,6 @@ int pd_new(pd_t *pd,
     {
         ZF_LOGE("Couldn't forge an MO for PD's init data\n");
     }
-
-    // Track the init data MO in RT only
-    pd_add_resource_by_id(get_gpi_server()->rt_pd_id, GPICAP_TYPE_MO, get_mo_component()->space_id, rde_mo_obj->id,
-                          pd->init_data_mo.badged_server_ep_cspath.capPtr, seL4_CapNull, pd->init_data_mo.badged_server_ep_cspath.capPtr);
 
     // Setup init data
     pd->init_data->rde_count = 0;
@@ -623,11 +619,6 @@ int pd_configure(pd_t *pd,
     int error = 0;
     memcpy(&pd->proc.pd, target_ads->root_page_dir, sizeof(vka_object_t));
     pd->proc.thread = target_cpu->thread;
-
-    /* The RT manages this ADS */
-    // (XXX) Arya: is this necessary?
-    pd_add_resource_by_id(get_gpi_server()->rt_pd_id, GPICAP_TYPE_ADS, get_ads_component()->space_id, target_ads->id,
-                          seL4_CapNull, seL4_CapNull, seL4_CapNull);
 
     // the ADS cap is both a resource space and a resource
     seL4_Word badge = gpi_new_badge(GPICAP_TYPE_ADS, 0x00, pd->id, get_ads_component()->space_id, target_ads->id);
