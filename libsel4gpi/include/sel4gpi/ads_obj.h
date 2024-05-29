@@ -242,9 +242,17 @@ static seL4_CPtr assign_asid_pool(seL4_CPtr asid_pool, seL4_CPtr pd)
  * @param loadee_vspace
  * @param proc the process struct that belongs to the PD obj
  * @param image_name name of the ELF image to load
+ * @param ret_entry_point the entry point found after loading the ELF
+ * @param ret_elf_reservations returns the vspace reservations made during loading, for OSmosis tracking purposes
+ * @param ret_num_elf_regions returns the number of loadable regions found
  * @return 0 on success, 1 on failure
  */
-int ads_load_elf(vspace_t *loadee_vspace, sel4utils_process_t *proc, const char *image_name, void **ret_entry_point);
+int ads_load_elf(vspace_t *loadee_vspace,
+                 sel4utils_process_t *proc,
+                 const char *image_name,
+                 void **ret_entry_point,
+                 sel4utils_elf_region_t **ret_elf_reservations,
+                 int *ret_num_elf_regions);
 
 /**
  * @brief slightly modified version of the sel4utils process spawn function

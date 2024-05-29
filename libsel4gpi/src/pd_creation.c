@@ -177,19 +177,16 @@ int sel4gpi_ads_configure(ads_config_t *cfg,
         break;
     }
 
-    if (cfg->entry_point)
-    {
-        *ret_entry_point = cfg->entry_point;
-        PRINT_IF_COND(auto_entry_point != NULL,
-                      COLORIZE("Warning:", CYAN) "Overriding automatically found entry point (%p) with given one (%p)\n",
-                      auto_entry_point, cfg->entry_point);
-    }
-    else
-    {
-        *ret_entry_point = auto_entry_point;
-    }
+    PRINT_IF_COND(auto_entry_point != NULL && cfg->entry_point,
+                  COLORIZE("Warning: ", CYAN) "Automatically found entry point (%p) differs from given one (%p)\n",
+                  auto_entry_point, cfg->entry_point);
+    PRINT_IF_COND(auto_entry_point == NULL && cfg->entry_point == NULL,
+                  COLORIZE("Warning: ", CYAN) "PD has no entry point (either it was not found or was not given)\n");
 
-    PRINT_IF_COND(*ret_entry_point == NULL, "Warning: PD has no entry point (either it was not found or was not given)\n");
+    if (ret_entry_point)
+    {
+        *ret_entry_point = cfg->entry_point == NULL ? auto_entry_point : cfg->entry_point;
+    }
 
     if (cfg->vmr_cfgs)
     {
@@ -230,13 +227,19 @@ int sel4gpi_ads_configure(ads_config_t *cfg,
     switch (cfg->stack_shared)
     {
     case GPI_SHARED:
-        if (!cfg->same_ads)
-        {
-            GOTO_IF_COND(1, "Not implemented yet!\n");
-        }
-        break;
     case GPI_COPY:
-        GOTO_IF_COND(1, "Not implemented yet!\n");
+        GOTO_IF_COND(1, "Not implemented!\n");
+        if (!(cfg->same_ads && cfg->stack_shared == GPI_SHARED))
+        {
+            PD_CREATION_PRINT("Copying stack\n");
+            vmr_config_t code_cfg = {.start = NULL,
+                                     .region_pages = 0,
+                                     .type = SEL4UTILS_RES_TYPE_STACK,
+                                     .share_mode = cfg->code_shared};
+
+            error = ads_client_copy(&self_ads_conn, &runnable->ads, &code_cfg);
+            GOTO_IF_ERR(error, "failed to copy ELF to ADS\n");
+        }
         break;
     case GPI_DISJOINT:
         PD_CREATION_PRINT("Allocating stack (%zu pages)\n", cfg->stack_pages);

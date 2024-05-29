@@ -37,6 +37,7 @@
 #define SERVER_ID ADSSERVS
 
 static int forge_ads_attachments_from_vspace(ads_t *ads, uint32_t client_pd_id);
+static int forge_ads_attachment_from_res(ads_t *ads, sel4utils_res_t *res, uint32_t client_pd_id);
 
 resource_component_context_t *get_ads_component(void)
 {
@@ -303,30 +304,42 @@ static seL4_MessageInfo_t handle_load_elf_request(seL4_Word sender_badge, seL4_M
     OSDB_PRINTF("Got load elf request from client badge %lx.\n", sender_badge);
 
     int error = 0;
-    SERVER_GOTO_IF_COND(seL4_MessageInfo_get_capsUnwrapped(old_tag) < 1, "Missing cap for target PD in capsUnwrapped\n");
+    SERVER_GOTO_IF_COND(seL4_MessageInfo_get_capsUnwrapped(old_tag) < 1,
+                        "Missing cap for target PD in capsUnwrapped\n");
 
     ads_component_registry_entry_t *target_ads = (ads_component_registry_entry_t *)
         resource_component_registry_get_by_badge(get_ads_component(), sender_badge);
     pd_component_registry_entry_t *target_pd = (pd_component_registry_entry_t *)
         resource_component_registry_get_by_id(get_pd_component(), get_object_id_from_badge(seL4_GetBadge(0)));
-    SERVER_GOTO_IF_COND(target_ads == NULL, "Couldn't find target ADS (%ld)\n", get_object_id_from_badge(sender_badge));
-    SERVER_GOTO_IF_COND(target_pd == NULL, "Couldn't find target PD (%ld)\n", get_object_id_from_badge(seL4_GetBadge(0)));
+    SERVER_GOTO_IF_COND(target_ads == NULL, "Couldn't find target ADS (%ld)\n",
+                        get_object_id_from_badge(sender_badge));
+    SERVER_GOTO_IF_COND(target_pd == NULL, "Couldn't find target PD (%ld)\n",
+                        get_object_id_from_badge(seL4_GetBadge(0)));
 
     int image_id = (int)seL4_GetMR(ADSMSGREG_LOAD_ELF_REQ_IMAGE);
     SERVER_GOTO_IF_COND(image_id < 0 || image_id > PD_N_IMAGES, "Requested elf load of bad image ID %d\n", image_id);
 
     OSDB_PRINTF("Loading %s's ELF into PD %d\n", pd_images[image_id], target_pd->pd.id);
     void *entry_point;
-    error = ads_load_elf(target_ads->ads.vspace, &target_pd->pd.proc, pd_images[image_id], &entry_point);
+    sel4utils_elf_region_t *elf_reservations;
+    int elf_regions;
+    error = ads_load_elf(target_ads->ads.vspace, &target_pd->pd.proc, pd_images[image_id],
+                         &entry_point, &elf_reservations, &elf_regions);
     SERVER_GOTO_IF_ERR(error, "Load ELF failed\n");
+
+    // For now, we must fake the ADS attachments after loading elf
+    for (int i = 0; i < elf_regions; i++)
+    {
+        sel4utils_res_t *res = reservation_to_res(elf_reservations[i].reservation);
+        forge_ads_attachment_from_res(&target_ads->ads, res, target_pd->pd.id);
+    }
 
     OSDB_PRINTF("Successfully loaded ELF, entry point %p.\n", entry_point);
 
     pd_set_image_name(&target_pd->pd, pd_images[image_id]);
 
-    // For now, we must fake the ADS attachments after loading elf
-    error = forge_ads_attachments_from_vspace(&target_ads->ads, get_gpi_server()->rt_pd_id);
-    SERVER_GOTO_IF_ERR(error, "Failed to forge attachments to ADS after elf load\n");
+    // error = forge_ads_attachments_from_vspace(&target_ads->ads, get_gpi_server()->rt_pd_id);
+    // SERVER_GOTO_IF_ERR(error, "Failed to forge attachments to ADS after elf load\n");
 
     seL4_SetMR(ADSMSGREG_LOAD_ELF_ACK_ENTRY_PT, (seL4_Word)entry_point);
 
@@ -336,6 +349,56 @@ err_goto:
     seL4_SetMR(ADSMSGREG_FUNC, ADS_FUNC_LOAD_ELF_ACK);
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(error, 0, 0, ADSMSGREG_LOAD_ELF_ACK_END);
     return tag;
+}
+
+/**
+ * @brief forges an ADS attachment (and MO) from a given reservation
+ *
+ * @param ads the ADS to forge the attachment in
+ * @param res the reservation to forge
+ * @param client_pd_id the PD ID which is binded with the given ADS
+ * @return int 0 on success
+ */
+static int forge_ads_attachment_from_res(ads_t *ads, sel4utils_res_t *res, uint32_t client_pd_id)
+{
+    int error = 0;
+    /* Get the caps in the reservation */
+    uint32_t num_frames = (res->end - res->start) / PAGE_SIZE_4K;
+    seL4_CPtr *frame_caps = malloc(sizeof(seL4_CPtr) * num_frames);
+    assert(frame_caps != NULL);
+
+    int i = 0;
+    for (void *start = (void *)res->start;
+         start < (void *)res->end;
+         start += PAGE_SIZE_4K)
+    {
+        frame_caps[i] = vspace_get_cap(ads->vspace, start);
+        i++;
+    }
+
+    /* This way, we can call forge_ads_cap_from_vspace again and again */
+    // (XXX) Arya: is this check necessary?
+    if (res->mo_ref == NULL)
+    {
+        OSDB_PRINTF("Forging MO/attach for reservation [%p,%p]\n", (void *)res->start, (void *)res->end);
+
+        // (XXX) Arya: This may have issues if the region is not mapped to physical pages everywhere
+        seL4_CPtr cap_ret;
+        error = forge_mo_cap_from_frames(frame_caps,
+                                         num_frames,
+                                         get_ads_component()->server_vka,
+                                         client_pd_id,
+                                         &cap_ret,
+                                         (mo_t **)&res->mo_ref);
+        SERVER_GOTO_IF_ERR(error, "Failed to forge MO cap while forging ADS attach\n");
+
+        // Add the attach node for this region
+        error = ads_forge_attach(ads, res, res->mo_ref);
+        SERVER_GOTO_IF_ERR(error, "Failed to forge ADS attach\n");
+    }
+
+err_goto:
+    return error;
 }
 
 /**
@@ -358,42 +421,8 @@ static int forge_ads_attachments_from_vspace(ads_t *ads, uint32_t client_pd_id)
     while (res != NULL)
     {
         OSDB_PRINTF("Found reservation [%p,%p]\n", (void *)res->start, (void *)res->end);
-
-        /* Get the caps in the reservation */
-        uint32_t num_frames = (res->end - res->start) / PAGE_SIZE_4K;
-        seL4_CPtr *frame_caps = malloc(sizeof(seL4_CPtr) * num_frames);
-        assert(frame_caps != NULL);
-
-        int i = 0;
-        for (void *start = (void *)res->start;
-             start < (void *)res->end;
-             start += PAGE_SIZE_4K)
-        {
-            frame_caps[i] = vspace_get_cap(ads->vspace, start);
-            i++;
-        }
-
-        /* This way, we can call forge_ads_cap_from_vspace again and again */
-        // (XXX) Arya: is this check necessary?
-        if (res->mo_ref == NULL)
-        {
-            OSDB_PRINTF("Forging MO/attach for reservation [%p,%p]\n", (void *)res->start, (void *)res->end);
-
-            // (XXX) Arya: This may have issues if the region is not mapped to physical pages everywhere
-            seL4_CPtr cap_ret;
-            error = forge_mo_cap_from_frames(frame_caps,
-                                             num_frames,
-                                             get_ads_component()->server_vka,
-                                             client_pd_id,
-                                             &cap_ret,
-                                             (mo_t **)&res->mo_ref);
-            SERVER_GOTO_IF_ERR(error, "Failed to forge MO cap while forging ADS attach\n");
-
-            // Add the attach node for this region
-            error = ads_forge_attach(ads, res, res->mo_ref);
-            SERVER_GOTO_IF_ERR(error, "Failed to forge ADS attach\n");
-        }
-
+        error = forge_ads_attachment_from_res(ads, res, client_pd_id);
+        SERVER_GOTO_IF_ERR(error, "Failed to forge attach node from reservation\n");
         res = res->next;
     }
 

@@ -259,40 +259,10 @@ int ads_attach_to_res(ads_t *ads,
                 reservation->vaddr, human_readable_va_res_type(reservation->type), reservation->n_pages,
                 offset);
 
-    /* Make a copy of the frame caps for this new mapping */
-    // seL4_CPtr frame_caps[mo->num_pages];
-    // for (int i = 0; i < mo->num_pages; i++)
-    // {
-    //     cspacepath_t from_path, to_path;
-    //     vka_cspace_make_path(vka, mo->frame_caps_in_root_task[i], &from_path);
-
-    //     /* allocate a path for the copy*/
-    //     int error = vka_cspace_alloc_path(vka, &to_path);
-    //     if (error)
-    //     {
-    //         OSDB_PRINTF("main: Failed to allocate slot in root cspace, error: %d", error);
-    //         return 1;
-    //     }
-
-    //     /* copy the frame cap */
-    //     error = vka_cnode_copy(&to_path, &from_path, seL4_AllRights);
-    //     if (error)
-    //     {
-    //         OSDB_PRINTF("main: Failed to copy cap, error: %d", error);
-    //         return 1;
-    //     }
-
-    //     frame_caps[i] = to_path.capPtr;
-
-    //     // void *frame_paddr = (void *)seL4_DebugCapPaddr(attach_node->frame_caps[i]);
-    //     // OSDB_PRINTF("paddr of frame to map: %p\n", frame_paddr);
-    // }
-
     reservation->frame_caps = malloc(sizeof(seL4_CPtr) * mo->num_pages);
 
     error = copy_frame_caps_for_mapping(mo->frame_caps_in_root_task, reservation->frame_caps, mo->num_pages);
     SERVER_GOTO_IF_ERR(error, "Failed to copy frame caps for attachment\n");
-
     /* Map the frame caps into the vspace */
     error = sel4utils_map_pages_at_vaddr(ads->vspace,
                                          reservation->frame_caps,
@@ -301,7 +271,6 @@ int ads_attach_to_res(ads_t *ads,
                                          mo->num_pages,
                                          MO_PAGE_BITS,
                                          reservation->res);
-
     SERVER_GOTO_IF_ERR(error, "Failed to map pages\n");
 
     /* Track the attachment */
@@ -386,6 +355,7 @@ int ads_forge_attach(ads_t *ads, sel4utils_res_t *res, mo_t *mo)
     attach_node->mo_attached = true;
     attach_node->mo_id = mo->id;
     attach_node->mo_offset = 0;
+
     resource_server_registry_insert(&ads->attach_registry, (resource_server_registry_node_t *)attach_node);
 
     return 0;
@@ -571,86 +541,61 @@ void ads_dump_rr(ads_t *ads, model_state_t *ms, gpi_model_node_t *pd_node)
 }
 
 /**
- * @brief copies a VMR reservation from src_ads to dst_ads
- *
- * @param src_ads the source ADS
- * @param dst_ads the destination ADS
- * @param start address of the start of the VMR
- * @param end address of the end of the VMR
- * @param vmr_type VMR type (e.g. stack, heap, etc.)
- * @param src_attach_node the attach node to copy the reservation from
- * @param ret_new_attach_node returns the created attach node for dst_ads
- * @param ret_mo if MO was attached in src_ads's reservation, returns the MO, otherwise NULL
- * @param ret_n_pages returns the number of pages in the reservation
- * @return 0 on success, 1 on failure
- */
-static int ads_copy_reservation(ads_t *src_ads,
-                                ads_t *dst_ads,
-                                uintptr_t start,
-                                uintptr_t end,
-                                sel4utils_reservation_type_t vmr_type,
-                                attach_node_t *src_attach_node,
-                                attach_node_t **ret_new_attach_node,
-                                mo_t **ret_mo,
-                                int *ret_n_pages)
-{
-    int error = 0;
-    int num_pages = (end - start) / (SIZE_BITS_TO_BYTES(MO_PAGE_BITS));
-
-    attach_node_t *new_attach_node;
-    error = ads_reserve(dst_ads, (void *)start, num_pages, MO_PAGE_BITS, vmr_type, &new_attach_node);
-    SERVER_GOTO_IF_ERR(error, "Failed to reserve region\n");
-
-    // Find the original MO
-    mo_t *old_mo;
-    if (src_attach_node->mo_attached)
-    {
-        mo_component_registry_entry_t *old_mo_reg_entry = (mo_component_registry_entry_t *)resource_component_registry_get_by_id(get_mo_component(), src_attach_node->mo_id);
-        SERVER_GOTO_IF_COND(old_mo_reg_entry == NULL, "Failed to find the MO (%ld) for vaddr: %p\n", src_attach_node->mo_id, (void *)start);
-        old_mo = &old_mo_reg_entry->mo;
-    }
-
-    *ret_new_attach_node = new_attach_node;
-    *ret_mo = old_mo;
-    *ret_n_pages = num_pages;
-
-err_goto:
-    return error;
-}
-
-/**
  * @brief deep copies the contents of src_mo to dst_ads, a reservation for the VMR in dst_ads must already exist
  *
  * @param dst_ads ADS to copy MO contents into
  * @param src_mo MO of data to be copied
- * @param num_pages number of pages in the source reservation
  * @param new_attach_node the attach node in dst_ads for the reservation
  * @param old_attach_node the original attach node for src_mo
  * @return int 0 on success, 1 on failure
  */
-static int ads_deep_copy(ads_t *dst_ads, mo_t *src_mo, int num_pages, attach_node_t *new_attach_node, attach_node_t *old_attach_node)
+static int ads_deep_copy(ads_t *dst_ads, mo_t *src_mo, attach_node_t *new_attach_node, attach_node_t *old_attach_node)
 {
     int error = 0;
-
+    int num_pages = old_attach_node->n_pages;
     // Make a new MO
     // The "client" to hold this MO is the root task
-    mo_component_registry_entry_t *mo_entry;
+    mo_component_registry_entry_t *
+        mo_entry;
     seL4_CPtr mo_cap; // Not used since we are not giving this MO away
-    error = resource_component_allocate(get_mo_component(), get_gpi_server()->rt_pd_id, BADGE_OBJ_ID_NULL, false, (void *)num_pages, (resource_server_registry_node_t **)&mo_entry, &mo_cap);
+    error = resource_component_allocate(get_mo_component(),
+                                        get_gpi_server()->rt_pd_id,
+                                        BADGE_OBJ_ID_NULL,
+                                        false,
+                                        (void *)num_pages,
+                                        (resource_server_registry_node_t **)&mo_entry,
+                                        &mo_cap);
+
     SERVER_GOTO_IF_ERR(error, "Failed to allocate a new MO for deep copy\n");
 
     // Attach the new MO in the new ADS
     mo_t *new_mo = &mo_entry->mo;
-    error = ads_attach_to_res(dst_ads, get_ads_component()->server_vka, new_attach_node, old_attach_node->mo_offset, new_mo);
+
+    error = ads_attach_to_res(dst_ads,
+                              get_ads_component()->server_vka,
+                              new_attach_node,
+                              old_attach_node->mo_offset, new_mo);
     SERVER_GOTO_IF_ERR(error, "Failed to attach pages to region\n");
 
     // Temporarily map the pages of both MO to current vspace and copy data
     // (XXX) Arya: no ADS for RT so just manually map the pages
     vspace_t *loader = get_ads_component()->server_vspace;
-    void *old_mo_va = vspace_map_pages(loader, src_mo->frame_caps_in_root_task, NULL, seL4_AllRights, num_pages, MO_PAGE_BITS, 1);
+    void *old_mo_va = vspace_map_pages(loader,
+                                       src_mo->frame_caps_in_root_task,
+                                       NULL,
+                                       seL4_AllRights,
+                                       num_pages,
+                                       MO_PAGE_BITS,
+                                       1);
     SERVER_GOTO_IF_COND(old_mo_va == NULL, "Failed to map old MO for deep copy\n");
 
-    void *new_mo_va = vspace_map_pages(loader, new_mo->frame_caps_in_root_task, NULL, seL4_AllRights, num_pages, MO_PAGE_BITS, 1);
+    void *new_mo_va = vspace_map_pages(loader,
+                                       new_mo->frame_caps_in_root_task,
+                                       NULL,
+                                       seL4_AllRights,
+                                       num_pages,
+                                       MO_PAGE_BITS,
+                                       1);
     SERVER_GOTO_IF_COND(new_mo_va == NULL, "Failed to map new MO for deep copy\n");
 
     memcpy(new_mo_va, old_mo_va, num_pages * SIZE_BITS_TO_BYTES(MO_PAGE_BITS));
@@ -669,12 +614,6 @@ int ads_copy(vspace_t *loader,
              vmr_config_t *cfg)
 {
     int error = 0;
-
-    OSDB_PRINTF("%s VMR %p (type: %s, pages: %u) from ADS%d -> ADS%d\n",
-                sel4gpi_share_degree_to_str(cfg->share_mode),
-                cfg->start, human_readable_va_res_type(cfg->type),
-                cfg->region_pages, src_ads->id, dst_ads->id);
-
     attach_node_t *src_attach_node;
 
     if (cfg->start == NULL &&
@@ -683,7 +622,8 @@ int ads_copy(vspace_t *loader,
         cfg->type != SEL4UTILS_RES_TYPE_GENERIC)
     {
         src_attach_node = ads_get_res_by_type(src_ads, cfg->type);
-        SERVER_GOTO_IF_COND(src_attach_node == NULL, "Given %s VMR config with no start address and no existing reservation\n",
+        SERVER_GOTO_IF_COND(src_attach_node == NULL,
+                            "Given %s VMR config with no start address and no existing reservation\n",
                             human_readable_va_res_type(cfg->type));
     }
     else
@@ -692,16 +632,26 @@ int ads_copy(vspace_t *loader,
         SERVER_GOTO_IF_COND(src_attach_node == NULL, "Failed to find the attach node for vaddr: %p\n", cfg->start);
     }
 
+    OSDB_PRINTF("%s VMR %p (type: %s, pages: %u) from ADS%d -> ADS%d\n",
+                sel4gpi_share_degree_to_str(cfg->share_mode),
+                src_attach_node->vaddr, human_readable_va_res_type(cfg->type),
+                src_attach_node->n_pages, src_ads->id, dst_ads->id);
+
     attach_node_t *new_attach_node;
-    mo_t *old_mo; // original MO
-    int num_pages;
+    error = ads_reserve(dst_ads, (void *)src_attach_node->vaddr, src_attach_node->n_pages,
+                        MO_PAGE_BITS, src_attach_node->type, &new_attach_node);
+    SERVER_GOTO_IF_ERR(error, "Failed to reserve region\n");
 
-    uintptr_t region_end = (uintptr_t)cfg->start + (cfg->region_pages * SIZE_BITS_TO_BYTES(MO_PAGE_BITS));
-
-    error = ads_copy_reservation(src_ads, dst_ads, (uintptr_t)cfg->start, region_end, cfg->type,
-                                 src_attach_node, &new_attach_node, &old_mo, &num_pages);
-    SERVER_GOTO_IF_ERR(error, "Copying reservation failed\n");
-    SERVER_GOTO_IF_COND(!src_attach_node->mo_attached, "No MO attached for source VMR reservation\n");
+    // Find the original MO
+    mo_t *old_mo;
+    SERVER_GOTO_IF_COND(!src_attach_node->mo_attached, "No MO attached to source VMR, cannot copy\n");
+    mo_component_registry_entry_t *old_mo_reg_entry =
+        (mo_component_registry_entry_t *)resource_component_registry_get_by_id(get_mo_component(),
+                                                                               src_attach_node->mo_id);
+    SERVER_GOTO_IF_COND(old_mo_reg_entry == NULL,
+                        "Failed to find the MO (%ld) for vaddr: %p\n",
+                        src_attach_node->mo_id, (void *)src_attach_node->vaddr);
+    old_mo = &old_mo_reg_entry->mo;
 
     switch (cfg->share_mode)
     {
@@ -709,7 +659,7 @@ int ads_copy(vspace_t *loader,
         error = ads_attach_to_res(dst_ads, vka, new_attach_node, src_attach_node->mo_offset, old_mo);
         break;
     case GPI_COPY:
-        error = ads_deep_copy(dst_ads, old_mo, num_pages, new_attach_node, src_attach_node);
+        error = ads_deep_copy(dst_ads, old_mo, new_attach_node, src_attach_node);
         break;
     default:
         SERVER_GOTO_IF_COND(1, "Invalid sharing mode specified: %s\n", sel4gpi_share_degree_to_str(cfg->share_mode));
@@ -819,7 +769,9 @@ void ads_destroy(ads_t *ads)
 int ads_load_elf(vspace_t *loadee_vspace,
                  sel4utils_process_t *proc,
                  const char *image_name,
-                 void **ret_entry_point)
+                 void **ret_entry_point,
+                 sel4utils_elf_region_t **ret_elf_reservations,
+                 int *ret_num_elf_regions)
 {
     int error;
     seL4_CPtr slot;
@@ -832,7 +784,8 @@ int ads_load_elf(vspace_t *loadee_vspace,
     elf_t elf;
     elf_newFile(file, size, &elf);
 
-    proc->entry_point = sel4utils_elf_load(loadee_vspace, server_vspace, server_vka, server_vka, &elf);
+    proc->entry_point = sel4utils_elf_load2(loadee_vspace, server_vspace, server_vka, server_vka,
+                                            &elf, ret_elf_reservations, ret_num_elf_regions);
     if (proc->entry_point == NULL)
     {
         ZF_LOGE("Failed to load elf file\n");

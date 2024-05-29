@@ -80,7 +80,7 @@ static int configure_separate_ads()
         .type = SEL4UTILS_RES_TYPE_HEAP,
         .share_mode = GPI_COPY};
 
-    linked_list_insert(&other_ads_cfg, (void *)&heap_cfg);
+    linked_list_insert(&other_vmr_cfg, (void *)&heap_cfg);
     other_ads_cfg.vmr_cfgs = &other_vmr_cfg;
 
     sel4gpi_runnable_t runnable = {0};
