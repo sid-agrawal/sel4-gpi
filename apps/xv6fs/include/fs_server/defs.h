@@ -97,6 +97,7 @@ void initsleeplock(struct sleeplock *, char *);
 void xv6fs_bread(uint32_t sec, void *buf);
 void xv6fs_bwrite(uint32_t sec, void *buf);
 void disk_rw(struct buf *, int);
+void map_file_to_block(uint64_t file_id, uint32_t blockno);
 int init_disk_file(void);
 void fd_init(void);
 

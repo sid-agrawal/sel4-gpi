@@ -24,7 +24,7 @@
 #define DEV_NULL_PATH "/dev/null"
 static int dev_null_fd;
 
-#if FS_DEBUG
+#if FS_DEBUG_ENABLED
 #define XV6FS_PRINTF(...)   \
   do                        \
   {                         \

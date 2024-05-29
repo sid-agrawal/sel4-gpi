@@ -18,8 +18,9 @@
 #include <sel4gpi/pd_clientapi.h>
 #include <sel4gpi/resource_server_remote_utils.h>
 #include <sel4gpi/resource_space_clientapi.h>
-#include <ramdisk_client.h>
+#include <sel4gpi/error_handle.h>
 
+#include <ramdisk_client.h>
 #include <libc_fs_helpers.h>
 #include <fs_shared.h>
 #include <fs_server.h>
@@ -27,7 +28,7 @@
 #include <file.h>
 #include <buf.h>
 
-#if FS_DEBUG
+#if FS_DEBUG_ENABLED
 #define XV6FS_PRINTF(...)   \
   do                        \
   {                         \
@@ -66,6 +67,10 @@
       goto dest;                                \
     }                                           \
   } while (0);
+
+// Defined for utility printing macros
+#define DEBUG_ID FS_DEBUG
+#define SERVER_ID XV6FS_S
 
 /* Used by xv6fs internal functions when they panic */
 __attribute__((noreturn)) void xv6fs_panic(char *s)
@@ -407,7 +412,7 @@ seL4_MessageInfo_t xv6fs_request_handler(seL4_MessageInfo_t tag, seL4_Word sende
         filedup(file);
       }
 
-#if FS_DEBUG
+#if FS_DEBUG_ENABLED
       // Prints the FS contents to console for debug
       int n_files;
       uint32_t inums[16];
@@ -632,4 +637,30 @@ void disk_rw(struct buf *b, int write)
   {
     xv6fs_bread(b->blockno, b->data);
   }
+}
+
+/* Notifies the component when a new block is assigned to a file */
+// (XXX) Arya: what about releasing?
+void map_file_to_block(uint64_t file_id, uint32_t blockno)
+{
+
+  int error = 0;
+
+  file_registry_entry_t *reg_entry = (file_registry_entry_t *)
+      resource_server_registry_get_by_id(&get_xv6fs_server()->file_registry, file_id);
+
+  SERVER_GOTO_IF_COND(reg_entry == NULL, "Failed to find file with ID %d\n", file_id);
+
+  seL4_Word file_universal_id = universal_res_id(GPICAP_TYPE_FILE, get_xv6fs_server()->gen.default_space.id, file_id);
+  seL4_Word block_universal_id = universal_res_id(GPICAP_TYPE_BLOCK,
+                                                  get_xv6fs_server()->naive_blocks[blockno].space_id,
+                                                  get_xv6fs_server()->naive_blocks[blockno].res_id);
+  
+  error = pd_client_map_resource(&get_xv6fs_server()->gen.pd_conn, file_universal_id, block_universal_id);
+  SERVER_GOTO_IF_ERR(error, "Failed to map file (%lx) to block (%lx)\n", file_universal_id, block_universal_id);
+
+  return;
+
+err_goto:
+  ZF_LOGF("Failed to map file to block\n");
 }

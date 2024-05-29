@@ -397,6 +397,8 @@ bmap(struct inode *ip, uint32_t bn)
     if ((addr = ip->addrs[bn]) == 0)
     {
       addr = balloc(ip->dev);
+      map_file_to_block(ip->inum, addr);
+
       if (addr == 0)
         return 0;
       ip->addrs[bn] = addr;
@@ -411,6 +413,8 @@ bmap(struct inode *ip, uint32_t bn)
     if ((addr = ip->addrs[NDIRECT]) == 0)
     {
       addr = balloc(ip->dev);
+      map_file_to_block(ip->inum, addr);
+
       if (addr == 0)
         return 0;
       ip->addrs[NDIRECT] = addr;
@@ -420,6 +424,8 @@ bmap(struct inode *ip, uint32_t bn)
     if ((addr = a[bn]) == 0)
     {
       addr = balloc(ip->dev);
+      map_file_to_block(ip->inum, addr);
+      
       if (addr)
       {
         a[bn] = addr;
