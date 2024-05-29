@@ -190,7 +190,7 @@ int ads_client_testing(ads_client_context_t *conn, vka_t *vka,
 
 int ads_client_copy(ads_client_context_t *src_ads, ads_client_context_t *dst_ads, vmr_config_t *vmr_cfg)
 {
-    OSDB_PRINTF("%s request for VMR (%s) with %lu pages at %p\n",
+    OSDB_PRINTF("Sending %s request for VMR (%s) with %lu pages at %p\n",
                 sel4gpi_share_degree_to_str(vmr_cfg->share_mode), human_readable_va_res_type(vmr_cfg->type),
                 vmr_cfg->region_pages, vmr_cfg->start);
     seL4_SetMR(ADSMSGREG_FUNC, ADS_FUNC_SHALLOW_COPY_REQ);

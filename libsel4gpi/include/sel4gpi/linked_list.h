@@ -25,7 +25,7 @@ typedef struct _linked_list
 } linked_list_t;
 
 /**
- * @brief creates a new linked list, caller is responsible for freeing via linked_list_destroy
+ * @brief creates a new linked list on the heap, caller is responsible for freeing via linked_list_destroy
  *
  * @return linked_list_t* returns an empty linked list
  */
@@ -33,7 +33,7 @@ linked_list_t *linked_list_new(void);
 
 /**
  * @brief inserts a new item containing the given data at the tail of the list
- * caller is responsible for managing given data's memory
+ * caller is responsible for managing given data's memory and for freeing the list node via linked_list_destroy
  *
  * @param list an existing list
  * @param data the data to insert

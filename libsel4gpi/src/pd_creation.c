@@ -169,6 +169,11 @@ int sel4gpi_ads_configure(ads_config_t *cfg,
         PD_CREATION_PRINT("Loading Elf\n");
         error = ads_client_load_elf(&runnable->ads, &runnable->pd, cfg->image_name, &auto_entry_point);
         GOTO_IF_ERR(error, "failed to load elf to ADS");
+        PRINT_IF_COND(auto_entry_point != NULL && cfg->entry_point,
+                      COLORIZE("Warning: ", CYAN) "Automatically found entry point (%p) differs from given one (%p)\n",
+                      auto_entry_point, cfg->entry_point);
+        PRINT_IF_COND(auto_entry_point == NULL && cfg->entry_point == NULL,
+                      COLORIZE("Warning: ", CYAN) "PD has no entry point (either it was not found or was not given)\n");
         break;
     case GPI_OMIT:
         break;
@@ -176,12 +181,6 @@ int sel4gpi_ads_configure(ads_config_t *cfg,
         GOTO_IF_COND(1, "Invalid sharing degree specified (%d) for code region\n", cfg->code_shared);
         break;
     }
-
-    PRINT_IF_COND(auto_entry_point != NULL && cfg->entry_point,
-                  COLORIZE("Warning: ", CYAN) "Automatically found entry point (%p) differs from given one (%p)\n",
-                  auto_entry_point, cfg->entry_point);
-    PRINT_IF_COND(auto_entry_point == NULL && cfg->entry_point == NULL,
-                  COLORIZE("Warning: ", CYAN) "PD has no entry point (either it was not found or was not given)\n");
 
     if (ret_entry_point)
     {

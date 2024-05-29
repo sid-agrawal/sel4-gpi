@@ -338,9 +338,6 @@ static seL4_MessageInfo_t handle_load_elf_request(seL4_Word sender_badge, seL4_M
 
     pd_set_image_name(&target_pd->pd, pd_images[image_id]);
 
-    // error = forge_ads_attachments_from_vspace(&target_ads->ads, get_gpi_server()->rt_pd_id);
-    // SERVER_GOTO_IF_ERR(error, "Failed to forge attachments to ADS after elf load\n");
-
     seL4_SetMR(ADSMSGREG_LOAD_ELF_ACK_ENTRY_PT, (seL4_Word)entry_point);
 
     OSDB_PRINTF("Forged ADS attachments from ELF.\n");

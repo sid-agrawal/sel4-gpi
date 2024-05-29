@@ -193,13 +193,13 @@ attach_node_t *ads_get_res_by_vaddr(ads_t *ads, void *vaddr)
 }
 
 /**
- * @brief finds a reservation for a VMR by the type
+ * @brief finds the reservations for a VMR by the type (Multiple reservations of the type may exist)
  *
  * @param src_ads ADS to find the reservation in
  * @param vmr_type the type of VMR to look for
- * @return attach_node_t* returns the attach node data, or NULL if no such VMR exists
+ * @return returns a list of found attach nodes
  */
-static attach_node_t *ads_get_res_by_type(ads_t *src_ads, sel4utils_reservation_type_t vmr_type)
+static linked_list_t *ads_get_res_by_type(ads_t *src_ads, sel4utils_reservation_type_t vmr_type)
 {
     // sel4utils_alloc_data_t *vmr_data = get_alloc_data(src_ads->vspace);
     // sel4utils_res_t *curr_res = vmr_data->reservation_head;
@@ -213,16 +213,16 @@ static attach_node_t *ads_get_res_by_type(ads_t *src_ads, sel4utils_reservation_
 
     //     curr_res = curr_res->next;
     // }
-
+    linked_list_t *found_nodes = linked_list_new();
     for (attach_node_t *curr = (attach_node_t *)src_ads->attach_registry.head; curr != NULL; curr = curr->gen.hh.next)
     {
         if (curr->type == vmr_type)
         {
-            return curr;
+            linked_list_insert(found_nodes, curr);
         }
     }
 
-    return NULL;
+    return found_nodes;
 }
 
 static int copy_frame_caps_for_mapping(seL4_CPtr *src_caps, seL4_CPtr *dest_caps, size_t num_pages)
@@ -614,60 +614,65 @@ int ads_copy(vspace_t *loader,
              vmr_config_t *cfg)
 {
     int error = 0;
-    attach_node_t *src_attach_node;
+    linked_list_t *src_attaches = NULL;
 
     if (cfg->start == NULL &&
         cfg->type != SEL4UTILS_RES_TYPE_SHARED_FRAMES &&
         cfg->type != SEL4UTILS_RES_TYPE_OTHER &&
         cfg->type != SEL4UTILS_RES_TYPE_GENERIC)
     {
-        src_attach_node = ads_get_res_by_type(src_ads, cfg->type);
-        SERVER_GOTO_IF_COND(src_attach_node == NULL,
-                            "Given %s VMR config with no start address and no existing reservation\n",
+        src_attaches = ads_get_res_by_type(src_ads, cfg->type);
+        SERVER_GOTO_IF_COND(src_attaches->count == 0,
+                            "Given %s VMR config with no start address and no existing reservation(s)\n",
                             human_readable_va_res_type(cfg->type));
     }
     else
     {
-        src_attach_node = ads_get_res_by_vaddr(src_ads, cfg->start);
-        SERVER_GOTO_IF_COND(src_attach_node == NULL, "Failed to find the attach node for vaddr: %p\n", cfg->start);
+        src_attaches = linked_list_new();
+        attach_node_t *attach_node = ads_get_res_by_vaddr(src_ads, cfg->start);
+        SERVER_GOTO_IF_COND(attach_node == NULL, "Failed to find the attach node for vaddr: %p\n", cfg->start);
+        linked_list_insert(src_attaches, attach_node);
     }
 
-    OSDB_PRINTF("%s VMR %p (type: %s, pages: %u) from ADS%d -> ADS%d\n",
-                sel4gpi_share_degree_to_str(cfg->share_mode),
-                src_attach_node->vaddr, human_readable_va_res_type(cfg->type),
-                src_attach_node->n_pages, src_ads->id, dst_ads->id);
-
-    attach_node_t *new_attach_node;
-    error = ads_reserve(dst_ads, (void *)src_attach_node->vaddr, src_attach_node->n_pages,
-                        MO_PAGE_BITS, src_attach_node->type, &new_attach_node);
-    SERVER_GOTO_IF_ERR(error, "Failed to reserve region\n");
-
-    // Find the original MO
-    mo_t *old_mo;
-    SERVER_GOTO_IF_COND(!src_attach_node->mo_attached, "No MO attached to source VMR, cannot copy\n");
-    mo_component_registry_entry_t *old_mo_reg_entry =
-        (mo_component_registry_entry_t *)resource_component_registry_get_by_id(get_mo_component(),
-                                                                               src_attach_node->mo_id);
-    SERVER_GOTO_IF_COND(old_mo_reg_entry == NULL,
-                        "Failed to find the MO (%ld) for vaddr: %p\n",
-                        src_attach_node->mo_id, (void *)src_attach_node->vaddr);
-    old_mo = &old_mo_reg_entry->mo;
-
-    switch (cfg->share_mode)
+    for (linked_list_node_t *curr = src_attaches->head; curr != NULL; curr = curr->next)
     {
-    case GPI_SHARED:
-        error = ads_attach_to_res(dst_ads, vka, new_attach_node, src_attach_node->mo_offset, old_mo);
-        break;
-    case GPI_COPY:
-        error = ads_deep_copy(dst_ads, old_mo, new_attach_node, src_attach_node);
-        break;
-    default:
-        SERVER_GOTO_IF_COND(1, "Invalid sharing mode specified: %s\n", sel4gpi_share_degree_to_str(cfg->share_mode));
-        break;
+        attach_node_t *src_attach_node = (attach_node_t *)curr->data;
+        OSDB_PRINTF("%s VMR %p (type: %s, pages: %u) from ADS%d -> ADS%d\n",
+                    sel4gpi_share_degree_to_str(cfg->share_mode),
+                    src_attach_node->vaddr, human_readable_va_res_type(cfg->type),
+                    src_attach_node->n_pages, src_ads->id, dst_ads->id);
+
+        attach_node_t *new_attach_node;
+        error = ads_reserve(dst_ads, (void *)src_attach_node->vaddr, src_attach_node->n_pages,
+                            MO_PAGE_BITS, src_attach_node->type, &new_attach_node);
+        SERVER_GOTO_IF_ERR(error, "Failed to reserve region\n");
+
+        // Find the original MO
+        mo_t *old_mo;
+        SERVER_GOTO_IF_COND(!src_attach_node->mo_attached, "No MO attached to source VMR, cannot copy\n");
+        mo_component_registry_entry_t *old_mo_reg_entry =
+            (mo_component_registry_entry_t *)resource_component_registry_get_by_id(get_mo_component(),
+                                                                                   src_attach_node->mo_id);
+        SERVER_GOTO_IF_COND(old_mo_reg_entry == NULL,
+                            "Failed to find the MO (%ld) for vaddr: %p\n",
+                            src_attach_node->mo_id, (void *)src_attach_node->vaddr);
+        old_mo = &old_mo_reg_entry->mo;
+
+        switch (cfg->share_mode)
+        {
+        case GPI_SHARED:
+            error = ads_attach_to_res(dst_ads, vka, new_attach_node, src_attach_node->mo_offset, old_mo);
+            break;
+        case GPI_COPY:
+            error = ads_deep_copy(dst_ads, old_mo, new_attach_node, src_attach_node);
+            break;
+        default:
+            SERVER_GOTO_IF_COND(1, "Invalid sharing mode specified: %s\n", sel4gpi_share_degree_to_str(cfg->share_mode));
+            break;
+        }
+
+        SERVER_GOTO_IF_ERR(error, "Failed to attach source MO (%d) to dst ADS (%d)\n", old_mo->id, dst_ads->id);
     }
-
-    SERVER_GOTO_IF_ERR(error, "Failed to attach source MO (%d) to dst ADS (%d)\n", old_mo->id, dst_ads->id);
-
 #if 0
     /* walk all the reservations */
     // (XXX) Arya: We may be able to just walk attach nodes instead of reservations (eventually?)
@@ -737,6 +742,7 @@ int ads_copy(vspace_t *loader,
 #endif
 err_goto:
     // TODO if error: cleanup reservation
+    linked_list_destroy(src_attaches);
     return error;
 }
 

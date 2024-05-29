@@ -2,10 +2,6 @@
 #include <stdio.h>
 #include <sel4gpi/linked_list.h>
 
-static linked_list_node_t *insert_from_tail(linked_list_node_t *tail, void *data)
-{
-}
-
 void linked_list_insert(linked_list_t *list, void *data)
 {
     if (list)
@@ -47,6 +43,7 @@ void linked_list_destroy(linked_list_t *list)
             curr = next;
         }
 
+        /* this may sometimes be a non-malloc'd list, which is fine*/
         free(list);
     }
 }
