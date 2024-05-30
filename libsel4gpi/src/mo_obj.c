@@ -88,15 +88,9 @@ void mo_dump_rr(mo_t *mo, model_state_t *ms, gpi_model_node_t *pd_node)
             continue;
         }
 
-        // (XXX) Arya: Do not add the physical pages as relations, just count them
+        // Do not add the physical pages as relations, just count them
         // and store the count in the MO node
-#if 0
-        gpi_model_node_t *pmr_node = add_resource_node(ms, GPICAP_TYPE_PMR, 1, mo->frame_paddrs[i]);
-        add_edge(ms, GPI_EDGE_TYPE_MAP, mo_node, pmr_node);
-        add_edge(ms, GPI_EDGE_TYPE_HOLD, root_node, pmr_node);
-#else
         num_pages++;
-#endif
     }
 
     // Set the number of pages as extra data on the MO

@@ -120,6 +120,14 @@ gpi_server_parent_spawn_thread(simple_t *parent_simple, vka_t *parent_vka,
     /* Initialize the root task's PD resource */
     forge_pd_for_root_task(get_gpi_server()->rt_pd_id);
 
+    /* Initialize the root task's ADS resource */
+    seL4_CPtr ads_cap;
+    forge_ads_cap_from_vspace(get_gpi_server()->server_vspace, get_gpi_server()->server_vka,
+                              get_gpi_server()->rt_pd_id, &ads_cap, &get_gpi_server()->rt_ads_id);
+
+    /* Initialize the resource types */
+    resource_types_initialize();
+
     /* And also allocate a badged copy of the Server's endpoint that the Parent
      * can use to send to the Server. This is used to allow the Server to report
      * back to the Parent on whether or not the Server successfully bound to a
@@ -295,4 +303,10 @@ void gpi_server_main()
     /* After we break out of the loop, seL4_TCB_Suspend ourselves */
     ZF_LOGI(GPISERVS "main: Suspending.");
     seL4_TCB_Suspend(get_gpi_server()->server_thread.tcb.cptr);
+}
+
+void gpi_panic(char *reason, uint64_t code)
+{
+    printf("PANIC: %s. CODE: %ld\n", reason, code);
+    assert(0);
 }

@@ -165,7 +165,7 @@ void export_model_state(model_state_t *model_state, char *buffer, size_t buf_len
     for (gpi_model_edge_t *edge = model_state->edges; edge != NULL; edge = edge->hh.next)
     {
         size_t buf_written = snprintf(buffer, buf_len - buf_written_total,
-                                      "%-*s,%-*s,%-*s,%-*s,%-*s,%-*s\n",
+                                      "%-*s,%-*s,%-*s,%-*s,%-*s,%-*s,%-*s\n",
                                       width,
                                       "",
                                       width,
@@ -235,7 +235,7 @@ void print_model_state(model_state_t *model_state)
     // Print the edges
     for (gpi_model_edge_t *edge = model_state->edges; edge != NULL; edge = edge->hh.next)
     {
-        printf("%-*s,%-*s,%-*s,%-*s,%-*s,%-*s\n",
+        printf("%-*s,%-*s,%-*s,%-*s,%-*s,%-*s,%-*s\n",
                width,
                "",
                width,

@@ -10,6 +10,7 @@
 #include <sel4gpi/ads_clientapi.h>
 #include <sel4gpi/mo_clientapi.h>
 #include <sel4gpi/pd_clientapi.h>
+#include <sel4gpi/resource_types.h>
 #include <sel4gpi/resource_server_utils.h>
 #include <sel4gpi/resource_server_clientapi.h>
 
@@ -23,6 +24,7 @@
  */
 typedef struct _resource_server_context
 {
+    char resource_type_name[RESOURCE_TYPE_MAX_STRING_SIZE];
     gpi_cap_t resource_type;
 
     // Connection to the default resource space
@@ -55,7 +57,7 @@ typedef struct _resource_server_context
  * Starts the resource server in the current
  * thread of the current PD
  *
- * @param server_type The type of resource this server will serve
+ * @param server_type string name of the resource type this server will provide
  * @param request_handler Function to handle client requests
  *                  param: seL4_MessageInfo_t tag, the request tag
  *                  param: seL4_Word badge, the request's badge
@@ -67,7 +69,7 @@ typedef struct _resource_server_context
  * @return 0 on successful exit, nonzero otherwise
  */
 int resource_server_start(resource_server_context_t *context,
-                          gpi_cap_t server_type,
+                          char *server_type,
                           seL4_MessageInfo_t (*request_handler)(seL4_MessageInfo_t, seL4_Word, seL4_CPtr, bool *),
                           seL4_CPtr parent_ep,
                           uint64_t parent_pd_id,

@@ -39,7 +39,7 @@ int main(int argc, char **argv)
 
     return resource_server_start(
         &get_ramdisk_server()->gen,
-        GPICAP_TYPE_BLOCK,
+        "BLOCK",
         ramdisk_request_handler,
         parent_ep,
         parent_pd_id,

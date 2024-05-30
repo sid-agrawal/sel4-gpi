@@ -10,7 +10,7 @@
  *
  * @param server_ep endpoint of the resource space component
  * @param free_slot slot to store the resource space capability in
- * @param resource_type resource type of the new resource space
+ * @param resource_type name of the resource type of the new resource space
  * @param resource_server_ep endpoint of the server that will manager the resource space
  * @param client_id PD ID of the client that should receive an RDE for the new space
  * @param ret_conn returns the initialized resource space client connection
@@ -18,7 +18,7 @@
  */
 int resspc_client_connect(seL4_CPtr server_ep,
                           seL4_CPtr free_slot,
-                          gpi_cap_t resource_type,
+                          char *resource_type,
                           seL4_CPtr resource_server_ep,
                           seL4_CPtr client_id,
                           resspc_client_context_t *ret_conn);

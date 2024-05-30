@@ -15,7 +15,8 @@ static const char *pd_images[PD_N_IMAGES] = {"hello", "hello_kvstore", "ramdisk_
 typedef struct _resspc_client_context
 {
    cspacepath_t badged_server_ep_cspath;
-   uint64_t id;
+   uint64_t id;             ///< Resource space ID
+   gpi_cap_t resource_type; ///< The type of resource that this resource space contains
 } resspc_client_context_t;
 
 typedef struct _cpu_client_context

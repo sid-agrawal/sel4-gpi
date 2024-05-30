@@ -24,6 +24,7 @@
 #include <sel4gpi/pd_component.h>
 #include <sel4gpi/cpu_component.h>
 #include <sel4gpi/cap_tracking.h>
+#include <sel4gpi/resource_types.h>
 // #include <sel4gpi/gpi_rde.h>
 
 #define GPI_SERVER_DEFAULT_PRIORITY (seL4_MaxPrio - 1)
@@ -81,18 +82,22 @@ typedef struct _gpi_server_context
     seL4_Word parent_badge_value;
     cspacepath_t _badged_server_ep_cspath;
 
-    /* Per-client context maintained by the server. */
+    /* Context of each component */
     resource_component_context_t ads_component;
     resource_component_context_t mo_component;
     resource_component_context_t cpu_component;
     resource_component_context_t pd_component;
     resource_component_context_t resspc_component;
 
+    /* Track the GPI resource types */
+    resource_server_registry_t resource_types;
+
     osmosis_cap_t *osm_caps;
     osmosis_cap_t *osm_caps_tail;
 
-    // ID of the root task PD
+    // ID of the root task's PD and ADS
     uint64_t rt_pd_id;
+    uint64_t rt_ads_id;
 } gpi_server_context_t;
 
 /**
@@ -101,3 +106,8 @@ typedef struct _gpi_server_context
 void gpi_server_main(void);
 
 gpi_server_context_t *get_gpi_server(void);
+
+/**
+ * Used for an unrecoverable fault in the gpi server
+*/
+void gpi_panic(char *reason, uint64_t code);

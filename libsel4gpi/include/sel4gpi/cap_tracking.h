@@ -6,6 +6,8 @@
 #include <sel4/sel4.h>
 #include <sel4gpi/badge_usage.h>
 
+// (XXX) Arya: I think we can remove this file entirely?
+
 typedef struct osmosis_pd_id
 {
     seL4_Word l0_pd_id;

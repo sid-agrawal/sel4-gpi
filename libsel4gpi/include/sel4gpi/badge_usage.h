@@ -13,29 +13,8 @@
 #include <stdint.h>
 
 #include <sel4/sel4.h>
+#include <sel4gpi/resource_types.h>
 
-typedef enum GPICAP_TYPE
-{
-    // Core cap types
-    GPICAP_TYPE_NONE = 0,
-    GPICAP_TYPE_ADS,
-    GPICAP_TYPE_VMR,
-    GPICAP_TYPE_MO,
-    GPICAP_TYPE_PMR,
-    GPICAP_TYPE_CPU,
-    GPICAP_TYPE_PCPU,
-    GPICAP_TYPE_PD,
-    GPICAP_TYPE_RESSPC, // resource space
-    GPICAP_TYPE_seL4,
-
-    // Non-core cap types
-    GPICAP_TYPE_BLOCK,
-    GPICAP_TYPE_FILE,
-
-    GPICAP_TYPE_MAX,
-} gpi_cap_t;
-
-// (XXX) Arya: Should be able to make this 0 once we prefix badges with server ID
 #define BADGE_OBJ_ID_NULL 0xfffff
 #define MAX_BADGE_STR_SIZE 512
 
@@ -114,6 +93,3 @@ uint64_t universal_res_id(gpi_cap_t type, uint64_t space_id, uint64_t object_id)
  * @param badge badge to print
  */
 void badge_sprint(char *dest, seL4_Word badge);
-
-void gpi_panic(char *reason, uint64_t code);
-char *cap_type_to_str(gpi_cap_t cap_type);

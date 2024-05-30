@@ -220,3 +220,18 @@ int ads_component_rm_by_id(uint64_t ads_id, uint32_t vmr_id);
  * @param vaddr vaddr of the region to remove
 */
 int ads_component_rm_by_vaddr(uint64_t ads_id, void *vaddr);
+
+/**
+ * Map an MO to the root task's address space
+ * 
+ * @param mo_id ID of the MO to attach
+ * @param ret_vaddr Returns the attached vaddr
+*/
+int ads_component_attach_to_rt(uint64_t mo_id, void **ret_vaddr);
+
+/**
+ * Unmap an MO from the root task's address space
+ * 
+ * @param vaddr vaddr where the MO was attached
+*/
+int ads_component_remove_from_rt(void *vaddr);

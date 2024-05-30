@@ -41,7 +41,7 @@
     } while (0);
 
 int resource_server_start(resource_server_context_t *context,
-                          gpi_cap_t server_type,
+                          char *server_type,
                           seL4_MessageInfo_t (*request_handler)(seL4_MessageInfo_t, seL4_Word, seL4_CPtr, bool *),
                           seL4_CPtr parent_ep,
                           uint64_t parent_pd_id,
@@ -49,7 +49,7 @@ int resource_server_start(resource_server_context_t *context,
 {
     seL4_Error error;
 
-    context->resource_type = server_type;
+    strncpy(context->resource_type_name, server_type, RESOURCE_TYPE_MAX_STRING_SIZE);
     context->request_handler = request_handler;
     context->mo_ep = sel4gpi_get_rde(GPICAP_TYPE_MO);
     context->resspc_ep = sel4gpi_get_rde(GPICAP_TYPE_RESSPC);
@@ -246,10 +246,11 @@ int resource_server_create_resource(resource_server_context_t *context,
 
     RESOURCE_SERVER_PRINTF("Creating resource with ID 0x%lx\n", resource_id);
 
-    if (space_conn == NULL) {
+    if (space_conn == NULL)
+    {
         space_conn = &context->default_space;
     }
-    
+
     error = resspc_client_create_resource(space_conn, resource_id);
 
     return error;
@@ -287,8 +288,11 @@ int resource_server_new_res_space(resource_server_context_t *context,
     CHECK_ERROR_GOTO(error, "failed to get next slot", err_goto);
 
     resspc_client_context_t space_conn;
-    error = resspc_client_connect(context->resspc_ep, free_slot, context->resource_type, context->server_ep, client_id, &space_conn);
+    error = resspc_client_connect(context->resspc_ep, free_slot, context->resource_type_name,
+                                  context->server_ep, client_id, &space_conn);
     CHECK_ERROR_GOTO(error, "failed to register resource space for server", err_goto);
+
+    context->resource_type = space_conn.resource_type;
     *ret_conn = space_conn;
 
     RESOURCE_SERVER_PRINTF("Registered resource server, space ID is 0x%lx\n", space_conn.id);

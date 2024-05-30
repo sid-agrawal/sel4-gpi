@@ -40,8 +40,8 @@ seL4_CPtr sel4gpi_get_rde(int type)
 
     if (slot == seL4_CapNull)
     {
-        printf(COLORIZE("Warning: could not find RDE (type: %s) for PD (%ld)\n", MAGENTA),
-               cap_type_to_str(type), sel4gpi_get_pd_conn().id);
+        printf(COLORIZE("Warning: could not find RDE (type: %d) for PD (%ld)\n", MAGENTA),
+               type, sel4gpi_get_pd_conn().id);
     }
 
     return slot;
@@ -70,8 +70,8 @@ seL4_CPtr sel4gpi_get_rde_by_space_id(uint32_t space_id, gpi_cap_t type)
     {
         if (init_data->rde[type][i].type.type == GPICAP_TYPE_NONE)
         {
-            printf(COLORIZE("Warning: could not find RDE (type: %s, space: %d) for PD (%ld)\n", MAGENTA),
-                   cap_type_to_str(type), space_id, sel4gpi_get_pd_conn().id);
+            printf(COLORIZE("Warning: could not find RDE (type: %d, space: %d) for PD (%ld)\n", MAGENTA),
+                   type, space_id, sel4gpi_get_pd_conn().id);
             return seL4_CapNull;
         }
         else if (init_data->rde[type][i].space_id == space_id)
@@ -80,8 +80,8 @@ seL4_CPtr sel4gpi_get_rde_by_space_id(uint32_t space_id, gpi_cap_t type)
         }
     }
 
-    printf(COLORIZE("Warning: could not find RDE (type: %s, space: %d) for PD (%ld)\n", MAGENTA),
-           cap_type_to_str(type), space_id, sel4gpi_get_pd_conn().id);
+    printf(COLORIZE("Warning: could not find RDE (type: %d, space: %d) for PD (%ld)\n", MAGENTA),
+           type, space_id, sel4gpi_get_pd_conn().id);
     return seL4_CapNull;
 }
 
@@ -95,7 +95,7 @@ void sel4gpi_debug_print_rde(void)
         {
             if (init_data->rde[i][j].type.type != GPICAP_TYPE_NONE)
             {
-                printf("type:%s \tid: %d\n", cap_type_to_str(init_data->rde[i][j].type.type), init_data->rde[i][j].space_id);
+                printf("type:%d \tid: %d\n", init_data->rde[i][j].type.type, init_data->rde[i][j].space_id);
             }
         }
     }

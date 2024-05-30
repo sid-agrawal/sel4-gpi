@@ -45,11 +45,10 @@ static void on_resspc_registry_delete(resource_server_registry_node_t *node_gen)
 
 static seL4_MessageInfo_t handle_resspc_allocation_request(seL4_Word sender_badge, seL4_CPtr received_cap)
 {
-    OSDB_PRINTF("Got register server request from client badge %lx.\n", sender_badge);
+    OSDB_PRINTF("Got resource space allocation request from client badge %lx.\n", sender_badge);
     int error = 0;
     seL4_MessageInfo_t reply_tag;
 
-    gpi_cap_t type = seL4_GetMR(RESSPCMSGREG_CONNECT_REQ_TYPE);
     uint64_t caller_id = get_client_id_from_badge(sender_badge);
     uint64_t client_id = seL4_GetMR(RESSPCMSGREG_CONNECT_REQ_CLIENT_ID);
 
@@ -62,6 +61,18 @@ static seL4_MessageInfo_t handle_resspc_allocation_request(seL4_Word sender_badg
     pd_component_registry_entry_t *client_pd = (pd_component_registry_entry_t *)
         resource_component_registry_get_by_id(get_pd_component(), client_id);
     SERVER_GOTO_IF_COND(client_pd == NULL, "Couldn't find client PD (%ld)\n", client_id);
+
+    // Attach the MO containing resource type name
+    uint64_t mo_id = get_object_id_from_badge(seL4_GetBadge(1));
+
+    char *resource_type_name;
+    error = ads_component_attach_to_rt(mo_id, (void *)&resource_type_name);
+    SERVER_GOTO_IF_ERR(error, "Failed to attach MO from client to root task\n");
+
+    // Get the resource type code
+    gpi_cap_t type = get_resource_type_code(resource_type_name);
+
+    OSDB_PRINTF("Creating resource space for type (%s, %d).\n", resource_type_name, type);
 
     // Allocate the resource space
     resspc_component_registry_entry_t *space_entry;
@@ -77,7 +88,8 @@ static seL4_MessageInfo_t handle_resspc_allocation_request(seL4_Word sender_badg
                                         (resource_server_registry_node_t **)&space_entry, &space_cap);
     SERVER_GOTO_IF_ERR(error, "Failed to allocate a new resource space\n");
 
-    OSDB_PRINTF("Registered resource space, server cap is at %ld.\n", space_entry->space.server_ep);
+    OSDB_PRINTF("Registered resource space, server cap is at %ld, ID: %ld.\n",
+                space_entry->space.server_ep, space_entry->gen.object_id);
 
     uint64_t space_id = space_entry->gen.object_id;
 
@@ -90,6 +102,7 @@ static seL4_MessageInfo_t handle_resspc_allocation_request(seL4_Word sender_badg
 
     seL4_SetMR(PDMSGREG_FUNC, RESSPC_FUNC_CONNECT_ACK);
     seL4_SetMR(RESSPCMSGREG_CONNECT_ACK_ID, space_id);
+    seL4_SetMR(RESSPCMSGREG_CONNECT_ACK_TYPE, type);
     seL4_SetCap(0, space_cap);
     reply_tag = seL4_MessageInfo_new(error, 0, 1,
                                      RESSPCMSGREG_CONNECT_ACK_END);

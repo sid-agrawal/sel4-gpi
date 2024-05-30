@@ -2,13 +2,13 @@
  * Defines some utility functions for osmosis PDs
  */
 
+#include <stdint.h>
+#include <sel4/types.h>
+
 #include <sel4gpi/badge_usage.h>
 #include <sel4gpi/ads_clientapi.h>
 #include <sel4gpi/mo_clientapi.h>
 #include <sel4gpi/cpu_clientapi.h>
-#include <stdint.h>
-#include <sel4/types.h>
-#include <sel4gpi/badge_usage.h>
 
 /* We define a specific address for our static heap since we want the flexibility of allocating an MO for it
  * (rather than it being part of the ELF data) */

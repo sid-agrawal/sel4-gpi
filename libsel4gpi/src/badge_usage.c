@@ -9,10 +9,12 @@
  *
  */
 
-#include <sel4gpi/badge_usage.h>
-#include <sel4gpi/debug.h>
 #include <assert.h>
 #include <stdio.h>
+
+#include <sel4gpi/debug.h>
+#include <sel4gpi/resource_types.h>
+#include <sel4gpi/badge_usage.h>
 
 /*
  How we are using the badge.
@@ -106,55 +108,6 @@ uint64_t gpi_new_badge(gpi_cap_t cap_type,
 uint64_t universal_res_id(gpi_cap_t type, uint64_t space_id, uint64_t object_id)
 {
     return gpi_new_badge(type, 0, 0, space_id, object_id);
-}
-
-char *cap_type_to_str(gpi_cap_t cap_type)
-{
-    switch (cap_type)
-    {
-    case GPICAP_TYPE_ADS:
-        return "ADS";
-        break;
-    case GPICAP_TYPE_VMR:
-        return "VMR";
-        break;
-    case GPICAP_TYPE_PMR:
-        return "PMR";
-        break;
-    case GPICAP_TYPE_MO:
-        return "MO";
-        break;
-    case GPICAP_TYPE_CPU:
-        return "VCPU";
-        break;
-    case GPICAP_TYPE_PCPU:
-        return "PCPU";
-        break;
-    case GPICAP_TYPE_PD:
-        return "PD";
-        break;
-    case GPICAP_TYPE_BLOCK:
-        return "BLOCK";
-        break;
-    case GPICAP_TYPE_FILE:
-        return "FILE";
-        break;
-    case GPICAP_TYPE_RESSPC:
-        return "RESSPC";
-        break;
-    case GPICAP_TYPE_NONE:
-        return "NONE";
-        break;
-    default:
-        return "UNKNOWN";
-        break;
-    }
-}
-
-void gpi_panic(char *reason, uint64_t code)
-{
-    printf("PANIC: %s. CODE: %ld\n", reason, code);
-    assert(0);
 }
 
 void badge_sprint(char *dest, seL4_Word badge)

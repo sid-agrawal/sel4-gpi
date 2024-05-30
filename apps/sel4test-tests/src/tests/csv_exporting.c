@@ -23,14 +23,14 @@ char *csv_buffer =
     "PD,PD_2,Proc2,,,\n"
     "RESOURCE,MO_1_1,MO,,,\n"
     "RESOURCE,MO_1_2,MO,,,\n"
-    "RESOURCE,PMR_1_1,PMR,,,\n"
-    "RESOURCE,PMR_1_2,PMR,,,\n"
+    "RESOURCE,VMR_1_1,VMR,,,\n"
+    "RESOURCE,VMR_1_2,VMR,,,\n"
     ",,NONE,HOLD,PD_1,MO_1_1\n"
     ",,NONE,HOLD,PD_2,MO_1_2\n"
-    ",,NONE,HOLD,PD_0,PMR_1_1\n"
-    ",,NONE,HOLD,PD_0,PMR_1_2\n"
-    ",,NONE,MAP,MO_1_1,PMR_1_1\n"
-    ",,NONE,MAP,MO_1_2,PMR_1_2\n"
+    ",,NONE,HOLD,PD_0,VMR_1_1\n"
+    ",,NONE,HOLD,PD_0,VMR_1_2\n"
+    ",,NONE,MAP,VMR_1_1,MO_1_1,\n"
+    ",,NONE,MAP,VMR_1_2,MO_1_2\n"
     ",,MO,REQUEST,PD_1,PD_0\n"
     ",,MO,REQUEST,PD_2,PD_0\n";
 
@@ -55,8 +55,8 @@ int test_model_state_export(env_t env)
     int pmr_space_id = 1;
     gpi_model_node_t *mo1 = add_resource_node(model_state, GPICAP_TYPE_MO, mo_space_id, 1);
     gpi_model_node_t *mo2 = add_resource_node(model_state, GPICAP_TYPE_MO, mo_space_id, 2);
-    gpi_model_node_t *page1 = add_resource_node(model_state, GPICAP_TYPE_PMR, pmr_space_id, 1);
-    gpi_model_node_t *page2 = add_resource_node(model_state, GPICAP_TYPE_PMR, pmr_space_id, 2);
+    gpi_model_node_t *page1 = add_resource_node(model_state, GPICAP_TYPE_VMR, pmr_space_id, 1);
+    gpi_model_node_t *page2 = add_resource_node(model_state, GPICAP_TYPE_VMR, pmr_space_id, 2);
 
     // Add hold edges
     add_edge(model_state, GPI_EDGE_TYPE_HOLD, pd1, mo1);
@@ -65,8 +65,8 @@ int test_model_state_export(env_t env)
     add_edge(model_state, GPI_EDGE_TYPE_HOLD, root_node, page2);
 
     // Add map edges
-    add_edge(model_state, GPI_EDGE_TYPE_MAP, mo1, page1);
-    add_edge(model_state, GPI_EDGE_TYPE_MAP, mo2, page2);
+    add_edge(model_state, GPI_EDGE_TYPE_MAP, page1, mo1);
+    add_edge(model_state, GPI_EDGE_TYPE_MAP, page2, mo2);
 
     // Add request edges
     add_request_edge(model_state, pd1, root_node, GPICAP_TYPE_MO);
@@ -74,7 +74,7 @@ int test_model_state_export(env_t env)
 
     // Add some duplicate nodes/edges
     pd1 = add_pd_node(model_state, "Proc1", 1);
-    add_edge(model_state, GPI_EDGE_TYPE_MAP, mo2, page2);
+    add_edge(model_state, GPI_EDGE_TYPE_MAP, page2, mo2);
     add_request_edge(model_state, pd1, root_node, GPICAP_TYPE_MO);
 
     export_model_state(model_state, output_buffer, sizeof(output_buffer));

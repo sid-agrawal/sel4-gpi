@@ -649,7 +649,11 @@ void map_file_to_block(uint64_t file_id, uint32_t blockno)
   file_registry_entry_t *reg_entry = (file_registry_entry_t *)
       resource_server_registry_get_by_id(&get_xv6fs_server()->file_registry, file_id);
 
-  SERVER_GOTO_IF_COND(reg_entry == NULL, "Failed to find file with ID %d\n", file_id);
+  if (reg_entry == NULL) 
+  {
+    XV6FS_PRINTF("Warning: did not find file for inode %d\n", file_id);
+    return;
+  }
 
   seL4_Word file_universal_id = universal_res_id(GPICAP_TYPE_FILE, get_xv6fs_server()->gen.default_space.id, file_id);
   seL4_Word block_universal_id = universal_res_id(GPICAP_TYPE_BLOCK,

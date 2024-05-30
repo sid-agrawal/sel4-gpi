@@ -43,3 +43,9 @@ int mo_component_client_connect(seL4_CPtr server_ep_cap,
 
     return seL4_MessageInfo_ptr_get_label(&tag);
 }
+
+int mo_component_client_disconnect(mo_client_context_t *conn)
+{
+    // (XXX) Arya: to implement
+    return 0;
+}

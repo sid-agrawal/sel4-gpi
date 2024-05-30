@@ -84,9 +84,12 @@ int resource_component_allocate(resource_component_context_t *component,
     GOTO_IF_COND(reg_entry == NULL, "Couldn't allocate new %s reg entry\n", cap_type_to_str(component->resource_type));
 
     uint64_t resource_id;
-    if (object_id == BADGE_OBJ_ID_NULL) {
+    if (object_id == BADGE_OBJ_ID_NULL)
+    {
         resource_id = resource_server_registry_insert_new_id(&component->registry, (resource_server_registry_node_t *)reg_entry);
-    } else {
+    }
+    else
+    {
         resource_id = object_id;
         reg_entry->gen.object_id = object_id;
         resource_server_registry_insert(&component->registry, (resource_server_registry_node_t *)reg_entry);
@@ -105,8 +108,11 @@ int resource_component_allocate(resource_component_context_t *component,
     {
         /* Create the badged endpoint */
         *ret_cap = resource_server_make_badged_ep(component->server_vka, NULL, component->server_ep,
-                                                  component->resource_type, component->space_id, resource_id, client_id);
-        GOTO_IF_COND(ret_cap == seL4_CapNull, "Failed to make badged ep for new %s\n", cap_type_to_str(component->resource_type));
+                                                  component->resource_type, component->space_id,
+                                                  resource_id, client_id);
+        GOTO_IF_COND(ret_cap == seL4_CapNull, "Failed to make badged ep for new %s\n",
+                     cap_type_to_str(component->resource_type));
+        OSDB_PRINTF("Made badged EP for resource space\n");
     }
 
     // (XXX) Arya:
