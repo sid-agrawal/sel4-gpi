@@ -68,6 +68,8 @@ Context of the server
 */
 typedef struct _gpi_server_context
 {
+    bool is_root; ///< True iff the current process is the root task
+
     simple_t *server_simple;
     vka_t *server_vka;
     seL4_CPtr server_cspace;

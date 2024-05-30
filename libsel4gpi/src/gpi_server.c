@@ -76,6 +76,8 @@ gpi_server_parent_spawn_thread(simple_t *parent_simple, vka_t *parent_vka,
     /* This will clear out all the fields in osm_caps too*/
     memset(get_gpi_server(), 0, sizeof(gpi_server_context_t));
 
+    get_gpi_server()->is_root = true;
+
     /* Get a CPtr to the parent's root cnode. */
     vka_cspace_make_path(parent_vka, 0, &parent_cspace_cspath);
 

@@ -37,7 +37,7 @@ cpu_client_context_t sel4gpi_get_cpu_conn(void);
 
 /**
  * Get the ID of the currently bound ADS
-*/
+ */
 uint64_t sel4gpi_get_binded_ads_id(void);
 
 /*
@@ -47,15 +47,23 @@ seL4_CPtr sel4gpi_get_cspace_root(void);
 
 /**
  * Get a resource type code from the resource type name
- * 
+ *
  * @param type_name the text name of the resource type
-*/
+ */
 gpi_cap_t sel4gpi_get_resource_type_code(char *type_name);
+
+/**
+ * Get a resource type name from the resource type code
+ * This only works if the resource type is in the PD's RDE
+ *
+ * @param type the text name of the resource type
+ */
+char *sel4gpi_get_resource_type_name(gpi_cap_t type);
 
 /**
  * Get an osmosis RDE from the env
  * Returns the default resource space for the provided type
- * 
+ *
  * @param type gpi_cap_t type of the RDE
  * @return the cptr to the RDE endpoint
  */
@@ -63,9 +71,9 @@ seL4_CPtr sel4gpi_get_rde(int type);
 
 /**
  * Get the resource space ID of the default RDE for the given type
- * 
+ *
  * @param type gpi_cap_t type of the RDE
- * @return the resource space ID of the default RDE, 
+ * @return the resource space ID of the default RDE,
  *         or 0 if there is none for the given type
  */
 uint64_t sel4gpi_get_default_space_id(int type);

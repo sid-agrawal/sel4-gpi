@@ -57,8 +57,9 @@ gpi_cap_t get_resource_type_code(char *name)
     // Check if the resource type already exists
     for (resource_type_registry_entry_t *curr = registry->head; curr != NULL; curr = curr->gen.hh.next)
     {
-        if (strcmp(name, curr->name) == 0) {
-            return (gpi_cap_t) curr->gen.object_id;
+        if (strcmp(name, curr->name) == 0)
+        {
+            return (gpi_cap_t)curr->gen.object_id;
         }
     }
 
@@ -68,20 +69,19 @@ gpi_cap_t get_resource_type_code(char *name)
 
 char *cap_type_to_str(gpi_cap_t cap_type)
 {
-    // Check that the caller is the root task
-    pd_client_context_t pd_conn = sel4gpi_get_pd_conn();
-
-    if (pd_conn.id != 0)
+    if (get_gpi_server()->is_root)
     {
-        gpi_panic("cap_type_to_str called by PD: ", pd_conn.id);
-    }
+        // Root task finds name from resource type definitions
+        resource_type_registry_entry_t *reg_entry = (resource_type_registry_entry_t *)
+            resource_server_registry_get_by_id(registry, (uint64_t)cap_type);
 
-    resource_type_registry_entry_t *reg_entry = (resource_type_registry_entry_t *)
-        resource_server_registry_get_by_id(registry, (uint64_t)cap_type);
-
-    if (reg_entry == NULL)
-    {
-        gpi_panic("Cap type not found in registry: ", cap_type);
+        if (reg_entry == NULL)
+        {
+            gpi_panic("Cap type not found in registry: ", cap_type);
+        }
+        return reg_entry->name;
+    } else {
+        // Other PDs find the name from their init data
+        return sel4gpi_get_resource_type_name(cap_type);
     }
-    return reg_entry->name;
 }
