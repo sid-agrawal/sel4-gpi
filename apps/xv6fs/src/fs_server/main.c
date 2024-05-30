@@ -35,7 +35,7 @@ int main(int argc, char **argv)
     
     printf("FS main!\n");
 
-    seL4_CPtr ramdisk_ep = sel4gpi_get_rde(GPICAP_TYPE_BLOCK);
+    seL4_CPtr ramdisk_ep = sel4gpi_get_rde(sel4gpi_get_resource_type_code(BLOCK_RESOURCE_TYPE_NAME));
 
     printf("FS: RAMDISK EP: %ld\n", (seL4_Word)ramdisk_ep);
 

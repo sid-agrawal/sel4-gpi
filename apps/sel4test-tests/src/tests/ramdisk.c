@@ -61,7 +61,7 @@ int test_ramdisk(env_t env)
     test_assert(error == 0);
 
     /* Add the ramdisk to local RD */
-    seL4_CPtr ramdisk_client_ep = sel4gpi_get_rde(GPICAP_TYPE_BLOCK);
+    seL4_CPtr ramdisk_client_ep = sel4gpi_get_rde(sel4gpi_get_resource_type_code(BLOCK_RESOURCE_TYPE_NAME));
 
     printf("------------------STARTING TESTS: %s------------------\n", __func__);
 

@@ -182,8 +182,9 @@ int xv6fs_init()
   CHECK_ERROR(error, "failed to bind shared mem page");
 
   /* Map the file space to the block space */
+  gpi_cap_t block_cap_type = sel4gpi_get_resource_type_code(BLOCK_RESOURCE_TYPE_NAME);
   error = resspc_client_map_space(&get_xv6fs_server()->gen.default_space,
-                                  sel4gpi_get_default_space_id(GPICAP_TYPE_BLOCK));
+                                  sel4gpi_get_default_space_id(block_cap_type));
 
   /* Initialize the blocks */
   error = init_naive_blocks();
@@ -269,13 +270,15 @@ seL4_MessageInfo_t xv6fs_request_handler(seL4_MessageInfo_t tag, seL4_Word sende
       gpi_model_node_t *client_pd_node = add_pd_node(model_state, NULL, pd_id);
 
       /* Add the file resource space node */
-      gpi_model_node_t *file_space_node = add_resource_space_node(model_state, GPICAP_TYPE_FILE, get_xv6fs_server()->gen.default_space.id);
+      gpi_model_node_t *file_space_node = add_resource_space_node(model_state, get_xv6fs_server()->gen.resource_type,
+                                                                  get_xv6fs_server()->gen.default_space.id);
       add_edge(model_state, GPI_EDGE_TYPE_HOLD, self_pd_node, file_space_node);
 
       /* Add the block resource space node */
       // (XXX) Arya: Assumes all blocks belong to the same block space
+      gpi_cap_t block_cap_type = sel4gpi_get_resource_type_code(BLOCK_RESOURCE_TYPE_NAME);
       uint64_t block_space_id = get_xv6fs_server()->naive_blocks[0].space_id;
-      gpi_model_node_t *block_space_node = add_resource_space_node(model_state, GPICAP_TYPE_BLOCK, block_space_id);
+      gpi_model_node_t *block_space_node = add_resource_space_node(model_state, block_cap_type, block_space_id);
       add_edge(model_state, GPI_EDGE_TYPE_MAP, file_space_node, block_space_node);
 
       /* Add nodes for all files and blocks */
@@ -286,7 +289,8 @@ seL4_MessageInfo_t xv6fs_request_handler(seL4_MessageInfo_t tag, seL4_Word sende
         XV6FS_PRINTF("Get RR for fileno %ld\n", inums[i]);
 
         /* Add the file resource node */
-        gpi_model_node_t *file_node = add_resource_node(model_state, GPICAP_TYPE_FILE, get_xv6fs_server()->gen.default_space.id, inums[i]);
+        gpi_model_node_t *file_node = add_resource_node(model_state, get_xv6fs_server()->gen.resource_type,
+                                                        get_xv6fs_server()->gen.default_space.id, inums[i]);
         add_edge(model_state, GPI_EDGE_TYPE_HOLD, self_pd_node, file_node);
         add_edge(model_state, GPI_EDGE_TYPE_HOLD, client_pd_node, file_node);
         add_edge(model_state, GPI_EDGE_TYPE_SUBSET, file_node, file_space_node);
@@ -301,7 +305,7 @@ seL4_MessageInfo_t xv6fs_request_handler(seL4_MessageInfo_t tag, seL4_Word sende
         {
           block_id = get_xv6fs_server()->naive_blocks[blocknos[j]].res_id;
 
-          gpi_model_node_t *block_node = add_resource_node(model_state, GPICAP_TYPE_BLOCK, block_space_id, block_id);
+          gpi_model_node_t *block_node = add_resource_node(model_state, block_cap_type, block_space_id, block_id);
           add_edge(model_state, GPI_EDGE_TYPE_MAP, file_node, block_node);
         }
       }
@@ -649,17 +653,18 @@ void map_file_to_block(uint64_t file_id, uint32_t blockno)
   file_registry_entry_t *reg_entry = (file_registry_entry_t *)
       resource_server_registry_get_by_id(&get_xv6fs_server()->file_registry, file_id);
 
-  if (reg_entry == NULL) 
+  if (reg_entry == NULL)
   {
     XV6FS_PRINTF("Warning: did not find file for inode %d\n", file_id);
     return;
   }
 
-  seL4_Word file_universal_id = universal_res_id(GPICAP_TYPE_FILE, get_xv6fs_server()->gen.default_space.id, file_id);
-  seL4_Word block_universal_id = universal_res_id(GPICAP_TYPE_BLOCK,
+  seL4_Word file_universal_id = universal_res_id(get_xv6fs_server()->gen.resource_type,
+                                                 get_xv6fs_server()->gen.default_space.id, file_id);
+  seL4_Word block_universal_id = universal_res_id(sel4gpi_get_resource_type_code(BLOCK_RESOURCE_TYPE_NAME),
                                                   get_xv6fs_server()->naive_blocks[blockno].space_id,
                                                   get_xv6fs_server()->naive_blocks[blockno].res_id);
-  
+
   error = pd_client_map_resource(&get_xv6fs_server()->gen.pd_conn, file_universal_id, block_universal_id);
   SERVER_GOTO_IF_ERR(error, "Failed to map file (%lx) to block (%lx)\n", file_universal_id, block_universal_id);
 

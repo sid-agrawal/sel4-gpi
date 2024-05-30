@@ -159,13 +159,15 @@ seL4_MessageInfo_t ramdisk_request_handler(seL4_MessageInfo_t tag, seL4_Word sen
             gpi_model_node_t *client_pd_node = add_pd_node(model_state, NULL, pd_id);
 
             /* Add the block resource space node */
-            gpi_model_node_t *block_space_node = add_resource_space_node(model_state, GPICAP_TYPE_BLOCK,
+            gpi_model_node_t *block_space_node = add_resource_space_node(model_state,
+                                                                         get_ramdisk_server()->gen.resource_type,
                                                                          get_ramdisk_server()->gen.default_space.id);
             add_edge(model_state, GPI_EDGE_TYPE_HOLD, self_pd_node, block_space_node);
 
             /* Add the resource node */
 
-            gpi_model_node_t *block_node = add_resource_node(model_state, GPICAP_TYPE_BLOCK, 1, blockno);
+            gpi_model_node_t *block_node = add_resource_node(model_state, get_ramdisk_server()->gen.resource_type,
+                                                             1, blockno);
             add_edge(model_state, GPI_EDGE_TYPE_HOLD, self_pd_node, block_node);
             add_edge(model_state, GPI_EDGE_TYPE_HOLD, client_pd_node, block_node);
             add_edge(model_state, GPI_EDGE_TYPE_SUBSET, block_node, block_space_node);
@@ -262,7 +264,8 @@ seL4_MessageInfo_t ramdisk_request_handler(seL4_MessageInfo_t tag, seL4_Word sen
         RAMDISK_PRINTF("Got message on EP with badge: %lx\n", sender_badge);
 
         gpi_cap_t cap_type = get_cap_type_from_badge(sender_badge);
-        CHECK_ERROR_GOTO(cap_type != GPICAP_TYPE_BLOCK, "ramdisk server got invalid captype in badged EP",
+        CHECK_ERROR_GOTO(cap_type != get_ramdisk_server()->gen.resource_type,
+                         "ramdisk server got invalid captype in badged EP",
                          RD_SERVER_ERROR_UNKNOWN, done);
         uint64_t blockno = obj_id;
         uint64_t client_id = get_client_id_from_badge(sender_badge);

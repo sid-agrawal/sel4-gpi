@@ -81,7 +81,7 @@ static int create_vmr_space(uint32_t client_id, resspc_component_registry_entry_
         SERVER_GOTO_IF_COND(client_pd_data == NULL, "Couldn't find PD (%d)\n", client_id);
 
         rde_type_t type = {.type = GPICAP_TYPE_VMR};
-        error = pd_add_rde(&client_pd_data->pd, type, space_entry->space.id, get_ads_component()->server_ep);
+        error = pd_add_rde(&client_pd_data->pd, type, "VMR", space_entry->space.id, get_ads_component()->server_ep);
         SERVER_GOTO_IF_ERR(error, "Couldn't add VMR (%d) to PD (%d)'s RDE\n", space_entry->space.id, client_id);
     }
 

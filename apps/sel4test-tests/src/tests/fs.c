@@ -62,7 +62,7 @@ int test_fs(env_t env)
     test_assert(error == 0);
 
     // Add FS ep to RDE
-    seL4_CPtr fs_client_ep = sel4gpi_get_rde(GPICAP_TYPE_FILE);
+    seL4_CPtr fs_client_ep = sel4gpi_get_rde(sel4gpi_get_resource_type_code(FILE_RESOURCE_TYPE_NAME));
     test_assert(fs_client_ep != seL4_CapNull);
 
     printf("------------------STARTING TESTS: %s------------------\n", __func__);
@@ -194,7 +194,8 @@ int test_fs(env_t env)
     test_assert(error == 0);
     test_assert(ns_id != 0);
 
-    seL4_CPtr fs_client_ep_ns1 = sel4gpi_get_rde_by_space_id(ns_id, GPICAP_TYPE_FILE);
+    seL4_CPtr fs_client_ep_ns1 =
+        sel4gpi_get_rde_by_space_id(ns_id, sel4gpi_get_resource_type_code(FILE_RESOURCE_TYPE_NAME));
     assert(fs_client_ep_ns1 != seL4_CapNull);
 
     // Test a file within namespace

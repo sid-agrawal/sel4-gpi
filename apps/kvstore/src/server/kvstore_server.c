@@ -143,7 +143,7 @@ int kvstore_server_main(seL4_CPtr parent_ep)
     seL4_MessageInfo_t tag;
     seL4_CPtr badge;
 
-    seL4_CPtr fs_ep = sel4gpi_get_rde(GPICAP_TYPE_FILE);
+    seL4_CPtr fs_ep = sel4gpi_get_rde(sel4gpi_get_resource_type_code(FILE_RESOURCE_TYPE_NAME));
     printf("kvstore-server main: parent ep (%d), fs ep(%d) \n", (int)parent_ep, (int)fs_ep);
 
     pd_client_context_t pd_conn = sel4gpi_get_pd_conn();

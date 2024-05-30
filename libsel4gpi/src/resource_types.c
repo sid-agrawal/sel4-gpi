@@ -39,10 +39,6 @@ void resource_types_initialize(void)
     insert_resource_type(GPICAP_TYPE_PD, "PD");
     insert_resource_type(GPICAP_TYPE_RESSPC, "RESSPC");
     insert_resource_type(GPICAP_TYPE_seL4, "UNKNOWN");
-
-    // (XXX) Arya: Temporarily insert file/block as core types, will remove
-    insert_resource_type(GPICAP_TYPE_BLOCK, "BLOCK");
-    insert_resource_type(GPICAP_TYPE_FILE, "FILE");
 }
 
 // Insert a resource type and allocate a new ID

@@ -30,6 +30,7 @@ static uint64_t fs_id;
 static pd_client_context_t fs_pd;
 static uint64_t fs_2_id;
 static pd_client_context_t fs_2_pd;
+static gpi_cap_t file_cap_type;
 
 typedef enum _kvstore_mode
 {
@@ -67,7 +68,8 @@ static int setup(env_t env)
     test_assert(error == 0);
 
     /* Add FS ep to RDE */
-    seL4_CPtr fs_client_ep = sel4gpi_get_rde(GPICAP_TYPE_FILE);
+    file_cap_type = sel4gpi_get_resource_type_code(FILE_RESOURCE_TYPE_NAME);
+    seL4_CPtr fs_client_ep = sel4gpi_get_rde(file_cap_type);
 
     /* Create EP to listen for test results */
     error = pd_client_alloc_ep(&pd_conn, &self_ep);
@@ -99,7 +101,7 @@ static int start_kvstore_server(seL4_CPtr *kvstore_ep, uint64_t fs_nsid, pd_clie
     test_assert(error == 0);
 
     // Share an FS RDE
-    error = pd_client_share_rde(kvstore_pd, GPICAP_TYPE_FILE, fs_nsid);
+    error = pd_client_share_rde(kvstore_pd, file_cap_type, fs_nsid);
     test_assert(error == 0);
 
     // Start it
@@ -171,7 +173,7 @@ static int start_hello_kvstore(kvstore_mode_t kvstore_mode,
     test_assert(error == 0);
 
     // Share an FS RDE
-    error = pd_client_share_rde(hello_pd, GPICAP_TYPE_FILE, fs_nsid);
+    error = pd_client_share_rde(hello_pd, file_cap_type, fs_nsid);
     test_assert(error == 0);
 
     // share the ADS RDE if we're to make new ADSes
@@ -273,7 +275,7 @@ int test_kvstore_diff_namespace(env_t env)
     test_assert(error == 0);
 
     /* Create the FS namespaces */
-    seL4_CPtr fs_ep = sel4gpi_get_rde(GPICAP_TYPE_FILE);
+    seL4_CPtr fs_ep = sel4gpi_get_rde(file_cap_type);
     uint64_t nsid_1, nsid_2;
 
     error = resource_server_client_new_ns(fs_ep, &nsid_1);

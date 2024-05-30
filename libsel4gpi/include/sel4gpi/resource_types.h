@@ -22,13 +22,9 @@ typedef enum GPICAP_CORE_TYPE
     GPICAP_TYPE_PD,
     GPICAP_TYPE_RESSPC, // resource space
     GPICAP_TYPE_seL4,
-
-    // Non-core cap types
-    GPICAP_TYPE_BLOCK,
-    GPICAP_TYPE_FILE,
-
-    GPICAP_TYPE_MAX,
 } gpi_cap_t;
+
+#define GPICAP_TYPE_MAX (GPICAP_TYPE_seL4 + 8) // Maximum number of resource types
 
 /**
  * Gets the gpi_cap_t code for a resource type by name

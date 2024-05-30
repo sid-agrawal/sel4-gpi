@@ -46,6 +46,13 @@ uint64_t sel4gpi_get_binded_ads_id(void);
 seL4_CPtr sel4gpi_get_cspace_root(void);
 
 /**
+ * Get a resource type code from the resource type name
+ * 
+ * @param type_name the text name of the resource type
+*/
+gpi_cap_t sel4gpi_get_resource_type_code(char *type_name);
+
+/**
  * Get an osmosis RDE from the env
  * Returns the default resource space for the provided type
  * 

@@ -192,7 +192,7 @@ int test_sqlite(env_t env)
     test_assert(error == 0);
 
     // Add FS ep to RDE
-    seL4_CPtr fs_client_ep = sel4gpi_get_rde(GPICAP_TYPE_FILE);
+    seL4_CPtr fs_client_ep = sel4gpi_get_rde(sel4gpi_get_resource_type_code(FILE_RESOURCE_TYPE_NAME));
 
     printf("------------------STARTING TESTS: %s------------------\n", __func__);
 

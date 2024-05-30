@@ -98,16 +98,14 @@ typedef struct _pd_hold_node
  */
 typedef struct _osm_pd_init_data
 {
-    // Connection to the PD's own core resources
-    pd_client_context_t pd_conn;
-    ads_client_context_t ads_conn;
-    cpu_client_context_t cpu_conn;
+    pd_client_context_t pd_conn;   ///< Connection to the PD's own PD resource
+    ads_client_context_t ads_conn; ///< Connection to the PD's own ADS resource
+    cpu_client_context_t cpu_conn; ///< Connection to the PD's own CPU resource
 
-    // PD's cspace
-    seL4_CPtr cspace_root;
+    seL4_CPtr cspace_root; ///< PD's cspace
 
-    // Resource directory
-    osmosis_rde_t rde[GPICAP_TYPE_MAX][MAX_NS_PER_RDE];
+    char type_names[GPICAP_TYPE_MAX][RESOURCE_TYPE_MAX_STRING_SIZE]; ///< Friendly names of cap types
+    osmosis_rde_t rde[GPICAP_TYPE_MAX][MAX_NS_PER_RDE];              ///< Resource directory
     uint64_t rde_count;
 } osm_pd_init_data_t;
 
@@ -275,11 +273,13 @@ linked_list_t *pd_get_resources_of_type(pd_t *pd, gpi_cap_t type);
  *
  * @param pd The target PD to add an RDE to
  * @param type the type of the RDE
+ * @param type_name friendly name of the type, used to get RDE entries by name
  * @param space_id the resource space of this RDE
  * @param server_ep the raw endpoint of the resource space
  */
 int pd_add_rde(pd_t *pd,
                rde_type_t type,
+               char *type_name,
                uint32_t space_id,
                seL4_CPtr server_ep);
 

@@ -79,6 +79,7 @@ Context of the client for this process
 typedef struct _global_xv6fs_client_context_t
 {
     vka_t *client_vka;
+    gpi_cap_t file_cap_type;
     uint32_t space_id;
 
     // Temporary fields for naive implementation

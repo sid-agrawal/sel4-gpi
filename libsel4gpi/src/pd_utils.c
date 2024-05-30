@@ -34,6 +34,20 @@ seL4_CPtr sel4gpi_get_cspace_root(void)
     return slot;
 }
 
+gpi_cap_t sel4gpi_get_resource_type_code(char *type_name)
+{
+    osm_pd_init_data_t * init_data = (osm_pd_init_data_t *)sel4runtime_get_osm_init_data();
+    for (int i = 0; i < GPICAP_TYPE_MAX; i++)
+    {
+        if (strcmp(init_data->type_names[i], type_name) == 0) {
+            return i;
+        }
+    }
+
+    // This is not good
+    return 0;
+}
+
 seL4_CPtr sel4gpi_get_rde(int type)
 {
     seL4_CPtr slot = ((osm_pd_init_data_t *)sel4runtime_get_osm_init_data())->rde[type][0].slot_in_PD;

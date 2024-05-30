@@ -306,6 +306,7 @@ static seL4_MessageInfo_t handle_share_rde_req(seL4_Word sender_badge, seL4_Mess
     rde_type_t rde_type = {.type = type};
     error = pd_add_rde(&target_data->pd,
                        rde_type,
+                       client_data->pd.init_data->type_names[type],
                        rde->space_id,
                        resource_space_data->space.server_ep);
 
@@ -566,7 +567,10 @@ static seL4_MessageInfo_t handle_share_resource_type_req(seL4_Word sender_badge,
     SERVER_GOTO_IF_COND(src_pd_data->pd.id == dst_pd_data->pd.id, "Invalid sharing of resources between the same PD (%d -> %d)\n", src_pd_data->pd.id, dst_pd_data->pd.id);
 
     gpi_cap_t res_type = (gpi_cap_t)seL4_GetMR(PDMSGREG_SHARE_RES_TYPE_REQ_TYPE);
-    SERVER_GOTO_IF_COND(res_type != GPICAP_TYPE_MO && res_type != GPICAP_TYPE_FILE, "Sharing of resource type %s not permitted.\n", cap_type_to_str(res_type));
+    SERVER_GOTO_IF_COND(res_type != GPICAP_TYPE_MO &&
+                            res_type < GPICAP_TYPE_seL4, // (XXX) Arya: how to check for non-core resources?
+                        "Sharing of resource type %s not permitted.\n",
+                        cap_type_to_str(res_type));
     linked_list_t *resources = pd_get_resources_of_type(&src_pd_data->pd, res_type);
     error = pd_bulk_add_resource(&dst_pd_data->pd, resources);
     SERVER_GOTO_IF_ERR(error, "Error occurred during resource sharing (some may still have been successful)\n");
@@ -748,19 +752,19 @@ void forge_pd_cap_from_init_data(test_init_data_t *init_data, sel4utils_process_
 
     // Add the basic RDEs
     rde_type_t resspc_type = {.type = GPICAP_TYPE_RESSPC};
-    pd_add_rde(pd, resspc_type, RESSPC_SPACE_ID, get_gpi_server()->server_ep_obj.cptr);
+    pd_add_rde(pd, resspc_type, "RESSPC", RESSPC_SPACE_ID, get_gpi_server()->server_ep_obj.cptr);
 
     rde_type_t ads_type = {.type = GPICAP_TYPE_ADS};
-    pd_add_rde(pd, ads_type, get_ads_component()->space_id, get_gpi_server()->server_ep_obj.cptr);
+    pd_add_rde(pd, ads_type, "ADS", get_ads_component()->space_id, get_gpi_server()->server_ep_obj.cptr);
 
     rde_type_t cpu_type = {.type = GPICAP_TYPE_CPU};
-    pd_add_rde(pd, cpu_type, get_cpu_component()->space_id, get_gpi_server()->server_ep_obj.cptr);
+    pd_add_rde(pd, cpu_type, "CPU", get_cpu_component()->space_id, get_gpi_server()->server_ep_obj.cptr);
 
     rde_type_t mo_type = {.type = GPICAP_TYPE_MO};
-    pd_add_rde(pd, mo_type, get_mo_component()->space_id, get_gpi_server()->server_ep_obj.cptr);
+    pd_add_rde(pd, mo_type, "MO", get_mo_component()->space_id, get_gpi_server()->server_ep_obj.cptr);
 
     rde_type_t pd_type = {.type = GPICAP_TYPE_PD};
-    pd_add_rde(pd, pd_type, get_pd_component()->space_id, get_gpi_server()->server_ep_obj.cptr);
+    pd_add_rde(pd, pd_type, "PD", get_pd_component()->space_id, get_gpi_server()->server_ep_obj.cptr);
 
     // Forge ADS cap
     seL4_CPtr child_as_cap_in_parent;

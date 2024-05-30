@@ -440,7 +440,7 @@ static int benchmark_fs(env_t env)
     test_assert(error == 0);
 
     // Add FS ep to RDE
-    seL4_CPtr fs_client_ep = sel4gpi_get_rde(GPICAP_TYPE_FILE);
+    seL4_CPtr fs_client_ep = sel4gpi_get_rde(sel4gpi_get_resource_type_code(FILE_RESOURCE_TYPE_NAME));
 
     // The libc fs ops should go to the xv6fs server
     xv6fs_client_init();

@@ -97,7 +97,7 @@ static seL4_MessageInfo_t handle_resspc_allocation_request(seL4_Word sender_badg
     rde_type_t rde_type = {
         .type = type,
     };
-    error = pd_add_rde(&client_pd->pd, rde_type, space_id, received_cap);
+    error = pd_add_rde(&client_pd->pd, rde_type, resource_type_name, space_id, received_cap);
     SERVER_GOTO_IF_ERR(error, "Failed to add RDE to new resource space\n");
 
     seL4_SetMR(PDMSGREG_FUNC, RESSPC_FUNC_CONNECT_ACK);

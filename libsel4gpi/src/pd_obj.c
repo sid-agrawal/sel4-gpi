@@ -166,6 +166,7 @@ osmosis_rde_t *pd_rde_get(pd_t *pd,
 
 int pd_add_rde(pd_t *pd,
                rde_type_t type,
+               char *type_name,
                uint32_t space_id,
                seL4_CPtr server_ep)
 {
@@ -194,6 +195,7 @@ int pd_add_rde(pd_t *pd,
         return 1;
     }
 
+    strncpy(pd->init_data->type_names[type.type], type_name, RESOURCE_TYPE_MAX_STRING_SIZE);
     pd->init_data->rde[type.type][idx].space_id = space_id;
     /* we don't really need to keep this if we index by type, but let's just keep it around for now */
     pd->init_data->rde[type.type][idx].type = type;
@@ -629,7 +631,7 @@ int pd_configure(pd_t *pd,
 
     // the ADS cap also acts an a VMR RDE
     rde_type_t ads_rde_type = {.type = GPICAP_TYPE_VMR};
-    error = pd_add_rde(pd, ads_rde_type, target_ads->id, get_ads_component()->server_ep);
+    error = pd_add_rde(pd, ads_rde_type, "VMR", target_ads->id, get_ads_component()->server_ep);
     ZF_LOGE_IFERR(error, "Failed to add ADS RDE to PD");
 
     // Send the PD's CPU resource
@@ -897,13 +899,6 @@ static int res_dump(pd_t *pd, model_state_t *ms, pd_hold_node_t *current_cap,
     case GPICAP_TYPE_seL4:
         // Use some other method to get the cap details
         break;
-    case GPICAP_TYPE_BLOCK:
-        OSDB_PRINTF("Calling another PD to get the info for resource with ID 0x%x\n", current_cap->res_id);
-
-        error = request_remote_rr(pd, ms, current_cap->space_id, current_cap->res_id, rr_frame_path, rr_local_vaddr);
-        assert(error == 0);
-
-        break;
     case GPICAP_TYPE_PD:
         if (current_cap->res_id != pd->id)
         {
@@ -921,11 +916,21 @@ static int res_dump(pd_t *pd, model_state_t *ms, pd_hold_node_t *current_cap,
     case GPICAP_TYPE_VMR:
         // (XXX) Arya: Do not need to dump VMR, handled in ADS component
         break;
-    case GPICAP_TYPE_FILE:
-        // (XXX) Arya: dump files by NS instead
-        break;
     default:
-        ZF_LOGE("Invalid holding cap type 0x%x", current_cap->type);
+        // This is a remote resource
+
+        OSDB_PRINTF("Calling another PD to get the info for resource with ID 0x%x\n", current_cap->res_id);
+
+        // (XXX) Arya: workaround to not request for individual files, there may be a better way
+        gpi_cap_t file_type = get_resource_type_code("FILE");
+        if (current_cap->type == file_type)
+        {
+            break;
+        }
+
+        error = request_remote_rr(pd, ms, current_cap->space_id, current_cap->res_id, rr_frame_path, rr_local_vaddr);
+        assert(error == 0);
+
         break;
     }
 
@@ -971,7 +976,8 @@ static int pd_dump_internal(pd_t *pd, model_state_t *ms, cspacepath_t rr_frame_p
                  *  For files, walk the file system now
                  *  (XXX) Arya: should there be a general pre-fetch stage for all resource spaces?
                  **/
-                if (rde.type.type == GPICAP_TYPE_FILE)
+                gpi_cap_t file_type = get_resource_type_code("FILE");
+                if (rde.type.type == file_type)
                 {
                     // (XXX) Arya: Workaround to get all files in the file system
                     // Find the server that created this resource based on the resource id

@@ -127,7 +127,7 @@ int start_xv6fs_pd(uint64_t rd_id,
                    seL4_CPtr *fs_pd_cap,
                    uint64_t *fs_id)
 {
-  int error = start_resource_server_pd(GPICAP_TYPE_BLOCK, rd_id,
+  int error = start_resource_server_pd(sel4gpi_get_resource_type_code(BLOCK_RESOURCE_TYPE_NAME), rd_id,
                                        FS_APP, fs_pd_cap, fs_id);
   CHECK_ERROR(error, "failed to start file resource server\n");
   XV6FS_PRINTF("Successfully started file system server\n");
@@ -148,6 +148,7 @@ xv6fs_client_init(void)
   int error;
 
   get_xv6fs_client()->space_id = RESSPC_ID_NULL;
+  get_xv6fs_client()->file_cap_type = sel4gpi_get_resource_type_code(FILE_RESOURCE_TYPE_NAME);
 
   /* Allocate the TEMP shared memory object */
   get_xv6fs_client()->shared_mem = malloc(sizeof(mo_client_context_t));
@@ -183,13 +184,6 @@ int xv6fs_client_set_namespace(uint64_t ns_id)
 {
   XV6FS_PRINTF("Client of FS server will use namespace %ld\n", ns_id);
 
-  // seL4_CPtr ep = sel4gpi_get_rde_by_space_id(ns_id, GPICAP_TYPE_FILE);
-
-  // if (ep == seL4_CapNull)
-  // {
-  //   return -1;
-  // }
-
   get_xv6fs_client()->space_id = ns_id;
   return 0;
 }
@@ -224,7 +218,7 @@ int xv6fs_client_link_file(seL4_CPtr file, const char *path)
   seL4_SetCap(0, get_xv6fs_client()->shared_mem->badged_server_ep_cspath.capPtr);
   seL4_SetCap(1, file);
 
-  tag = seL4_Call(sel4gpi_get_rde_by_space_id(get_xv6fs_client()->space_id, GPICAP_TYPE_FILE), tag);
+  tag = seL4_Call(sel4gpi_get_rde_by_space_id(get_xv6fs_client()->space_id, get_xv6fs_client()->file_cap_type), tag);
 
   return seL4_MessageInfo_get_label(tag);
 }
@@ -253,7 +247,7 @@ static int xv6fs_libc_open(const char *pathname, int flags, int modes)
   // (XXX) Currently ignore modes
 
   // Alloc received cap ep
-  tag = seL4_Call(sel4gpi_get_rde_by_space_id(get_xv6fs_client()->space_id, GPICAP_TYPE_FILE), tag);
+  tag = seL4_Call(sel4gpi_get_rde_by_space_id(get_xv6fs_client()->space_id, get_xv6fs_client()->file_cap_type), tag);
 
   if (seL4_MessageInfo_get_label(tag) != seL4_NoError)
   {
@@ -602,7 +596,7 @@ static int xv6fs_libc_unlink(const char *pathname)
   seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 1, FSMSGREG_UNLINK_REQ_END);
   seL4_SetMR(FSMSGREG_FUNC, FS_FUNC_UNLINK_REQ);
   seL4_SetCap(0, get_xv6fs_client()->shared_mem->badged_server_ep_cspath.capPtr);
-  tag = seL4_Call(sel4gpi_get_rde_by_space_id(get_xv6fs_client()->space_id, GPICAP_TYPE_FILE), tag);
+  tag = seL4_Call(sel4gpi_get_rde_by_space_id(get_xv6fs_client()->space_id, get_xv6fs_client()->file_cap_type), tag);
 
   if (seL4_MessageInfo_get_label(tag) != seL4_NoError)
   {
