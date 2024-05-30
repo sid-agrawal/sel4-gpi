@@ -503,12 +503,6 @@ static seL4_MessageInfo_t handle_runtime_setup_req(seL4_Word sender_badge, seL4_
 
         // (XXX) Linh: stack_top meaning differs depending on what PD we're starting, should fix as this is not so nice
         void *stack_top = (void *)seL4_GetMR(PDMSGREG_SETUP_REQ_STACK);
-        size_t stack_size = seL4_GetMR(PDMSGREG_SETUP_REQ_STACK_SZ);
-
-        // these fields only matter if PD is a process
-        target_pd->pd.proc.thread.stack_top = stack_top;
-        target_pd->pd.proc.thread.stack_size = stack_size;
-
         void *entry_point = (void *)seL4_GetMR(PDMSGREG_SETUP_REQ_ENTRY_POINT);
         void *ipc_buf_addr = (void *)seL4_GetMR(PDMSGREG_SETUP_REQ_IPC_BUF);
         pd_setup_type_t setup_mode = (pd_setup_type_t)seL4_GetMR(PDMSGREG_SETUP_REQ_TYPE);
@@ -517,13 +511,9 @@ static seL4_MessageInfo_t handle_runtime_setup_req(seL4_Word sender_badge, seL4_
         {
         case PD_RUNTIME_SETUP:
             void *init_stack;
-            error = ads_write_arguments(&target_pd->pd.proc,
-                                        (void *)target_pd->pd.init_data_in_PD,
-                                        get_gpi_server()->server_vka,
-                                        get_pd_component()->server_vspace,
-                                        argc,
-                                        argv,
-                                        &init_stack);
+            error = ads_write_arguments(&target_pd->pd, &target_ads->ads,
+                                        &target_cpu->cpu, stack_top,
+                                        argc, argv, &init_stack);
             if (!error)
             {
                 error = cpu_set_remote_context(&target_cpu->cpu, entry_point, init_stack);

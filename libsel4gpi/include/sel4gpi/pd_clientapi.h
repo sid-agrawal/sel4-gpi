@@ -164,7 +164,6 @@ void pd_client_bench_ipc(pd_client_context_t *conn, seL4_CPtr dummy_send_cap, se
  * @param target_pd the process PD which will use this stack
  * @param target_cpu the CPU which will execute in this ADS and PD
  * @param stack_pos pointer to a position in the stack, depends on the setup type
- * @param stack_size size of the stack (in pages)
  * @param argc the number of arguments to place on the stack
  * @param args the arguments
  * @param entry_point the address of the instruction to start executing at (in the target ADS)
@@ -176,7 +175,6 @@ int pd_client_runtime_setup(pd_client_context_t *target_pd,
                             ads_client_context_t *target_ads,
                             cpu_client_context_t *target_cpu,
                             void *stack_pos,
-                            int stack_size,
                             int argc,
                             seL4_Word *args,
                             void *entry_point,

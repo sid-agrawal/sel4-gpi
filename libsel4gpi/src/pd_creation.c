@@ -299,7 +299,6 @@ int sel4gpi_start_pd(pd_config_t *cfg, sel4gpi_runnable_t *runnable, int argc, s
         }
     }
 
-    // TODO check in config is valid
     if (cfg->fault_ep != seL4_CapNull)
     {
         PD_CREATION_PRINT("Sending fault EP (0x%lx) to PD\n", cfg->fault_ep);
@@ -314,7 +313,14 @@ int sel4gpi_start_pd(pd_config_t *cfg, sel4gpi_runnable_t *runnable, int argc, s
     }
 
     PD_CREATION_PRINT("Configuring CPU Object, fault_ep: %lx\n", fault_ep_in_pd);
-    error = cpu_client_config(&runnable->cpu, &runnable->ads, &runnable->pd, &ipc_mo, cnode_guard, fault_ep_in_pd, (seL4_Word)ipc_buf, &osm_init_data);
+    error = cpu_client_config(&runnable->cpu,
+                              &runnable->ads,
+                              &runnable->pd,
+                              &ipc_mo,
+                              cnode_guard,
+                              fault_ep_in_pd,
+                              (seL4_Word)ipc_buf,
+                              &osm_init_data);
     GOTO_IF_ERR(error, "failed to configure CPU\n");
 
     // (XXX) Linh required that this happens after cpu_client_config specifically due to dependency between the sel4util structs in the GPI components
@@ -334,7 +340,7 @@ int sel4gpi_start_pd(pd_config_t *cfg, sel4gpi_runnable_t *runnable, int argc, s
             GOTO_IF_ERR(error, "failed to set TLS base\n");
         }
 
-        error = pd_client_runtime_setup(&runnable->pd, &runnable->ads, &runnable->cpu, stack, cfg->ads_cfg.stack_pages, argc, args, entry_point, ipc_buf, setup_mode);
+        error = pd_client_runtime_setup(&runnable->pd, &runnable->ads, &runnable->cpu, stack, argc, args, entry_point, ipc_buf, setup_mode);
         GOTO_IF_ERR(error, "failed to prepare runtime");
     }
 

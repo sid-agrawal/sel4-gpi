@@ -586,9 +586,6 @@ static int pd_setup_cspace(pd_t *pd, vka_t *vka)
     int size_bits = CSPACE_SIZE_BITS;
     pd->cnode_guard = api_make_guard_skip_word(seL4_WordBits - size_bits);
 
-    // error = vka_alloc_endpoint(vka, &pd->proc.fault_endpoint);
-    // SERVER_GOTO_IF_ERR(error, "Failed to create PD %d's fault endpoint", pd->id);
-
     error = vka_alloc_cnode_object(vka, size_bits, &pd->proc.cspace);
     SERVER_GOTO_IF_ERR(error, "Failed to create PD %d's cspace", pd->id);
 
@@ -615,12 +612,6 @@ static int pd_setup_cspace(pd_t *pd, vka_t *vka)
     return 0;
 
 err_goto:
-    /* try to clean up */
-    // if (pd->proc.fault_endpoint.cptr != 0)
-    // {
-    //     vka_free_object(vka, &pd->proc.fault_endpoint);
-    // }
-
     if (pd->proc.cspace.cptr != 0)
     {
         vka_free_object(vka, &pd->proc.cspace);

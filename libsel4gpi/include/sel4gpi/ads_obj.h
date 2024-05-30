@@ -13,15 +13,17 @@
 #include <sel4utils/vspace_internal.h>
 #include <sel4utils/process.h>
 #include <sel4gpi/model_exporting.h>
-#include <sel4gpi/mo_obj.h>
-#include <sel4gpi/cpu_obj.h>
 #include <sel4gpi/resource_server_utils.h>
 #include <sel4gpi/gpi_client.h>
 #include <sel4gpi/pd_creation.h>
 
+typedef struct _pd pd_t;
+typedef struct _mo mo_t;
+typedef struct _cpu cpu_t;
+
 /**
  * Maps a shorter (portable) attach node ID to a vaddr
-*/
+ */
 typedef struct _attach_node_map
 {
     resource_server_registry_node_t gen;
@@ -248,7 +250,7 @@ static seL4_CPtr assign_asid_pool(seL4_CPtr asid_pool, seL4_CPtr pd)
  * @return 0 on success, 1 on failure
  */
 int ads_load_elf(vspace_t *loadee_vspace,
-                 sel4utils_process_t *proc,
+                 pd_t *pd,
                  const char *image_name,
                  void **ret_entry_point,
                  sel4utils_elf_region_t **ret_elf_reservations,
@@ -267,10 +269,10 @@ int ads_load_elf(vspace_t *loadee_vspace,
  * @param ret_init_stack the position of the initial stack pointer after setup
  * @return 0 on success, 1 on failure
  */
-int ads_write_arguments(sel4utils_process_t *process,
-                        void *osm_init_data,
-                        vka_t *vka,
-                        vspace_t *vspace,
+int ads_write_arguments(pd_t *pd,
+                        ads_t *ads,
+                        cpu_t *cpu,
+                        void *stack_top,
                         int argc,
                         char *argv[],
                         void **ret_init_stack);

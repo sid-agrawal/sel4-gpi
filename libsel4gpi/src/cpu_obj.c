@@ -29,7 +29,7 @@
 int cpu_start(cpu_t *cpu)
 {
     OSDB_PRINTF("cpu_start: starting CPU at PC: 0x%lx\n", cpu->reg_ctx->pc);
-    return seL4_TCB_Resume(cpu->thread.tcb.cptr);
+    return seL4_TCB_Resume(cpu->tcb.cptr);
 }
 
 int cpu_config_vspace(cpu_t *cpu,
@@ -49,10 +49,10 @@ int cpu_config_vspace(cpu_t *cpu,
     cpu->cspace = root_cnode;
     cpu->cspace_guard = cnode_guard;
     cpu->fault_ep = fault_ep;
-    cpu->thread.ipc_buffer_addr = ipc_buf_addr;
-    cpu->thread.ipc_buffer = ipc_buffer_frame;
+    cpu->ipc_buf_addr = ipc_buf_addr;
+    cpu->ipc_frame_cap = ipc_buffer_frame;
 
-    int error = seL4_TCB_Configure(cpu->thread.tcb.cptr,
+    int error = seL4_TCB_Configure(cpu->tcb.cptr,
                                    fault_ep,   // fault endpoint
                                    root_cnode, // root cnode
                                    cnode_guard,
@@ -62,7 +62,7 @@ int cpu_config_vspace(cpu_t *cpu,
                                    ipc_buffer_frame);
     assert(error == 0);
 
-    error = seL4_TCB_SetPriority(cpu->thread.tcb.cptr, seL4_CapInitThreadTCB, seL4_MaxPrio - 1);
+    error = seL4_TCB_SetPriority(cpu->tcb.cptr, seL4_CapInitThreadTCB, seL4_MaxPrio - 1);
     assert(error == 0);
 
     return 0;
@@ -77,14 +77,14 @@ int cpu_change_vspace(cpu_t *cpu,
     seL4_CPtr vspace_root = vspace->get_root(vspace); // root page table
     assert(vspace_root != 0);
 
-    int error = seL4_TCB_Configure(cpu->thread.tcb.cptr,
+    int error = seL4_TCB_Configure(cpu->tcb.cptr,
                                    cpu->fault_ep, // fault endpoint
                                    cpu->cspace,   // root cnode
                                    cpu->cspace_guard,
                                    vspace_root,
                                    0, // domain
-                                   cpu->thread.ipc_buffer_addr,
-                                   cpu->thread.ipc_buffer);
+                                   cpu->ipc_buf_addr,
+                                   cpu->ipc_frame_cap);
 
     return error;
 }
@@ -94,7 +94,7 @@ int cpu_new(cpu_t *cpu,
             vspace_t *vspace,
             void *arg0)
 {
-    int error = vka_alloc_tcb(vka, &cpu->thread.tcb);
+    int error = vka_alloc_tcb(vka, &cpu->tcb);
     SERVER_GOTO_IF_ERR(error, "Couldn't allocate TCB\n");
 
     cpu->reg_ctx = calloc(1, sizeof(seL4_UserContext));
@@ -118,7 +118,7 @@ void cpu_dump_rr(cpu_t *cpu, model_state_t *ms, gpi_model_node_t *pd_node)
 
     seL4_Word affinity = 0;
 #if CONFIG_MAX_NUM_NODES > 1
-    seL4_TCB_GetAffinity_t affinity_res = seL4_TCB_GetAffinity(cpu->thread.tcb.cptr);
+    seL4_TCB_GetAffinity_t affinity_res = seL4_TCB_GetAffinity(cpu->tcb.cptr);
     affinity = affinity_res.affinity;
 #endif
 
@@ -154,7 +154,7 @@ int cpu_set_tls_base(cpu_t *cpu, void *tls_base, bool write_reg)
 
     if (write_reg)
     {
-        error = seL4_TCB_SetTLSBase(cpu->thread.tcb.cptr, (seL4_Word)tls_base);
+        error = seL4_TCB_SetTLSBase(cpu->tcb.cptr, (seL4_Word)tls_base);
         SERVER_GOTO_IF_ERR(error, "Failed to write the TLS base register\n");
     }
 
@@ -171,7 +171,7 @@ int cpu_set_local_context(cpu_t *cpu, void *entry_point,
     error = sel4utils_arch_init_local_context(entry_point, arg0, arg1, arg2, init_stack, cpu->reg_ctx);
     SERVER_GOTO_IF_ERR(error, "failed to set CPU context\n");
 
-    error = seL4_TCB_WriteRegisters(cpu->thread.tcb.cptr, 0, 0, sizeof(seL4_UserContext) / sizeof(seL4_Word), cpu->reg_ctx);
+    error = seL4_TCB_WriteRegisters(cpu->tcb.cptr, 0, 0, sizeof(seL4_UserContext) / sizeof(seL4_Word), cpu->reg_ctx);
     SERVER_GOTO_IF_ERR(error, "failed to write TCB registers\n");
 err_goto:
     return error;
@@ -183,7 +183,7 @@ int cpu_set_remote_context(cpu_t *cpu, void *entry_point, void *init_stack)
     error = sel4utils_arch_init_context(entry_point, init_stack, cpu->reg_ctx);
     SERVER_GOTO_IF_ERR(error, "failed to set CPU context\n");
 
-    error = seL4_TCB_WriteRegisters(cpu->thread.tcb.cptr, 0, 0, sizeof(seL4_UserContext) / sizeof(seL4_Word), cpu->reg_ctx);
+    error = seL4_TCB_WriteRegisters(cpu->tcb.cptr, 0, 0, sizeof(seL4_UserContext) / sizeof(seL4_Word), cpu->reg_ctx);
     SERVER_GOTO_IF_ERR(error, "failed to write TCB registers\n");
 err_goto:
     return error;

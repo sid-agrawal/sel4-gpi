@@ -245,7 +245,6 @@ int pd_client_runtime_setup(pd_client_context_t *target_pd,
                             ads_client_context_t *target_ads,
                             cpu_client_context_t *target_cpu,
                             void *stack_pos,
-                            int stack_size,
                             int argc,
                             seL4_Word *args,
                             void *entry_point,
@@ -285,7 +284,6 @@ int pd_client_runtime_setup(pd_client_context_t *target_pd,
     OSDB_PRINTF_2("]\n");
 
     seL4_SetMR(PDMSGREG_SETUP_REQ_STACK, (seL4_Word)stack_pos);
-    seL4_SetMR(PDMSGREG_SETUP_REQ_STACK_SZ, stack_size);
     seL4_SetMR(PDMSGREG_SETUP_REQ_ENTRY_POINT, (seL4_Word)entry_point);
     seL4_SetMR(PDMSGREG_SETUP_REQ_IPC_BUF, (seL4_Word)ipc_buf_addr);
     seL4_SetMR(PDMSGREG_SETUP_REQ_TYPE, setup_type);

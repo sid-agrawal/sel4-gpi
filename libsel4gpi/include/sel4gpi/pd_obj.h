@@ -118,6 +118,10 @@ typedef struct _pd
 
     /* this is only used if the PD is a process */
     sel4utils_process_t proc;
+    uintptr_t sysinfo;
+    int num_elf_phdrs;
+    Elf64_Phdr *elf_phdrs;
+    seL4_Word pagesz;
 
     /* cnode guard for this PD's cspace */
     seL4_Word cnode_guard;

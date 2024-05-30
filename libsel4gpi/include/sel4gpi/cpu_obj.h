@@ -19,6 +19,10 @@ typedef struct _cpu
     uint32_t id;
 
     sel4utils_thread_t thread; // storage for some commonly used fields
+    vka_object_t tcb;
+    seL4_Word ipc_buf_addr;
+    seL4_CPtr ipc_frame_cap;
+
     uint64_t binded_ads_id;
     void *tls_base;
     seL4_CPtr cspace; // the currently binded cspace, could potentially change if reconfigured

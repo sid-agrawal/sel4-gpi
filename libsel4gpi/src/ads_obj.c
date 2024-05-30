@@ -36,6 +36,10 @@
 extern char _cpio_archive[];
 extern char _cpio_archive_end[];
 
+typedef struct _pd pd_t;
+typedef struct _mo mo_t;
+typedef struct _cpu cpu_t;
+
 /**
  * Callback when an attach node is deleted
  * Perform cleanup here
@@ -728,7 +732,7 @@ void ads_destroy(ads_t *ads)
 /* ======================================= CONVENIENCE FUNCTIONS (NOT PART OF FRAMEWORK) ================================================= */
 
 int ads_load_elf(vspace_t *loadee_vspace,
-                 sel4utils_process_t *proc,
+                 pd_t *pd,
                  const char *image_name,
                  void **ret_entry_point,
                  sel4utils_elf_region_t **ret_elf_reservations,
@@ -745,63 +749,52 @@ int ads_load_elf(vspace_t *loadee_vspace,
     elf_t elf;
     elf_newFile(file, size, &elf);
 
-    proc->entry_point = sel4utils_elf_load2(loadee_vspace, server_vspace, server_vka, server_vka,
-                                            &elf, ret_elf_reservations, ret_num_elf_regions);
-    if (proc->entry_point == NULL)
-    {
-        ZF_LOGE("Failed to load elf file\n");
-        goto error;
-    }
+    *ret_entry_point = sel4utils_elf_load2(loadee_vspace, server_vspace, server_vka, server_vka,
+                                           &elf, ret_elf_reservations, ret_num_elf_regions);
+    SERVER_GOTO_IF_COND(*ret_entry_point == NULL, "Failed to load elf file\n");
 
-    proc->sysinfo = sel4utils_elf_get_vsyscall(&elf);
+    pd->sysinfo = sel4utils_elf_get_vsyscall(&elf);
 
     /* Retrieve the ELF phdrs */
-    proc->num_elf_phdrs = sel4utils_elf_num_phdrs(&elf);
-    proc->elf_phdrs = calloc(proc->num_elf_phdrs, sizeof(Elf_Phdr));
-    if (!proc->elf_phdrs)
-    {
-        ZF_LOGE("Failed to allocate memory for elf phdr information");
-        goto error;
-    }
-    sel4utils_elf_read_phdrs(&elf, proc->num_elf_phdrs, proc->elf_phdrs);
-    proc->pagesz = PAGE_SIZE_4K;
+    pd->num_elf_phdrs = sel4utils_elf_num_phdrs(&elf);
+    pd->elf_phdrs = calloc(pd->num_elf_phdrs, sizeof(Elf_Phdr));
+    SERVER_GOTO_IF_COND(!pd->elf_phdrs, "Failed to allocate memory for elf phdr information\n");
 
-    *ret_entry_point = proc->entry_point;
+    sel4utils_elf_read_phdrs(&elf, pd->num_elf_phdrs, pd->elf_phdrs);
+    pd->pagesz = PAGE_SIZE_4K;
 
     return 0;
-error:
-    if (proc->elf_regions)
+
+err_goto:
+    if (pd->elf_phdrs)
     {
-        free(proc->elf_regions);
+        free(pd->elf_phdrs);
     }
 
-    if (proc->elf_phdrs)
-    {
-        free(proc->elf_phdrs);
-    }
+    return 1;
 }
 
-int ads_write_arguments(sel4utils_process_t *process,
-                        void *osm_init_data,
-                        vka_t *vka,
-                        vspace_t *vspace,
+int ads_write_arguments(pd_t *pd,
+                        ads_t *ads,
+                        cpu_t *cpu,
+                        void *stack_top,
                         int argc,
                         char *argv[],
                         void **ret_init_stack)
 {
-    assert(vspace != NULL);
-    assert(&process->vspace != NULL);
     /* define an envp and auxp */
     int error;
     int envc = 0;
     char *envp[] = {};
+    vspace_t *vspace = get_ads_component()->server_vspace;
+    vka_t *vka = get_ads_component()->server_vka;
 
-    uintptr_t initial_stack_pointer = (uintptr_t)process->thread.stack_top - sizeof(seL4_Word);
+    uintptr_t initial_stack_pointer = (uintptr_t)stack_top - sizeof(seL4_Word);
 
     /* Copy the elf headers */
     uintptr_t at_phdr;
-    error = sel4utils_stack_write(vspace, &process->vspace, vka, process->elf_phdrs,
-                                  process->num_elf_phdrs * sizeof(Elf_Phdr), &initial_stack_pointer);
+    error = sel4utils_stack_write(vspace, &ads->vspace, vka, pd->elf_phdrs,
+                                  pd->num_elf_phdrs * sizeof(Elf_Phdr), &initial_stack_pointer);
     if (error)
     {
         ZF_LOGE("%s: Failed to write stack\n", __func__);
@@ -813,25 +806,25 @@ int ads_write_arguments(sel4utils_process_t *process,
     int auxc = 7;
     Elf_auxv_t auxv[8];
     auxv[0].a_type = AT_PAGESZ;
-    auxv[0].a_un.a_val = process->pagesz;
+    auxv[0].a_un.a_val = pd->pagesz;
     auxv[1].a_type = AT_PHDR;
     auxv[1].a_un.a_val = at_phdr;
     auxv[2].a_type = AT_PHNUM;
-    auxv[2].a_un.a_val = process->num_elf_phdrs;
+    auxv[2].a_un.a_val = pd->num_elf_phdrs;
     auxv[3].a_type = AT_PHENT;
     auxv[3].a_un.a_val = sizeof(Elf_Phdr);
     auxv[4].a_type = AT_SEL4_IPC_BUFFER_PTR;
-    auxv[4].a_un.a_val = process->thread.ipc_buffer_addr;
+    auxv[4].a_un.a_val = cpu->ipc_buf_addr;
     auxv[5].a_type = AT_SEL4_TCB;
-    auxv[5].a_un.a_val = process->dest_tcb_cptr;
+    auxv[5].a_un.a_val = seL4_CapNull; // Is it ok that we don't give the process access to its TCB?
 
     auxv[6].a_type = AT_OSM_INIT_DATA;
-    auxv[6].a_un.a_val = (uint64_t)osm_init_data;
+    auxv[6].a_un.a_val = (uint64_t)pd->init_data_in_PD;
 
-    if (process->sysinfo)
+    if (pd->sysinfo)
     {
         auxv[7].a_type = AT_SYSINFO;
-        auxv[7].a_un.a_val = process->sysinfo;
+        auxv[7].a_un.a_val = pd->sysinfo;
         auxc++;
     }
 
@@ -840,7 +833,7 @@ int ads_write_arguments(sel4utils_process_t *process,
 
     /* write all the strings into the stack */
     /* Copy over the user arguments */
-    error = sel4utils_stack_copy_args(vspace, &process->vspace, vka, argc, argv, dest_argv, &initial_stack_pointer);
+    error = sel4utils_stack_copy_args(vspace, &ads->vspace, vka, argc, argv, dest_argv, &initial_stack_pointer);
     if (error)
     {
         ZF_LOGE("%s: Failed to write stack\n", __func__);
@@ -850,7 +843,7 @@ int ads_write_arguments(sel4utils_process_t *process,
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wstringop-overflow"
     /* copy the environment */
-    error = sel4utils_stack_copy_args(vspace, &process->vspace, vka, envc, envp, dest_envp, &initial_stack_pointer);
+    error = sel4utils_stack_copy_args(vspace, &ads->vspace, vka, envc, envp, dest_envp, &initial_stack_pointer);
     if (error)
     {
         ZF_LOGE("%s: Failed to write stack\n", __func__);
@@ -871,55 +864,55 @@ int ads_write_arguments(sel4utils_process_t *process,
 
     /* construct initial stack frame */
     /* Null terminate aux */
-    error = sel4utils_stack_write_constant(vspace, &process->vspace, vka, 0, &initial_stack_pointer);
+    error = sel4utils_stack_write_constant(vspace, &ads->vspace, vka, 0, &initial_stack_pointer);
     if (error)
     {
         ZF_LOGE("%s: Failed to write stack\n", __func__);
         return -1;
     }
-    error = sel4utils_stack_write_constant(vspace, &process->vspace, vka, 0, &initial_stack_pointer);
+    error = sel4utils_stack_write_constant(vspace, &ads->vspace, vka, 0, &initial_stack_pointer);
     if (error)
     {
         ZF_LOGE("%s: Failed to write stack\n", __func__);
         return -1;
     }
     /* write aux */
-    error = sel4utils_stack_write(vspace, &process->vspace, vka, auxv, sizeof(auxv[0]) * auxc, &initial_stack_pointer);
+    error = sel4utils_stack_write(vspace, &ads->vspace, vka, auxv, sizeof(auxv[0]) * auxc, &initial_stack_pointer);
     if (error)
     {
         ZF_LOGE("%s: Failed to write stack\n", __func__);
         return -1;
     }
     /* Null terminate environment */
-    error = sel4utils_stack_write_constant(vspace, &process->vspace, vka, 0, &initial_stack_pointer);
+    error = sel4utils_stack_write_constant(vspace, &ads->vspace, vka, 0, &initial_stack_pointer);
     if (error)
     {
         ZF_LOGE("%s: Failed to write stack\n", __func__);
         return -1;
     }
     /* write environment */
-    error = sel4utils_stack_write(vspace, &process->vspace, vka, dest_envp, sizeof(dest_envp), &initial_stack_pointer);
+    error = sel4utils_stack_write(vspace, &ads->vspace, vka, dest_envp, sizeof(dest_envp), &initial_stack_pointer);
     if (error)
     {
         ZF_LOGE("%s: Failed to write stack\n", __func__);
         return -1;
     }
     /* Null terminate arguments */
-    error = sel4utils_stack_write_constant(vspace, &process->vspace, vka, 0, &initial_stack_pointer);
+    error = sel4utils_stack_write_constant(vspace, &ads->vspace, vka, 0, &initial_stack_pointer);
     if (error)
     {
         ZF_LOGE("%s: Failed to write stack\n", __func__);
         return -1;
     }
     /* write arguments */
-    error = sel4utils_stack_write(vspace, &process->vspace, vka, dest_argv, sizeof(dest_argv), &initial_stack_pointer);
+    error = sel4utils_stack_write(vspace, &ads->vspace, vka, dest_argv, sizeof(dest_argv), &initial_stack_pointer);
     if (error)
     {
         ZF_LOGE("%s: Failed to write stack\n", __func__);
         return -1;
     }
     /* Push argument count */
-    error = sel4utils_stack_write_constant(vspace, &process->vspace, vka, argc, &initial_stack_pointer);
+    error = sel4utils_stack_write_constant(vspace, &ads->vspace, vka, argc, &initial_stack_pointer);
     if (error)
     {
         ZF_LOGE("%s: Failed to write stack\n", __func__);
@@ -928,7 +921,6 @@ int ads_write_arguments(sel4utils_process_t *process,
 
     assert(initial_stack_pointer % (2 * sizeof(seL4_Word)) == 0);
 
-    process->thread.initial_stack_pointer = (void *)initial_stack_pointer;
     *ret_init_stack = (void *)initial_stack_pointer;
     return 0;
 }

@@ -200,7 +200,6 @@ enum pd_component_msgregs
     /* (XXX) For now,  we only pass upt to 4 args, which may need fixing */
     PDMSGREG_SETUP_REQ_ARGC = PDMSGREG_LABEL0,
     PDMSGREG_SETUP_REQ_STACK,
-    PDMSGREG_SETUP_REQ_STACK_SZ,
     PDMSGREG_SETUP_REQ_ENTRY_POINT,
     PDMSGREG_SETUP_REQ_IPC_BUF,
     PDMSGREG_SETUP_REQ_TYPE,
