@@ -147,45 +147,6 @@ int sel4gpi_ads_configure(ads_config_t *cfg,
     }
 
     void *auto_entry_point = NULL;
-    switch (cfg->code_shared)
-    {
-    case GPI_SHARED:
-    case GPI_COPY:
-        /* shallow copying when we're in the same ADS doesn't make sense */
-        if (!(cfg->same_ads && cfg->code_shared == GPI_SHARED))
-        {
-            PD_CREATION_PRINT("Copying ELF to ADS rather than loading\n");
-            vmr_config_t code_cfg = {.start = NULL,
-                                     .region_pages = 0,
-                                     .type = SEL4UTILS_RES_TYPE_ELF,
-                                     .share_mode = cfg->code_shared};
-
-            error = ads_client_copy(&self_ads_conn, &runnable->ads, &code_cfg);
-            GOTO_IF_ERR(error, "failed to copy ELF to ADS\n");
-        }
-        break;
-    case GPI_DISJOINT:
-        // elf load
-        PD_CREATION_PRINT("Loading Elf\n");
-        error = ads_client_load_elf(&runnable->ads, &runnable->pd, cfg->image_name, &auto_entry_point);
-        GOTO_IF_ERR(error, "failed to load elf to ADS");
-        PRINT_IF_COND(auto_entry_point != NULL && cfg->entry_point,
-                      COLORIZE("Warning: ", CYAN) "Automatically found entry point (%p) differs from given one (%p)\n",
-                      auto_entry_point, cfg->entry_point);
-        PRINT_IF_COND(auto_entry_point == NULL && cfg->entry_point == NULL,
-                      COLORIZE("Warning: ", CYAN) "PD has no entry point (either it was not found or was not given)\n");
-        break;
-    case GPI_OMIT:
-        break;
-    default:
-        GOTO_IF_COND(1, "Invalid sharing degree specified (%d) for code region\n", cfg->code_shared);
-        break;
-    }
-
-    if (ret_entry_point)
-    {
-        *ret_entry_point = cfg->entry_point == NULL ? auto_entry_point : cfg->entry_point;
-    }
 
     if (cfg->vmr_cfgs)
     {
@@ -209,10 +170,50 @@ int sel4gpi_ads_configure(ads_config_t *cfg,
                 }
                 break;
             case GPI_DISJOINT:
-                PD_CREATION_PRINT("Allocating VMR (%s) with %lu pages at %p\n",
-                                  human_readable_va_res_type(vmr->type), vmr->region_pages, vmr->start);
-                void *vmr_addr = sel4gpi_get_vmr(&vmr_rde, vmr->region_pages, vmr->start, vmr->type, NULL);
-                GOTO_IF_ERR(vmr_addr == NULL, "failed to allocate VMR (%p)\n", vmr->start);
+                if (vmr->type == SEL4UTILS_RES_TYPE_CODE)
+                {
+                    // elf load
+                    PD_CREATION_PRINT("Loading Elf\n");
+                    error = ads_client_load_elf(&runnable->ads, &runnable->pd, cfg->image_name, &auto_entry_point);
+                    GOTO_IF_ERR(error, "failed to load elf to ADS");
+                    PRINT_IF_COND(auto_entry_point != NULL && cfg->entry_point,
+                                  COLORIZE("Warning: ", CYAN) "Automatically found entry point (%p) differs from given one (%p)\n",
+                                  auto_entry_point, cfg->entry_point);
+                    PRINT_IF_COND(auto_entry_point == NULL && cfg->entry_point == NULL,
+                                  COLORIZE("Warning: ", CYAN) "PD has no entry point (either it was not found or was not given)\n");
+                }
+                else if (vmr->type == SEL4UTILS_RES_TYPE_STACK)
+                {
+                    PD_CREATION_PRINT("Allocating stack (%zu pages)\n", cfg->stack_pages);
+                    void *stack = sel4gpi_new_sized_stack(&vmr_rde, cfg->stack_pages);
+                    if (ret_stack)
+                    {
+                        *ret_stack = stack;
+                    }
+                    GOTO_IF_ERR(stack == NULL, "failed to allocate a new stack");
+                }
+                else
+                {
+                    PD_CREATION_PRINT("Allocating VMR (%s) with %lu pages at %p\n",
+                                      human_readable_va_res_type(vmr->type), vmr->region_pages, vmr->start);
+                    mo_client_context_t mo = {0};
+                    void *vmr_addr = sel4gpi_get_vmr(&vmr_rde, vmr->region_pages, vmr->start, vmr->type, &mo);
+                    GOTO_IF_ERR(vmr_addr == NULL, "failed to allocate VMR (%s@%p)\n", vmr->type, vmr->start);
+
+                    if (vmr->type == SEL4UTILS_RES_TYPE_IPC_BUF)
+                    {
+                        if (ret_ipc_buf)
+                        {
+                            *ret_ipc_buf = vmr_addr;
+                        }
+
+                        if (ret_ipc_buf_mo)
+                        {
+                            *ret_ipc_buf_mo = mo;
+                        }
+                    }
+                }
+
                 break;
             case GPI_OMIT:
                 break;
@@ -223,71 +224,9 @@ int sel4gpi_ads_configure(ads_config_t *cfg,
         }
     }
 
-    switch (cfg->stack_shared)
+    if (ret_entry_point)
     {
-    case GPI_SHARED:
-    case GPI_COPY:
-        GOTO_IF_COND(1, "Not implemented!\n");
-        if (!(cfg->same_ads && cfg->stack_shared == GPI_SHARED))
-        {
-            PD_CREATION_PRINT("Copying stack\n");
-            vmr_config_t code_cfg = {.start = NULL,
-                                     .region_pages = 0,
-                                     .type = SEL4UTILS_RES_TYPE_STACK,
-                                     .share_mode = cfg->code_shared};
-
-            error = ads_client_copy(&self_ads_conn, &runnable->ads, &code_cfg);
-            GOTO_IF_ERR(error, "failed to copy ELF to ADS\n");
-        }
-        break;
-    case GPI_DISJOINT:
-        PD_CREATION_PRINT("Allocating stack (%zu pages)\n", cfg->stack_pages);
-        void *stack = sel4gpi_new_sized_stack(&vmr_rde, cfg->stack_pages);
-        if (ret_stack)
-        {
-            *ret_stack = stack;
-        }
-        GOTO_IF_COND(stack == NULL, "failed to allocate a new stack");
-        break;
-    case GPI_OMIT:
-        break;
-    default:
-        GOTO_IF_COND(1, "Invalid sharing degree specified (%d) for stack region\n", cfg->stack_shared);
-        break;
-    }
-
-    switch (cfg->ipc_buf_shared)
-    {
-    case GPI_SHARED:
-        if (!cfg->same_ads)
-        {
-            GOTO_IF_COND(1, "Not implemented yet!\n");
-        }
-        break;
-    case GPI_COPY:
-        GOTO_IF_COND(1, "Not implemented yet!\n");
-        break;
-    case GPI_DISJOINT:
-        PD_CREATION_PRINT("Allocating IPC Buffer\n");
-        mo_client_context_t ipc_buf_mo = {0};
-        void *ipc_buf = sel4gpi_get_vmr(&vmr_rde, 1, NULL, SEL4UTILS_RES_TYPE_IPC_BUF, &ipc_buf_mo);
-        if (ret_ipc_buf)
-        {
-            *ret_ipc_buf = ipc_buf;
-        }
-
-        if (ret_ipc_buf_mo)
-        {
-            *ret_ipc_buf_mo = ipc_buf_mo;
-        }
-
-        GOTO_IF_ERR(ipc_buf == NULL, "failed to allocate a new ipc buf");
-        break;
-    case GPI_OMIT:
-        break;
-    default:
-        GOTO_IF_COND(1, "Invalid sharing degree specified (%d) for ipc buf region\n", cfg->ipc_buf_shared);
-        break;
+        *ret_entry_point = cfg->entry_point == NULL ? auto_entry_point : cfg->entry_point;
     }
 
 err_goto:
@@ -350,10 +289,10 @@ int sel4gpi_start_pd(pd_config_t *cfg, sel4gpi_runnable_t *runnable, int argc, s
 
     if (cfg->gpi_res_type_cfg)
     {
-        PD_CREATION_PRINT("Sharing Resources\n");
         for (linked_list_node_t *curr = cfg->gpi_res_type_cfg->head; curr != NULL; curr = curr->next)
         {
             gpi_cap_t type = (gpi_cap_t)curr->data;
+            PD_CREATION_PRINT("Sharing %s Resources with PD\n", cap_type_to_str(type));
             error = pd_client_share_resource_by_type(&self_pd_conn, &runnable->pd, type);
             PRINT_IF_ERR(error, "Failed to share %s resources with PD\n", cap_type_to_str(type));
         }
@@ -412,19 +351,36 @@ pd_config_t *sel4gpi_generate_proc_config(const char *image_name, size_t stack_p
     pd_config_t *proc_cfg = calloc(1, sizeof(pd_config_t));
     proc_cfg->ads_cfg.same_ads = false;
     proc_cfg->ads_cfg.code_shared = GPI_DISJOINT;
-    proc_cfg->ads_cfg.ipc_buf_shared = GPI_DISJOINT;
     proc_cfg->ads_cfg.stack_shared = GPI_DISJOINT;
     proc_cfg->ads_cfg.stack_pages = stack_pages;
     proc_cfg->ads_cfg.image_name = image_name;
 
     proc_cfg->ads_cfg.vmr_cfgs = linked_list_new();
+    int n_cfgs = 0;
     vmr_config_t *heap_vmr = calloc(1, sizeof(vmr_config_t));
     heap_vmr->start = (void *)PD_HEAP_LOC;
     heap_vmr->type = SEL4UTILS_RES_TYPE_HEAP;
     heap_vmr->region_pages = heap_pages;
     heap_vmr->share_mode = GPI_DISJOINT;
+    n_cfgs++;
 
-    linked_list_insert(proc_cfg->ads_cfg.vmr_cfgs, heap_vmr);
+    vmr_config_t *code_vmr = calloc(1, sizeof(vmr_config_t));
+    code_vmr->type = SEL4UTILS_RES_TYPE_CODE;
+    code_vmr->share_mode = GPI_DISJOINT;
+    n_cfgs++;
+
+    vmr_config_t *stack_vmr = calloc(1, sizeof(vmr_config_t));
+    stack_vmr->type = SEL4UTILS_RES_TYPE_STACK;
+    stack_vmr->share_mode = GPI_DISJOINT;
+    n_cfgs++;
+
+    vmr_config_t *ipc_buf_vmr = calloc(1, sizeof(vmr_config_t));
+    ipc_buf_vmr->type = SEL4UTILS_RES_TYPE_IPC_BUF;
+    ipc_buf_vmr->share_mode = GPI_DISJOINT;
+    ipc_buf_vmr->region_pages = 1;
+    n_cfgs++;
+
+    linked_list_insert_many(proc_cfg->ads_cfg.vmr_cfgs, n_cfgs, code_vmr, heap_vmr, stack_vmr, ipc_buf_vmr);
 
     proc_cfg->rde_cfg = linked_list_new();
 
@@ -450,12 +406,25 @@ pd_config_t *sel4gpi_generate_thread_config(void *thread_fn, seL4_CPtr fault_ep)
         .same_ads = true,
         .entry_point = thread_fn,
         .code_shared = GPI_SHARED,
-        .ipc_buf_shared = GPI_DISJOINT,
         .stack_shared = GPI_DISJOINT,
         .stack_pages = DEFAULT_STACK_PAGES};
 
     thread_cfg->ads_cfg = thread_ads_cfg;
     thread_cfg->ads_cfg.vmr_cfgs = linked_list_new();
+
+    int n_cfgs = 0;
+    vmr_config_t *stack_cfg = calloc(1, sizeof(vmr_config_t));
+    stack_cfg->type = SEL4UTILS_RES_TYPE_STACK;
+    stack_cfg->share_mode = GPI_DISJOINT;
+    n_cfgs++;
+
+    vmr_config_t *ipc_buf_cfg = calloc(1, sizeof(vmr_config_t));
+    ipc_buf_cfg->type = SEL4UTILS_RES_TYPE_IPC_BUF;
+    ipc_buf_cfg->share_mode = GPI_DISJOINT;
+    ipc_buf_cfg->region_pages = 1;
+    n_cfgs++;
+
+    linked_list_insert_many(thread_cfg->ads_cfg.vmr_cfgs, n_cfgs, stack_cfg, ipc_buf_cfg);
 
     // give the thread PD all of our current RDEs
     osm_pd_init_data_t *init_data = ((osm_pd_init_data_t *)sel4runtime_get_osm_init_data());

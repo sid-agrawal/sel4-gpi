@@ -175,7 +175,8 @@ err_goto:
 
 static seL4_MessageInfo_t handle_attach_req(seL4_Word sender_badge, seL4_MessageInfo_t old_tag, seL4_CPtr mo_cap)
 {
-    OSDB_PRINTF("Got attach request from client badge %lx.\n", sender_badge);
+    OSDB_PRINTF("Got attach request from client badge: ", sender_badge);
+    BADGE_PRINT(sender_badge);
 
     int error = 0;
 
@@ -331,7 +332,7 @@ static seL4_MessageInfo_t handle_load_elf_request(seL4_Word sender_badge, seL4_M
     for (int i = 0; i < elf_regions; i++)
     {
         sel4utils_res_t *res = reservation_to_res(elf_reservations[i].reservation);
-        forge_ads_attachment_from_res(&target_ads->ads, res, target_pd->pd.id);
+        forge_ads_attachment_from_res(&target_ads->ads, res, get_gpi_server()->rt_pd_id);
     }
 
     OSDB_PRINTF("Successfully loaded ELF, entry point %p.\n", entry_point);
@@ -339,6 +340,8 @@ static seL4_MessageInfo_t handle_load_elf_request(seL4_Word sender_badge, seL4_M
     pd_set_image_name(&target_pd->pd, pd_images[image_id]);
 
     seL4_SetMR(ADSMSGREG_LOAD_ELF_ACK_ENTRY_PT, (seL4_Word)entry_point);
+    // error = forge_ads_attachments_from_vspace(&target_ads->ads, get_gpi_server()->rt_pd_id);
+    // SERVER_GOTO_IF_ERR(error, "Failed to forge attachments to ADS after elf load\n");
 
     OSDB_PRINTF("Forged ADS attachments from ELF.\n");
 
@@ -349,11 +352,11 @@ err_goto:
 }
 
 /**
- * @brief forges an ADS attachment (and MO) from a given reservation
+ * @brief forges an ADS attachment (and MO) from a given reservation.
  *
  * @param ads the ADS to forge the attachment in
  * @param res the reservation to forge
- * @param client_pd_id the PD ID which is binded with the given ADS
+ * @param client_pd_id the ID of the PD which should hold the MO backing the attachment (if it exists)
  * @return int 0 on success
  */
 static int forge_ads_attachment_from_res(ads_t *ads, sel4utils_res_t *res, uint32_t client_pd_id)
@@ -383,7 +386,6 @@ static int forge_ads_attachment_from_res(ads_t *ads, sel4utils_res_t *res, uint3
         seL4_CPtr cap_ret;
         error = forge_mo_cap_from_frames(frame_caps,
                                          num_frames,
-                                         get_ads_component()->server_vka,
                                          client_pd_id,
                                          &cap_ret,
                                          (mo_t **)&res->mo_ref);
@@ -418,6 +420,8 @@ static int forge_ads_attachments_from_vspace(ads_t *ads, uint32_t client_pd_id)
     while (res != NULL)
     {
         OSDB_PRINTF("Found reservation [%p,%p]\n", (void *)res->start, (void *)res->end);
+        // (XXX) Linh: it would be hard to determine which frames belong to the RT's ADS, and which aren't,
+        //             so we'll just not copy them for now
         error = forge_ads_attachment_from_res(ads, res, client_pd_id);
         SERVER_GOTO_IF_ERR(error, "Failed to forge attach node from reservation\n");
         res = res->next;
@@ -580,9 +584,9 @@ int ads_component_attach(uint64_t ads_id, uint64_t mo_id, sel4utils_reservation_
     SERVER_GOTO_IF_COND(mo_reg == NULL, "Couldn't find MO (%ld)\n", mo_id);
 
     /* Attach the MO */
-    if (vmr_type < SEL4UTILS_RES_TYPE_ELF || vmr_type >= SEL4UTILS_RES_TYPE_MAX)
+    if (vmr_type <= SEL4UTILS_RES_TYPE_NONE || vmr_type >= SEL4UTILS_RES_TYPE_MAX)
     {
-        vmr_type = SEL4UTILS_RES_TYPE_OTHER;
+        vmr_type = SEL4UTILS_RES_TYPE_GENERIC;
     }
     error = ads_attach(&ads_entry->ads,
                        get_ads_component()->server_vka,

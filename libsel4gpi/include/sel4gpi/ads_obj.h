@@ -180,15 +180,14 @@ int ads_rm(ads_t *ads, vka_t *vka, void *vaddr);
 int ads_bind(ads_t *ads, vka_t *vka, seL4_CPtr *cpu_cap);
 
 /**
- * @brief
+ * @brief Copies a VMR from src_ads to dst_ads.
+ * The copying method depends on what is set in the given config
  *
  * @param loader vspace of the function running this
  * @param vka vka object to allocate cspace slots and PT from
  * @param src_ads ads object to clone
  * @param dst_ads target to copy into
- * @param omit_vaddr start vaddr of the segment to omit
- * @param pd_osm_data vaddr of a PDs osm data (e.g. RD table) - we need to shallow copy this
- * @param shallow_copy if true, only copy the page table entries, do not copy the frames
+ * @param cfg the configuration describing how the VMR should be copied
  * @return int
  */
 int ads_copy(vspace_t *loader, vka_t *vka, ads_t *src_ads, ads_t *dst_ads, vmr_config_t *cfg);

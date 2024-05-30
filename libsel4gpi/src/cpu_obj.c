@@ -52,7 +52,6 @@ int cpu_config_vspace(cpu_t *cpu,
     cpu->thread.ipc_buffer_addr = ipc_buf_addr;
     cpu->thread.ipc_buffer = ipc_buffer_frame;
 
-    OSDB_PRINTF("fault_ep: %lx\n", fault_ep);
     int error = seL4_TCB_Configure(cpu->thread.tcb.cptr,
                                    fault_ep,   // fault endpoint
                                    root_cnode, // root cnode

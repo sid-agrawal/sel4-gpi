@@ -138,9 +138,8 @@ int ads_client_testing(ads_client_context_t *conn, vka_t *vka,
 /**
  * @brief Given a VMR config that describes a virtual memory region, copies it from src_ads to dst_ads
  * Copying method will depend on what's provided in the config. Currently, only shallow and deep copying are supported.
- * For regions with type other than SEL4UTILS_RES_TYPE_GENERIC, SEL4UTILS_RES_TYPE_OTHER, and
- * SEL4UTILS_RES_TYPE_SHARED_FRAMES, the config can omit a start address and region size,
- * and the server will attempt to look for the special-typed VMR
+ * For regions with type other than SEL4UTILS_RES_TYPE_GENERIC and SEL4UTILS_RES_TYPE_SHARED_FRAMES,
+ * the config can omit a start address and region size, and the server will attempt to look for the special-typed VMR
  *
  * @param src_ads the ADS to copy from
  * @param dst_ads the ADS to copy to

@@ -158,7 +158,6 @@ int mo_component_initialize(simple_t *server_simple,
 
 int forge_mo_cap_from_frames(seL4_CPtr *frame_caps,
                              uint32_t num_pages,
-                             vka_t *vka,
                              uint32_t client_pd_id,
                              seL4_CPtr *cap_ret,
                              mo_t **mo_ret)
@@ -189,7 +188,6 @@ int forge_mo_cap_from_frames(seL4_CPtr *frame_caps,
         // We cannot assert this, may be forging an MO from a reservation
         // that is not fully backed
         // assert(caps[i] != seL4_CapNull);
-
         mo->frame_caps_in_root_task[i] = frame_caps[i];
 
         // (XXX) Arya: Should we have a non-debug function for this?

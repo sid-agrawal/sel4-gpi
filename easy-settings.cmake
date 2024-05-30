@@ -33,7 +33,7 @@ set(KernelSel4Arch "aarch64" CACHE STRING "aarch32, aarch64, arm_hyp, ia32, x86_
 #set(LibSel4TestPrinterRegex "GPIADS002" CACHE STRING "A POSIX regex pattern used to filter tests")
 #set(LibSel4TestPrinterRegex "GPICPU001" CACHE STRING "A POSIX regex pattern used to filter tests")
 # set(LibSel4TestPrinterRegex "GPIVM001" CACHE STRING "A POSIX regex pattern used to filter tests")
-set(LibSel4TestPrinterRegex "GPIPD001" CACHE STRING "A POSIX regex pattern used to filter tests")
+set(LibSel4TestPrinterRegex "GPIKV002" CACHE STRING "A POSIX regex pattern used to filter tests")
 set(LibSel4TestPrinterHaltOnTestFailure OFF CACHE BOOL "Halt on the first test failure")
 mark_as_advanced(CLEAR LibSel4TestPrinterRegex LibSel4TestPrinterHaltOnTestFailure)
 

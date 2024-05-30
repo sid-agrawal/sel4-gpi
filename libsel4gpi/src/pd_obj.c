@@ -343,7 +343,7 @@ int pd_new(pd_t *pd,
     pd->init_data = (osm_pd_init_data_t *)vspace_map_pages(server_vspace, &frame.cptr, NULL, seL4_AllRights, 1, seL4_PageBits, 1);
 
     mo_t *rde_mo_obj;
-    error = forge_mo_cap_from_frames(&frame.cptr, 1, server_vka, pd->id,
+    error = forge_mo_cap_from_frames(&frame.cptr, 1, get_gpi_server()->rt_pd_id,
                                      &pd->init_data_mo.badged_server_ep_cspath.capPtr, &rde_mo_obj);
     pd->init_data_mo_id = rde_mo_obj->id;
 
@@ -645,7 +645,8 @@ int pd_configure(pd_t *pd,
     ZF_LOGF_IFERR(error, "Failed to send PD cap to PD");
 
     // Map init data to the PD
-    error = ads_component_attach(pd->init_data->ads_conn.id, pd->init_data_mo_id, SEL4UTILS_RES_TYPE_OTHER, NULL, (void **)&pd->init_data_in_PD);
+    error = ads_component_attach(pd->init_data->ads_conn.id, pd->init_data_mo_id,
+                                 SEL4UTILS_RES_TYPE_GENERIC, NULL, (void **)&pd->init_data_in_PD);
     if (error)
     {
         ZF_LOGF("Failed to attach init data to child PD");

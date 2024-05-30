@@ -10,6 +10,8 @@
 #include <sel4gpi/pd_clientapi.h>
 #include <sel4gpi/error_handle.h>
 
+#include <sel4runtime.h>
+
 #include <kvstore_shared.h>
 #include <kvstore_client.h>
 #include <kvstore_server.h>
@@ -49,38 +51,62 @@ int kvstore_client_swap_ads_app(void)
 static int configure_separate_ads()
 {
     int error = 0;
-    // int swap_err;
 
-    // pd_client_context_t self_pd_conn = sel4gpi_get_pd_conn();
-    // seL4_CPtr slot;
-    // pd_client_next_slot(&self_pd_conn, &slot);
-
-    // seL4_CPtr ads_rde = sel4gpi_get_rde(GPICAP_TYPE_ADS);
-    // ads_client_context_t self_ads_conn = sel4gpi_get_ads_conn();
-    // swap_err = ads_client_shallow_copy(&self_ads_conn, slot, NULL, &kvserv_ads);
-    // if (swap_err)
-    // {
-    //     ZF_LOGE("failed to make a new ADS for kvstore server");
-    //     return swap_err;
-    // }
-
-    /* WIP */
     ads_config_t other_ads_cfg = {
         .same_ads = false,
-        .code_shared = GPI_SHARED,
+        .code_shared = GPI_COPY,
         .stack_shared = GPI_SHARED,
-        .ipc_buf_shared = GPI_SHARED,
         .stack_pages = DEFAULT_STACK_PAGES,
     };
 
     linked_list_t other_vmr_cfg = {0};
+    int n_cfgs = 0;
     vmr_config_t heap_cfg = {
         .start = (void *)PD_HEAP_LOC,
         .region_pages = DEFAULT_HEAP_PAGES,
         .type = SEL4UTILS_RES_TYPE_HEAP,
         .share_mode = GPI_COPY};
+    n_cfgs++;
 
-    linked_list_insert(&other_vmr_cfg, (void *)&heap_cfg);
+    vmr_config_t osm_init_data_cfg = {
+        .start = sel4runtime_get_osm_init_data(),
+        .region_pages = 1,
+        .type = SEL4UTILS_RES_TYPE_GENERIC,
+        .share_mode = GPI_SHARED};
+    n_cfgs++;
+
+    vmr_config_t code_reg_cfg = {
+        .start = 0,
+        .region_pages = 0,
+        .type = SEL4UTILS_RES_TYPE_CODE,
+        .share_mode = GPI_SHARED};
+    n_cfgs++;
+
+    vmr_config_t data_reg_cfg = {
+        .start = 0,
+        .region_pages = 0,
+        .type = SEL4UTILS_RES_TYPE_DATA,
+        .share_mode = GPI_COPY};
+    n_cfgs++;
+
+    vmr_config_t stack_reg_cfg = {
+        .start = 0,
+        .region_pages = 0,
+        .type = SEL4UTILS_RES_TYPE_STACK,
+        .share_mode = GPI_SHARED};
+    n_cfgs++;
+
+    vmr_config_t ipc_buf_cfg = {
+        .start = 0,
+        .region_pages = 0,
+        .type = SEL4UTILS_RES_TYPE_IPC_BUF,
+        .share_mode = GPI_SHARED};
+    n_cfgs++;
+
+    linked_list_insert_many(&other_vmr_cfg, n_cfgs,
+                            &code_reg_cfg, &data_reg_cfg, &heap_cfg,
+                            &osm_init_data_cfg, &stack_reg_cfg, &ipc_buf_cfg);
+
     other_ads_cfg.vmr_cfgs = &other_vmr_cfg;
 
     sel4gpi_runnable_t runnable = {0};

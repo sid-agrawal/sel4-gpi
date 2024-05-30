@@ -114,10 +114,11 @@ void sel4gpi_set_exit_cb(void)
     sel4runtime_set_exit(sel4gpi_exit_cb);
 }
 
-void *sel4gpi_get_vmr(ads_client_context_t *vmr_rde, int num_pages, void *vaddr, sel4utils_reservation_type_t vmr_type, mo_client_context_t *ret_mo)
+void *sel4gpi_get_vmr(ads_client_context_t *vmr_rde, int num_pages, void *vaddr,
+                      sel4utils_reservation_type_t vmr_type, mo_client_context_t *ret_mo)
 {
     int error;
-
+    GOTO_IF_COND(num_pages <= 0, "Invalid VMR pages specified: %d\n", num_pages);
     pd_client_context_t self_pd = sel4gpi_get_pd_conn();
 
     seL4_CPtr mo_rde = sel4gpi_get_rde(GPICAP_TYPE_MO);

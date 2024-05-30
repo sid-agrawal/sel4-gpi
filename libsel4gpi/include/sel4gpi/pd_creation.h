@@ -82,10 +82,11 @@ typedef struct _ads_config
     /** if specified, will take precedence over any automatically found ones */
     void *entry_point;
 
-    /** if we're in the same ADS, configuring any of these as GPI_SHARED has no effect */
+    /** if we're in the same ADS, configuring any of these as GPI_SHARED has no effect
+     * (XXX) Linh: these are to be removed once we have a unified entry point, the actual
+     */
     gpi_share_degree_t code_shared;
     gpi_share_degree_t stack_shared;
-    gpi_share_degree_t ipc_buf_shared;
     size_t stack_pages;
 
     /** list of vaddrs to non-contiguous VMRs to configure, the heap should be specified here

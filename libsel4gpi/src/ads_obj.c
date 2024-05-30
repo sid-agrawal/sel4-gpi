@@ -409,27 +409,6 @@ int ads_bind(ads_t *ads, vka_t *vka, seL4_CPtr *cpu_cap)
     return 0;
 }
 
-static char *ads_res_type_to_str(sel4utils_reservation_type_t type)
-{
-    switch (type)
-    {
-    case SEL4UTILS_RES_TYPE_ELF:
-        return "ELF";
-    case SEL4UTILS_RES_TYPE_STACK:
-        return "STACK";
-    case SEL4UTILS_RES_TYPE_IPC_BUF:
-        return "IPC_BUFFER";
-    case SEL4UTILS_RES_TYPE_HEAP:
-        return "HEAP";
-    case SEL4UTILS_RES_TYPE_SHARED_FRAMES:
-        return "SHARED_FRAMES";
-    case SEL4UTILS_RES_TYPE_OTHER:
-        return "OTHER";
-    default:
-        return "UNKNOWN";
-    }
-}
-
 void ads_dump_rr(ads_t *ads, model_state_t *ms, gpi_model_node_t *pd_node)
 {
     // Add the ADS resource space
@@ -555,8 +534,7 @@ static int ads_deep_copy(ads_t *dst_ads, mo_t *src_mo, attach_node_t *new_attach
     int num_pages = old_attach_node->n_pages;
     // Make a new MO
     // The "client" to hold this MO is the root task
-    mo_component_registry_entry_t *
-        mo_entry;
+    mo_component_registry_entry_t *mo_entry;
     seL4_CPtr mo_cap; // Not used since we are not giving this MO away
     error = resource_component_allocate(get_mo_component(),
                                         get_gpi_server()->rt_pd_id,
@@ -580,8 +558,24 @@ static int ads_deep_copy(ads_t *dst_ads, mo_t *src_mo, attach_node_t *new_attach
     // Temporarily map the pages of both MO to current vspace and copy data
     // (XXX) Arya: no ADS for RT so just manually map the pages
     vspace_t *loader = get_ads_component()->server_vspace;
+
+    seL4_CPtr *frames = malloc(sizeof(seL4_CPtr) * src_mo->num_pages);
+    for (int i = 0; i < src_mo->num_pages; i++)
+    {
+        cspacepath_t src, dst;
+        error = vka_cspace_alloc_path(get_ads_component()->server_vka, &dst);
+        SERVER_GOTO_IF_ERR(error, "Failed to alloc slot for copied frame\n");
+
+        vka_cspace_make_path(get_ads_component()->server_vka, src_mo->frame_caps_in_root_task[i], &src);
+
+        error = vka_cnode_copy(&dst, &src, seL4_AllRights);
+        SERVER_GOTO_IF_ERR(error, "Failed to copy frame cap\n");
+
+        frames[i] = dst.capPtr;
+    }
+
     void *old_mo_va = vspace_map_pages(loader,
-                                       src_mo->frame_caps_in_root_task,
+                                       frames,
                                        NULL,
                                        seL4_AllRights,
                                        num_pages,
@@ -603,6 +597,7 @@ static int ads_deep_copy(ads_t *dst_ads, mo_t *src_mo, attach_node_t *new_attach
 err_goto:
     vspace_unmap_pages(loader, old_mo_va, num_pages, MO_PAGE_BITS, VSPACE_FREE);
     vspace_unmap_pages(loader, new_mo_va, num_pages, MO_PAGE_BITS, VSPACE_FREE);
+    free(frames);
 
     return error;
 }
@@ -616,9 +611,11 @@ int ads_copy(vspace_t *loader,
     int error = 0;
     linked_list_t *src_attaches = NULL;
 
+    SERVER_GOTO_IF_COND(cfg->type <= SEL4UTILS_RES_TYPE_NONE || cfg->type >= SEL4UTILS_RES_TYPE_MAX,
+                        "Invalid reservation type given: %d\n", cfg->type);
+
     if (cfg->start == NULL &&
         cfg->type != SEL4UTILS_RES_TYPE_SHARED_FRAMES &&
-        cfg->type != SEL4UTILS_RES_TYPE_OTHER &&
         cfg->type != SEL4UTILS_RES_TYPE_GENERIC)
     {
         src_attaches = ads_get_res_by_type(src_ads, cfg->type);
@@ -673,73 +670,7 @@ int ads_copy(vspace_t *loader,
 
         SERVER_GOTO_IF_ERR(error, "Failed to attach source MO (%d) to dst ADS (%d)\n", old_mo->id, dst_ads->id);
     }
-#if 0
-    /* walk all the reservations */
-    // (XXX) Arya: We may be able to just walk attach nodes instead of reservations (eventually?)
-    while (from_sel4_res != NULL)
-    {
-        OSDB_PRINTF("Reservation: %p\n", (void *)from_sel4_res->start);
 
-        if (from_sel4_res->start == (uintptr_t)omit_vaddr)
-        {
-            OSDB_PRINTF("Skipping the region, with start vaddr of %p\n", omit_vaddr);
-            from_sel4_res = from_sel4_res->next;
-            continue;
-        }
-
-        attach_node_t *new_attach_node;
-        attach_node_t *old_attach_node; // original attach node
-        mo_t *old_mo;                   // original MO
-        error = ads_copy_reservation(src_ads, dst_ads, from_sel4_res->start, from_sel4_res->end, from_sel4_res->type, &old_attach_node, &new_attach_node, &old_mo, &num_pages);
-        SERVER_GOTO_IF_ERR(error, "Copying reservation failed\n");
-
-        if (!old_attach_node->mo_attached)
-        {
-            // If no MO attached, skip to next reservation
-            OSDB_PRINTF("Skipping reservation at vaddr: %p, no MO attached\n", (void *)from_sel4_res->start);
-            from_sel4_res = from_sel4_res->next;
-            continue;
-        }
-
-        // Shallow copy IPC buffer, stack, init data, elf
-        if (from_sel4_res->type == SEL4UTILS_RES_TYPE_IPC_BUF ||
-            from_sel4_res->type == SEL4UTILS_RES_TYPE_STACK ||
-            from_sel4_res->start == (uintptr_t)pd_osm_data ||
-            from_sel4_res->type == SEL4UTILS_RES_TYPE_ELF)
-        {
-            OSDB_PRINTF("======================Shallow copying [%s] %p to %p [%s]\n",
-                        human_readable_va_res_type(from_sel4_res->type),
-                        (void *)from_sel4_res->start, (void *)from_sel4_res->end,
-                        human_readable_size(from_sel4_res->end - from_sel4_res->start));
-
-            // Attach the same MO in the new ADS
-            error = ads_attach_to_res(dst_ads, vka, new_attach_node, old_attach_node->mo_offset, old_mo);
-
-            if (error)
-            {
-                ZF_LOGE("Failed to attach pages to region\n");
-                return 1;
-            }
-        }
-        else if (from_sel4_res->type == SEL4UTILS_RES_TYPE_HEAP)
-        {
-            OSDB_PRINTF("======================Deep copying [%s] %p to %p [%s]\n",
-                        human_readable_va_res_type(from_sel4_res->type),
-                        (void *)from_sel4_res->start, (void *)from_sel4_res->end,
-                        human_readable_size(from_sel4_res->end - from_sel4_res->start));
-
-            error = ads_deep_copy(dst_ads, old_mo, num_pages, new_attach_node, old_attach_node);
-            SERVER_GOTO_IF_ERR(error, "Failed to deep copy reservation\n");
-        }
-
-        // Move to next node.
-        from_sel4_res = from_sel4_res->next;
-    }
-    OSDB_PRINTF("New vspace details:\n");
-    // sel4utils_walk_vspace(to, NULL);
-    // For each reservation: call share_mem_at_vaddr
-    return 0;
-#endif
 err_goto:
     // TODO if error: cleanup reservation
     linked_list_destroy(src_attaches);

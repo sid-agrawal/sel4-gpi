@@ -47,3 +47,12 @@ void linked_list_insert(linked_list_t *list, void *data);
  * @param list an existing list
  */
 void linked_list_destroy(linked_list_t *list);
+
+/**
+ * @brief inserts many items into the list at once
+ *
+ * @param list an existing list
+ * @param count the number of items being inserted
+ * @param ... variadic arguments specifying the items to insert
+ */
+void linked_list_insert_many(linked_list_t *list, int count, ...);

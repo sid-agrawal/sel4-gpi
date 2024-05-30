@@ -90,9 +90,18 @@ int mo_component_initialize(simple_t *server_simple,
 /* Global server instance accessor functions. */
 resource_component_context_t *get_mo_component(void);
 
+/**
+ * @brief forges an MO resource given the list of frames.
+ *
+ * @param frame_caps the frames belonging to the MO
+ * @param num_pages total number of pages
+ * @param client_pd_id the PD which holds the MO
+ * @param cap_ret returns the MO cap
+ * @param mo_ref returns the MO handle
+ * @return int 0 on success
+ */
 int forge_mo_cap_from_frames(seL4_CPtr *frame_caps,
                              uint32_t num_pages,
-                             vka_t *vka,
                              uint32_t client_pd_id,
                              seL4_CPtr *cap_ret,
                              mo_t **mo_ref);
