@@ -793,7 +793,7 @@ int ads_write_arguments(pd_t *pd,
 
     /* Copy the elf headers */
     uintptr_t at_phdr;
-    error = sel4utils_stack_write(vspace, &ads->vspace, vka, pd->elf_phdrs,
+    error = sel4utils_stack_write(vspace, ads->vspace, vka, pd->elf_phdrs,
                                   pd->num_elf_phdrs * sizeof(Elf_Phdr), &initial_stack_pointer);
     if (error)
     {
@@ -833,7 +833,7 @@ int ads_write_arguments(pd_t *pd,
 
     /* write all the strings into the stack */
     /* Copy over the user arguments */
-    error = sel4utils_stack_copy_args(vspace, &ads->vspace, vka, argc, argv, dest_argv, &initial_stack_pointer);
+    error = sel4utils_stack_copy_args(vspace, ads->vspace, vka, argc, argv, dest_argv, &initial_stack_pointer);
     if (error)
     {
         ZF_LOGE("%s: Failed to write stack\n", __func__);
@@ -843,7 +843,7 @@ int ads_write_arguments(pd_t *pd,
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wstringop-overflow"
     /* copy the environment */
-    error = sel4utils_stack_copy_args(vspace, &ads->vspace, vka, envc, envp, dest_envp, &initial_stack_pointer);
+    error = sel4utils_stack_copy_args(vspace, ads->vspace, vka, envc, envp, dest_envp, &initial_stack_pointer);
     if (error)
     {
         ZF_LOGE("%s: Failed to write stack\n", __func__);
@@ -864,55 +864,55 @@ int ads_write_arguments(pd_t *pd,
 
     /* construct initial stack frame */
     /* Null terminate aux */
-    error = sel4utils_stack_write_constant(vspace, &ads->vspace, vka, 0, &initial_stack_pointer);
+    error = sel4utils_stack_write_constant(vspace, ads->vspace, vka, 0, &initial_stack_pointer);
     if (error)
     {
         ZF_LOGE("%s: Failed to write stack\n", __func__);
         return -1;
     }
-    error = sel4utils_stack_write_constant(vspace, &ads->vspace, vka, 0, &initial_stack_pointer);
+    error = sel4utils_stack_write_constant(vspace, ads->vspace, vka, 0, &initial_stack_pointer);
     if (error)
     {
         ZF_LOGE("%s: Failed to write stack\n", __func__);
         return -1;
     }
     /* write aux */
-    error = sel4utils_stack_write(vspace, &ads->vspace, vka, auxv, sizeof(auxv[0]) * auxc, &initial_stack_pointer);
+    error = sel4utils_stack_write(vspace, ads->vspace, vka, auxv, sizeof(auxv[0]) * auxc, &initial_stack_pointer);
     if (error)
     {
         ZF_LOGE("%s: Failed to write stack\n", __func__);
         return -1;
     }
     /* Null terminate environment */
-    error = sel4utils_stack_write_constant(vspace, &ads->vspace, vka, 0, &initial_stack_pointer);
+    error = sel4utils_stack_write_constant(vspace, ads->vspace, vka, 0, &initial_stack_pointer);
     if (error)
     {
         ZF_LOGE("%s: Failed to write stack\n", __func__);
         return -1;
     }
     /* write environment */
-    error = sel4utils_stack_write(vspace, &ads->vspace, vka, dest_envp, sizeof(dest_envp), &initial_stack_pointer);
+    error = sel4utils_stack_write(vspace, ads->vspace, vka, dest_envp, sizeof(dest_envp), &initial_stack_pointer);
     if (error)
     {
         ZF_LOGE("%s: Failed to write stack\n", __func__);
         return -1;
     }
     /* Null terminate arguments */
-    error = sel4utils_stack_write_constant(vspace, &ads->vspace, vka, 0, &initial_stack_pointer);
+    error = sel4utils_stack_write_constant(vspace, ads->vspace, vka, 0, &initial_stack_pointer);
     if (error)
     {
         ZF_LOGE("%s: Failed to write stack\n", __func__);
         return -1;
     }
     /* write arguments */
-    error = sel4utils_stack_write(vspace, &ads->vspace, vka, dest_argv, sizeof(dest_argv), &initial_stack_pointer);
+    error = sel4utils_stack_write(vspace, ads->vspace, vka, dest_argv, sizeof(dest_argv), &initial_stack_pointer);
     if (error)
     {
         ZF_LOGE("%s: Failed to write stack\n", __func__);
         return -1;
     }
     /* Push argument count */
-    error = sel4utils_stack_write_constant(vspace, &ads->vspace, vka, argc, &initial_stack_pointer);
+    error = sel4utils_stack_write_constant(vspace, ads->vspace, vka, argc, &initial_stack_pointer);
     if (error)
     {
         ZF_LOGE("%s: Failed to write stack\n", __func__);

@@ -51,9 +51,12 @@ err_goto:
     return NULL;
 }
 
-pd_config_t *sel4gpi_configure_process(const char *image_name, int stack_pages, int heap_pages, pd_client_context_t *ret_pd)
+pd_config_t *sel4gpi_configure_process(const char *image_name,
+                                       int stack_pages,
+                                       int heap_pages,
+                                       sel4gpi_runnable_t *ret_runnable)
 {
-    int error;
+    int error = 0;
     pd_config_t *proc_cfg = NULL;
 
     seL4_CPtr pd_rde = sel4gpi_get_rde(GPICAP_TYPE_PD);
@@ -62,17 +65,75 @@ pd_config_t *sel4gpi_configure_process(const char *image_name, int stack_pages, 
     pd_client_context_t self_pd_conn = sel4gpi_get_pd_conn();
 
     /* new PD */
-    seL4_CPtr slot;
-    error = pd_client_next_slot(&self_pd_conn, &slot);
+    seL4_CPtr free_slot;
+    error = pd_client_next_slot(&self_pd_conn, &free_slot);
     GOTO_IF_ERR(error, "Failed to allocate slot for new PD\n");
 
-    error = pd_component_client_connect(pd_rde, slot, ret_pd);
+    error = pd_component_client_connect(pd_rde, free_slot, &ret_runnable->pd);
     GOTO_IF_ERR(error, "Failed to create new PD\n");
+
+    /* new ADS*/
+    seL4_CPtr ads_rde = sel4gpi_get_rde(GPICAP_TYPE_ADS);
+    GOTO_IF_COND(ads_rde == seL4_CapNull, "Can't make new ADS, no ADS RDE\n");
+
+    error = pd_client_next_slot(&self_pd_conn, &free_slot);
+    GOTO_IF_ERR(error, "failed to allocate next slot");
+
+    error = ads_component_client_connect(ads_rde, free_slot, &ret_runnable->ads);
+    GOTO_IF_ERR(error, "failed to allocate a new ADS");
+
+    /* new CPU */
+    // (XXX) Linh: for now, we'll just assume we always need a new CPU resource, configuration is TBD
+    seL4_CPtr cpu_rde = sel4gpi_get_rde(GPICAP_TYPE_CPU);
+    GOTO_IF_COND(cpu_rde == seL4_CapNull, "No CPU RDE\n");
+
+    error = pd_client_next_slot(&self_pd_conn, &free_slot);
+    GOTO_IF_ERR(error, "failed to allocate next slot");
+
+    error = cpu_component_client_connect(cpu_rde, free_slot, &ret_runnable->cpu);
+    GOTO_IF_ERR(error, "failed to allocate a new CPU");
 
     proc_cfg = sel4gpi_generate_proc_config(image_name, DEFAULT_STACK_PAGES, DEFAULT_HEAP_PAGES);
 
 err_goto:
     return proc_cfg;
+}
+
+pd_config_t *sel4gpi_configure_thread(void *thread_fn, seL4_CPtr fault_ep, sel4gpi_runnable_t *ret_runnable)
+{
+    int error = 0;
+    pd_config_t *cfg = NULL;
+    seL4_CPtr pd_rde = sel4gpi_get_rde(GPICAP_TYPE_PD);
+    GOTO_IF_COND(pd_rde == seL4_CapNull, "No PD RDE\n");
+
+    pd_client_context_t self_pd_conn = sel4gpi_get_pd_conn();
+
+    /* new PD */
+    seL4_CPtr free_slot;
+    error = pd_client_next_slot(&self_pd_conn, &free_slot);
+    GOTO_IF_ERR(error, "Failed to allocate slot for new PD\n");
+
+    error = pd_component_client_connect(pd_rde, free_slot, &ret_runnable->pd);
+    GOTO_IF_ERR(error, "Failed to create new PD\n");
+
+    /* use same ADS */
+    ret_runnable->ads = sel4gpi_get_ads_conn();
+
+    /* new CPU */
+    // (XXX) Linh: for now, we'll just assume we always need a new CPU resource, configuration is TBD
+    seL4_CPtr cpu_rde = sel4gpi_get_rde(GPICAP_TYPE_CPU);
+    GOTO_IF_COND(cpu_rde == seL4_CapNull, "No CPU RDE\n");
+
+    error = pd_client_next_slot(&self_pd_conn, &free_slot);
+    GOTO_IF_ERR(error, "failed to allocate next slot");
+
+    error = cpu_component_client_connect(cpu_rde, free_slot, &ret_runnable->cpu);
+    GOTO_IF_ERR(error, "failed to allocate a new CPU");
+
+    cfg = sel4gpi_generate_thread_config(thread_fn, fault_ep);
+
+err_goto:
+    return cfg;
 }
 
 /**
@@ -120,32 +181,34 @@ int sel4gpi_ads_configure(ads_config_t *cfg,
                           mo_client_context_t *ret_ipc_buf_mo)
 {
     int error = 0;
-    ads_client_context_t vmr_rde = {0};
-    pd_client_context_t self_pd_conn = sel4gpi_get_pd_conn();
+    ads_client_context_t vmr_rde = {.badged_server_ep_cspath.capPtr =
+                                        sel4gpi_get_rde_by_space_id(runnable->ads.id, GPICAP_TYPE_VMR)};
+    uint64_t current_ads_id = sel4gpi_get_binded_ads_id();
+    // pd_client_context_t self_pd_conn = sel4gpi_get_pd_conn();
     ads_client_context_t self_ads_conn = sel4gpi_get_ads_conn();
-    seL4_CPtr free_slot;
+    // seL4_CPtr free_slot;
 
-    if (cfg->same_ads)
-    {
-        vmr_rde.badged_server_ep_cspath.capPtr = sel4gpi_get_rde_by_space_id(sel4gpi_get_binded_ads_id(), GPICAP_TYPE_VMR);
-        runnable->ads = sel4gpi_get_ads_conn();
-    }
-    else
-    {
-        PD_CREATION_PRINT("Making new ADS\n");
-        // create a new ADS
-        seL4_CPtr ads_rde = sel4gpi_get_rde(GPICAP_TYPE_ADS);
-        GOTO_IF_COND(ads_rde == seL4_CapNull, "Can't make new ADS, no ADS RDE\n");
+    // if (cfg->same_ads)
+    // {
+    //     vmr_rde.badged_server_ep_cspath.capPtr = sel4gpi_get_rde_by_space_id(sel4gpi_get_binded_ads_id(), GPICAP_TYPE_VMR);
+    //     runnable->ads = sel4gpi_get_ads_conn();
+    // }
+    // else
+    // {
+    //     PD_CREATION_PRINT("Making new ADS\n");
+    //     // create a new ADS
+    //     seL4_CPtr ads_rde = sel4gpi_get_rde(GPICAP_TYPE_ADS);
+    //     GOTO_IF_COND(ads_rde == seL4_CapNull, "Can't make new ADS, no ADS RDE\n");
 
-        /* new ADS */
-        error = pd_client_next_slot(&self_pd_conn, &free_slot);
-        GOTO_IF_ERR(error, "failed to allocate next slot");
+    //     /* new ADS */
+    //     error = pd_client_next_slot(&self_pd_conn, &free_slot);
+    //     GOTO_IF_ERR(error, "failed to allocate next slot");
 
-        error = ads_component_client_connect(ads_rde, free_slot, &runnable->ads);
-        GOTO_IF_ERR(error, "failed to allocate a new ADS");
+    //     error = ads_component_client_connect(ads_rde, free_slot, &runnable->ads);
+    //     GOTO_IF_ERR(error, "failed to allocate a new ADS");
 
-        vmr_rde.badged_server_ep_cspath.capPtr = sel4gpi_get_rde_by_space_id(runnable->ads.id, GPICAP_TYPE_VMR);
-    }
+    //     vmr_rde.badged_server_ep_cspath.capPtr = sel4gpi_get_rde_by_space_id(runnable->ads.id, GPICAP_TYPE_VMR);
+    // }
 
     void *auto_entry_point = NULL;
 
@@ -160,7 +223,7 @@ int sel4gpi_ads_configure(ads_config_t *cfg,
             case GPI_COPY:
             case GPI_SHARED:
                 /* shallow copying when we're in the same ADS doesn't make sense */
-                if (!(cfg->same_ads && vmr->share_mode == GPI_SHARED))
+                if (!(current_ads_id == runnable->ads.id && vmr->share_mode == GPI_SHARED))
                 {
                     PD_CREATION_PRINT("%s VMR (%s) with %lu pages at %p\n",
                                       sel4gpi_share_degree_to_str(vmr->share_mode),
@@ -264,15 +327,15 @@ int sel4gpi_start_pd(pd_config_t *cfg, sel4gpi_runnable_t *runnable, int argc, s
     seL4_CPtr free_slot;
     pd_client_context_t self_pd_conn = sel4gpi_get_pd_conn();
 
-    // (XXX) Linh: for now, we'll just assume we always need a new CPU resource, configuration is TBD
-    seL4_CPtr cpu_rde = sel4gpi_get_rde(GPICAP_TYPE_CPU);
-    GOTO_IF_COND(cpu_rde == seL4_CapNull, "No CPU RDE\n");
+    // // (XXX) Linh: for now, we'll just assume we always need a new CPU resource, configuration is TBD
+    // seL4_CPtr cpu_rde = sel4gpi_get_rde(GPICAP_TYPE_CPU);
+    // GOTO_IF_COND(cpu_rde == seL4_CapNull, "No CPU RDE\n");
 
-    error = pd_client_next_slot(&self_pd_conn, &free_slot);
-    GOTO_IF_ERR(error, "failed to allocate next slot");
+    // error = pd_client_next_slot(&self_pd_conn, &free_slot);
+    // GOTO_IF_ERR(error, "failed to allocate next slot");
 
-    error = cpu_component_client_connect(cpu_rde, free_slot, &runnable->cpu);
-    GOTO_IF_ERR(error, "failed to allocate a new CPU");
+    // error = cpu_component_client_connect(cpu_rde, free_slot, &runnable->cpu);
+    // GOTO_IF_ERR(error, "failed to allocate a new CPU");
     seL4_Word cnode_guard = api_make_guard_skip_word(seL4_WordBits - TEST_PROCESS_CSPACE_SIZE_BITS);
 
     mo_client_context_t ipc_mo = {0};
@@ -287,6 +350,14 @@ int sel4gpi_start_pd(pd_config_t *cfg, sel4gpi_runnable_t *runnable, int argc, s
 
     error = rde_configure(cfg, runnable);
     GOTO_IF_ERR(error, "Failed to configure RDEs\n");
+
+    // give the PD its CPU cap
+    error = pd_client_send_cap(&runnable->pd, runnable->cpu.badged_server_ep_cspath.capPtr, NULL);
+    GOTO_IF_ERR(error, "Failed to send CPU cap to PD\n");
+
+    // give the PD its ADS cap
+    error = pd_client_send_cap(&runnable->pd, runnable->ads.badged_server_ep_cspath.capPtr, NULL);
+    GOTO_IF_ERR(error, "Failed to send ADS cap to PD\n");
 
     if (cfg->gpi_res_type_cfg)
     {
@@ -356,7 +427,6 @@ err_goto:
 pd_config_t *sel4gpi_generate_proc_config(const char *image_name, size_t stack_pages, size_t heap_pages)
 {
     pd_config_t *proc_cfg = calloc(1, sizeof(pd_config_t));
-    proc_cfg->ads_cfg.same_ads = false;
     proc_cfg->ads_cfg.code_shared = GPI_DISJOINT;
     proc_cfg->ads_cfg.stack_shared = GPI_DISJOINT;
     proc_cfg->ads_cfg.stack_pages = stack_pages;
@@ -410,7 +480,6 @@ pd_config_t *sel4gpi_generate_thread_config(void *thread_fn, seL4_CPtr fault_ep)
     pd_config_t *thread_cfg = calloc(1, sizeof(pd_config_t));
     thread_cfg->fault_ep = fault_ep;
     ads_config_t thread_ads_cfg = {
-        .same_ads = true,
         .entry_point = thread_fn,
         .code_shared = GPI_SHARED,
         .stack_shared = GPI_DISJOINT,

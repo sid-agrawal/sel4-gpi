@@ -89,7 +89,11 @@ int pd_client_send_cap(pd_client_context_t *conn, seL4_CPtr cap_to_send,
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 1,
                                                   PDMSGREG_SEND_CAP_REQ_END);
     tag = seL4_Call(conn->badged_server_ep_cspath.capPtr, tag);
-    *slot = seL4_GetMR(PDMSGREG_SEND_CAP_PD_SLOT);
+
+    if (slot)
+    {
+        *slot = seL4_GetMR(PDMSGREG_SEND_CAP_PD_SLOT);
+    }
 
     return seL4_MessageInfo_ptr_get_label(&tag);
 }

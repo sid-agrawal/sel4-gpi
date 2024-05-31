@@ -35,31 +35,19 @@ int test_new_process_osmosis_shmem(env_t env)
 {
     int error;
     printf("------------------STARTING: %s------------------\n", __func__);
-    pd_client_context_t new_pd;
-    pd_config_t *proc_cfg = sel4gpi_configure_process("hello", DEFAULT_STACK_PAGES, DEFAULT_HEAP_PAGES, &new_pd);
+
+    sel4gpi_runnable_t runnable = {0};
+    pd_config_t *proc_cfg = sel4gpi_configure_process("hello", DEFAULT_STACK_PAGES, DEFAULT_HEAP_PAGES, &runnable);
     test_assert(proc_cfg != NULL);
-
-    // ads_client_context_t vmr_rde = {.badged_server_ep_cspath.capPtr = sel4gpi_get_rde_by_space_id(sel4gpi_get_binded_ads_id(), GPICAP_TYPE_VMR)};
-    // void *vaddr = sel4gpi_get_vmr(&vmr_rde, 5, NULL, SEL4UTILS_RES_TYPE_GENERIC, NULL);
-    // printf("vaddr: %p\n", vaddr);
-    // test_assert(vaddr != NULL);
-
-    // vmr_config_t *test_cfg = calloc(1, sizeof(vmr_config_t));
-    // test_cfg->start = vaddr;
-    // test_cfg->region_pages = 5;
-    // test_cfg->type = SEL4UTILS_RES_TYPE_HEAP;
-    // test_cfg->share_mode = GPI_COPY;
-    // linked_list_insert(proc_cfg->ads_cfg.vmr_cfgs, test_cfg);
 
     vka_object_t ep;
     error = vka_alloc_endpoint(&env->vka, &ep);
     test_error_eq(error, 0);
 
     seL4_CPtr slot;
-    error = pd_client_send_cap(&new_pd, ep.cptr, &slot);
+    error = pd_client_send_cap(&runnable.pd, ep.cptr, &slot);
     test_error_eq(error, 0);
 
-    sel4gpi_runnable_t runnable = {.pd = new_pd};
     error = sel4gpi_start_pd(proc_cfg, &runnable, 1, &slot);
     test_error_eq(error, 0);
 
@@ -79,7 +67,7 @@ int test_new_process_osmosis_shmem(env_t env)
     error = mo_component_client_connect(sel4gpi_get_rde(GPICAP_TYPE_MO), slot, 1, &shared_mo);
     test_error_eq(error, 0);
 
-    error = pd_client_send_cap(&new_pd, shared_mo.badged_server_ep_cspath.capPtr, &slot);
+    error = pd_client_send_cap(&runnable.pd, shared_mo.badged_server_ep_cspath.capPtr, &slot);
     test_error_eq(error, 0);
 
     seL4_SetMR(0, slot);

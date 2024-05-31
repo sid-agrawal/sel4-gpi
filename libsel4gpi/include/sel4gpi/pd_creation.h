@@ -75,8 +75,6 @@ typedef struct _vmr_config
  */
 typedef struct _ads_config
 {
-    /** whether this config is for the same ADS as the current one */
-    bool same_ads;
     /** only used if code_shared == GPI_DISJOINT */
     const char *image_name;
     /** if specified, will take precedence over any automatically found ones */
@@ -118,16 +116,29 @@ typedef struct _pd_config
 } pd_config_t;
 
 /**
- * @brief creates a new PD, and generates a configuration that can start a process
- * by default, gives the new process the MO and RESSPC RDE
+ * @brief creates a new PD, ADS, CPU and generates a configuration that can start a process
  *
  * @param image_name ELF image for the process
  * @param stack_pages size of stack, in pages
  * @param heap_pages size of heap, in pages
- * @param ret_pd returns the newly created PD context
+ * @param ret_runnable returns a filled in runnable with the PD, ADS, CPU contexts
  * @return pd_config_t* returns the PD configuration, NULL on failure. Caller is responsbile for freeing the config.
  */
-pd_config_t *sel4gpi_configure_process(const char *image_name, int stack_pages, int heap_pages, pd_client_context_t *ret_pd);
+pd_config_t *sel4gpi_configure_process(const char *image_name,
+                                       int stack_pages,
+                                       int heap_pages,
+                                       sel4gpi_runnable_t *ret_runnable);
+
+/**
+ * @brief creates a new PD and CPU, and generates a configuration that can start a thread
+ *
+ * @param thread_fn the function the thread will run
+ * @param fault_ep OPTIONAL a fault endpoint for the thread, if not provided, a new one will be allocated
+ * @param ret_runnable returns a filled in runnable with the PD, ADS, CPU contexts
+ *                     the ADS context returned will be the exact same as the current ADS
+ * @return pd_config_t* returns the PD configuration, NULL on failure. Caller is responsbile for freeing the config.
+ */
+pd_config_t *sel4gpi_configure_thread(void *thread_fn, seL4_CPtr fault_ep, sel4gpi_runnable_t *ret_runnable);
 
 /**
  * @brief configures a runnable entity given a created PD and prepares it for execution (via cpu_start)

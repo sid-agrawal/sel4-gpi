@@ -89,8 +89,11 @@ static int start_kvstore_server(seL4_CPtr *kvstore_ep, uint64_t fs_nsid, pd_clie
 {
     int error;
 
-    pd_config_t *cfg = sel4gpi_configure_process(KVSTORE_SERVER_APP, DEFAULT_STACK_PAGES, DEFAULT_HEAP_PAGES, kvstore_pd);
+    sel4gpi_runnable_t runnable = {0};
+    pd_config_t *cfg = sel4gpi_configure_process(KVSTORE_SERVER_APP, DEFAULT_STACK_PAGES, DEFAULT_HEAP_PAGES, &runnable);
     test_assert(cfg != NULL);
+
+    *kvstore_pd = runnable.pd;
 
     // Setup the hello PD's args
     int argc = 1;
@@ -105,7 +108,6 @@ static int start_kvstore_server(seL4_CPtr *kvstore_ep, uint64_t fs_nsid, pd_clie
     test_assert(error == 0);
 
     // Start it
-    sel4gpi_runnable_t runnable = {.pd = *kvstore_pd};
     error = sel4gpi_start_pd(cfg, &runnable, argc, args);
     test_error_eq(error, 0);
 
@@ -145,8 +147,11 @@ static int start_hello_kvstore(kvstore_mode_t kvstore_mode,
     int argc = 3;
     seL4_Word args[argc];
 
-    pd_config_t *cfg = sel4gpi_configure_process(HELLO_KVSTORE_APP, DEFAULT_STACK_PAGES, DEFAULT_HEAP_PAGES, hello_pd);
+    sel4gpi_runnable_t runnable = {0};
+    pd_config_t *cfg = sel4gpi_configure_process(HELLO_KVSTORE_APP, DEFAULT_STACK_PAGES, DEFAULT_HEAP_PAGES, &runnable);
     test_assert(cfg != NULL);
+
+    *hello_pd = runnable.pd;
 
     // Copy the parent ep
     error = pd_client_send_cap(hello_pd, self_ep, &args[0]);
@@ -183,7 +188,6 @@ static int start_hello_kvstore(kvstore_mode_t kvstore_mode,
     }
 
     // Start it
-    sel4gpi_runnable_t runnable = {.pd = *hello_pd};
     error = sel4gpi_start_pd(cfg, &runnable, argc, args);
     test_error_eq(error, 0);
 

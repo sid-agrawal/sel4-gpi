@@ -43,7 +43,7 @@ int pd_client_disconnect(pd_client_context_t *conn);
  *
  * @param conn client connection object
  * @param cap_to_send cap to send to the PD
- * @param slot slot in the PD where the cap was installed
+ * @param slot OPTIONAL slot in the PD where the cap was installed
  * @return int 0 on success, -1 on failure.
  */
 int pd_client_send_cap(pd_client_context_t *conn, seL4_CPtr cap_to_send,

@@ -59,22 +59,9 @@ int test_osm_threads(env_t env)
     int error;
     printf("------------------STARTING: %s------------------\n", __func__);
 
-    pd_client_context_t test_pd_os_cap = sel4gpi_get_pd_conn();
-    seL4_CPtr pd_rde = sel4gpi_get_rde(GPICAP_TYPE_PD);
-
-    /* new PD to represent the thread */
-    seL4_CPtr slot;
-    error = pd_client_next_slot(&test_pd_os_cap, &slot);
-    test_error_eq(error, 0);
-
-    pd_client_context_t thread_pd;
-    error = pd_component_client_connect(pd_rde, slot, &thread_pd);
-    test_error_eq(error, 0);
-
-    pd_config_t *cfg = sel4gpi_generate_thread_config(test_thread, env->endpoint);
+    sel4gpi_runnable_t runnable = {0};
+    pd_config_t *cfg = sel4gpi_configure_thread(test_thread, env->endpoint, &runnable);
     test_assert(cfg != NULL);
-
-    sel4gpi_runnable_t runnable = {.pd = thread_pd};
 
     seL4_Word arg0 = 1;
     error = sel4gpi_start_pd(cfg, &runnable, 1, &arg0);

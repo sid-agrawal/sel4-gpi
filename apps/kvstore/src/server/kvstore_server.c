@@ -231,25 +231,16 @@ int kvstore_server_start_thread(seL4_CPtr *kvstore_ep)
     GOTO_IF_COND(pd_rde == seL4_CapNull, "Can't start thread, no PD RDE\n");
 
     /* new PD as the thread */
-    seL4_CPtr slot;
-    error = pd_client_next_slot(&self_pd_conn, &slot);
-    GOTO_IF_ERR(error, "Failed to allocate a slot\n");
-
-    pd_client_context_t thread_pd;
-    error = pd_component_client_connect(pd_rde, slot, &thread_pd);
-    GOTO_IF_ERR(error, "Failed to allocate a PD\n");
-
-    pd_config_t *cfg = sel4gpi_generate_thread_config(kvstore_server_main_thread, seL4_CapNull);
+    sel4gpi_runnable_t runnable = {0};
+    pd_config_t *cfg = sel4gpi_configure_thread(kvstore_server_main_thread, seL4_CapNull, &runnable);
     GOTO_IF_COND(cfg == NULL, "Failed to generate a thread config\n");
-
-    sel4gpi_runnable_t runnable = {.pd = thread_pd};
 
     seL4_CPtr temp_ep;
     error = pd_client_alloc_ep(&self_pd_conn, &temp_ep);
     GOTO_IF_ERR(error, "failed to allocate ep\n");
 
     seL4_CPtr temp_ep_in_PD;
-    pd_client_send_cap(&thread_pd, temp_ep, &temp_ep_in_PD);
+    pd_client_send_cap(&runnable.pd, temp_ep, &temp_ep_in_PD);
 
     error = sel4gpi_start_pd(cfg, &runnable, 1, (seL4_Word *)&temp_ep_in_PD);
     GOTO_IF_ERR(error, "Failed to start PD\n");

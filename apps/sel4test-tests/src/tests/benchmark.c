@@ -128,8 +128,8 @@ static int spawn_pd_osm(env_t env)
 {
     int error;
 
-    pd_client_context_t proc;
-    pd_config_t *cfg = sel4gpi_configure_process("hello_benchmark", DEFAULT_STACK_PAGES, DEFAULT_HEAP_PAGES, &proc);
+    sel4gpi_runnable_t runnable = {0};
+    pd_config_t *cfg = sel4gpi_configure_process("hello_benchmark", DEFAULT_STACK_PAGES, DEFAULT_HEAP_PAGES, &runnable);
     test_assert(cfg != NULL);
 
     error = vka_alloc_endpoint(&env->vka, &hello_ep);
@@ -144,7 +144,6 @@ static int spawn_pd_osm(env_t env)
     args[0] = slot;
     args[1] = 0;
 
-    sel4gpi_runnable_t runnable = {.pd = proc};
     error = sel4gpi_start_pd(cfg, &runnable, argc, args);
     test_error_eq(error, 0);
 

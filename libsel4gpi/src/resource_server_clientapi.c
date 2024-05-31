@@ -43,19 +43,19 @@ int start_resource_server_pd(gpi_cap_t rde_type,
     error = pd_client_alloc_ep(&current_pd, &ep);
     CHECK_ERROR(error, "failed to allocate endpoint");
 
-    pd_client_context_t server_pd;
-    pd_config_t *cfg = sel4gpi_configure_process(image_name, DEFAULT_STACK_PAGES, DEFAULT_HEAP_PAGES, &server_pd);
+    sel4gpi_runnable_t runnable = {0};
+    pd_config_t *cfg = sel4gpi_configure_process(image_name, DEFAULT_STACK_PAGES, DEFAULT_HEAP_PAGES, &runnable);
     error = cfg == NULL;
     CHECK_ERROR(error, "failed to configure process");
 
     if (server_pd_cap)
     {
-        *server_pd_cap = server_pd.badged_server_ep_cspath.capPtr;
+        *server_pd_cap = runnable.pd.badged_server_ep_cspath.capPtr;
     }
 
     // Copy the parent ep to the new PD
     seL4_Word parent_ep_slot;
-    error = pd_client_send_cap(&server_pd, ep, &parent_ep_slot);
+    error = pd_client_send_cap(&runnable.pd, ep, &parent_ep_slot);
     CHECK_ERROR(error, "failed to send parent's ep cap to pd");
 
     // Copy the RDE to the new PD
@@ -63,7 +63,7 @@ int start_resource_server_pd(gpi_cap_t rde_type,
     {
 
         RESOURCE_SERVER_PRINTF("SENDING RDE\n");
-        error = pd_client_share_rde(&server_pd, rde_type, rde_id);
+        error = pd_client_share_rde(&runnable.pd, rde_type, rde_id);
         CHECK_ERROR(error, "failed to send rde to pd");
     }
 
@@ -74,7 +74,6 @@ int start_resource_server_pd(gpi_cap_t rde_type,
     args[1] = current_pd.id;
 
     // Start it
-    sel4gpi_runnable_t runnable = {.pd = server_pd};
     error = sel4gpi_start_pd(cfg, &runnable, argc, args);
     CHECK_ERROR(error, "failed to start pd");
 
