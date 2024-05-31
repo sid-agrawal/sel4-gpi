@@ -19,11 +19,13 @@
  *
  * @param server_ep_cap Well known server endpoint cap.
  * @param free_slot a slot to receive a cap in
+ * @param osm_data_mo an MO for holding the PD's OSmosis data
  * @param ret_conn client's connection object
  * @return int 0 on success, -1 on failure.
  */
 int pd_component_client_connect(seL4_CPtr server_ep_cap,
                                 seL4_CPtr free_slot,
+                                mo_client_context_t *osm_data_mo,
                                 pd_client_context_t *ret_conn);
 
 /**
@@ -44,10 +46,25 @@ int pd_client_disconnect(pd_client_context_t *conn);
  * @param conn client connection object
  * @param cap_to_send cap to send to the PD
  * @param slot OPTIONAL slot in the PD where the cap was installed
- * @return int 0 on success, -1 on failure.
+ * @return int 0 on success, 1 on failure.
  */
-int pd_client_send_cap(pd_client_context_t *conn, seL4_CPtr cap_to_send,
+int pd_client_send_cap(pd_client_context_t *conn,
+                       seL4_CPtr cap_to_send,
                        seL4_Word *slot);
+
+/**
+ * @brief Sends a core resource (PD, CPU, ADS) cap to a PD.
+ * The sent cap will be set in the PD's OSmosis data frame,
+ * overwriting any cap that was previously set.
+ *
+ * @param conn the PD to send the cap to
+ * @param cap_to_send cap to send to the PD
+ * @param slot OPTIONAL slot in the PD where the cap was installed
+ * @return int 0 on success, 1 on failure.
+ */
+int pd_client_send_core_cap(pd_client_context_t *conn,
+                            seL4_CPtr cap_to_send,
+                            seL4_Word *slot);
 
 /**
  * @brief Get the next free slot
@@ -75,20 +92,6 @@ int pd_client_free_slot(pd_client_context_t *conn,
  * @return int 0 on success, -1 on failure.
  */
 int pd_client_alloc_ep(pd_client_context_t *conn,
-                       seL4_CPtr *ret_ep);
-
-/**
- * @brief Create a badged copy of an endpoint capability
- * (XXX) Arya: TO BE DEPRECATED
- * @param conn client connection object
- * @param src_ep raw endpoint in pd's cspace
- * @param badge badge to apply to the endpoint
- * @param ret_ep location of result endpoint
- * @return int 0 on success, -1 on failure.
- */
-int pd_client_badge_ep(pd_client_context_t *conn,
-                       seL4_CPtr src_ep,
-                       seL4_Word badge,
                        seL4_CPtr *ret_ep);
 
 /**
@@ -157,7 +160,9 @@ void pd_client_exit(pd_client_context_t *conn);
 void pd_client_bench_ipc(pd_client_context_t *conn, seL4_CPtr dummy_send_cap, seL4_CPtr dummy_recv_cap, bool cap_transfer);
 
 /**
- * @brief (WIP) prepares the (PD, ADS, CPU) combination with the given arguments, entry point, stack, and IPC buffer
+ * @brief (WIP) prepares the (PD, ADS, CPU) combination with the given arguments,
+ *        entry point, stack, and IPC buffer, and OSmosis data frame
+ * This eventually will be removed in favour of a unified PD entry-point
  * TODO Linh: better explain what differs between setup types
  *
  * @param target_ads the ADS where the stack resides

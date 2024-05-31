@@ -62,14 +62,25 @@ pd_config_t *sel4gpi_configure_process(const char *image_name,
     seL4_CPtr pd_rde = sel4gpi_get_rde(GPICAP_TYPE_PD);
     GOTO_IF_COND(pd_rde == seL4_CapNull, "No PD RDE\n");
 
+    seL4_CPtr mo_rde = sel4gpi_get_rde(GPICAP_TYPE_MO);
+    GOTO_IF_COND(mo_rde == seL4_CapNull, "No MO RDE\n");
+
     pd_client_context_t self_pd_conn = sel4gpi_get_pd_conn();
 
     /* new PD */
     seL4_CPtr free_slot;
     error = pd_client_next_slot(&self_pd_conn, &free_slot);
+    GOTO_IF_ERR(error, "Failed to allocate next slot\n");
+
+    /* allocate MO for PD's OSmosis data */
+    mo_client_context_t osm_data_mo;
+    error = mo_component_client_connect(mo_rde, free_slot, 1, &osm_data_mo);
+    GOTO_IF_ERR(error, "Failed to allocat OSmosis data MO\n");
+
+    error = pd_client_next_slot(&self_pd_conn, &free_slot);
     GOTO_IF_ERR(error, "Failed to allocate slot for new PD\n");
 
-    error = pd_component_client_connect(pd_rde, free_slot, &ret_runnable->pd);
+    error = pd_component_client_connect(pd_rde, free_slot, &osm_data_mo, &ret_runnable->pd);
     GOTO_IF_ERR(error, "Failed to create new PD\n");
 
     /* new ADS*/
@@ -93,7 +104,15 @@ pd_config_t *sel4gpi_configure_process(const char *image_name,
     error = cpu_component_client_connect(cpu_rde, free_slot, &ret_runnable->cpu);
     GOTO_IF_ERR(error, "failed to allocate a new CPU");
 
-    proc_cfg = sel4gpi_generate_proc_config(image_name, DEFAULT_STACK_PAGES, DEFAULT_HEAP_PAGES);
+    proc_cfg = sel4gpi_generate_proc_config(image_name, DEFAULT_STACK_PAGES, DEFAULT_HEAP_PAGES, &osm_data_mo);
+    GOTO_IF_COND(proc_cfg == NULL, "failed to generate config\n");
+
+    // give the process its VMR RDE
+    rde_config_t *vmr_rde_cfg = calloc(1, sizeof(rde_config_t));
+    vmr_rde_cfg->space_id = ret_runnable->ads.id;
+    vmr_rde_cfg->type = GPICAP_TYPE_VMR;
+
+    linked_list_insert(proc_cfg->rde_cfg, vmr_rde_cfg);
 
 err_goto:
     return proc_cfg;
@@ -106,14 +125,23 @@ pd_config_t *sel4gpi_configure_thread(void *thread_fn, seL4_CPtr fault_ep, sel4g
     seL4_CPtr pd_rde = sel4gpi_get_rde(GPICAP_TYPE_PD);
     GOTO_IF_COND(pd_rde == seL4_CapNull, "No PD RDE\n");
 
+    seL4_CPtr mo_rde = sel4gpi_get_rde(GPICAP_TYPE_MO);
+    GOTO_IF_COND(mo_rde == seL4_CapNull, "No MO RDE\n");
+
     pd_client_context_t self_pd_conn = sel4gpi_get_pd_conn();
 
     /* new PD */
     seL4_CPtr free_slot;
     error = pd_client_next_slot(&self_pd_conn, &free_slot);
+    GOTO_IF_ERR(error, "Failed to allocate next slot\n");
+    mo_client_context_t osm_data_mo;
+    error = mo_component_client_connect(mo_rde, free_slot, 1, &osm_data_mo);
+    GOTO_IF_ERR(error, "Failed to allocat OSmosis data MO\n");
+
+    error = pd_client_next_slot(&self_pd_conn, &free_slot);
     GOTO_IF_ERR(error, "Failed to allocate slot for new PD\n");
 
-    error = pd_component_client_connect(pd_rde, free_slot, &ret_runnable->pd);
+    error = pd_component_client_connect(pd_rde, free_slot, &osm_data_mo, &ret_runnable->pd);
     GOTO_IF_ERR(error, "Failed to create new PD\n");
 
     /* use same ADS */
@@ -175,40 +203,31 @@ err_goto:
 
 int sel4gpi_ads_configure(ads_config_t *cfg,
                           sel4gpi_runnable_t *runnable,
+                          mo_client_context_t *osm_data_mo,
                           void **ret_stack,
                           void **ret_ipc_buf,
                           void **ret_entry_point,
+                          void **ret_osm_data,
                           mo_client_context_t *ret_ipc_buf_mo)
 {
     int error = 0;
     ads_client_context_t vmr_rde = {.badged_server_ep_cspath.capPtr =
                                         sel4gpi_get_rde_by_space_id(runnable->ads.id, GPICAP_TYPE_VMR)};
     uint64_t current_ads_id = sel4gpi_get_binded_ads_id();
-    // pd_client_context_t self_pd_conn = sel4gpi_get_pd_conn();
     ads_client_context_t self_ads_conn = sel4gpi_get_ads_conn();
-    // seL4_CPtr free_slot;
 
-    // if (cfg->same_ads)
-    // {
-    //     vmr_rde.badged_server_ep_cspath.capPtr = sel4gpi_get_rde_by_space_id(sel4gpi_get_binded_ads_id(), GPICAP_TYPE_VMR);
-    //     runnable->ads = sel4gpi_get_ads_conn();
-    // }
-    // else
-    // {
-    //     PD_CREATION_PRINT("Making new ADS\n");
-    //     // create a new ADS
-    //     seL4_CPtr ads_rde = sel4gpi_get_rde(GPICAP_TYPE_ADS);
-    //     GOTO_IF_COND(ads_rde == seL4_CapNull, "Can't make new ADS, no ADS RDE\n");
+    /* attach OSmosis data MO to the ADS*/
+    if (osm_data_mo)
+    {
+        void *pd_osm_data;
+        error = ads_client_attach(&vmr_rde, NULL, osm_data_mo, SEL4UTILS_RES_TYPE_GENERIC, &pd_osm_data);
+        GOTO_IF_ERR(error, "Failed to attach OSmosis data MO to PD's ADS\n");
 
-    //     /* new ADS */
-    //     error = pd_client_next_slot(&self_pd_conn, &free_slot);
-    //     GOTO_IF_ERR(error, "failed to allocate next slot");
-
-    //     error = ads_component_client_connect(ads_rde, free_slot, &runnable->ads);
-    //     GOTO_IF_ERR(error, "failed to allocate a new ADS");
-
-    //     vmr_rde.badged_server_ep_cspath.capPtr = sel4gpi_get_rde_by_space_id(runnable->ads.id, GPICAP_TYPE_VMR);
-    // }
+        if (ret_osm_data)
+        {
+            *ret_osm_data = pd_osm_data;
+        }
+    }
 
     void *auto_entry_point = NULL;
 
@@ -327,15 +346,6 @@ int sel4gpi_start_pd(pd_config_t *cfg, sel4gpi_runnable_t *runnable, int argc, s
     seL4_CPtr free_slot;
     pd_client_context_t self_pd_conn = sel4gpi_get_pd_conn();
 
-    // // (XXX) Linh: for now, we'll just assume we always need a new CPU resource, configuration is TBD
-    // seL4_CPtr cpu_rde = sel4gpi_get_rde(GPICAP_TYPE_CPU);
-    // GOTO_IF_COND(cpu_rde == seL4_CapNull, "No CPU RDE\n");
-
-    // error = pd_client_next_slot(&self_pd_conn, &free_slot);
-    // GOTO_IF_ERR(error, "failed to allocate next slot");
-
-    // error = cpu_component_client_connect(cpu_rde, free_slot, &runnable->cpu);
-    // GOTO_IF_ERR(error, "failed to allocate a new CPU");
     seL4_Word cnode_guard = api_make_guard_skip_word(seL4_WordBits - TEST_PROCESS_CSPACE_SIZE_BITS);
 
     mo_client_context_t ipc_mo = {0};
@@ -345,19 +355,24 @@ int sel4gpi_start_pd(pd_config_t *cfg, sel4gpi_runnable_t *runnable, int argc, s
     void *ipc_buf = NULL;
     void *osm_init_data = NULL;
 
-    error = sel4gpi_ads_configure(&cfg->ads_cfg, runnable, &stack, &ipc_buf, &entry_point, &ipc_mo);
+    error = sel4gpi_ads_configure(&cfg->ads_cfg, runnable, &cfg->osm_data_mo,
+                                  &stack, &ipc_buf, &entry_point, &osm_init_data, &ipc_mo);
     GOTO_IF_ERR(error, "Failed to configure ADS\n");
 
     error = rde_configure(cfg, runnable);
     GOTO_IF_ERR(error, "Failed to configure RDEs\n");
 
     // give the PD its CPU cap
-    error = pd_client_send_cap(&runnable->pd, runnable->cpu.badged_server_ep_cspath.capPtr, NULL);
+    error = pd_client_send_core_cap(&runnable->pd, runnable->cpu.badged_server_ep_cspath.capPtr, NULL);
     GOTO_IF_ERR(error, "Failed to send CPU cap to PD\n");
 
     // give the PD its ADS cap
-    error = pd_client_send_cap(&runnable->pd, runnable->ads.badged_server_ep_cspath.capPtr, NULL);
+    error = pd_client_send_core_cap(&runnable->pd, runnable->ads.badged_server_ep_cspath.capPtr, NULL);
     GOTO_IF_ERR(error, "Failed to send ADS cap to PD\n");
+
+    // give the PD its PD cap
+    error = pd_client_send_core_cap(&runnable->pd, runnable->pd.badged_server_ep_cspath.capPtr, NULL);
+    GOTO_IF_ERR(error, "Failed to send PD cap to PD\n");
 
     if (cfg->gpi_res_type_cfg)
     {
@@ -390,8 +405,7 @@ int sel4gpi_start_pd(pd_config_t *cfg, sel4gpi_runnable_t *runnable, int argc, s
                               &ipc_mo,
                               cnode_guard,
                               fault_ep_in_pd,
-                              (seL4_Word)ipc_buf,
-                              &osm_init_data);
+                              (seL4_Word)ipc_buf);
     GOTO_IF_ERR(error, "failed to configure CPU\n");
 
     // (XXX) Linh required that this happens after cpu_client_config specifically due to dependency between the sel4util structs in the GPI components
@@ -411,7 +425,15 @@ int sel4gpi_start_pd(pd_config_t *cfg, sel4gpi_runnable_t *runnable, int argc, s
             GOTO_IF_ERR(error, "failed to set TLS base\n");
         }
 
-        error = pd_client_runtime_setup(&runnable->pd, &runnable->ads, &runnable->cpu, stack, argc, args, entry_point, ipc_buf, setup_mode);
+        error = pd_client_runtime_setup(&runnable->pd,
+                                        &runnable->ads,
+                                        &runnable->cpu,
+                                        stack,
+                                        argc,
+                                        args,
+                                        entry_point,
+                                        ipc_buf,
+                                        setup_mode);
         GOTO_IF_ERR(error, "failed to prepare runtime");
     }
 
@@ -424,13 +446,15 @@ err_goto:
     return error;
 }
 
-pd_config_t *sel4gpi_generate_proc_config(const char *image_name, size_t stack_pages, size_t heap_pages)
+pd_config_t *sel4gpi_generate_proc_config(const char *image_name, size_t stack_pages,
+                                          size_t heap_pages, mo_client_context_t *osm_data_mo)
 {
     pd_config_t *proc_cfg = calloc(1, sizeof(pd_config_t));
     proc_cfg->ads_cfg.code_shared = GPI_DISJOINT;
     proc_cfg->ads_cfg.stack_shared = GPI_DISJOINT;
     proc_cfg->ads_cfg.stack_pages = stack_pages;
     proc_cfg->ads_cfg.image_name = image_name;
+    proc_cfg->osm_data_mo = *osm_data_mo;
 
     proc_cfg->ads_cfg.vmr_cfgs = linked_list_new();
     int n_cfgs = 0;
@@ -461,16 +485,18 @@ pd_config_t *sel4gpi_generate_proc_config(const char *image_name, size_t stack_p
 
     proc_cfg->rde_cfg = linked_list_new();
 
+    int n_rde_cfgs = 0;
     rde_config_t *mo_rde_cfg = calloc(1, sizeof(rde_config_t));
     mo_rde_cfg->space_id = RESSPC_ID_NULL;
     mo_rde_cfg->type = GPICAP_TYPE_MO;
+    n_rde_cfgs++;
 
     rde_config_t *resspc_rde_cfg = calloc(1, sizeof(rde_config_t));
     resspc_rde_cfg->space_id = RESSPC_ID_NULL;
     resspc_rde_cfg->type = GPICAP_TYPE_RESSPC;
+    n_rde_cfgs++;
 
-    linked_list_insert(proc_cfg->rde_cfg, mo_rde_cfg);
-    linked_list_insert(proc_cfg->rde_cfg, resspc_rde_cfg);
+    linked_list_insert_many(proc_cfg->rde_cfg, n_rde_cfgs, mo_rde_cfg, resspc_rde_cfg);
 
     return proc_cfg;
 }

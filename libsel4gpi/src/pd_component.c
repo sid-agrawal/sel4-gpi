@@ -81,7 +81,11 @@ static seL4_MessageInfo_t handle_pd_allocation(seL4_Word sender_badge)
     pd_component_registry_entry_t *new_entry;
     uint32_t client_id = get_client_id_from_badge(sender_badge);
 
-    error = resource_component_allocate(get_pd_component(), client_id, BADGE_OBJ_ID_NULL, false, NULL,
+    mo_component_registry_entry_t *osm_mo_entry =
+        resource_component_registry_get_by_badge(get_mo_component(), seL4_GetBadge(0));
+    SERVER_GOTO_IF_COND_BG(osm_mo_entry == NULL, seL4_GetBadge(0), "Failed to find MO for OSmosis data: ");
+
+    error = resource_component_allocate(get_pd_component(), client_id, BADGE_OBJ_ID_NULL, false, &osm_mo_entry->mo,
                                         (resource_server_registry_node_t **)&new_entry, &ret_cap);
     SERVER_GOTO_IF_ERR(error, "failed to allocat a PD\n");
     new_entry->pd.pd_cap_in_RT = ret_cap;
@@ -191,33 +195,6 @@ err_goto:
     return tag;
 }
 
-static seL4_MessageInfo_t handle_badge_ep_req(seL4_Word sender_badge,
-                                              seL4_MessageInfo_t old_tag)
-{
-    OSDB_PRINTF("Got badge ep request from client badge %lx.\n", sender_badge);
-    int error = 0;
-
-    pd_component_registry_entry_t *client_data = pd_component_registry_get_entry_by_badge(sender_badge);
-    SERVER_GOTO_IF_COND(client_data == NULL, "Couldn't find PD (%ld)\n", get_object_id_from_badge(sender_badge));
-
-    seL4_Word badge = seL4_GetMR(PDMSGREG_BADGE_EP_REQ_BADGE);
-    seL4_CPtr src_ep_slot = seL4_GetMR(PDMSGREG_BADGE_EP_REQ_SRC);
-    seL4_Word slot;
-
-    error = pd_badge_ep(&client_data->pd,
-                        src_ep_slot,
-                        badge,
-                        &slot);
-
-    seL4_SetMR(PDMSGREG_BADGE_EP_PD_SLOT, slot);
-
-err_goto:
-    seL4_SetMR(PDMSGREG_FUNC, PD_FUNC_BADGE_EP_ACK);
-    seL4_MessageInfo_t tag = seL4_MessageInfo_new(error, 0, 0,
-                                                  PDMSGREG_BADGE_EP_ACK_END);
-    return tag;
-}
-
 static seL4_MessageInfo_t handle_send_cap_req(seL4_Word sender_badge,
                                               seL4_MessageInfo_t old_tag,
                                               seL4_CPtr received_cap)
@@ -235,13 +212,15 @@ static seL4_MessageInfo_t handle_send_cap_req(seL4_Word sender_badge,
     SERVER_GOTO_IF_COND(client_data == NULL, "Couldn't find PD (%ld)\n", get_object_id_from_badge(sender_badge));
 
     seL4_Word received_caps_badge = seL4_GetBadge(0);
+    bool is_core_cap = (bool)seL4_GetMR(PDMSGREG_SEND_CAP_REQ_IS_CORE);
 
     seL4_Word slot;
     error = pd_send_cap(&client_data->pd,
                         received_cap,
                         received_caps_badge,
                         &slot,
-                        true);
+                        true,
+                        is_core_cap);
 
     seL4_SetMR(PDMSGREG_SEND_CAP_PD_SLOT, slot);
 
@@ -501,7 +480,7 @@ static seL4_MessageInfo_t handle_runtime_setup_req(seL4_Word sender_badge, seL4_
             snprintf(argv[i], WORD_STRING_SIZE, "%" PRIuPTR "", args[i]);
         }
 
-        // (XXX) Linh: stack_top meaning differs depending on what PD we're starting, should fix as this is not so nice
+        // (XXX) Linh: stack_top meaning differs depending on what PD we're starting, should fix as this is not so nice ■
         void *stack_top = (void *)seL4_GetMR(PDMSGREG_SETUP_REQ_STACK);
         void *entry_point = (void *)seL4_GetMR(PDMSGREG_SETUP_REQ_ENTRY_POINT);
         void *ipc_buf_addr = (void *)seL4_GetMR(PDMSGREG_SETUP_REQ_IPC_BUF);
@@ -610,9 +589,6 @@ static seL4_MessageInfo_t pd_component_handle(seL4_MessageInfo_t tag,
         case PD_FUNC_ALLOC_EP_REQ:
             reply_tag = handle_alloc_ep_req(sender_badge, tag);
             break;
-        case PD_FUNC_BADGE_EP_REQ:
-            reply_tag = handle_badge_ep_req(sender_badge, tag);
-            break;
         case PD_FUNC_SENDCAP_REQ:
             reply_tag = handle_send_cap_req(sender_badge, tag, received_cap);
             *need_new_recv_cap = true;
@@ -708,17 +684,23 @@ uint64_t test_pd_id;
 
 void forge_pd_cap_from_init_data(test_init_data_t *init_data, sel4utils_process_t *test_process, void **osm_init_data)
 {
-    assert(init_data != NULL);
-
     int error = 0;
+    SERVER_GOTO_IF_COND(init_data == NULL, "Test PD's init data is NULL\n");
+
     seL4_CPtr ret_cap;
     pd_component_registry_entry_t *new_entry;
 
+    /* Allocate an MO to hold PD's OSmosis data */
+    mo_t *init_data_mo;
+    error = mo_component_allocate(1, &init_data_mo);
+    SERVER_GOTO_IF_ERR(error, "Failed to allocate MO for new PD's init data\n");
+
     /* Allocate the PD object */
-    error = resource_component_allocate(get_pd_component(), get_gpi_server()->rt_pd_id, BADGE_OBJ_ID_NULL, false, NULL,
+    error = resource_component_allocate(get_pd_component(), get_gpi_server()->rt_pd_id,
+                                        BADGE_OBJ_ID_NULL, false, init_data_mo,
                                         (resource_server_registry_node_t **)&new_entry, &ret_cap);
-    ZF_LOGF_IFERR(error, "Failed to allocate PD for forging");
-    assert(error == 0);
+    SERVER_GOTO_IF_ERR(error, "Failed to allocate PD for forging");
+
     pd_t *pd = &new_entry->pd;
     test_pd_id = pd->id;
     pd->pd_cap_in_RT = ret_cap;
@@ -737,7 +719,7 @@ void forge_pd_cap_from_init_data(test_init_data_t *init_data, sel4utils_process_
                                    init_data->cspace_size_bits,
                                    // seL4_WordBits - init_data->cspace_size_bits);
                                    0);
-    ZF_LOGF_IFERR(error, "Failed to initialize PD VKA");
+    SERVER_GOTO_IF_ERR(error, "Failed to initialize PD VKA");
     init_data->free_slots.end = mid_slot - 1;
 
     // Add the basic RDEs
@@ -760,40 +742,43 @@ void forge_pd_cap_from_init_data(test_init_data_t *init_data, sel4utils_process_
     seL4_CPtr child_as_cap_in_parent;
     uint32_t ads_id;
     error = forge_ads_cap_from_vspace(&test_process->vspace, get_pd_component()->server_vka, pd->id, &child_as_cap_in_parent, &ads_id);
-    ZF_LOGF_IFERR(error, "Failed to forge child's as cap");
+    SERVER_GOTO_IF_ERR(error, "Failed to forge child's as cap");
     pd->init_data->ads_conn.id = ads_id;
 
     // Forge CPU cap
     seL4_CPtr child_cpu_cap_in_parent;
     uint32_t cpu_id;
     error = forge_cpu_cap_from_tcb(test_process, get_pd_component()->server_vka, pd->id, &child_cpu_cap_in_parent, &cpu_id);
-    ZF_LOGF_IFERR(error, "Failed to forge child's CPU cap");
+    SERVER_GOTO_IF_ERR(error, "Failed to forge child's CPU cap");
 
     // Copy the ADS/CPU/PD caps to the test process
     // The refcount of each is 1
     error = copy_cap_to_pd(pd, child_as_cap_in_parent, &pd->init_data->ads_conn.badged_server_ep_cspath.capPtr);
-    assert(error == 0);
+    SERVER_GOTO_IF_ERR(error, "Failed to copy cap to PD\n");
     pd_add_resource(pd, GPICAP_TYPE_ADS, get_ads_component()->space_id, ads_id,
                     child_as_cap_in_parent, pd->init_data->ads_conn.badged_server_ep_cspath.capPtr, child_as_cap_in_parent);
 
     error = copy_cap_to_pd(pd, pd->pd_cap_in_RT, &pd->init_data->pd_conn.badged_server_ep_cspath.capPtr);
-    assert(error == 0);
+    SERVER_GOTO_IF_ERR(error, "Failed to copy cap to PD\n");
     pd_add_resource(pd, GPICAP_TYPE_PD, get_pd_component()->space_id, pd->id,
                     pd->pd_cap_in_RT, pd->init_data->pd_conn.badged_server_ep_cspath.capPtr, pd->pd_cap_in_RT);
 
     error = copy_cap_to_pd(pd, child_cpu_cap_in_parent, &pd->init_data->cpu_conn.badged_server_ep_cspath.capPtr);
-    assert(error == 0);
+    SERVER_GOTO_IF_ERR(error, "Failed to copy cap to PD\n");
     pd_add_resource(pd, GPICAP_TYPE_CPU, get_cpu_component()->space_id, cpu_id,
                     child_cpu_cap_in_parent, pd->init_data->cpu_conn.badged_server_ep_cspath.capPtr, child_cpu_cap_in_parent);
 
     // Attach the init data to test PD
     void *init_data_vaddr = (void *)0x50000000;
     error = ads_component_attach(ads_id, pd->init_data_mo_id, SEL4UTILS_RES_TYPE_GENERIC, init_data_vaddr, &init_data_vaddr);
-    assert(error == 0);
+    SERVER_GOTO_IF_ERR(error, "Failed to attach OSmosis data to test PD\n");
 
     *osm_init_data = init_data_vaddr;
     pd->init_data_in_PD = init_data_vaddr;
     OSDB_PRINTF("Test process init data is at %p\n", pd->init_data_in_PD);
+
+err_goto:
+    return error;
 }
 
 void destroy_test_pd(void)

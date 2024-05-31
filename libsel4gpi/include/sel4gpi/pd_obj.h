@@ -142,10 +142,19 @@ typedef struct _pd
     seL4_CPtr pd_cap_in_RT;
 } pd_t;
 
+/**
+ * @brief Creates a new PD Object
+ *
+ * @param pd allocated, empty PD struct
+ * @param server_vka vka object to allocate frames from
+ * @param server_vspace unused
+ * @param osm_data_mo an MO to hold the PD's OSmosis data
+ * @return int
+ */
 int pd_new(pd_t *pd,
            vka_t *server_vka,
            vspace_t *server_vspace,
-           void *arg0);
+           mo_t *osm_data_mo);
 
 int pd_configure(pd_t *pd,
                  ads_t *target_ads,
@@ -161,12 +170,15 @@ int pd_dump(pd_t *pd);
  * @param the badge of the cap to send
  * @param slot returns the slot of the cap in the target PD
  * @param inc_refcount if true, increments the refcount of the corresponding resource
+ * @param update_core_res the cap being sent is a core PD resource,
+ *                        and should be set in its OSmosis data
  */
 int pd_send_cap(pd_t *pd,
                 seL4_CPtr cap,
                 seL4_Word badge,
                 seL4_Word *slot,
-                bool inc_refcount);
+                bool inc_refcount,
+                bool update_core_res);
 
 int pd_next_slot(pd_t *pd,
                  seL4_CPtr *next_free_slot);
@@ -183,32 +195,6 @@ int pd_free_slot(pd_t *pd,
  */
 int pd_alloc_ep(pd_t *pd,
                 vka_t *server_vka,
-                seL4_CPtr *ret_ep);
-
-/**
- * Mints a source path into the PD's cspace
- *
- * @param pd The destination PD
- * @param src Path to the source cap
- * @param badge Badge to apply
- * @param ret Returns the destination slot in the PD
- */
-int pd_mint(pd_t *pd,
-            cspacepath_t *src,
-            seL4_Word badge,
-            seL4_CPtr *ret);
-
-/**
- * Mints an endpoint in the PD's cspace and attaches the badge
- *
- * @param pd The pd to allocate an endpoint for
- * @param src_ep raw endpoint to badge
- * @param badge badge to apply
- * @param ret_ep slot of the badged ep in the PD's cspace
- */
-int pd_badge_ep(pd_t *pd,
-                seL4_CPtr src_ep,
-                seL4_Word badge,
                 seL4_CPtr *ret_ep);
 
 /**
@@ -353,9 +339,11 @@ void pd_set_image_name(pd_t *pd, const char *image_name);
 void pd_debug_print_held(pd_t *pd);
 
 /**
- * bad functions that are only here because of our cursed sel4utils struct dependencies
- * for setting fields in the sel4utils_process_t struct from outside the PD component
+ * @brief sets the core caps in a PD's OSmosis data
+ *
+ * @param pd target PD
+ * @param core_cap_badge badge of the resource
+ * @param core_cap cap to the resource
+ * @return int 0 on success
  */
-void pd_proc_set_page_dir(pd_t *pd, ads_t *target_ads);
-
-void pd_proc_set_thread(pd_t *pd, cpu_t *target_cpu);
+int pd_set_core_cap(pd_t *pd, seL4_Word core_cap_badge, seL4_CPtr core_cap);

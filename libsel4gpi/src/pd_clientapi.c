@@ -24,6 +24,7 @@
 
 int pd_component_client_connect(seL4_CPtr server_ep_cap,
                                 seL4_CPtr free_slot,
+                                mo_client_context_t *osm_data_mo,
                                 pd_client_context_t *ret_conn)
 {
 
@@ -38,7 +39,8 @@ int pd_component_client_connect(seL4_CPtr server_ep_cap,
 
     /* Set request type */
     seL4_SetMR(PDMSGREG_FUNC, PD_FUNC_CONNECT_REQ);
-    seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0, PDMSGREG_CONNECT_REQ_END);
+    seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 1, PDMSGREG_CONNECT_REQ_END);
+    seL4_SetCap(0, osm_data_mo->badged_server_ep_cspath.capPtr);
 
     tag = seL4_Call(server_ep_cap, tag);
     assert(seL4_MessageInfo_get_extraCaps(tag) == 1);
@@ -81,10 +83,10 @@ int pd_client_dump(pd_client_context_t *conn,
     return seL4_MessageInfo_ptr_get_label(&tag);
 }
 
-int pd_client_send_cap(pd_client_context_t *conn, seL4_CPtr cap_to_send,
-                       seL4_Word *slot)
+static int send_cap_req(pd_client_context_t *conn, seL4_CPtr cap_to_send, seL4_Word *slot, bool is_core)
 {
     seL4_SetMR(PDMSGREG_FUNC, PD_FUNC_SENDCAP_REQ);
+    seL4_SetMR(PDMSGREG_SEND_CAP_REQ_IS_CORE, (seL4_Word)is_core);
     seL4_SetCap(0, cap_to_send);
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 1,
                                                   PDMSGREG_SEND_CAP_REQ_END);
@@ -96,6 +98,22 @@ int pd_client_send_cap(pd_client_context_t *conn, seL4_CPtr cap_to_send,
     }
 
     return seL4_MessageInfo_ptr_get_label(&tag);
+}
+
+// convenient wrapper for send_cap_req
+int pd_client_send_cap(pd_client_context_t *conn,
+                       seL4_CPtr cap_to_send,
+                       seL4_Word *slot)
+{
+    return send_cap_req(conn, cap_to_send, slot, false);
+}
+
+// convenient wrapper for send_cap_req
+int pd_client_send_core_cap(pd_client_context_t *conn,
+                            seL4_CPtr cap_to_send,
+                            seL4_Word *slot)
+{
+    return send_cap_req(conn, cap_to_send, slot, true);
 }
 
 int pd_client_next_slot(pd_client_context_t *conn,
@@ -139,32 +157,6 @@ int pd_client_alloc_ep(pd_client_context_t *conn,
                                                   PDMSGREG_ALLOC_EP_REQ_END);
     tag = seL4_Call(conn->badged_server_ep_cspath.capPtr, tag);
     *ret_ep = seL4_GetMR(PDMSGREG_ALLOC_EP_PD_SLOT);
-
-    return seL4_MessageInfo_ptr_get_label(&tag);
-}
-
-/**
- * @brief Create a badged copy of an endpoint capability
- *
- * @param conn client connection object
- * @param src_ep raw endpoint in pd's cspace
- * @param badge badge to apply to the endpoint
- * @param ret_ep location of result endpoint
- * @return int 0 on success, -1 on failure.
- */
-int pd_client_badge_ep(pd_client_context_t *conn,
-                       seL4_CPtr src_ep,
-                       seL4_Word badge,
-                       seL4_CPtr *ret_ep)
-{
-    int error;
-    seL4_SetMR(PDMSGREG_FUNC, PD_FUNC_BADGE_EP_REQ);
-    seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0,
-                                                  PDMSGREG_BADGE_EP_REQ_END);
-    seL4_SetMR(PDMSGREG_BADGE_EP_REQ_BADGE, badge);
-    seL4_SetMR(PDMSGREG_BADGE_EP_REQ_SRC, src_ep);
-    tag = seL4_Call(conn->badged_server_ep_cspath.capPtr, tag);
-    *ret_ep = seL4_GetMR(PDMSGREG_BADGE_EP_PD_SLOT);
 
     return seL4_MessageInfo_ptr_get_label(&tag);
 }

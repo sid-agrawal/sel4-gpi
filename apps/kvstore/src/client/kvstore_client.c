@@ -123,7 +123,7 @@ static int configure_separate_ads()
 
     other_ads_cfg.vmr_cfgs = &other_vmr_cfg;
 
-    error = sel4gpi_ads_configure(&other_ads_cfg, &runnable, NULL, NULL, NULL, NULL);
+    error = sel4gpi_ads_configure(&other_ads_cfg, &runnable, NULL, NULL, NULL, NULL, NULL, NULL);
     GOTO_IF_ERR(error, "Failed to configure other ADS\n");
     kvserv_ads = runnable.ads;
 

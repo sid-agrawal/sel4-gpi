@@ -109,6 +109,7 @@ typedef struct _pd_config
 {
     /** supply a fault-endpoint for the PD, if NULL, will create a new one */
     seL4_CPtr fault_ep;
+    mo_client_context_t osm_data_mo;
     ads_config_t ads_cfg;
     linked_list_t *rde_cfg;
     linked_list_t *gpi_res_type_cfg;
@@ -158,7 +159,8 @@ int sel4gpi_start_pd(pd_config_t *cfg, sel4gpi_runnable_t *runnable, int argc, s
  * @param image_name the name of the process's image
  * @return pd_config_t* returns a filled in config struct, caller is responsbile for freeing
  */
-pd_config_t *sel4gpi_generate_proc_config(const char *image_name, size_t stack_pages, size_t heap_pages);
+pd_config_t *sel4gpi_generate_proc_config(const char *image_name, size_t stack_pages,
+                                          size_t heap_pages, mo_client_context_t *osm_data_mo);
 
 /**
  * @brief generates a PD configuration that describes a thread
@@ -189,16 +191,20 @@ char *sel4gpi_share_degree_to_str(gpi_share_degree_t share_deg);
  *
  * @param cfg The ADS config options
  * @param runnable an allocated runnable struct that can be empty, but typically with the PD context filled in
+ * @param osm_data_mo OPTIONAL: an MO for holding OSmosis data
  * @param ret_stack OPTIONAL: address of the allocated stack
  * @param ret_ipc_buf OPTIONAL: address of the allocated IPC buffer
  * @param ret_entry_point OPTIONAL: address of the entry point, if found. If an entry point is specified in the config,
  *                        this will be the same
+ * @param ret_osm_data OPTIONAL: address of the mapped OSmosis data frame (only applies if osm_data_mo is given)
  * @param ret_ipc_buf_mo OPTIONAL: the MO for the IPC buffer
  * @return int 0 on success
  */
 int sel4gpi_ads_configure(ads_config_t *cfg,
                           sel4gpi_runnable_t *runnable,
+                          mo_client_context_t *osm_data_mo,
                           void **ret_stack,
                           void **ret_ipc_buf,
                           void **ret_entry_point,
+                          void **ret_osm_data,
                           mo_client_context_t *ret_ipc_buf_mo);

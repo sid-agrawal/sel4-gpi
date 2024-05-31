@@ -98,6 +98,10 @@ gpi_server_parent_spawn_thread(simple_t *parent_simple, vka_t *parent_vka,
 
     *server_ep_cap = get_gpi_server()->server_ep_obj.cptr;
 
+    /* Initialize the resource types */
+    // resspc component initialization requires that the types are initialized first
+    resource_types_initialize();
+
     /* Setup the Resource Space Component */
     // This must be initialized first so that the other components can make their own resource spaces
     resspc_component_initialize(parent_simple, parent_vka, parent_cspace_cspath.root, parent_vspace,
@@ -126,9 +130,6 @@ gpi_server_parent_spawn_thread(simple_t *parent_simple, vka_t *parent_vka,
     seL4_CPtr ads_cap;
     forge_ads_cap_from_vspace(get_gpi_server()->server_vspace, get_gpi_server()->server_vka,
                               get_gpi_server()->rt_pd_id, &ads_cap, &get_gpi_server()->rt_ads_id);
-
-    /* Initialize the resource types */
-    resource_types_initialize();
 
     /* And also allocate a badged copy of the Server's endpoint that the Parent
      * can use to send to the Server. This is used to allow the Server to report

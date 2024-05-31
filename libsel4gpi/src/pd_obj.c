@@ -334,23 +334,20 @@ pd_held_resource_on_delete(resource_server_registry_node_t *node_gen)
 int pd_new(pd_t *pd,
            vka_t *server_vka,
            vspace_t *server_vspace,
-           void *arg0)
+           mo_t *osm_data_mo)
 {
     int error;
-
+    // TODO Linh: fix this for forging of test PD
     OSDB_PRINTF("new PD: \n");
+
+    SERVER_GOTO_IF_COND(osm_data_mo == NULL, "No MO given to hold PD's OSmosis data\n");
+
+    pd->init_data_mo_id = osm_data_mo->id;
+    error = ads_component_attach_to_rt(osm_data_mo->id, &pd->init_data);
+    SERVER_GOTO_IF_ERR(error, "Failed to attach init data MO to RT\n");
 
     // Initialize the hold registry
     resource_server_initialize_registry(&pd->hold_registry, pd_held_resource_on_delete);
-
-    // Create the MO for the PD's init data
-    mo_t *init_data_mo;
-    error = mo_component_allocate(1, &init_data_mo);
-    SERVER_GOTO_IF_ERR(error, "Failed to allocate MO for new PD's init data\n");
-    pd->init_data_mo_id = init_data_mo->id;
-
-    error = ads_component_attach_to_rt(init_data_mo->id, &pd->init_data);
-    SERVER_GOTO_IF_ERR(error, "Failed to attach init data MO to RT\n");
 
     // Setup init data
     pd->init_data->rde_count = 0;
@@ -359,7 +356,7 @@ int pd_new(pd_t *pd,
 
     // Setup the cspace
     error = pd_setup_cspace(pd, get_pd_component()->server_vka);
-    assert(error == 0);
+    SERVER_GOTO_IF_ERR(error, "Failed to setup PD's CSpace\n");
 
     pd->image_name = "PD"; // default name, since if a PD isn't a process, this never gets set
 
@@ -388,7 +385,8 @@ void pd_destroy(pd_t *pd, vka_t *server_vka, vspace_t *server_vspace)
     /* begin copied from sel4utils_clean_up_thread */
     sel4utils_thread_t *thread = &process->thread;
 
-    if (thread->tcb.cptr != 0) {
+    if (thread->tcb.cptr != 0)
+    {
         vka_free_object(vka, &thread->tcb);
     }
 
@@ -401,11 +399,13 @@ void pd_destroy(pd_t *pd, vka_t *server_vka, vspace_t *server_vspace)
     //     vspace_free_sized_stack(&process->vspace, thread->stack_top, thread->stack_size);
     // }
 
-    if (thread->own_sc && thread->sched_context.cptr != 0) {
+    if (thread->own_sc && thread->sched_context.cptr != 0)
+    {
         vka_free_object(vka, &thread->sched_context);
     }
 
-    if (thread->own_reply && thread->reply.cptr != 0) {
+    if (thread->own_reply && thread->reply.cptr != 0)
+    {
         vka_free_object(vka, &thread->reply);
     }
 
@@ -510,40 +510,6 @@ int pd_alloc_ep(pd_t *pd,
     return error;
 }
 
-int pd_mint(pd_t *pd,
-            cspacepath_t *src,
-            seL4_Word badge,
-            seL4_CPtr *ret)
-{
-    cspacepath_t dest;
-
-    int error = vka_cspace_alloc_path(&pd->pd_vka, &dest);
-    // int error = vka_cspace_alloc_path(get_pd_component()->server_vka, &dest);
-    if (error)
-    {
-        return error;
-    }
-
-    error = vka_cnode_mint(&dest,
-                           src,
-                           seL4_AllRights,
-                           badge);
-
-    *ret = error == seL4_NoError ? dest.capPtr : seL4_CapNull;
-    return error;
-}
-
-int pd_badge_ep(pd_t *pd,
-                seL4_CPtr src_ep,
-                seL4_Word badge,
-                seL4_CPtr *ret_ep)
-{
-    cspacepath_t src;
-    vka_cspace_make_path(&pd->pd_vka, src_ep, &src);
-
-    return pd_mint(pd, &src, badge, ret_ep);
-}
-
 int pd_bootstrap_allocator(pd_t *pd,
                            seL4_CPtr root,
                            size_t start_slot,
@@ -634,32 +600,32 @@ int pd_configure(pd_t *pd,
                  cpu_t *target_cpu)
 {
     int error = 0;
-    memcpy(&pd->proc.pd, target_ads->root_page_dir, sizeof(vka_object_t));
-    pd->proc.thread = target_cpu->thread;
+    // memcpy(&pd->proc.pd, target_ads->root_page_dir, sizeof(vka_object_t));
+    // pd->proc.thread = target_cpu->thread;
 
-    // the ADS cap is both a resource space and a resource
-    seL4_Word badge = gpi_new_badge(GPICAP_TYPE_ADS, 0x00, pd->id, get_ads_component()->space_id, target_ads->id);
-    error = pd_send_cap(pd, get_ads_component()->server_ep, badge, &pd->init_data->ads_conn.badged_server_ep_cspath.capPtr, false);
-    ZF_LOGF_IFERR(error, "Failed to send ADS resource cap to PD");
-    pd->init_data->ads_conn.id = target_ads->id;
-    target_cpu->binded_ads_id = target_ads->id;
+    // // the ADS cap is both a resource space and a resource
+    // seL4_Word badge = gpi_new_badge(GPICAP_TYPE_ADS, 0x00, pd->id, get_ads_component()->space_id, target_ads->id);
+    // error = pd_send_cap(pd, get_ads_component()->server_ep, badge, &pd->init_data->ads_conn.badged_server_ep_cspath.capPtr, true);
+    // ZF_LOGF_IFERR(error, "Failed to send ADS resource cap to PD");
+    // pd->init_data->ads_conn.id = target_ads->id;
+    // target_cpu->binded_ads_id = target_ads->id;
 
-    // the ADS cap also acts an a VMR RDE
-    rde_type_t ads_rde_type = {.type = GPICAP_TYPE_VMR};
-    error = pd_add_rde(pd, ads_rde_type, "VMR", target_ads->id, get_ads_component()->server_ep);
-    ZF_LOGE_IFERR(error, "Failed to add ADS RDE to PD");
+    // // the ADS cap also acts an a VMR RDE
+    // rde_type_t ads_rde_type = {.type = GPICAP_TYPE_VMR};
+    // error = pd_add_rde(pd, ads_rde_type, "VMR", target_ads->id, get_ads_component()->server_ep);
+    // ZF_LOGE_IFERR(error, "Failed to add ADS RDE to PD");
 
-    // Send the PD's CPU resource
-    badge = gpi_new_badge(GPICAP_TYPE_CPU, 0x00, pd->id, get_cpu_component()->space_id, target_cpu->id);
-    error = pd_send_cap(pd, get_cpu_component()->server_ep, badge, &pd->init_data->cpu_conn.badged_server_ep_cspath.capPtr, false);
-    ZF_LOGF_IFERR(error, "Failed to send CPU cap to PD");
+    // // Send the PD's CPU resource
+    // badge = gpi_new_badge(GPICAP_TYPE_CPU, 0x00, pd->id, get_cpu_component()->space_id, target_cpu->id);
+    // error = pd_send_cap(pd, get_cpu_component()->server_ep, badge, &pd->init_data->cpu_conn.badged_server_ep_cspath.capPtr, true);
+    // ZF_LOGF_IFERR(error, "Failed to send CPU cap to PD");
 
-    memcpy(&pd->proc.vspace, target_ads->vspace, sizeof(vspace_t));
+    // memcpy(&pd->proc.vspace, target_ads->vspace, sizeof(vspace_t));
 
     // Send the PD's PD resource
-    badge = gpi_new_badge(GPICAP_TYPE_PD, 0x00, pd->id, get_pd_component()->space_id, pd->id);
-    error = pd_send_cap(pd, pd->pd_cap_in_RT, badge, &pd->init_data->pd_conn.badged_server_ep_cspath.capPtr, false);
-    ZF_LOGF_IFERR(error, "Failed to send PD cap to PD");
+    // badge = gpi_new_badge(GPICAP_TYPE_PD, 0x00, pd->id, get_pd_component()->space_id, pd->id);
+    // error = pd_send_cap(pd, pd->pd_cap_in_RT, badge, &pd->init_data->pd_conn.badged_server_ep_cspath.capPtr, true);
+    // ZF_LOGF_IFERR(error, "Failed to send PD cap to PD");
 
     // Map init data to the PD
     error = ads_component_attach(pd->init_data->ads_conn.id, pd->init_data_mo_id,
@@ -677,22 +643,15 @@ int pd_send_cap(pd_t *to_pd,
                 seL4_CPtr cap,
                 seL4_Word badge,
                 seL4_Word *slot,
-                bool inc_refcount)
+                bool inc_refcount,
+                bool update_core_cap)
 {
-    /*
-        (XXX): Need to handle how sending OSM caps would leand to additional data tracking.
-    */
-
-    if (cap == 0)
-    {
-        OSDB_PRINTERR("pd_send_cap got a null cap to send\n");
-        return 1;
-    }
+    int error = 0;
+    SERVER_GOTO_IF_COND(cap == 0, "pd_send_cap got a null cap to send\n");
 
     OSDB_PRINTF("pd_send_cap: Sending cap %ld(badge:%lx), to pd %d\n", cap, badge, to_pd->id);
 
     seL4_Word new_badge;
-    int error = 0;
     cspacepath_t src, dest;
     seL4_CPtr dest_cptr;
     pd_hold_node_t *res;
@@ -750,9 +709,8 @@ int pd_send_cap(pd_t *to_pd,
             }
             break;
         default:
-            // ZF_LOGF("Unknown cap type in %s", __FUNCTION__);
             //  (XXX) Arya: allowing unknown cap type for now to send parent ep
-            ZF_LOGE("Unknown cap type %d in %s", cap_type, __FUNCTION__);
+            OSDB_PRINTF("Warning: Unknown cap type %d in %s\n", cap_type, __FUNCTION__);
             should_mint = false;
             break;
         }
@@ -763,50 +721,44 @@ int pd_send_cap(pd_t *to_pd,
 
         // forge a copy of the cap with the type, perms, and obj id, but different client id
         // Insert it in the appropirate list
-        if (should_mint) // (XXX) remove this once we stop sending non-osmosis caps through here
+        if (should_mint)
         {
-            new_badge = gpi_new_badge(cap_type,
-                                      get_perms_from_badge(badge),
-                                      to_pd->id, /* Client ID */
-                                      get_space_id_from_badge(badge),
-                                      get_object_id_from_badge(badge));
+            seL4_CPtr new_cap = resource_server_make_badged_ep(server_vka,
+                                                               &to_pd->pd_vka,
+                                                               server_src_cap,
+                                                               cap_type,
+                                                               get_space_id_from_badge(badge),
+                                                               get_object_id_from_badge(badge),
+                                                               to_pd->id);
 
-            vka_cspace_make_path(server_vka, server_src_cap, &src);
-            vka_cspace_alloc(server_vka, &dest_cptr);
-            vka_cspace_make_path(server_vka, dest_cptr, &dest);
+            SERVER_GOTO_IF_COND(new_cap == seL4_CapNull, "Failed to mint a new cap\n");
 
-            error = vka_cnode_mint(&dest,
-                                   &src,
-                                   seL4_AllRights,
-                                   new_badge);
-            if (error)
+            error = pd_add_resource(to_pd,
+                                    cap_type,
+                                    get_space_id_from_badge(badge),
+                                    get_object_id_from_badge(badge),
+                                    new_cap,
+                                    cap,
+                                    new_cap);
+            SERVER_PRINT_IF_ERR(error, "Warning: Failed to add cap to PD's resources\n");
+
+            if (update_core_cap)
             {
-                OSDB_PRINTF("%s: Failed to mint new_badge %lx.\n",
-                            __FUNCTION__, new_badge);
-                return 1;
+                error = pd_set_core_cap(to_pd, badge, new_cap);
+                SERVER_PRINT_IF_ERR(error, "Warning: failed to set the cap in PD's OSmosis data\n");
             }
-
-            cap = dest_cptr;
-            pd_add_resource(to_pd, cap_type, get_space_id_from_badge(badge), get_object_id_from_badge(badge), src.capPtr, cap, src.capPtr);
         }
-        // do the same copy as above
-    }
-    else
-    {
-        // This is a cap from the kernel.
-        // Just copy it to the child.
+        else
+        {
+            // if this is a non-core cap, just copy
+            error = copy_cap_to_pd(to_pd, cap, slot);
+        }
     }
 
-    error = copy_cap_to_pd(to_pd, cap, slot);
-    if (error != 0)
-    {
-        ZF_LOGF("Failed to copy cap to process");
-        return -1;
-    }
+    SERVER_GOTO_IF_ERR(error, "Failed to copy cap to PD\n");
     OSDB_PRINTF("pd_send_cap: copied cap at %ld to child\n", *slot);
 
-    /* Add to our caps data struct */
-
+err_goto:
     return 0;
 }
 
@@ -1156,16 +1108,31 @@ inline void pd_set_image_name(pd_t *pd, const char *image_name)
     pd->image_name = image_name;
 }
 
-/**
- * bad functions that are only here because of our cursed sel4utils struct dependencies
- * for setting fields in the sel4utils_process_t struct from outside the PD component
- */
-void pd_proc_set_page_dir(pd_t *pd, ads_t *target_ads)
+int pd_set_core_cap(pd_t *pd, seL4_Word core_cap_badge, seL4_CPtr core_cap)
 {
-    memcpy(&pd->proc.pd, target_ads->root_page_dir, sizeof(vka_object_t));
-}
+    int error = 0;
+    uint64_t cap_type = get_cap_type_from_badge(core_cap_badge);
+    uint64_t cap_id = get_object_id_from_badge(core_cap_badge);
+    OSDB_PRINTF("Setting PD%d's OSmosis %s cap\n", pd->id, cap_type_to_str(get_cap_type_from_badge(cap_type)));
 
-void pd_proc_set_thread(pd_t *pd, cpu_t *target_cpu)
-{
-    pd->proc.thread = target_cpu->thread;
+    switch (cap_type)
+    {
+    case GPICAP_TYPE_ADS:
+        pd->init_data->ads_conn.id = cap_id;
+        pd->init_data->ads_conn.badged_server_ep_cspath.capPtr = core_cap;
+        break;
+    case GPICAP_TYPE_PD:
+        pd->init_data->pd_conn.id = cap_id;
+        pd->init_data->pd_conn.badged_server_ep_cspath.capPtr = core_cap;
+        break;
+    case GPICAP_TYPE_CPU:
+        pd->init_data->cpu_conn.badged_server_ep_cspath.capPtr = core_cap;
+        break;
+    default:
+        SERVER_GOTO_IF_COND(1, "Trying to set PD OSmosis data with invalid cap\n");
+        break;
+    }
+
+err_goto:
+    return error;
 }

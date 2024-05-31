@@ -50,8 +50,7 @@ int cpu_client_config(cpu_client_context_t *cpu,
                       mo_client_context_t *ipc_buf_mo,
                       seL4_Word cnode_guard,
                       seL4_CPtr fault_ep_position,
-                      seL4_Word ipc_buf_addr,
-                      void **ret_osm_init_data_addr)
+                      seL4_Word ipc_buf_addr)
 {
     seL4_SetMR(CPUMSGREG_FUNC, CPU_FUNC_CONFIG_REQ);
     seL4_SetMR(CPUMSGREG_CONFIG_IPC_BUF_ADDR, ipc_buf_addr);
@@ -72,11 +71,6 @@ int cpu_client_config(cpu_client_context_t *cpu,
                                                   CPUMSGREG_CONFIG_REQ_END);
 
     tag = seL4_Call(cpu->badged_server_ep_cspath.capPtr, tag);
-
-    if (ret_osm_init_data_addr)
-    {
-        *ret_osm_init_data_addr = (void *)seL4_GetMR(CPUMSGREG_CONFIG_ACK_OSM_DATA_ADDR);
-    }
 
     return seL4_MessageInfo_ptr_get_label(&tag);
 }

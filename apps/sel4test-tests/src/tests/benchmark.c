@@ -81,7 +81,12 @@ static int benchmark_pd_create(env_t env, bool native)
 
         SEL4BENCH_READ_CCNT(pd_create_start);
         pd_client_context_t pd_conn;
-        error = pd_component_client_connect(sel4gpi_get_rde(GPICAP_TYPE_PD), slot, &pd_conn);
+
+        vka_object_t osm_data_frame;
+        error = vka_alloc_frame(&env->vka, seL4_PageBits, &osm_data_frame);
+        test_error_eq(error, 0);
+
+        error = pd_component_client_connect(sel4gpi_get_rde(GPICAP_TYPE_PD), slot, osm_data_frame.cptr, &pd_conn);
         test_error_eq(error, 0);
         SEL4BENCH_READ_CCNT(pd_create_end);
     }
@@ -402,7 +407,7 @@ static int benchmark_cpu(env_t env, bool native)
         test_error_eq(error, 0);
 
         SEL4BENCH_READ_CCNT(cpu_bind_start);
-        error = cpu_client_config(&new_cpu, &new_ads, NULL, NULL, 0, seL4_CapNull, 0, NULL);
+        error = cpu_client_config(&new_cpu, &new_ads, NULL, NULL, 0, seL4_CapNull, 0);
         test_error_eq(error, 0);
         SEL4BENCH_READ_CCNT(cpu_bind_end);
     }

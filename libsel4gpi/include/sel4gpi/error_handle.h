@@ -100,11 +100,13 @@
         }                                                                                 \
     } while (0)
 
+/* this sets the error back to 0, because it is meant for warning messages, and not to halt a request */
 #define SERVER_PRINT_IF_ERR(err, msg, ...)                                                \
     do                                                                                    \
     {                                                                                     \
         if ((err))                                                                        \
         {                                                                                 \
+            error = 0;                                                                    \
             OSDB_PRINTERR(COLORIZE("[ERROR] %s():\t", RED) msg, __func__, ##__VA_ARGS__); \
         }                                                                                 \
     } while (0)

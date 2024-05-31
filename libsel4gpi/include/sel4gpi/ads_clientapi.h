@@ -39,7 +39,7 @@ int ads_component_client_disconnect(ads_client_context_t *conn);
  * Attach an MO to an ADS, and simultaneously reserve the VMR of the correct
  * size to attach to
  *
- * @param conn client connection object
+ * @param conn the VMR RDE for the ADS to attach to
  * @param vaddr virtual address to attach at, can be NULL
  * @param mo_cap MO cap of the memory to attach
  * @param vmr_type the type of virtual memory (e.g. stack, heap, ipc buffer)
