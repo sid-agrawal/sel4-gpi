@@ -65,11 +65,15 @@ void init_model_state(model_state_t *model_state, void *free_ptr, size_t free_si
 {
     assert(model_state != NULL);
 
+    memset(model_state, 0, sizeof(model_state_t));
+    
     model_state->nodes = NULL;
     model_state->edges = NULL;
     model_state->mem_start = (gpi_model_state_component_t *)free_ptr;
     model_state->mem_ptr = model_state->mem_start;
     model_state->mem_end = (gpi_model_state_component_t *)(free_ptr + free_size);
+    assert(model_state->mem_start == free_ptr);
+    assert(model_state->mem_end == free_ptr + free_size);
 
     if (free_ptr != NULL)
     {
@@ -280,7 +284,7 @@ static gpi_model_node_t *add_node(model_state_t *model_state, gpi_node_type_t no
     }
     else
     {
-        assert(model_state->mem_ptr < model_state->mem_end);
+        assert(model_state->mem_ptr + 1 < model_state->mem_end);
 
         // Allocate a node from free pointer
         gpi_model_state_component_t *component = model_state->mem_ptr;
@@ -339,7 +343,7 @@ static void add_edge_by_id(model_state_t *model_state, gpi_edge_type_t type, cha
     }
     else
     {
-        assert(model_state->mem_ptr < model_state->mem_end);
+        assert(model_state->mem_ptr + 1 < model_state->mem_end);
 
         // Allocate a node from free pointer
         gpi_model_state_component_t *component = model_state->mem_ptr;

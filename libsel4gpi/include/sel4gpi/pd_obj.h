@@ -131,7 +131,6 @@ typedef struct _pd
 
     // Init data is mapped to PD and includes RDE and ADS/PD caps
     mo_client_context_t init_data_mo;
-    seL4_CPtr init_data_frame;
     uint64_t init_data_mo_id;
     osm_pd_init_data_t *init_data;       // RT vaddr of the init data
     osm_pd_init_data_t *init_data_in_PD; // PD's vaddr of the init data
@@ -265,6 +264,17 @@ int pd_bulk_add_resource(pd_t *pd, linked_list_t *resources);
  * @return linked_list_t* a list of all the found resources
  */
 linked_list_t *pd_get_resources_of_type(pd_t *pd, gpi_cap_t type);
+
+/**
+ * Add a resource type name so a PD may access it by cap_type_to_str
+ *
+ * @param pd The target PD
+ * @param type the type
+ * @param type_name friendly name of the type
+ */
+void pd_add_type_name(pd_t *pd,
+                      rde_type_t type,
+                      char *type_name);
 
 /**
  * @brief Add an RDE to a PD

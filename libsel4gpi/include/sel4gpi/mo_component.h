@@ -92,7 +92,9 @@ resource_component_context_t *get_mo_component(void);
 
 /**
  * @brief forges an MO resource given the list of frames.
- *
+ * (XXX) Arya: Eventually we should be able to remove this entirely.
+ * For now, it is used when forging ADS attachments only.
+ * 
  * @param frame_caps the frames belonging to the MO
  * @param num_pages total number of pages
  * @param client_pd_id the PD which holds the MO
@@ -105,3 +107,12 @@ int forge_mo_cap_from_frames(seL4_CPtr *frame_caps,
                              uint32_t client_pd_id,
                              seL4_CPtr *cap_ret,
                              mo_t **mo_ref);
+
+/**
+ * @brief Allocate an MO for the root task's use
+ * 
+ * @param num_pages number of pages for the MO
+ * @param ret_mo returns the allocated MO
+ * @return 0 on success, error otherwise
+*/
+int mo_component_allocate(int num_pages, mo_t **ret_mo);

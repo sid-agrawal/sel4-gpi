@@ -574,30 +574,26 @@ static int ads_deep_copy(ads_t *dst_ads, mo_t *src_mo, attach_node_t *new_attach
         frames[i] = dst.capPtr;
     }
 
-    void *old_mo_va = vspace_map_pages(loader,
-                                       frames,
-                                       NULL,
-                                       seL4_AllRights,
-                                       num_pages,
-                                       MO_PAGE_BITS,
-                                       1);
-    SERVER_GOTO_IF_COND(old_mo_va == NULL, "Failed to map old MO for deep copy\n");
+    // Attach the MOs
+    void *old_mo_va;
+    error = ads_component_attach_to_rt(src_mo->id, &old_mo_va);
+    SERVER_GOTO_IF_ERR(error, "Failed to map old MO for deep copy\n");
 
-    void *new_mo_va = vspace_map_pages(loader,
-                                       new_mo->frame_caps_in_root_task,
-                                       NULL,
-                                       seL4_AllRights,
-                                       num_pages,
-                                       MO_PAGE_BITS,
-                                       1);
-    SERVER_GOTO_IF_COND(new_mo_va == NULL, "Failed to map new MO for deep copy\n");
+    void *new_mo_va;
+    error = ads_component_attach_to_rt(new_mo->id, &new_mo_va);
+    SERVER_GOTO_IF_ERR(error, "Failed to map new MO for deep copy\n");
 
+    // Copy data
     memcpy(new_mo_va, old_mo_va, num_pages * SIZE_BITS_TO_BYTES(MO_PAGE_BITS));
 
+    // Remove the MOs
+    error = ads_component_remove_from_rt(old_mo_va);
+    SERVER_GOTO_IF_ERR(error, "Failed to unmap old MO for deep copy\n");\
+
+    error = ads_component_remove_from_rt(new_mo_va);
+    SERVER_GOTO_IF_ERR(error, "Failed to unmap new MO for deep copy\n");
+
 err_goto:
-    vspace_unmap_pages(loader, old_mo_va, num_pages, MO_PAGE_BITS, VSPACE_FREE);
-    vspace_unmap_pages(loader, new_mo_va, num_pages, MO_PAGE_BITS, VSPACE_FREE);
-    free(frames);
 
     return error;
 }

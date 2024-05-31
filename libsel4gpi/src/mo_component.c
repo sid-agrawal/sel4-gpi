@@ -51,6 +51,26 @@ static void on_mo_registry_delete(resource_server_registry_node_t *node_gen)
     mo_destroy(&node->mo, get_mo_component()->server_vka);
 }
 
+int mo_component_allocate(int num_pages, mo_t **ret_mo)
+{
+    int error = 0;
+    mo_component_registry_entry_t *new_entry;
+
+    error = resource_component_allocate(
+        get_mo_component(),
+        get_gpi_server()->rt_pd_id,
+        BADGE_OBJ_ID_NULL,
+        false,
+        (void *)num_pages,
+        (resource_server_registry_node_t **)&new_entry, NULL);
+    SERVER_GOTO_IF_ERR(error, "Failed to allocate new MO object for RT\n");
+
+    *ret_mo = &new_entry->mo;
+
+err_goto:
+    return error;
+}
+
 static seL4_MessageInfo_t handle_mo_allocation_request(seL4_Word sender_badge)
 {
     OSDB_PRINTF("Got MO allocation request from %lx\n", sender_badge);

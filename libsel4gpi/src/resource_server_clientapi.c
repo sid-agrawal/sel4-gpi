@@ -120,6 +120,7 @@ int resource_server_client_get_rr(seL4_CPtr server_ep,
     seL4_SetMR(RSMSGREG_EXTRACT_RR_REQ_ID, res_id);
     seL4_SetMR(RSMSGREG_EXTRACT_RR_REQ_PD_ID, pd_id);
     seL4_SetMR(RSMSGREG_EXTRACT_RR_REQ_RS_PD_ID, server_pd_id);
+
     tag = seL4_Call(server_ep, tag);
 
     // Adjust result state's pointers if successful

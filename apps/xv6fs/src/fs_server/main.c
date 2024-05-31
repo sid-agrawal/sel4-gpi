@@ -48,7 +48,7 @@ int main(int argc, char **argv)
 
     return resource_server_start(
         &get_xv6fs_server()->gen,
-        "FILE",
+        FILE_RESOURCE_TYPE_NAME,
         xv6fs_request_handler,
         parent_ep,
         parent_pd_id,

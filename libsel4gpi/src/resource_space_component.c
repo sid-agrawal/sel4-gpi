@@ -100,6 +100,13 @@ static seL4_MessageInfo_t handle_resspc_allocation_request(seL4_Word sender_badg
     error = pd_add_rde(&client_pd->pd, rde_type, resource_type_name, space_id, received_cap);
     SERVER_GOTO_IF_ERR(error, "Failed to add RDE to new resource space\n");
 
+    // Add the type name to the server PD
+    pd_add_type_name(&server_pd->pd, rde_type, resource_type_name);
+
+    // Remove the MO
+    error = ads_component_remove_from_rt((void *) resource_type_name);
+    SERVER_GOTO_IF_ERR(error, "Failed to remove MO from root task\n");
+
     seL4_SetMR(PDMSGREG_FUNC, RESSPC_FUNC_CONNECT_ACK);
     seL4_SetMR(RESSPCMSGREG_CONNECT_ACK_ID, space_id);
     seL4_SetMR(RESSPCMSGREG_CONNECT_ACK_TYPE, type);

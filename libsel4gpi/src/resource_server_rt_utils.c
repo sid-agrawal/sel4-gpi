@@ -121,7 +121,9 @@ int resource_component_allocate(resource_component_context_t *component,
     if (!(client_id == get_gpi_server()->rt_pd_id && component->resource_type == GPICAP_TYPE_RESSPC))
     {
         /* Add the resource to the client */
-        error = pd_add_resource_by_id(client_id, component->resource_type, component->space_id, resource_id, *ret_cap, seL4_CapNull, *ret_cap);
+        seL4_CPtr slot_in_rt = ret_cap ? *ret_cap : seL4_CapNull;
+        error = pd_add_resource_by_id(client_id, component->resource_type, component->space_id, resource_id,
+                                      slot_in_rt, seL4_CapNull, slot_in_rt);
         GOTO_IF_ERR(error, "Failed to add %s  esource to PD\n", cap_type_to_str(component->resource_type));
     }
 

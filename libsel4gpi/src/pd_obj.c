@@ -40,6 +40,7 @@
 #define CSPACE_SIZE_BITS 17
 #define ELF_LIB_DATA_SECTION ".lib_data"
 #define ELF_APP_DATA_SECTION ".data"
+#define REMOTE_RR_N_PAGES 8
 
 /* This is doesn't belong here but we need it */
 extern char _cpio_archive[];
@@ -50,7 +51,7 @@ extern char _cpio_archive_end[];
 #define SERVER_ID PDSERVS
 
 static int pd_setup_cspace(pd_t *pd, vka_t *vka);
-static int pd_dump_internal(pd_t *pd, model_state_t *ms, cspacepath_t rr_frame_path, void *rr_local_vaddr);
+static int pd_dump_internal(pd_t *pd, model_state_t *ms, uint64_t rr_mo_id, void *rr_local_vaddr);
 
 int copy_cap_to_pd(pd_t *to_pd,
                    seL4_CPtr cap,
@@ -164,6 +165,13 @@ osmosis_rde_t *pd_rde_get(pd_t *pd,
     }
 }
 
+void pd_add_type_name(pd_t *pd,
+                      rde_type_t type,
+                      char *type_name)
+{
+    strncpy(pd->init_data->type_names[type.type], type_name, RESOURCE_TYPE_MAX_STRING_SIZE);
+}
+
 int pd_add_rde(pd_t *pd,
                rde_type_t type,
                char *type_name,
@@ -195,7 +203,8 @@ int pd_add_rde(pd_t *pd,
         return 1;
     }
 
-    strncpy(pd->init_data->type_names[type.type], type_name, RESOURCE_TYPE_MAX_STRING_SIZE);
+    pd_add_type_name(pd, type, type_name);
+
     pd->init_data->rde[type.type][idx].space_id = space_id;
     /* we don't really need to keep this if we index by type, but let's just keep it around for now */
     pd->init_data->rde[type.type][idx].type = type;
@@ -335,24 +344,13 @@ int pd_new(pd_t *pd,
     resource_server_initialize_registry(&pd->hold_registry, pd_held_resource_on_delete);
 
     // Create the MO for the PD's init data
-    vka_object_t frame;
-    error = vka_alloc_frame(server_vka, seL4_PageBits, &frame);
-    if (error)
-    {
-        ZF_LOGE("Couldn't allocate frame to hold PD %ld's init data\n", pd->id);
-    }
-    pd->init_data_frame = frame.cptr;
-    pd->init_data = (osm_pd_init_data_t *)vspace_map_pages(server_vspace, &frame.cptr, NULL, seL4_AllRights, 1, seL4_PageBits, 1);
+    mo_t *init_data_mo;
+    error = mo_component_allocate(1, &init_data_mo);
+    SERVER_GOTO_IF_ERR(error, "Failed to allocate MO for new PD's init data\n");
+    pd->init_data_mo_id = init_data_mo->id;
 
-    mo_t *rde_mo_obj;
-    error = forge_mo_cap_from_frames(&frame.cptr, 1, get_gpi_server()->rt_pd_id,
-                                     &pd->init_data_mo.badged_server_ep_cspath.capPtr, &rde_mo_obj);
-    pd->init_data_mo_id = rde_mo_obj->id;
-
-    if (error)
-    {
-        ZF_LOGE("Couldn't forge an MO for PD's init data\n");
-    }
+    error = ads_component_attach_to_rt(init_data_mo->id, &pd->init_data);
+    SERVER_GOTO_IF_ERR(error, "Failed to attach init data MO to RT\n");
 
     // Setup init data
     pd->init_data->rde_count = 0;
@@ -365,6 +363,7 @@ int pd_new(pd_t *pd,
 
     pd->image_name = "PD"; // default name, since if a PD isn't a process, this never gets set
 
+err_goto:
     return error;
 }
 
@@ -796,23 +795,25 @@ int pd_send_cap(pd_t *to_pd,
 }
 
 static int request_remote_rr(pd_t *pd, model_state_t *ms, uint64_t space_id, uint32_t obj_id,
-                             cspacepath_t rr_frame_path, void *rr_local_vaddr)
+                             uint64_t rr_mo_id, void *rr_local_vaddr)
 {
-    int error;
+    int error = 0;
+    void *rr_remote_vaddr = NULL;
 
     resspc_component_registry_entry_t *server_entry = resource_space_get_entry_by_id(space_id);
+    SERVER_GOTO_IF_COND(server_entry == NULL, "Failed to find resource server with ID 0x%lx\n", space_id);
 
-    if (server_entry == NULL)
-    {
-        OSDB_PRINTF("Failed to find resource server with ID 0x%lx\n", space_id);
-        return -1;
-    }
-    seL4_CPtr server_cap = server_entry->space.server_ep;
     model_state_t *ms2;
+    seL4_CPtr server_cap = server_entry->space.server_ep;
 
     OSDB_PRINTF("Resource ID 0x%x, space ID 0x%lx, server EP at %d\n", obj_id, space_id, (int)server_cap);
 
-    // Pre-map the memory so resource server does not need to call root task
+    // Pre-map the shared memory so resource server does not need to call root task
+    uint64_t server_ads_id = server_entry->space.pd->init_data->ads_conn.id;
+    error = ads_component_attach(server_ads_id, rr_mo_id, SEL4UTILS_RES_TYPE_SHARED_FRAMES, NULL, &rr_remote_vaddr);
+    SERVER_GOTO_IF_ERR(error, "Failed to attach frame for remote rr to resource server\n");
+
+#if 0
     cspacepath_t rr_frame_copy_path;
     error = vka_cspace_alloc_path(get_gpi_server()->server_vka, &rr_frame_copy_path);
     if (error != seL4_NoError)
@@ -835,12 +836,14 @@ static int request_remote_rr(pd_t *pd, model_state_t *ms, uint64_t space_id, uin
         OSDB_PRINTF("Failed to map RR frame to resource server, %d", error);
         return -1;
     }
+#endif
 
     // Get RR from remote resource server
     error = resource_server_client_get_rr(server_cap, space_id, obj_id, pd->id,
                                           server_entry->space.pd->id,
                                           rr_remote_vaddr, rr_local_vaddr,
-                                          SIZE_BITS_TO_BYTES(seL4_LargePageBits), &ms2);
+                                          SIZE_BITS_TO_BYTES(seL4_PageBits) * REMOTE_RR_N_PAGES,
+                                          &ms2);
 
     if (error == RS_ERROR_DNE)
     {
@@ -849,27 +852,30 @@ static int request_remote_rr(pd_t *pd, model_state_t *ms, uint64_t space_id, uin
         // For now, just omit deleted resources from the model state
         error = 0;
     }
-    if (error == RS_ERROR_RR_SIZE)
-    {
-        // (XXX) Arya: Need to allocate a bigger shared memory if this fails
-        printf("RR needs larger memory\n");
-        error = -1;
-    }
-    else if (error != seL4_NoError)
-    {
-        error = -1;
-    }
+
+    SERVER_GOTO_IF_COND(error == RS_ERROR_RR_SIZE, "remote resource relations need larger memory\n");
+    SERVER_GOTO_IF_ERR(error, "Unknown error getting remote resource relations\n");
 
     combine_model_states(ms, ms2);
 
-    // Remove remotely-mapped memory
+// Remove remotely-mapped memory
+#if 0
     vspace_unmap_pages(&server_entry->space.pd->proc.vspace, rr_remote_vaddr, 1, seL4_LargePageBits, NULL);
     vka_cnode_delete(&rr_frame_copy_path);
+#endif
+
+err_goto:
+    if (rr_remote_vaddr != NULL)
+    {
+        error = ads_component_rm_by_vaddr(server_ads_id, rr_remote_vaddr);
+    }
+
+    return error;
 }
 
 // Add rows to model state for one resource
 static int res_dump(pd_t *pd, model_state_t *ms, pd_hold_node_t *current_cap,
-                    gpi_model_node_t *pd_node, cspacepath_t rr_frame_path, void *rr_local_vaddr)
+                    gpi_model_node_t *pd_node, uint64_t rr_mo_id, void *rr_local_vaddr)
 {
     int error;
 
@@ -907,7 +913,7 @@ static int res_dump(pd_t *pd, model_state_t *ms, pd_hold_node_t *current_cap,
 
             assert(pd_data != NULL);
             // pd_dump(&pd_data->pd);
-            pd_dump_internal(&pd_data->pd, ms, rr_frame_path, rr_local_vaddr);
+            pd_dump_internal(&pd_data->pd, ms, rr_mo_id, rr_local_vaddr);
         }
         break;
     case GPICAP_TYPE_RESSPC:
@@ -928,7 +934,7 @@ static int res_dump(pd_t *pd, model_state_t *ms, pd_hold_node_t *current_cap,
             break;
         }
 
-        error = request_remote_rr(pd, ms, current_cap->space_id, current_cap->res_id, rr_frame_path, rr_local_vaddr);
+        error = request_remote_rr(pd, ms, current_cap->space_id, current_cap->res_id, rr_mo_id, rr_local_vaddr);
         assert(error == 0);
 
         break;
@@ -940,7 +946,7 @@ static int res_dump(pd_t *pd, model_state_t *ms, pd_hold_node_t *current_cap,
 /**
  * Dump the given PD to the given model state
  */
-static int pd_dump_internal(pd_t *pd, model_state_t *ms, cspacepath_t rr_frame_path, void *rr_local_vaddr)
+static int pd_dump_internal(pd_t *pd, model_state_t *ms, uint64_t rr_mo_id, void *rr_local_vaddr)
 {
     int error;
 
@@ -984,7 +990,7 @@ static int pd_dump_internal(pd_t *pd, model_state_t *ms, cspacepath_t rr_frame_p
                     uint64_t obj_id = rde.space_id;
                     uint64_t server_id = rde.space_id;
 
-                    error = request_remote_rr(pd, ms, server_id, obj_id, rr_frame_path, rr_local_vaddr);
+                    error = request_remote_rr(pd, ms, server_id, obj_id, rr_mo_id, rr_local_vaddr);
                     assert(error == 0);
                 }
             }
@@ -995,7 +1001,7 @@ static int pd_dump_internal(pd_t *pd, model_state_t *ms, cspacepath_t rr_frame_p
     for (pd_hold_node_t *current_cap = (pd_hold_node_t *)pd->hold_registry.head; current_cap != NULL; current_cap = (pd_hold_node_t *)current_cap->gen.hh.next)
     {
         // print_pd_osm_cap_info(current_cap);
-        if (res_dump(pd, ms, current_cap, pd_node, rr_frame_path, rr_local_vaddr) != 0)
+        if (res_dump(pd, ms, current_cap, pd_node, rr_mo_id, rr_local_vaddr) != 0)
         {
             return 1;
         }
@@ -1006,7 +1012,7 @@ static int pd_dump_internal(pd_t *pd, model_state_t *ms, cspacepath_t rr_frame_p
 
 int pd_dump(pd_t *pd)
 {
-    int error;
+    int error = 0;
 
     OSDB_PRINTF("pd_dump_cap: Dumping all details of PD:%u\n", pd->id);
 
@@ -1024,7 +1030,16 @@ int pd_dump(pd_t *pd)
     model_state_t *ms = (model_state_t *)malloc(sizeof(model_state_t));
     init_model_state(ms, NULL, 0);
 
-    /* Allocate memory for remote rr requests */
+    /* Allocate MO for remote rr requests */
+    mo_t *rr_mo;
+    error = mo_component_allocate(REMOTE_RR_N_PAGES, &rr_mo);
+    SERVER_GOTO_IF_ERR(error, "Failed to allocate MO for remote resource relation requests\n");
+
+    void *rr_mo_va;
+    error = ads_component_attach_to_rt(rr_mo->id, &rr_mo_va);
+    SERVER_GOTO_IF_ERR(error, "Failed to attach MO for remote resource relation requests\n");
+
+#if 0
     // (XXX) Arya: not able to use MO for remote rr request, since it would require calls back to pd component
     vka_object_t rr_frame_obj;
     error = vka_alloc_frame(get_gpi_server()->server_vka, seL4_LargePageBits, &rr_frame_obj);
@@ -1042,6 +1057,7 @@ int pd_dump(pd_t *pd)
     {
         return 1;
     }
+#endif
 
     /* Add a special node for the RT */
     gpi_model_node_t *rt_node = get_root_node(ms);
@@ -1056,21 +1072,22 @@ int pd_dump(pd_t *pd)
     for (pd_hold_node_t *current_cap = (pd_hold_node_t *)rt_pd->hold_registry.head; current_cap != NULL; current_cap = (pd_hold_node_t *)current_cap->gen.hh.next)
     {
         // print_pd_osm_cap_info(current_cap);
-        if (res_dump(rt_pd, ms, current_cap, rt_node, rr_frame_path, rr_local_vaddr) != 0)
+        if (res_dump(rt_pd, ms, current_cap, rt_node, rr_mo->id, rr_mo_va) != 0)
         {
             return 1;
         }
     }
 
     /* Add the PD's data */
-    error = pd_dump_internal(pd, ms, rr_frame_path, rr_local_vaddr);
-    if (error != 0)
-    {
-        return error;
-    }
+    error = pd_dump_internal(pd, ms, rr_mo->id, rr_mo_va);
+    SERVER_GOTO_IF_ERR(error, "Failed PD dump\n");
 
     /* Free the frame used for rr requests */
+    error = ads_component_remove_from_rt(rr_mo_va);
+    SERVER_GOTO_IF_ERR(error, "Failed to remove MO for remote resource relation requests\n");
+#if 0
     vspace_unmap_pages(get_pd_component()->server_vspace, rr_local_vaddr, 1, seL4_LargePageBits, get_pd_component()->server_vka);
+#endif
 
     print_model_state(ms);
     destroy_model_state(ms);
@@ -1084,7 +1101,8 @@ int pd_dump(pd_t *pd)
         }
     }
 
-    return 0;
+err_goto:
+    return error;
 }
 
 inline void print_pd_osm_cap_info(pd_hold_node_t *o)

@@ -233,8 +233,6 @@ seL4_MessageInfo_t xv6fs_request_handler(seL4_MessageInfo_t tag, seL4_Word sende
       void *free_mem = mem_vaddr + sizeof(model_state_t);
       size_t free_size = seL4_GetMR(RSMSGREG_EXTRACT_RR_REQ_SIZE) - sizeof(model_state_t);
 
-      XV6FS_PRINTF("Get RR for ns %d\n", ns_id);
-
       /* Update pathname for namespace */
       char path[MAXPATH];
       strcpy(path, ROOT_DIR);
