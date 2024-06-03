@@ -676,7 +676,7 @@ dirlookup_idx(struct inode *dp, int idx, char *de_name)
     // printf("Dirlookup '%s'\n", de.name);
   }
 
-  if (de.inum == 0 || strlen(de_name) == 0)
+  if (de.inum == 0 || strlen(de.name) == 0)
   {
     return &null_inode;
   }

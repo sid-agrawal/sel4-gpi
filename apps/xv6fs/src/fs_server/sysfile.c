@@ -238,7 +238,7 @@ int xv6fs_sys_walk(char *path, bool print, uint32_t *inums, int *n_files)
             else if (sub_ip->type == T_FILE)
             {
               if (print)
-                printf("  - %s (%d)\n", de_name, sub_ip->inum);
+                printf("    - %s (%d)\n", de_name, sub_ip->inum);
               inums[inum_idx] = sub_ip->inum;
               inum_idx++;
             }
