@@ -27,7 +27,7 @@ void resource_types_initialize(void)
 {
     registry = &get_gpi_server()->resource_types;
 
-    resource_server_initialize_registry(registry, NULL);
+    resource_server_initialize_registry(registry, NULL, NULL);
 
     // Insert the core cap types to the registry with their names
     insert_resource_type(GPICAP_TYPE_NONE, "NONE");
@@ -71,6 +71,12 @@ char *cap_type_to_str(gpi_cap_t cap_type)
 {
     if (get_gpi_server()->is_root)
     {
+        if (registry == NULL)
+        {
+            // Can't get cap type name if the resource type registry is not initialized
+            gpi_panic("Resource type registry is not initialized", 1);
+        }
+
         // Root task finds name from resource type definitions
         resource_type_registry_entry_t *reg_entry = (resource_type_registry_entry_t *)
             resource_server_registry_get_by_id(registry, (uint64_t)cap_type);

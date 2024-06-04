@@ -40,7 +40,6 @@ typedef struct _attach_node
 {
     resource_server_registry_node_t gen;
 
-    vspace_t *vspace;                  ///< Which vspace this attach corresponds to
     void *vaddr;                       ///< Attach vaddr, key for the UTHash
     attach_node_map_t *map_entry;      ///< the attach node map entry for this node
     reservation_t res;                 ///< Reservation in the vspace
@@ -80,6 +79,15 @@ int ads_new(ads_t *ads,
             vka_t *vka,
             vspace_t *loader,
             void *arg0);
+
+/**
+ * @brief Initialize an ads object
+ * This is exposed just to initialize a forged ADS object
+ * 
+ * @param ads the ADS to initialize
+ * @return int 0 on success, 1 on failure.
+*/
+int ads_initialize(ads_t *ads);
 
 /**
  * Reserve a region of the ADS

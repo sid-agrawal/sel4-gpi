@@ -99,7 +99,7 @@ int resource_component_initialize(
     uint64_t space_id,
     seL4_MessageInfo_t (*request_handler)(seL4_MessageInfo_t, seL4_Word, seL4_CPtr, bool *),
     int (*new_obj)(resource_component_object_t *, vka_t *, vspace_t *, void *),
-    void (*on_registry_delete)(resource_server_registry_node_t *),
+    void (*on_registry_delete)(resource_server_registry_node_t *, void *),
     size_t reg_entry_size,
     simple_t *server_simple,
     vka_t *server_vka,
@@ -182,3 +182,8 @@ int resource_component_inc(resource_component_context_t *component,
 */
 int resource_component_dec(resource_component_context_t *component,
                            uint64_t object_id);
+
+/**
+ * Debug function to print the existing resources in a resource component
+*/
+void resource_component_debug_print(resource_component_context_t *component);

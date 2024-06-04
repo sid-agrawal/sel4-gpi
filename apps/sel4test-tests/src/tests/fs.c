@@ -61,7 +61,7 @@ int test_fs(env_t env)
     error = start_xv6fs_pd(ramdisk_id, &fs_pd_cap, &fs_id);
     test_assert(error == 0);
 
-    // Add FS ep to RDE
+    // Get the FS ep
     seL4_CPtr fs_client_ep = sel4gpi_get_rde(sel4gpi_get_resource_type_code(FILE_RESOURCE_TYPE_NAME));
     test_assert(fs_client_ep != seL4_CapNull);
 
@@ -260,3 +260,159 @@ int test_fs(env_t env)
     return sel4test_get_result();
 }
 DEFINE_TEST(GPIFS001, "Ensure that the file system is functioning", test_fs, true)
+
+/**
+ * Tests that the currently connected FS is sufficiently functional to
+ * write and read a file
+ */
+static int basic_fs_test()
+{
+    int error = 0;
+    char buf[128];
+
+    // Test file open/write
+    int f = open(TEST_FNAME, O_CREAT | O_RDWR);
+    test_assert(f > 0);
+
+    int nbytes = write(f, TEST_STR_1, strlen(TEST_STR_1) + 1);
+    test_assert(nbytes == strlen(TEST_STR_1) + 1);
+
+    error = close(f);
+    test_assert(error == 0);
+
+    // Test file open/read
+    f = open(TEST_FNAME, O_RDONLY);
+    test_assert(f > 0);
+
+    memset(buf, 0, 128);
+    nbytes = read(f, buf, strlen(TEST_STR_1) + 1);
+    test_assert(nbytes == strlen(TEST_STR_1) + 1);
+    test_assert(strcmp(buf, TEST_STR_1) == 0);
+
+    error = close(f);
+    test_assert(error == 0);
+
+    return error;
+}
+
+int test_multiple_fs(env_t env)
+{
+    int error;
+    char buf[128];
+
+    printf("------------------STARTING SETUP: %s------------------\n", __func__);
+
+    /* Initialize the ADS */
+    ads_client_context_t ads_conn;
+    vka_cspace_make_path(&env->vka, sel4gpi_get_rde_by_space_id(sel4gpi_get_binded_ads_id(), GPICAP_TYPE_VMR), &ads_conn.badged_server_ep_cspath);
+
+    /* Initialize the PD */
+    pd_client_context_t pd_conn = sel4gpi_get_pd_conn();
+
+    /* Create a memory object for the RR dump */
+    seL4_CPtr slot;
+    vka_cspace_alloc(&env->vka, &slot);
+
+    mo_client_context_t mo_conn;
+    error = mo_component_client_connect(sel4gpi_get_rde(GPICAP_TYPE_MO),
+                                        slot,
+                                        RR_MO_N_PAGES,
+                                        &mo_conn);
+    test_assert(error == 0);
+    printf("Finished mo_component_client_connect\n");
+
+    /* Start ramdisk server process */
+    uint64_t ramdisk_id;
+    seL4_CPtr ramdisk_pd_cap;
+    error = start_ramdisk_pd(&ramdisk_pd_cap, &ramdisk_id);
+    test_assert(error == 0);
+
+    printf("------------------STARTING TESTS: %s------------------\n", __func__);
+
+    /* Start FS 1 */
+    uint64_t fs_1_id;
+    seL4_CPtr fs_1_pd_cap;
+    error = start_xv6fs_pd(ramdisk_id, &fs_1_pd_cap, &fs_1_id);
+    test_assert(error == 0);
+
+    /* Attach MO to test's ADS */
+    void *mo_vaddr;
+    error = ads_client_attach(&ads_conn,
+                              NULL,
+                              &mo_conn,
+                              SEL4UTILS_RES_TYPE_GENERIC,
+                              &mo_vaddr);
+    test_assert(error == 0);
+
+    // The libc fs ops should go to the xv6fs server
+    xv6fs_client_init();
+
+    // Test FS1 is functional
+    error = basic_fs_test();
+    test_assert(error == 0);
+
+    /* Start FS 2 */
+    uint64_t fs_2_id;
+    seL4_CPtr fs_2_pd_cap;
+    error = start_xv6fs_pd(ramdisk_id, &fs_2_pd_cap, &fs_2_id);
+    test_assert(error == 0);
+
+    // Swap to using FS2
+    xv6fs_client_set_namespace(fs_2_id);
+
+    // Check that we are in a new FS
+    int f = open(TEST_FNAME, O_RDWR);
+    test_assert(f == -1); // File should not exist in new FS
+
+    // Test FS2 is functional
+    error = basic_fs_test();
+    test_assert(error == 0);
+
+    // Destroy an FS and start another one
+    // If the FS is configured to use half of the ramdisk, this test checks that blocks are being
+    // reclaimed from the destroyed FS
+    pd_client_context_t fs_1_pd_conn;
+    fs_1_pd_conn.badged_server_ep_cspath.capPtr = fs_1_pd_cap;
+    error = pd_client_disconnect(&fs_1_pd_conn);
+    test_assert(error == 0);
+
+    /* Start FS 3 */
+    uint64_t fs_3_id;
+    seL4_CPtr fs_3_pd_cap;
+    error = start_xv6fs_pd(ramdisk_id, &fs_3_pd_cap, &fs_3_id);
+    test_assert(error == 0);
+
+    // Swap to using FS3
+    xv6fs_client_set_namespace(fs_3_id);
+
+    // Check that we are in a new FS
+    f = open(TEST_FNAME, O_RDWR);
+    test_assert(f == -1); // File should not exist in new FS
+
+    // Test FS3 is functional
+    error = basic_fs_test();
+    test_assert(error == 0);
+
+    // Cleanup other servers
+    pd_client_context_t fs_2_pd_conn;
+    fs_2_pd_conn.badged_server_ep_cspath.capPtr = fs_2_pd_cap;
+    error = pd_client_disconnect(&fs_2_pd_conn);
+    test_assert(error == 0);
+
+    pd_client_context_t fs_3_pd_conn;
+    fs_3_pd_conn.badged_server_ep_cspath.capPtr = fs_3_pd_cap;
+    error = pd_client_disconnect(&fs_3_pd_conn);
+    test_assert(error == 0);
+
+    pd_client_context_t ramdisk_pd_conn;
+    ramdisk_pd_conn.badged_server_ep_cspath.capPtr = ramdisk_pd_cap;
+    error = pd_client_disconnect(&ramdisk_pd_conn);
+    test_assert(error == 0);
+
+    // Print whole-pd model state
+    // error = pd_client_dump(&pd_conn, NULL, 0);
+
+    printf("------------------ENDING: %s------------------\n", __func__);
+    return sel4test_get_result();
+}
+DEFINE_TEST(GPIFS002, "Start multiple file systems", test_multiple_fs, true)

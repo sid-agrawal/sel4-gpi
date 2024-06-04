@@ -35,7 +35,7 @@ resource_component_context_t *get_resspc_component(void)
 }
 
 // Called when an item from the MO registry is deleted
-static void on_resspc_registry_delete(resource_server_registry_node_t *node_gen)
+static void on_resspc_registry_delete(resource_server_registry_node_t *node_gen, void *arg)
 {
     resspc_component_registry_entry_t *node = (resspc_component_registry_entry_t *)node_gen;
 

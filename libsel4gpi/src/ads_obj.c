@@ -44,15 +44,16 @@ typedef struct _cpu cpu_t;
  * Callback when an attach node is deleted
  * Perform cleanup here
  */
-static void on_attach_registry_delete(resource_server_registry_node_t *node_gen)
+static void on_attach_registry_delete(resource_server_registry_node_t *node_gen, void *ads_v)
 {
     attach_node_t *node = (attach_node_t *)node_gen;
+    ads_t *ads = (ads_t *)ads_v;
 
     OSDB_PRINTF("Deleting attach node vaddr %p, mo_attached %d, type %s\n",
                 node->vaddr, node->mo_attached, human_readable_va_res_type(node->type));
 
     // Remove the reservation
-    // sel4utils_free_reservation(node->vspace, node->res);
+    sel4utils_free_reservation(ads->vspace, node->res);
 
     // Remove the attached MO
     if (node->mo_attached)
@@ -61,7 +62,7 @@ static void on_attach_registry_delete(resource_server_registry_node_t *node_gen)
         // (XXX) Arya: I believe we want VSPACE_PRESERVE here
         // Otherwise, sel4utils will attempt to free the frame caps and their corresponding untyped
         // Which we do not want, since the MO continues to exist
-        sel4utils_unmap_pages(node->vspace, node->vaddr + node->mo_offset,
+        sel4utils_unmap_pages(ads->vspace, node->vaddr + node->mo_offset,
                               node->n_frames, MO_PAGE_BITS, VSPACE_PRESERVE);
 
         // Free the frame caps (duplicated for this attach)
@@ -73,13 +74,32 @@ static void on_attach_registry_delete(resource_server_registry_node_t *node_gen)
             vka_cspace_free_path(get_ads_component()->server_vka, path);
         }
 
-        free(node->frame_caps);
+        // (XXX) Arya: IMPORTANT
+        // Something is broken with morecore when I free this
+        //free(node->frame_caps);
 
         // Decrement the refcount of the MO
         // It is important to do this after freeing the caps, since if the MO is freed,
         // it will return the frames to the VKA, and the VKA expects that there are no copies
         resource_component_dec(get_mo_component(), node->mo_id);
     }
+}
+
+int ads_initialize(ads_t *ads)
+{
+    int error = 0;
+
+    // Initialize VMR registry
+    resource_server_initialize_registry(&ads->attach_registry, on_attach_registry_delete, (void *)ads);
+    resource_server_initialize_registry(&ads->attach_id_to_vaddr_map, NULL, NULL);
+
+    /* The root task holds the ADS by default */
+    error = pd_add_resource_by_id(get_gpi_server()->rt_pd_id, GPICAP_TYPE_ADS, get_ads_component()->space_id, ads->id,
+                                  seL4_CapNull, seL4_CapNull, seL4_CapNull);
+    SERVER_GOTO_IF_ERR(error, "Failed to add new ADS to root task\n");
+
+err_goto:
+    return error;
 }
 
 int ads_new(ads_t *ads,
@@ -136,14 +156,8 @@ int ads_new(ads_t *ads,
 
     ads->root_page_dir = vspace_root_object;
 
-    // Initialize VMR registry
-    resource_server_initialize_registry(&ads->attach_registry, on_attach_registry_delete);
-    resource_server_initialize_registry(&ads->attach_id_to_vaddr_map, NULL);
-
-    /* The root task holds the ADS by default */
-    error = pd_add_resource_by_id(get_gpi_server()->rt_pd_id, GPICAP_TYPE_ADS, get_ads_component()->space_id, ads->id,
-                                  seL4_CapNull, seL4_CapNull, seL4_CapNull);
-    SERVER_GOTO_IF_ERR(error, "Failed to add new ADS to root task\n");
+    // Perform any initialization of metadata
+    error = ads_initialize(ads);
 
     return error;
 
@@ -203,7 +217,6 @@ int ads_reserve(ads_t *ads,
 
     // The attach node is keyed by vaddr
     memset((void *)attach_node, 0, sizeof(attach_node_t));
-    attach_node->vspace = ads->vspace;
     attach_node->res = res;
     attach_node->vaddr = vaddr;
     attach_node->map_entry = attach_node_map_entry;
@@ -382,15 +395,13 @@ int ads_attach(ads_t *ads,
 
 int ads_forge_attach(ads_t *ads, sel4utils_res_t *res, mo_t *mo)
 {
+    int error = 0;
+
     // Add the attach node for this region
     attach_node_t *attach_node = malloc(sizeof(attach_node_t));
     attach_node_map_t *attach_node_map_entry = malloc(sizeof(attach_node_map_t));
-
-    if (attach_node == NULL || attach_node_map_entry == NULL)
-    {
-        ZF_LOGE("Failed to allocate attach node for forged attach\n");
-        return 1;
-    }
+    SERVER_GOTO_IF_COND(attach_node == NULL || attach_node_map_entry == NULL,
+                        "Failed to allocate attach node for forged attach\n");
 
     // Map a shorter attach node ID to vaddr
     attach_node_map_entry->vaddr = (void *)res->start;
@@ -398,7 +409,6 @@ int ads_forge_attach(ads_t *ads, sel4utils_res_t *res, mo_t *mo)
 
     // The attach node is keyed by vaddr
     memset((void *)attach_node, 0, sizeof(attach_node_t));
-    attach_node->vspace = ads->vspace;
     attach_node->res.res = res;
     attach_node->vaddr = (void *)res->start;
     attach_node->map_entry = attach_node_map_entry;
@@ -411,7 +421,12 @@ int ads_forge_attach(ads_t *ads, sel4utils_res_t *res, mo_t *mo)
 
     resource_server_registry_insert(&ads->attach_registry, (resource_server_registry_node_t *)attach_node);
 
-    return 0;
+    // Track this attachment as a refcount to the MO
+    error = resource_component_inc(get_mo_component(), mo->id);
+    SERVER_GOTO_IF_ERR(error, "Failed to increment refcount of MO\n");
+
+err_goto:
+    return error;
 }
 
 int ads_rm(ads_t *ads, vka_t *vka, void *vaddr)

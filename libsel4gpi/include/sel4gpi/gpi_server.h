@@ -113,3 +113,8 @@ gpi_server_context_t *get_gpi_server(void);
  * Used for an unrecoverable fault in the gpi server
 */
 void gpi_panic(char *reason, uint64_t code);
+
+/**
+ * Debug function prints all core resources in existence
+*/
+void gpi_debug_print_resources(void);

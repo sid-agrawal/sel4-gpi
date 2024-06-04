@@ -43,7 +43,7 @@ resource_component_context_t *get_cpu_component(void)
 }
 
 // Called when an item from the CPU registry is deleted
-static void on_cpu_registry_delete(resource_server_registry_node_t *node_gen)
+static void on_cpu_registry_delete(resource_server_registry_node_t *node_gen, void *arg)
 {
     cpu_component_registry_entry_t *node = (cpu_component_registry_entry_t *)node_gen;
 
@@ -200,6 +200,11 @@ static seL4_MessageInfo_t handle_change_vspace_req(seL4_Word sender_badge,
                               ads_vspace);
 
     SERVER_GOTO_IF_ERR(error, "Failed to change vspace\n");
+
+    // Update refcount of the ADS objects
+    uint64_t old_ads_id = pd_data->pd.init_data->ads_conn.id;
+    resource_component_dec(get_ads_component(), old_ads_id);
+    resource_component_inc(get_ads_component(), ads_data->ads.id);
 
     // Update the PD object with the new ADS
     // (XXX) Arya: update the ads_conn cap? need to find the badged EP for the given ADS

@@ -63,7 +63,7 @@ static pd_component_registry_entry_t *pd_component_registry_get_entry_by_badge(s
 }
 
 // Called when an item from the CPU registry is deleted
-static void on_pd_registry_delete(resource_server_registry_node_t *node_gen)
+static void on_pd_registry_delete(resource_server_registry_node_t *node_gen, void *arg)
 {
     pd_component_registry_entry_t *node = (pd_component_registry_entry_t *)node_gen;
 
@@ -668,7 +668,7 @@ int pd_component_initialize(simple_t *server_simple,
                                   server_thread,
                                   server_ep_obj.cptr);
 
-    resource_server_initialize_registry(&server_registry, NULL);
+    resource_server_initialize_registry(&server_registry, NULL, NULL);
 }
 
 void forge_pd_for_root_task(uint64_t rt_id)
@@ -744,15 +744,18 @@ void forge_pd_cap_from_init_data(test_init_data_t *init_data, sel4utils_process_
     error = forge_ads_cap_from_vspace(&test_process->vspace, get_pd_component()->server_vka, pd->id, &child_as_cap_in_parent, &ads_id);
     SERVER_GOTO_IF_ERR(error, "Failed to forge child's as cap");
     pd->init_data->ads_conn.id = ads_id;
+    resource_component_inc(get_ads_component(), ads_id);
 
     // Forge CPU cap
     seL4_CPtr child_cpu_cap_in_parent;
     uint32_t cpu_id;
     error = forge_cpu_cap_from_tcb(test_process, get_pd_component()->server_vka, pd->id, &child_cpu_cap_in_parent, &cpu_id);
     SERVER_GOTO_IF_ERR(error, "Failed to forge child's CPU cap");
+    pd->init_data->cpu_conn.id = cpu_id;
+    resource_component_inc(get_cpu_component(), cpu_id);
 
     // Copy the ADS/CPU/PD caps to the test process
-    // The refcount of each is 1
+    // The ADS/CPU is 2 (1 for holding, 1 for binding)
     error = copy_cap_to_pd(pd, child_as_cap_in_parent, &pd->init_data->ads_conn.badged_server_ep_cspath.capPtr);
     SERVER_GOTO_IF_ERR(error, "Failed to copy cap to PD\n");
     pd_add_resource(pd, GPICAP_TYPE_ADS, get_ads_component()->space_id, ads_id,

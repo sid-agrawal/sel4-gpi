@@ -108,14 +108,14 @@ static void apply_prefix(char *prefix, char *path)
   strcpy(path, temp);
 }
 
-static void ns_registry_entry_on_delete(resource_server_registry_node_t *node_gen)
+static void ns_registry_entry_on_delete(resource_server_registry_node_t *node_gen, void *arg)
 {
   fs_namespace_entry_t *node = (fs_namespace_entry_t *)node_gen;
 
   // (XXX) Any cleanup necessary for NS
 }
 
-static void file_registry_entry_on_delete(resource_server_registry_node_t *node_gen)
+static void file_registry_entry_on_delete(resource_server_registry_node_t *node_gen, void *arg)
 {
   file_registry_entry_t *node = (file_registry_entry_t *)node_gen;
 
@@ -197,8 +197,8 @@ int xv6fs_init()
   fsinit(ROOTDEV);
 
   /* Initialize the registries */
-  resource_server_initialize_registry(&get_xv6fs_server()->file_registry, file_registry_entry_on_delete);
-  resource_server_initialize_registry(&get_xv6fs_server()->ns_registry, ns_registry_entry_on_delete);
+  resource_server_initialize_registry(&get_xv6fs_server()->file_registry, file_registry_entry_on_delete, NULL);
+  resource_server_initialize_registry(&get_xv6fs_server()->ns_registry, ns_registry_entry_on_delete, NULL);
 
   XV6FS_PRINTF("Initialized file system\n");
 
@@ -311,8 +311,12 @@ seL4_MessageInfo_t xv6fs_request_handler(seL4_MessageInfo_t tag, seL4_Word sende
       free(blocknos);
       clean_model_state(model_state);
 
-      seL4_SetMR(RDMSGREG_FUNC, RS_FUNC_GET_RR_ACK);
+      seL4_SetMR(RSMSGREG_FUNC, RS_FUNC_GET_RR_ACK);
       break;
+    case RS_FUNC_FREE_REQ:
+      printf("Warning: try to free file, not implemented\n");
+
+      seL4_SetMR(RSMSGREG_FUNC, RS_FUNC_FREE_ACK);
     default:
       XV6FS_PRINTF("Op is %d\n", op);
       CHECK_ERROR_GOTO(1, "got invalid op on unbadged ep", error, done);

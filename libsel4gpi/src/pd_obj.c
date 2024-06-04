@@ -290,10 +290,11 @@ int pd_bulk_add_resource(pd_t *pd, linked_list_t *resources)
 }
 
 static void
-pd_held_resource_on_delete(resource_server_registry_node_t *node_gen)
+pd_held_resource_on_delete(resource_server_registry_node_t *node_gen, void *pd_v)
 {
     int error = 0;
     pd_hold_node_t *node = (pd_hold_node_t *)node_gen;
+    pd_t *pd = (pd_t *) pd_v;
 
     OSDB_PRINTF("Freeing resource %s_%d_%d\n", cap_type_to_str(node->type), node->space_id, node->res_id);
 
@@ -318,10 +319,20 @@ pd_held_resource_on_delete(resource_server_registry_node_t *node_gen)
         // NS ID is the ADS, res ID is the VMR
         error = ads_component_rm_by_id(node->space_id, node->res_id);
         break;
+    case GPICAP_TYPE_RESSPC:
+        // Wait to clean up resource spaces until later
+        // (XXX) Arya: figure out resource space deletion policy
+        break;
     default:
         // Otherwise, call the manager PD
-        // (XXX) Arya: TODO implement
-        // OSDB_PRINTERR("Not implemented: delete PD's held non-core resource %s-%d\n", cap_type_to_str(node->type), node->res_id);
+        resspc_component_registry_entry_t *space_data = resource_space_get_entry_by_id(node->space_id);
+
+        // But if the manager PD is this PD itself, then there's no point
+        if (space_data->space.pd->id == pd->id) {
+            break;
+        }
+
+        error = resource_server_client_free(space_data->space.server_ep, node->space_id, node->res_id);
         break;
     }
 
@@ -347,7 +358,7 @@ int pd_new(pd_t *pd,
     SERVER_GOTO_IF_ERR(error, "Failed to attach init data MO to RT\n");
 
     // Initialize the hold registry
-    resource_server_initialize_registry(&pd->hold_registry, pd_held_resource_on_delete);
+    resource_server_initialize_registry(&pd->hold_registry, pd_held_resource_on_delete, (void *) pd);
 
     // Setup init data
     pd->init_data->rde_count = 0;
@@ -366,6 +377,10 @@ err_goto:
 
 void pd_destroy(pd_t *pd, vka_t *server_vka, vspace_t *server_vspace)
 {
+    /* decrement the refcount of the PD's binded ADS and CPU */
+    resource_component_dec(get_ads_component(), pd->init_data->ads_conn.id);
+    resource_component_dec(get_cpu_component(), pd->init_data->cpu_conn.id);
+
     /* below is copied from sel4utils_destroy_process */
     /* (XXX) Arya: eventually should be repartitioned to other components */
     sel4utils_process_t *process = &pd->proc;
@@ -411,8 +426,6 @@ void pd_destroy(pd_t *pd, vka_t *server_vka, vspace_t *server_vspace)
 
     memset(thread, 0, sizeof(sel4utils_thread_t));
     /* end copied from sel4utils_clean_up_thread */
-
-    // (XXX) Arya: do we need to decrement the refcount of the PD's binded ADS, or will it always hold the resource?
 
     /* destroy the endpoint */
     if (process->own_ep && process->fault_endpoint.cptr != 0)
@@ -1077,6 +1090,7 @@ int pd_set_core_cap(pd_t *pd, seL4_Word core_cap_badge, seL4_CPtr core_cap)
     switch (cap_type)
     {
     case GPICAP_TYPE_ADS:
+        resource_component_inc(get_ads_component(), cap_id);
         pd->init_data->ads_conn.id = cap_id;
         pd->init_data->ads_conn.badged_server_ep_cspath.capPtr = core_cap;
         break;
@@ -1085,6 +1099,8 @@ int pd_set_core_cap(pd_t *pd, seL4_Word core_cap_badge, seL4_CPtr core_cap)
         pd->init_data->pd_conn.badged_server_ep_cspath.capPtr = core_cap;
         break;
     case GPICAP_TYPE_CPU:
+        resource_component_inc(get_cpu_component(), cap_id);
+        pd->init_data->cpu_conn.id = cap_id;
         pd->init_data->cpu_conn.badged_server_ep_cspath.capPtr = core_cap;
         break;
     default:

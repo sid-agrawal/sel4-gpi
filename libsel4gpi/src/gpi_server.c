@@ -103,7 +103,7 @@ gpi_server_parent_spawn_thread(simple_t *parent_simple, vka_t *parent_vka,
     resource_types_initialize();
 
     /* Setup the Resource Space Component */
-    // This must be initialized first so that the other components can make their own resource spaces
+    // This component must be initialized first so that the other components can make their own resource spaces
     resspc_component_initialize(parent_simple, parent_vka, parent_cspace_cspath.root, parent_vspace,
                                 get_gpi_server()->server_thread, get_gpi_server()->server_ep_obj);
 
@@ -312,4 +312,14 @@ void gpi_panic(char *reason, uint64_t code)
 {
     printf("PANIC: %s. CODE: %ld\n", reason, code);
     assert(0);
+}
+
+void gpi_debug_print_resources(void)
+{
+    printf("*** LISTING REMAINING RESOURCES ***\n");
+    resource_component_debug_print(get_ads_component());
+    resource_component_debug_print(get_cpu_component());
+    resource_component_debug_print(get_mo_component());
+    resource_component_debug_print(get_pd_component());
+    printf("*** DONE LISTING RESOURCES ***\n");
 }

@@ -45,7 +45,7 @@ resource_component_context_t *get_ads_component(void)
 }
 
 // Called when an item from the ADS registry is deleted
-static void on_ads_registry_delete(resource_server_registry_node_t *node_gen)
+static void on_ads_registry_delete(resource_server_registry_node_t *node_gen, void *arg)
 {
     ads_component_registry_entry_t *node = (ads_component_registry_entry_t *)node_gen;
 
@@ -386,16 +386,27 @@ static int forge_ads_attachment_from_res(ads_t *ads, sel4utils_res_t *res, uint3
 
         // (XXX) Arya: This may have issues if the region is not mapped to physical pages everywhere
         seL4_CPtr cap_ret;
+        mo_t *mo_ret;
         error = forge_mo_cap_from_frames(frame_caps,
                                          num_frames,
                                          client_pd_id,
                                          &cap_ret,
-                                         (mo_t **)&res->mo_ref);
+                                         &mo_ret);
         SERVER_GOTO_IF_ERR(error, "Failed to forge MO cap while forging ADS attach\n");
+
+        res->mo_ref = (void *)mo_ret;
 
         // Add the attach node for this region
         error = ads_forge_attach(ads, res, res->mo_ref);
         SERVER_GOTO_IF_ERR(error, "Failed to forge ADS attach\n");
+
+        // Since the root task "holds" these MOs, decrement the refcount
+        // The refcount then will only be 1, for the attachment to the forged ADS
+        if (client_pd_id == get_gpi_server()->rt_pd_id)
+        {
+            error = resource_component_dec(get_mo_component(), mo_ret->id);
+            SERVER_GOTO_IF_ERR(error, "Failed to decrement refcount of MO\n");
+        }
     }
 
 err_goto:
@@ -422,8 +433,6 @@ static int forge_ads_attachments_from_vspace(ads_t *ads, uint32_t client_pd_id)
     while (res != NULL)
     {
         OSDB_PRINTF("Found reservation [%p,%p]\n", (void *)res->start, (void *)res->end);
-        // (XXX) Linh: it would be hard to determine which frames belong to the RT's ADS, and which aren't,
-        //             so we'll just not copy them for now
         error = forge_ads_attachment_from_res(ads, res, client_pd_id);
         SERVER_GOTO_IF_ERR(error, "Failed to forge attach node from reservation\n");
         res = res->next;
@@ -552,12 +561,16 @@ int forge_ads_cap_from_vspace(vspace_t *vspace, vka_t *vka, uint32_t client_pd_i
                                         (resource_server_registry_node_t **)&new_entry, &ret_cap);
     SERVER_GOTO_IF_ERR(error, "Failed to allocate ADS for forging\n");
 
+    /* Perform any initialization of the forged ADS object */
+    error = ads_initialize(&new_entry->ads);
+    SERVER_GOTO_IF_ERR(error, "Failed to initialize forged ADS\n");
+
     /* Update the ADS object with the vspace data */
     new_entry->ads.vspace = vspace;
-    resource_server_initialize_registry(&new_entry->ads.attach_registry, NULL);
-    resource_server_initialize_registry(&new_entry->ads.attach_id_to_vaddr_map, NULL);
 
-    error = forge_ads_attachments_from_vspace(&new_entry->ads, client_pd_id);
+    /* Forge attachments for existing reservations in the vspace */
+    // The client for these MOs is always the root task
+    error = forge_ads_attachments_from_vspace(&new_entry->ads, get_gpi_server()->rt_pd_id);
     SERVER_GOTO_IF_ERR(error, "Failed to forge ADS attachments from vspace\n");
 
     if (id_ret)

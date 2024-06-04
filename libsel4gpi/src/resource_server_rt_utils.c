@@ -19,7 +19,7 @@ int resource_component_initialize(
     uint64_t space_id,
     seL4_MessageInfo_t (*request_handler)(seL4_MessageInfo_t, seL4_Word, seL4_CPtr, bool *),
     int (*new_obj)(resource_component_object_t *, vka_t *, vspace_t *, void *),
-    void (*on_registry_delete)(resource_server_registry_node_t *),
+    void (*on_registry_delete)(resource_server_registry_node_t *, void *),
     size_t reg_entry_size,
     simple_t *server_simple,
     vka_t *server_vka,
@@ -40,7 +40,7 @@ int resource_component_initialize(
     component->server_thread = server_thread;
     component->server_ep = server_ep;
 
-    resource_server_initialize_registry(&component->registry, on_registry_delete);
+    resource_server_initialize_registry(&component->registry, on_registry_delete, NULL);
 
     OSDB_PRINTF("Initialized resource component %s\n", cap_type_to_str(resource_type));
 }
@@ -175,4 +175,13 @@ int resource_component_dec(resource_component_context_t *component,
 
 err_goto:
     return error;
+}
+
+void resource_component_debug_print(resource_component_context_t *component)
+{
+    resource_server_registry_node_t *curr;
+    for (curr = component->registry.head; curr != NULL; curr = curr->hh.next)
+    {
+        printf(" - %s (%d), refcount %d\n", cap_type_to_str(component->resource_type), curr->object_id, curr->count);
+    }
 }

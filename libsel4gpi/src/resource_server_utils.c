@@ -14,10 +14,13 @@
 
 /* --- Functions for managing a registry --- */
 
-void resource_server_initialize_registry(resource_server_registry_t *registry, void (*on_delete)(resource_server_registry_node_t *))
+void resource_server_initialize_registry(resource_server_registry_t *registry,
+                                         void (*on_delete)(resource_server_registry_node_t *, void *),
+                                         void *on_delete_arg)
 {
     registry->head = NULL;
     registry->on_delete = on_delete;
+    registry->on_delete_arg = on_delete_arg;
     registry->n_entries = 0;
 }
 
@@ -44,7 +47,7 @@ void resource_server_registry_delete(resource_server_registry_t *registry, resou
 {
     if (registry->on_delete)
     {
-        registry->on_delete(node);
+        registry->on_delete(node, registry->on_delete_arg);
     }
 
     HASH_DEL(registry->head, node);

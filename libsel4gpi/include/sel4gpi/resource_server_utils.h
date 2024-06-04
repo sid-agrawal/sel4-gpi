@@ -37,23 +37,21 @@
  */
 typedef struct _resource_server_registry_node
 {
-    // Unique ID within the registry
-    uint64_t object_id;
-
-    // Reference count to this node
-    uint32_t count;
+    uint64_t object_id; ///< Unique ID within the registry
+    uint32_t count;     ///< Reference count to this node
 
     UT_hash_handle hh;
 } resource_server_registry_node_t;
 
 typedef struct _resource_server_registry
 {
-    // Hash table of registry nodes
-    resource_server_registry_node_t *head;
-    uint32_t n_entries;
+    resource_server_registry_node_t *head; ///< Hash table of registry nodes
+    uint32_t n_entries;                    ///< Number of entries in the hash table
 
-    // Function to be called before a node is deleted, or NULL
-    void (*on_delete)(resource_server_registry_node_t *node);
+    void (*on_delete)(resource_server_registry_node_t *, void *); ///< Function to be called before a node is deleted
+                                                                  ///< or NULL
+                                                                  ///< Args: node, optional arg
+    void *on_delete_arg;                                          ///< Passed as the second argument to on_delete
 
 } resource_server_registry_t;
 
@@ -64,8 +62,11 @@ typedef struct _resource_server_registry
  *
  * @param registry the registry to initialize
  * @param on_delete (optional) function to be called before a node is deleted
+ * @param on_delete_arg (optional) to pass as the second argument to on_delete
  */
-void resource_server_initialize_registry(resource_server_registry_t *registry, void (*on_delete)(resource_server_registry_node_t *));
+void resource_server_initialize_registry(resource_server_registry_t *registry,
+                                         void (*on_delete)(resource_server_registry_node_t *, void *),
+                                         void *on_delete_arg);
 
 /**
  * Insert a new node to the registry
