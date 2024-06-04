@@ -775,8 +775,8 @@ err_goto:
 }
 
 int ads_write_arguments(pd_t *pd,
-                        ads_t *ads,
-                        cpu_t *cpu,
+                        vspace_t *loadee_vspace,
+                        void *ipc_buf_addr,
                         void *stack_top,
                         int argc,
                         char *argv[],
@@ -793,7 +793,7 @@ int ads_write_arguments(pd_t *pd,
 
     /* Copy the elf headers */
     uintptr_t at_phdr;
-    error = sel4utils_stack_write(vspace, ads->vspace, vka, pd->elf_phdrs,
+    error = sel4utils_stack_write(vspace, loadee_vspace, vka, pd->elf_phdrs,
                                   pd->num_elf_phdrs * sizeof(Elf_Phdr), &initial_stack_pointer);
     if (error)
     {
@@ -814,7 +814,7 @@ int ads_write_arguments(pd_t *pd,
     auxv[3].a_type = AT_PHENT;
     auxv[3].a_un.a_val = sizeof(Elf_Phdr);
     auxv[4].a_type = AT_SEL4_IPC_BUFFER_PTR;
-    auxv[4].a_un.a_val = cpu->ipc_buf_addr;
+    auxv[4].a_un.a_val = ipc_buf_addr;
     auxv[5].a_type = AT_SEL4_TCB;
     auxv[5].a_un.a_val = seL4_CapNull; // Is it ok that we don't give the process access to its TCB?
 
@@ -833,7 +833,7 @@ int ads_write_arguments(pd_t *pd,
 
     /* write all the strings into the stack */
     /* Copy over the user arguments */
-    error = sel4utils_stack_copy_args(vspace, ads->vspace, vka, argc, argv, dest_argv, &initial_stack_pointer);
+    error = sel4utils_stack_copy_args(vspace, loadee_vspace, vka, argc, argv, dest_argv, &initial_stack_pointer);
     if (error)
     {
         ZF_LOGE("%s: Failed to write stack\n", __func__);
@@ -843,7 +843,7 @@ int ads_write_arguments(pd_t *pd,
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wstringop-overflow"
     /* copy the environment */
-    error = sel4utils_stack_copy_args(vspace, ads->vspace, vka, envc, envp, dest_envp, &initial_stack_pointer);
+    error = sel4utils_stack_copy_args(vspace, loadee_vspace, vka, envc, envp, dest_envp, &initial_stack_pointer);
     if (error)
     {
         ZF_LOGE("%s: Failed to write stack\n", __func__);
@@ -864,55 +864,55 @@ int ads_write_arguments(pd_t *pd,
 
     /* construct initial stack frame */
     /* Null terminate aux */
-    error = sel4utils_stack_write_constant(vspace, ads->vspace, vka, 0, &initial_stack_pointer);
+    error = sel4utils_stack_write_constant(vspace, loadee_vspace, vka, 0, &initial_stack_pointer);
     if (error)
     {
         ZF_LOGE("%s: Failed to write stack\n", __func__);
         return -1;
     }
-    error = sel4utils_stack_write_constant(vspace, ads->vspace, vka, 0, &initial_stack_pointer);
+    error = sel4utils_stack_write_constant(vspace, loadee_vspace, vka, 0, &initial_stack_pointer);
     if (error)
     {
         ZF_LOGE("%s: Failed to write stack\n", __func__);
         return -1;
     }
     /* write aux */
-    error = sel4utils_stack_write(vspace, ads->vspace, vka, auxv, sizeof(auxv[0]) * auxc, &initial_stack_pointer);
+    error = sel4utils_stack_write(vspace, loadee_vspace, vka, auxv, sizeof(auxv[0]) * auxc, &initial_stack_pointer);
     if (error)
     {
         ZF_LOGE("%s: Failed to write stack\n", __func__);
         return -1;
     }
     /* Null terminate environment */
-    error = sel4utils_stack_write_constant(vspace, ads->vspace, vka, 0, &initial_stack_pointer);
+    error = sel4utils_stack_write_constant(vspace, loadee_vspace, vka, 0, &initial_stack_pointer);
     if (error)
     {
         ZF_LOGE("%s: Failed to write stack\n", __func__);
         return -1;
     }
     /* write environment */
-    error = sel4utils_stack_write(vspace, ads->vspace, vka, dest_envp, sizeof(dest_envp), &initial_stack_pointer);
+    error = sel4utils_stack_write(vspace, loadee_vspace, vka, dest_envp, sizeof(dest_envp), &initial_stack_pointer);
     if (error)
     {
         ZF_LOGE("%s: Failed to write stack\n", __func__);
         return -1;
     }
     /* Null terminate arguments */
-    error = sel4utils_stack_write_constant(vspace, ads->vspace, vka, 0, &initial_stack_pointer);
+    error = sel4utils_stack_write_constant(vspace, loadee_vspace, vka, 0, &initial_stack_pointer);
     if (error)
     {
         ZF_LOGE("%s: Failed to write stack\n", __func__);
         return -1;
     }
     /* write arguments */
-    error = sel4utils_stack_write(vspace, ads->vspace, vka, dest_argv, sizeof(dest_argv), &initial_stack_pointer);
+    error = sel4utils_stack_write(vspace, loadee_vspace, vka, dest_argv, sizeof(dest_argv), &initial_stack_pointer);
     if (error)
     {
         ZF_LOGE("%s: Failed to write stack\n", __func__);
         return -1;
     }
     /* Push argument count */
-    error = sel4utils_stack_write_constant(vspace, ads->vspace, vka, argc, &initial_stack_pointer);
+    error = sel4utils_stack_write_constant(vspace, loadee_vspace, vka, argc, &initial_stack_pointer);
     if (error)
     {
         ZF_LOGE("%s: Failed to write stack\n", __func__);

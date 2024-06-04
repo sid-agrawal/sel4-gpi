@@ -480,18 +480,18 @@ static seL4_MessageInfo_t handle_runtime_setup_req(seL4_Word sender_badge, seL4_
             snprintf(argv[i], WORD_STRING_SIZE, "%" PRIuPTR "", args[i]);
         }
 
-        // (XXX) Linh: stack_top meaning differs depending on what PD we're starting, should fix as this is not so nice ■
+        // (XXX) Linh: stack_top meaning differs depending on what PD we're starting, should fix as this is not so nice
         void *stack_top = (void *)seL4_GetMR(PDMSGREG_SETUP_REQ_STACK);
         void *entry_point = (void *)seL4_GetMR(PDMSGREG_SETUP_REQ_ENTRY_POINT);
         void *ipc_buf_addr = (void *)seL4_GetMR(PDMSGREG_SETUP_REQ_IPC_BUF);
         pd_setup_type_t setup_mode = (pd_setup_type_t)seL4_GetMR(PDMSGREG_SETUP_REQ_TYPE);
 
+        target_pd->pd.init_data_in_PD = (void *)seL4_GetMR(PDMSGREG_SETUP_REQ_OSM_DATA);
         switch (setup_mode)
         {
         case PD_RUNTIME_SETUP:
             void *init_stack;
-            error = ads_write_arguments(&target_pd->pd, &target_ads->ads,
-                                        &target_cpu->cpu, stack_top,
+            error = ads_write_arguments(&target_pd->pd, target_ads->ads.vspace, ipc_buf_addr, stack_top,
                                         argc, argv, &init_stack);
             if (!error)
             {

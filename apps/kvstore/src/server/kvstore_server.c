@@ -142,7 +142,7 @@ int kvstore_server_main(seL4_CPtr parent_ep)
     int error;
     seL4_MessageInfo_t tag;
     seL4_CPtr badge;
-
+    printf("here\n");
     seL4_CPtr fs_ep = sel4gpi_get_rde(sel4gpi_get_resource_type_code(FILE_RESOURCE_TYPE_NAME));
     printf("kvstore-server main: parent ep (%d), fs ep(%d) \n", (int)parent_ep, (int)fs_ep);
 

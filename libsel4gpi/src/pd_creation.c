@@ -158,7 +158,7 @@ pd_config_t *sel4gpi_configure_thread(void *thread_fn, seL4_CPtr fault_ep, sel4g
     error = cpu_component_client_connect(cpu_rde, free_slot, &ret_runnable->cpu);
     GOTO_IF_ERR(error, "failed to allocate a new CPU");
 
-    cfg = sel4gpi_generate_thread_config(thread_fn, fault_ep);
+    cfg = sel4gpi_generate_thread_config(thread_fn, fault_ep, &osm_data_mo);
 
 err_goto:
     return cfg;
@@ -217,7 +217,7 @@ int sel4gpi_ads_configure(ads_config_t *cfg,
     ads_client_context_t self_ads_conn = sel4gpi_get_ads_conn();
 
     /* attach OSmosis data MO to the ADS*/
-    if (osm_data_mo)
+    if (osm_data_mo && osm_data_mo->badged_server_ep_cspath.capPtr != seL4_CapNull)
     {
         void *pd_osm_data;
         error = ads_client_attach(&vmr_rde, NULL, osm_data_mo, SEL4UTILS_RES_TYPE_GENERIC, &pd_osm_data);
@@ -398,17 +398,7 @@ int sel4gpi_start_pd(pd_config_t *cfg, sel4gpi_runnable_t *runnable, int argc, s
         GOTO_IF_ERR(error, "Couldn't allocate fault EP for PD\n");
     }
 
-    PD_CREATION_PRINT("Configuring CPU Object, fault_ep: %lx\n", fault_ep_in_pd);
-    error = cpu_client_config(&runnable->cpu,
-                              &runnable->ads,
-                              &runnable->pd,
-                              &ipc_mo,
-                              cnode_guard,
-                              fault_ep_in_pd,
-                              (seL4_Word)ipc_buf);
-    GOTO_IF_ERR(error, "failed to configure CPU\n");
-
-    // (XXX) Linh required that this happens after cpu_client_config specifically due to dependency between the sel4util structs in the GPI components
+    // (XXX) Linh: This whole `if` blob is to be removed with unified entry-point
     if (cfg->ads_cfg.stack_shared == GPI_DISJOINT)
     {
         PD_CREATION_PRINT("Setting up runtime\n");
@@ -433,9 +423,20 @@ int sel4gpi_start_pd(pd_config_t *cfg, sel4gpi_runnable_t *runnable, int argc, s
                                         args,
                                         entry_point,
                                         ipc_buf,
+                                        osm_init_data,
                                         setup_mode);
         GOTO_IF_ERR(error, "failed to prepare runtime");
     }
+
+    PD_CREATION_PRINT("Configuring CPU Object, fault_ep: %lx\n", fault_ep_in_pd);
+    error = cpu_client_config(&runnable->cpu,
+                              &runnable->ads,
+                              &runnable->pd,
+                              &ipc_mo,
+                              cnode_guard,
+                              fault_ep_in_pd,
+                              (seL4_Word)ipc_buf);
+    GOTO_IF_ERR(error, "failed to configure CPU\n");
 
     PD_CREATION_PRINT("Starting CPU\n");
     error = cpu_client_start(&runnable->cpu);
@@ -501,10 +502,12 @@ pd_config_t *sel4gpi_generate_proc_config(const char *image_name, size_t stack_p
     return proc_cfg;
 }
 
-pd_config_t *sel4gpi_generate_thread_config(void *thread_fn, seL4_CPtr fault_ep)
+pd_config_t *sel4gpi_generate_thread_config(void *thread_fn, seL4_CPtr fault_ep, mo_client_context_t *osm_data_mo)
 {
     pd_config_t *thread_cfg = calloc(1, sizeof(pd_config_t));
     thread_cfg->fault_ep = fault_ep;
+    thread_cfg->osm_data_mo = *osm_data_mo;
+
     ads_config_t thread_ads_cfg = {
         .entry_point = thread_fn,
         .code_shared = GPI_SHARED,

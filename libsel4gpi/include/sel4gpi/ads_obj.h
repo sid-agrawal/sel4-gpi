@@ -260,18 +260,19 @@ int ads_load_elf(vspace_t *loadee_vspace,
  * @brief slightly modified version of the sel4utils process spawn function
  * sets up the stack with arguments for setting up the C runtime
  *
- * @param process the process struct holding info after an ELF has been loaded
- * @param osm_init_data initial OSmosis data for the PD
- * @param vka the loader's VKA
- * @param vspace the loader's vspace
+ * @param pd target PD to write arguments for, it's expected that an ELF has already been loaded into its ADS,
+ *          and the relevant ELF data fields inside pd_t are filled out
+ * @param loadee_vspace vspace handle of the ADS where the stack to write in resides
+ * @param ipc_buf_addr OPTIONAL address to the IPC buffer
+ * @param stack_top the top of the stack in loadee_vspace
  * @param argc the number of arguments
  * @param argv the arguments
  * @param ret_init_stack the position of the initial stack pointer after setup
  * @return 0 on success, 1 on failure
  */
 int ads_write_arguments(pd_t *pd,
-                        ads_t *ads,
-                        cpu_t *cpu,
+                        vspace_t *loadee_vspace,
+                        void *ipc_buf_addr,
                         void *stack_top,
                         int argc,
                         char *argv[],

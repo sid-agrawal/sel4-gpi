@@ -81,7 +81,8 @@ typedef struct _ads_config
     void *entry_point;
 
     /** if we're in the same ADS, configuring any of these as GPI_SHARED has no effect
-     * (XXX) Linh: these are to be removed once we have a unified entry point, the actual
+     * (XXX) Linh: these are to be removed once we have a unified entry point,
+     *             this should match up with the sharing degree specified inside vmr_cfgs
      */
     gpi_share_degree_t code_shared;
     gpi_share_degree_t stack_shared;
@@ -157,6 +158,9 @@ int sel4gpi_start_pd(pd_config_t *cfg, sel4gpi_runnable_t *runnable, int argc, s
  * @brief generates a PD configuration that describes a process
  *
  * @param image_name the name of the process's image
+ * @param stack_pages size of the stack, in pages
+ * @param heap_pages size of the heap, in pages
+ * @param osm_data_mo the MO for holding OSmosis data
  * @return pd_config_t* returns a filled in config struct, caller is responsbile for freeing
  */
 pd_config_t *sel4gpi_generate_proc_config(const char *image_name, size_t stack_pages,
@@ -167,9 +171,10 @@ pd_config_t *sel4gpi_generate_proc_config(const char *image_name, size_t stack_p
  *
  * @param thread_fn the thread's entry function
  * @param fault_ep the fault endpoint for the thread (OPTIONAL, if not specified, a new one will be allocated)
+ * @param osm_data_mo the MO for holding OSmosis data
  * @return pd_config_t*
  */
-pd_config_t *sel4gpi_generate_thread_config(void *thread_fn, seL4_CPtr fault_ep);
+pd_config_t *sel4gpi_generate_thread_config(void *thread_fn, seL4_CPtr fault_ep, mo_client_context_t *osm_data_mo);
 
 /**
  * @brief frees all memory used by a config and the config itself

@@ -138,7 +138,7 @@ uint64_t resource_server_registry_insert_new_id(resource_server_registry_t *regi
  * @param space_id ID of the resource space
  * @param res_id ID of the resource, unique to the resource space
  * @param client_id client the badge is meant for
- * @return the new resource badge
+ * @return the new resource's EP cap
  */
 seL4_CPtr resource_server_make_badged_ep(vka_t *src_vka, vka_t *dst_vka, seL4_CPtr src_ep,
                                          gpi_cap_t resource_type, uint64_t space_id, uint64_t res_id, uint64_t client_id);

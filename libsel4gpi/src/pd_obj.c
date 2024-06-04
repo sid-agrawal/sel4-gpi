@@ -595,50 +595,6 @@ err_goto:
     return 1;
 }
 
-int pd_configure(pd_t *pd,
-                 ads_t *target_ads,
-                 cpu_t *target_cpu)
-{
-    int error = 0;
-    // memcpy(&pd->proc.pd, target_ads->root_page_dir, sizeof(vka_object_t));
-    // pd->proc.thread = target_cpu->thread;
-
-    // // the ADS cap is both a resource space and a resource
-    // seL4_Word badge = gpi_new_badge(GPICAP_TYPE_ADS, 0x00, pd->id, get_ads_component()->space_id, target_ads->id);
-    // error = pd_send_cap(pd, get_ads_component()->server_ep, badge, &pd->init_data->ads_conn.badged_server_ep_cspath.capPtr, true);
-    // ZF_LOGF_IFERR(error, "Failed to send ADS resource cap to PD");
-    // pd->init_data->ads_conn.id = target_ads->id;
-    // target_cpu->binded_ads_id = target_ads->id;
-
-    // // the ADS cap also acts an a VMR RDE
-    // rde_type_t ads_rde_type = {.type = GPICAP_TYPE_VMR};
-    // error = pd_add_rde(pd, ads_rde_type, "VMR", target_ads->id, get_ads_component()->server_ep);
-    // ZF_LOGE_IFERR(error, "Failed to add ADS RDE to PD");
-
-    // // Send the PD's CPU resource
-    // badge = gpi_new_badge(GPICAP_TYPE_CPU, 0x00, pd->id, get_cpu_component()->space_id, target_cpu->id);
-    // error = pd_send_cap(pd, get_cpu_component()->server_ep, badge, &pd->init_data->cpu_conn.badged_server_ep_cspath.capPtr, true);
-    // ZF_LOGF_IFERR(error, "Failed to send CPU cap to PD");
-
-    // memcpy(&pd->proc.vspace, target_ads->vspace, sizeof(vspace_t));
-
-    // Send the PD's PD resource
-    // badge = gpi_new_badge(GPICAP_TYPE_PD, 0x00, pd->id, get_pd_component()->space_id, pd->id);
-    // error = pd_send_cap(pd, pd->pd_cap_in_RT, badge, &pd->init_data->pd_conn.badged_server_ep_cspath.capPtr, true);
-    // ZF_LOGF_IFERR(error, "Failed to send PD cap to PD");
-
-    // Map init data to the PD
-    error = ads_component_attach(pd->init_data->ads_conn.id, pd->init_data_mo_id,
-                                 SEL4UTILS_RES_TYPE_GENERIC, NULL, (void **)&pd->init_data_in_PD);
-    if (error)
-    {
-        ZF_LOGF("Failed to attach init data to child PD");
-    }
-    OSDB_PRINTF("Mapped PD's init data at %p\n", (void *)pd->init_data_in_PD);
-
-    return 0;
-}
-
 int pd_send_cap(pd_t *to_pd,
                 seL4_CPtr cap,
                 seL4_Word badge,
@@ -649,7 +605,8 @@ int pd_send_cap(pd_t *to_pd,
     int error = 0;
     SERVER_GOTO_IF_COND(cap == 0, "pd_send_cap got a null cap to send\n");
 
-    OSDB_PRINTF("pd_send_cap: Sending cap %ld(badge:%lx), to pd %d\n", cap, badge, to_pd->id);
+    OSDB_PRINTF("pd_send_cap: Sending cap %ld to PD%d: ", cap, to_pd->id);
+    BADGE_PRINT(badge);
 
     seL4_Word new_badge;
     cspacepath_t src, dest;
@@ -737,9 +694,9 @@ int pd_send_cap(pd_t *to_pd,
                                     cap_type,
                                     get_space_id_from_badge(badge),
                                     get_object_id_from_badge(badge),
-                                    new_cap,
                                     cap,
-                                    new_cap);
+                                    new_cap,
+                                    cap);
             SERVER_PRINT_IF_ERR(error, "Warning: Failed to add cap to PD's resources\n");
 
             if (update_core_cap)
@@ -747,6 +704,8 @@ int pd_send_cap(pd_t *to_pd,
                 error = pd_set_core_cap(to_pd, badge, new_cap);
                 SERVER_PRINT_IF_ERR(error, "Warning: failed to set the cap in PD's OSmosis data\n");
             }
+
+            *slot = new_cap;
         }
         else
         {

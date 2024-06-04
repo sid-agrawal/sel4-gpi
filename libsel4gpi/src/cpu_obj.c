@@ -21,6 +21,7 @@
 #include <sel4gpi/error_handle.h>
 #include <sel4/sel4.h>
 #include <sel4runtime.h>
+#include <sel4debug/register_dump.h>
 
 // Defined for utility printing macros
 #define DEBUG_ID CPU_DEBUG
@@ -41,7 +42,8 @@ int cpu_config_vspace(cpu_t *cpu,
                       seL4_CPtr ipc_buffer_frame,
                       seL4_Word ipc_buf_addr)
 {
-    OSDB_PRINTF("cpu_config_vspace: Configuring CPU\n");
+    OSDB_PRINTF("Configuring CPU, cspace: %lx, cspace_guard: %lx, fault_ep: %lx, ipc_buf_addr: %lx, ipc_buf_frame: %lx\n",
+                root_cnode, cnode_guard, fault_ep, ipc_buf_addr, ipc_buffer_frame);
 
     seL4_CPtr vspace_root = vspace->get_root(vspace); // root page table
     assert(vspace_root != 0);
@@ -64,6 +66,8 @@ int cpu_config_vspace(cpu_t *cpu,
 
     error = seL4_TCB_SetPriority(cpu->tcb.cptr, seL4_CapInitThreadTCB, seL4_MaxPrio - 1);
     assert(error == 0);
+
+    // sel4debug_dump_registers(cpu->tcb.cptr);
 
     return 0;
 }
@@ -185,6 +189,9 @@ int cpu_set_remote_context(cpu_t *cpu, void *entry_point, void *init_stack)
 
     error = seL4_TCB_WriteRegisters(cpu->tcb.cptr, 0, 0, sizeof(seL4_UserContext) / sizeof(seL4_Word), cpu->reg_ctx);
     SERVER_GOTO_IF_ERR(error, "failed to write TCB registers\n");
+
+    // sel4debug_dump_registers(cpu->tcb.cptr);
+
 err_goto:
     return error;
 }

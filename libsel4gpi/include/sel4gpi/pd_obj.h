@@ -156,10 +156,6 @@ int pd_new(pd_t *pd,
            vspace_t *server_vspace,
            mo_t *osm_data_mo);
 
-int pd_configure(pd_t *pd,
-                 ads_t *target_ads,
-                 cpu_t *target_cpu);
-
 int pd_dump(pd_t *pd);
 
 /**

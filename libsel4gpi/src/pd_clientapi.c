@@ -245,6 +245,7 @@ int pd_client_runtime_setup(pd_client_context_t *target_pd,
                             seL4_Word *args,
                             void *entry_point,
                             void *ipc_buf_addr,
+                            void *osm_data_in_PD,
                             pd_setup_type_t setup_type)
 {
     seL4_SetMR(PDMSGREG_FUNC, PD_FUNC_SETUP_REQ);
@@ -282,6 +283,7 @@ int pd_client_runtime_setup(pd_client_context_t *target_pd,
     seL4_SetMR(PDMSGREG_SETUP_REQ_STACK, (seL4_Word)stack_pos);
     seL4_SetMR(PDMSGREG_SETUP_REQ_ENTRY_POINT, (seL4_Word)entry_point);
     seL4_SetMR(PDMSGREG_SETUP_REQ_IPC_BUF, (seL4_Word)ipc_buf_addr);
+    seL4_SetMR(PDMSGREG_SETUP_REQ_OSM_DATA, (seL4_Word)osm_data_in_PD);
     seL4_SetMR(PDMSGREG_SETUP_REQ_TYPE, setup_type);
 
     tag = seL4_Call(target_pd->badged_server_ep_cspath.capPtr, tag);
