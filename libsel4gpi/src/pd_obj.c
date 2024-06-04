@@ -385,10 +385,35 @@ void pd_destroy(pd_t *pd, vka_t *server_vka, vspace_t *server_vspace)
         vka_free_object(vka, &process->cspace);
     }
 
-    /* destroy the thread */
-    sel4utils_clean_up_thread(vka, &process->vspace, &process->thread);
+    /* begin copied from sel4utils_clean_up_thread */
+    sel4utils_thread_t *thread = &process->thread;
 
-    /* ADS component destroys the vspace */
+    if (thread->tcb.cptr != 0) {
+        vka_free_object(vka, &thread->tcb);
+    }
+
+    // We free the IPC buf and stack as MOs
+    // if (thread->ipc_buffer_addr != 0) {
+    //     vspace_free_ipc_buffer(&process->vspace, (seL4_Word *) thread->ipc_buffer_addr);
+    // }
+    // We free the stack as an MO
+    // if (thread->stack_top != 0) {
+    //     vspace_free_sized_stack(&process->vspace, thread->stack_top, thread->stack_size);
+    // }
+
+    if (thread->own_sc && thread->sched_context.cptr != 0) {
+        vka_free_object(vka, &thread->sched_context);
+    }
+
+    if (thread->own_reply && thread->reply.cptr != 0) {
+        vka_free_object(vka, &thread->reply);
+    }
+
+    memset(thread, 0, sizeof(sel4utils_thread_t));
+    /* end copied from sel4utils_clean_up_thread */
+
+    // (XXX) Arya: do we need to decrement the refcount of the PD's binded ADS, or will it always hold the resource?
+
     /* destroy the endpoint */
     if (process->own_ep && process->fault_endpoint.cptr != 0)
     {
@@ -623,7 +648,7 @@ int pd_configure(pd_t *pd,
 
     // the ADS cap is both a resource space and a resource
     seL4_Word badge = gpi_new_badge(GPICAP_TYPE_ADS, 0x00, pd->id, get_ads_component()->space_id, target_ads->id);
-    error = pd_send_cap(pd, get_ads_component()->server_ep, badge, &pd->init_data->ads_conn.badged_server_ep_cspath.capPtr, true);
+    error = pd_send_cap(pd, get_ads_component()->server_ep, badge, &pd->init_data->ads_conn.badged_server_ep_cspath.capPtr, false);
     ZF_LOGF_IFERR(error, "Failed to send ADS resource cap to PD");
     pd->init_data->ads_conn.id = target_ads->id;
     target_cpu->binded_ads_id = target_ads->id;
@@ -635,14 +660,14 @@ int pd_configure(pd_t *pd,
 
     // Send the PD's CPU resource
     badge = gpi_new_badge(GPICAP_TYPE_CPU, 0x00, pd->id, get_cpu_component()->space_id, target_cpu->id);
-    error = pd_send_cap(pd, get_cpu_component()->server_ep, badge, &pd->init_data->cpu_conn.badged_server_ep_cspath.capPtr, true);
+    error = pd_send_cap(pd, get_cpu_component()->server_ep, badge, &pd->init_data->cpu_conn.badged_server_ep_cspath.capPtr, false);
     ZF_LOGF_IFERR(error, "Failed to send CPU cap to PD");
 
     memcpy(&pd->proc.vspace, target_ads->vspace, sizeof(vspace_t));
 
     // Send the PD's PD resource
     badge = gpi_new_badge(GPICAP_TYPE_PD, 0x00, pd->id, get_pd_component()->space_id, pd->id);
-    error = pd_send_cap(pd, pd->pd_cap_in_RT, badge, &pd->init_data->pd_conn.badged_server_ep_cspath.capPtr, true);
+    error = pd_send_cap(pd, pd->pd_cap_in_RT, badge, &pd->init_data->pd_conn.badged_server_ep_cspath.capPtr, false);
     ZF_LOGF_IFERR(error, "Failed to send PD cap to PD");
 
     // Map init data to the PD

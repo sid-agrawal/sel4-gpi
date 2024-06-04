@@ -151,6 +151,9 @@ int resource_component_inc(resource_component_context_t *component,
     resource_component_registry_entry_t *reg_entry = resource_component_registry_get_by_id(component, object_id);
     GOTO_IF_COND(reg_entry == NULL, "Couldn't find %s (%ld)\n", cap_type_to_str(component->resource_type), object_id);
 
+    OSDB_PRINTF("inc refcount %s (%d), new count %d\n",
+                cap_type_to_str(component->resource_type), object_id, reg_entry->gen.count + 1);
+
     resource_server_registry_inc(&component->registry, (resource_server_registry_node_t *)reg_entry);
 
 err_goto:
@@ -164,6 +167,9 @@ int resource_component_dec(resource_component_context_t *component,
 
     resource_component_registry_entry_t *reg_entry = resource_component_registry_get_by_id(component, object_id);
     GOTO_IF_COND(reg_entry == NULL, "Couldn't find %s (%ld)\n", cap_type_to_str(component->resource_type), object_id);
+
+    OSDB_PRINTF("dec refcount %s (%d), new count %d\n",
+                cap_type_to_str(component->resource_type), object_id, reg_entry->gen.count - 1);
 
     resource_server_registry_dec(&component->registry, (resource_server_registry_node_t *)reg_entry);
 

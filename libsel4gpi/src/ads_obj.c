@@ -36,6 +36,48 @@
 extern char _cpio_archive[];
 extern char _cpio_archive_end[];
 
+/**
+ * Callback when an attach node is deleted
+ * Perform cleanup here
+ */
+static void on_attach_registry_delete(resource_server_registry_node_t *node_gen)
+{
+    attach_node_t *node = (attach_node_t *)node_gen;
+
+    OSDB_PRINTF("Deleting attach node vaddr %p, mo_attached %d, type %s\n",
+                node->vaddr, node->mo_attached, human_readable_va_res_type(node->type));
+
+    // Remove the reservation
+    // sel4utils_free_reservation(node->vspace, node->res);
+
+    // Remove the attached MO
+    if (node->mo_attached)
+    {
+        // Unmap the pages
+        // (XXX) Arya: I believe we want VSPACE_PRESERVE here
+        // Otherwise, sel4utils will attempt to free the frame caps and their corresponding untyped
+        // Which we do not want, since the MO continues to exist
+        sel4utils_unmap_pages(node->vspace, node->vaddr + node->mo_offset,
+                              node->n_frames, MO_PAGE_BITS, VSPACE_PRESERVE);
+
+        // Free the frame caps (duplicated for this attach)
+        for (int i = 0; i < node->n_frames; i++)
+        {
+            cspacepath_t path;
+            vka_cspace_make_path(get_ads_component()->server_vka, node->frame_caps[i], &path);
+            vka_cnode_delete(&path);
+            vka_cspace_free_path(get_ads_component()->server_vka, path);
+        }
+
+        free(node->frame_caps);
+
+        // Decrement the refcount of the MO
+        // It is important to do this after freeing the caps, since if the MO is freed,
+        // it will return the frames to the VKA, and the VKA expects that there are no copies
+        resource_component_dec(get_mo_component(), node->mo_id);
+    }
+}
+
 int ads_new(ads_t *ads,
             vka_t *vka,
             vspace_t *loader,
@@ -91,7 +133,7 @@ int ads_new(ads_t *ads,
     ads->root_page_dir = vspace_root_object;
 
     // Initialize VMR registry
-    resource_server_initialize_registry(&ads->attach_registry, NULL);
+    resource_server_initialize_registry(&ads->attach_registry, on_attach_registry_delete);
     resource_server_initialize_registry(&ads->attach_id_to_vaddr_map, NULL);
 
     /* The root task holds the ADS by default */
@@ -157,6 +199,7 @@ int ads_reserve(ads_t *ads,
 
     // The attach node is keyed by vaddr
     memset((void *)attach_node, 0, sizeof(attach_node_t));
+    attach_node->vspace = ads->vspace;
     attach_node->res = res;
     attach_node->vaddr = vaddr;
     attach_node->map_entry = attach_node_map_entry;
@@ -263,6 +306,7 @@ int ads_attach_to_res(ads_t *ads,
 
     error = copy_frame_caps_for_mapping(mo->frame_caps_in_root_task, reservation->frame_caps, mo->num_pages);
     SERVER_GOTO_IF_ERR(error, "Failed to copy frame caps for attachment\n");
+
     /* Map the frame caps into the vspace */
     error = sel4utils_map_pages_at_vaddr(ads->vspace,
                                          reservation->frame_caps,
@@ -285,6 +329,10 @@ int ads_attach_to_res(ads_t *ads,
     uint64_t mo_id = universal_res_id(GPICAP_TYPE_MO, get_mo_component()->space_id, mo->id);
     error = pd_component_map_resources(get_gpi_server()->rt_pd_id, vmr_universal_id, mo_id);
     SERVER_GOTO_IF_ERR(error, "Failed to map VMR to MO\n");
+
+    /* Track this attachment as a refcount to the MO */
+    error = resource_component_inc(get_mo_component(), mo->id);
+    SERVER_GOTO_IF_ERR(error, "Failed to increment refcount of MO\n");
 
 err_goto:
     return error;
@@ -346,6 +394,7 @@ int ads_forge_attach(ads_t *ads, sel4utils_res_t *res, mo_t *mo)
 
     // The attach node is keyed by vaddr
     memset((void *)attach_node, 0, sizeof(attach_node_t));
+    attach_node->vspace = ads->vspace;
     attach_node->res.res = res;
     attach_node->vaddr = (void *)res->start;
     attach_node->map_entry = attach_node_map_entry;
@@ -377,30 +426,11 @@ int ads_rm(ads_t *ads, vka_t *vka, void *vaddr)
         return 1;
     }
 
-    // Remove the reservation
-    sel4utils_free_reservation(target, node->res);
-
-    // Unmap the pages
-    // (XXX) Arya: I believe we want VSPACE_PRESERVE here
-    // Otherwise, sel4utils will attempt to free the frame caps and their corresponding untyped
-    // Which we do not want, since the MO continues to exist
-    sel4utils_unmap_pages(target, vaddr, node->n_pages, MO_PAGE_BITS, VSPACE_PRESERVE);
-
-    // Free the frame caps (duplicated for this attach)
-    for (int i = 0; i < node->n_frames; i++)
-    {
-        cspacepath_t path;
-        vka_cspace_make_path(vka, node->frame_caps[i], &path);
-        vka_cnode_delete(&path);
-        vka_cspace_free_path(vka, path);
-    }
-
-    free(node->frame_caps);
-
     // Remove the attach node
     resource_server_registry_delete(&ads->attach_id_to_vaddr_map, (resource_server_registry_node_t *)node->map_entry);
     resource_server_registry_delete(&ads->attach_registry, (resource_server_registry_node_t *)node);
 
+err_goto:
     return error;
 }
 
@@ -588,7 +618,7 @@ static int ads_deep_copy(ads_t *dst_ads, mo_t *src_mo, attach_node_t *new_attach
 
     // Remove the MOs
     error = ads_component_remove_from_rt(old_mo_va);
-    SERVER_GOTO_IF_ERR(error, "Failed to unmap old MO for deep copy\n");\
+    SERVER_GOTO_IF_ERR(error, "Failed to unmap old MO for deep copy\n");
 
     error = ads_component_remove_from_rt(new_mo_va);
     SERVER_GOTO_IF_ERR(error, "Failed to unmap new MO for deep copy\n");
@@ -693,8 +723,6 @@ void ads_destroy(ads_t *ads)
      * as they should be all MOs
      * (XXX) Arya: Make sure this is the case
      */
-
-    /* free the object */
 }
 
 /* ======================================= CONVENIENCE FUNCTIONS (NOT PART OF FRAMEWORK) ================================================= */

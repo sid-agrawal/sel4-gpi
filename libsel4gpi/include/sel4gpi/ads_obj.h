@@ -19,37 +19,38 @@
 #include <sel4gpi/gpi_client.h>
 #include <sel4gpi/pd_creation.h>
 
-// Used in a map from attach node ID to vaddr
+/**
+ * Maps a shorter (portable) attach node ID to a vaddr
+*/
 typedef struct _attach_node_map
 {
     resource_server_registry_node_t gen;
-    void *vaddr; // Key for the attach registry
+    void *vaddr; ///< Key for the attach registry
 } attach_node_map_t;
 
 /**
  * Represents an reservation in the ADS (essentially a VMR resource)
  * Optinoally, also an attachment of an MO
  *
- * Each attach of the same MO requires a copy
- * of the frame capabilities
+ * Each attach of the same MO requires a copy of the frame capabilities
  * */
 typedef struct _attach_node
 {
     resource_server_registry_node_t gen;
 
-    void *vaddr;                  // Key for the UTHash
-    attach_node_map_t *map_entry; // the attach node map entry for this node
-    reservation_t res;
-    sel4utils_reservation_type_t type;
-    uint32_t n_pages;
+    vspace_t *vspace;                  ///< Which vspace this attach corresponds to
+    void *vaddr;                       ///< Attach vaddr, key for the UTHash
+    attach_node_map_t *map_entry;      ///< the attach node map entry for this node
+    reservation_t res;                 ///< Reservation in the vspace
+    sel4utils_reservation_type_t type; ///< Reservation type
+    uint32_t n_pages;                  ///< Number of pages
 
-    // Only if an MO is attached
     // (XXX) Arya: Assumes we only need to attach one MO to a reservation
-    bool mo_attached;
-    size_t mo_offset;
-    seL4_Word mo_id;
-    seL4_CPtr *frame_caps;
-    uint32_t n_frames;
+    bool mo_attached;      ///< True if an MO is attached (next fields are valid only if true)
+    size_t mo_offset;      ///< Offset where the MO is attached in the reservation
+    seL4_Word mo_id;       ///< ID of the MO attached
+    seL4_CPtr *frame_caps; ///< Array of frame caps copied for this attach
+    uint32_t n_frames;     ///< Number of frame caps in the array
 } attach_node_t;
 
 typedef struct _ads
