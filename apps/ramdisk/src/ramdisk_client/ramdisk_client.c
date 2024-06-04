@@ -93,7 +93,7 @@ int ramdisk_client_alloc_block(seL4_CPtr server_ep_cap,
     ret_conn->space_id = seL4_GetMR(RDMSGREG_CREATE_ACK_SPACE_ID);
     ret_conn->res_id = seL4_GetMR(RDMSGREG_CREATE_ACK_RES_ID);
 
-    return 0;
+    return error;
 }
 
 int ramdisk_client_read(ramdisk_client_context_t *conn)

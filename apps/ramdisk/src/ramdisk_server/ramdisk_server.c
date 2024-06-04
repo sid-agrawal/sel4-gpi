@@ -74,6 +74,116 @@ static void *ramdisk_ptr(unsigned int sector)
 }
 
 /**
+ * Allocate the next available block
+ *
+ * @param blockno returns the allocated block number
+ * @param return 0 on success, 1 if there are no blocks available
+ */
+static int alloc_block(uint64_t *blockno)
+{
+    if (get_ramdisk_server()->free_blocks == NULL)
+    {
+        return 1;
+    }
+
+    *blockno = get_ramdisk_server()->free_blocks->blockno;
+
+    RAMDISK_PRINTF("Allocating blockno %ld\n", *blockno);
+
+    // Update free block list
+    get_ramdisk_server()->free_blocks->blockno++;
+    get_ramdisk_server()->free_blocks->n_blocks--;
+
+    if (get_ramdisk_server()->free_blocks->n_blocks <= 0)
+    {
+        // This node has no blocks left, move to the next
+        ramdisk_block_node_t *old_node = get_ramdisk_server()->free_blocks;
+        get_ramdisk_server()->free_blocks = old_node->next;
+        free(old_node);
+    }
+
+    return 0;
+}
+
+/**
+ * Mark a block as free
+ */
+static void free_block(unsigned int blockno)
+{
+    // Find a place in the linked list to record this free block
+    // (XXX) Arya: Not terribly efficient
+    ramdisk_block_node_t *prev = NULL;
+    for (ramdisk_block_node_t *curr = get_ramdisk_server()->free_blocks; curr != NULL; curr = curr->next)
+    {
+        if (curr->blockno == blockno + 1)
+        {
+            // Insert this block at the beginning of the current node
+            curr->blockno = blockno;
+            curr->n_blocks++;
+
+            // Check if we can coalesce with previous node
+            if (prev && (prev->blockno + prev->n_blocks) == blockno)
+            {
+                prev->n_blocks += curr->n_blocks;
+                prev->next = curr->next;
+                free(curr);
+            }
+
+            return;
+        }
+        else if (curr->blockno + curr->n_blocks == blockno)
+        {
+            // Insert this block at the end of the current node
+            curr->n_blocks++;
+
+            // Check if we can coalesce with the next node
+            if (curr->next && curr->next->blockno == blockno + 1)
+            {
+                curr->n_blocks += curr->next->n_blocks;
+                curr->next = curr->next->next;
+                free(curr->next);
+            }
+
+            return;
+        }
+        else if (curr->blockno > blockno)
+        {
+            // Should insert a new node for this blockno
+            ramdisk_block_node_t *new_node = malloc(sizeof(ramdisk_block_node_t));
+            new_node->blockno = blockno;
+            new_node->n_blocks = 1;
+            new_node->next = curr;
+
+            if (prev == NULL)
+            {
+                get_ramdisk_server()->free_blocks = new_node;
+            }
+            else
+            {
+                prev->next = new_node;
+            }
+
+            return;
+        }
+    }
+
+    // If we get here, then we need to insert at the end of the list
+    ramdisk_block_node_t *new_node = malloc(sizeof(ramdisk_block_node_t));
+    new_node->blockno = blockno;
+    new_node->n_blocks = 1;
+    new_node->next = NULL;
+
+    if (prev == NULL)
+    {
+        get_ramdisk_server()->free_blocks = new_node;
+    }
+    else
+    {
+        prev->next = new_node;
+    }
+}
+
+/**
  * To be run once at the beginning of ramdisk main
  */
 int ramdisk_init()
@@ -125,7 +235,7 @@ seL4_MessageInfo_t ramdisk_request_handler(seL4_MessageInfo_t tag, seL4_Word sen
 {
     int error;
     void *mo_vaddr;
-    *need_new_recv_cap = true;
+    *need_new_recv_cap = false;
     unsigned int op = seL4_GetMR(RDMSGREG_FUNC);
     uint64_t obj_id = get_object_id_from_badge(sender_badge);
 
@@ -137,8 +247,6 @@ seL4_MessageInfo_t ramdisk_request_handler(seL4_MessageInfo_t tag, seL4_Word sen
         switch (op)
         {
         case RS_FUNC_GET_RR_REQ:
-            *need_new_recv_cap = false;
-
             uint64_t blockno = seL4_GetMR(RSMSGREG_EXTRACT_RR_REQ_ID);
             uint64_t pd_id = seL4_GetMR(RSMSGREG_EXTRACT_RR_REQ_PD_ID);
             uint64_t rd_pd_id = seL4_GetMR(RSMSGREG_EXTRACT_RR_REQ_RS_PD_ID);
@@ -184,6 +292,18 @@ seL4_MessageInfo_t ramdisk_request_handler(seL4_MessageInfo_t tag, seL4_Word sen
             RAMDISK_PRINTF("Returning RR\n");
 
             break;
+        case RS_FUNC_FREE_REQ:
+            uint64_t space_id = seL4_GetMR(RSMSGREG_FREE_REQ_SPACE_ID);
+            uint64_t obj_id = seL4_GetMR(RSMSGREG_FREE_REQ_OBJ_ID);
+
+            RAMDISK_PRINTF("Free blockno %d\n", obj_id);
+
+            assert(space_id == get_ramdisk_server()->gen.default_space.id);
+
+            free_block(obj_id);
+
+            seL4_SetMR(RDMSGREG_FUNC, RS_FUNC_FREE_ACK);
+            break;
         default:
             RAMDISK_PRINTF("Op is %d\n", op);
             CHECK_ERROR_GOTO(1, "got invalid op on unbadged ep", error, done);
@@ -197,6 +317,8 @@ seL4_MessageInfo_t ramdisk_request_handler(seL4_MessageInfo_t tag, seL4_Word sen
         switch (op)
         {
         case RD_FUNC_BIND_REQ:
+            *need_new_recv_cap = true;
+
             RAMDISK_PRINTF("Binding MO for client %ld\n", client_id);
 
             /* Attach memory object to server ADS */
@@ -218,23 +340,16 @@ seL4_MessageInfo_t ramdisk_request_handler(seL4_MessageInfo_t tag, seL4_Word sen
             error = resource_server_unattach(&get_ramdisk_server()->gen, mo_vaddr);
             CHECK_ERROR_GOTO(error, "Failed to unattach MO", error, done);
 
+            // (XXX) Arya: Free the cap as well
+
             seL4_SetMR(RDMSGREG_FUNC, RD_FUNC_BIND_ACK);
             break;
         case RD_FUNC_CREATE_REQ:
             // Assign a new block to this ep
-            CHECK_ERROR_GOTO(get_ramdisk_server()->free_blocks == NULL, "no more free blocks to assign",
-                             RD_SERVER_ERROR_NO_BLOCKS, done);
-            uint64_t blockno = get_ramdisk_server()->free_blocks->blockno;
+            uint64_t blockno;
+            error = alloc_block(&blockno);
 
-            RAMDISK_PRINTF("Allocating blockno %ld\n", blockno);
-
-            // Update free block list
-            get_ramdisk_server()->free_blocks->blockno++;
-            get_ramdisk_server()->free_blocks->n_blocks--;
-            if (get_ramdisk_server()->free_blocks->n_blocks <= 0)
-            {
-                get_ramdisk_server()->free_blocks = get_ramdisk_server()->free_blocks->next;
-            }
+            CHECK_ERROR_GOTO(error, "no more free blocks to assign", RD_SERVER_ERROR_NO_BLOCKS, done);
 
             // Create the resource endpoint
             seL4_CPtr dest;

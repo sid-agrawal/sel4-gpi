@@ -7,14 +7,13 @@
  * API for remote resource servers, which the RT or other PDs may use
  */
 
-
 // IPC values returned in the "label" message header.
 enum rs_errors
 {
     RS_NOERROR = 0,
     /* No future collisions with seL4_Error.*/
     RS_ERROR_RR_SIZE = seL4_NumErrors, // RR request shared memory is too small
-    RS_ERROR_DNE,                      // RR request resource no longer exists
+    RS_ERROR_DNE,                      // Resource does not exist
     RS_ERROR_NS,                       // Namespace does not exist
     RS_NUM_ERRORS
 };
@@ -28,10 +27,13 @@ enum rs_funcs
     RS_FUNC_NEW_NS_REQ,
     RS_FUNC_NEW_NS_ACK,
 
+    RS_FUNC_FREE_REQ,
+    RS_FUNC_FREE_ACK,
+
     RS_FUNC_END,
 };
 
-// Message registers for all remote resource server requests 
+// Message registers for all remote resource server requests
 enum rs_msgregs
 {
     /* These are fixed headers in every message. */
@@ -55,6 +57,13 @@ enum rs_msgregs
     RSMSGREG_NEW_NS_REQ_END = RSMSGREG_LABEL0,
     RSMSGREG_NEW_NS_ACK_ID = RSMSGREG_LABEL0,
     RSMSGREG_NEW_NS_ACK_END,
+
+    /* Free Resource */
+    RSMSGREG_FREE_REQ_SPACE_ID = RSMSGREG_LABEL0,
+    RSMSGREG_FREE_REQ_OBJ_ID,
+    RSMSGREG_FREE_REQ_END,
+
+    RSMSGREG_FREE_ACK_END,
 };
 
 /**
@@ -70,9 +79,11 @@ int start_resource_server_pd(gpi_cap_t rde_type,
                              char *image_name,
                              seL4_CPtr *server_pd_cap,
                              uint64_t *space_id);
-                             
+
 /**
- * Request a resource server to dump resource relations
+ * \brief Request a resource server to dump resource relations
+ *
+ * This function is only usable by the root task
  *
  * @param server_ep Unbadged ep of the resource server
  * @param space_id The space ID of the resource to dump relations for
@@ -90,20 +101,37 @@ int start_resource_server_pd(gpi_cap_t rde_type,
  *      + Error codes for the respective resource server
  */
 int resource_server_client_get_rr(seL4_CPtr server_ep,
-seL4_Word space_id,
-                           seL4_Word res_id,
-                           seL4_Word pd_id,
-                           seL4_Word server_pd_id,
-                           void *remote_vaddr,
-                           void *local_vaddr,
-                           size_t size,
-                           model_state_t **ret_state);
+                                  seL4_Word space_id,
+                                  seL4_Word res_id,
+                                  seL4_Word pd_id,
+                                  seL4_Word server_pd_id,
+                                  void *remote_vaddr,
+                                  void *local_vaddr,
+                                  size_t size,
+                                  model_state_t **ret_state);
 
 /**
  * Request a new namespace ID from a resource server
  *
  * @param server_ep the EP of the resource server
  * @param ns_id returns the newly allocated NS ID
+ * @return RS_NOERROR on success, error otherwise
  */
 int resource_server_client_new_ns(seL4_CPtr server_ep,
                                   uint64_t *ns_id);
+
+/**
+ * \brief Notify a resource server to free a resource
+ * The server may keep a reference count and simply decrement
+ * the count rather than immediately freeing the resource
+ *
+ * This function is only usable by the root task
+ *
+ * @param server_ep unbadged EP of the resource server
+ * @param space_id the space ID of the resource
+ * @param object_id the object ID of the resource
+ * @return RS_NOERROR on success, error otherwise
+ */
+int resource_server_client_free(seL4_CPtr server_ep,
+                                seL4_Word space_id,
+                                seL4_Word object_id);
