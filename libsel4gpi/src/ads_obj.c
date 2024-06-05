@@ -76,7 +76,7 @@ static void on_attach_registry_delete(resource_server_registry_node_t *node_gen,
 
         // (XXX) Arya: IMPORTANT
         // Something is broken with morecore when I free this
-        //free(node->frame_caps);
+        free(node->frame_caps);
 
         // Decrement the refcount of the MO
         // It is important to do this after freeing the caps, since if the MO is freed,
@@ -150,7 +150,7 @@ int ads_new(ads_t *ads,
             Instead use a different function which suited are needs better.
         */
 
-        &(ads->process_for_cookies));
+        ads->process_for_cookies);
 
     SERVER_GOTO_IF_ERR(error, "Failed to get new vspace while making copy\n");
 
