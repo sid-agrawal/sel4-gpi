@@ -316,10 +316,10 @@ void gpi_panic(char *reason, uint64_t code)
 
 void gpi_debug_print_resources(void)
 {
-    printf("*** LISTING REMAINING RESOURCES ***\n");
+    printf("\n\n*** LISTING REMAINING RESOURCES ***\n");
     resource_component_debug_print(get_ads_component());
     resource_component_debug_print(get_cpu_component());
     resource_component_debug_print(get_mo_component());
     resource_component_debug_print(get_pd_component());
-    printf("*** DONE LISTING RESOURCES ***\n");
+    printf("*** DONE LISTING RESOURCES ***\n\n\n");
 }

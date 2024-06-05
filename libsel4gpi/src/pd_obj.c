@@ -322,13 +322,17 @@ pd_held_resource_on_delete(resource_server_registry_node_t *node_gen, void *pd_v
     case GPICAP_TYPE_RESSPC:
         // Wait to clean up resource spaces until later
         // (XXX) Arya: figure out resource space deletion policy
+        error = resspc_component_delete(node->res_id);
         break;
     default:
         // Otherwise, call the manager PD
         resspc_component_registry_entry_t *space_data = resource_space_get_entry_by_id(node->space_id);
+        SERVER_GOTO_IF_COND(space_data == NULL, "couldn't find resource space (%d)\n", node->space_id);
 
-        // But if the manager PD is this PD itself, then there's no point
-        if (space_data->space.pd->id == pd->id) {
+        // If the space is deleted,
+        // or the manager PD is this PD itself,
+        // then there's no point in notifying the manager
+        if (space_data->space.deleted || space_data->space.pd->id == pd->id) {
             break;
         }
 
@@ -336,6 +340,7 @@ pd_held_resource_on_delete(resource_server_registry_node_t *node_gen, void *pd_v
         break;
     }
 
+err_goto:
     if (error)
     {
         OSDB_PRINTERR("Warning: Could not free PD's held resource %s-%d\n", cap_type_to_str(node->type), node->res_id);

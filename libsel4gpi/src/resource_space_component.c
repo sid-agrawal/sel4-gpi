@@ -122,6 +122,21 @@ err_goto:
     return reply_tag;
 }
 
+int resspc_component_delete(uint64_t space_id)
+{
+    int error = 0;
+
+    // Find the resource space
+    resspc_component_registry_entry_t *space_entry = (resspc_component_registry_entry_t *)
+        resource_component_registry_get_by_id(get_resspc_component(), space_id);
+    SERVER_GOTO_IF_COND(space_entry == NULL, "Couldn't find resource space (%ld)\n", space_id);
+
+    space_entry->space.deleted = true;
+
+err_goto:
+    return error;
+}
+
 static seL4_MessageInfo_t handle_create_resource_request(seL4_Word sender_badge)
 {
     OSDB_PRINTF("Got create resource request from client badge %lx.\n", sender_badge);
@@ -270,6 +285,7 @@ static int resspc_new(res_space_t *res_space,
     res_space->pd = config->pd;
     res_space->data = config->data;
     res_space->map_spaces = linked_list_new();
+    res_space->deleted = false;
 
     // (XXX) Arya: todo, allow new type creation
 

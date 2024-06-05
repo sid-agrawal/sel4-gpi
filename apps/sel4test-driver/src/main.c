@@ -432,14 +432,13 @@ void sel4test_run_tests(struct driver_env *e)
 
                 test_result_t result = test_types[tt]->run_test(tests[i], (uintptr_t)e);
 
-                // gpi_debug_print_resources();
-                // (XXX) Arya: At the moment, there is a page fault in tear_down
-                // I would like to print remaining resources after teardown once fixed
-
                 if (test_types[tt]->tear_down != NULL)
                 {
                     test_types[tt]->tear_down((uintptr_t)e);
                 }
+
+                // (XXX) Arya: print remaining resources, to see if something exists that should not
+                gpi_debug_print_resources();
 
                 sel4test_end_test(result);
 
