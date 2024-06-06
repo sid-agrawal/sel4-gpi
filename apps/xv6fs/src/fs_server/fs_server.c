@@ -312,8 +312,27 @@ seL4_MessageInfo_t xv6fs_request_handler(seL4_MessageInfo_t tag, seL4_Word sende
       seL4_SetMR(RSMSGREG_FUNC, RS_FUNC_GET_RR_ACK);
       break;
     case RS_FUNC_FREE_REQ:
-      printf("Warning: try to free file, not implemented\n");
+      // Actually don't do much when a file is freed, it's the same as file close
+      // We still want to keep it in the file system, but we can reduce the refcount
+      uint64_t file_id = seL4_GetMR(RSMSGREG_FREE_REQ_OBJ_ID);
 
+      // Find the registry entry
+      file_registry_entry_t *reg_entry = (file_registry_entry_t *)resource_server_registry_get_by_id(
+          &get_xv6fs_server()->file_registry,
+          file_id);
+
+      if (reg_entry == NULL)
+      {
+        // No-op if the file doesn't exist / isn't open
+        XV6FS_PRINTF("Received file (%d) to free, file isn't open\n");
+      }
+      else
+      {
+        // Decrement the refcount
+        resource_server_registry_dec(&get_xv6fs_server()->file_registry, (resource_server_registry_node_t *)reg_entry);
+      }
+
+      seL4_MessageInfo_ptr_set_length(&reply_tag, RSMSGREG_FREE_ACK_END);
       seL4_SetMR(RSMSGREG_FUNC, RS_FUNC_FREE_ACK);
       break;
     default:
@@ -532,7 +551,10 @@ seL4_MessageInfo_t xv6fs_request_handler(seL4_MessageInfo_t tag, seL4_Word sende
     XV6FS_PRINTF("Received badged request with object id %lx\n", get_object_id_from_badge(sender_badge));
 
     int ret;
-    file_registry_entry_t *reg_entry = (file_registry_entry_t *)resource_server_registry_get_by_badge(&get_xv6fs_server()->file_registry, sender_badge);
+    file_registry_entry_t *reg_entry =
+        (file_registry_entry_t *)resource_server_registry_get_by_badge(
+            &get_xv6fs_server()->file_registry,
+            sender_badge);
 
     if (reg_entry == NULL)
     {
