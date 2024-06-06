@@ -217,11 +217,12 @@ int test_kvstore_lib_in_same_pd(env_t env)
     dump_model();
 
     /* Cleanup servers */
+    error = pd_client_disconnect(&hello_pd);
+    test_assert(error == 0);
     error = pd_client_disconnect(&fs_pd);
     test_assert(error == 0);
     error = pd_client_disconnect(&ramdisk_pd);
     test_assert(error == 0);
-    // Hello will exit by itself and get cleaned up
 
     printf("------------------ENDING: %s------------------\n", __func__);
     return sel4test_get_result();
@@ -256,13 +257,14 @@ int test_kvstore_lib_in_diff_pd(env_t env)
     dump_model();
 
     /* Cleanup servers */
+    error = pd_client_disconnect(&hello_pd);
+    test_assert(error == 0);
     error = pd_client_disconnect(&kvstore_pd);
     test_assert(error == 0);
     error = pd_client_disconnect(&fs_pd);
     test_assert(error == 0);
     error = pd_client_disconnect(&ramdisk_pd);
     test_assert(error == 0);
-    // Hello will exit by itself and get cleaned up
 
     printf("------------------ENDING: %s------------------\n", __func__);
     return sel4test_get_result();
@@ -316,7 +318,6 @@ int test_kvstore_diff_namespace(env_t env)
     test_assert(error == 0);
     error = pd_client_disconnect(&ramdisk_pd);
     test_assert(error == 0);
-    // Hello will exit by itself and get cleaned up
 
     printf("------------------ENDING: %s------------------\n", __func__);
     return sel4test_get_result();
@@ -366,7 +367,6 @@ int test_kvstore_diff_fs(env_t env)
     test_assert(error == 0);
     error = pd_client_disconnect(&ramdisk_pd);
     test_assert(error == 0);
-    // Hello will exit by itself and get cleaned up
 
     printf("------------------ENDING: %s------------------\n", __func__);
     return sel4test_get_result();
@@ -401,7 +401,6 @@ int test_kvstore_lib_same_pd_diff_ads(env_t env)
     test_assert(error == 0);
     error = pd_client_disconnect(&ramdisk_pd);
     test_assert(error == 0);
-    // Hello will exit by itself and get cleaned up
 
     printf("------------------ENDING: %s------------------\n", __func__);
     return sel4test_get_result();
@@ -421,6 +420,12 @@ int test_kvstore_diff_threads(env_t env)
     pd_client_context_t hello_pd;
     error = start_hello_kvstore(SEPARATE_THREAD, 0, &hello_pd, RESSPC_ID_NULL);
 
+    /**
+     * We don't actually destroy the second thread because we don't start it as a PD here
+     * Then not all of its resources are destroyed
+     * Once fixed, we can properly destroy both PDs
+    */
+
     /* Wait for test result */
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0, 0);
     tag = seL4_Recv(self_ep, NULL);
@@ -436,7 +441,6 @@ int test_kvstore_diff_threads(env_t env)
     test_assert(error == 0);
     error = pd_client_disconnect(&ramdisk_pd);
     test_assert(error == 0);
-    // Hello will exit by itself and get cleaned up
 
     printf("------------------ENDING: %s------------------\n", __func__);
     return sel4test_get_result();
@@ -449,6 +453,8 @@ int test_kvstore_two_sets(env_t env)
 
     printf("------------------STARTING TEST: %s------------------\n", __func__);
 
+    // (XXX) Arya: This test fails in the FS right now, to fix
+    
     error = setup(env);
     test_assert(error == 0);
 
@@ -498,7 +504,6 @@ int test_kvstore_two_sets(env_t env)
     test_assert(error == 0);
     error = pd_client_disconnect(&ramdisk_pd);
     test_assert(error == 0);
-    // Hello will exit by itself and get cleaned up
 
     printf("------------------ENDING: %s------------------\n", __func__);
     return sel4test_get_result();

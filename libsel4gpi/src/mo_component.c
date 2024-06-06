@@ -65,6 +65,9 @@ int mo_component_allocate(int num_pages, mo_t **ret_mo)
         (resource_server_registry_node_t **)&new_entry, NULL);
     SERVER_GOTO_IF_ERR(error, "Failed to allocate new MO object for RT\n");
 
+    OSDB_PRINTF("Root task allocated a new MO (%d) with %d pages.\n",
+                new_entry->mo.id, new_entry->mo.num_pages);
+
     *ret_mo = &new_entry->mo;
 
 err_goto:
@@ -89,7 +92,8 @@ static seL4_MessageInfo_t handle_mo_allocation_request(seL4_Word sender_badge)
                                         (resource_server_registry_node_t **)&new_entry, &ret_cap);
     SERVER_GOTO_IF_ERR(error, "Failed to allocate new MO object\n");
 
-    OSDB_PRINTF("Successfully allocated a new MO.\n");
+    OSDB_PRINTF("Allocated a new MO (%d) with %d pages.\n",
+                new_entry->mo.id, new_entry->mo.num_pages);
 
     /* Return this badged end point in the return message. */
     seL4_SetCap(0, ret_cap);
@@ -222,8 +226,8 @@ int forge_mo_cap_from_frames(seL4_CPtr *frame_caps,
 
     SERVER_GOTO_IF_ERR(error, "Failed to add new MO to root task\n");
 
-    OSDB_PRINTF("Forged a new MO cap(EP: %d) with %d pages.\n",
-                (int)*cap_ret, new_entry->mo.num_pages);
+    OSDB_PRINTF("Forged a new MO (%d) with %d pages.\n",
+                mo->id, new_entry->mo.num_pages);
 
     *mo_ret = &new_entry->mo;
 

@@ -14,8 +14,8 @@
 #define GPI_DEBUG 0x20
 #define FS_DEBUG 0x40 // (XXX) Arya: WIP to move remote resource server debug controls to this
 #define ALL_DEBUG 0x7f
-#define OSMOSIS_DEBUG NO_DEBUG                           // selectively enable component debug e.g. (PD_DEBUG | ADS_DEBUG)
-#define OSMOSIS_ERROR ALL_DEBUG                          // selectively enable component error messages e.g. (PD_DEBUG | ADS_DEBUG)
+#define OSMOSIS_DEBUG (MO_DEBUG) // selectively enable component debug e.g. (PD_DEBUG | ADS_DEBUG)
+#define OSMOSIS_ERROR ALL_DEBUG             // selectively enable component error messages e.g. (PD_DEBUG | ADS_DEBUG)
 
 #if OSMOSIS_DEBUG
 // Utility print, requires DEBUG_ID and SERVER_ID defined
@@ -43,13 +43,13 @@
 #endif
 
 #if OSMOSIS_ERROR
-#define OSDB_PRINTERR(...)                 \
-    do                                     \
-    {                                      \
-        if (OSMOSIS_ERROR & (DEBUG_ID))    \
-        {                                  \
-            printf(SERVER_ID __VA_ARGS__); \
-        }                                  \
+#define OSDB_PRINTERR(...)                                         \
+    do                                                             \
+    {                                                              \
+        if (OSMOSIS_ERROR & (DEBUG_ID))                            \
+        {                                                          \
+            printf(COLORIZE("ERROR " SERVER_ID, RED) __VA_ARGS__); \
+        }                                                          \
     } while (0)
 #else
 #define OSDB_PRINTERR(...)

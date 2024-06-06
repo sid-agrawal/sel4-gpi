@@ -317,9 +317,14 @@ void gpi_panic(char *reason, uint64_t code)
 void gpi_debug_print_resources(void)
 {
     printf("\n\n*** LISTING REMAINING RESOURCES ***\n");
+    resource_component_debug_print(get_pd_component());
     resource_component_debug_print(get_ads_component());
     resource_component_debug_print(get_cpu_component());
     resource_component_debug_print(get_mo_component());
-    resource_component_debug_print(get_pd_component());
-    printf("*** DONE LISTING RESOURCES ***\n\n\n");
+    printf("*** DONE LISTING RESOURCES ***\n\n");
+
+    printf("Expected resources to remain:\n");
+    printf(" - RT PD (%d)\n", get_gpi_server()->rt_pd_id);
+    printf(" - RT ADS (%d)\n", get_gpi_server()->rt_ads_id);
+    printf("\n\n");
 }

@@ -143,7 +143,13 @@ void cpu_dump_rr(cpu_t *cpu, model_state_t *ms, gpi_model_node_t *pd_node)
 void cpu_destroy(cpu_t *cpu)
 {
     // (XXX) Linh: Ideally, we can destroy the thread struct here rather than in pd_destroy
+
+    // Destroy the TCB
+    vka_free_object(get_cpu_component()->server_vka, &cpu->tcb);
+
+    // Free other things
     free(cpu->reg_ctx);
+
     return;
 }
 

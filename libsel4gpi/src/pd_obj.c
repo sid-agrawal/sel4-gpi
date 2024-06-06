@@ -382,9 +382,15 @@ err_goto:
 
 void pd_destroy(pd_t *pd, vka_t *server_vka, vspace_t *server_vspace)
 {
+    int error = 0;
+    int pd_id = pd->id;
+
     /* decrement the refcount of the PD's binded ADS and CPU */
     resource_component_dec(get_ads_component(), pd->init_data->ads_conn.id);
     resource_component_dec(get_cpu_component(), pd->init_data->cpu_conn.id);
+
+    // This should destroy the CPU, if this is the only PD using it
+    // Then the TCB is destroyed, including the internal copies of IPC frame cap and fault endpoint cap
 
     /* below is copied from sel4utils_destroy_process */
     /* (XXX) Arya: eventually should be repartitioned to other components */
@@ -404,11 +410,6 @@ void pd_destroy(pd_t *pd, vka_t *server_vka, vspace_t *server_vspace)
 
     /* begin copied from sel4utils_clean_up_thread */
     sel4utils_thread_t *thread = &process->thread;
-
-    if (thread->tcb.cptr != 0)
-    {
-        vka_free_object(vka, &thread->tcb);
-    }
 
     // We free the IPC buf and stack as MOs
     // if (thread->ipc_buffer_addr != 0) {
@@ -465,9 +466,10 @@ void pd_destroy(pd_t *pd, vka_t *server_vka, vspace_t *server_vspace)
         resource_server_registry_delete(&pd->hold_registry, current);
     }
 
-    // Frame for init data
-    // (XXX) Arya: TODO destroy the init data MO
-    vspace_unmap_pages(server_vspace, pd->init_data, 1, seL4_PageBits, server_vka);
+    // free the MO for init data
+    // the MO will be destroyed once all references are removed
+    error = ads_component_remove_from_rt((void *) pd->init_data);
+    SERVER_GOTO_IF_ERR(error, "Failed to remove PD's init data from RT\n");
 
     // The PD's VKA/allocator are destroyed with allocator_mem_pool
 
@@ -477,6 +479,11 @@ void pd_destroy(pd_t *pd, vka_t *server_vka, vspace_t *server_vspace)
     vka_cnode_delete(&path);
     vka_cspace_free_path(server_vka, path);
     // The CPtrs like "ads_cap_in_RT" should be destroyed when the ADS is destroyed
+
+    return;
+
+err_goto:
+    OSDB_PRINTERR("Error while destroying PD (%d)\n", pd_id);
 }
 
 int pd_next_slot(pd_t *pd,

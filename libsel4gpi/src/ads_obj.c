@@ -49,9 +49,9 @@ static void on_attach_registry_delete(resource_server_registry_node_t *node_gen,
     attach_node_t *node = (attach_node_t *)node_gen;
     ads_t *ads = (ads_t *)ads_v;
 
-    OSDB_PRINTF("Deleting attach node vaddr %p, mo_attached %d, type %s\n",
-                node->vaddr, node->mo_attached, human_readable_va_res_type(node->type));
-
+    OSDB_PRINTF("Deleting attach node from ADS (%d), vaddr %p, mo_attached %d, type %s\n",
+                ads->id, node->vaddr, node->mo_attached, human_readable_va_res_type(node->type));
+    
     // Remove the reservation
     sel4utils_free_reservation(ads->vspace, node->res);
 
@@ -581,47 +581,22 @@ static int ads_deep_copy(ads_t *dst_ads, mo_t *src_mo, attach_node_t *new_attach
 {
     int error = 0;
     int num_pages = old_attach_node->n_pages;
+
     // Make a new MO
     // The "client" to hold this MO is the root task
-    mo_component_registry_entry_t *mo_entry;
-    seL4_CPtr mo_cap; // Not used since we are not giving this MO away
-    error = resource_component_allocate(get_mo_component(),
-                                        get_gpi_server()->rt_pd_id,
-                                        BADGE_OBJ_ID_NULL,
-                                        false,
-                                        (void *)num_pages,
-                                        (resource_server_registry_node_t **)&mo_entry,
-                                        &mo_cap);
-
+    mo_t *new_mo;
+    error = mo_component_allocate(num_pages, &new_mo);
     SERVER_GOTO_IF_ERR(error, "Failed to allocate a new MO for deep copy\n");
 
     // Attach the new MO in the new ADS
-    mo_t *new_mo = &mo_entry->mo;
-
     error = ads_attach_to_res(dst_ads,
                               get_ads_component()->server_vka,
                               new_attach_node,
                               old_attach_node->mo_offset, new_mo);
     SERVER_GOTO_IF_ERR(error, "Failed to attach pages to region\n");
 
-    // Temporarily map the pages of both MO to current vspace and copy data
-    // (XXX) Arya: no ADS for RT so just manually map the pages
-    vspace_t *loader = get_ads_component()->server_vspace;
-
-    seL4_CPtr *frames = malloc(sizeof(seL4_CPtr) * src_mo->num_pages);
-    for (int i = 0; i < src_mo->num_pages; i++)
-    {
-        cspacepath_t src, dst;
-        error = vka_cspace_alloc_path(get_ads_component()->server_vka, &dst);
-        SERVER_GOTO_IF_ERR(error, "Failed to alloc slot for copied frame\n");
-
-        vka_cspace_make_path(get_ads_component()->server_vka, src_mo->frame_caps_in_root_task[i], &src);
-
-        error = vka_cnode_copy(&dst, &src, seL4_AllRights);
-        SERVER_GOTO_IF_ERR(error, "Failed to copy frame cap\n");
-
-        frames[i] = dst.capPtr;
-    }
+    // Reduce the refcount of the MO since only the root task is holding it
+    resource_component_dec(get_mo_component(), new_mo->id);
 
     // Attach the MOs
     void *old_mo_va;
@@ -735,7 +710,16 @@ void ads_destroy(ads_t *ads)
     }
 
     /* tear down the vspace */
-    vspace_tear_down(ads->vspace, VSPACE_FREE);
+
+    /**
+     * (XXX) Arya:
+     * If VKA is VSPACE_FREE instead of VSPACE_PRESERVE
+     * this will also free the forged MO regions like ELF region
+     * 
+     * VSPACE_FREE does not currently work, it seems that some freed frame
+     * has another cap to it and causes the VKA to break
+    */
+    vspace_tear_down(ads->vspace, VSPACE_PRESERVE);
 
     /**
      * we should not need to free any objects created by the vspace,

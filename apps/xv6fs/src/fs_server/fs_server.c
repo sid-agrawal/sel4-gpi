@@ -209,7 +209,7 @@ seL4_MessageInfo_t xv6fs_request_handler(seL4_MessageInfo_t tag, seL4_Word sende
 {
   int error;
   void *mo_vaddr;
-  *need_new_recv_cap = true; // (XXX) Arya: todo, find the cases when we actually need this
+  *need_new_recv_cap = false;
   unsigned int op = seL4_GetMR(FSMSGREG_FUNC);
   uint64_t obj_id = get_object_id_from_badge(sender_badge);
 
@@ -222,8 +222,6 @@ seL4_MessageInfo_t xv6fs_request_handler(seL4_MessageInfo_t tag, seL4_Word sende
     switch (op)
     {
     case RS_FUNC_GET_RR_REQ:
-      *need_new_recv_cap = false;
-
       uint64_t pd_id = seL4_GetMR(RSMSGREG_EXTRACT_RR_REQ_PD_ID);
       uint64_t fs_pd_id = seL4_GetMR(RSMSGREG_EXTRACT_RR_REQ_RS_PD_ID);
       uint64_t ns_id = seL4_GetMR(RSMSGREG_EXTRACT_RR_REQ_ID);
@@ -317,6 +315,7 @@ seL4_MessageInfo_t xv6fs_request_handler(seL4_MessageInfo_t tag, seL4_Word sende
       printf("Warning: try to free file, not implemented\n");
 
       seL4_SetMR(RSMSGREG_FUNC, RS_FUNC_FREE_ACK);
+      break;
     default:
       XV6FS_PRINTF("Op is %d\n", op);
       CHECK_ERROR_GOTO(1, "got invalid op on unbadged ep", error, done);
@@ -358,6 +357,8 @@ seL4_MessageInfo_t xv6fs_request_handler(seL4_MessageInfo_t tag, seL4_Word sende
       seL4_SetMR(RSMSGREG_NEW_NS_ACK_ID, ns_id);
       break;
     case FS_FUNC_CREATE_REQ:
+      *need_new_recv_cap = true;
+
       int open_flags = seL4_GetMR(FSMSGREG_CREATE_REQ_FLAGS);
 
       /* Attach memory object to server ADS (contains pathname) */
@@ -449,6 +450,8 @@ seL4_MessageInfo_t xv6fs_request_handler(seL4_MessageInfo_t tag, seL4_Word sende
       seL4_SetMR(RSMSGREG_FUNC, FS_FUNC_CREATE_ACK);
       break;
     case FS_FUNC_LINK_REQ:
+      *need_new_recv_cap = true;
+
       /* Attach memory object to server ADS (contains pathname) */
       error = resource_server_attach_mo(&get_xv6fs_server()->gen, cap, &mo_vaddr);
       CHECK_ERROR_GOTO(error, "Failed to attach MO", error, done);
@@ -490,6 +493,8 @@ seL4_MessageInfo_t xv6fs_request_handler(seL4_MessageInfo_t tag, seL4_Word sende
       seL4_SetMR(RDMSGREG_FUNC, FS_FUNC_LINK_ACK);
       break;
     case FS_FUNC_UNLINK_REQ:
+      *need_new_recv_cap = true;
+
       /* Attach memory object to server ADS (contains pathname) */
       error = resource_server_attach_mo(&get_xv6fs_server()->gen, cap, &mo_vaddr);
       CHECK_ERROR_GOTO(error, "Failed to attach MO", error, done);
@@ -541,6 +546,8 @@ seL4_MessageInfo_t xv6fs_request_handler(seL4_MessageInfo_t tag, seL4_Word sende
     switch (op)
     {
     case FS_FUNC_READ_REQ:
+      *need_new_recv_cap = true;
+
       int n_bytes_to_read = seL4_GetMR(FSMSGREG_READ_REQ_N);
       int offset = seL4_GetMR(FSMSGREG_READ_REQ_OFFSET);
 
@@ -582,6 +589,8 @@ seL4_MessageInfo_t xv6fs_request_handler(seL4_MessageInfo_t tag, seL4_Word sende
       seL4_SetMR(RDMSGREG_FUNC, FS_FUNC_CLOSE_ACK);
       break;
     case FS_FUNC_STAT_REQ:
+      *need_new_recv_cap = true;
+
       /* Attach memory object to server ADS */
       error = resource_server_attach_mo(&get_xv6fs_server()->gen, cap, &mo_vaddr);
       CHECK_ERROR_GOTO(error, "Failed to attach MO", error, done);
