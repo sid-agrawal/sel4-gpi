@@ -30,6 +30,11 @@
 int cpu_start(cpu_t *cpu)
 {
     OSDB_PRINTF("cpu_start: starting CPU (%d) at PC: 0x%lx\n", cpu->id, cpu->reg_ctx->pc);
+#if CONFIG_MAX_NUM_NODES > 1
+    seL4_TCB_GetAffinity_t affinity_res = seL4_TCB_GetAffinity(cpu->tcb.cptr);
+    seL4_Word affinity = affinity_res.affinity;
+    CPRINTF("affinity: %ld\n", affinity);
+#endif
     return seL4_TCB_Resume(cpu->tcb.cptr);
 }
 

@@ -58,13 +58,13 @@ uintptr_t morecore_base = (uintptr_t)&morecore_arr[0];
 uintptr_t morecore_top = (uintptr_t)&morecore_arr[RT_MALLOC_SIZE];
 
 /* ammount of untyped memory to reserve for the driver (32mb) */
-#define DRIVER_UNTYPED_MEMORY (1 << 28)
+#define DRIVER_UNTYPED_MEMORY (SIZE_BITS_TO_BYTES(seL4_PageBits) * 8192) // 32 MB
 /* Number of untypeds to try and use to allocate the driver memory.
  * if we cannot get 32mb with 16 untypeds then something is probably wrong */
 #define DRIVER_NUM_UNTYPEDS 20
 
 /* dimensions of virtual memory for the allocator to use */
-#define ALLOCATOR_VIRTUAL_POOL_SIZE ((1 << seL4_PageBits) * 12800) // 40 MB
+#define ALLOCATOR_VIRTUAL_POOL_SIZE ((1 << seL4_PageBits) * 128000) // 500 MB
 
 /* static memory for the allocator to bootstrap with */
 #define ALLOCATOR_STATIC_POOL_SIZE ((1 << seL4_PageBits) * 20)
@@ -72,7 +72,14 @@ static char allocator_mem_pool[ALLOCATOR_STATIC_POOL_SIZE];
 
 #define BOOTSTRAP_CNODE_SIZE 12
 
+/* QEMU, by default, only gets around 300 MB untyped */
+#ifdef CONFIG_PLAT_QEMU_ARM_VIRT
+#define SERIAL_IRQ 33
+#define TEST_UNTYPED_SIZE BIT(seL4_PageBits) * 25600 // 100 MB
+#elif CONFIG_PLAT_ODROIDC4
+#define SERIAL_IRQ 225
 #define TEST_UNTYPED_SIZE BIT(seL4_PageBits) * 76800 // 300 MB
+#endif
 
 /* static memory for virtual memory bootstrapping */
 static sel4utils_alloc_data_t data;
@@ -102,10 +109,10 @@ static void init_env(driver_env_t env)
     {
         ZF_LOGF("Failed to create allocman");
     }
+    // allocman_add_simple_untypeds(allocman, &env->simple);
 
     /* create a vka (interface for interacting with the underlying allocator) */
     allocman_make_vka(&env->vka, allocman);
-
     /* create a vspace (virtual memory management interface). We pass
      * boot info not because it will use capabilities from it, but so
      * it knows the address and will add it as a reserved region */
@@ -162,6 +169,8 @@ static unsigned int allocate_untypeds(vka_object_t *untypeds, size_t bytes, unsi
             num_untypeds++;
         }
     }
+
+    CPRINTF("allocated: %zu, num_untyped: %u\n", allocated, num_untypeds);
     return num_untypeds;
 }
 
@@ -520,6 +529,18 @@ void *main_continued(void *arg UNUSED)
         ZF_LOGF_IF(allocated == false, "Failed to allocate a device frame for the frame tests");
     }
 
+    /* print all untyped regions */
+    // bool allocated = false;
+    // int untyped_count = simple_get_untyped_count(&env.simple);
+    // for (int i = 0; i < untyped_count; i++)
+    // {
+    //     bool device = false;
+    //     uintptr_t ut_paddr = 0;
+    //     size_t ut_size_bits = 0;
+    //     seL4_CPtr ut_cptr = simple_get_nth_untyped(&env.simple, i, &ut_size_bits, &ut_paddr, &device);
+    //     CPRINTF("ut_cptr: %lx, ut_size_bits: %zu, ut_paddr: %lx, device :%d\n", ut_cptr, ut_size_bits, ut_paddr, device);
+    // }
+
     /* allocate lots of untyped memory for tests to use */
     env.num_untypeds = populate_untypeds(untypeds);
     env.untypeds = untypeds;
@@ -556,6 +577,16 @@ void *main_continued(void *arg UNUSED)
         ZF_LOGF_IF(error, "Failed to allocate reply");
     }
 
+    /* serial IRQ handler */
+    cspacepath_t serial_slot;
+    error = vka_cspace_alloc_path(&env.vka, &serial_slot);
+    ZF_LOGF_IFERR(error, "Failed to allocate serial_slot for IRQ handler\n");
+
+    error = simple_get_IRQ_handler(&env.simple, SERIAL_IRQ, serial_slot);
+    ZF_LOGF_IFERR(error, "Failed to make QEMU UART IRQ Handler\n");
+
+    env.serial_irq_handler = serial_slot.capPtr;
+
     /* Start core services */
     printf(GPISERVP "Starting GPI server...\n");
     error = gpi_server_parent_spawn_thread(&env.simple,
@@ -566,6 +597,10 @@ void *main_continued(void *arg UNUSED)
     // printf(GPISERVP "Public EP is: %d\n", env.gpi_endpoint_in_parent);
     // debug_cap_identify(GPISERVP, env.gpi_endpoint_in_parent);
 
+    // vka_object_t frame = {0};
+    // error = vka_alloc_frame_at(&env.vka, seL4_LargePageBits, 0x40000000, &frame);
+    // CPRINTF("alloc frame at error: %d\n", error);
+
     /* now run the tests */
     sel4test_run_tests(&env);
 
@@ -575,9 +610,9 @@ void *main_continued(void *arg UNUSED)
 /* Note that the following globals are place here because it is not expected that
  * this function be refactored out of sel4test-driver in its current form. */
 /* Number of objects to track allocation of. Currently all serial devices are
- * initialised with a single Frame object.  Future devices may need more than 1.
+ * initialised with a single Frame object. Tracked device frames: serial output, timer
  */
-#define NUM_ALLOC_AT_TO_TRACK 1
+#define NUM_ALLOC_AT_TO_TRACK 2
 /* Static global to store the original vka_utspace_alloc_at function. It
  * isn't expected for this to dynamically change after initialisation.*/
 static vka_utspace_alloc_at_fn vka_utspace_alloc_at_base;
@@ -729,7 +764,6 @@ int main(void)
     /* enable serial driver */
     serial_utspace_record = true;
     platsupport_serial_setup_simple(&env.vspace, &env.simple, &env.vka);
-    serial_utspace_record = false;
 
     /* Partially overwrite the IRQ interface so that we can record the IRQ caps that were allocated.
      * We need this only for the timer as the ltimer interfaces allocates the caps for us and hides them away.
@@ -739,6 +773,8 @@ int main(void)
     env.ops.irq_ops.irq_register_fn = sel4test_timer_irq_register;
     /* Initialise ltimer */
     init_timer();
+    /* also cache the timer's device frame, as it may be requested by a guest VM */
+    serial_utspace_record = false;
     /* Restore the IRQ interface's register function */
     env.ops.irq_ops.irq_register_fn = irq_register_fn_copy;
 

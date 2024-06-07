@@ -90,12 +90,6 @@ struct driver_env
     /* Add for libsel4gpi */
     seL4_CPtr gpi_endpoint_in_parent;
 
-    seL4_CPtr child_ads_cptr_in_child;    // Child address-space cptr in child
-    seL4_CPtr child_cpu_cptr_in_child;    // Child cpu cptr in child
-    seL4_CPtr child_pd_cptr_in_child;     // Child PD cptr in child
-    seL4_CPtr child_mo_cptr_in_child[10]; // Child PD cptr in child
-    seL4_CPtr gpi_endpoint_in_child;
-
     int num_untypeds;
     vka_object_t *untypeds;
 
@@ -104,6 +98,9 @@ struct driver_env
 
     /* time server for managing timeouts */
     time_manager_t tm;
+
+    /* irq handler for serial driver */
+    seL4_CPtr serial_irq_handler;
 };
 typedef struct driver_env *driver_env_t;
 

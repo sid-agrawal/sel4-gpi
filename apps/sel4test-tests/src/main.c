@@ -57,7 +57,7 @@ static seL4_CPtr self_pd_cap;
 static sel4utils_alloc_data_t alloc_data;
 
 /* dimensions of virtual memory for the allocator to use */
-#define ALLOCATOR_VIRTUAL_POOL_SIZE ((1 << seL4_PageBits) * 4000)
+#define ALLOCATOR_VIRTUAL_POOL_SIZE ((1 << seL4_PageBits) * 128000) // 500 MB
 
 /* allocator static pool */
 #define ALLOCATOR_STATIC_POOL_SIZE ((1 << seL4_PageBits) * 20)
@@ -140,6 +140,7 @@ static void init_allocator(env_t env, test_init_data_t *init_data)
     unsigned int size_bits_index;
     size_t size_bits;
     cspacepath_t path;
+    size_t total_size = 0;
     for (slot = init_data->untypeds.start, size_bits_index = 0;
          slot <= init_data->untypeds.end;
          slot++, size_bits_index++)
@@ -149,6 +150,7 @@ static void init_allocator(env_t env, test_init_data_t *init_data)
         /* allocman doesn't require the paddr unless we need to ask for phys addresses,
          * which we don't. */
         size_bits = init_data->untyped_size_bits_list[size_bits_index];
+        total_size += SIZE_BITS_TO_BYTES(size_bits);
         error = allocman_utspace_add_uts(allocator, 1, &path, &size_bits, NULL,
                                          ALLOCMAN_UT_KERNEL);
         if (error)
@@ -156,6 +158,8 @@ static void init_allocator(env_t env, test_init_data_t *init_data)
             ZF_LOGF("Failed to add untyped objects to allocator");
         }
     }
+
+    CPRINTF("untypeds found in test process: %zu\n", total_size);
 
     /* add any arch specific objects to the allocator */
     arch_init_allocator(env, init_data);
@@ -231,25 +235,16 @@ int main(int argc, char **argv)
     struct env env;
 
     /* parse args */
-    assert(argc == 6);
+    assert(argc == 2);
     endpoint = (seL4_CPtr)atoi(argv[0]);
 
     /* read in init data */
     init_data = (void *)atol(argv[1]);
 
-    self_as_cap = (seL4_CPtr)atoi(argv[2]);
-    self_cpu_cap = (seL4_CPtr)atoi(argv[3]);
-    self_pd_cap = (seL4_CPtr)atoi(argv[4]);
-    gpi_endpoint = (seL4_CPtr)atoi(argv[5]);
-
     /* configure env */
     env.cspace_root = init_data->root_cnode;
     env.page_directory = init_data->page_directory;
     env.endpoint = endpoint;
-    env.self_ads_cptr = self_as_cap;
-    env.self_cpu_cptr = self_cpu_cap;
-    env.self_pd_cptr = self_pd_cap;
-    env.gpi_endpoint = gpi_endpoint;
     env.priority = init_data->priority;
     env.cspace_size_bits = init_data->cspace_size_bits;
     env.tcb = init_data->tcb;
@@ -257,7 +252,7 @@ int main(int argc, char **argv)
     env.asid_pool = init_data->asid_pool;
     env.asid_ctrl = init_data->asid_ctrl;
     env.sched_ctrl = init_data->sched_ctrl;
-    env.irq_handler = init_data->irq_handler;
+    env.irq_handler = init_data->serial_irq_handler;
 #ifdef CONFIG_IOMMU
     env.io_space = init_data->io_space;
 #endif
@@ -284,6 +279,12 @@ int main(int argc, char **argv)
 
     /* initialise rpc client */
     sel4rpc_client_init(&env.rpc_client, env.endpoint, SEL4TEST_PROTOBUF_RPC);
+
+    // vka_object_t frame = {0};
+    // int error = vka_alloc_frame_at(&env.vka, seL4_LargePageBits, 0x40000000, &frame);
+    // seL4_Word paddr = seL4_DebugCapPaddr(frame.cptr);
+    // seL4_Word type = seL4_DebugCapIdentify(frame.cptr);
+    // CPRINTF("alloc frame at error: %d, frame cptr: %lx, paddr: %lx, type: %ld\n", error, frame.cptr, paddr, type);
 
     /* find the test */
     testcase_t *test = find_test(init_data->name);
