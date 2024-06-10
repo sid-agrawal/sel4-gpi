@@ -221,9 +221,14 @@ void basic_set_up(uintptr_t e)
     config = process_config_mcp(config, seL4_MaxPrio);
     config = process_config_auth(config, simple_get_tcb(&env->simple));
     config = process_config_create_cnode(config, TEST_PROCESS_CSPACE_SIZE_BITS);
-    CPRINTF("%p\n", &env->vka);
     error = sel4utils_configure_process_custom(&(env->test_process), &env->vka, &env->vspace, config);
     assert(error == 0);
+
+    CPRINTF("ELF regions:\n");
+    for (int i = 0; i < env->test_process.num_elf_regions; i++)
+    {
+        CPRINTF("%p, %d\n", env->test_process.elf_regions[i].elf_vstart, env->test_process.elf_regions[i].size);
+    }
 
     /* set up caps about the process */
     env->init->stack_pages = CONFIG_SEL4UTILS_STACK_SIZE / PAGE_SIZE_4K;

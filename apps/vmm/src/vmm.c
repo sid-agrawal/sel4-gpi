@@ -254,6 +254,9 @@ vmm_env_t *vm_setup(seL4_IRQHandler irq_handler, vka_t *vka, vspace_t *vspace, s
     /* guest ram */
     size_t num_pages = DIV_ROUND_UP(GUEST_RAM_SIZE, SIZE_BITS_TO_BYTES(seL4_LargePageBits));
 
+    seL4_CPtr kernel_img_cap = vspace_get_cap(vmm_e->vspace, _guest_kernel_image);
+    FATAL_IF_ERR(1, "AAA!, kernel_img_cap: %lx, guest_img_vaddr: %p\n", kernel_img_cap, _guest_kernel_image);
+
     res = vspace_reserve_range_at(&vmm_e->vm_vspace, (void *)GUEST_RAM_VADDR, GUEST_RAM_SIZE, seL4_AllRights, 1);
     seL4_CPtr ram_frames[num_pages];
     vka_object_t frame;

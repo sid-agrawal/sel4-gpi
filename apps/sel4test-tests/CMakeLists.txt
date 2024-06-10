@@ -8,6 +8,17 @@ cmake_minimum_required(VERSION 3.7.2)
 
 project(sel4test-tests C CXX)
 
+if(KernelPlatform STREQUAL "qemu-arm-virt")
+    set(KernelPlatVMM "qemu_arm_virt")
+endif()
+
+if(KernelPlatform STREQUAL "odroidc4")
+    set(KernelPlatVMM "${KernelPlatform}")
+endif()
+
+cmake_path(GET CMAKE_CURRENT_SOURCE_DIR PARENT_PATH PARENT_DIR)
+# message(STATUS "parent: ${PARENT_DIR} current source dir: ${CMAKE_CURRENT_SOURCE_DIR}")
+
 # Use arm arch source files on RISCV
 set(arch ${KernelArch})
 if(KernelArchRiscV)
@@ -27,16 +38,18 @@ file(
         src/arch/${KernelArch}/tests/*.S
 )
 
-# temp for now, since the cpu client api calls need to be fixed
+# Excluding these tests from compilation since we haven't fixed them yet
 list(REMOVE_ITEM deps "${CMAKE_CURRENT_SOURCE_DIR}/src/tests/ads_capability.c")
 list(REMOVE_ITEM deps "${CMAKE_CURRENT_SOURCE_DIR}/src/tests/lwc.c")
 
 add_subdirectory(../sqlite3 sqlite3)
+add_subdirectory(../vmm libsel4vmm)
 
 include(cpio)
 set(cpio_files "")
 # New binaries in the CPIO go here.
 list(APPEND cpio_files "$<TARGET_FILE:hello_benchmark>")
+list(APPEND cpio_files "${PARENT_DIR}/vmm/board/${KernelPlatVMM}/linux")
 MakeCPIO(archive.o "${cpio_files}")
 
 add_executable(sel4test-tests EXCLUDE_FROM_ALL ${deps} archive.o)
