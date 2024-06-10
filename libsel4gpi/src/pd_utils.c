@@ -89,13 +89,7 @@ seL4_CPtr sel4gpi_get_rde_by_space_id(uint32_t space_id, gpi_cap_t type)
 
     for (int i = 0; i < MAX_NS_PER_RDE; i++)
     {
-        if (init_data->rde[type][i].type.type == GPICAP_TYPE_NONE)
-        {
-            printf(COLORIZE("Warning: could not find RDE (type: %d, space: %d) for PD (%ld)\n", MAGENTA),
-                   type, space_id, sel4gpi_get_pd_conn().id);
-            return seL4_CapNull;
-        }
-        else if (init_data->rde[type][i].space_id == space_id)
+        if (init_data->rde[type][i].space_id == space_id)
         {
             return init_data->rde[type][i].slot_in_PD;
         }
@@ -165,4 +159,19 @@ void *sel4gpi_get_vmr(ads_client_context_t *vmr_rde, int num_pages, void *vaddr,
 
 err_goto:
     return NULL;
+}
+
+int sel4gpi_destroy_vmr(ads_client_context_t *vmr_rde, void *vaddr, mo_client_context_t *mo)
+{
+    int error;
+
+    error = ads_client_rm(vmr_rde, vaddr);
+    GOTO_IF_ERR(error, "failed to remove MO from ADS\n");
+
+    error = mo_component_client_disconnect(mo);
+    GOTO_IF_ERR(error, "failed to disconnect MO\n");
+
+
+err_goto:
+    return error;
 }

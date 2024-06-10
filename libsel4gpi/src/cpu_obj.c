@@ -29,8 +29,14 @@
 
 int cpu_start(cpu_t *cpu)
 {
-    OSDB_PRINTF("cpu_start: starting CPU at PC: 0x%lx\n", cpu->reg_ctx->pc);
+    OSDB_PRINTF("cpu_start: starting CPU (%d) at PC: 0x%lx\n", cpu->id, cpu->reg_ctx->pc);
     return seL4_TCB_Resume(cpu->tcb.cptr);
+}
+
+int cpu_stop(cpu_t *cpu)
+{
+    OSDB_PRINTF("cpu_start: stopping CPU (%d) at PC: 0x%lx\n", cpu->id, cpu->reg_ctx->pc);
+    return seL4_TCB_Suspend(cpu->tcb.cptr);
 }
 
 int cpu_config_vspace(cpu_t *cpu,
@@ -143,6 +149,14 @@ void cpu_dump_rr(cpu_t *cpu, model_state_t *ms, gpi_model_node_t *pd_node)
 void cpu_destroy(cpu_t *cpu)
 {
     // (XXX) Linh: Ideally, we can destroy the thread struct here rather than in pd_destroy
+
+    // Stop the CPU
+    int error = cpu_stop(cpu);
+
+    if (error)
+    {
+        OSDB_PRINTERR("Error while stopping CPU (%d)\n", cpu->id);
+    }
 
     // Destroy the TCB
     vka_free_object(get_cpu_component()->server_vka, &cpu->tcb);

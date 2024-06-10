@@ -308,26 +308,32 @@ static seL4_MessageInfo_t handle_load_elf_request(seL4_Word sender_badge, seL4_M
     OSDB_PRINTF("Got load elf request from client badge %lx.\n", sender_badge);
 
     int error = 0;
-    SERVER_GOTO_IF_COND(seL4_MessageInfo_get_capsUnwrapped(old_tag) < 1,
+    char *image_name;
+    void *entry_point;
+    SERVER_GOTO_IF_COND(seL4_MessageInfo_get_capsUnwrapped(old_tag) < 2,
                         "Missing cap for target PD in capsUnwrapped\n");
 
+    // Find target ADS
     ads_component_registry_entry_t *target_ads = (ads_component_registry_entry_t *)
         resource_component_registry_get_by_badge(get_ads_component(), sender_badge);
-    pd_component_registry_entry_t *target_pd = (pd_component_registry_entry_t *)
-        resource_component_registry_get_by_id(get_pd_component(), get_object_id_from_badge(seL4_GetBadge(0)));
     SERVER_GOTO_IF_COND(target_ads == NULL, "Couldn't find target ADS (%ld)\n",
                         get_object_id_from_badge(sender_badge));
+
+    // Find target PD
+    pd_component_registry_entry_t *target_pd = (pd_component_registry_entry_t *)
+        resource_component_registry_get_by_id(get_pd_component(), get_object_id_from_badge(seL4_GetBadge(0)));
     SERVER_GOTO_IF_COND(target_pd == NULL, "Couldn't find target PD (%ld)\n",
                         get_object_id_from_badge(seL4_GetBadge(0)));
 
-    int image_id = (int)seL4_GetMR(ADSMSGREG_LOAD_ELF_REQ_IMAGE);
-    SERVER_GOTO_IF_COND(image_id < 0 || image_id > PD_N_IMAGES, "Requested elf load of bad image ID %d\n", image_id);
+    // Get the image name
+    error = ads_component_attach_to_rt(get_object_id_from_badge(seL4_GetBadge(1)), (void **)&image_name);
+    SERVER_GOTO_IF_ERR(error, "Failed to attach MO for image name to RT\n");
 
-    OSDB_PRINTF("Loading %s's ELF into PD %d\n", pd_images[image_id], target_pd->pd.id);
-    void *entry_point;
+    // Load the ELF
+    OSDB_PRINTF("Loading %s's ELF into PD %d\n", image_name, target_pd->pd.id);
     sel4utils_elf_region_t *elf_reservations;
     int elf_regions;
-    error = ads_load_elf(target_ads->ads.vspace, &target_pd->pd, pd_images[image_id],
+    error = ads_load_elf(target_ads->ads.vspace, &target_pd->pd, image_name,
                          &entry_point, &elf_reservations, &elf_regions);
     SERVER_GOTO_IF_ERR(error, "Load ELF failed\n");
 
@@ -340,15 +346,23 @@ static seL4_MessageInfo_t handle_load_elf_request(seL4_Word sender_badge, seL4_M
 
     OSDB_PRINTF("Successfully loaded ELF, entry point %p.\n", entry_point);
 
-    pd_set_image_name(&target_pd->pd, pd_images[image_id]);
-
-    seL4_SetMR(ADSMSGREG_LOAD_ELF_ACK_ENTRY_PT, (seL4_Word)entry_point);
+    pd_set_image_name(&target_pd->pd, image_name);
 
     OSDB_PRINTF("Forged ADS attachments from ELF.\n");
 
 err_goto:
+    if (image_name != NULL) {
+        // Remove the MO for image name
+        error = ads_component_remove_from_rt((void *) image_name);
+        if (error)
+        {
+            OSDB_PRINTERR("Failed to remove MO for image name from RT\n");
+        }
+    }
     free(elf_reservations);
+
     seL4_SetMR(ADSMSGREG_FUNC, ADS_FUNC_LOAD_ELF_ACK);
+    seL4_SetMR(ADSMSGREG_LOAD_ELF_ACK_ENTRY_PT, (seL4_Word)entry_point);
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(error, 0, 0, ADSMSGREG_LOAD_ELF_ACK_END);
     return tag;
 }

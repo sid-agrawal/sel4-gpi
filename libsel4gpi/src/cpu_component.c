@@ -353,3 +353,35 @@ int forge_cpu_cap_from_tcb(sel4utils_process_t *process, // Change this to the s
 err_goto:
     return error;
 }
+
+int cpu_component_stop(uint32_t cpu_id)
+{
+    int error = 0;
+
+    // Find the CPU
+    cpu_component_registry_entry_t *cpu_data = (cpu_component_registry_entry_t *)
+        resource_component_registry_get_by_id(get_cpu_component(), cpu_id);
+    SERVER_GOTO_IF_COND(cpu_data == NULL, "Couldn't find CPU (%ld)\n", cpu_id);
+
+    // Stop the CPU
+    error = cpu_stop(&cpu_data->cpu);
+
+err_goto:
+    return error;
+}
+
+int cpu_component_get_reply_cap(uint32_t cpu_id, seL4_CPtr *reply_cap)
+{
+    int error = 0;
+
+    // Find the CPU
+    cpu_component_registry_entry_t *cpu_data = (cpu_component_registry_entry_t *)
+        resource_component_registry_get_by_id(get_cpu_component(), cpu_id);
+    SERVER_GOTO_IF_COND(cpu_data == NULL, "Couldn't find CPU (%ld)\n", cpu_id);
+
+    // Return the reply cap
+    *reply_cap = cpu_data->cpu.thread.reply.cptr;
+
+err_goto:
+    return error;
+}

@@ -113,6 +113,16 @@ void sel4gpi_set_exit_cb(void);
 void *sel4gpi_get_vmr(ads_client_context_t *vmr_rde, int num_pages, void *vaddr, sel4utils_reservation_type_t vmr_type, mo_client_context_t *ret_mo);
 
 /**
+ * Unattach an MO from the given ADS then destroy it
+ * 
+ * @param vmr_rde the ADS where the MO is attached
+ * @param vaddr the vaddr where the MO is attached
+ * @param mo connection to the MO to destroy
+ * @return 0 on success, error otherwise
+*/
+int sel4gpi_destroy_vmr(ads_client_context_t *vmr_rde, void *vaddr, mo_client_context_t *mo);
+
+/**
  * @brief creates a new stack with num_pages in the given ADS, it will NOT be mapped to the current one.
  *        NOTE: no guard page is created
  * @param ads the ADS in which to create the stack

@@ -40,6 +40,14 @@ typedef struct _cpu
 int cpu_start(cpu_t *cpu);
 
 /**
+ * @brief Stop the given CPU.
+ *
+ * @param cpu cpu object
+ * @return int 0 on success, 1 on failure.
+ */
+int cpu_stop(cpu_t *cpu);
+
+/**
  * @brief
  *
  * @param cpu cpu opject

@@ -37,10 +37,20 @@ resource_component_context_t *get_resspc_component(void)
 // Called when an item from the MO registry is deleted
 static void on_resspc_registry_delete(resource_server_registry_node_t *node_gen, void *arg)
 {
+    int error = 0;
+
     resspc_component_registry_entry_t *node = (resspc_component_registry_entry_t *)node_gen;
 
     OSDB_PRINTF("Destroying resource space (%d)\n", node->space.id);
-    OSDB_PRINTERR("Destroying resource space not implemented\n");
+
+    // Cleanup PDs according to cleanup policy
+    error = pd_component_space_cleanup(node->space.resource_type, node->space.id);
+    SERVER_GOTO_IF_ERR(error, "failed to cleanup PDs for deleted resource space (%d)\n", node->space.id);
+
+    return;
+
+err_goto:
+    OSDB_PRINTERR("Failed to delete resource space (%d)\n", node->space.id);
 }
 
 static seL4_MessageInfo_t handle_resspc_allocation_request(seL4_Word sender_badge, seL4_CPtr received_cap)
@@ -104,7 +114,7 @@ static seL4_MessageInfo_t handle_resspc_allocation_request(seL4_Word sender_badg
     pd_add_type_name(&server_pd->pd, rde_type, resource_type_name);
 
     // Remove the MO
-    error = ads_component_remove_from_rt((void *) resource_type_name);
+    error = ads_component_remove_from_rt((void *)resource_type_name);
     SERVER_GOTO_IF_ERR(error, "Failed to remove MO from root task\n");
 
     seL4_SetMR(PDMSGREG_FUNC, RESSPC_FUNC_CONNECT_ACK);
@@ -122,7 +132,7 @@ err_goto:
     return reply_tag;
 }
 
-int resspc_component_delete(uint64_t space_id)
+int resspc_component_mark_delete(uint64_t space_id)
 {
     int error = 0;
 
@@ -131,10 +141,42 @@ int resspc_component_delete(uint64_t space_id)
         resource_component_registry_get_by_id(get_resspc_component(), space_id);
     SERVER_GOTO_IF_COND(space_entry == NULL, "Couldn't find resource space (%ld)\n", space_id);
 
+    // (XXX) Arya: We can't clean up the server endpoint because it might be used for another resource space
+    // This needs some more thought
+#if 0
+    // Cancel badged sends for this resspc
+    cspacepath_t server_ep_path;
+    pd_make_path(node->space.pd, node->space.server_ep, &server_ep_path);
+    error = seL4_CNode_CancelBadgedSends(server_ep_path.root, server_ep_path.capPtr, server_ep_path.capDepth);
+    SERVER_GOTO_IF_ERR(error, "Failed to cancel badged sends on resource space (%d)\n", space_id);
+
+    // Revoke the server EP
+    error = vka_cnode_revoke(&server_ep_path);
+    SERVER_GOTO_IF_ERR(error, "Failed to revoke endpoint for resource space (%d)\n", space_id);
+
+    // Delete the server EP
+    error = vka_cnode_delete(&server_ep_path);
+    SERVER_GOTO_IF_ERR(error, "Failed to revoke endpoint for resource space (%d)\n", space_id);
+#endif
+
+    // Mark it for deletion
     space_entry->space.deleted = true;
 
 err_goto:
     return error;
+}
+
+int resspc_component_sweep(void)
+{
+    // Find any spaces marked for deletion, then delete them
+    resource_server_registry_node_t *curr, *tmp;
+    HASH_ITER(hh, get_resspc_component()->registry.head, curr, tmp)
+    {
+        if (((resspc_component_registry_entry_t *)curr)->space.deleted)
+        {
+            resource_server_registry_delete(&get_resspc_component()->registry, curr);
+        }
+    }
 }
 
 static seL4_MessageInfo_t handle_create_resource_request(seL4_Word sender_badge)

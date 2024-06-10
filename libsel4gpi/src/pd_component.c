@@ -324,7 +324,7 @@ static seL4_MessageInfo_t handle_give_resource_req(seL4_Word sender_badge, seL4_
     //             server_id, space_id, resource_id, recipient_id);
 
     /* Create a new badged EP for the resource */
-    seL4_CPtr dest = resource_server_make_badged_ep(get_pd_component()->server_vka, &recipient_data->pd.pd_vka,
+    seL4_CPtr dest = resource_server_make_badged_ep(get_pd_component()->server_vka, recipient_data->pd.pd_vka,
                                                     resource_space_data->space.server_ep, resource_space_data->space.resource_type,
                                                     space_id, resource_id, recipient_id);
     seL4_SetMR(PDMSGREG_GIVE_RES_ACK_DEST, dest);
@@ -676,6 +676,7 @@ void forge_pd_for_root_task(uint64_t rt_id)
     pd_component_registry_entry_t *rt_entry = malloc(sizeof(pd_component_registry_entry_t));
     rt_entry->gen.object_id = rt_id;
     rt_entry->pd.id = rt_id;
+    rt_entry->pd.pd_vka = get_gpi_server()->server_vka;
     resource_server_registry_insert(&get_pd_component()->registry, (resource_server_registry_node_t *)rt_entry);
 }
 
@@ -814,6 +815,94 @@ int pd_add_resource_by_id(uint32_t pd_id,
     SERVER_GOTO_IF_COND(client_pd_data == NULL, "Couldn't find PD (%d) to add resource \n", pd_id);
 
     error = pd_add_resource(&client_pd_data->pd, cap_type, space_id, res_id, slot_in_RT, slot_in_PD, slot_in_serverPD);
+
+err_goto:
+    return error;
+}
+
+int pd_component_remove_resource_from_rt(gpi_cap_t resource_type, uint32_t space_id, uint32_t obj_id)
+{
+    int error = 0;
+
+    // Get the root task PD
+    pd_component_registry_entry_t *pd_entry = pd_component_registry_get_entry_by_id(get_gpi_server()->rt_pd_id);
+    SERVER_GOTO_IF_COND(pd_entry == NULL,
+                        "Couldn't find RT PD (%d) to remove resource \n",
+                        get_gpi_server()->rt_pd_id);
+
+    // Remove the resource from it
+    error = pd_remove_resource(&pd_entry->pd, resource_type, space_id, obj_id);
+
+err_goto:
+    return error;
+}
+
+int pd_component_resource_cleanup(gpi_cap_t resource_type, uint32_t space_id, uint32_t obj_id)
+{
+    int error = 0;
+
+    // Iterate over all live PDs
+    resource_server_registry_node_t *curr, *tmp;
+    HASH_ITER(hh, get_pd_component()->registry.head, curr, tmp)
+    {
+        pd_component_registry_entry_t *pd_entry = (pd_component_registry_entry_t *)curr;
+
+        if (pd_entry->pd.id == get_gpi_server()->rt_pd_id || pd_entry->pd.deleted)
+        {
+            // Skip a PD currently being deleted
+            continue;
+        }
+
+        OSDB_PRINTF("Remove resource %s_%d_%d from PD(%d)\n", cap_type_to_str(resource_type),
+                    space_id, obj_id, pd_entry->pd.id);
+
+        error = pd_remove_resource(&pd_entry->pd, resource_type, space_id, obj_id);
+        SERVER_GOTO_IF_ERR(error, "failed to remove resource %s_%d_%d from PD (%d)\n",
+                           cap_type_to_str(resource_type),
+                           space_id, obj_id, pd_entry->pd.id);
+    }
+
+err_goto:
+    return error;
+}
+
+int pd_component_space_cleanup(gpi_cap_t space_type, uint32_t space_id)
+{
+    int error = 0;
+
+    // Iterate over all live PDs
+    resource_server_registry_node_t *curr, *tmp;
+    HASH_ITER(hh, get_pd_component()->registry.head, curr, tmp)
+    {
+        pd_component_registry_entry_t *pd_entry = (pd_component_registry_entry_t *)curr;
+
+        if (pd_entry->pd.id == get_gpi_server()->rt_pd_id || pd_entry->pd.deleted)
+        {
+            // Skip the root task, or a PD currently being deleted
+            continue;
+        }
+
+        OSDB_PRINTF("Cleanup resource space %s_%d in PD(%d)\n", cap_type_to_str(space_type),
+                    space_id, pd_entry->pd.id);
+
+        // Always remove an RDE if there is one
+        // Ignore errors if the RDE doesn't exist
+        rde_type_t rde_type = {.type = space_type};
+        pd_remove_rde(&pd_entry->pd, rde_type, space_id);
+
+        switch (GPI_CLEANUP_POLICY)
+        {
+        case PD_CLEANUP_MINIMAL:
+            // Just remove resources belonging to the offending space
+            error = pd_remove_resources_in_space(&pd_entry->pd, space_id);
+            SERVER_GOTO_IF_ERR(error, "failed to remove resources in %s_%d from PD (%d)\n",
+                               cap_type_to_str(space_type),
+                               space_id, pd_entry->pd.id);
+            break;
+        default:
+            gpi_panic("Unknown PD cleanup policy", GPI_CLEANUP_POLICY);
+        }
+    }
 
 err_goto:
     return error;

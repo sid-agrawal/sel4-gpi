@@ -586,6 +586,8 @@ seL4_MessageInfo_t xv6fs_request_handler(seL4_MessageInfo_t tag, seL4_Word sende
       seL4_SetMR(FSMSGREG_READ_ACK_N, n_bytes_ret);
       break;
     case FS_FUNC_WRITE_REQ:
+      *need_new_recv_cap = true;
+      
       n_bytes_to_read = seL4_GetMR(FSMSGREG_READ_REQ_N);
       offset = seL4_GetMR(FSMSGREG_READ_REQ_OFFSET);
 

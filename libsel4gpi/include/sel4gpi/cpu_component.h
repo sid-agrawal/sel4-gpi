@@ -141,3 +141,20 @@ int cpu_component_initialize(simple_t *server_simple,
 resource_component_context_t *get_cpu_component(void);
 
 int forge_cpu_cap_from_tcb(sel4utils_process_t *proc, vka_t *vka, uint32_t client_id, seL4_CPtr *cap_ret, uint32_t *id_ret);
+
+/**
+ * Stops a CPU's TCB
+ * 
+ * @param cpu_id ID of the cpu to stop
+ * @return 0 on success, error otherwise
+*/
+int cpu_component_stop(uint32_t cpu_id);
+
+/**
+ * Get the CPU's TCB reply cap
+ * 
+ * @param cpu_id ID of the target cpu
+ * @param reply_cap returns the slot of the reply cap, within the current PD's cspace
+ * @return 0 on success, error otherwise
+*/
+int cpu_component_get_reply_cap(uint32_t cpu_id, seL4_CPtr *reply_cap);

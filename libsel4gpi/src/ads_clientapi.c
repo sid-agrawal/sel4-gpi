@@ -16,6 +16,7 @@
 #include <sel4gpi/badge_usage.h>
 #include <sel4gpi/debug.h>
 #include <sel4gpi/gpi_client.h>
+#include <sel4gpi/pd_utils.h>
 
 // Defined for utility printing macros
 #define DEBUG_ID ADS_DEBUG
@@ -221,23 +222,34 @@ int ads_client_load_elf(ads_client_context_t *loadee_ads,
                         void **ret_entry_point)
 {
     int error = 0;
-    seL4_SetMR(ADSMSGREG_FUNC, ADS_FUNC_LOAD_ELF_REQ);
-    int image_id = sel4gpi_image_name_to_id(image_name);
-    if (image_id == -1)
-    {
-        OSDB_PRINTF("invalid image name received %s\n", image_name);
-        return -1;
+
+    // Allocate an MO to send the image name
+    ads_client_context_t ads_conn = {0};
+    ads_conn.badged_server_ep_cspath.capPtr = sel4gpi_get_rde_by_space_id(sel4gpi_get_binded_ads_id(), GPICAP_TYPE_VMR);
+
+    mo_client_context_t mo_conn;
+    void *mo_vaddr = sel4gpi_get_vmr(&ads_conn, 1, NULL, SEL4UTILS_RES_TYPE_SHARED_FRAMES, &mo_conn);
+
+    if (mo_vaddr == NULL) {
+        return 1;
     }
 
-    seL4_SetMR(ADSMSGREG_LOAD_ELF_REQ_IMAGE, image_id);
-    seL4_SetCap(0, loadee_pd->badged_server_ep_cspath.capPtr);
+    strcpy(mo_vaddr, image_name);
 
-    seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 1,
+    // Make the request
+    seL4_SetMR(ADSMSGREG_FUNC, ADS_FUNC_LOAD_ELF_REQ);
+    seL4_SetCap(0, loadee_pd->badged_server_ep_cspath.capPtr);
+    seL4_SetCap(1, mo_conn.badged_server_ep_cspath.capPtr);
+
+    seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 2,
                                                   ADSMSGREG_LOAD_ELF_REQ_END);
 
     tag = seL4_Call(loadee_ads->badged_server_ep_cspath.capPtr, tag);
-    assert(seL4_MessageInfo_get_label(tag) == 0);
 
     *ret_entry_point = (void *)seL4_GetMR(ADSMSGREG_LOAD_ELF_ACK_ENTRY_PT);
+
+    // Free the MO
+    sel4gpi_destroy_vmr(&ads_conn, mo_vaddr, &mo_conn);
+
     return seL4_MessageInfo_get_label(tag);
 }

@@ -6,10 +6,6 @@
 #include <sel4utils/vspace.h>
 #include <sel4gpi/badge_usage.h>
 
-/* (XXX) Arya: temp definition of supported images */
-#define PD_N_IMAGES 6
-static const char *pd_images[PD_N_IMAGES] = {"hello", "hello_kvstore", "ramdisk_server", "fs_server", "kvstore_server", "hello_benchmark"};
-
 #define PD_MAX_ARGC 4
 
 typedef struct _resspc_client_context
@@ -48,5 +44,3 @@ typedef struct _mo_client_context
    // cspacepath_t public_server_ep_cspath;
    uint64_t id; // Needed only for RR dump
 } mo_client_context_t;
-
-int sel4gpi_image_name_to_id(const char *image_name);

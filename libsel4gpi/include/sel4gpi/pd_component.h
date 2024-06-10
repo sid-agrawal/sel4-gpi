@@ -216,6 +216,12 @@ enum _pd_setup_type
 };
 typedef enum _pd_setup_type pd_setup_type_t;
 
+// Options for cleanup policies when a resource manager PD dies
+typedef enum _pd_cleanup_policy
+{
+    PD_CLEANUP_MINIMAL = 1, ///< Just remove any resources that the crashed PD was managing from other PDs
+} pd_cleanup_policy_t;
+
 // Registry of PDs maintained by the server
 typedef struct _pd_component_registry_entry
 {
@@ -275,3 +281,35 @@ int pd_add_resource_by_id(uint32_t pd_id,
  * @return 0 on success, error otherwise
 */
 int pd_component_map_resources(uint32_t client_pd_id, uint64_t src_res_id, uint64_t dest_res_id);
+
+/**
+ * To be called after a core resource is destroyed, since the root task does not count as a refcount
+ * Remove it from the root task's metadata 
+ * 
+ * @param resource_type type of the deleted resource 
+ * @param space_id ID of the deleted resource 
+ * @param obj_id ID of the deleted resource
+ * @return 0 on success, error otherwise
+*/
+int pd_component_remove_resource_from_rt(gpi_cap_t resource_type, uint32_t space_id, uint32_t obj_id);
+
+/**
+ * To be called when a resource is destroyed
+ * Remove the resource from any PDs that may hold it
+ * 
+ * @param resource_type type of the deleted resource 
+ * @param space_id ID of the deleted resource 
+ * @param obj_id ID of the deleted resource
+ * @return 0 on success, error otherwise
+*/
+int pd_component_resource_cleanup(gpi_cap_t resource_type, uint32_t space_id, uint32_t obj_id);
+
+/**
+ * To be called when a resource space is destroyed
+ * Execute the cleanup policy for any PDs that still depend on the resource space
+ * 
+ * @param space_type type of the deleted resource space
+ * @param space_id ID of the deleted resource space
+ * @return 0 on success, error otherwise
+*/
+int pd_component_space_cleanup(gpi_cap_t space_type, uint32_t space_id);

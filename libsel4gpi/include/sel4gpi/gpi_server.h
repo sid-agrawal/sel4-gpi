@@ -34,6 +34,8 @@
 
 #define GPI_SERVER_BADGE_PARENT_VALUE 0xdeadbeef // Change this to something which will not violate the badge range
 
+#define GPI_CLEANUP_POLICY PD_CLEANUP_MINIMAL
+
 /** @file API for allowing a thread to act as the parent to a GPI server
  * thread.
  *

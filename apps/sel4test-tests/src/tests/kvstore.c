@@ -54,7 +54,9 @@ static int setup(env_t env)
     int error;
 
     /* Initialize the ADS */
-    vka_cspace_make_path(&env->vka, sel4gpi_get_rde_by_space_id(sel4gpi_get_binded_ads_id(), GPICAP_TYPE_VMR), &ads_conn.badged_server_ep_cspath);
+    vka_cspace_make_path(&env->vka,
+                         sel4gpi_get_rde_by_space_id(sel4gpi_get_binded_ads_id(), GPICAP_TYPE_VMR),
+                         &ads_conn.badged_server_ep_cspath);
 
     /* Initialize the PD */
     pd_conn = sel4gpi_get_pd_conn();
@@ -424,7 +426,7 @@ int test_kvstore_diff_threads(env_t env)
      * We don't actually destroy the second thread because we don't start it as a PD here
      * Then not all of its resources are destroyed
      * Once fixed, we can properly destroy both PDs
-    */
+     */
 
     /* Wait for test result */
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0, 0);
@@ -453,8 +455,6 @@ int test_kvstore_two_sets(env_t env)
 
     printf("------------------STARTING TEST: %s------------------\n", __func__);
 
-    // (XXX) Arya: This test fails in the FS right now, to fix
-    
     error = setup(env);
     test_assert(error == 0);
 

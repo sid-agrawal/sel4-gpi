@@ -69,7 +69,7 @@ int copy_cap_to_pd(pd_t *to_pd,
 
     cspacepath_t src, dest;
     vka_cspace_make_path(get_gpi_server()->server_vka, cap, &src);
-    vka_cspace_make_path(&to_pd->pd_vka, free_slot, &dest);
+    vka_cspace_make_path(to_pd->pd_vka, free_slot, &dest);
 
     error = vka_cnode_copy(&dest, &src, seL4_AllRights);
     if (error != 0)
@@ -115,34 +115,102 @@ int pd_add_resource(pd_t *pd, gpi_cap_t type, uint32_t space_id, uint32_t res_id
     return 0;
 }
 
+/**
+ * Internal function to revoke a resource from a PD and remove the metadata
+ */
+static void pd_remove_resource_internal(pd_t *pd, resource_server_registry_node_t *hold_node)
+{
+    int error = 0;
+
+    // Delete the capability
+    seL4_CPtr cap = ((pd_hold_node_t *)hold_node)->slot_in_PD_Debug;
+
+    if (cap == seL4_CapNull)
+    {
+        if (pd->id != get_gpi_server()->rt_pd_id)
+        {
+            pd_hold_node_t *node = (pd_hold_node_t *)hold_node;
+            OSDB_PRINTERR("Warning: remove resource %s_%d_%d from PD, slot_in_PD is null!\n",
+                          cap_type_to_str(node->type), node->space_id, node->res_id);
+        }
+    }
+    else
+    {
+        /**
+         * (XXX) Arya:
+         * If we revoke a badged endpoint, it will delete any copies of the badged endpoint
+         * Thus this will only delete copies of this resource within this PD, not any other badged endpoints
+         * made from the same, original raw endpoint.
+         */
+        cspacepath_t path;
+        vka_cspace_make_path(pd->pd_vka, cap, &path);
+        error = vka_cnode_revoke(&path);
+        if (error)
+        {
+            OSDB_PRINTERR("Failed to revoke resource from PD(%d)\n", pd->id);
+        }
+
+        error = vka_cnode_delete(&path);
+        if (error)
+        {
+            OSDB_PRINTERR("Failed to delete resource from PD(%d)\n", pd->id);
+        }
+
+        pd->pd_vka->cspace_free(pd->pd_vka->data, cap);
+    }
+
+    // Remove the node
+    resource_server_registry_delete(&pd->hold_registry, hold_node);
+}
+
+int pd_remove_resource(pd_t *pd, gpi_cap_t type, uint32_t space_id, uint32_t res_id)
+{
+    // See if the resource exists, remove it if so
+    uint64_t res_node_id = universal_res_id(type, space_id, res_id);
+    resource_server_registry_node_t *node = resource_server_registry_get_by_id(&pd->hold_registry, res_node_id);
+
+    if (node != NULL)
+    {
+        pd_remove_resource_internal(pd, node);
+    }
+
+    return 0;
+}
+
+int pd_remove_resources_in_space(pd_t *pd, uint32_t space_id)
+{
+    // Search through the held resources, remove any belonging to the given space ID
+    resource_server_registry_node_t *curr, *tmp;
+    HASH_ITER(hh, pd->hold_registry.head, curr, tmp)
+    {
+        if (((pd_hold_node_t *)curr)->space_id == space_id)
+        {
+            pd_remove_resource_internal(pd, curr);
+        }
+    }
+
+    return 0;
+}
+
 static int pd_rde_find_idx(pd_t *pd,
                            gpi_cap_t type,
                            uint32_t space_id)
 {
     int idx = -1;
 
-    if (space_id == RESSPC_ID_NULL)
+    // search within the entries for this type and space id
+    for (int i = 0; i < MAX_NS_PER_RDE; i++)
     {
-        // check if a default entry for this type exists
-        if (pd->init_data->rde[type][0].type.type != GPICAP_TYPE_NONE)
+        if (space_id == RESSPC_ID_NULL && pd->init_data->rde[type][i].type.type == type)
         {
-            idx = 0;
+            // Just return the first entry we find if given a null space ID
+            idx = i;
+            break;
         }
-    }
-    else
-    {
-        // search within the entries for this type and space id
-        for (int i = 0; i < MAX_NS_PER_RDE; i++)
+        else if (pd->init_data->rde[type][i].space_id == space_id)
         {
-            if (pd->init_data->rde[type][i].type.type == GPICAP_TYPE_NONE)
-            {
-                break;
-            }
-            else if (pd->init_data->rde[type][i].space_id == space_id)
-            {
-                idx = i;
-                break;
-            }
+            idx = i;
+            break;
         }
     }
 
@@ -186,12 +254,14 @@ int pd_add_rde(pd_t *pd,
         osmosis_rde_t rde = pd->init_data->rde[type.type][i];
         if (rde.space_id == space_id && rde.type.type == type.type)
         {
+            // The entry already exists
             idx = -1;
             break;
         }
 
         if (rde.type.type == GPICAP_TYPE_NONE)
         {
+            // This is an empty entry we can fill
             idx = i;
             break;
         }
@@ -217,7 +287,7 @@ int pd_add_rde(pd_t *pd,
     cspacepath_t src, dest;
     vka_cspace_make_path(get_gpi_server()->server_vka, server_ep, &src);
 
-    int error = vka_cspace_alloc_path(&pd->pd_vka, &dest);
+    int error = vka_cspace_alloc_path(pd->pd_vka, &dest);
     if (error)
     {
         return error;
@@ -246,6 +316,58 @@ int pd_add_rde(pd_t *pd,
     return 0;
 }
 
+int pd_remove_rde(pd_t *pd,
+                  rde_type_t type,
+                  uint32_t space_id)
+{
+    int error = 0;
+
+    // Find the RDE entry in the structure
+    int idx = -1;
+
+    assert(type.type > 0 && type.type < GPICAP_TYPE_MAX);
+
+    for (int i = 0; i < MAX_NS_PER_RDE; i++)
+    {
+        osmosis_rde_t rde = pd->init_data->rde[type.type][i];
+
+        if (rde.type.type == type.type && (space_id == RESSPC_ID_NULL || rde.space_id == space_id))
+        {
+            idx = i;
+            break;
+        }
+    }
+
+    if (idx == -1)
+    {
+        // This may not be an error, just print
+        OSDB_PRINTF("Could not find RDE type %d, id %d to remove\n", type.type, space_id);
+        return 1;
+    }
+
+    // Revoke / delete the RDE endpoint
+    // The RDE ep is badged once per client, so this will only delete this PD's copy of the endpoint
+    cspacepath_t rde_ep_path;
+    vka_cspace_make_path(pd->pd_vka, pd->init_data->rde[type.type][idx].slot_in_PD, &rde_ep_path);
+    error = vka_cnode_revoke(&rde_ep_path);
+    SERVER_GOTO_IF_ERR(error, "Failed to revoke RDE endpoint (slot %d) for PD (%d)\n", rde_ep_path.capPtr, pd->id);
+    error = vka_cnode_delete(&rde_ep_path);
+    SERVER_GOTO_IF_ERR(error, "Failed to delete RDE endpoint (slot %d) for PD (%d)\n", rde_ep_path.capPtr, pd->id);
+
+    // Clear the entry
+    pd->init_data->rde[type.type][idx].space_id = RESSPC_ID_NULL;
+    pd->init_data->rde[type.type][idx].type.type = GPICAP_TYPE_NONE;
+    pd->init_data->rde[type.type][idx].slot_in_RT = seL4_CapNull;
+    pd->init_data->rde[type.type][idx].slot_in_PD = seL4_CapNull;
+
+    OSDB_PRINTF("Removed RDE of type %s, space %d from PD (%d)\n", cap_type_to_str(type.type), space_id, pd->id);
+
+    pd->init_data->rde_count--;
+
+err_goto:
+    return error;
+}
+
 linked_list_t *pd_get_resources_of_type(pd_t *pd, gpi_cap_t type)
 {
     linked_list_t *found = linked_list_new();
@@ -270,7 +392,7 @@ int pd_bulk_add_resource(pd_t *pd, linked_list_t *resources)
     {
         res = (pd_hold_node_t *)curr->data;
         resspc_component_registry_entry_t *resource_space_data = resource_space_get_entry_by_id(res->space_id);
-        seL4_CPtr copied_res = resource_server_make_badged_ep(get_pd_component()->server_vka, &pd->pd_vka,
+        seL4_CPtr copied_res = resource_server_make_badged_ep(get_pd_component()->server_vka, pd->pd_vka,
                                                               resource_space_data->space.server_ep, resource_space_data->space.resource_type,
                                                               res->space_id, res->res_id, pd->id);
         seL4_CPtr slot_in_PD;
@@ -294,7 +416,7 @@ pd_held_resource_on_delete(resource_server_registry_node_t *node_gen, void *pd_v
 {
     int error = 0;
     pd_hold_node_t *node = (pd_hold_node_t *)node_gen;
-    pd_t *pd = (pd_t *) pd_v;
+    pd_t *pd = (pd_t *)pd_v;
 
     OSDB_PRINTF("Freeing resource %s_%d_%d\n", cap_type_to_str(node->type), node->space_id, node->res_id);
 
@@ -304,12 +426,18 @@ pd_held_resource_on_delete(resource_server_registry_node_t *node_gen, void *pd_v
     {
     case GPICAP_TYPE_ADS:
         error = resource_component_dec(get_ads_component(), node->res_id);
+        SERVER_GOTO_IF_ERR(error, "failed to decrement ADS resource\n");
+        error = pd_component_remove_resource_from_rt(node->type, node->space_id, node->res_id);
         break;
     case GPICAP_TYPE_CPU:
         error = resource_component_dec(get_cpu_component(), node->res_id);
+        SERVER_GOTO_IF_ERR(error, "failed to decrement CPU resource\n");
+        error = pd_component_remove_resource_from_rt(node->type, node->space_id, node->res_id);
         break;
     case GPICAP_TYPE_MO:
         error = resource_component_dec(get_mo_component(), node->res_id);
+        SERVER_GOTO_IF_ERR(error, "failed to decrement MO resource\n");
+        error = pd_component_remove_resource_from_rt(node->type, node->space_id, node->res_id);
         break;
     case GPICAP_TYPE_PD:
         // (XXX) Arya: I think we do not want to destroy a PD when the refcount reaches zero
@@ -321,8 +449,7 @@ pd_held_resource_on_delete(resource_server_registry_node_t *node_gen, void *pd_v
         break;
     case GPICAP_TYPE_RESSPC:
         // Wait to clean up resource spaces until later
-        // (XXX) Arya: figure out resource space deletion policy
-        error = resspc_component_delete(node->res_id);
+        error = resspc_component_mark_delete(node->res_id);
         break;
     default:
         // Otherwise, call the manager PD
@@ -332,7 +459,8 @@ pd_held_resource_on_delete(resource_server_registry_node_t *node_gen, void *pd_v
         // If the space is deleted,
         // or the manager PD is this PD itself,
         // then there's no point in notifying the manager
-        if (space_data->space.deleted || space_data->space.pd->id == pd->id) {
+        if (space_data->space.deleted || space_data->space.pd->id == pd->id)
+        {
             break;
         }
 
@@ -363,7 +491,7 @@ int pd_new(pd_t *pd,
     SERVER_GOTO_IF_ERR(error, "Failed to attach init data MO to RT\n");
 
     // Initialize the hold registry
-    resource_server_initialize_registry(&pd->hold_registry, pd_held_resource_on_delete, (void *) pd);
+    resource_server_initialize_registry(&pd->hold_registry, pd_held_resource_on_delete, (void *)pd);
 
     // Setup init data
     pd->init_data->rde_count = 0;
@@ -385,9 +513,17 @@ void pd_destroy(pd_t *pd, vka_t *server_vka, vspace_t *server_vspace)
     int error = 0;
     int pd_id = pd->id;
 
+    OSDB_PRINTF("Destroying PD (%d, %s)\n", pd_id, pd->image_name);
+    pd->deleted = true;
+
+    /* stop the PD's CPU, if not already stopped */
+    error = cpu_component_stop(pd->init_data->cpu_conn.id);
+    SERVER_GOTO_IF_ERR(error, "Failed to stop CPU (%d) while destroying PD (%d)\n",
+                       pd->init_data->cpu_conn.id, pd_id);
+
     /* decrement the refcount of the PD's binded ADS and CPU */
-    resource_component_dec(get_ads_component(), pd->init_data->ads_conn.id);
     resource_component_dec(get_cpu_component(), pd->init_data->cpu_conn.id);
+    resource_component_dec(get_ads_component(), pd->init_data->ads_conn.id);
 
     // This should destroy the CPU, if this is the only PD using it
     // Then the TCB is destroyed, including the internal copies of IPC frame cap and fault endpoint cap
@@ -412,13 +548,6 @@ void pd_destroy(pd_t *pd, vka_t *server_vka, vspace_t *server_vspace)
     sel4utils_thread_t *thread = &process->thread;
 
     // We free the IPC buf and stack as MOs
-    // if (thread->ipc_buffer_addr != 0) {
-    //     vspace_free_ipc_buffer(&process->vspace, (seL4_Word *) thread->ipc_buffer_addr);
-    // }
-    // We free the stack as an MO
-    // if (thread->stack_top != 0) {
-    //     vspace_free_sized_stack(&process->vspace, thread->stack_top, thread->stack_size);
-    // }
 
     if (thread->own_sc && thread->sched_context.cptr != 0)
     {
@@ -468,7 +597,7 @@ void pd_destroy(pd_t *pd, vka_t *server_vka, vspace_t *server_vspace)
 
     // free the MO for init data
     // the MO will be destroyed once all references are removed
-    error = ads_component_remove_from_rt((void *) pd->init_data);
+    error = ads_component_remove_from_rt((void *)pd->init_data);
     SERVER_GOTO_IF_ERR(error, "Failed to remove PD's init data from RT\n");
 
     // The PD's VKA/allocator are destroyed with allocator_mem_pool
@@ -477,8 +606,17 @@ void pd_destroy(pd_t *pd, vka_t *server_vka, vspace_t *server_vspace)
     cspacepath_t path;
     vka_cspace_make_path(server_vka, pd->pd_cap_in_RT, &path);
     vka_cnode_delete(&path);
+    SERVER_GOTO_IF_ERR(error, "Failed to delete destroyed PD's cap in RT\n");
     vka_cspace_free_path(server_vka, path);
     // The CPtrs like "ads_cap_in_RT" should be destroyed when the ADS is destroyed
+
+    // Cleanup any resource space(s) this PD held
+    error = resspc_component_sweep();
+    SERVER_GOTO_IF_ERR(error, "Failed to sweep resource spaces after PD destroy\n");
+
+    // Remove this PD from any other PDs that hold it
+    error = pd_component_resource_cleanup(GPICAP_TYPE_PD, get_pd_component()->space_id, pd_id);
+    SERVER_GOTO_IF_ERR(error, "Failed to remove destroyed PD resource from other PDs\n");
 
     return;
 
@@ -491,7 +629,7 @@ int pd_next_slot(pd_t *pd,
 {
 
     cspacepath_t path;
-    int error = vka_cspace_alloc_path(&pd->pd_vka, &path);
+    int error = vka_cspace_alloc_path(pd->pd_vka, &path);
     *next_free_slot = error == seL4_NoError ? path.capPtr : seL4_CapNull;
     return error;
 }
@@ -502,7 +640,7 @@ int pd_free_slot(pd_t *pd,
     // First try to delete slot contents,
     // ignore error if slot is already empty
     cspacepath_t path;
-    vka_cspace_make_path(&pd->pd_vka, slot, &path);
+    vka_cspace_make_path(pd->pd_vka, slot, &path);
     vka_cnode_delete(&path);
 
     /*
@@ -510,7 +648,7 @@ int pd_free_slot(pd_t *pd,
     the cap based on the current cspace
     // vka_cspace_free(&pd->pd_vka, slot);
     */
-    pd->pd_vka.cspace_free(pd->pd_vka.data, slot);
+    pd->pd_vka->cspace_free(pd->pd_vka->data, slot);
     return 0;
 }
 
@@ -521,7 +659,7 @@ int pd_alloc_ep(pd_t *pd,
     // alloc slot in pd
     cspacepath_t dest;
 
-    int error = vka_cspace_alloc_path(&pd->pd_vka, &dest);
+    int error = vka_cspace_alloc_path(pd->pd_vka, &dest);
     if (error)
     {
         return error;
@@ -547,11 +685,14 @@ int pd_bootstrap_allocator(pd_t *pd,
     allocman_t *allocator = bootstrap_create_allocman(PD_ALLOCATOR_STATIC_POOL_SIZE,
                                                       pd->allocator_mem_pool);
 
-    error = cspace_single_level_create(allocator, cspace, (struct cspace_single_level_config){.cnode = root, .cnode_size_bits = size_bits,
-                                                                                              //.cnode_guard_bits = seL4_WordBits - pd->cspace_size_bits,
-                                                                                              .cnode_guard_bits = guard_bits,
-                                                                                              .first_slot = start_slot,
-                                                                                              .end_slot = end_slot});
+    error = cspace_single_level_create(allocator,
+                                       cspace,
+                                       (struct cspace_single_level_config){
+                                           .cnode = root, .cnode_size_bits = size_bits,
+                                           //.cnode_guard_bits = seL4_WordBits - pd->cspace_size_bits,
+                                           .cnode_guard_bits = guard_bits,
+                                           .first_slot = start_slot,
+                                           .end_slot = end_slot});
     if (error != seL4_NoError)
     {
         OSDB_PRINTF("%s: Failed to initialize single-level cspace for PD id %d.\n",
@@ -567,7 +708,10 @@ int pd_bootstrap_allocator(pd_t *pd,
         return -1;
     }
 
-    allocman_make_vka(&pd->pd_vka, allocator);
+    pd->pd_vka = malloc(sizeof(vka_t));
+    assert(pd->pd_vka != NULL);
+
+    allocman_make_vka(pd->pd_vka, allocator);
     return 0;
 }
 
@@ -706,7 +850,7 @@ int pd_send_cap(pd_t *to_pd,
         if (should_mint)
         {
             seL4_CPtr new_cap = resource_server_make_badged_ep(server_vka,
-                                                               &to_pd->pd_vka,
+                                                               to_pd->pd_vka,
                                                                server_src_cap,
                                                                cap_type,
                                                                get_space_id_from_badge(badge),
@@ -877,7 +1021,8 @@ static int res_dump(pd_t *pd, model_state_t *ms, pd_hold_node_t *current_cap,
     default:
         // This is a remote resource
 
-        OSDB_PRINTF("Calling another PD to get the info for resource with ID 0x%x\n", current_cap->res_id);
+        OSDB_PRINTF("Calling another PD to get the info for resource %s_%d_%d\n",
+                    cap_type_to_str(current_cap->type), current_cap->space_id, current_cap->res_id);
 
         // (XXX) Arya: workaround to not request for individual files, there may be a better way
         gpi_cap_t file_type = get_resource_type_code("FILE");
@@ -1089,7 +1234,8 @@ void pd_debug_print_held(pd_t *pd)
 
 inline void pd_set_image_name(pd_t *pd, const char *image_name)
 {
-    pd->image_name = image_name;
+    pd->image_name = malloc(strlen(image_name) + 1);
+    strcpy(pd->image_name, image_name);
 }
 
 int pd_set_core_cap(pd_t *pd, seL4_Word core_cap_badge, seL4_CPtr core_cap)
@@ -1122,4 +1268,9 @@ int pd_set_core_cap(pd_t *pd, seL4_Word core_cap_badge, seL4_CPtr core_cap)
 
 err_goto:
     return error;
+}
+
+void pd_make_path(pd_t *pd, seL4_CPtr cap, cspacepath_t *path)
+{
+    vka_cspace_make_path(pd->pd_vka, cap, path);
 }

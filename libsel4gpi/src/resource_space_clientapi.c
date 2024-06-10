@@ -63,8 +63,7 @@ int resspc_client_connect(seL4_CPtr server_ep,
     ret_conn->resource_type = (gpi_cap_t) seL4_GetMR(RESSPCMSGREG_CONNECT_ACK_TYPE);
 
     // Free the MO
-    ads_client_rm(&ads_conn, mo_vaddr);
-    mo_component_client_disconnect(&mo_conn);
+    sel4gpi_destroy_vmr(&ads_conn, mo_vaddr, &mo_conn);
 
     return seL4_MessageInfo_ptr_get_label(&tag);
 }

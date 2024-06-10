@@ -113,33 +113,28 @@ typedef struct _pd
 {
     uint32_t id;
 
-    /* This is only for model extraction purposes */
-    const char *image_name;
-
-    /* this is only used if the PD is a process */
+    /* Fields only used for process PDs */
     sel4utils_process_t proc;
     uintptr_t sysinfo;
     int num_elf_phdrs;
     Elf64_Phdr *elf_phdrs;
     seL4_Word pagesz;
 
-    /* cnode guard for this PD's cspace */
-    seL4_Word cnode_guard;
+    /* Fields for all PDs */
+    const char *image_name;                                 ///< This is for model extraction only
+    seL4_Word cnode_guard;                                  ///< cnode guard for this PD's cspace
+    vka_t *pd_vka;                                          ///< Allocator for the PD's cspace
+    char allocator_mem_pool[PD_ALLOCATOR_STATIC_POOL_SIZE]; ///< Memory pool to bootstrap the PD's VKA
+    resource_server_registry_t hold_registry;               ///< Registry of PD's resources
+    seL4_CPtr pd_cap_in_RT;                                 ///< Slot where the PD's badged endpoint is in RT
 
-    /* allocator for the pd's cspace */
-    char allocator_mem_pool[PD_ALLOCATOR_STATIC_POOL_SIZE];
-    vka_t pd_vka;
+    mo_client_context_t init_data_mo;    ///< Init data is mapped to PD and includes RDE, etc.
+    uint64_t init_data_mo_id;            ///< (XXX) Arya: We could remove this field
+    osm_pd_init_data_t *init_data;       ///< RT vaddr of the init data
+    osm_pd_init_data_t *init_data_in_PD; ///< PD's vaddr of the init data
 
-    // PD's accessible resources
-    resource_server_registry_t hold_registry;
-
-    // Init data is mapped to PD and includes RDE and ADS/PD caps
-    mo_client_context_t init_data_mo;
-    uint64_t init_data_mo_id;
-    osm_pd_init_data_t *init_data;       // RT vaddr of the init data
-    osm_pd_init_data_t *init_data_in_PD; // PD's vaddr of the init data
-
-    seL4_CPtr pd_cap_in_RT;
+    /* other general PD metadata */
+    bool deleted; ///< Set to true while the PD is being deleted
 } pd_t;
 
 /**
@@ -214,7 +209,7 @@ void print_pd_osm_cap_info(pd_hold_node_t *o);
 void print_pd_osm_rde_info(osmosis_rde_t *o);
 
 /**
- * Add a resource that the PD holds in metadata only, the resource isn't actually minted into the PD's Cspace.
+ * Add a resource that the PD holds in metadata only, the resource isn't actually minted into the PD's cspace
  * Does not insert if the resource ID is a duplicate
  *
  * @param type the resource type
@@ -234,6 +229,19 @@ int pd_add_resource(pd_t *pd,
                     seL4_CPtr slot_in_serverPD);
 
 /**
+ * Remove a resource that the PD holds, also revoke / delete the cap in the PD's cspace
+ * Does nothing if the PD does not hold the resource
+ *
+ * @param type the resource type
+ * @param space_id the resource space ID
+ * @param res_id the resource ID (unique within the space)
+ * @return 0 on success, 1 otherwise
+ */
+int pd_remove_resource(pd_t *pd,
+                       gpi_cap_t type,
+                       uint32_t space_id,
+                       uint32_t res_id);
+/**
  * @brief Adds all resources specified in the given list to a PD
  *
  * @param pd the target PD
@@ -241,6 +249,15 @@ int pd_add_resource(pd_t *pd,
  * @return int 0 on success, an indicated error may still have successfully added some resources
  */
 int pd_bulk_add_resource(pd_t *pd, linked_list_t *resources);
+
+/**
+ * Remove all resources in the given space ID from the PD
+ *
+ * @param pd the target PD
+ * @param space_id remove all resources in this space from the PD
+ * @return 0 on success, error otherwise
+ */
+int pd_remove_resources_in_space(pd_t *pd, uint32_t space_id);
 
 /**
  * @brief gets all resources of the given type that belongs to the given PD
@@ -265,8 +282,6 @@ void pd_add_type_name(pd_t *pd,
 /**
  * @brief Add an RDE to a PD
  *
- * Note: This must be called after the PD is loaded, and before it is started
- *
  * @param pd The target PD to add an RDE to
  * @param type the type of the RDE
  * @param type_name friendly name of the type, used to get RDE entries by name
@@ -278,6 +293,18 @@ int pd_add_rde(pd_t *pd,
                char *type_name,
                uint32_t space_id,
                seL4_CPtr server_ep);
+
+/**
+ * @brief Remove an RDE from a PD
+ *
+ * @param pd The target PD to remove an RDE from
+ * @param type the type of the RDE
+ * @param space_id the resource space of this RDE
+ * @return 0 on success, error otherwise
+ */
+int pd_remove_rde(pd_t *pd,
+                  rde_type_t type,
+                  uint32_t space_id);
 
 /**
  * @brief Send a cap to a PD's cspace without badging (does NOT add the cap to the PD's resources set)
@@ -343,3 +370,12 @@ void pd_debug_print_held(pd_t *pd);
  * @return int 0 on success
  */
 int pd_set_core_cap(pd_t *pd, seL4_Word core_cap_badge, seL4_CPtr core_cap);
+
+/**
+ * Make a cspacepath for a slot in the PD's cspace
+ * 
+ * @param pd target PD
+ * @param cap a slot within the PD's cspace
+ * @param path returns the full path to the given slot
+*/
+void pd_make_path(pd_t *pd, seL4_CPtr cap, cspacepath_t *path);
