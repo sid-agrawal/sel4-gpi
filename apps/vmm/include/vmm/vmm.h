@@ -47,6 +47,10 @@ typedef struct vm_data
 } vm_data_t;
 
 void vm_init(vmm_env_t *vmm_e);
-vmm_env_t *vm_setup(seL4_IRQHandler irq_handler,
-                    vka_t *vka, vspace_t *vspace,
-                    seL4_CPtr vspace_root, seL4_CPtr asid_pool, simple_t *simple);
+
+vmm_env_t *vm_setup_native(seL4_IRQHandler irq_handler,
+                           vka_t *vka,
+                           vspace_t *vspace,
+                           seL4_CPtr vspace_root,
+                           seL4_CPtr asid_pool,
+                           simple_t *simple);

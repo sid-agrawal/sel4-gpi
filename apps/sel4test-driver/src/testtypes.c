@@ -75,7 +75,6 @@ static seL4_SlotRegion copy_untypeds_to_process(sel4utils_process_t *process,
         range.end = slot;
     }
 
-    CPRINTF("num_untypeds: %d\n", num_untypeds);
     assert((range.end - range.start) + 1 == num_untypeds);
     return range;
 }
@@ -224,12 +223,6 @@ void basic_set_up(uintptr_t e)
     error = sel4utils_configure_process_custom(&(env->test_process), &env->vka, &env->vspace, config);
     assert(error == 0);
 
-    CPRINTF("ELF regions:\n");
-    for (int i = 0; i < env->test_process.num_elf_regions; i++)
-    {
-        CPRINTF("%p, %d\n", env->test_process.elf_regions[i].elf_vstart, env->test_process.elf_regions[i].size);
-    }
-
     /* set up caps about the process */
     env->init->stack_pages = CONFIG_SEL4UTILS_STACK_SIZE / PAGE_SIZE_4K;
     env->init->stack = env->test_process.thread.stack_top - CONFIG_SEL4UTILS_STACK_SIZE;
@@ -272,15 +265,53 @@ void basic_set_up(uintptr_t e)
                                                    env->untypeds,
                                                    env->num_untypeds,
                                                    env);
-    CPRINTF("env->init->untypeds[%ld,%ld]\n", env->init->untypeds.start, env->init->untypeds.end);
+
     /* copy the fault endpoint - we wait on the endpoint for a message
      * or a fault to see when the test finishes */
     env->endpoint = sel4utils_copy_cap_to_process(&(env->test_process), &env->vka, env->test_process.fault_endpoint.cptr);
-    CPRINTF("env->endpoint: %ld\n", env->endpoint);
-    // Keep this one as the last COPY, so that  init->free_slot.start a few lines below stays valid.
-    // See at label "Warning"
-    seL4_CPtr free_slot_start = env->endpoint + 1;
 
+#ifdef CPIO_FRAME_ACCESSIBLE
+    void *data_vstart = NULL;
+    int data_size = 0;
+    for (int i = 0; i < env->test_process.num_elf_regions; i++)
+    {
+        if (!env->test_process.elf_regions[i].executable)
+        {
+            data_vstart = env->test_process.elf_regions[i].reservation_vstart;
+            data_size = env->test_process.elf_regions[i].size;
+            break;
+        }
+    }
+
+    PRINT_IF_COND(data_vstart == NULL, "Warning: No ELF data section found\n");
+    seL4_CPtr copied = seL4_CapNull;
+    bool first = true;
+
+    if (data_vstart)
+    {
+        uintptr_t data_vend = (uintptr_t)data_vstart + data_size;
+        uintptr_t curr_pos = (uintptr_t)data_vstart;
+        while (curr_pos < data_vend)
+        {
+            seL4_CPtr data_cap = vspace_get_cap(&env->test_process.vspace, (void *)curr_pos);
+            copied = sel4utils_copy_cap_to_process(&env->test_process, &env->vka, data_cap);
+            curr_pos += SIZE_BITS_TO_BYTES(seL4_PageBits);
+
+            if (first)
+            {
+                env->cpio_frames.start = copied;
+                first = false;
+            }
+        }
+    }
+
+    env->cpio_frames.end = copied;
+
+    seL4_CPtr free_slot_start = copied != seL4_CapNull ? copied + 1 : env->endpoint + 1;
+    printf("CPIO frames copied in slot region: [%ld,%ld]\n", env->cpio_frames.start, env->cpio_frames.end);
+#else
+    seL4_CPtr free_slot_start = env->endpoint + 1;
+#endif // CPIO_FRAME_ACCESSIBLE
     /* copy the device frame, if any */
     if (env->init->device_frame_cap)
     {
@@ -320,13 +351,23 @@ test_result_t basic_run_test(struct testcase *test, uintptr_t e)
 #endif
 
     /* set up args for the test process */
+#ifdef CPIO_FRAME_ACCESSIBLE
+    seL4_Word argc = 4;
+    char string_args[argc][WORD_STRING_SIZE];
+    char *argv[argc];
+    sel4utils_create_word_args(string_args, argv, argc,
+                               env->endpoint,
+                               env->remote_vaddr,
+                               env->cpio_frames.start,
+                               env->cpio_frames.end);
+#else
     seL4_Word argc = 2;
     char string_args[argc][WORD_STRING_SIZE];
     char *argv[argc];
     sel4utils_create_word_args(string_args, argv, argc,
                                env->endpoint,
                                env->remote_vaddr);
-
+#endif // CPIO_FRAME_ACCESSIBLE
     int num_res;
 
 /* spawn the process */

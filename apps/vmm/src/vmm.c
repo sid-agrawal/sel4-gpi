@@ -13,6 +13,7 @@
 #include "tcb.h"
 #include "vcpu.h"
 #include "vmm/vmm.h"
+#include <cpio/cpio.h>
 #include <vka/vka.h>
 #include <sel4/sel4.h>
 #include <vka/object.h>
@@ -87,17 +88,30 @@
 
 #define VM_CNODE_BITS 7
 
+// /* Data for the guest's kernel image. */
+// extern char _guest_kernel_image[];
+// extern char _guest_kernel_image_end[];
+// /* Data for the device tree to be passed to the kernel. */
+// extern char _guest_dtb_image[];
+// extern char _guest_dtb_image_end[];
+// /* Data for the initial RAM disk to be passed to the kernel. */
+// extern char _guest_initrd_image[];
+// extern char _guest_initrd_image_end[];
+
 /* Data for the guest's kernel image. */
-extern char _guest_kernel_image[];
-extern char _guest_kernel_image_end[];
+char _guest_kernel_image[1];
+char _guest_kernel_image_end[1];
 /* Data for the device tree to be passed to the kernel. */
-extern char _guest_dtb_image[];
-extern char _guest_dtb_image_end[];
+char _guest_dtb_image[1];
+char _guest_dtb_image_end[1];
 /* Data for the initial RAM disk to be passed to the kernel. */
-extern char _guest_initrd_image[];
-extern char _guest_initrd_image_end[];
+char _guest_initrd_image[1];
+char _guest_initrd_image_end[1];
 
 // static vmm_env_t vmm_env;
+/* guest images are stored here */
+extern char _cpio_archive[];
+extern char _cpio_archive_end[];
 
 static void serial_ack(size_t vcpu_id, int irq, void *cookie)
 {
@@ -112,7 +126,12 @@ static void serial_ack(size_t vcpu_id, int irq, void *cookie)
     ZF_LOGE_IFERR(error, "Failed to ACK serial interrupt");
 }
 
-vmm_env_t *vm_setup(seL4_IRQHandler irq_handler, vka_t *vka, vspace_t *vspace, seL4_CPtr vspace_root, seL4_CPtr asid_pool, simple_t *simple)
+vmm_env_t *vm_setup_native(seL4_IRQHandler irq_handler,
+                           vka_t *vka,
+                           vspace_t *vspace,
+                           seL4_CPtr vspace_root,
+                           seL4_CPtr asid_pool,
+                           simple_t *simple)
 {
     int error;
     seL4_Error serr;
@@ -204,8 +223,6 @@ vmm_env_t *vm_setup(seL4_IRQHandler irq_handler, vka_t *vka, vspace_t *vspace, s
 
 #ifdef BOARD_qemu_arm_virt
     /* map in serial device region */
-    /* (XXX) Linh: why are we able to allocate frames at this paddr? */
-
     error = vka_alloc_frame_at(vka, seL4_PageBits, (uintptr_t)SERIAL_PADDR, &vmm_e->serial_dev_frame[0]);
     ZF_LOGF_IF(error, "Failed to allocate serial device frame");
 
@@ -252,16 +269,28 @@ vmm_env_t *vm_setup(seL4_IRQHandler irq_handler, vka_t *vka, vspace_t *vspace, s
     ZF_LOGF_IF(error, "Failed to map odroid bus 3 region to VM");
 #endif
     /* guest ram */
-    size_t num_pages = DIV_ROUND_UP(GUEST_RAM_SIZE, SIZE_BITS_TO_BYTES(seL4_LargePageBits));
+    /* get CPIO archive */
 
-    seL4_CPtr kernel_img_cap = vspace_get_cap(vmm_e->vspace, _guest_kernel_image);
-    FATAL_IF_ERR(1, "AAA!, kernel_img_cap: %lx, guest_img_vaddr: %p\n", kernel_img_cap, _guest_kernel_image);
+    unsigned long size;
+    unsigned long cpio_len = _cpio_archive_end - _cpio_archive;
+    char const *file = cpio_get_file(_cpio_archive, cpio_len, "linux", &size);
+    seL4_CPtr cap = vspace_get_cap(vmm_e->vspace, (void *)file);
+    CPRINTF("linux: %p, size: %ld, cap: %lx\n", file, size, cap);
+
+    file = cpio_get_file(_cpio_archive, cpio_len, "linux.dtb", &size);
+    cap = vspace_get_cap(vmm_e->vspace, (void *)file);
+    CPRINTF("linux.dtb: %p, size: %ld, cap: %lx\n", file, size, cap);
+
+    file = cpio_get_file(_cpio_archive, cpio_len, "rootfs.cpio.gz", &size);
+    cap = vspace_get_cap(vmm_e->vspace, (void *)file);
+    CPRINTF("rootfs.cpio.gz: %p, size: %ld, cap: %lx\n", file, size, cap);
+
+    size_t num_pages = DIV_ROUND_UP(GUEST_RAM_SIZE, SIZE_BITS_TO_BYTES(seL4_LargePageBits));
 
     res = vspace_reserve_range_at(&vmm_e->vm_vspace, (void *)GUEST_RAM_VADDR, GUEST_RAM_SIZE, seL4_AllRights, 1);
     seL4_CPtr ram_frames[num_pages];
     vka_object_t frame;
 #ifdef BOARD_qemu_arm_virt
-    /* (XXX) Linh: why are we able to allocate frames at this paddr? */
     uintptr_t paddr = GUEST_RAM_PADDR;
     for (size_t i = 0; i < num_pages; i++)
     {
@@ -274,7 +303,6 @@ vmm_env_t *vm_setup(seL4_IRQHandler irq_handler, vka_t *vka, vspace_t *vspace, s
     error = vspace_map_pages_at_vaddr(&vmm_e->vm_vspace, ram_frames, NULL, (void *)GUEST_RAM_VADDR, num_pages, seL4_LargePageBits, res);
     ZF_LOGF_IF(error, "Failed to map guest RAM in VMM's vspace");
 #elif BOARD_odroidc4
-    CPRINTF("A\n");
     for (size_t i = 0; i < num_pages; i++)
     {
         error = vka_alloc_frame(vka, seL4_LargePageBits, &frame);
@@ -286,10 +314,7 @@ vmm_env_t *vm_setup(seL4_IRQHandler irq_handler, vka_t *vka, vspace_t *vspace, s
     ZF_LOGF_IF(error, "Failed to map guest RAM in VMM's vspace");
 
 #endif
-    CPRINTF("B\n");
-
     error = sel4utils_share_mem_at_vaddr(&vmm_e->vm_vspace, vmm_e->vspace, (void *)GUEST_RAM_VADDR, num_pages, seL4_LargePageBits, (void *)GUEST_RAM_VADDR, res);
-    // error = vspace_map_pages(vmm_e->vspace, ram_frames, NULL, seL4_AllRights, num_pages, seL4_LargePageBits, 1);
     ZF_LOGF_IF(error, "Failed to copy guest RAM to VM's vspace");
 
     // FATAL_IF_ERR(1, "AAA!\n");

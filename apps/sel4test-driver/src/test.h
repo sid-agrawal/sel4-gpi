@@ -101,6 +101,10 @@ struct driver_env
 
     /* irq handler for serial driver */
     seL4_CPtr serial_irq_handler;
+
+#ifdef CPIO_FRAME_ACCESSIBLE
+    seL4_SlotRegion cpio_frames;
+#endif // CPIO_FRAME_ACCESSIBLE
 };
 typedef struct driver_env *driver_env_t;
 

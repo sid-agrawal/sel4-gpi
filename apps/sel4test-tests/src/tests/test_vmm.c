@@ -27,8 +27,13 @@ int test_new_vmm_native(env_t env)
     int error;
     printf("------------------STARTING: %s------------------\n", __func__);
 
-    vmm_env_t *vmm_e = vm_setup(env->irq_handler, &env->vka, &env->vspace, env->page_directory, env->asid_pool, &env->simple);
-    vm_init(vmm_e);
+    vmm_env_t *vmm_e = vm_setup_native(env->irq_handler,
+                                       &env->vka,
+                                       &env->vspace,
+                                       env->page_directory,
+                                       env->asid_pool,
+                                       &env->simple);
+    // vm_init(vmm_e);
 
     seL4_DebugDumpScheduler();
 

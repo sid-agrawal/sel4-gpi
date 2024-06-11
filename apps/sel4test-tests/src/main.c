@@ -48,10 +48,6 @@ extern char _cpio_archive_end[];
 
 /* endpoint to call back to the test driver on */
 static seL4_CPtr endpoint;
-static seL4_CPtr gpi_endpoint;
-static seL4_CPtr self_as_cap;
-static seL4_CPtr self_cpu_cap;
-static seL4_CPtr self_pd_cap;
 
 /* global static memory for init */
 static sel4utils_alloc_data_t alloc_data;
@@ -159,8 +155,6 @@ static void init_allocator(env_t env, test_init_data_t *init_data)
         }
     }
 
-    CPRINTF("untypeds found in test process: %zu\n", total_size);
-
     /* add any arch specific objects to the allocator */
     arch_init_allocator(env, init_data);
 
@@ -174,8 +168,14 @@ static void init_allocator(env_t env, test_init_data_t *init_data)
         existing_frames[i + 2] = init_data->stack + (i * PAGE_SIZE_4K);
     }
 
+#ifdef CPIO_FRAME_ACCESSIBLE
+    error = sel4utils_bootstrap_vspace_cpio(&env->vspace, &alloc_data, init_data->page_directory, &env->vka,
+                                            NULL, NULL, existing_frames,
+                                            &env->cpio_frames, _cpio_archive, _cpio_archive_end);
+#else
     error = sel4utils_bootstrap_vspace(&env->vspace, &alloc_data, init_data->page_directory, &env->vka,
                                        NULL, NULL, existing_frames);
+#endif // CPIO_FRAME_ACCESSIBLE
 
     /* switch the allocator to a virtual memory pool */
     void *vaddr;
@@ -235,11 +235,16 @@ int main(int argc, char **argv)
     struct env env;
 
     /* parse args */
-    assert(argc == 2);
+    assert(argc >= 2);
     endpoint = (seL4_CPtr)atoi(argv[0]);
 
     /* read in init data */
     init_data = (void *)atol(argv[1]);
+
+#ifdef CPIO_FRAME_ACCESSIBLE
+    env.cpio_frames.start = (seL4_SlotPos)atol(argv[2]);
+    env.cpio_frames.end = (seL4_SlotPos)atol(argv[3]);
+#endif // CPIO_FRAME_ACCESSIBLE
 
     /* configure env */
     env.cspace_root = init_data->root_cnode;
@@ -269,22 +274,11 @@ int main(int argc, char **argv)
 
     /* initialse cspace, vspace and untyped memory allocation */
     init_allocator(&env, init_data);
-    // printf("%s %d self_as_cptr is %d: ", __FUNCTION__, __LINE__, self_as_cap);
-    // debug_cap_identify("test-main", self_as_cap);
-
-    // printf("%s %d ads_endpoint is %ld: ", __FUNCTION__, __LINE__, gpi_endpoint);
-    // debug_cap_identify("test-main", gpi_endpoint);
     /* initialise simple */
     init_simple(&env, init_data);
 
     /* initialise rpc client */
     sel4rpc_client_init(&env.rpc_client, env.endpoint, SEL4TEST_PROTOBUF_RPC);
-
-    // vka_object_t frame = {0};
-    // int error = vka_alloc_frame_at(&env.vka, seL4_LargePageBits, 0x40000000, &frame);
-    // seL4_Word paddr = seL4_DebugCapPaddr(frame.cptr);
-    // seL4_Word type = seL4_DebugCapIdentify(frame.cptr);
-    // CPRINTF("alloc frame at error: %d, frame cptr: %lx, paddr: %lx, type: %ld\n", error, frame.cptr, paddr, type);
 
     /* find the test */
     testcase_t *test = find_test(init_data->name);

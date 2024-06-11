@@ -170,7 +170,6 @@ static unsigned int allocate_untypeds(vka_object_t *untypeds, size_t bytes, unsi
         }
     }
 
-    CPRINTF("allocated: %zu, num_untyped: %u\n", allocated, num_untypeds);
     return num_untypeds;
 }
 
@@ -596,10 +595,6 @@ void *main_continued(void *arg UNUSED)
                                            &env.gpi_endpoint_in_parent);
     // printf(GPISERVP "Public EP is: %d\n", env.gpi_endpoint_in_parent);
     // debug_cap_identify(GPISERVP, env.gpi_endpoint_in_parent);
-
-    // vka_object_t frame = {0};
-    // error = vka_alloc_frame_at(&env.vka, seL4_LargePageBits, 0x40000000, &frame);
-    // CPRINTF("alloc frame at error: %d\n", error);
 
     /* now run the tests */
     sel4test_run_tests(&env);
