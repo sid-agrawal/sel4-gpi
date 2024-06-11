@@ -96,7 +96,7 @@ typedef struct _pd_hold_node
 /**
  * The data given to initialize a new Osmosis PD
  */
-typedef struct _osm_pd_init_data
+typedef struct _osm_pd_shared_data
 {
     pd_client_context_t pd_conn;   ///< Connection to the PD's own PD resource
     ads_client_context_t ads_conn; ///< Connection to the PD's own ADS resource
@@ -107,7 +107,12 @@ typedef struct _osm_pd_init_data
     char type_names[GPICAP_TYPE_MAX][RESOURCE_TYPE_MAX_STRING_SIZE]; ///< Friendly names of cap types
     osmosis_rde_t rde[GPICAP_TYPE_MAX][MAX_NS_PER_RDE];              ///< Resource directory
     uint64_t rde_count;
-} osm_pd_init_data_t;
+
+    uint64_t current_client_id; ///< Resource server sets this field while processing a client request
+                                ///< If the server crashes before it finishes, the client will also be killed
+    seL4_CPtr reply_cap;        ///< For resource servers, store the reply cap of the
+                                ///< request that is currently being processed
+} osm_pd_shared_data_t;
 
 typedef struct _pd
 {
@@ -128,10 +133,9 @@ typedef struct _pd
     resource_server_registry_t hold_registry;               ///< Registry of PD's resources
     seL4_CPtr pd_cap_in_RT;                                 ///< Slot where the PD's badged endpoint is in RT
 
-    mo_client_context_t init_data_mo;    ///< Init data is mapped to PD and includes RDE, etc.
-    uint64_t init_data_mo_id;            ///< (XXX) Arya: We could remove this field
-    osm_pd_init_data_t *init_data;       ///< RT vaddr of the init data
-    osm_pd_init_data_t *init_data_in_PD; ///< PD's vaddr of the init data
+    uint64_t shared_data_mo_id;              ///< Shared data is mapped to PD and includes RDE, etc.
+    osm_pd_shared_data_t *shared_data;       ///< RT vaddr of the shared data
+    osm_pd_shared_data_t *shared_data_in_PD; ///< PD's vaddr of the shared
 
     /* other general PD metadata */
     bool deleted; ///< Set to true while the PD is being deleted
@@ -373,9 +377,9 @@ int pd_set_core_cap(pd_t *pd, seL4_Word core_cap_badge, seL4_CPtr core_cap);
 
 /**
  * Make a cspacepath for a slot in the PD's cspace
- * 
+ *
  * @param pd target PD
  * @param cap a slot within the PD's cspace
  * @param path returns the full path to the given slot
-*/
+ */
 void pd_make_path(pd_t *pd, seL4_CPtr cap, cspacepath_t *path);

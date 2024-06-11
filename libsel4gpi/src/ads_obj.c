@@ -817,8 +817,8 @@ int ads_write_arguments(pd_t *pd,
     auxv[5].a_type = AT_SEL4_TCB;
     auxv[5].a_un.a_val = seL4_CapNull; // Is it ok that we don't give the process access to its TCB?
 
-    auxv[6].a_type = AT_OSM_INIT_DATA;
-    auxv[6].a_un.a_val = (uint64_t)pd->init_data_in_PD;
+    auxv[6].a_type = AT_OSM_SHARED_DATA;
+    auxv[6].a_un.a_val = (uint64_t)pd->shared_data_in_PD;
 
     if (pd->sysinfo)
     {

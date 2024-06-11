@@ -170,12 +170,12 @@ err_goto:
  * @param dest_stack address of the top of dest_stack in the current ADS
  * @param stack_pages number of pages in the stack (NOT including guard)
  * @param ipc_buffer_addr address of the ipc buffer (OPTIONAL)
- * @param osm_init_data address of the osm_pd_init_data_t struct
+ * @param osm_shared_data address of the osm_pd_shared_data_t struct
  * @param ret_sp returns the stack pointer after alignment
  * @param ret_tp returns the thread pointer after writing to the TLS
  * @return int returns 0 on success, 1 on failure
  */
-static int setup_tls_in_stack(void *dest_stack, size_t stack_pages, void *ipc_buffer_addr, void *osm_init_data, void **ret_sp, void **ret_tp)
+static int setup_tls_in_stack(void *dest_stack, size_t stack_pages, void *ipc_buffer_addr, void *osm_shared_data, void **ret_sp, void **ret_tp)
 {
     int error = 0;
     size_t tls_size = sel4runtime_get_tls_size();
@@ -191,7 +191,7 @@ static int setup_tls_in_stack(void *dest_stack, size_t stack_pages, void *ipc_bu
         sel4runtime_set_tls_variable(tp, __sel4_ipc_buffer, ipc_buf);
     }
 
-    sel4runtime_set_tls_variable(tp, __sel4gpi_osm_data, osm_init_data);
+    sel4runtime_set_tls_variable(tp, __sel4gpi_osm_data, osm_shared_data);
 
     *ret_sp = (void *)ALIGN_DOWN(tls_base, STACK_CALL_ALIGNMENT);
     *ret_tp = (void *)tp;
@@ -353,10 +353,10 @@ int sel4gpi_start_pd(pd_config_t *cfg, sel4gpi_runnable_t *runnable, int argc, s
     void *entry_point = NULL;
     void *stack = NULL;
     void *ipc_buf = NULL;
-    void *osm_init_data = NULL;
+    void *osm_shared_data = NULL;
 
     error = sel4gpi_ads_configure(&cfg->ads_cfg, runnable, &cfg->osm_data_mo,
-                                  &stack, &ipc_buf, &entry_point, &osm_init_data, &ipc_mo);
+                                  &stack, &ipc_buf, &entry_point, &osm_shared_data, &ipc_mo);
     GOTO_IF_ERR(error, "Failed to configure ADS\n");
 
     error = rde_configure(cfg, runnable);
@@ -408,7 +408,7 @@ int sel4gpi_start_pd(pd_config_t *cfg, sel4gpi_runnable_t *runnable, int argc, s
         {
             PD_CREATION_PRINT("C Runtime already initialized, setup the TLS ourselves\n");
             void *tp = NULL;
-            error = setup_tls_in_stack(stack, cfg->ads_cfg.stack_pages, ipc_buf, osm_init_data, &stack, &tp);
+            error = setup_tls_in_stack(stack, cfg->ads_cfg.stack_pages, ipc_buf, osm_shared_data, &stack, &tp);
             GOTO_IF_ERR(error, "failed to write TLS\n");
 
             error = cpu_client_set_tls_base(&runnable->cpu, tp);
@@ -423,7 +423,7 @@ int sel4gpi_start_pd(pd_config_t *cfg, sel4gpi_runnable_t *runnable, int argc, s
                                         args,
                                         entry_point,
                                         ipc_buf,
-                                        osm_init_data,
+                                        osm_shared_data,
                                         setup_mode);
         GOTO_IF_ERR(error, "failed to prepare runtime");
     }
@@ -532,17 +532,17 @@ pd_config_t *sel4gpi_generate_thread_config(void *thread_fn, seL4_CPtr fault_ep,
     linked_list_insert_many(thread_cfg->ads_cfg.vmr_cfgs, n_cfgs, stack_cfg, ipc_buf_cfg);
 
     // give the thread PD all of our current RDEs
-    osm_pd_init_data_t *init_data = ((osm_pd_init_data_t *)sel4runtime_get_osm_init_data());
+    osm_pd_shared_data_t *shared_data = ((osm_pd_shared_data_t *)sel4runtime_get_osm_shared_data());
     thread_cfg->rde_cfg = linked_list_new();
     for (int i = GPICAP_TYPE_NONE + 1; i < GPICAP_TYPE_MAX; i++)
     {
         for (int j = 0; j < MAX_NS_PER_RDE; j++)
         {
-            if (init_data->rde[i][j].type.type != GPICAP_TYPE_NONE)
+            if (shared_data->rde[i][j].type.type != GPICAP_TYPE_NONE)
             {
                 rde_config_t *rde = calloc(1, sizeof(rde_config_t));
-                rde->type = init_data->rde[i][j].type.type;
-                rde->space_id = init_data->rde[i][j].space_id;
+                rde->type = shared_data->rde[i][j].type.type;
+                rde->space_id = shared_data->rde[i][j].space_id;
                 linked_list_insert(thread_cfg->rde_cfg, rde);
             }
         }

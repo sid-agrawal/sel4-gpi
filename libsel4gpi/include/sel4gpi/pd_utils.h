@@ -20,6 +20,8 @@
 /* OSmosis data on the TLS */
 extern __thread void *__sel4gpi_osm_data;
 
+/** FUNCTIONS TO INTERACT WITH OSMOSIS SHARED DATA **/
+
 /*
  * Get the current PD's connection object from the env
  */
@@ -94,6 +96,25 @@ seL4_CPtr sel4gpi_get_rde_by_space_id(uint32_t space_id, gpi_cap_t type);
  *
  */
 void sel4gpi_debug_print_rde(void);
+
+/**
+ * For a resource manager to store a copy of the reply cap.
+ * This should be done immediately after receiving a message.
+*/
+void sel4gpi_store_reply_cap(void);
+
+/**
+ * For a resource manager to retrieve a copy of the reply cap.
+*/
+seL4_CPtr sel4gpi_get_reply_cap(void);
+
+/**
+ * For a resource manager to clear the reply ap.
+ * This should be called when a request is complete.
+*/
+void sel4gpi_clear_reply_cap(void);
+
+/** OTHER UTIL FUNCTIONS **/
 
 /**
  * Set the exit callback to the default GPI exit handler

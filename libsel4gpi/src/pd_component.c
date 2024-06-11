@@ -285,7 +285,7 @@ static seL4_MessageInfo_t handle_share_rde_req(seL4_Word sender_badge, seL4_Mess
     rde_type_t rde_type = {.type = type};
     error = pd_add_rde(&target_data->pd,
                        rde_type,
-                       client_data->pd.init_data->type_names[type],
+                       client_data->pd.shared_data->type_names[type],
                        rde->space_id,
                        resource_space_data->space.server_ep);
 
@@ -486,7 +486,7 @@ static seL4_MessageInfo_t handle_runtime_setup_req(seL4_Word sender_badge, seL4_
         void *ipc_buf_addr = (void *)seL4_GetMR(PDMSGREG_SETUP_REQ_IPC_BUF);
         pd_setup_type_t setup_mode = (pd_setup_type_t)seL4_GetMR(PDMSGREG_SETUP_REQ_TYPE);
 
-        target_pd->pd.init_data_in_PD = (void *)seL4_GetMR(PDMSGREG_SETUP_REQ_OSM_DATA);
+        target_pd->pd.shared_data_in_PD = (void *)seL4_GetMR(PDMSGREG_SETUP_REQ_OSM_DATA);
         switch (setup_mode)
         {
         case PD_RUNTIME_SETUP:
@@ -683,7 +683,7 @@ void forge_pd_for_root_task(uint64_t rt_id)
 // (XXX) Arya: hack to store the test PD ID for destroying it later
 uint64_t test_pd_id;
 
-void forge_pd_cap_from_init_data(test_init_data_t *init_data, sel4utils_process_t *test_process, void **osm_init_data)
+void forge_pd_cap_from_init_data(test_init_data_t *init_data, sel4utils_process_t *test_process, void **osm_shared_data)
 {
     int error = 0;
     SERVER_GOTO_IF_COND(init_data == NULL, "Test PD's init data is NULL\n");
@@ -692,20 +692,20 @@ void forge_pd_cap_from_init_data(test_init_data_t *init_data, sel4utils_process_
     pd_component_registry_entry_t *new_entry;
 
     /* Allocate an MO to hold PD's OSmosis data */
-    mo_t *init_data_mo;
-    error = mo_component_allocate(1, &init_data_mo);
+    mo_t *shared_data_mo;
+    error = mo_component_allocate(1, &shared_data_mo);
     SERVER_GOTO_IF_ERR(error, "Failed to allocate MO for new PD's init data\n");
 
     /* Allocate the PD object */
     error = resource_component_allocate(get_pd_component(), get_gpi_server()->rt_pd_id,
-                                        BADGE_OBJ_ID_NULL, false, init_data_mo,
+                                        BADGE_OBJ_ID_NULL, false, shared_data_mo,
                                         (resource_server_registry_node_t **)&new_entry, &ret_cap);
     SERVER_GOTO_IF_ERR(error, "Failed to allocate PD for forging");
 
     pd_t *pd = &new_entry->pd;
     test_pd_id = pd->id;
     pd->pd_cap_in_RT = ret_cap;
-    pd->init_data->pd_conn.id = test_pd_id;
+    pd->shared_data->pd_conn.id = test_pd_id;
 
     /* Update the PD object from init data */
     // pd_new(pd,
@@ -744,7 +744,7 @@ void forge_pd_cap_from_init_data(test_init_data_t *init_data, sel4utils_process_
     uint32_t ads_id;
     error = forge_ads_cap_from_vspace(&test_process->vspace, get_pd_component()->server_vka, pd->id, &child_as_cap_in_parent, &ads_id);
     SERVER_GOTO_IF_ERR(error, "Failed to forge child's as cap");
-    pd->init_data->ads_conn.id = ads_id;
+    pd->shared_data->ads_conn.id = ads_id;
     resource_component_inc(get_ads_component(), ads_id);
 
     // Forge CPU cap
@@ -752,34 +752,35 @@ void forge_pd_cap_from_init_data(test_init_data_t *init_data, sel4utils_process_
     uint32_t cpu_id;
     error = forge_cpu_cap_from_tcb(test_process, get_pd_component()->server_vka, pd->id, &child_cpu_cap_in_parent, &cpu_id);
     SERVER_GOTO_IF_ERR(error, "Failed to forge child's CPU cap");
-    pd->init_data->cpu_conn.id = cpu_id;
+    pd->shared_data->cpu_conn.id = cpu_id;
     resource_component_inc(get_cpu_component(), cpu_id);
 
     // Copy the ADS/CPU/PD caps to the test process
     // The ADS/CPU is 2 (1 for holding, 1 for binding)
-    error = copy_cap_to_pd(pd, child_as_cap_in_parent, &pd->init_data->ads_conn.badged_server_ep_cspath.capPtr);
+    error = copy_cap_to_pd(pd, child_as_cap_in_parent, &pd->shared_data->ads_conn.badged_server_ep_cspath.capPtr);
     SERVER_GOTO_IF_ERR(error, "Failed to copy cap to PD\n");
     pd_add_resource(pd, GPICAP_TYPE_ADS, get_ads_component()->space_id, ads_id,
-                    child_as_cap_in_parent, pd->init_data->ads_conn.badged_server_ep_cspath.capPtr, child_as_cap_in_parent);
+                    child_as_cap_in_parent, pd->shared_data->ads_conn.badged_server_ep_cspath.capPtr, child_as_cap_in_parent);
 
-    error = copy_cap_to_pd(pd, pd->pd_cap_in_RT, &pd->init_data->pd_conn.badged_server_ep_cspath.capPtr);
+    error = copy_cap_to_pd(pd, pd->pd_cap_in_RT, &pd->shared_data->pd_conn.badged_server_ep_cspath.capPtr);
     SERVER_GOTO_IF_ERR(error, "Failed to copy cap to PD\n");
     pd_add_resource(pd, GPICAP_TYPE_PD, get_pd_component()->space_id, pd->id,
-                    pd->pd_cap_in_RT, pd->init_data->pd_conn.badged_server_ep_cspath.capPtr, pd->pd_cap_in_RT);
+                    pd->pd_cap_in_RT, pd->shared_data->pd_conn.badged_server_ep_cspath.capPtr, pd->pd_cap_in_RT);
 
-    error = copy_cap_to_pd(pd, child_cpu_cap_in_parent, &pd->init_data->cpu_conn.badged_server_ep_cspath.capPtr);
+    error = copy_cap_to_pd(pd, child_cpu_cap_in_parent, &pd->shared_data->cpu_conn.badged_server_ep_cspath.capPtr);
     SERVER_GOTO_IF_ERR(error, "Failed to copy cap to PD\n");
     pd_add_resource(pd, GPICAP_TYPE_CPU, get_cpu_component()->space_id, cpu_id,
-                    child_cpu_cap_in_parent, pd->init_data->cpu_conn.badged_server_ep_cspath.capPtr, child_cpu_cap_in_parent);
+                    child_cpu_cap_in_parent, pd->shared_data->cpu_conn.badged_server_ep_cspath.capPtr, child_cpu_cap_in_parent);
 
     // Attach the init data to test PD
-    void *init_data_vaddr = (void *)0x50000000;
-    error = ads_component_attach(ads_id, pd->init_data_mo_id, SEL4UTILS_RES_TYPE_GENERIC, init_data_vaddr, &init_data_vaddr);
+    void *shared_data_vaddr = (void *)0x50000000;
+    error = ads_component_attach(ads_id, pd->shared_data_mo_id, SEL4UTILS_RES_TYPE_GENERIC,
+                                 shared_data_vaddr, &shared_data_vaddr);
     SERVER_GOTO_IF_ERR(error, "Failed to attach OSmosis data to test PD\n");
 
-    *osm_init_data = init_data_vaddr;
-    pd->init_data_in_PD = init_data_vaddr;
-    OSDB_PRINTF("Test process init data is at %p\n", pd->init_data_in_PD);
+    *osm_shared_data = shared_data_vaddr;
+    pd->shared_data_in_PD = shared_data_vaddr;
+    OSDB_PRINTF("Test process init data is at %p\n", pd->shared_data_in_PD);
 
 err_goto:
     return error;

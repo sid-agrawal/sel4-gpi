@@ -149,12 +149,3 @@ int forge_cpu_cap_from_tcb(sel4utils_process_t *proc, vka_t *vka, uint32_t clien
  * @return 0 on success, error otherwise
 */
 int cpu_component_stop(uint32_t cpu_id);
-
-/**
- * Get the CPU's TCB reply cap
- * 
- * @param cpu_id ID of the target cpu
- * @param reply_cap returns the slot of the reply cap, within the current PD's cspace
- * @return 0 on success, error otherwise
-*/
-int cpu_component_get_reply_cap(uint32_t cpu_id, seL4_CPtr *reply_cap);

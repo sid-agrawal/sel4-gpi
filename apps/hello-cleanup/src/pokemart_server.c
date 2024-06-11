@@ -1,4 +1,5 @@
 #include <pokemart_server.h>
+#include <sel4gpi/pd_utils.h>
 
 #define PRINTF(...)                                   \
     do                                                \

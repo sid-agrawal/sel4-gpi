@@ -201,13 +201,13 @@ static int pd_rde_find_idx(pd_t *pd,
     // search within the entries for this type and space id
     for (int i = 0; i < MAX_NS_PER_RDE; i++)
     {
-        if (space_id == RESSPC_ID_NULL && pd->init_data->rde[type][i].type.type == type)
+        if (space_id == RESSPC_ID_NULL && pd->shared_data->rde[type][i].type.type == type)
         {
             // Just return the first entry we find if given a null space ID
             idx = i;
             break;
         }
-        else if (pd->init_data->rde[type][i].space_id == space_id)
+        else if (pd->shared_data->rde[type][i].space_id == space_id)
         {
             idx = i;
             break;
@@ -229,7 +229,7 @@ osmosis_rde_t *pd_rde_get(pd_t *pd,
     }
     else
     {
-        return &pd->init_data->rde[type][idx];
+        return &pd->shared_data->rde[type][idx];
     }
 }
 
@@ -237,7 +237,7 @@ void pd_add_type_name(pd_t *pd,
                       rde_type_t type,
                       char *type_name)
 {
-    strncpy(pd->init_data->type_names[type.type], type_name, RESOURCE_TYPE_MAX_STRING_SIZE);
+    strncpy(pd->shared_data->type_names[type.type], type_name, RESOURCE_TYPE_MAX_STRING_SIZE);
 }
 
 int pd_add_rde(pd_t *pd,
@@ -251,7 +251,7 @@ int pd_add_rde(pd_t *pd,
 
     for (int i = 0; i < MAX_NS_PER_RDE; i++)
     {
-        osmosis_rde_t rde = pd->init_data->rde[type.type][i];
+        osmosis_rde_t rde = pd->shared_data->rde[type.type][i];
         if (rde.space_id == space_id && rde.type.type == type.type)
         {
             // The entry already exists
@@ -275,10 +275,10 @@ int pd_add_rde(pd_t *pd,
 
     pd_add_type_name(pd, type, type_name);
 
-    pd->init_data->rde[type.type][idx].space_id = space_id;
+    pd->shared_data->rde[type.type][idx].space_id = space_id;
     /* we don't really need to keep this if we index by type, but let's just keep it around for now */
-    pd->init_data->rde[type.type][idx].type = type;
-    pd->init_data->rde[type.type][idx].slot_in_RT = server_ep;
+    pd->shared_data->rde[type.type][idx].type = type;
+    pd->shared_data->rde[type.type][idx].slot_in_RT = server_ep;
 
     // Badge the endpoint into the client PD
     uint32_t client_id = pd->id;
@@ -308,11 +308,11 @@ int pd_add_rde(pd_t *pd,
         return error;
     }
 
-    pd->init_data->rde[type.type][idx].slot_in_PD = dest.capPtr;
+    pd->shared_data->rde[type.type][idx].slot_in_PD = dest.capPtr;
 
     OSDB_PRINTF("Added new RDE of type %s to PD %d, in slot %d, with badge %lx\n", cap_type_to_str(type.type), client_id, (int)dest.capPtr, badge_val);
 
-    pd->init_data->rde_count++;
+    pd->shared_data->rde_count++;
     return 0;
 }
 
@@ -329,7 +329,7 @@ int pd_remove_rde(pd_t *pd,
 
     for (int i = 0; i < MAX_NS_PER_RDE; i++)
     {
-        osmosis_rde_t rde = pd->init_data->rde[type.type][i];
+        osmosis_rde_t rde = pd->shared_data->rde[type.type][i];
 
         if (rde.type.type == type.type && (space_id == RESSPC_ID_NULL || rde.space_id == space_id))
         {
@@ -348,21 +348,21 @@ int pd_remove_rde(pd_t *pd,
     // Revoke / delete the RDE endpoint
     // The RDE ep is badged once per client, so this will only delete this PD's copy of the endpoint
     cspacepath_t rde_ep_path;
-    vka_cspace_make_path(pd->pd_vka, pd->init_data->rde[type.type][idx].slot_in_PD, &rde_ep_path);
+    vka_cspace_make_path(pd->pd_vka, pd->shared_data->rde[type.type][idx].slot_in_PD, &rde_ep_path);
     error = vka_cnode_revoke(&rde_ep_path);
     SERVER_GOTO_IF_ERR(error, "Failed to revoke RDE endpoint (slot %d) for PD (%d)\n", rde_ep_path.capPtr, pd->id);
     error = vka_cnode_delete(&rde_ep_path);
     SERVER_GOTO_IF_ERR(error, "Failed to delete RDE endpoint (slot %d) for PD (%d)\n", rde_ep_path.capPtr, pd->id);
 
     // Clear the entry
-    pd->init_data->rde[type.type][idx].space_id = RESSPC_ID_NULL;
-    pd->init_data->rde[type.type][idx].type.type = GPICAP_TYPE_NONE;
-    pd->init_data->rde[type.type][idx].slot_in_RT = seL4_CapNull;
-    pd->init_data->rde[type.type][idx].slot_in_PD = seL4_CapNull;
+    pd->shared_data->rde[type.type][idx].space_id = RESSPC_ID_NULL;
+    pd->shared_data->rde[type.type][idx].type.type = GPICAP_TYPE_NONE;
+    pd->shared_data->rde[type.type][idx].slot_in_RT = seL4_CapNull;
+    pd->shared_data->rde[type.type][idx].slot_in_PD = seL4_CapNull;
 
     OSDB_PRINTF("Removed RDE of type %s, space %d from PD (%d)\n", cap_type_to_str(type.type), space_id, pd->id);
 
-    pd->init_data->rde_count--;
+    pd->shared_data->rde_count--;
 
 err_goto:
     return error;
@@ -486,17 +486,17 @@ int pd_new(pd_t *pd,
 
     SERVER_GOTO_IF_COND(osm_data_mo == NULL, "No MO given to hold PD's OSmosis data\n");
 
-    pd->init_data_mo_id = osm_data_mo->id;
-    error = ads_component_attach_to_rt(osm_data_mo->id, &pd->init_data);
+    pd->shared_data_mo_id = osm_data_mo->id;
+    error = ads_component_attach_to_rt(osm_data_mo->id, (void **)&pd->shared_data);
     SERVER_GOTO_IF_ERR(error, "Failed to attach init data MO to RT\n");
 
     // Initialize the hold registry
     resource_server_initialize_registry(&pd->hold_registry, pd_held_resource_on_delete, (void *)pd);
 
     // Setup init data
-    pd->init_data->rde_count = 0;
-    memset(pd->init_data->rde, 0, sizeof(osmosis_rde_t) * MAX_PD_OSM_RDE);
-    pd->init_data->pd_conn.id = pd->id;
+    pd->shared_data->rde_count = 0;
+    memset(pd->shared_data->rde, 0, sizeof(osmosis_rde_t) * MAX_PD_OSM_RDE);
+    pd->shared_data->pd_conn.id = pd->id;
 
     // Setup the cspace
     error = pd_setup_cspace(pd, get_pd_component()->server_vka);
@@ -517,13 +517,52 @@ void pd_destroy(pd_t *pd, vka_t *server_vka, vspace_t *server_vspace)
     pd->deleted = true;
 
     /* stop the PD's CPU, if not already stopped */
-    error = cpu_component_stop(pd->init_data->cpu_conn.id);
+    error = cpu_component_stop(pd->shared_data->cpu_conn.id);
     SERVER_GOTO_IF_ERR(error, "Failed to stop CPU (%d) while destroying PD (%d)\n",
-                       pd->init_data->cpu_conn.id, pd_id);
+                       pd->shared_data->cpu_conn.id, pd_id);
+
+#if 0
+    seL4_CPtr reply_cap_in_pd;
+    error = cpu_component_get_reply_cap(pd->shared_data->cpu_conn.id, &reply_cap_in_pd);
+    SERVER_GOTO_IF_ERR(error, "Failed to get reply cap from CPU (%d) while destroying PD (%d)\n",
+                       pd->shared_data->cpu_conn.id, pd_id);
+
+    assert(reply_cap_in_pd != seL4_CapNull);
+
+    cspacepath_t reply_path_in_pd, reply_path_in_rt;
+    vka_cspace_make_path(pd->pd_vka, reply_cap_in_pd, &reply_path_in_pd);
+    vka_cspace_alloc_path(server_vka, &reply_path_in_rt);
+    vka_cnode_copy(&reply_path_in_rt, &reply_path_in_pd, seL4_AllRights);
+
+    seL4_MessageInfo_t tag = seL4_MessageInfo_new(1,0,0,0);
+    seL4_Send(reply_path_in_rt.capPtr, tag);
+#endif
+
+    /* Reply with an error to any client waiting ont his PD */
+    if (pd->shared_data->reply_cap != seL4_CapNull)
+    {
+        // Copy the reply cap to the RT cspace
+        cspacepath_t reply_cap_path_in_pd;
+        cspacepath_t reply_cap_path_in_rt;
+        vka_cspace_make_path(pd->pd_vka, pd->shared_data->reply_cap, &reply_cap_path_in_pd);
+        vka_cspace_alloc_path(server_vka, &reply_cap_path_in_rt);
+
+        //error = vka_cnode_copy(&reply_cap_path_in_rt, &reply_cap_path_in_pd, seL4_CanWrite);
+        error = vka_cnode_move(&reply_cap_path_in_rt, &reply_cap_path_in_pd);
+        SERVER_GOTO_IF_ERR(error, "Failed to move reply cap (%d) while destroying PD (%d)\n",
+                           pd->shared_data->reply_cap,
+                           pd_id);
+
+        seL4_MessageInfo_t reply_tag = seL4_MessageInfo_new(1, 0, 0, 0);
+        seL4_Send(reply_cap_path_in_rt.capPtr, reply_tag);
+    }
+
+    // try this
+    // broadcasting endpoint / association of endopint to ipc buffer
 
     /* decrement the refcount of the PD's binded ADS and CPU */
-    resource_component_dec(get_cpu_component(), pd->init_data->cpu_conn.id);
-    resource_component_dec(get_ads_component(), pd->init_data->ads_conn.id);
+    resource_component_dec(get_cpu_component(), pd->shared_data->cpu_conn.id);
+    resource_component_dec(get_ads_component(), pd->shared_data->ads_conn.id);
 
     // This should destroy the CPU, if this is the only PD using it
     // Then the TCB is destroyed, including the internal copies of IPC frame cap and fault endpoint cap
@@ -597,7 +636,7 @@ void pd_destroy(pd_t *pd, vka_t *server_vka, vspace_t *server_vspace)
 
     // free the MO for init data
     // the MO will be destroyed once all references are removed
-    error = ads_component_remove_from_rt((void *)pd->init_data);
+    error = ads_component_remove_from_rt((void *)pd->shared_data);
     SERVER_GOTO_IF_ERR(error, "Failed to remove PD's init data from RT\n");
 
     // The PD's VKA/allocator are destroyed with allocator_mem_pool
@@ -727,7 +766,7 @@ static int pd_setup_cspace(pd_t *pd, vka_t *vka)
     pd->proc.cspace_size = size_bits;
     /* first slot is always 1, never allocate 0 as a cslot */
     pd->proc.cspace_next_free = 1;
-    pd->init_data->cspace_root = PD_CAP_ROOT;
+    pd->shared_data->cspace_root = PD_CAP_ROOT;
 
     /*  mint the cnode cap into the process cspace */
     cspacepath_t src;
@@ -905,7 +944,7 @@ static int request_remote_rr(pd_t *pd, model_state_t *ms, uint64_t space_id, uin
     OSDB_PRINTF("Resource ID 0x%x, space ID 0x%lx, server EP at %d\n", obj_id, space_id, (int)server_cap);
 
     // Pre-map the shared memory so resource server does not need to call root task
-    uint64_t server_ads_id = server_entry->space.pd->init_data->ads_conn.id;
+    uint64_t server_ads_id = server_entry->space.pd->shared_data->ads_conn.id;
     error = ads_component_attach(server_ads_id, rr_mo_id, SEL4UTILS_RES_TYPE_SHARED_FRAMES, NULL, &rr_remote_vaddr);
     SERVER_GOTO_IF_ERR(error, "Failed to attach frame for remote rr to resource server\n");
 
@@ -1057,7 +1096,7 @@ static int pd_dump_internal(pd_t *pd, model_state_t *ms, uint64_t rr_mo_id, void
     {
         for (int j = 0; j < MAX_NS_PER_RDE; j++)
         {
-            osmosis_rde_t rde = pd->init_data->rde[i][j];
+            osmosis_rde_t rde = pd->shared_data->rde[i][j];
 
             if (rde.type.type != GPICAP_TYPE_NONE)
             {
@@ -1194,7 +1233,7 @@ int pd_dump(pd_t *pd)
     {
         for (int j = 0; j < MAX_NS_PER_RDE; j++)
         {
-            // print_pd_osm_rde_info(&pd->init_data->rde[i][j]);
+            // print_pd_osm_rde_info(&pd->shared_data->rde[i][j]);
         }
     }
 
@@ -1249,17 +1288,17 @@ int pd_set_core_cap(pd_t *pd, seL4_Word core_cap_badge, seL4_CPtr core_cap)
     {
     case GPICAP_TYPE_ADS:
         resource_component_inc(get_ads_component(), cap_id);
-        pd->init_data->ads_conn.id = cap_id;
-        pd->init_data->ads_conn.badged_server_ep_cspath.capPtr = core_cap;
+        pd->shared_data->ads_conn.id = cap_id;
+        pd->shared_data->ads_conn.badged_server_ep_cspath.capPtr = core_cap;
         break;
     case GPICAP_TYPE_PD:
-        pd->init_data->pd_conn.id = cap_id;
-        pd->init_data->pd_conn.badged_server_ep_cspath.capPtr = core_cap;
+        pd->shared_data->pd_conn.id = cap_id;
+        pd->shared_data->pd_conn.badged_server_ep_cspath.capPtr = core_cap;
         break;
     case GPICAP_TYPE_CPU:
         resource_component_inc(get_cpu_component(), cap_id);
-        pd->init_data->cpu_conn.id = cap_id;
-        pd->init_data->cpu_conn.badged_server_ep_cspath.capPtr = core_cap;
+        pd->shared_data->cpu_conn.id = cap_id;
+        pd->shared_data->cpu_conn.badged_server_ep_cspath.capPtr = core_cap;
         break;
     default:
         SERVER_GOTO_IF_COND(1, "Trying to set PD OSmosis data with invalid cap\n");

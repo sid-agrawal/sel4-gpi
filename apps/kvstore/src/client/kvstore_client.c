@@ -82,8 +82,8 @@ static int configure_separate_ads()
         .share_mode = GPI_COPY};
     n_cfgs++;
 
-    vmr_config_t osm_init_data_cfg = {
-        .start = sel4runtime_get_osm_init_data(),
+    vmr_config_t osm_shared_data_cfg = {
+        .start = sel4runtime_get_osm_shared_data(),
         .region_pages = 1,
         .type = SEL4UTILS_RES_TYPE_GENERIC,
         .share_mode = GPI_SHARED};
@@ -119,7 +119,7 @@ static int configure_separate_ads()
 
     linked_list_insert_many(&other_vmr_cfg, n_cfgs,
                             &code_reg_cfg, &data_reg_cfg, &heap_cfg,
-                            &osm_init_data_cfg, &stack_reg_cfg, &ipc_buf_cfg);
+                            &osm_shared_data_cfg, &stack_reg_cfg, &ipc_buf_cfg);
 
     other_ads_cfg.vmr_cfgs = &other_vmr_cfg;
 

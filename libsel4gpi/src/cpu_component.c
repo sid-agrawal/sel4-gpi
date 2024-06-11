@@ -110,13 +110,13 @@ static seL4_MessageInfo_t handle_config_req(seL4_Word sender_badge,
     SERVER_GOTO_IF_COND(seL4_MessageInfo_ptr_get_capsUnwrapped(&old_tag) < 2, "Config request requires 2 capsUnwrapped\n");
 
     /* Find the client */
-    cpu_component_registry_entry_t *client_data = (cpu_component_registry_entry_t *)
+    cpu_component_registry_entry_t *cpu_data = (cpu_component_registry_entry_t *)
         resource_component_registry_get_by_badge(get_cpu_component(), sender_badge);
-    SERVER_GOTO_IF_COND(client_data == NULL, "Couldn't find CPU (%ld)\n", get_object_id_from_badge(sender_badge));
+    SERVER_GOTO_IF_COND(cpu_data == NULL, "Couldn't find CPU (%ld)\n", get_object_id_from_badge(sender_badge));
 
     pd_component_registry_entry_t *pd_data = (pd_component_registry_entry_t *)
         resource_component_registry_get_by_badge(get_pd_component(), seL4_GetBadge(0));
-    SERVER_GOTO_IF_COND(client_data == NULL, "Couldn't find PD (%ld)\n", get_object_id_from_badge(seL4_GetBadge(0)));
+    SERVER_GOTO_IF_COND(pd_data == NULL, "Couldn't find PD (%ld)\n", get_object_id_from_badge(seL4_GetBadge(0)));
 
     /* Get Fault EP */
     seL4_CPtr fault_ep = seL4_GetMR(CPUMSGREG_CONFIG_FAULT_EP);
@@ -145,7 +145,7 @@ static seL4_MessageInfo_t handle_config_req(seL4_Word sender_badge,
     /* Configure the vspace */
     seL4_CNode cspace_root = pd_data->pd.proc.cspace.cptr;
 
-    error = cpu_config_vspace(&client_data->cpu,
+    error = cpu_config_vspace(&cpu_data->cpu,
                               get_cpu_component()->server_vka,
                               ads_vspace,
                               cspace_root,
@@ -157,7 +157,7 @@ static seL4_MessageInfo_t handle_config_req(seL4_Word sender_badge,
     // (XXX) Arya: here, the issue with va_args was seen before adding the CPU object ID to the format
     SERVER_GOTO_IF_ERR(error, "Failed to configure vspace for CPU (%ld)\n", get_object_id_from_badge(sender_badge));
 
-    client_data->cpu.binded_ads_id = asre->ads.id;
+    cpu_data->cpu.binded_ads_id = asre->ads.id;
     OSDB_PRINTF("Finished configuring CPU\n");
 
 err_goto:
@@ -202,13 +202,13 @@ static seL4_MessageInfo_t handle_change_vspace_req(seL4_Word sender_badge,
     SERVER_GOTO_IF_ERR(error, "Failed to change vspace\n");
 
     // Update refcount of the ADS objects
-    uint64_t old_ads_id = pd_data->pd.init_data->ads_conn.id;
+    uint64_t old_ads_id = pd_data->pd.shared_data->ads_conn.id;
     resource_component_dec(get_ads_component(), old_ads_id);
     resource_component_inc(get_ads_component(), ads_data->ads.id);
 
     // Update the PD object with the new ADS
     // (XXX) Arya: update the ads_conn cap? need to find the badged EP for the given ADS
-    pd_data->pd.init_data->ads_conn.id = ads_data->ads.id;
+    pd_data->pd.shared_data->ads_conn.id = ads_data->ads.id;
     client_data->cpu.binded_ads_id = ads_data->ads.id;
 
 err_goto:
@@ -365,22 +365,6 @@ int cpu_component_stop(uint32_t cpu_id)
 
     // Stop the CPU
     error = cpu_stop(&cpu_data->cpu);
-
-err_goto:
-    return error;
-}
-
-int cpu_component_get_reply_cap(uint32_t cpu_id, seL4_CPtr *reply_cap)
-{
-    int error = 0;
-
-    // Find the CPU
-    cpu_component_registry_entry_t *cpu_data = (cpu_component_registry_entry_t *)
-        resource_component_registry_get_by_id(get_cpu_component(), cpu_id);
-    SERVER_GOTO_IF_COND(cpu_data == NULL, "Couldn't find CPU (%ld)\n", cpu_id);
-
-    // Return the reply cap
-    *reply_cap = cpu_data->cpu.thread.reply.cptr;
 
 err_goto:
     return error;

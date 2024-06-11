@@ -6,40 +6,40 @@
 
 pd_client_context_t sel4gpi_get_pd_conn(void)
 {
-    pd_client_context_t conn = ((osm_pd_init_data_t *)sel4runtime_get_osm_init_data())->pd_conn;
+    pd_client_context_t conn = ((osm_pd_shared_data_t *)sel4runtime_get_osm_shared_data())->pd_conn;
     return conn;
 }
 
 ads_client_context_t sel4gpi_get_ads_conn(void)
 {
-    ads_client_context_t conn = ((osm_pd_init_data_t *)sel4runtime_get_osm_init_data())->ads_conn;
+    ads_client_context_t conn = ((osm_pd_shared_data_t *)sel4runtime_get_osm_shared_data())->ads_conn;
     return conn;
 }
 
 cpu_client_context_t sel4gpi_get_cpu_conn(void)
 {
-    cpu_client_context_t conn = ((osm_pd_init_data_t *)sel4runtime_get_osm_init_data())->cpu_conn;
+    cpu_client_context_t conn = ((osm_pd_shared_data_t *)sel4runtime_get_osm_shared_data())->cpu_conn;
     return conn;
 }
 
 uint64_t sel4gpi_get_binded_ads_id(void)
 {
-    uint64_t id = ((osm_pd_init_data_t *)sel4runtime_get_osm_init_data())->ads_conn.id;
+    uint64_t id = ((osm_pd_shared_data_t *)sel4runtime_get_osm_shared_data())->ads_conn.id;
     return id;
 }
 
 seL4_CPtr sel4gpi_get_cspace_root(void)
 {
-    seL4_CPtr slot = ((osm_pd_init_data_t *)sel4runtime_get_osm_init_data())->cspace_root;
+    seL4_CPtr slot = ((osm_pd_shared_data_t *)sel4runtime_get_osm_shared_data())->cspace_root;
     return slot;
 }
 
 gpi_cap_t sel4gpi_get_resource_type_code(char *type_name)
 {
-    osm_pd_init_data_t *init_data = (osm_pd_init_data_t *)sel4runtime_get_osm_init_data();
+    osm_pd_shared_data_t *shared_data = (osm_pd_shared_data_t *)sel4runtime_get_osm_shared_data();
     for (int i = 0; i < GPICAP_TYPE_MAX; i++)
     {
-        if (strcmp(init_data->type_names[i], type_name) == 0)
+        if (strcmp(shared_data->type_names[i], type_name) == 0)
         {
             return i;
         }
@@ -51,13 +51,13 @@ gpi_cap_t sel4gpi_get_resource_type_code(char *type_name)
 
 char *sel4gpi_get_resource_type_name(gpi_cap_t type)
 {
-    osm_pd_init_data_t *init_data = (osm_pd_init_data_t *)sel4runtime_get_osm_init_data();
-    return init_data->type_names[type];
+    osm_pd_shared_data_t *shared_data = (osm_pd_shared_data_t *)sel4runtime_get_osm_shared_data();
+    return shared_data->type_names[type];
 }
 
 seL4_CPtr sel4gpi_get_rde(int type)
 {
-    seL4_CPtr slot = ((osm_pd_init_data_t *)sel4runtime_get_osm_init_data())->rde[type][0].slot_in_PD;
+    seL4_CPtr slot = ((osm_pd_shared_data_t *)sel4runtime_get_osm_shared_data())->rde[type][0].slot_in_PD;
 
     if (slot == seL4_CapNull)
     {
@@ -70,7 +70,7 @@ seL4_CPtr sel4gpi_get_rde(int type)
 
 uint64_t sel4gpi_get_default_space_id(int type)
 {
-    uint64_t space_id = ((osm_pd_init_data_t *)sel4runtime_get_osm_init_data())->rde[type][0].space_id;
+    uint64_t space_id = ((osm_pd_shared_data_t *)sel4runtime_get_osm_shared_data())->rde[type][0].space_id;
 
     return space_id;
 }
@@ -78,7 +78,7 @@ uint64_t sel4gpi_get_default_space_id(int type)
 seL4_CPtr sel4gpi_get_rde_by_space_id(uint32_t space_id, gpi_cap_t type)
 {
     assert(type != GPICAP_TYPE_NONE && type != GPICAP_TYPE_MAX);
-    osm_pd_init_data_t *init_data = ((osm_pd_init_data_t *)sel4runtime_get_osm_init_data());
+    osm_pd_shared_data_t *shared_data = ((osm_pd_shared_data_t *)sel4runtime_get_osm_shared_data());
 
     if (space_id == RESSPC_ID_NULL)
     {
@@ -89,9 +89,9 @@ seL4_CPtr sel4gpi_get_rde_by_space_id(uint32_t space_id, gpi_cap_t type)
 
     for (int i = 0; i < MAX_NS_PER_RDE; i++)
     {
-        if (init_data->rde[type][i].space_id == space_id)
+        if (shared_data->rde[type][i].space_id == space_id)
         {
-            return init_data->rde[type][i].slot_in_PD;
+            return shared_data->rde[type][i].slot_in_PD;
         }
     }
 
@@ -102,18 +102,58 @@ seL4_CPtr sel4gpi_get_rde_by_space_id(uint32_t space_id, gpi_cap_t type)
 
 void sel4gpi_debug_print_rde(void)
 {
-    osm_pd_init_data_t *init_data = ((osm_pd_init_data_t *)sel4runtime_get_osm_init_data());
+    osm_pd_shared_data_t *shared_data = ((osm_pd_shared_data_t *)sel4runtime_get_osm_shared_data());
     printf("RDEs ------------------------------------ \n");
     for (int i = GPICAP_TYPE_NONE + 1; i < GPICAP_TYPE_MAX; i++)
     {
         for (int j = 0; j < MAX_NS_PER_RDE; j++)
         {
-            if (init_data->rde[i][j].type.type != GPICAP_TYPE_NONE)
+            if (shared_data->rde[i][j].type.type != GPICAP_TYPE_NONE)
             {
-                printf("type:%d \tid: %d\n", init_data->rde[i][j].type.type, init_data->rde[i][j].space_id);
+                printf("type:%d \tid: %d\n", shared_data->rde[i][j].type.type, shared_data->rde[i][j].space_id);
             }
         }
     }
+}
+
+void sel4gpi_store_reply_cap(void)
+{
+    int error;
+    pd_client_context_t pd_conn = sel4gpi_get_pd_conn();
+    seL4_CPtr free_slot;
+
+    error = pd_client_next_slot(&pd_conn, &((osm_pd_shared_data_t *)sel4runtime_get_osm_shared_data())->reply_cap);
+    GOTO_IF_ERR(error, "Failed to allocate slot for reply cap\n");
+
+    error = seL4_CNode_SaveCaller(
+        PD_CAP_ROOT,
+        ((osm_pd_shared_data_t *)sel4runtime_get_osm_shared_data())->reply_cap,
+        PD_CAP_DEPTH);
+    GOTO_IF_ERR(error, "Failed to store reply cap\n");
+
+err_goto:
+    return;
+}
+
+seL4_CPtr sel4gpi_get_reply_cap(void)
+{
+    return ((osm_pd_shared_data_t *)sel4runtime_get_osm_shared_data())->reply_cap;
+}
+
+void sel4gpi_clear_reply_cap(void)
+{
+    int error = 0;
+    pd_client_context_t pd_conn = sel4gpi_get_pd_conn();
+    seL4_CPtr slot = ((osm_pd_shared_data_t *)sel4runtime_get_osm_shared_data())->reply_cap;
+
+    // Set the data to null first in case we are killed while the slot is being freed
+    ((osm_pd_shared_data_t *)sel4runtime_get_osm_shared_data())->reply_cap = seL4_CapNull;
+
+    error = pd_client_free_slot(&pd_conn, slot);
+    GOTO_IF_ERR(error, "Failed to free slot for reply cap\n");
+
+err_goto:
+    return;
 }
 
 static void sel4gpi_exit_cb(int code)
@@ -170,7 +210,6 @@ int sel4gpi_destroy_vmr(ads_client_context_t *vmr_rde, void *vaddr, mo_client_co
 
     error = mo_component_client_disconnect(mo);
     GOTO_IF_ERR(error, "failed to disconnect MO\n");
-
 
 err_goto:
     return error;

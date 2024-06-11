@@ -89,7 +89,9 @@ seL4_MessageInfo_t resource_server_recv(resource_server_context_t *context,
 void resource_server_reply(resource_server_context_t *context,
                            seL4_MessageInfo_t tag)
 {
-    api_reply(context->mcs_reply, tag);
+    // api_reply(context->mcs_reply, tag);
+
+    seL4_Send(sel4gpi_get_reply_cap(), tag);
 }
 
 int resource_server_next_slot(resource_server_context_t *context,
@@ -151,6 +153,14 @@ int resource_server_main(void *context_v)
         tag = resource_server_recv(context, &sender_badge);
         int op = seL4_GetMR(RSMSGREG_FUNC);
         RESOURCE_SERVER_PRINTF("Received message, op is %d, passing to request handler\n", op);
+
+        /* Track the reply cap if the message is not from root task */
+        if (sender_badge != 0)
+        {
+            sel4gpi_store_reply_cap();
+        }
+
+        /* Handle the message */
         seL4_MessageInfo_t reply_tag = context->request_handler(tag, sender_badge, received_cap_path.capPtr, &need_new_receive_slot);
 
         /**
@@ -188,6 +198,12 @@ int resource_server_main(void *context_v)
 
         /* Reply to message */
         resource_server_reply(context, reply_tag);
+
+        /* Clear the reply */
+        if (sender_badge != 0)
+        {
+            sel4gpi_clear_reply_cap();
+        }
     }
 
 exit_main:
