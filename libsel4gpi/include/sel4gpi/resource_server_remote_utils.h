@@ -76,18 +76,6 @@ int resource_server_start(resource_server_context_t *context,
                           int (*init_fn)());
 
 /**
- * Recv function for MCS or non-MCS kernel
- */
-seL4_MessageInfo_t resource_server_recv(resource_server_context_t *context,
-                                        seL4_Word *sender_badge_ptr);
-
-/**
- * Reply function for MCS or non-MCS kernel
- */
-void resource_server_reply(resource_server_context_t *context,
-                           seL4_MessageInfo_t tag);
-
-/**
  * Gets the next free cspace slot, otherwise uses pd clientapi
  */
 int resource_server_next_slot(resource_server_context_t *context,

@@ -100,6 +100,8 @@ void sel4gpi_debug_print_rde(void);
 /**
  * For a resource manager to store a copy of the reply cap.
  * This should be done immediately after receiving a message.
+ * 
+ * This function will not make any IPC calls.
 */
 void sel4gpi_store_reply_cap(void);
 
@@ -111,6 +113,8 @@ seL4_CPtr sel4gpi_get_reply_cap(void);
 /**
  * For a resource manager to clear the reply ap.
  * This should be called when a request is complete.
+ * 
+ * This function will make IPC calls to the root task to clear / reallocate the reply cap slot
 */
 void sel4gpi_clear_reply_cap(void);
 

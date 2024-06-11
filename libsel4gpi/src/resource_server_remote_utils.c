@@ -13,6 +13,8 @@
 #include <sel4gpi/resource_server_utils.h>
 #include <sel4gpi/resource_server_remote_utils.h>
 
+#define STORE_REPLY_CAP 1
+
 #define CHECK_ERROR(error, msg)    \
     do                             \
     {                              \
@@ -73,7 +75,10 @@ int resource_server_start(resource_server_context_t *context,
     return resource_server_main((void *)context);
 }
 
-seL4_MessageInfo_t resource_server_recv(resource_server_context_t *context,
+/**
+ * Recv function for MCS or non-MCS kernel
+ */
+static seL4_MessageInfo_t resource_server_recv(resource_server_context_t *context,
                                         seL4_Word *sender_badge_ptr)
 {
     /** NOTE:
@@ -86,12 +91,22 @@ seL4_MessageInfo_t resource_server_recv(resource_server_context_t *context,
                     context->mcs_reply);
 }
 
-void resource_server_reply(resource_server_context_t *context,
-                           seL4_MessageInfo_t tag)
+/**
+ * Reply function for MCS or non-MCS kernel
+ */
+static void resource_server_reply(resource_server_context_t *context,
+                           seL4_MessageInfo_t tag,
+                           bool stored_reply)
 {
-    // api_reply(context->mcs_reply, tag);
+#if STORE_REPLY_CAP
+    if (stored_reply)
+    {
+        seL4_Send(sel4gpi_get_reply_cap(), tag);
+        return;
+    }
+#endif
 
-    seL4_Send(sel4gpi_get_reply_cap(), tag);
+    api_reply(context->mcs_reply, tag);
 }
 
 int resource_server_next_slot(resource_server_context_t *context,
@@ -146,6 +161,11 @@ int resource_server_main(void *context_v)
     seL4_SetMR(0, context->default_space.id);
     seL4_Send(context->parent_ep, tag);
 
+#if STORE_REPLY_CAP
+    // Initialize the reply cap
+    sel4gpi_clear_reply_cap();
+#endif
+
     while (1)
     {
         /* Receive a message */
@@ -154,11 +174,15 @@ int resource_server_main(void *context_v)
         int op = seL4_GetMR(RSMSGREG_FUNC);
         RESOURCE_SERVER_PRINTF("Received message, op is %d, passing to request handler\n", op);
 
-        /* Track the reply cap if the message is not from root task */
+        bool stored_reply = false;
+#if STORE_REPLY_CAP
+        // Track the reply cap if the message is not from root task
         if (sender_badge != 0)
         {
+            stored_reply = true;
             sel4gpi_store_reply_cap();
         }
+#endif
 
         /* Handle the message */
         seL4_MessageInfo_t reply_tag = context->request_handler(tag, sender_badge, received_cap_path.capPtr, &need_new_receive_slot);
@@ -195,15 +219,17 @@ int resource_server_main(void *context_v)
             seL4_SetMR(0, arg0);
             seL4_SetMR(1, arg1);
         }
-
+        
         /* Reply to message */
-        resource_server_reply(context, reply_tag);
+        resource_server_reply(context, reply_tag, stored_reply);
 
-        /* Clear the reply */
-        if (sender_badge != 0)
+#if STORE_REPLY_CAP
+        // Clear the reply cap
+        if (stored_reply)
         {
             sel4gpi_clear_reply_cap();
         }
+#endif
     }
 
 exit_main:
