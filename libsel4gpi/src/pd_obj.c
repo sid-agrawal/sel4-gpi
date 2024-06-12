@@ -621,14 +621,6 @@ void pd_destroy(pd_t *pd, vka_t *server_vka, vspace_t *server_vspace)
 
     // The PD's VKA/allocator are destroyed with allocator_mem_pool
 
-    // Other caps in RT
-    cspacepath_t path;
-    vka_cspace_make_path(server_vka, pd->pd_cap_in_RT, &path);
-    vka_cnode_delete(&path);
-    SERVER_GOTO_IF_ERR(error, "Failed to delete destroyed PD's cap in RT\n");
-    vka_cspace_free_path(server_vka, path);
-    // The CPtrs like "ads_cap_in_RT" should be destroyed when the ADS is destroyed
-
     // Cleanup any resource space(s) this PD held
     error = resspc_component_sweep();
     SERVER_GOTO_IF_ERR(error, "Failed to sweep resource spaces after PD destroy\n");

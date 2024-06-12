@@ -18,13 +18,11 @@
  * @brief   Initialize the pd client.
  *
  * @param server_ep_cap Well known server endpoint cap.
- * @param free_slot a slot to receive a cap in
  * @param osm_data_mo an MO for holding the PD's OSmosis data
  * @param ret_conn client's connection object
  * @return int 0 on success, -1 on failure.
  */
 int pd_component_client_connect(seL4_CPtr server_ep_cap,
-                                seL4_CPtr free_slot,
                                 mo_client_context_t *osm_data_mo,
                                 pd_client_context_t *ret_conn);
 

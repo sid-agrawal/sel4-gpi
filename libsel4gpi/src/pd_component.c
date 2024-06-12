@@ -88,15 +88,12 @@ static seL4_MessageInfo_t handle_pd_allocation(seL4_Word sender_badge)
     error = resource_component_allocate(get_pd_component(), client_id, BADGE_OBJ_ID_NULL, false, &osm_mo_entry->mo,
                                         (resource_server_registry_node_t **)&new_entry, &ret_cap);
     SERVER_GOTO_IF_ERR(error, "failed to allocat a PD\n");
-    new_entry->pd.pd_cap_in_RT = ret_cap;
 
     OSDB_PRINTF("Successfully allocated a new PD %d.\n", new_entry->pd.id);
 
     /* Return this badged end point in the return message. */
-    seL4_SetCap(0, ret_cap);
-    seL4_SetMR(PDMSGREG_FUNC, PD_FUNC_CONNECT_ACK);
-    reply_tag = seL4_MessageInfo_new(error, 0, 1, PDMSGREG_CONNECT_ACK_END);
-    return reply_tag;
+    seL4_SetMR(PDMSGREG_CONNECT_ACK_SLOT, ret_cap);
+    seL4_SetMR(PDMSGREG_CONNECT_ACK_ID, new_entry->pd.id);
 
 err_goto:
     seL4_SetMR(PDMSGREG_FUNC, PD_FUNC_CONNECT_ACK);
@@ -688,30 +685,22 @@ void forge_pd_cap_from_init_data(test_init_data_t *init_data, sel4utils_process_
     int error = 0;
     SERVER_GOTO_IF_COND(init_data == NULL, "Test PD's init data is NULL\n");
 
-    seL4_CPtr ret_cap;
-    pd_component_registry_entry_t *new_entry;
-
     /* Allocate an MO to hold PD's OSmosis data */
     mo_t *shared_data_mo;
     error = mo_component_allocate(1, &shared_data_mo);
     SERVER_GOTO_IF_ERR(error, "Failed to allocate MO for new PD's init data\n");
 
     /* Allocate the PD object */
+    seL4_CPtr pd_cap_in_rt;
+    pd_component_registry_entry_t *new_entry;
     error = resource_component_allocate(get_pd_component(), get_gpi_server()->rt_pd_id,
                                         BADGE_OBJ_ID_NULL, false, shared_data_mo,
-                                        (resource_server_registry_node_t **)&new_entry, &ret_cap);
+                                        (resource_server_registry_node_t **)&new_entry, &pd_cap_in_rt);
     SERVER_GOTO_IF_ERR(error, "Failed to allocate PD for forging");
 
     pd_t *pd = &new_entry->pd;
     test_pd_id = pd->id;
-    pd->pd_cap_in_RT = ret_cap;
     pd->shared_data->pd_conn.id = test_pd_id;
-
-    /* Update the PD object from init data */
-    // pd_new(pd,
-    //        get_pd_component()->server_vka,
-    //        get_pd_component()->server_vspace,
-    //       NULL);
 
     // Split the test process' cspace and initialize a vka with half
     seL4_CPtr mid_slot = DIV_ROUND_UP(init_data->free_slots.start + init_data->free_slots.end, 2);
@@ -759,12 +748,18 @@ void forge_pd_cap_from_init_data(test_init_data_t *init_data, sel4utils_process_
     pd->shared_data->cpu_conn.id = cpu_id;
     resource_component_inc(get_cpu_component(), cpu_id); // Increase the refcount since the CPU is bound to PD
 
-    // Copy the ADS/CPU/PD caps to the test process
-    // The ADS/CPU is 2 (1 for holding, 1 for binding)
-    error = copy_cap_to_pd(pd, pd->pd_cap_in_RT, &pd->shared_data->pd_conn.badged_server_ep_cspath.capPtr);
+    // Copy the PD cap to the test process
+    error = copy_cap_to_pd(pd, pd_cap_in_rt, &pd->shared_data->pd_conn.badged_server_ep_cspath.capPtr);
     SERVER_GOTO_IF_ERR(error, "Failed to copy cap to PD\n");
     pd_add_resource(pd, GPICAP_TYPE_PD, get_pd_component()->space_id, pd->id,
-                    pd->pd_cap_in_RT, pd->shared_data->pd_conn.badged_server_ep_cspath.capPtr, pd->pd_cap_in_RT);
+                    seL4_CapNull, pd->shared_data->pd_conn.badged_server_ep_cspath.capPtr, seL4_CapNull);
+
+    // Cleanup the PD cap in RT
+    cspacepath_t path;
+    vka_cspace_make_path(get_pd_component()->server_vka, pd_cap_in_rt, &path);
+    vka_cnode_delete(&path);
+    SERVER_GOTO_IF_ERR(error, "Failed to delete destroyed PD's cap in RT\n");
+    vka_cspace_free_path(get_pd_component()->server_vka, path);
 
     // Attach the init data to test PD
     void *shared_data_vaddr = (void *)0x50000000;

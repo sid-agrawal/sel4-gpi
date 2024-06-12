@@ -23,31 +23,19 @@
 #define SERVER_ID PDSERVC
 
 int pd_component_client_connect(seL4_CPtr server_ep_cap,
-                                seL4_CPtr free_slot,
                                 mo_client_context_t *osm_data_mo,
                                 pd_client_context_t *ret_conn)
 {
-
-    /* Send a REQ message to the server on its public EP */
-    seL4_SetCapReceivePath(SEL4UTILS_CNODE_SLOT, /* Position of the cap to the CNODE */
-                           free_slot,            /* CPTR in this CSPACE */
-                           /* This works coz we have a single level cnode with no guard.*/
-                           seL4_WordBits); /* Depth i.e. how many bits of free_slot to interpret*/
-
-    OSDB_PRINTF("%s %d pd_endpoint is %lu:__ \n", __FUNCTION__, __LINE__, server_ep_cap);
-    OSDB_PRINTF("Set a receive path for the badged ep: %d\n", (int)free_slot);
-
     /* Set request type */
     seL4_SetMR(PDMSGREG_FUNC, PD_FUNC_CONNECT_REQ);
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 1, PDMSGREG_CONNECT_REQ_END);
     seL4_SetCap(0, osm_data_mo->badged_server_ep_cspath.capPtr);
 
     tag = seL4_Call(server_ep_cap, tag);
-    assert(seL4_MessageInfo_get_extraCaps(tag) == 1);
 
-    ret_conn->badged_server_ep_cspath.capPtr = free_slot;
+    ret_conn->badged_server_ep_cspath.capPtr = seL4_GetMR(PDMSGREG_CONNECT_ACK_SLOT);
+    ret_conn->id = seL4_GetMR(PDMSGREG_CONNECT_ACK_ID);
 
-    OSDB_PRINTF("received badged endpoint and it was kept in %d:__\n", (int)free_slot);
     return seL4_MessageInfo_ptr_get_label(&tag);
 }
 

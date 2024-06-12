@@ -131,7 +131,6 @@ typedef struct _pd
     vka_t *pd_vka;                                          ///< Allocator for the PD's cspace
     char allocator_mem_pool[PD_ALLOCATOR_STATIC_POOL_SIZE]; ///< Memory pool to bootstrap the PD's VKA
     resource_server_registry_t hold_registry;               ///< Registry of PD's resources
-    seL4_CPtr pd_cap_in_RT;                                 ///< Slot where the PD's badged endpoint is in RT
 
     uint64_t shared_data_mo_id;              ///< Shared data is mapped to PD and includes RDE, etc.
     osm_pd_shared_data_t *shared_data;       ///< RT vaddr of the shared data

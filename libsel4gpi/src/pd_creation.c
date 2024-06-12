@@ -64,17 +64,13 @@ pd_config_t *sel4gpi_configure_process(const char *image_name,
 
     pd_client_context_t self_pd_conn = sel4gpi_get_pd_conn();
 
-    seL4_CPtr free_slot;
-
     /* allocate MO for PD's OSmosis data */
     mo_client_context_t osm_data_mo;
     error = mo_component_client_connect(mo_rde, 1, &osm_data_mo);
     GOTO_IF_ERR(error, "Failed to allocat OSmosis data MO\n");
 
-    error = pd_client_next_slot(&self_pd_conn, &free_slot);
-    GOTO_IF_ERR(error, "Failed to allocate slot for new PD\n");
-
-    error = pd_component_client_connect(pd_rde, free_slot, &osm_data_mo, &ret_runnable->pd);
+    /* new PD */
+    error = pd_component_client_connect(pd_rde, &osm_data_mo, &ret_runnable->pd);
     GOTO_IF_ERR(error, "Failed to create new PD\n");
 
     /* new ADS*/
@@ -119,16 +115,11 @@ pd_config_t *sel4gpi_configure_thread(void *thread_fn, seL4_CPtr fault_ep, sel4g
     pd_client_context_t self_pd_conn = sel4gpi_get_pd_conn();
 
     /* new PD */
-    seL4_CPtr free_slot;
-
     mo_client_context_t osm_data_mo;
     error = mo_component_client_connect(mo_rde, 1, &osm_data_mo);
     GOTO_IF_ERR(error, "Failed to allocat OSmosis data MO\n");
 
-    error = pd_client_next_slot(&self_pd_conn, &free_slot);
-    GOTO_IF_ERR(error, "Failed to allocate slot for new PD\n");
-
-    error = pd_component_client_connect(pd_rde, free_slot, &osm_data_mo, &ret_runnable->pd);
+    error = pd_component_client_connect(pd_rde, &osm_data_mo, &ret_runnable->pd);
     GOTO_IF_ERR(error, "Failed to create new PD\n");
 
     /* use same ADS */

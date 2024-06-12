@@ -75,10 +75,6 @@ static int benchmark_pd_create(env_t env, bool native)
     }
     else
     {
-        seL4_CPtr slot;
-        error = vka_cspace_alloc(&env->vka, &slot);
-        test_error_eq(error, 0);
-
         SEL4BENCH_READ_CCNT(pd_create_start);
         pd_client_context_t pd_conn;
 
@@ -87,7 +83,7 @@ static int benchmark_pd_create(env_t env, bool native)
         test_error_eq(error, 0);
 
         // TODO fix
-        error = pd_component_client_connect(sel4gpi_get_rde(GPICAP_TYPE_PD), slot, NULL, &pd_conn);
+        error = pd_component_client_connect(sel4gpi_get_rde(GPICAP_TYPE_PD), NULL, &pd_conn);
         test_error_eq(error, 0);
         SEL4BENCH_READ_CCNT(pd_create_end);
     }
