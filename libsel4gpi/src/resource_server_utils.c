@@ -9,6 +9,7 @@
 #include <vka/object.h>
 #include <vka/capops.h>
 
+#include <sel4gpi/gpi_server.h>
 #include <sel4gpi/pd_utils.h>
 #include <sel4gpi/resource_server_utils.h>
 
@@ -21,12 +22,11 @@ void resource_server_initialize_registry(resource_server_registry_t *registry,
     registry->head = NULL;
     registry->on_delete = on_delete;
     registry->on_delete_arg = on_delete_arg;
-    registry->n_entries = 0;
+    registry->id_counter = 1;
 }
 
 void resource_server_registry_insert(resource_server_registry_t *registry, resource_server_registry_node_t *node)
 {
-    registry->n_entries++;
     node->count = 1;
     HASH_ADD(hh, registry->head, object_id, sizeof(node->object_id), node);
 }
@@ -52,7 +52,6 @@ void resource_server_registry_delete(resource_server_registry_t *registry, resou
 
     HASH_DEL(registry->head, node);
     free(node);
-    registry->n_entries--;
 }
 
 void resource_server_registry_inc(resource_server_registry_t *registry, resource_server_registry_node_t *node)
@@ -72,7 +71,26 @@ void resource_server_registry_dec(resource_server_registry_t *registry, resource
 
 uint64_t resource_server_registry_insert_new_id(resource_server_registry_t *registry, resource_server_registry_node_t *node)
 {
-    uint64_t new_id = registry->n_entries + 1;
+    // Find a free ID
+    uint64_t new_id = registry->id_counter++;
+
+    resource_server_registry_node_t *test_node;
+    HASH_FIND(hh, registry->head, &new_id, sizeof(new_id), test_node);
+
+    // While a node exists with this ID, try another 
+    while (test_node != NULL)
+    {
+        new_id = registry->id_counter++;
+
+        if (new_id == 0)
+        {
+            // If ID is zero, we have checked every possible ID
+            gpi_panic("Out of IDs for resource server registry", 1);
+        }
+
+        HASH_FIND(hh, registry->head, &new_id, sizeof(new_id), test_node);
+    }
+
     node->object_id = new_id;
     resource_server_registry_insert(registry, node);
     return new_id;

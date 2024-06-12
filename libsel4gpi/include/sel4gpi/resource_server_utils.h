@@ -46,7 +46,7 @@ typedef struct _resource_server_registry_node
 typedef struct _resource_server_registry
 {
     resource_server_registry_node_t *head; ///< Hash table of registry nodes
-    uint32_t n_entries;                    ///< Number of entries in the hash table
+    uint32_t id_counter;                   ///< Next ID to assign for an object in the registry
 
     void (*on_delete)(resource_server_registry_node_t *, void *); ///< Function to be called before a node is deleted
                                                                   ///< or NULL
