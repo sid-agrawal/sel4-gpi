@@ -133,6 +133,7 @@ int pd_client_give_resource(pd_client_context_t *conn,
                             seL4_Word resource_id,
                             seL4_CPtr *dest);
 
+#if TRACK_MAP_RELATIONS
 /**
  * To be called by a resource server when it maps a resource to another resource
  * The server must be the managing PD of the source resource's resource space
@@ -146,6 +147,7 @@ int pd_client_give_resource(pd_client_context_t *conn,
 int pd_client_map_resource(pd_client_context_t *conn,
                            seL4_Word src_res_id,
                            seL4_Word dest_res_id);
+#endif
 
 /**
  * Called by a PD to notify that it is about to exit

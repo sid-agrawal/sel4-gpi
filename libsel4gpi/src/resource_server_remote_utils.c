@@ -13,8 +13,6 @@
 #include <sel4gpi/resource_server_utils.h>
 #include <sel4gpi/resource_server_remote_utils.h>
 
-#define STORE_REPLY_CAP 1
-
 #define CHECK_ERROR(error, msg)    \
     do                             \
     {                              \

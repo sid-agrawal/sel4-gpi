@@ -25,7 +25,7 @@
 #include <sel4gpi/cpu_component.h>
 #include <sel4gpi/cap_tracking.h>
 #include <sel4gpi/resource_types.h>
-// #include <sel4gpi/gpi_rde.h>
+#include <sel4gpi/gpi_options.h>
 
 #define GPI_SERVER_DEFAULT_PRIORITY (seL4_MaxPrio - 1)
 
@@ -33,8 +33,6 @@
 #define GPISERVS "GPIServ Server: "
 
 #define GPI_SERVER_BADGE_PARENT_VALUE 0xdeadbeef // Change this to something which will not violate the badge range
-
-#define GPI_CLEANUP_POLICY PD_CLEANUP_MINIMAL
 
 /** @file API for allowing a thread to act as the parent to a GPI server
  * thread.

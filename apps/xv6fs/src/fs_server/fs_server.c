@@ -677,7 +677,7 @@ void disk_rw(struct buf *b, int write)
 // (XXX) Arya: what about releasing?
 void map_file_to_block(uint64_t file_id, uint32_t blockno)
 {
-
+  #if TRACK_MAP_RELATIONS
   int error = 0;
 
   file_registry_entry_t *reg_entry = (file_registry_entry_t *)
@@ -702,4 +702,6 @@ void map_file_to_block(uint64_t file_id, uint32_t blockno)
 
 err_goto:
   ZF_LOGF("Failed to map file to block\n");
+
+  #endif
 }

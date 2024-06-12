@@ -22,8 +22,6 @@
 #include <sel4gpi/error_handle.h>
 #include <sel4testsupport/testreporter.h>
 
-#define PD_FORGE 1
-
 /* Bootstrap test type. */
 static inline void bootstrap_set_up_test_type(uintptr_t e)
 {
@@ -321,7 +319,7 @@ test_result_t basic_run_test(struct testcase *test, uintptr_t e)
     int num_res;
 
 /* spawn the process */
-#ifdef PD_FORGE
+#if PD_FORGE
     // (XXX) Arya: We aren't starting the test process as a normal PD yet,
     // so use this workaround to create a PD object anyway
     void *osm_shared_data;

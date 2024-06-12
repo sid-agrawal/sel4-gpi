@@ -341,11 +341,13 @@ int ads_attach_to_res(ads_t *ads,
     reservation->n_frames = mo->num_pages;
     // memcpy(reservation->frame_caps, frame_caps, sizeof(seL4_CPtr) * mo->num_pages);
 
+#if TRACK_MAP_RELATIONS
     /* Map the VMR to the MO */
     uint64_t vmr_universal_id = universal_res_id(GPICAP_TYPE_VMR, ads->id, reservation->map_entry->gen.object_id);
     uint64_t mo_id = universal_res_id(GPICAP_TYPE_MO, get_mo_component()->space_id, mo->id);
     error = pd_component_map_resources(get_gpi_server()->rt_pd_id, vmr_universal_id, mo_id);
     SERVER_GOTO_IF_ERR(error, "Failed to map VMR to MO\n");
+#endif
 
     /* Track this attachment as a refcount to the MO */
     error = resource_component_inc(get_mo_component(), mo->id);

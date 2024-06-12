@@ -5,6 +5,7 @@
 #include <vka/vka.h>
 #include <sel4utils/vspace.h>
 #include <sel4gpi/badge_usage.h>
+#include <sel4gpi/gpi_options.h>
 
 #define PD_MAX_ARGC 4
 

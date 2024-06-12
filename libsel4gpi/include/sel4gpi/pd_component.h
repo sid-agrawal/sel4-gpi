@@ -273,45 +273,47 @@ int pd_add_resource_by_id(uint32_t pd_id,
                           seL4_CPtr slot_in_PD,
                           seL4_CPtr slot_in_serverPD);
 
+#if TRACK_MAP_RELATIONS
 /***
  * Map one resource to another
  * (XXX) Arya: At the moment this does nothing but check that the mapping is valid
- * 
+ *
  * @param client_pd_id ID of the PD that is requesting the mapping
  * @param src_res_id the universal ID of the source resource
  * @param dest_res_id the universal ID of the destination resource
  * @return 0 on success, error otherwise
-*/
+ */
 int pd_component_map_resources(uint32_t client_pd_id, uint64_t src_res_id, uint64_t dest_res_id);
+#endif
 
 /**
  * To be called after a core resource is destroyed, since the root task does not count as a refcount
- * Remove it from the root task's metadata 
- * 
- * @param resource_type type of the deleted resource 
- * @param space_id ID of the deleted resource 
+ * Remove it from the root task's metadata
+ *
+ * @param resource_type type of the deleted resource
+ * @param space_id ID of the deleted resource
  * @param obj_id ID of the deleted resource
  * @return 0 on success, error otherwise
-*/
+ */
 int pd_component_remove_resource_from_rt(gpi_cap_t resource_type, uint32_t space_id, uint32_t obj_id);
 
 /**
  * To be called when a resource is destroyed
  * Remove the resource from any PDs that may hold it
- * 
- * @param resource_type type of the deleted resource 
- * @param space_id ID of the deleted resource 
+ *
+ * @param resource_type type of the deleted resource
+ * @param space_id ID of the deleted resource
  * @param obj_id ID of the deleted resource
  * @return 0 on success, error otherwise
-*/
+ */
 int pd_component_resource_cleanup(gpi_cap_t resource_type, uint32_t space_id, uint32_t obj_id);
 
 /**
  * To be called when a resource space is destroyed
  * Execute the cleanup policy for any PDs that still depend on the resource space
- * 
+ *
  * @param space_type type of the deleted resource space
  * @param space_id ID of the deleted resource space
  * @return 0 on success, error otherwise
-*/
+ */
 int pd_component_space_cleanup(gpi_cap_t space_type, uint32_t space_id);

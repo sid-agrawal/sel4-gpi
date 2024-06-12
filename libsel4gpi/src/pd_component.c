@@ -340,6 +340,7 @@ err_goto:
     return tag;
 }
 
+#if TRACK_MAP_RELATIONS
 int pd_component_map_resources(uint32_t client_pd_id, uint64_t src_res_id, uint64_t dest_res_id)
 {
     int error = 0;
@@ -374,7 +375,9 @@ int pd_component_map_resources(uint32_t client_pd_id, uint64_t src_res_id, uint6
 err_goto:
     return error;
 }
+#endif
 
+#if TRACK_MAP_RELATIONS
 static seL4_MessageInfo_t handle_map_resource_req(seL4_Word sender_badge, seL4_MessageInfo_t old_tag)
 {
     int error = 0;
@@ -394,6 +397,7 @@ err_goto:
                                                   PDMSGREG_MAP_RES_ACK_END);
     return tag;
 }
+#endif
 
 static seL4_MessageInfo_t handle_exit_req(seL4_Word sender_badge, seL4_MessageInfo_t old_tag)
 {
@@ -599,9 +603,11 @@ static seL4_MessageInfo_t pd_component_handle(seL4_MessageInfo_t tag,
         case PD_FUNC_GIVE_RES_REQ:
             reply_tag = handle_give_resource_req(sender_badge, tag);
             break;
+#if TRACK_MAP_RELATIONS
         case PD_FUNC_MAP_RES_REQ:
             reply_tag = handle_map_resource_req(sender_badge, tag);
             break;
+#endif
         case PD_FUNC_EXIT_REQ:
             reply_tag = handle_exit_req(sender_badge, tag);
             break;

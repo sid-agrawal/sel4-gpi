@@ -181,6 +181,7 @@ int pd_client_give_resource(pd_client_context_t *conn,
     return seL4_MessageInfo_ptr_get_label(&tag);
 }
 
+#if TRACK_MAP_RELATIONS
 int pd_client_map_resource(pd_client_context_t *conn,
                            seL4_Word src_res_id,
                            seL4_Word dest_res_id)
@@ -195,6 +196,7 @@ int pd_client_map_resource(pd_client_context_t *conn,
 
     return seL4_MessageInfo_ptr_get_label(&tag);
 }
+#endif
 
 void pd_client_exit(pd_client_context_t *conn)
 {
