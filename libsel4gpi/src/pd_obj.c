@@ -521,24 +521,7 @@ void pd_destroy(pd_t *pd, vka_t *server_vka, vspace_t *server_vspace)
     SERVER_GOTO_IF_ERR(error, "Failed to stop CPU (%d) while destroying PD (%d)\n",
                        pd->shared_data->cpu_conn.id, pd_id);
 
-#if 0
-    seL4_CPtr reply_cap_in_pd;
-    error = cpu_component_get_reply_cap(pd->shared_data->cpu_conn.id, &reply_cap_in_pd);
-    SERVER_GOTO_IF_ERR(error, "Failed to get reply cap from CPU (%d) while destroying PD (%d)\n",
-                       pd->shared_data->cpu_conn.id, pd_id);
-
-    assert(reply_cap_in_pd != seL4_CapNull);
-
-    cspacepath_t reply_path_in_pd, reply_path_in_rt;
-    vka_cspace_make_path(pd->pd_vka, reply_cap_in_pd, &reply_path_in_pd);
-    vka_cspace_alloc_path(server_vka, &reply_path_in_rt);
-    vka_cnode_copy(&reply_path_in_rt, &reply_path_in_pd, seL4_AllRights);
-
-    seL4_MessageInfo_t tag = seL4_MessageInfo_new(1,0,0,0);
-    seL4_Send(reply_path_in_rt.capPtr, tag);
-#endif
-
-    /* Reply with an error to any client waiting ont his PD */
+    /* Reply with an error to any client waiting on this PD */
     if (pd->shared_data->reply_cap != seL4_CapNull)
     {
         // Copy the reply cap to the RT cspace
@@ -556,9 +539,6 @@ void pd_destroy(pd_t *pd, vka_t *server_vka, vspace_t *server_vspace)
         seL4_MessageInfo_t reply_tag = seL4_MessageInfo_new(1, 0, 0, 0);
         seL4_Send(reply_cap_path_in_rt.capPtr, reply_tag);
     }
-
-    // try this
-    // broadcasting endpoint / association of endopint to ipc buffer
 
     /* decrement the refcount of the PD's binded ADS and CPU */
     resource_component_dec(get_cpu_component(), pd->shared_data->cpu_conn.id);

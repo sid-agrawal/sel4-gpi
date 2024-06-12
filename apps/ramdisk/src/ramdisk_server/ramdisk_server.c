@@ -195,12 +195,8 @@ int ramdisk_init()
     int n_pages = RAMDISK_SIZE_BYTES / SIZE_BITS_TO_BYTES(seL4_PageBits);
     RAMDISK_PRINTF("Allocating %d pages\n", n_pages);
     server->ramdisk_mo = malloc(sizeof(mo_client_context_t));
-    seL4_CPtr free_slot;
-    error = resource_server_next_slot(&get_ramdisk_server()->gen, &free_slot);
-    CHECK_ERROR(error, "failed to get next cspace slot");
 
     error = mo_component_client_connect(server->gen.mo_ep,
-                                        free_slot,
                                         n_pages,
                                         server->ramdisk_mo);
     CHECK_ERROR(error, "failed to allocate virtual disk");

@@ -106,8 +106,25 @@ int resource_component_allocate(resource_component_context_t *component,
 
     if (ret_cap != NULL)
     {
+        vka_t *client_vka;
+
+        /* Eventually all will use the client vka */
+        if (component->resource_type == GPICAP_TYPE_MO || component->resource_type == GPICAP_TYPE_ADS)
+        {
+            // Find the client PD
+            pd_component_registry_entry_t *pd_data = (pd_component_registry_entry_t *)
+                resource_component_registry_get_by_id(get_pd_component(), client_id);
+            SERVER_GOTO_IF_COND(pd_data == NULL, "Couldn't find PD (%ld)\n", client_id);
+
+            client_vka = pd_data->pd.pd_vka;
+        }
+        else
+        {
+            client_vka = component->server_vka;
+        }
+
         /* Create the badged endpoint */
-        *ret_cap = resource_server_make_badged_ep(component->server_vka, NULL, component->server_ep,
+        *ret_cap = resource_server_make_badged_ep(component->server_vka, client_vka, component->server_ep,
                                                   component->resource_type, component->space_id,
                                                   resource_id, client_id);
         GOTO_IF_COND(ret_cap == seL4_CapNull, "Failed to make badged ep for new %s\n",

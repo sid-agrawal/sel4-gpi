@@ -48,6 +48,7 @@ static void on_mo_registry_delete(resource_server_registry_node_t *node_gen, voi
 
     OSDB_PRINTF("Destroying MO (%d)\n", node->mo.id);
 
+    // Destroy the MO
     mo_destroy(&node->mo, get_mo_component()->server_vka);
 }
 
@@ -96,16 +97,37 @@ static seL4_MessageInfo_t handle_mo_allocation_request(seL4_Word sender_badge)
                 new_entry->mo.id, new_entry->mo.num_pages);
 
     /* Return this badged end point in the return message. */
-    seL4_SetCap(0, ret_cap);
     seL4_SetMR(MOMSGREG_CONNECT_ACK_ID, new_entry->mo.id);
-
-    seL4_SetMR(MOMSGREG_FUNC, MO_FUNC_CONNECT_ACK);
-    reply_tag = seL4_MessageInfo_new(error, 0, 1, MOMSGREG_CONNECT_ACK_END);
-    return reply_tag;
+    seL4_SetMR(MOMSGREG_CONNECT_ACK_SLOT, ret_cap);
 
 err_goto:
     seL4_SetMR(MOMSGREG_FUNC, MO_FUNC_CONNECT_ACK);
     reply_tag = seL4_MessageInfo_new(error, 0, 0, MOMSGREG_CONNECT_ACK_END);
+    return reply_tag;
+}
+
+static seL4_MessageInfo_t handle_mo_disconnect_request(seL4_Word sender_badge)
+{
+    int error = 0;
+
+    OSDB_PRINTF("Got MO disconnect request from %lx\n", sender_badge);
+    BADGE_PRINT(sender_badge);
+
+    uint64_t mo_id = get_object_id_from_badge(sender_badge);
+
+    /* Find the PD */
+    pd_component_registry_entry_t *pd_data = (pd_component_registry_entry_t *)
+        resource_component_registry_get_by_id(get_pd_component(), get_client_id_from_badge(sender_badge));
+    SERVER_GOTO_IF_COND(pd_data == NULL, "Couldn't find PD (%ld)\n", get_client_id_from_badge(sender_badge));
+
+    /* Remove the MO from the client PD */
+    pd_remove_resource(&pd_data->pd, GPICAP_TYPE_MO, get_mo_component()->space_id, mo_id);
+
+    // This will reduce the refcount of the MO, and then it will be deleted if necessary
+
+err_goto:
+    seL4_SetMR(MOMSGREG_FUNC, MO_FUNC_DISCONNECT_ACK);
+    seL4_MessageInfo_t reply_tag = seL4_MessageInfo_new(error, 0, 0, MOMSGREG_DISCONNECT_ACK_END);
     return reply_tag;
 }
 
@@ -128,6 +150,9 @@ static seL4_MessageInfo_t mo_component_handle(seL4_MessageInfo_t tag,
     {
         switch (func)
         {
+        case MO_FUNC_DISCONNECT_REQ:
+            handle_mo_disconnect_request(sender_badge);
+            break;
         default:
             SERVER_GOTO_IF_COND(1, "Unknown request received: %d\n", func);
             break;
@@ -158,8 +183,8 @@ int mo_component_initialize(simple_t *server_simple,
         .ep = get_gpi_server()->server_ep_obj.cptr,
     };
 
-    error = resource_component_allocate(get_resspc_component(), get_gpi_server()->rt_pd_id, BADGE_OBJ_ID_NULL, false, (void *)&resspc_config,
-                                        (resource_server_registry_node_t **)&space_entry, NULL);
+    error = resource_component_allocate(get_resspc_component(), get_gpi_server()->rt_pd_id, BADGE_OBJ_ID_NULL, false,
+                                        (void *)&resspc_config, (resource_server_registry_node_t **)&space_entry, NULL);
     assert(error == 0);
 
     // Initialize the component

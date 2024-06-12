@@ -19,12 +19,10 @@
  * @brief   Initialize the ads client.
  *
  * @param server_ep_cap Well known server endpoint cap.
- * @param free_slot a slot to receive a cap in
  * @param ret_conn returns the client connection object
  * @return int 0 on success, 1 on failure.
  */
 int ads_component_client_connect(seL4_CPtr server_ep_cap,
-                                 seL4_CPtr free_slot,
                                  ads_client_context_t *ret_conn);
 
 /**

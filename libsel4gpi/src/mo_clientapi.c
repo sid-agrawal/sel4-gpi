@@ -20,32 +20,26 @@
 #define SERVER_ID MOSERVS
 
 int mo_component_client_connect(seL4_CPtr server_ep_cap,
-                                seL4_CPtr free_slot,
                                 seL4_Word num_pages,
                                 mo_client_context_t *ret_conn)
 {
-    /* Send a REQ message to the server on its public EP */
-    seL4_SetCapReceivePath(SEL4UTILS_CNODE_SLOT, /* Position of the cap to the CNODE */
-                           free_slot,            /* CPTR in this CSPACE */
-                           /* This works coz we have a single level cnode with no guard.*/
-                           seL4_WordBits); /* Depth i.e. how many bits of free_slot to interpret*/
-
     seL4_SetMR(MOMSGREG_FUNC, MO_FUNC_CONNECT_REQ);
     seL4_SetMR(MOMSGREG_CONNECT_REQ_NUM_PAGES, num_pages);
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0, MOMSGREG_CONNECT_REQ_END);
     tag = seL4_Call(server_ep_cap, tag);
 
-    ret_conn->badged_server_ep_cspath.capPtr = free_slot;
+    ret_conn->badged_server_ep_cspath.capPtr = seL4_GetMR(MOMSGREG_CONNECT_ACK_SLOT);
     ret_conn->id = seL4_GetMR(MOMSGREG_CONNECT_ACK_ID);
-
-    OSDB_PRINTF("received badged endpoint and it was kept in %lu:__\n",
-                free_slot);
 
     return seL4_MessageInfo_ptr_get_label(&tag);
 }
 
 int mo_component_client_disconnect(mo_client_context_t *conn)
 {
-    // (XXX) Arya: to implement
-    return 0;
+    seL4_SetMR(MOMSGREG_FUNC, MO_FUNC_DISCONNECT_REQ);
+
+    seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0, MOMSGREG_CONNECT_REQ_END);
+    tag = seL4_Call(conn->badged_server_ep_cspath.capPtr, tag);
+    
+    return seL4_MessageInfo_ptr_get_label(&tag);
 }

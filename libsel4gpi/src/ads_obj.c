@@ -51,7 +51,7 @@ static void on_attach_registry_delete(resource_server_registry_node_t *node_gen,
 
     OSDB_PRINTF("Deleting attach node from ADS (%d), vaddr %p, mo_attached %d, type %s\n",
                 ads->id, node->vaddr, node->mo_attached, human_readable_va_res_type(node->type));
-    
+
     // Remove the reservation
     sel4utils_free_reservation(ads->vspace, node->res);
 
@@ -715,10 +715,10 @@ void ads_destroy(ads_t *ads)
      * (XXX) Arya:
      * If VKA is VSPACE_FREE instead of VSPACE_PRESERVE
      * this will also free the forged MO regions like ELF region
-     * 
+     *
      * VSPACE_FREE does not currently work, it seems that some freed frame
      * has another cap to it and causes the VKA to break
-    */
+     */
     vspace_tear_down(ads->vspace, VSPACE_PRESERVE);
 
     /**

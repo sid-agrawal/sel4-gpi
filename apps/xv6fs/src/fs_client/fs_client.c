@@ -152,13 +152,8 @@ xv6fs_client_init(void)
 
   /* Allocate the TEMP shared memory object */
   get_xv6fs_client()->shared_mem = malloc(sizeof(mo_client_context_t));
-  seL4_CPtr free_slot;
-  pd_client_context_t pd_conn = sel4gpi_get_pd_conn();
-  error = pd_client_next_slot(&pd_conn, &free_slot);
-  CHECK_ERROR(error, "failed to get next cspace slot");
 
   error = mo_component_client_connect(sel4gpi_get_rde(GPICAP_TYPE_MO),
-                                      free_slot,
                                       1,
                                       get_xv6fs_client()->shared_mem);
   CHECK_ERROR(error, "failed to allocate shared mem page");

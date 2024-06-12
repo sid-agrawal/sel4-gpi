@@ -53,18 +53,12 @@ static int configure_separate_ads()
     int error = 0;
 
     /* new ADS*/
-
-    seL4_CPtr free_slot;
     sel4gpi_runnable_t runnable = {0};
 
     seL4_CPtr ads_rde = sel4gpi_get_rde(GPICAP_TYPE_ADS);
     GOTO_IF_COND(ads_rde == seL4_CapNull, "Can't make new ADS, no ADS RDE\n");
 
-    pd_client_context_t self_pd_conn = sel4gpi_get_pd_conn();
-    error = pd_client_next_slot(&self_pd_conn, &free_slot);
-    GOTO_IF_ERR(error, "failed to allocate next slot");
-
-    error = ads_component_client_connect(ads_rde, free_slot, &runnable.ads);
+    error = ads_component_client_connect(ads_rde, &runnable.ads);
     GOTO_IF_ERR(error, "failed to allocate a new ADS");
 
     ads_config_t other_ads_cfg = {

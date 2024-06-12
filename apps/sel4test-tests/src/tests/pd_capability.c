@@ -60,11 +60,9 @@ int test_new_process_osmosis_shmem(env_t env)
     seL4_Recv(ep.cptr, NULL);
 
     pd_client_context_t self_pd = sel4gpi_get_pd_conn();
-    error = pd_client_next_slot(&self_pd, &slot);
-    test_error_eq(error, 0);
 
     mo_client_context_t shared_mo;
-    error = mo_component_client_connect(sel4gpi_get_rde(GPICAP_TYPE_MO), slot, 1, &shared_mo);
+    error = mo_component_client_connect(sel4gpi_get_rde(GPICAP_TYPE_MO), 1, &shared_mo);
     test_error_eq(error, 0);
 
     error = pd_client_send_cap(&runnable.pd, shared_mo.badged_server_ep_cspath.capPtr, &slot);

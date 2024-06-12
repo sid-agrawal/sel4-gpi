@@ -38,12 +38,8 @@ int test_fs(env_t env)
     pd_client_context_t pd_conn = sel4gpi_get_pd_conn();
 
     /* Create a memory object for the RR dump */
-    seL4_CPtr slot;
-    vka_cspace_alloc(&env->vka, &slot);
-
     mo_client_context_t mo_conn;
     error = mo_component_client_connect(sel4gpi_get_rde(GPICAP_TYPE_MO),
-                                        slot,
                                         RR_MO_N_PAGES,
                                         &mo_conn);
     test_assert(error == 0);
@@ -321,12 +317,8 @@ int test_multiple_fs(env_t env)
     pd_client_context_t pd_conn = sel4gpi_get_pd_conn();
 
     /* Create a memory object for the RR dump */
-    seL4_CPtr slot;
-    vka_cspace_alloc(&env->vka, &slot);
-
     mo_client_context_t mo_conn;
     error = mo_component_client_connect(sel4gpi_get_rde(GPICAP_TYPE_MO),
-                                        slot,
                                         RR_MO_N_PAGES,
                                         &mo_conn);
     test_assert(error == 0);

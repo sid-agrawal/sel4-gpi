@@ -740,28 +740,27 @@ void forge_pd_cap_from_init_data(test_init_data_t *init_data, sel4utils_process_
     pd_add_rde(pd, pd_type, "PD", get_pd_component()->space_id, get_gpi_server()->server_ep_obj.cptr);
 
     // Forge ADS cap
-    seL4_CPtr child_as_cap_in_parent;
+    seL4_CPtr child_as_cap; // This will be the ptr of the cap in the forged PD's cspace
     uint32_t ads_id;
-    error = forge_ads_cap_from_vspace(&test_process->vspace, get_pd_component()->server_vka, pd->id, &child_as_cap_in_parent, &ads_id);
+    error = forge_ads_cap_from_vspace(&test_process->vspace, get_pd_component()->server_vka,
+                                      pd->id, &child_as_cap, &ads_id);
     SERVER_GOTO_IF_ERR(error, "Failed to forge child's as cap");
+
     pd->shared_data->ads_conn.id = ads_id;
-    resource_component_inc(get_ads_component(), ads_id);
+    pd->shared_data->ads_conn.badged_server_ep_cspath.capPtr = child_as_cap;
+    resource_component_inc(get_ads_component(), ads_id); // Increase the refcount since the ADS is attached to PD
 
     // Forge CPU cap
     seL4_CPtr child_cpu_cap_in_parent;
     uint32_t cpu_id;
-    error = forge_cpu_cap_from_tcb(test_process, get_pd_component()->server_vka, pd->id, &child_cpu_cap_in_parent, &cpu_id);
+    error = forge_cpu_cap_from_tcb(test_process, get_pd_component()->server_vka, pd->id,
+                                   &child_cpu_cap_in_parent, &cpu_id);
     SERVER_GOTO_IF_ERR(error, "Failed to forge child's CPU cap");
     pd->shared_data->cpu_conn.id = cpu_id;
-    resource_component_inc(get_cpu_component(), cpu_id);
+    resource_component_inc(get_cpu_component(), cpu_id); // Increase the refcount since the CPU is bound to PD
 
     // Copy the ADS/CPU/PD caps to the test process
     // The ADS/CPU is 2 (1 for holding, 1 for binding)
-    error = copy_cap_to_pd(pd, child_as_cap_in_parent, &pd->shared_data->ads_conn.badged_server_ep_cspath.capPtr);
-    SERVER_GOTO_IF_ERR(error, "Failed to copy cap to PD\n");
-    pd_add_resource(pd, GPICAP_TYPE_ADS, get_ads_component()->space_id, ads_id,
-                    child_as_cap_in_parent, pd->shared_data->ads_conn.badged_server_ep_cspath.capPtr, child_as_cap_in_parent);
-
     error = copy_cap_to_pd(pd, pd->pd_cap_in_RT, &pd->shared_data->pd_conn.badged_server_ep_cspath.capPtr);
     SERVER_GOTO_IF_ERR(error, "Failed to copy cap to PD\n");
     pd_add_resource(pd, GPICAP_TYPE_PD, get_pd_component()->space_id, pd->id,

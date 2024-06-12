@@ -30,11 +30,8 @@ void *sel4gpi_new_sized_stack(ads_client_context_t *ads_rde, size_t n_pages)
     GOTO_IF_ERR(error, "failed to reserve VMR for stack\n");
 
     /* allocate MO */
-    error = pd_client_next_slot(&self_pd, &slot);
-    GOTO_IF_ERR(error, "failed to allocate next slot\n");
-
     mo_client_context_t mo;
-    error = mo_component_client_connect(mo_rde, slot, n_pages, &mo);
+    error = mo_component_client_connect(mo_rde, n_pages, &mo);
     GOTO_IF_ERR(error, "failed to allocate MO\n");
 
     /* attach MO to ADS */
@@ -67,14 +64,11 @@ pd_config_t *sel4gpi_configure_process(const char *image_name,
 
     pd_client_context_t self_pd_conn = sel4gpi_get_pd_conn();
 
-    /* new PD */
     seL4_CPtr free_slot;
-    error = pd_client_next_slot(&self_pd_conn, &free_slot);
-    GOTO_IF_ERR(error, "Failed to allocate next slot\n");
 
     /* allocate MO for PD's OSmosis data */
     mo_client_context_t osm_data_mo;
-    error = mo_component_client_connect(mo_rde, free_slot, 1, &osm_data_mo);
+    error = mo_component_client_connect(mo_rde, 1, &osm_data_mo);
     GOTO_IF_ERR(error, "Failed to allocat OSmosis data MO\n");
 
     error = pd_client_next_slot(&self_pd_conn, &free_slot);
@@ -87,10 +81,7 @@ pd_config_t *sel4gpi_configure_process(const char *image_name,
     seL4_CPtr ads_rde = sel4gpi_get_rde(GPICAP_TYPE_ADS);
     GOTO_IF_COND(ads_rde == seL4_CapNull, "Can't make new ADS, no ADS RDE\n");
 
-    error = pd_client_next_slot(&self_pd_conn, &free_slot);
-    GOTO_IF_ERR(error, "failed to allocate next slot");
-
-    error = ads_component_client_connect(ads_rde, free_slot, &ret_runnable->ads);
+    error = ads_component_client_connect(ads_rde, &ret_runnable->ads);
     GOTO_IF_ERR(error, "failed to allocate a new ADS");
 
     /* new CPU */
@@ -132,10 +123,9 @@ pd_config_t *sel4gpi_configure_thread(void *thread_fn, seL4_CPtr fault_ep, sel4g
 
     /* new PD */
     seL4_CPtr free_slot;
-    error = pd_client_next_slot(&self_pd_conn, &free_slot);
-    GOTO_IF_ERR(error, "Failed to allocate next slot\n");
+
     mo_client_context_t osm_data_mo;
-    error = mo_component_client_connect(mo_rde, free_slot, 1, &osm_data_mo);
+    error = mo_component_client_connect(mo_rde, 1, &osm_data_mo);
     GOTO_IF_ERR(error, "Failed to allocat OSmosis data MO\n");
 
     error = pd_client_next_slot(&self_pd_conn, &free_slot);
@@ -213,6 +203,7 @@ int sel4gpi_ads_configure(ads_config_t *cfg,
     int error = 0;
     ads_client_context_t vmr_rde = {.badged_server_ep_cspath.capPtr =
                                         sel4gpi_get_rde_by_space_id(runnable->ads.id, GPICAP_TYPE_VMR)};
+                                        
     uint64_t current_ads_id = sel4gpi_get_binded_ads_id();
     ads_client_context_t self_ads_conn = sel4gpi_get_ads_conn();
 

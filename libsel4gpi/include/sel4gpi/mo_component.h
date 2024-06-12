@@ -63,6 +63,7 @@ enum mo_component_msgregs
     MOMSGREG_CONNECT_REQ_END,
 
     MOMSGREG_CONNECT_ACK_ID = MOMSGREG_LABEL0,
+    MOMSGREG_CONNECT_ACK_SLOT,
     MOMSGREG_CONNECT_ACK_END,
 
     /* Disconnect / Delete*/

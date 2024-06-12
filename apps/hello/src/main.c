@@ -57,13 +57,9 @@ int main(int argc, char **argv)
 
     seL4_CPtr slot;
     printf("HELLO: getting next slot\n");
-    error = pd_client_next_slot(&pd_conn, &slot);
-    assert(error == 0);
-    printf("Next free slot is %ld\n", (seL4_Word)slot);
 
     mo_client_context_t mo_conn;
     error = mo_component_client_connect(mo_server_ep,
-                                        slot,
                                         5,
                                         &mo_conn);
 

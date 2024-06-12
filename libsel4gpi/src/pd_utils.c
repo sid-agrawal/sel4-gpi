@@ -186,12 +186,8 @@ void *sel4gpi_get_vmr(ads_client_context_t *vmr_rde, int num_pages, void *vaddr,
 
     seL4_CPtr mo_rde = sel4gpi_get_rde(GPICAP_TYPE_MO);
 
-    seL4_CPtr slot;
-    error = pd_client_next_slot(&self_pd, &slot);
-    GOTO_IF_ERR(error, "failed to allocate next slot\n");
-
     mo_client_context_t mo;
-    error = mo_component_client_connect(mo_rde, slot, num_pages, &mo);
+    error = mo_component_client_connect(mo_rde, num_pages, &mo);
     GOTO_IF_ERR(error, "failed to allocate MO\n");
 
     void *new_vaddr;

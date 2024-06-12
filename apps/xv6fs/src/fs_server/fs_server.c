@@ -160,13 +160,8 @@ int xv6fs_init()
 
   /* Allocate the shared memory object used to communicate with the ramdisk*/
   server->shared_mem = malloc(sizeof(mo_client_context_t));
-  seL4_CPtr free_slot;
-  error = resource_server_next_slot(&get_xv6fs_server()->gen, &free_slot);
-
-  CHECK_ERROR(error, "failed to get next cspace slot");
 
   error = mo_component_client_connect(server->gen.mo_ep,
-                                      free_slot,
                                       1,
                                       server->shared_mem);
   CHECK_ERROR(error, "failed to allocate shared mem page");

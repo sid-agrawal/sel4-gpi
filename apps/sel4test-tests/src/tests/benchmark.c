@@ -247,12 +247,8 @@ static int benchmark_give_resource(env_t env, bool native)
     else
     {
         seL4_CPtr mo_rde = sel4gpi_get_rde(GPICAP_TYPE_MO);
-        cspacepath_t mo_cap_path;
-        error = vka_cspace_alloc_path(&env->vka, &mo_cap_path);
-        test_error_eq(error, 0);
 
         error = mo_component_client_connect(mo_rde,
-                                            mo_cap_path.capPtr,
                                             1,
                                             &bench_mo);
         test_error_eq(error, 0);
@@ -309,12 +305,8 @@ static int benchmark_ads_create(env_t env, bool native)
         seL4_CPtr ads_rde = sel4gpi_get_rde(GPICAP_TYPE_ADS);
         SEL4BENCH_READ_CCNT(ads_create_start);
 
-        seL4_CPtr slot;
-        error = vka_cspace_alloc(&env->vka, &slot);
-        test_error_eq(error, 0);
-
         ads_client_context_t new_ads;
-        error = ads_component_client_connect(ads_rde, slot, &new_ads);
+        error = ads_component_client_connect(ads_rde, &new_ads);
         SEL4BENCH_READ_CCNT(ads_create_end);
     }
 
@@ -402,9 +394,7 @@ static int benchmark_cpu(env_t env, bool native)
         SEL4BENCH_READ_CCNT(cpu_create_end);
 
         ads_client_context_t new_ads;
-        error = vka_cspace_alloc(&env->vka, &slot);
-        test_error_eq(error, 0);
-        error = ads_component_client_connect(sel4gpi_get_rde(GPICAP_TYPE_ADS), slot, &new_ads);
+        error = ads_component_client_connect(sel4gpi_get_rde(GPICAP_TYPE_ADS), &new_ads);
         test_error_eq(error, 0);
 
         SEL4BENCH_READ_CCNT(cpu_bind_start);

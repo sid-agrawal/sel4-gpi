@@ -119,13 +119,11 @@ static seL4_MessageInfo_t handle_ads_allocation(seL4_Word sender_badge)
     OSDB_PRINTF("Successfully allocated a new ADS (%d) with VMR Space (%d).\n", new_entry->ads.id, space_entry->space.id);
 
     /* Return this badged end point in the return message. */
-    seL4_SetCap(0, ret_cap);
     seL4_SetMR(ADSMSGREG_CONNECT_ACK_VMR_SPACE_ID, space_entry->space.id);
-
-    reply_tag = seL4_MessageInfo_new(error, 0, 1, ADSMSGREG_CONNECT_ACK_END);
-    return reply_tag;
+    seL4_SetMR(ADSMSGREG_CONNECT_ACK_SLOT, ret_cap);
 
 err_goto:
+    seL4_SetMR(ADSMSGREG_FUNC, ADS_FUNC_CONNECT_ACK);
     reply_tag = seL4_MessageInfo_new(error, 0, 0, ADSMSGREG_CONNECT_ACK_END);
     return reply_tag;
 }
@@ -351,9 +349,10 @@ static seL4_MessageInfo_t handle_load_elf_request(seL4_Word sender_badge, seL4_M
     OSDB_PRINTF("Forged ADS attachments from ELF.\n");
 
 err_goto:
-    if (image_name != NULL) {
+    if (image_name != NULL)
+    {
         // Remove the MO for image name
-        error = ads_component_remove_from_rt((void *) image_name);
+        error = ads_component_remove_from_rt((void *)image_name);
         if (error)
         {
             OSDB_PRINTERR("Failed to remove MO for image name from RT\n");
@@ -535,8 +534,8 @@ int ads_component_initialize(simple_t *server_simple,
         .ep = get_gpi_server()->server_ep_obj.cptr,
     };
 
-    error = resource_component_allocate(get_resspc_component(), get_gpi_server()->rt_pd_id, BADGE_OBJ_ID_NULL, false, (void *)&resspc_config,
-                                        (resource_server_registry_node_t **)&space_entry, NULL);
+    error = resource_component_allocate(get_resspc_component(), get_gpi_server()->rt_pd_id, BADGE_OBJ_ID_NULL, false,
+                                        (void *)&resspc_config, (resource_server_registry_node_t **)&space_entry, NULL);
     assert(error == 0);
 
     // Initialize the component
