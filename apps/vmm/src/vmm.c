@@ -88,7 +88,11 @@
 
 #define VM_CNODE_BITS 7
 
-// /* Data for the guest's kernel image. */
+#define GUEST_IMAGE_NAME "linux"
+#define GUEST_IMAGE_DTB GUEST_IMAGE_NAME ".dtb"
+#define GUEST_IMAGE_INITRD "rootfs.cpio.gz"
+
+/* Data for the guest's kernel image. */
 // extern char _guest_kernel_image[];
 // extern char _guest_kernel_image_end[];
 // /* Data for the device tree to be passed to the kernel. */
@@ -98,17 +102,6 @@
 // extern char _guest_initrd_image[];
 // extern char _guest_initrd_image_end[];
 
-/* Data for the guest's kernel image. */
-char _guest_kernel_image[1];
-char _guest_kernel_image_end[1];
-/* Data for the device tree to be passed to the kernel. */
-char _guest_dtb_image[1];
-char _guest_dtb_image_end[1];
-/* Data for the initial RAM disk to be passed to the kernel. */
-char _guest_initrd_image[1];
-char _guest_initrd_image_end[1];
-
-// static vmm_env_t vmm_env;
 /* guest images are stored here */
 extern char _cpio_archive[];
 extern char _cpio_archive_end[];
@@ -124,6 +117,35 @@ static void serial_ack(size_t vcpu_id, int irq, void *cookie)
     vmm_env_t *vmm_e = (vmm_env_t *)cookie;
     seL4_Error error = seL4_IRQHandler_Ack(vmm_e->serial_irq_handler); // XXX + serial channel
     ZF_LOGE_IFERR(error, "Failed to ACK serial interrupt");
+}
+
+static int map_file_to_guest(const char *file_name, vspace_t *curr_vspace, vspace_t *guest_vspace, void *vaddr)
+{
+    /* get images from CPIO archive */
+    int error = 0;
+    unsigned long size;
+    unsigned long cpio_len = _cpio_archive_end - _cpio_archive;
+    const void *file = cpio_get_file(_cpio_archive, cpio_len, file_name, &size);
+    uintptr_t curr_pos = (uintptr_t)file;
+
+    size_t num_caps = BYTES_TO_4K_PAGES(size);
+    CPRINTF("%s: %p, size (bytes): 0x%lx, num pages: %zu, guest_vaddr: %p\n", file_name, file, size, num_caps, vaddr);
+
+    seL4_CPtr *file_caps = calloc(num_caps, sizeof(seL4_CPtr));
+    for (size_t i = 0; i < num_caps; i++)
+    {
+        assert(curr_pos <= (uintptr_t)file + size);
+        file_caps[i] = vspace_get_cap(curr_vspace, ALIGN_DOWN(curr_pos, seL4_PageBits));
+        assert(file_caps[i] != seL4_CapNull);
+        curr_pos += PAGE_SIZE_4K;
+    }
+
+    reservation_t res = vspace_reserve_range_at(guest_vspace, vaddr, size, seL4_AllRights, 0);
+    error = vspace_map_pages_at_vaddr(guest_vspace, file_caps, NULL, vaddr, num_caps, seL4_PageBits, res);
+
+err_goto:
+    free(file_caps);
+    return error;
 }
 
 vmm_env_t *vm_setup_native(seL4_IRQHandler irq_handler,
@@ -268,27 +290,24 @@ vmm_env_t *vm_setup_native(seL4_IRQHandler irq_handler,
     error = vspace_map_pages_at_vaddr(&vmm_e->vm_vspace, serial_frames, NULL, (void *)ODROID_BUS3, 1, seL4_PageBits, res);
     ZF_LOGF_IF(error, "Failed to map odroid bus 3 region to VM");
 #endif
-    /* guest ram */
-    /* get CPIO archive */
+    /** guest ram **/
+    error = map_file_to_guest(GUEST_IMAGE_NAME, vmm_e->vspace, &vmm_e->vm_vspace, GUEST_RAM_VADDR);
+    GOTO_IF_ERR(error, "Failed to map %s to guest at %p\n", GUEST_IMAGE_NAME, GUEST_RAM_VADDR);
 
-    unsigned long size;
-    unsigned long cpio_len = _cpio_archive_end - _cpio_archive;
-    char const *file = cpio_get_file(_cpio_archive, cpio_len, "linux", &size);
-    seL4_CPtr cap = vspace_get_cap(vmm_e->vspace, (void *)file);
-    CPRINTF("linux: %p, size: %ld, cap: %lx\n", file, size, cap);
+    error = map_file_to_guest(GUEST_IMAGE_INITRD, vmm_e->vspace, &vmm_e->vm_vspace, GUEST_INIT_RAM_DISK_VADDR);
+    GOTO_IF_ERR(error, "Failed to map %s to guest at %p\n", GUEST_IMAGE_INITRD, GUEST_INIT_RAM_DISK_VADDR);
 
-    file = cpio_get_file(_cpio_archive, cpio_len, "linux.dtb", &size);
-    cap = vspace_get_cap(vmm_e->vspace, (void *)file);
-    CPRINTF("linux.dtb: %p, size: %ld, cap: %lx\n", file, size, cap);
+    // error = map_file_to_guest(GUEST_IMAGE_DTB, vmm_e->vspace, &vmm_e->vm_vspace, GUEST_DTB_VADDR);
+    // GOTO_IF_ERR(error, "Failed to map %s to guest at %p\n", GUEST_IMAGE_DTB, GUEST_DTB_VADDR);
 
-    file = cpio_get_file(_cpio_archive, cpio_len, "rootfs.cpio.gz", &size);
-    cap = vspace_get_cap(vmm_e->vspace, (void *)file);
-    CPRINTF("rootfs.cpio.gz: %p, size: %ld, cap: %lx\n", file, size, cap);
+    CPRINTF("size of linux header: %zu\n", sizeof(struct linux_image_header));
 
-    size_t num_pages = DIV_ROUND_UP(GUEST_RAM_SIZE, SIZE_BITS_TO_BYTES(seL4_LargePageBits));
+    size_t num_pages = BYTES_TO_SIZE_BITS_PAGES(GUEST_RAM_SIZE, seL4_LargePageBits);
 
-    res = vspace_reserve_range_at(&vmm_e->vm_vspace, (void *)GUEST_RAM_VADDR, GUEST_RAM_SIZE, seL4_AllRights, 1);
-    seL4_CPtr ram_frames[num_pages];
+    uintptr_t unused_ram_start = (void *)GUEST_INIT_RAM_DISK_VADDR + 770048;
+
+    res = vspace_reserve_range_at(&vmm_e->vm_vspace, (void *)unused_ram_start, GUEST_RAM_SIZE, seL4_AllRights, 1);
+    seL4_CPtr *ram_frames = calloc(num_pages, sizeof(seL4_CPtr));
     vka_object_t frame;
 #ifdef BOARD_qemu_arm_virt
     uintptr_t paddr = GUEST_RAM_PADDR;
@@ -300,7 +319,7 @@ vmm_env_t *vm_setup_native(seL4_IRQHandler irq_handler,
         paddr += SIZE_BITS_TO_BYTES(seL4_LargePageBits);
     }
 
-    error = vspace_map_pages_at_vaddr(&vmm_e->vm_vspace, ram_frames, NULL, (void *)GUEST_RAM_VADDR, num_pages, seL4_LargePageBits, res);
+    error = vspace_map_pages_at_vaddr(&vmm_e->vm_vspace, ram_frames, NULL, unused_ram_start, num_pages, seL4_LargePageBits, res);
     ZF_LOGF_IF(error, "Failed to map guest RAM in VMM's vspace");
 #elif BOARD_odroidc4
     for (size_t i = 0; i < num_pages; i++)
@@ -314,10 +333,27 @@ vmm_env_t *vm_setup_native(seL4_IRQHandler irq_handler,
     ZF_LOGF_IF(error, "Failed to map guest RAM in VMM's vspace");
 
 #endif
-    error = sel4utils_share_mem_at_vaddr(&vmm_e->vm_vspace, vmm_e->vspace, (void *)GUEST_RAM_VADDR, num_pages, seL4_LargePageBits, (void *)GUEST_RAM_VADDR, res);
-    ZF_LOGF_IF(error, "Failed to copy guest RAM to VM's vspace");
+    // error = sel4utils_share_mem_at_vaddr(&vmm_e->vm_vspace, vmm_e->vspace, (void *)GUEST_RAM_VADDR, num_pages, seL4_LargePageBits, (void *)GUEST_RAM_VADDR, res);
+    // ZF_LOGF_IF(error, "Failed to copy guest RAM to VM's vspace");
 
-    // FATAL_IF_ERR(1, "AAA!\n");
+    unsigned long size;
+    unsigned long cpio_len = _cpio_archive_end - _cpio_archive;
+    const void *file = cpio_get_file(_cpio_archive, cpio_len, GUEST_IMAGE_NAME, &size);
+
+    struct linux_image_header *image_header = (struct linux_image_header *)file;
+    assert(image_header->magic == LINUX_IMAGE_MAGIC);
+    if (image_header->magic != LINUX_IMAGE_MAGIC)
+    {
+        ZF_LOGE("Linux kernel image magic check failed\n");
+        return 0;
+    }
+    // Copy the guest kernel image into the right location
+    uintptr_t kernel_dest = GUEST_RAM_VADDR + image_header->text_offset;
+    CPRINTF("kernel_dest: 0x%lx\n", kernel_dest);
+
+    guest_start(vmm_e, GUEST_VCPU_ID, kernel_dest, (uintptr_t)GUEST_DTB_VADDR, (uintptr_t)GUEST_INIT_RAM_DISK_VADDR);
+err_goto:
+    free(ram_frames);
     return vmm_e;
 }
 
@@ -326,19 +362,21 @@ void vm_init(vmm_env_t *vmm_e)
     int error;
     /* Initialise the VMM, the VCPU(s), and start the guest */
     /* Place all the binaries in the right locations before starting the guest */
-    size_t kernel_size = _guest_kernel_image_end - _guest_kernel_image;
-    size_t dtb_size = _guest_dtb_image_end - _guest_dtb_image;
-    size_t initrd_size = _guest_initrd_image_end - _guest_initrd_image;
+    // size_t kernel_size = _guest_kernel_image_end - _guest_kernel_image;
+    // size_t dtb_size = _guest_dtb_image_end - _guest_dtb_image;
+    // size_t initrd_size = _guest_initrd_image_end - _guest_initrd_image;
 
-    uintptr_t kernel_pc = linux_setup_images((uintptr_t)GUEST_RAM_VADDR,
-                                             (uintptr_t)_guest_kernel_image,
-                                             kernel_size,
-                                             (uintptr_t)_guest_dtb_image,
-                                             (uintptr_t)GUEST_DTB_VADDR,
-                                             dtb_size,
-                                             (uintptr_t)_guest_initrd_image,
-                                             (uintptr_t)GUEST_INIT_RAM_DISK_VADDR,
-                                             initrd_size);
+    // uintptr_t kernel_pc = linux_setup_images((uintptr_t)GUEST_RAM_VADDR,
+    //                                          (uintptr_t)_guest_kernel_image,
+    //                                          kernel_size,
+    //                                          (uintptr_t)_guest_dtb_image,
+    //                                          (uintptr_t)GUEST_DTB_VADDR,
+    //                                          dtb_size,
+    //                                          (uintptr_t)_guest_initrd_image,
+    //                                          (uintptr_t)GUEST_INIT_RAM_DISK_VADDR,
+    //                                          initrd_size);
+
+    uintptr_t kernel_pc = 0;
     if (!kernel_pc)
     {
         ZF_LOGE("Failed to initialise guest images\n");
