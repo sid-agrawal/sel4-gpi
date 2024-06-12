@@ -41,7 +41,7 @@ int test_ramdisk(env_t env)
     vka_cspace_alloc(&env->vka, &slot);
 
     mo_client_context_t mo_conn;
-    error = mo_component_client_connect(env->gpi_endpoint,
+    error = mo_component_client_connect(sel4gpi_get_rde(GPICAP_TYPE_MO),
                                         slot,
                                         1,
                                         &mo_conn);

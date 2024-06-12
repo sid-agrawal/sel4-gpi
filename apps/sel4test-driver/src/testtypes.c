@@ -19,9 +19,9 @@
 #include <sel4gpi/mo_component.h>
 #include <sel4gpi/cpu_component.h>
 #include <sel4gpi/pd_component.h>
+#include <sel4gpi/error_handle.h>
 #include <sel4testsupport/testreporter.h>
 
-#define QEMU_SERIAL_IRQ 33
 #define PD_FORGE 1
 
 /* Bootstrap test type. */
@@ -233,15 +233,6 @@ void basic_set_up(uintptr_t e)
         env->init->timer_ntfn = sel4utils_copy_cap_to_process(&(env->test_process), &env->vka, env->timer_notify_test.cptr);
     }
 
-    /* Get an IRQ Handler for serial device */
-    // TODO Linh: move this somewhere else, disabling for now so we can run multiple tests
-    // cspacepath_t path;
-    // error = vka_cspace_alloc_path(&env->vka, &path);
-    // ZF_LOGF_IFERR(error, "Failed to allocate path for IRQ handler\n");
-
-    // error = simple_get_IRQ_handler(&env->simple, QEMU_SERIAL_IRQ, path);
-    // ZF_LOGF_IFERR(error, "Failed to make QEMU UART IRQ Handler\n");
-
     /* NOTE:
        The return from sel4utils_copy_cap_to_process is the slot in the cnode where the cap was placed
        in the child process' cspace
@@ -249,7 +240,7 @@ void basic_set_up(uintptr_t e)
     env->init->domain = sel4utils_copy_cap_to_process(&(env->test_process), &env->vka, simple_get_init_cap(&env->simple, seL4_CapDomain));
     env->init->asid_pool = sel4utils_copy_cap_to_process(&(env->test_process), &env->vka, simple_get_init_cap(&env->simple, seL4_CapInitThreadASIDPool));
     env->init->asid_ctrl = sel4utils_copy_cap_to_process(&(env->test_process), &env->vka, simple_get_init_cap(&env->simple, seL4_CapASIDControl));
-    // env->init->irq_handler = sel4utils_copy_cap_to_process(&(env->test_process), &env->vka, path.capPtr);
+    env->init->serial_irq_handler = sel4utils_copy_cap_to_process(&(env->test_process), &env->vka, env->serial_irq_handler);
 #ifdef CONFIG_IOMMU
     env->init->io_space = sel4utils_copy_cap_to_process(&(env->test_process), &env->vka, simple_get_init_cap(&env->simple, seL4_CapIOSpace));
 #endif /* CONFIG_IOMMU */
@@ -277,13 +268,9 @@ void basic_set_up(uintptr_t e)
      * or a fault to see when the test finishes */
     env->endpoint = sel4utils_copy_cap_to_process(&(env->test_process), &env->vka, env->test_process.fault_endpoint.cptr);
 
-    env->gpi_endpoint_in_child = sel4utils_copy_cap_to_process(&(env->test_process),
-                                                               &env->vka, env->gpi_endpoint_in_parent);
-    assert(env->gpi_endpoint_in_child != 0);
-
     // Keep this one as the last COPY, so that  init->free_slot.start a few lines below stays valid.
     // See at label "Warning"
-    seL4_CPtr free_slot_start = env->gpi_endpoint_in_child + 1;
+    seL4_CPtr free_slot_start = env->endpoint + 1;
 
     /* copy the device frame, if any */
     if (env->init->device_frame_cap)
@@ -324,16 +311,12 @@ test_result_t basic_run_test(struct testcase *test, uintptr_t e)
 #endif
 
     /* set up args for the test process */
-    seL4_Word argc = 6;
+    seL4_Word argc = 2;
     char string_args[argc][WORD_STRING_SIZE];
     char *argv[argc];
     sel4utils_create_word_args(string_args, argv, argc,
                                env->endpoint,
-                               env->remote_vaddr,
-                               env->child_ads_cptr_in_child,
-                               env->child_cpu_cptr_in_child,
-                               env->child_pd_cptr_in_child,
-                               env->gpi_endpoint_in_child);
+                               env->remote_vaddr);
 
     int num_res;
 
@@ -381,12 +364,12 @@ void basic_tear_down(uintptr_t e)
         vka_cnode_revoke(&path);
     }
 
-    #if PD_FORGE
+#if PD_FORGE
     destroy_test_pd();
-    #else
+#else
     /* destroy the process */
     sel4utils_destroy_process(&(env->test_process), &env->vka);
-    #endif
+#endif
 }
 
 DEFINE_TEST_TYPE(BASIC, BASIC, NULL, NULL, basic_set_up, basic_tear_down, basic_run_test);

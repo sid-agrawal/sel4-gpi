@@ -86,7 +86,8 @@ static int benchmark_pd_create(env_t env, bool native)
         error = vka_alloc_frame(&env->vka, seL4_PageBits, &osm_data_frame);
         test_error_eq(error, 0);
 
-        error = pd_component_client_connect(sel4gpi_get_rde(GPICAP_TYPE_PD), slot, osm_data_frame.cptr, &pd_conn);
+        // TODO fix
+        error = pd_component_client_connect(sel4gpi_get_rde(GPICAP_TYPE_PD), slot, NULL, &pd_conn);
         test_error_eq(error, 0);
         SEL4BENCH_READ_CCNT(pd_create_end);
     }

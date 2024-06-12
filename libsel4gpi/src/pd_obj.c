@@ -768,7 +768,7 @@ static int pd_setup_cspace(pd_t *pd, vka_t *vka)
     pd->proc.cspace_next_free = 1;
     pd->shared_data->cspace_root = PD_CAP_ROOT;
 
-    /*  mint the cnode cap into the process cspace */
+    /*  mint the cnode cap into the PD's cspace */
     cspacepath_t src;
     vka_cspace_make_path(vka, pd->proc.cspace.cptr, &src);
     cspacepath_t dest = {.capPtr = pd->proc.cspace_next_free, .root = src.capPtr, .capDepth = pd->proc.cspace_size};

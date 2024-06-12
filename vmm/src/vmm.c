@@ -24,6 +24,8 @@
 #include <sel4utils/vspace.h>
 #include <sel4utils/vspace_internal.h>
 #include <sel4utils/api.h>
+#include <sel4gpi/error_handle.h>
+#include <sel4gpi/debug.h>
 
 // @ivanv: ideally we would have none of these hardcoded values
 // initrd, ram size come from the DTB
@@ -40,6 +42,7 @@
 #define GUEST_RAM_SIZE 0x10000000 // 128 MB // expected by linux's dts
 
 #if defined(BOARD_qemu_arm_virt)
+#define GUEST_RAM_PADDR 0x40000000
 #define GUEST_RAM_VADDR 0x40000000
 #define GUEST_DTB_VADDR 0x4f000000
 #define GUEST_INIT_RAM_DISK_VADDR 0x4d700000
@@ -217,42 +220,70 @@ vmm_env_t *vm_setup(seL4_IRQHandler irq_handler, vka_t *vka, vspace_t *vspace, s
     caps = vmm_e->gic_vcpu_frame.cptr;
     error = vspace_map_pages_at_vaddr(&vmm_e->vm_vspace, &caps, NULL, (void *)LINUX_GIC_PADDR, 1, seL4_PageBits, res);
     ZF_LOGF_IF(error, "Failed to map GIC vCPU region to VM");
-#endif
-
-#ifdef BOARD_odroidc4
-    error = vka_alloc_frame_at(vka, seL4_PageBits, (uintptr_t)ODROID_BUS1, &vmm_e->serial_dev_frame[0]);
+#elif BOARD_odroidc4
+    vka_object_t bus_frame = {0};
+    error = vka_alloc_frame_at(vka, seL4_LargePageBits, (uintptr_t)ODROID_BUS1, &bus_frame);
     ZF_LOGF_IF(error, "Failed to allocate odroid bus 1 frame");
-
-    error = vka_alloc_frame_at(vka, seL4_PageBits, (uintptr_t)ODROID_BUS2, &vmm_e->serial_dev_frame[1]);
-    ZF_LOGF_IF(error, "Failed to allocate odroid bus 2 frame");
-
-    error = vka_alloc_frame_at(vka, seL4_PageBits, (uintptr_t)ODROID_BUS3, &vmm_e->serial_dev_frame[2]);
-    ZF_LOGF_IF(error, "Failed to allocate odroid bus 3 frame");
-
-    res = vspace_reserve_range_at(&vmm_e->vm_vspace, (void *)ODROID_BUS1, BIT(seL4_PageBits), seL4_AllRights, 0);
-    seL4_CPtr caps = vmm_e->serial_dev_frame[0].cptr;
-    error = vspace_map_pages_at_vaddr(&vmm_e->vm_vspace, &caps, NULL, (void *)ODROID_BUS1, 1, seL4_PageBits, res);
+    res = vspace_reserve_range_at(&vmm_e->vm_vspace, (void *)ODROID_BUS1, BIT(seL4_LargePageBits), seL4_AllRights, 0);
+    error = vspace_map_pages_at_vaddr(&vmm_e->vm_vspace, &bus_frame.cptr, NULL, (void *)ODROID_BUS1, 1, seL4_LargePageBits, res);
     ZF_LOGF_IF(error, "Failed to map odroid bus 1 region to VM");
 
-    res = vspace_reserve_range_at(&vmm_e->vm_vspace, (void *)ODROID_BUS2, BIT(seL4_PageBits), seL4_AllRights, 0);
-    caps = vmm_e->serial_dev_frame[1].cptr;
-    error = vspace_map_pages_at_vaddr(&vmm_e->vm_vspace, &caps, NULL, (void *)ODROID_BUS2, 1, seL4_PageBits, res);
+    error = vka_alloc_frame_at(vka, seL4_LargePageBits, (uintptr_t)ODROID_BUS2, &bus_frame);
+    ZF_LOGF_IF(error, "Failed to allocate odroid bus 2 frame");
+    res = vspace_reserve_range_at(&vmm_e->vm_vspace, (void *)ODROID_BUS2, BIT(seL4_LargePageBits), seL4_AllRights, 0);
+    error = vspace_map_pages_at_vaddr(&vmm_e->vm_vspace, &bus_frame.cptr, NULL, (void *)ODROID_BUS2, 1, seL4_LargePageBits, res);
     ZF_LOGF_IF(error, "Failed to map odroid bus 2 region to VM");
 
+    size_t serial_pages = BYTES_TO_4K_PAGES(0x100000);
+    seL4_CPtr serial_frames[serial_pages];
+    uintptr_t serial_paddr = ODROID_BUS3;
+    for (size_t i = 0; i < serial_pages; i++)
+    {
+        error = vka_alloc_frame_at(vka, seL4_PageBits, serial_paddr, &bus_frame);
+        ZF_LOGF_IF(error, "Failed to allocate odroid serial frame");
+        serial_paddr += SIZE_BITS_TO_BYTES(seL4_PageBits);
+        serial_frames[i] = bus_frame.cptr;
+    }
+
     res = vspace_reserve_range_at(&vmm_e->vm_vspace, (void *)ODROID_BUS3, BIT(seL4_PageBits), seL4_AllRights, 0);
-    caps = vmm_e->serial_dev_frame[2].cptr;
-    error = vspace_map_pages_at_vaddr(&vmm_e->vm_vspace, &caps, NULL, (void *)ODROID_BUS3, 1, seL4_PageBits, res);
+    error = vspace_map_pages_at_vaddr(&vmm_e->vm_vspace, serial_frames, NULL, (void *)ODROID_BUS3, 1, seL4_PageBits, res);
     ZF_LOGF_IF(error, "Failed to map odroid bus 3 region to VM");
 #endif
-
     /* guest ram */
-    size_t num_pages = DIV_ROUND_UP(GUEST_RAM_SIZE, BIT(seL4_LargePageBits));
+    size_t num_pages = DIV_ROUND_UP(GUEST_RAM_SIZE, SIZE_BITS_TO_BYTES(seL4_LargePageBits));
 
-    reservation_t vmm_res = vspace_reserve_range_at(vmm_e->vspace, (void *)GUEST_RAM_VADDR, GUEST_RAM_SIZE, seL4_AllRights, 1);
-    error = vspace_new_pages_at_vaddr(vmm_e->vspace, (void *)GUEST_RAM_VADDR, DIV_ROUND_UP(GUEST_RAM_SIZE, BIT(seL4_LargePageBits)), seL4_LargePageBits, vmm_res);
-    ZF_LOGF_IF(error, "Failed to allocate guest RAM in VMM's vspace");
+    res = vspace_reserve_range_at(&vmm_e->vm_vspace, (void *)GUEST_RAM_VADDR, GUEST_RAM_SIZE, seL4_AllRights, 1);
+    seL4_CPtr ram_frames[num_pages];
+    vka_object_t frame;
+#ifdef BOARD_qemu_arm_virt
+    uintptr_t paddr = GUEST_RAM_PADDR;
+    for (size_t i = 0; i < num_pages; i++)
+    {
+        error = vka_alloc_frame_at(vka, seL4_LargePageBits, paddr, &frame);
+        ZF_LOGF_IF(error, "Failed to allocate frame for RAM\n");
+        ram_frames[i] = frame.cptr;
+        paddr += SIZE_BITS_TO_BYTES(seL4_LargePageBits);
+    }
 
-    error = sel4utils_share_mem_at_vaddr(vmm_e->vspace, &vmm_e->vm_vspace, (void *)GUEST_RAM_VADDR, num_pages, seL4_LargePageBits, (void *)GUEST_RAM_VADDR, vmm_res);
+    error = vspace_map_pages_at_vaddr(&vmm_e->vm_vspace, ram_frames, NULL, (void *)GUEST_RAM_VADDR, num_pages, seL4_LargePageBits, res);
+    ZF_LOGF_IF(error, "Failed to map guest RAM in VMM's vspace");
+#elif BOARD_odroidc4
+    CPRINTF("A\n");
+    for (size_t i = 0; i < num_pages; i++)
+    {
+        error = vka_alloc_frame(vka, seL4_LargePageBits, &frame);
+        ZF_LOGF_IF(error, "Failed to allocate frame for RAM\n");
+        ram_frames[i] = frame.cptr;
+    }
+
+    error = vspace_map_pages_at_vaddr(&vmm_e->vm_vspace, ram_frames, NULL, (void *)GUEST_RAM_VADDR, num_pages, seL4_LargePageBits, res);
+    ZF_LOGF_IF(error, "Failed to map guest RAM in VMM's vspace");
+
+#endif
+    CPRINTF("B\n");
+
+    error = sel4utils_share_mem_at_vaddr(&vmm_e->vm_vspace, vmm_e->vspace, (void *)GUEST_RAM_VADDR, num_pages, seL4_LargePageBits, (void *)GUEST_RAM_VADDR, res);
+    // error = vspace_map_pages(vmm_e->vspace, ram_frames, NULL, seL4_AllRights, num_pages, seL4_LargePageBits, 1);
     ZF_LOGF_IF(error, "Failed to copy guest RAM to VM's vspace");
 
     return vmm_e;
@@ -282,12 +313,14 @@ void vm_init(vmm_env_t *vmm_e)
         return;
     }
     /* Initialise the virtual GIC driver */
+
     bool success = virq_controller_init(GUEST_VCPU_ID);
     if (!success)
     {
         ZF_LOGE("Failed to initialise emulated interrupt controller\n");
         return;
     }
+
     // @ivanv: Note that remove this line causes the VMM to fault if we
     // actually get the interrupt. This should be avoided by making the VGIC driver more stable.
     success = virq_register(GUEST_VCPU_ID, SERIAL_IRQ, &serial_ack, (void *)vmm_e);
@@ -296,6 +329,7 @@ void vm_init(vmm_env_t *vmm_e)
     error = seL4_IRQHandler_Ack(vmm_e->serial_irq_handler); // XXX + serial channel num
     ZF_LOGE_IFERR(error, "Failed to ACK interrupt");
     // /* Finally start the guest */
+
     guest_start(vmm_e, GUEST_VCPU_ID, kernel_pc, (uintptr_t)GUEST_DTB_VADDR, (uintptr_t)GUEST_INIT_RAM_DISK_VADDR);
 }
 

@@ -22,7 +22,7 @@
 #include <vka/capops.h>
 #include <vmm/vmm.h>
 
-int test_new_vmm(env_t env)
+int test_new_vmm_native(env_t env)
 {
     int error;
     printf("------------------STARTING: %s------------------\n", __func__);
@@ -40,4 +40,13 @@ int test_new_vmm(env_t env)
 
     return sel4test_get_result();
 }
-DEFINE_TEST(GPIVM001, "Test running VM", test_new_vmm, true)
+
+int test_new_vmm_osm(env_t env)
+{
+    int error;
+    printf("------------------STARTING: %s------------------\n", __func__);
+    return sel4test_get_result();
+}
+
+DEFINE_TEST(GPIVM001, "Test native VMM", test_new_vmm_native, true)
+DEFINE_TEST(GPIVM002, "Test OSM VMM", test_new_vmm_osm, true)

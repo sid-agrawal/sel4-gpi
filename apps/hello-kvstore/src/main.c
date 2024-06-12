@@ -104,6 +104,7 @@ int main(int argc, char **argv)
     kvstore_mode_t mode = (seL4_CPtr)atol(argv[2]);
     seL4_CPtr fs_ep = sel4gpi_get_rde(sel4gpi_get_resource_type_code(FILE_RESOURCE_TYPE_NAME));
     seL4_CPtr mo_ep = sel4gpi_get_rde(GPICAP_TYPE_MO);
+    // seL4_Word affinity = seL4_TCB_GetAffinity()
 
     printf("hello-kvstore: parent ep (%d), kvstore ep (%d), mode (%d), fs ep(%d), mo ep(%d) \n", (int)parent_ep, (int)kvstore_ep, (int)mode, (int)fs_ep, (int)mo_ep);
 
