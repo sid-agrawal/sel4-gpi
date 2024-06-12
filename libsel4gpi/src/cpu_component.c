@@ -67,14 +67,11 @@ static seL4_MessageInfo_t handle_cpu_allocation(seL4_Word sender_badge)
                                         (resource_server_registry_node_t **)&new_entry, &ret_cap);
     SERVER_GOTO_IF_ERR(error, "Failed to allocate new CPU object\n");
 
-    seL4_SetCap(0, ret_cap);
-
     OSDB_PRINTF("Allocated new CPU (%d)\n", new_entry->cpu.id);
-
-    reply_tag = seL4_MessageInfo_new(error, 0, 1, CPUMSGREG_CONNECT_ACK_END);
-    return reply_tag;
+    seL4_SetMR(CPUMSGREG_CONNECT_ACK_SLOT, ret_cap);
 
 err_goto:
+    seL4_SetMR(CPUMSGREG_FUNC, CPU_FUNC_CONNECT_ACK);
     reply_tag = seL4_MessageInfo_new(error, 0, 0, CPUMSGREG_CONNECT_ACK_END);
     return reply_tag;
 }

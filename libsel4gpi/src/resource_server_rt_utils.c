@@ -109,7 +109,7 @@ int resource_component_allocate(resource_component_context_t *component,
         vka_t *client_vka;
 
         /* Eventually all will use the client vka */
-        if (component->resource_type == GPICAP_TYPE_MO || component->resource_type == GPICAP_TYPE_ADS)
+        if (component->resource_type == GPICAP_TYPE_MO || component->resource_type == GPICAP_TYPE_ADS || component->resource_type == GPICAP_TYPE_CPU)
         {
             // Find the client PD
             pd_component_registry_entry_t *pd_data = (pd_component_registry_entry_t *)

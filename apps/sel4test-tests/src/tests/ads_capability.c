@@ -113,7 +113,6 @@ int test_ads_dump_rr(env_t env)
 
     cpu_client_context_t cpu_conn;
     error = cpu_component_client_connect(env->gpi_endpoint,
-                                         &env->vka,
                                          &cpu_conn);
     test_error_eq(error, 0);
 
@@ -267,7 +266,6 @@ int test_ads_stack_isolated_stack_die(env_t env)
     // Allocate new CPU
     cpu_client_context_t cpu_conn;
     error = cpu_component_client_connect(env->gpi_endpoint,
-                                         &env->vka,
                                          &cpu_conn);
     test_error_eq(error, 0);
 

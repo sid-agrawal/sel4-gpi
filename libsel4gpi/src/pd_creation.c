@@ -89,10 +89,7 @@ pd_config_t *sel4gpi_configure_process(const char *image_name,
     seL4_CPtr cpu_rde = sel4gpi_get_rde(GPICAP_TYPE_CPU);
     GOTO_IF_COND(cpu_rde == seL4_CapNull, "No CPU RDE\n");
 
-    error = pd_client_next_slot(&self_pd_conn, &free_slot);
-    GOTO_IF_ERR(error, "failed to allocate next slot");
-
-    error = cpu_component_client_connect(cpu_rde, free_slot, &ret_runnable->cpu);
+    error = cpu_component_client_connect(cpu_rde, &ret_runnable->cpu);
     GOTO_IF_ERR(error, "failed to allocate a new CPU");
 
     proc_cfg = sel4gpi_generate_proc_config(image_name, DEFAULT_STACK_PAGES, DEFAULT_HEAP_PAGES, &osm_data_mo);
@@ -142,10 +139,7 @@ pd_config_t *sel4gpi_configure_thread(void *thread_fn, seL4_CPtr fault_ep, sel4g
     seL4_CPtr cpu_rde = sel4gpi_get_rde(GPICAP_TYPE_CPU);
     GOTO_IF_COND(cpu_rde == seL4_CapNull, "No CPU RDE\n");
 
-    error = pd_client_next_slot(&self_pd_conn, &free_slot);
-    GOTO_IF_ERR(error, "failed to allocate next slot");
-
-    error = cpu_component_client_connect(cpu_rde, free_slot, &ret_runnable->cpu);
+    error = cpu_component_client_connect(cpu_rde, &ret_runnable->cpu);
     GOTO_IF_ERR(error, "failed to allocate a new CPU");
 
     cfg = sel4gpi_generate_thread_config(thread_fn, fault_ep, &osm_data_mo);

@@ -19,27 +19,15 @@
 #define SERVER_ID CPUSERVC
 
 int cpu_component_client_connect(seL4_CPtr server_ep_cap,
-                                 seL4_CPtr free_slot,
                                  cpu_client_context_t *ret_conn)
 {
-
-    /* Send a REQ message to the server on its public EP */
-    seL4_SetCapReceivePath(SEL4UTILS_CNODE_SLOT, /* Position of the cap to the CNODE */
-                           free_slot,            /* CPTR in this CSPACE */
-                           /* This works coz we have a single level cnode with no guard.*/
-                           seL4_WordBits); /* Depth i.e. how many bits of free_slot to interpret*/
-
-    OSDB_PRINTF("Set a receive path for the badged ep: %lu\n", free_slot);
-
     /* Set request type */
     seL4_SetMR(CPUMSGREG_FUNC, CPU_FUNC_CONNECT_REQ);
 
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0, CPUMSGREG_CONNECT_REQ_END);
     tag = seL4_Call(server_ep_cap, tag);
 
-    ret_conn->badged_server_ep_cspath.capPtr = free_slot;
-
-    OSDB_PRINTF("received badged endpoint and it was kept in %lu:__\n", free_slot);
+    ret_conn->badged_server_ep_cspath.capPtr = seL4_GetMR(CPUMSGREG_CONNECT_ACK_SLOT);
     
     return seL4_MessageInfo_ptr_get_label(&tag);
 }

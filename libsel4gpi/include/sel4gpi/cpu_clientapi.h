@@ -18,12 +18,10 @@
  * @brief   Initialize the cpu client.
  *
  * @param server_ep_cap Well known server endpoint cap.
- * @param client_vka client's cka for allocating memory.
  * @param ret_conn client's connection object
  * @return int 0 on success, -1 on failure.
  */
 int cpu_component_client_connect(seL4_CPtr server_ep_cap,
-                                 seL4_CPtr free_slot,
                                  cpu_client_context_t *ret_conn);
 
 /**

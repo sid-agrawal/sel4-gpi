@@ -383,13 +383,9 @@ static int benchmark_cpu(env_t env, bool native)
     }
     else
     {
-        seL4_CPtr slot;
-        error = vka_cspace_alloc(&env->vka, &slot);
-        test_error_eq(error, 0);
-
         SEL4BENCH_READ_CCNT(cpu_create_start);
         cpu_client_context_t new_cpu;
-        error = cpu_component_client_connect(sel4gpi_get_rde(GPICAP_TYPE_CPU), slot, &new_cpu);
+        error = cpu_component_client_connect(sel4gpi_get_rde(GPICAP_TYPE_CPU), &new_cpu);
         test_error_eq(error, 0);
         SEL4BENCH_READ_CCNT(cpu_create_end);
 
