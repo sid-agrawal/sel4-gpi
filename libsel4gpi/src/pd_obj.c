@@ -645,15 +645,18 @@ int pd_next_slot(pd_t *pd,
     return error;
 }
 
+int pd_clear_slot(pd_t *pd,
+                 seL4_CPtr slot)
+{
+    // Try to delete slot contents
+    cspacepath_t path;
+    vka_cspace_make_path(pd->pd_vka, slot, &path);
+    return vka_cnode_delete(&path);
+}
+
 int pd_free_slot(pd_t *pd,
                  seL4_CPtr slot)
 {
-    // First try to delete slot contents,
-    // ignore error if slot is already empty
-    cspacepath_t path;
-    vka_cspace_make_path(pd->pd_vka, slot, &path);
-    vka_cnode_delete(&path);
-
     /*
     (XXX) Arya: Can't use vka_cspace_free because it tries to identify
     the cap based on the current cspace

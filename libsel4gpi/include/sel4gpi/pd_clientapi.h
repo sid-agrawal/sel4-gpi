@@ -15,6 +15,12 @@
 #include <sel4gpi/pd_creation.h>
 
 /**
+ * @file Definition of the client API for interacting with the PD component
+*/
+
+/** PD CREATION / INITIALIZATION **/
+
+/**
  * @brief   Initialize the pd client.
  *
  * @param server_ep_cap Well known server endpoint cap.
@@ -65,44 +71,6 @@ int pd_client_send_core_cap(pd_client_context_t *conn,
                             seL4_Word *slot);
 
 /**
- * @brief Get the next free slot
- *
- * @param conn client connection object
- * @param slot next free slot in the PD
- * @return int 0 on success, -1 on failure.
- */
-int pd_client_next_slot(pd_client_context_t *conn, seL4_Word *slot);
-
-/**
- * @brief Free an unused slot in the PD
- *
- * @param conn client connection object
- * @param slot slot to free in the PD
- * @return int 0 on success, -1 on failure.
- */
-int pd_client_free_slot(pd_client_context_t *conn,
-                        seL4_CPtr slot);
-/**
- * @brief Create a badged copy of an endpoint capability
- *
- * @param conn client connection object
- * @param ret_ep location of result endpoint
- * @return int 0 on success, -1 on failure.
- */
-int pd_client_alloc_ep(pd_client_context_t *conn,
-                       seL4_CPtr *ret_ep);
-
-/**
- * @brief Dump the PD.
- * @param conn client connection object
- * @param buf buffer to dump the PD into
- * @param size size of the buffer
- * @return int 0 on success, -1 on failure.
- */
-int pd_client_dump(pd_client_context_t *conn,
-                   char *buf, size_t size);
-
-/**
  * @brief Share an RDE with another PD
  * This shares an RDE from the client PD with the target PD (client PD is the PD which created the target PD)
  * The RDE is keyed by cap type and resource space ID
@@ -115,49 +83,6 @@ int pd_client_dump(pd_client_context_t *conn,
 int pd_client_share_rde(pd_client_context_t *target_pd,
                         gpi_cap_t cap_type,
                         uint64_t space_id);
-
-/**
- * To be called by a resource server when it allocates
- * a resource to another PD
- *
- * (XXX) Arya: Replace space/resource id with universal_res_id
- * @param conn the resource server's pd connection
- * @param res_space_id the resource space ID
- * @param recipient_id the recipient PD's ID
- * @param resource_id unique ID of the resource within the resource space
- * @param dest returns the destination slot in the recipient PD
- */
-int pd_client_give_resource(pd_client_context_t *conn,
-                            seL4_Word res_space_id,
-                            seL4_Word recipient_id,
-                            seL4_Word resource_id,
-                            seL4_CPtr *dest);
-
-#if TRACK_MAP_RELATIONS
-/**
- * To be called by a resource server when it maps a resource to another resource
- * The server must be the managing PD of the source resource's resource space
- * The source resource's resource space must map to the destination resource's space
- * (XXX) Arya: WIP
- *
- * @param conn the resource server's pd connection
- * @param src_res_id the universal ID of the source resource (universal_res_id)
- * @param dest_res_id the universal ID of the destination resource (universal_res_id)
- */
-int pd_client_map_resource(pd_client_context_t *conn,
-                           seL4_Word src_res_id,
-                           seL4_Word dest_res_id);
-#endif
-
-/**
- * Called by a PD to notify that it is about to exit
- * This call has no reply
- *
- * @param conn the connection of the PD that is exiting
- */
-void pd_client_exit(pd_client_context_t *conn);
-
-void pd_client_bench_ipc(pd_client_context_t *conn, seL4_CPtr dummy_send_cap, seL4_CPtr dummy_recv_cap, bool cap_transfer);
 
 /**
  * @brief (WIP) prepares the (PD, ADS, CPU) combination with the given arguments,
@@ -197,3 +122,110 @@ int pd_client_runtime_setup(pd_client_context_t *target_pd,
  * @return int 0 on success
  */
 int pd_client_share_resource_by_type(pd_client_context_t *src_pd, pd_client_context_t *dest_pd, gpi_cap_t res_type);
+
+/** CSPACE MANAGEMENT **/
+
+/**
+ * @brief Get the next free slot in the PD's cspace.
+ *
+ * @param conn client connection object
+ * @param slot next free slot in the PD
+ * @return int 0 on success, -1 on failure.
+ */
+int pd_client_next_slot(pd_client_context_t *conn, seL4_Word *slot);
+
+/**
+ * @brief Free an unused slot in the PD's cspace.
+ * If the slot contains a capability, the capability will be deleted.
+ * The slot will be marked free for future calls to pd_client_next_slot.
+ *
+ * @param conn client connection object
+ * @param slot slot to free in the PD
+ * @return int 0 on success, -1 on failure.
+ */
+int pd_client_free_slot(pd_client_context_t *conn,
+                        seL4_CPtr slot);
+
+/**
+ * @brief Clear a slot in the PD's cspace
+ * If the slot contains a capability, the capability will be deleted.
+ * The slot will not be freed, and can be used again by the PD.
+ *
+ * @param conn client connection object
+ * @param slot slot to free in the PD
+ * @return int 0 on success, -1 on failure.
+ */
+int pd_client_clear_slot(pd_client_context_t *conn,
+                        seL4_CPtr slot);
+
+/**
+ * @brief Create a badged copy of an endpoint capability
+ *
+ * @param conn client connection object
+ * @param ret_ep location of result endpoint
+ * @return int 0 on success, -1 on failure.
+ */
+int pd_client_alloc_ep(pd_client_context_t *conn,
+                       seL4_CPtr *ret_ep);
+
+/** RESOURCE SERVER PD OPERATIONS **/
+
+/**
+ * To be called by a resource server when it allocates
+ * a resource to another PD
+ *
+ * (XXX) Arya: Replace space/resource id with universal_res_id
+ * @param conn the resource server's pd connection
+ * @param res_space_id the resource space ID
+ * @param recipient_id the recipient PD's ID
+ * @param resource_id unique ID of the resource within the resource space
+ * @param dest returns the destination slot in the recipient PD
+ */
+int pd_client_give_resource(pd_client_context_t *conn,
+                            seL4_Word res_space_id,
+                            seL4_Word recipient_id,
+                            seL4_Word resource_id,
+                            seL4_CPtr *dest);
+
+#if TRACK_MAP_RELATIONS
+/**
+ * To be called by a resource server when it maps a resource to another resource
+ * The server must be the managing PD of the source resource's resource space
+ * The source resource's resource space must map to the destination resource's space
+ * (XXX) Arya: WIP
+ *
+ * @param conn the resource server's pd connection
+ * @param src_res_id the universal ID of the source resource (universal_res_id)
+ * @param dest_res_id the universal ID of the destination resource (universal_res_id)
+ */
+int pd_client_map_resource(pd_client_context_t *conn,
+                           seL4_Word src_res_id,
+                           seL4_Word dest_res_id);
+#endif
+
+/** OTHER FUNCTIONS FOR ACTIVE PDs **/
+
+/**
+ * Called by a PD to notify that it is about to exit
+ * This call has no reply
+ *
+ * @param conn the connection of the PD that is exiting
+ */
+void pd_client_exit(pd_client_context_t *conn);
+
+/** MODEL EXTRACTION & BENCHMARKING **/
+
+/**
+ * @brief Dump the PD.
+ * @param conn client connection object
+ * @param buf buffer to dump the PD into
+ * @param size size of the buffer
+ * @return int 0 on success, -1 on failure.
+ */
+int pd_client_dump(pd_client_context_t *conn,
+                   char *buf, size_t size);
+
+void pd_client_bench_ipc(pd_client_context_t *conn,
+                         seL4_CPtr dummy_send_cap,
+                         seL4_CPtr dummy_recv_cap,
+                         bool cap_transfer);

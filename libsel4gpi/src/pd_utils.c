@@ -4,7 +4,7 @@
 #include <sel4gpi/error_handle.h>
 #include <sel4gpi/pd_utils.h>
 
-static seL4_CPtr next_reply_cap_slot;
+static seL4_CPtr reply_cap_slot = seL4_CapNull;
 
 pd_client_context_t sel4gpi_get_pd_conn(void)
 {
@@ -125,11 +125,11 @@ void sel4gpi_store_reply_cap(void)
     // Save the reply cap in a previously-allocated slot
     error = seL4_CNode_SaveCaller(
         PD_CAP_ROOT,
-        next_reply_cap_slot,
+        reply_cap_slot,
         PD_CAP_DEPTH);
 
     // Update the shared data
-    ((osm_pd_shared_data_t *)sel4runtime_get_osm_shared_data())->reply_cap = next_reply_cap_slot;
+    ((osm_pd_shared_data_t *)sel4runtime_get_osm_shared_data())->reply_cap = reply_cap_slot;
 
 err_goto:
     return;
@@ -144,21 +144,22 @@ void sel4gpi_clear_reply_cap(void)
 {
     int error = 0;
     pd_client_context_t pd_conn = sel4gpi_get_pd_conn();
-    seL4_CPtr slot = ((osm_pd_shared_data_t *)sel4runtime_get_osm_shared_data())->reply_cap;
 
-    // Set the data to null first in case we are killed while the slot is being freed
+    // Set the data to null first in case we are killed while the slot is being cleared
     ((osm_pd_shared_data_t *)sel4runtime_get_osm_shared_data())->reply_cap = seL4_CapNull;
 
-    // Free the old slot
-    if (slot != seL4_CapNull)
+    if (reply_cap_slot == seL4_CapNull)
     {
-        error = pd_client_free_slot(&pd_conn, slot);
-        GOTO_IF_ERR(error, "Failed to free slot for reply cap\n");
+        // Setup the initial cap reply slot
+        error = pd_client_next_slot(&pd_conn, &reply_cap_slot);
+        GOTO_IF_ERR(error, "Failed to allocate slot for reply cap\n");
     }
-
-    // Setup a new slot
-    error = pd_client_next_slot(&pd_conn, &next_reply_cap_slot);
-    GOTO_IF_ERR(error, "Failed to allocate slot for reply cap\n");
+    else
+    {
+        // Clear the cap reply slot
+        error = pd_client_clear_slot(&pd_conn, reply_cap_slot);
+        GOTO_IF_ERR(error, "Failed to clear slot for reply cap\n");
+    }
 
 err_goto:
     return;

@@ -13,6 +13,10 @@
 #include <sel4gpi/resource_server_utils.h>
 #include <sel4gpi/resource_server_remote_utils.h>
 
+/** @file
+ * Utility functions for non-RT PDs that serve GPI resources
+ */
+
 #define CHECK_ERROR(error, msg)    \
     do                             \
     {                              \
@@ -77,7 +81,7 @@ int resource_server_start(resource_server_context_t *context,
  * Recv function for MCS or non-MCS kernel
  */
 static seL4_MessageInfo_t resource_server_recv(resource_server_context_t *context,
-                                        seL4_Word *sender_badge_ptr)
+                                               seL4_Word *sender_badge_ptr)
 {
     /** NOTE:
 
@@ -93,8 +97,8 @@ static seL4_MessageInfo_t resource_server_recv(resource_server_context_t *contex
  * Reply function for MCS or non-MCS kernel
  */
 static void resource_server_reply(resource_server_context_t *context,
-                           seL4_MessageInfo_t tag,
-                           bool stored_reply)
+                                  seL4_MessageInfo_t tag,
+                                  bool stored_reply)
 {
 #if STORE_REPLY_CAP
     if (stored_reply)
@@ -107,16 +111,22 @@ static void resource_server_reply(resource_server_context_t *context,
     api_reply(context->mcs_reply, tag);
 }
 
-int resource_server_next_slot(resource_server_context_t *context,
-                              seL4_CPtr *slot)
+static int resource_server_next_slot(resource_server_context_t *context,
+                                     seL4_CPtr *slot)
 {
     return pd_client_next_slot(&context->pd_conn, slot);
 }
 
-int resource_server_free_slot(resource_server_context_t *context,
-                              seL4_CPtr slot)
+static int resource_server_free_slot(resource_server_context_t *context,
+                                     seL4_CPtr slot)
 {
     return pd_client_free_slot(&context->pd_conn, slot);
+}
+
+static int resource_server_clear_slot(resource_server_context_t *context,
+                                      seL4_CPtr slot)
+{
+    return pd_client_clear_slot(&context->pd_conn, slot);
 }
 
 int resource_server_main(void *context_v)
@@ -144,7 +154,7 @@ int resource_server_main(void *context_v)
         CHECK_ERROR_GOTO(error, "failed to initialize resource server", exit_main);
     }
 
-    // Allocate the first cap receive slot
+    // Allocate the cap receive slot
     error = resource_server_next_slot(context, &received_cap_path.capPtr);
     CHECK_ERROR_GOTO(error, "failed to alloc cap receive slot", exit_main);
 
@@ -166,6 +176,12 @@ int resource_server_main(void *context_v)
 
     while (1)
     {
+        /* Reset the cap receive path */
+        seL4_SetCapReceivePath(
+            received_cap_path.root,
+            received_cap_path.capPtr,
+            received_cap_path.capDepth);
+
         /* Receive a message */
         RESOURCE_SERVER_PRINTF("Ready to receive a message\n");
         tag = resource_server_recv(context, &sender_badge);
@@ -183,41 +199,34 @@ int resource_server_main(void *context_v)
 #endif
 
         /* Handle the message */
-        seL4_MessageInfo_t reply_tag = context->request_handler(tag, sender_badge, received_cap_path.capPtr, &need_new_receive_slot);
+        seL4_MessageInfo_t reply_tag = context->request_handler(tag,
+                                                                sender_badge,
+                                                                received_cap_path.capPtr,
+                                                                &need_new_receive_slot);
 
         /**
-         * Free slot and reallocate only if needed
+         * Clear slot only if needed
          * Some requests come from the root task, so we cannot message it
          * */
         if (need_new_receive_slot)
         {
             // We need to finish setting up for the next request before responding to this one
-            // This is because the next request could be GET_RR, in which case we cannot
+            // This is because the next request could be from the RT, in which case we cannot
             // be requesting a new slot after it is sent
 
             // Save state of message registers for reply
             seL4_Word arg0 = seL4_GetMR(0);
             seL4_Word arg1 = seL4_GetMR(1);
 
-            RESOURCE_SERVER_PRINTF("Freeing cap receive slot\n");
-            error = resource_server_free_slot(context, received_cap_path.capPtr);
-            CHECK_ERROR_GOTO(error, "failed to free cap receive slot", exit_main);
-
-            // (XXX) Arya: Do we need to reallocate if we just delete the contents?
-            RESOURCE_SERVER_PRINTF("Allocating new cap receive slot\n");
-            error = resource_server_next_slot(context, &received_cap_path.capPtr);
-            CHECK_ERROR_GOTO(error, "failed to alloc cap receive slot", exit_main);
-
-            seL4_SetCapReceivePath(
-                received_cap_path.root,
-                received_cap_path.capPtr,
-                received_cap_path.capDepth);
+            RESOURCE_SERVER_PRINTF("Clearing cap receive slot\n");
+            error = resource_server_clear_slot(context, received_cap_path.capPtr);
+            CHECK_ERROR_GOTO(error, "failed to clear cap receive slot", exit_main);
 
             // Restore state of message registers for reply
             seL4_SetMR(0, arg0);
             seL4_SetMR(1, arg1);
         }
-        
+
         /* Reply to message */
         resource_server_reply(context, reply_tag, stored_reply);
 

@@ -174,10 +174,34 @@ int pd_send_cap(pd_t *pd,
                 bool inc_refcount,
                 bool update_core_res);
 
+/**
+ * @brief Allocate a free slot from the PD's cspace
+ * 
+ * @param pd the target PD
+ * @param next_free_slot returns the allocated slot index
+ * @return 0 on success, error otherwise
+*/
 int pd_next_slot(pd_t *pd,
                  seL4_CPtr *next_free_slot);
 
+/**
+ * @brief Free a slot from the PD's cspace
+ * 
+ * @param pd the target PD
+ * @param slot slot index to free
+ * @return 0 on success, error otherwise
+*/
 int pd_free_slot(pd_t *pd,
+                 seL4_CPtr slot);
+
+/**
+ * @brief Delete the capability from a slot in the PD's cspace
+ * 
+ * @param pd the target PD
+ * @param slot slot index to clear
+ * @return 0 on success, error otherwise
+*/
+int pd_clear_slot(pd_t *pd,
                  seL4_CPtr slot);
 
 /**

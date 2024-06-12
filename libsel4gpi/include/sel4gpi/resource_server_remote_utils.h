@@ -18,7 +18,6 @@
  * Utility functions for non-RT PDs that serve GPI resources
  */
 
-
 /**
  * Generic resource server context
  */
@@ -74,18 +73,6 @@ int resource_server_start(resource_server_context_t *context,
                           seL4_CPtr parent_ep,
                           uint64_t parent_pd_id,
                           int (*init_fn)());
-
-/**
- * Gets the next free cspace slot, otherwise uses pd clientapi
- */
-int resource_server_next_slot(resource_server_context_t *context,
-                              seL4_CPtr *slot);
-
-/**
- * Frees a previously allocated cspace slot, otherwise uses pd clientapi
- */
-int resource_server_free_slot(resource_server_context_t *context,
-                              seL4_CPtr slot);
 
 /**
  * Main function for a resource server, receives requests

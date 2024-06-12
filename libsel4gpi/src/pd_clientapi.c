@@ -18,6 +18,10 @@
 #include <sel4gpi/pd_utils.h>
 #include <sel4gpi/error_handle.h>
 
+/**
+ * @file Client-side calls for interacting with the PD component
+ */
+
 // Defined for utility printing macros
 #define DEBUG_ID PD_DEBUG
 #define SERVER_ID PDSERVC
@@ -110,7 +114,6 @@ int pd_client_next_slot(pd_client_context_t *conn,
     seL4_SetMR(PDMSGREG_FUNC, PD_FUNC_NEXT_SLOT_REQ);
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0,
                                                   PDMSGREG_NEXT_SLOT_REQ_END);
-    // OSDB_PRINTF(PD_DEBUG, "pd_client_next_slot call\n");
     tag = seL4_Call(conn->badged_server_ep_cspath.capPtr, tag);
     *slot = seL4_GetMR(PDMSGREG_NEXT_SLOT_PD_SLOT);
 
@@ -120,11 +123,22 @@ int pd_client_next_slot(pd_client_context_t *conn,
 int pd_client_free_slot(pd_client_context_t *conn,
                         seL4_CPtr slot)
 {
-    // Now get the server to free the slot
     seL4_SetMR(PDMSGREG_FUNC, PD_FUNC_FREE_SLOT_REQ);
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0,
                                                   PDMSGREG_FREE_SLOT_REQ_END);
     seL4_SetMR(PDMSGREG_FREE_SLOT_REQ_SLOT, slot);
+    tag = seL4_Call(conn->badged_server_ep_cspath.capPtr, tag);
+
+    return seL4_MessageInfo_ptr_get_label(&tag);
+}
+
+int pd_client_clear_slot(pd_client_context_t *conn,
+                         seL4_CPtr slot)
+{
+    seL4_SetMR(PDMSGREG_FUNC, PD_FUNC_CLEAR_SLOT_REQ);
+    seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0,
+                                                  PDMSGREG_CLEAR_SLOT_REQ_END);
+    seL4_SetMR(PDMSGREG_CLEAR_SLOT_REQ_SLOT, slot);
     tag = seL4_Call(conn->badged_server_ep_cspath.capPtr, tag);
 
     return seL4_MessageInfo_ptr_get_label(&tag);

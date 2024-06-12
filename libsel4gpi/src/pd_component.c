@@ -157,14 +157,35 @@ static seL4_MessageInfo_t handle_free_slot_req(seL4_Word sender_badge,
     SERVER_GOTO_IF_COND(client_data == NULL, "Couldn't find PD (%ld)\n", get_object_id_from_badge(sender_badge));
 
     seL4_Word slot = seL4_GetMR(PDMSGREG_FREE_SLOT_REQ_SLOT);
-    // OSDB_PRINTF("Freeing PD's slot %d.\n", (int)slot);
 
+    // Ignore error from clear slot, error occurs if the slot was already empty
+    pd_clear_slot(&client_data->pd, slot);
     error = pd_free_slot(&client_data->pd, slot);
 
 err_goto:
     seL4_SetMR(PDMSGREG_FUNC, PD_FUNC_FREE_SLOT_ACK);
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(error, 0, 0,
                                                   PDMSGREG_FREE_SLOT_ACK_END);
+    return tag;
+}
+
+static seL4_MessageInfo_t handle_clear_slot_req(seL4_Word sender_badge,
+                                                seL4_MessageInfo_t old_tag)
+{
+    // OSDB_PRINTF("Got clear slot request from client badge %lx.\n", sender_badge);
+    int error = 0;
+
+    pd_component_registry_entry_t *client_data = pd_component_registry_get_entry_by_badge(sender_badge);
+    SERVER_GOTO_IF_COND(client_data == NULL, "Couldn't find PD (%ld)\n", get_object_id_from_badge(sender_badge));
+
+    seL4_Word slot = seL4_GetMR(PDMSGREG_CLEAR_SLOT_REQ_SLOT);
+
+    error = pd_clear_slot(&client_data->pd, slot);
+
+err_goto:
+    seL4_SetMR(PDMSGREG_FUNC, PD_FUNC_CLEAR_SLOT_ACK);
+    seL4_MessageInfo_t tag = seL4_MessageInfo_new(error, 0, 0,
+                                                  PDMSGREG_CLEAR_SLOT_ACK_END);
     return tag;
 }
 
@@ -586,6 +607,9 @@ static seL4_MessageInfo_t pd_component_handle(seL4_MessageInfo_t tag,
             break;
         case PD_FUNC_FREE_SLOT_REQ:
             reply_tag = handle_free_slot_req(sender_badge, tag);
+            break;
+        case PD_FUNC_CLEAR_SLOT_REQ:
+            reply_tag = handle_clear_slot_req(sender_badge, tag);
             break;
         case PD_FUNC_ALLOC_EP_REQ:
             reply_tag = handle_alloc_ep_req(sender_badge, tag);
