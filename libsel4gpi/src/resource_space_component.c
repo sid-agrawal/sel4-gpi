@@ -120,10 +120,7 @@ static seL4_MessageInfo_t handle_resspc_allocation_request(seL4_Word sender_badg
     seL4_SetMR(PDMSGREG_FUNC, RESSPC_FUNC_CONNECT_ACK);
     seL4_SetMR(RESSPCMSGREG_CONNECT_ACK_ID, space_id);
     seL4_SetMR(RESSPCMSGREG_CONNECT_ACK_TYPE, type);
-    seL4_SetCap(0, space_cap);
-    reply_tag = seL4_MessageInfo_new(error, 0, 1,
-                                     RESSPCMSGREG_CONNECT_ACK_END);
-    return reply_tag;
+    seL4_SetMR(RESSPCMSGREG_CONNECT_ACK_SLOT, space_cap);
 
 err_goto:
     seL4_SetMR(PDMSGREG_FUNC, RESSPC_FUNC_CONNECT_ACK);

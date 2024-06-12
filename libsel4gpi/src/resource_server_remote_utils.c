@@ -325,12 +325,8 @@ int resource_server_new_res_space(resource_server_context_t *context,
 
     RESOURCE_SERVER_PRINTF("Creating new NS\n");
 
-    seL4_CPtr free_slot;
-    error = resource_server_next_slot(context, &free_slot);
-    CHECK_ERROR_GOTO(error, "failed to get next slot", err_goto);
-
     resspc_client_context_t space_conn;
-    error = resspc_client_connect(context->resspc_ep, free_slot, context->resource_type_name,
+    error = resspc_client_connect(context->resspc_ep, context->resource_type_name,
                                   context->server_ep, client_id, &space_conn);
     CHECK_ERROR_GOTO(error, "failed to register resource space for server", err_goto);
 

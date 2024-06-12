@@ -9,7 +9,6 @@
  * Allocate a new resource space
  *
  * @param server_ep endpoint of the resource space component
- * @param free_slot slot to store the resource space capability in
  * @param resource_type name of the resource type of the new resource space
  * @param resource_server_ep endpoint of the server that will manager the resource space
  * @param client_id PD ID of the client that should receive an RDE for the new space
@@ -17,7 +16,6 @@
  * @return 0 on success, error otherwise
  */
 int resspc_client_connect(seL4_CPtr server_ep,
-                          seL4_CPtr free_slot,
                           char *resource_type,
                           seL4_CPtr resource_server_ep,
                           seL4_CPtr client_id,

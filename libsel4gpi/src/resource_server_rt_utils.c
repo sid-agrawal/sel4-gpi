@@ -106,23 +106,12 @@ int resource_component_allocate(resource_component_context_t *component,
 
     if (ret_cap != NULL)
     {
-        vka_t *client_vka;
+        // Find the client PD
+        pd_component_registry_entry_t *pd_data = (pd_component_registry_entry_t *)
+            resource_component_registry_get_by_id(get_pd_component(), client_id);
+        SERVER_GOTO_IF_COND(pd_data == NULL, "Couldn't find PD (%ld)\n", client_id);
 
-        /* Eventually all will use the client vka */
-        if (component->resource_type == GPICAP_TYPE_MO || component->resource_type == GPICAP_TYPE_ADS ||
-            component->resource_type == GPICAP_TYPE_CPU || component->resource_type == GPICAP_TYPE_PD)
-        {
-            // Find the client PD
-            pd_component_registry_entry_t *pd_data = (pd_component_registry_entry_t *)
-                resource_component_registry_get_by_id(get_pd_component(), client_id);
-            SERVER_GOTO_IF_COND(pd_data == NULL, "Couldn't find PD (%ld)\n", client_id);
-
-            client_vka = pd_data->pd.pd_vka;
-        }
-        else
-        {
-            client_vka = component->server_vka;
-        }
+        vka_t *client_vka = pd_data->pd.pd_vka;
 
         /* Create the badged endpoint */
         *ret_cap = resource_server_make_badged_ep(component->server_vka, client_vka, component->server_ep,
@@ -139,9 +128,11 @@ int resource_component_allocate(resource_component_context_t *component,
     if (!(client_id == get_gpi_server()->rt_pd_id && component->resource_type == GPICAP_TYPE_RESSPC))
     {
         /* Add the resource to the client */
-        seL4_CPtr slot_in_rt = ret_cap ? *ret_cap : seL4_CapNull;
+        seL4_CPtr slot_in_rt = ret_cap && client_id == get_gpi_server()->rt_pd_id ? *ret_cap : seL4_CapNull;
+        seL4_CPtr slot_in_pd = ret_cap && client_id != get_gpi_server()->rt_pd_id ? *ret_cap : seL4_CapNull;
+
         error = pd_add_resource_by_id(client_id, component->resource_type, component->space_id, resource_id,
-                                      slot_in_rt, seL4_CapNull, slot_in_rt);
+                                      slot_in_rt, slot_in_pd, slot_in_rt);
         GOTO_IF_ERR(error, "Failed to add %s  esource to PD\n", cap_type_to_str(component->resource_type));
     }
 
