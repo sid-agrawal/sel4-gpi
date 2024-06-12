@@ -6,6 +6,7 @@
 #include <vspace/vspace.h>
 #include <sel4utils/vspace.h>
 #include <simple/simple.h>
+#include <sel4gpi/linked_list.h>
 
 #define GUEST_VCPU_ID 0
 #define GUEST_NUM_VCPUS 1
@@ -20,33 +21,27 @@
 #define SEL4_USER_CONTEXT_SIZE 0x24
 #endif
 
-typedef struct vmm_env
+// typedef struct _hyp_native_context
+// {
+//     seL4_CPtr
+// } hyp_native_context_t;
+
+typedef struct _vm_native_context
 {
-    vka_t *vka;
-    vspace_t *vspace;
-    seL4_IRQHandler serial_irq_handler;
     vka_object_t vcpu;
-
-    // TODO: only handles 1 for now, generalize to more vm's
-    /* vm objects */
-    vka_object_t vm_vspace_root;
-    vspace_t vm_vspace;
-    sel4utils_alloc_data_t vm_vspace_data;
-    vka_object_t vm_tcb;
-    vka_object_t vm_sched_ctxt;
-    vka_object_t vm_fault_ep;
-    vka_object_t vm_cspace;
-    vka_object_t serial_dev_frame[3]; // odroid requires three different regions for serial io
+    vka_object_t vspace_root;
+    vspace_t vspace;
+    sel4utils_alloc_data_t vspace_data;
+    vka_object_t tcb;
+    vka_object_t sched_ctxt;
+    seL4_CPtr fault_ep;
+    vka_object_t cspace;
+    vka_object_t *dev_frames;
+    size_t n_dev_frames;
     vka_object_t gic_vcpu_frame;
+} vm_native_context_t;
 
-} vmm_env_t;
-
-typedef struct vm_data
-{
-
-} vm_data_t;
-
-void vm_init(vmm_env_t *vmm_e);
-vmm_env_t *vm_setup(seL4_IRQHandler irq_handler,
+int vm_native_setup(seL4_IRQHandler irq_handler,
                     vka_t *vka, vspace_t *vspace,
-                    seL4_CPtr vspace_root, seL4_CPtr asid_pool, simple_t *simple);
+                    seL4_CPtr vspace_root, seL4_CPtr asid_pool,
+                    simple_t *simple, vm_native_context_t **ret_vm);

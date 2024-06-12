@@ -6,7 +6,7 @@
 #include <utils/zf_log.h>
 #include <vka/object.h>
 
-bool guest_start(vmm_env_t *vmm_env, size_t boot_vcpu_id, uintptr_t kernel_pc, uintptr_t dtb, uintptr_t initrd)
+bool guest_start(seL4_CPtr tcb, size_t boot_vcpu_id, uintptr_t kernel_pc, uintptr_t dtb, uintptr_t initrd)
 {
     /*
      * Set the TCB registers to what the virtual machine expects to be started with.
@@ -20,7 +20,7 @@ bool guest_start(vmm_env_t *vmm_env, size_t boot_vcpu_id, uintptr_t kernel_pc, u
     regs.pc = kernel_pc;
     /* Write out all the TCB registers */
     seL4_Error err = seL4_TCB_WriteRegisters(
-        vmm_env->vm_tcb.cptr,   // XXX + boot_vcpu_id?
+        tcb,                    // XXX + boot_vcpu_id?
         false,                  // We'll explcitly start the guest below rather than in this call
         0,                      // No flags
         SEL4_USER_CONTEXT_SIZE, // Writing to x0, pc, and spsr // @ivanv: for some reason having the number of registers here does not work... (in this case 2)
@@ -35,11 +35,11 @@ bool guest_start(vmm_env_t *vmm_env, size_t boot_vcpu_id, uintptr_t kernel_pc, u
             regs.pc, regs.x0, initrd);
     /* Restart the boot vCPU to the program counter of the TCB associated with it */
 
-    // err = seL4_TCB_Resume(vmm_env->vm_tcb.cptr);
+    // err = seL4_TCB_Resume(tcb);
     seL4_UserContext ctxt = {0};
     ctxt.pc = regs.pc;
     err = seL4_TCB_WriteRegisters(
-        vmm_env->vm_tcb.cptr, // XXX + boot_vcpu_id?
+        tcb, // XXX + boot_vcpu_id?
         true,
         0, /* No flags */
         1, /* writing 1 register */

@@ -26,10 +26,9 @@ int test_new_vmm_native(env_t env)
 {
     int error;
     printf("------------------STARTING: %s------------------\n", __func__);
-
-    vmm_env_t *vmm_e = vm_setup(env->irq_handler, &env->vka, &env->vspace, env->page_directory, env->asid_pool, &env->simple);
-    vm_init(vmm_e);
-
+    vm_native_context_t *vm;
+    error = vm_native_setup(env->irq_handler, &env->vka, &env->vspace, env->page_directory, env->asid_pool, &env->simple, &vm);
+    test_error_eq(error, 0);
     seL4_DebugDumpScheduler();
 
     /* temporary indefinite yield */
@@ -37,6 +36,9 @@ int test_new_vmm_native(env_t env)
     {
         seL4_Yield();
     }
+
+    // TODO destroy function that frees all the objects inside the vm context as well
+    free(vm);
 
     return sel4test_get_result();
 }
