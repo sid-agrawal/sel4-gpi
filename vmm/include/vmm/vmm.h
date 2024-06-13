@@ -21,11 +21,22 @@
 #define SEL4_USER_CONTEXT_SIZE 0x24
 #endif
 
-// typedef struct _hyp_native_context
-// {
-//     seL4_CPtr
-// } hyp_native_context_t;
+#define VMM_DBG 1
 
+#ifdef VMM_DBG
+#define VMM_PRINT(msg, ...)                                             \
+    do                                                                  \
+    {                                                                   \
+        printf(COLORIZE("%s():\t", BLUE) msg, __func__, ##__VA_ARGS__); \
+    } while (0)
+#else
+#define VMM_PRINT(...)
+#endif // VMM_DBG
+
+/**
+ * @brief Holds information about a VM for a
+ * seL4-test VMM implementation
+ */
 typedef struct _vm_native_context
 {
     vka_object_t vcpu;

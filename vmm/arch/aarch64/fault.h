@@ -9,13 +9,12 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include <stddef.h>
+#include <vmm/vmm.h>
 
 /* Fault-handling functions */
-bool fault_handle(size_t vcpu_id
-                  // microkit_msginfo msginfo // XXX
-);
+bool fault_handle(seL4_CPtr vcpu, seL4_MessageInfo_t *msg);
 
-bool fault_handle_vcpu_exception(size_t vcpu_id);
+bool fault_handle_vcpu_exception(vm_native_context_t *vm);
 bool fault_handle_vppi_event(size_t vcpu_id);
 bool fault_handle_user_exception(size_t vcpu_id);
 bool fault_handle_unknown_syscall(size_t vcpu_id);

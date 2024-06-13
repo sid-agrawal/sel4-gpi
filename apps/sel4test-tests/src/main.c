@@ -17,6 +17,7 @@
 #include <sel4/types.h>
 
 #include <sel4platsupport/timer.h>
+#include <sel4platsupport/platsupport.h>
 
 #include <sel4utils/util.h>
 #include <sel4utils/mapping.h>
@@ -277,6 +278,8 @@ int main(int argc, char **argv)
 
     /* initialise rpc client */
     sel4rpc_client_init(&env.rpc_client, env.endpoint, SEL4TEST_PROTOBUF_RPC);
+
+    platsupport_serial_setup_simple(&env.vspace, &env.simple, &env.vka);
 
     /* find the test */
     testcase_t *test = find_test(init_data->name);

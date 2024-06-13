@@ -1,7 +1,7 @@
-#include "vcpu.h"
+#include <vmm/vcpu.h>
 #include "guest.h"
 #include <stdbool.h>
-#include "vmm/vmm.h"
+#include <vmm/vmm.h>
 #include <sel4utils/sel4_zf_logif.h>
 #include <utils/zf_log.h>
 #include <vka/object.h>

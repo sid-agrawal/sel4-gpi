@@ -74,7 +74,7 @@ list(
     REMOVE_ITEM
     deps
     ${CMAKE_CURRENT_SOURCE_DIR}/src/arch/${KernelSel4Arch}/vgic/vgic_v3.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/arch/${KernelSel4Arch}/vcpu.c
+    # ${CMAKE_CURRENT_SOURCE_DIR}/src/arch/${KernelSel4Arch}/vcpu.c
 )
 
 # add_link_options("-fuse-ld=lld")

@@ -6,8 +6,9 @@
 
 #pragma once
 
+#include <sel4/sel4.h>
 #include <stdint.h>
 #include <stddef.h>
 
-void vcpu_reset(size_t vcpu_id);
-void vcpu_print_regs(size_t vcpu_id);
+void vcpu_reset(seL4_CPtr vcpu);
+void vcpu_print_regs(seL4_CPtr vcpu);

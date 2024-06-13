@@ -11,9 +11,10 @@
 #include <stddef.h>
 #include <stdint.h>
 #include <sel4/sel4.h>
+#include <vmm/vmm.h>
 
 /* SMC vCPU fault handler */
-bool handle_smc(size_t vcpu_id, uint32_t hsr);
+bool handle_smc(vm_native_context_t *vm, uint32_t hsr);
 
 /* Helper functions */
 void smc_set_return_value(seL4_UserContext *u, uint64_t val);

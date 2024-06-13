@@ -9,18 +9,9 @@
 #include "smc.h"
 #include "vgic/vgic.h"
 #include "tcb.h"
-#include "vcpu.h"
+#include <vmm/vcpu.h>
 #include "fault.h"
 #include "vmm/vmm.h"
-
-// #define CPSR_THUMB                 (1 << 5)
-// #define CPSR_IS_THUMB(x)           ((x) & CPSR_THUMB)
-
-// int fault_is_32bit_instruction(seL4_UserContext *regs)
-// {
-//     // @ivanv: assuming VCPU fault
-//     return !CPSR_IS_THUMB(regs->spsr);
-// }
 
 bool fault_advance_vcpu(size_t vcpu_id, seL4_UserContext *regs)
 {
@@ -278,14 +269,14 @@ bool fault_advance(size_t vcpu_id, seL4_UserContext *regs, uint64_t addr, uint64
     return fault_advance_vcpu(vcpu_id, regs);
 }
 
-bool fault_handle_vcpu_exception(size_t vcpu_id)
+bool fault_handle_vcpu_exception(vm_native_context_t *vm)
 {
     uint32_t hsr = seL4_GetMR(seL4_VCPUFault_HSR);
     uint64_t hsr_ec_class = HSR_EXCEPTION_CLASS(hsr);
     switch (hsr_ec_class)
     {
     case HSR_SMC_64_EXCEPTION:
-        return handle_smc(vcpu_id, hsr);
+        return handle_smc(vm, hsr);
     case HSR_WFx_EXCEPTION:
         // If we get a WFI exception, we just do nothing in the VMM.
         return true;
@@ -474,39 +465,38 @@ bool fault_handle_vm_exception(size_t vcpu_id)
     }
 }
 
-bool fault_handle(size_t vcpu_id)
+bool fault_handle(seL4_CPtr vcpu, seL4_MessageInfo_t *msg)
 {
-    // size_t label = microkit_msginfo_get_label(msginfo); // XXX
-    size_t label = 0;
     bool success = false;
+    size_t label = seL4_MessageInfo_ptr_get_label(msg);
     switch (label)
     {
     case seL4_Fault_VMFault:
-        success = fault_handle_vm_exception(vcpu_id);
+        success = fault_handle_vm_exception(vcpu);
         break;
     case seL4_Fault_UnknownSyscall:
-        success = fault_handle_unknown_syscall(vcpu_id);
+        success = fault_handle_unknown_syscall(vcpu);
         break;
     case seL4_Fault_UserException:
-        success = fault_handle_user_exception(vcpu_id);
+        success = fault_handle_user_exception(vcpu);
         break;
     case seL4_Fault_VGICMaintenance:
-        success = fault_handle_vgic_maintenance(vcpu_id);
+        success = fault_handle_vgic_maintenance(vcpu);
         break;
     case seL4_Fault_VCPUFault:
-        success = fault_handle_vcpu_exception(vcpu_id);
+        success = fault_handle_vcpu_exception(vcpu);
         break;
     case seL4_Fault_VPPIEvent:
-        success = fault_handle_vppi_event(vcpu_id);
+        success = fault_handle_vppi_event(vcpu);
         break;
     default:
         /* We have reached a genuinely unexpected case, stop the guest. */
-        ZF_LOGE("unknown fault label 0x%lx, stopping guest with ID 0x%lx\n", label, vcpu_id);
-        // microkit_vm_stop(vcpu_id); // XXX
+        ZF_LOGE("unknown fault label 0x%lx, stopping guest with ID 0x%lx\n", label, vcpu);
+        // microkit_vm_stop(vcpu); // XXX
         /* Dump the TCB and vCPU registers to hopefully get information as
          * to what has gone wrong. */
-        tcb_print_regs(vcpu_id);
-        // vcpu_print_regs(vcpu_id); // XXX
+        tcb_print_regs(vcpu);
+        // vcpu_print_regs(vcpu); // XXX
     }
 
     if (!success)

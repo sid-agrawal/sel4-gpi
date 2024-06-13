@@ -11,7 +11,6 @@
 #include "guest.h"
 #include "virq.h"
 #include "tcb.h"
-#include "vcpu.h"
 #include "vmm/vmm.h"
 #include <vka/vka.h>
 #include <sel4/sel4.h>
@@ -29,6 +28,7 @@
 #include <sel4debug/register_dump.h>
 #include <sel4utils/thread.h>
 #include <sel4utils/process.h>
+#include <vmm/vcpu.h>
 
 // @ivanv: ideally we would have none of these hardcoded values
 // initrd, ram size come from the DTB
@@ -116,13 +116,48 @@ extern char _guest_initrd_image_end[];
 
 static void handle_fault(void *arg0, void *arg1, void *arg2)
 {
+    VMM_PRINT("in handle_fault\n");
     vm_native_context_t *vm = (vm_native_context_t *)arg0;
+    seL4_CPtr fault_ep = (seL4_CPtr)arg1;
     while (1)
     {
-        printf("fault!\n");
-        seL4_MessageInfo_t info = seL4_Recv(vm->fault_ep, NULL);
-        sel4debug_dump_registers(vm->tcb.cptr);
+        seL4_MessageInfo_t info = seL4_Recv(fault_ep, NULL);
+        VMM_PRINT("fault: %s\n", fault_to_string(seL4_MessageInfo_get_label(info)));
+        fault_handle_vcpu_exception(vm);
+        vcpu_print_regs(vm->vcpu.cptr);
     }
+}
+
+static int setup_dev_frames(vka_t *vka,
+                            vm_native_context_t *vm,
+                            size_t num_pages,
+                            uintptr_t paddr,
+                            size_t vm_dev_frame_idx)
+{
+    int error = 0;
+    VMM_PRINT("Setting up dev frame at 0x%lx with %zu pages\n", paddr, num_pages);
+    uintptr_t curr = paddr;
+    seL4_CPtr *caps = calloc(num_pages, sizeof(seL4_CPtr));
+
+    for (size_t i = 0; i < num_pages; i++)
+    {
+        error = vka_alloc_frame_at(vka, seL4_PageBits, curr, &vm->dev_frames[vm_dev_frame_idx]);
+        GOTO_IF_ERR(error, "Failed to allocate odroid serial frame");
+        curr += SIZE_BITS_TO_BYTES(seL4_PageBits);
+        caps[i] = vm->dev_frames[vm_dev_frame_idx].cptr;
+        vm_dev_frame_idx++;
+    }
+
+    reservation_t res = vspace_reserve_range_at(&vm->vspace, (void *)paddr,
+                                                num_pages * SIZE_BITS_TO_BYTES(seL4_PageBits),
+                                                seL4_AllRights, 0);
+    GOTO_IF_COND(res.res == NULL, "Failed to reserve range\n");
+    error = vspace_map_pages_at_vaddr(&vm->vspace, caps, NULL, (void *)paddr, num_pages, seL4_PageBits, res);
+    GOTO_IF_ERR(error, "Failed to map devie region to VM");
+
+    free(caps);
+err_goto:
+    return error;
 }
 
 int vm_native_setup(seL4_IRQHandler irq_handler,
@@ -149,24 +184,18 @@ int vm_native_setup(seL4_IRQHandler irq_handler,
     /* vm's cspace */
     error = vka_alloc_cnode_object(vka, VM_CNODE_BITS, &vm->cspace);
     GOTO_IF_ERR(error, "Failed to allocate vm's cspace");
-    int curr_slot = 1;
 
     cspacepath_t src;
     vka_cspace_make_path(vka, vm->cspace.cptr, &src);
 
     cspacepath_t next_slot = {
-        .capPtr = curr_slot,
+        .capPtr = 1,
         .root = vm->cspace.cptr,
         .capDepth = VM_CNODE_BITS};
 
     seL4_Word cnode_guard = api_make_guard_skip_word(seL4_WordBits - VM_CNODE_BITS);
     error = vka_cnode_mint(&next_slot, &src, seL4_AllRights, cnode_guard);
     GOTO_IF_ERR(error, "Failed to mint vm's cnode to its cspace");
-
-    vka_cspace_make_path(vka, vm->vspace_root.cptr, &src);
-    next_slot.capPtr++;
-    error = vka_cnode_copy(&next_slot, &src, seL4_AllRights);
-    GOTO_IF_ERR(error, "Failed to copy vm's page directory to its cspace");
 
     /* fault endpoint */
     vka_object_t fault_ep = {0};
@@ -177,6 +206,7 @@ int vm_native_setup(seL4_IRQHandler irq_handler,
     next_slot.capPtr++;
     error = vka_cnode_copy(&next_slot, &src, seL4_AllRights);
     GOTO_IF_ERR(error, "Failed to copy vm's fault endpoint into its cspace\n");
+    vm->fault_ep = next_slot.capPtr;
 
     /* vcpu */
     error = vka_alloc_vcpu(vka, &vm->vcpu);
@@ -193,7 +223,7 @@ int vm_native_setup(seL4_IRQHandler irq_handler,
     void *ipc_buf = vspace_new_ipc_buffer(&vm->vspace, &ipc_buf_frame);
     GOTO_IF_COND(ipc_buf_frame == seL4_CapNull || ipc_buf == NULL, "Failed to allocate and/or map IPC buffer\n");
 
-    error = seL4_TCB_Configure(vm->tcb.cptr, vm->fault_ep, vm->cspace.cptr, 0, vm->vspace_root.cptr,
+    error = seL4_TCB_Configure(vm->tcb.cptr, vm->fault_ep, vm->cspace.cptr, cnode_guard, vm->vspace_root.cptr,
                                0, (seL4_Word)ipc_buf, ipc_buf_frame);
     GOTO_IF_ERR(error, "Failed to configure TCB, seL4_Error: %ld\n", error);
 
@@ -226,7 +256,7 @@ int vm_native_setup(seL4_IRQHandler irq_handler,
     reservation_t res;
 
     /* GIC vCPU interface region */
-    printf("Mapping GIC interface - seL4: %lx, linux: %lx\n", GIC_PADDR, LINUX_GIC_PADDR);
+    VMM_PRINT("Mapping GIC interface - seL4: %lx, linux: %lx\n", GIC_PADDR, LINUX_GIC_PADDR);
     error = vka_alloc_frame_at(vka, seL4_PageBits, (uintptr_t)GIC_PADDR, &vm->gic_vcpu_frame);
     GOTO_IF_ERR(error, "Failed to allocate GIC vCPU frame");
 
@@ -239,50 +269,31 @@ int vm_native_setup(seL4_IRQHandler irq_handler,
     /* map in serial device region */
     vm->n_dev_frames = 1;
     vm->dev_frames = calloc(1, sizeof(vka_object_t));
-    error = vka_alloc_frame_at(vka, seL4_PageBits, (uintptr_t)SERIAL_PADDR, vm->dev_frames);
-    GOTO_IF_ERR(error, "Failed to allocate serial device frame");
-
-    res = vspace_reserve_range_at(&vm->vspace, (void *)SERIAL_PADDR, BIT(seL4_PageBits), seL4_AllRights, 0);
-    error = vspace_map_pages_at_vaddr(&vm->vspace, &(vm->dev_frames->cptr), NULL, (void *)SERIAL_PADDR, 1, seL4_PageBits, res);
+    error = setup_dev_frames(vka, vm, 1, (void *)SERIAL_PADDR, 0);
     GOTO_IF_ERR(error, "Failed to map serial device to VM");
 #elif BOARD_odroidc4
-    /* All 4K pages within a 1MiB region + 2 Large Pages */
-    size_t n_large_pages = 2;
-    vm->n_dev_frames = BYTES_TO_4K_PAGES(MiB_TO_BYTES(1)) + n_large_pages;
+    /* Bus 1 and 2 span 2MB, and Bus 3 spans 1 MB
+     * not using large pages, since libplatsupport might already have allocated a 4K page in the middle of
+     * one of these regions, preventing us from allocating a large page here */
+    vm->n_dev_frames = BYTES_TO_4K_PAGES(MiB_TO_BYTES(5));
     vm->dev_frames = calloc(vm->n_dev_frames, sizeof(vka_object_t));
 
-    size_t curr_frame = 0;
-    error = vka_alloc_frame_at(vka, seL4_LargePageBits, (uintptr_t)ODROID_BUS1, &vm->dev_frames[curr_frame]);
-    GOTO_IF_ERR(error, "Failed to allocate odroid bus 1 frame");
-    res = vspace_reserve_range_at(&vm->vspace, (void *)ODROID_BUS1, BIT(seL4_LargePageBits), seL4_AllRights, 0);
-    error = vspace_map_pages_at_vaddr(&vm->vspace, &(vm->dev_frames[curr_frame].cptr), NULL, (void *)ODROID_BUS1, 1, seL4_LargePageBits, res);
-    GOTO_IF_ERR(error, "Failed to map odroid bus 1 region to VM");
+    /* BUS 1 */
+    size_t num_pages = BYTES_TO_4K_PAGES(MiB_TO_BYTES(2));
+    size_t dev_frame_idx = 0;
+    error = setup_dev_frames(vka, vm, num_pages, (void *)ODROID_BUS1, dev_frame_idx);
+    GOTO_IF_ERR(error, "Failed to setup bus region 0x%lx\n", ODROID_BUS1);
 
-    curr_frame++;
-    error = vka_alloc_frame_at(vka, seL4_LargePageBits, (uintptr_t)ODROID_BUS2, &vm->dev_frames[curr_frame]);
-    GOTO_IF_ERR(error, "Failed to allocate odroid bus 2 frame");
-    res = vspace_reserve_range_at(&vm->vspace, (void *)ODROID_BUS2, BIT(seL4_LargePageBits), seL4_AllRights, 0);
-    error = vspace_map_pages_at_vaddr(&vm->vspace, &(vm->dev_frames[curr_frame].cptr), NULL, (void *)ODROID_BUS2, 1, seL4_LargePageBits, res);
-    GOTO_IF_ERR(error, "Failed to map odroid bus 2 region to VM");
+    /* BUS 2 */
+    dev_frame_idx += num_pages;
+    error = setup_dev_frames(vka, vm, num_pages, (void *)ODROID_BUS2, dev_frame_idx);
+    GOTO_IF_ERR(error, "Failed to setup bus region 0x%lx\n", ODROID_BUS2);
 
-    curr_frame++;
-    size_t bus_pages = dev_pages - n_large_pages;
-    seL4_CPtr *bus_frames = calloc(bus_pages, sizeof(seL4_CPtr));
-    uintptr_t serial_paddr = ODROID_BUS3;
-    for (size_t i = 0; i < dev_pages; i++)
-    {
-        error = vka_alloc_frame_at(vka, seL4_PageBits, serial_paddr, &vm->dev_frames[curr_frame]);
-        GOTO_IF_ERR(error, "Failed to allocate odroid serial frame");
-        serial_paddr += SIZE_BITS_TO_BYTES(seL4_PageBits);
-        bus_frames[i] = vm->dev_frames[curr_frame].cptr;
-        curr_frame++;
-    }
-
-    res = vspace_reserve_range_at(&vm->vspace, (void *)ODROID_BUS3, MiB_TO_BYTES(1), seL4_AllRights, 0);
-    GOTO_IF_COND(res.res == NULL, "Failed to reserve range\n");
-    error = vspace_map_pages_at_vaddr(&vm->vspace, bus_frames, NULL, (void *)ODROID_BUS3, bus_pages, seL4_PageBits, res);
-    GOTO_IF_ERR(error, "Failed to map odroid bus 3 region to VM");
-    free(bus_frames);
+    /* BUS 3 */
+    num_pages = BYTES_TO_4K_PAGES(MiB_TO_BYTES(1));
+    dev_frame_idx += num_pages;
+    error = setup_dev_frames(vka, vm, num_pages, (void *)ODROID_BUS3, dev_frame_idx);
+    GOTO_IF_ERR(error, "Failed to setup bus region 0x%lx\n", ODROID_BUS3);
 #endif
     /* guest ram */
     size_t guest_ram_pages = BYTES_TO_SIZE_BITS_PAGES(GUEST_RAM_SIZE, seL4_LargePageBits);
@@ -342,7 +353,7 @@ int vm_native_setup(seL4_IRQHandler irq_handler,
 
     uintptr_t guest_dtb_curr_vspace = (uintptr_t)guest_ram_curr_vspace + ((uintptr_t)GUEST_DTB_VADDR - (uintptr_t)GUEST_RAM_VADDR);
     uintptr_t guest_initrd_curr_vspace = (uintptr_t)guest_ram_curr_vspace + ((uintptr_t)GUEST_INIT_RAM_DISK_VADDR - (uintptr_t)GUEST_RAM_VADDR);
-    CPRINTF("guest ram: %lx, dtb: %lx initrd: %lx\n", guest_ram_curr_vspace, guest_dtb_curr_vspace, guest_initrd_curr_vspace);
+    VMM_PRINT("guest ram: %lx, dtb: %lx initrd: %lx\n", guest_ram_curr_vspace, guest_dtb_curr_vspace, guest_initrd_curr_vspace);
 
     uintptr_t kernel_pc_curr_vspace = linux_setup_images((uintptr_t)guest_ram_curr_vspace,
                                                          (uintptr_t)_guest_kernel_image,
@@ -355,7 +366,7 @@ int vm_native_setup(seL4_IRQHandler irq_handler,
                                                          initrd_size);
 
     uintptr_t kernel_pc_vm_vspace = (uintptr_t)GUEST_RAM_VADDR + (kernel_pc_curr_vspace - (uintptr_t)guest_ram_curr_vspace);
-    CPRINTF("kernel_pc_vm_vspace %lx\n", kernel_pc_vm_vspace);
+    VMM_PRINT("kernel_pc_vm_vspace %lx\n", kernel_pc_vm_vspace);
 
     // bool success = virq_controller_init(GUEST_VCPU_ID);
     // if (!success)
@@ -379,10 +390,12 @@ int vm_native_setup(seL4_IRQHandler irq_handler,
                                                             api_make_guard_skip_word(seL4_WordBits - 17),
                                                             seL4_CapNull,
                                                             seL4_MaxPrio);
+
     error = sel4utils_configure_thread_config(vka, vspace, vspace, t_cfg, &thread);
     GOTO_IF_ERR(error, "Failed to configure fault handling thread\n");
 
-    error = sel4utils_start_thread(&thread, handle_fault, (void *)vm, (void *)0, 0);
+    VMM_PRINT("starting thread\n");
+    error = sel4utils_start_thread(&thread, handle_fault, (void *)vm, fault_ep.cptr, 1);
     GOTO_IF_ERR(error, "Failed to start fault handling thread\n");
 
     guest_start(vm->tcb.cptr, GUEST_VCPU_ID, kernel_pc_vm_vspace,
@@ -423,7 +436,7 @@ err_goto:
 //             break;
 //         }
 //         default:
-//             printf("Unexpected channel, ch: 0x%lx\n", ch);
+//             VMM_PRINT("Unexpected channel, ch: 0x%lx\n", ch);
 //     }
 // }
 

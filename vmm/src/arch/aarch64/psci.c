@@ -12,6 +12,7 @@
 #include "guest.h"
 #include <assert.h>
 #include <utils/zf_log.h>
+#include <sel4gpi/debug.h>
 
 /*
  * The PSCI version is represented by a 32-bit unsigned integer.
@@ -42,8 +43,9 @@ bool handle_psci(size_t vcpu_id, seL4_UserContext *regs, uint64_t fn_number, uin
     case PSCI_VERSION:
     {
         /* We support PSCI version 1.2 */
+        CPRINTF("PSCI version\n");
         uint32_t version = PSCI_MAJOR_VERSION(1) | PSCI_MINOR_VERSION(2);
-        smc_set_return_value(regs, version);
+        // smc_set_return_value(regs, version);
         break;
     }
     case PSCI_CPU_ON:
@@ -98,18 +100,19 @@ bool handle_psci(size_t vcpu_id, seL4_UserContext *regs, uint64_t fn_number, uin
         // }
         break;
     }
-    case PSCI_SYSTEM_OFF:
-        // @refactor, is it guaranteed that the CPU that does the vCPU request
-        // is the boot vcpu?
-        guest_stop(vcpu_id);
-        return true;
+    // case PSCI_SYSTEM_OFF:
+    //     // @refactor, is it guaranteed that the CPU that does the vCPU request
+    //     // is the boot vcpu?
+    //     guest_stop(vcpu_id);
+    //     return true;
     default:
         ZF_LOGE("Unhandled PSCI function ID 0x%lx\n", fn_number);
         return false;
     }
 
-    bool success = fault_advance_vcpu(vcpu_id, regs);
-    assert(success);
+    bool success = false;
+    // bool success = fault_advance_vcpu(vcpu_id, regs);
+    // assert(success);
 
     return success;
 }

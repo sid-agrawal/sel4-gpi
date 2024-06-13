@@ -56,8 +56,8 @@
 #endif
 
 /* For highlighting a certain print so that it's easier to see during debugging - should not remain in committed code */
-#define CPRINTF(msg, ...)                              \
-    do                                                 \
-    {                                                  \
-        printf(COLORIZE(msg, MAGENTA), ##__VA_ARGS__); \
+#define CPRINTF(msg, ...)                                               \
+    do                                                                  \
+    {                                                                   \
+        printf(COLORIZE("%s: ", MAGENTA) msg, __func__, ##__VA_ARGS__); \
     } while (0)

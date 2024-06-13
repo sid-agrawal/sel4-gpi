@@ -29,8 +29,9 @@ int test_new_vmm_native(env_t env)
     vm_native_context_t *vm;
     error = vm_native_setup(env->irq_handler, &env->vka, &env->vspace, env->page_directory, env->asid_pool, &env->simple, &vm);
     test_error_eq(error, 0);
+#ifdef CONFIG_DEBUG_BUILD
     seL4_DebugDumpScheduler();
-
+#endif
     /* temporary indefinite yield */
     while (1)
     {
