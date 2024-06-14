@@ -177,6 +177,21 @@ int pd_remove_resource(pd_t *pd, gpi_cap_t type, uint32_t space_id, uint32_t res
     return 0;
 }
 
+bool pd_has_resources_in_space(pd_t *pd, uint32_t space_id)
+{
+    // Search through the held resources, check if any belong to the given space ID
+    resource_server_registry_node_t *curr, *tmp;
+    HASH_ITER(hh, pd->hold_registry.head, curr, tmp)
+    {
+        if (((pd_hold_node_t *)curr)->space_id == space_id)
+        {
+            return true;
+        }
+    }
+
+    return false;
+}
+
 int pd_remove_resources_in_space(pd_t *pd, uint32_t space_id)
 {
     // Search through the held resources, remove any belonging to the given space ID
@@ -316,34 +331,16 @@ int pd_add_rde(pd_t *pd,
     return 0;
 }
 
-int pd_remove_rde(pd_t *pd,
-                  rde_type_t type,
-                  uint32_t space_id)
+/**
+ * Internal function to remove an RDE entry by type and index
+ *
+ * @param pd target PD
+ * @param type the entry type
+ * @param idx the index within the type
+ */
+static int pd_remove_rde_by_idx(pd_t *pd, rde_type_t type, int idx)
 {
     int error = 0;
-
-    // Find the RDE entry in the structure
-    int idx = -1;
-
-    assert(type.type > 0 && type.type < GPICAP_TYPE_MAX);
-
-    for (int i = 0; i < MAX_NS_PER_RDE; i++)
-    {
-        osmosis_rde_t rde = pd->shared_data->rde[type.type][i];
-
-        if (rde.type.type == type.type && (space_id == RESSPC_ID_NULL || rde.space_id == space_id))
-        {
-            idx = i;
-            break;
-        }
-    }
-
-    if (idx == -1)
-    {
-        // This may not be an error, just print
-        OSDB_PRINTF("Could not find RDE type %d, id %d to remove\n", type.type, space_id);
-        return 1;
-    }
 
     // Revoke / delete the RDE endpoint
     // The RDE ep is badged once per client, so this will only delete this PD's copy of the endpoint
@@ -354,15 +351,56 @@ int pd_remove_rde(pd_t *pd,
     error = vka_cnode_delete(&rde_ep_path);
     SERVER_GOTO_IF_ERR(error, "Failed to delete RDE endpoint (slot %d) for PD (%d)\n", rde_ep_path.capPtr, pd->id);
 
+    uint64_t space_id = pd->shared_data->rde[type.type][idx].space_id;
+    OSDB_PRINTF("Removed RDE of type %s, space %d from PD (%d)\n", cap_type_to_str(type.type), space_id, pd->id);
+
     // Clear the entry
     pd->shared_data->rde[type.type][idx].space_id = RESSPC_ID_NULL;
     pd->shared_data->rde[type.type][idx].type.type = GPICAP_TYPE_NONE;
     pd->shared_data->rde[type.type][idx].slot_in_RT = seL4_CapNull;
     pd->shared_data->rde[type.type][idx].slot_in_PD = seL4_CapNull;
 
-    OSDB_PRINTF("Removed RDE of type %s, space %d from PD (%d)\n", cap_type_to_str(type.type), space_id, pd->id);
-
     pd->shared_data->rde_count--;
+
+err_goto:
+    return error;
+}
+
+int pd_remove_rde(pd_t *pd,
+                  rde_type_t type,
+                  uint32_t space_id)
+{
+    int error = 0;
+
+    // Find the RDE entry in the structure
+    bool found_entry = false;
+
+    assert(type.type > 0 && type.type < GPICAP_TYPE_MAX);
+
+    for (int i = 0; i < MAX_NS_PER_RDE; i++)
+    {
+        osmosis_rde_t rde = pd->shared_data->rde[type.type][i];
+
+        if (rde.type.type == type.type && (rde.space_id == space_id || space_id == RESSPC_ID_NULL))
+        {
+            found_entry = true;
+            
+            error = pd_remove_rde_by_idx(pd, type, i);
+            SERVER_GOTO_IF_ERR(error, "Failed to remove RDE[%d][%d] from PD (%d)\n", type, i, pd->id);
+
+            if (space_id != RESSPC_ID_NULL) 
+            {
+                break;
+            }
+        }
+    }
+
+    if (found_entry == false)
+    {
+        // This may not be an error, just print
+        OSDB_PRINTF("Could not find RDE type %d, id %d to remove\n", type.type, space_id);
+        return 1;
+    }
 
 err_goto:
     return error;
@@ -418,7 +456,9 @@ pd_held_resource_on_delete(resource_server_registry_node_t *node_gen, void *pd_v
     pd_hold_node_t *node = (pd_hold_node_t *)node_gen;
     pd_t *pd = (pd_t *)pd_v;
 
-    OSDB_PRINTF("Freeing resource %s_%d_%d\n", cap_type_to_str(node->type), node->space_id, node->res_id);
+    OSDB_PRINTF("Freeing resource %s_%d_%d from PD (%d)\n",
+                cap_type_to_str(node->type), node->space_id, node->res_id,
+                pd->id);
 
     // If the resource is a core resource, free it directly
     // Decrement the registry entry's count, and if it reaches zero, the resource will be freed
@@ -464,7 +504,8 @@ pd_held_resource_on_delete(resource_server_registry_node_t *node_gen, void *pd_v
             break;
         }
 
-        error = resource_server_client_free(space_data->space.server_ep, node->space_id, node->res_id);
+        error =
+            (space_data->space.server_ep, node->space_id, node->res_id);
         break;
     }
 
@@ -530,7 +571,7 @@ void pd_destroy(pd_t *pd, vka_t *server_vka, vspace_t *server_vspace)
         vka_cspace_make_path(pd->pd_vka, pd->shared_data->reply_cap, &reply_cap_path_in_pd);
         vka_cspace_alloc_path(server_vka, &reply_cap_path_in_rt);
 
-        //error = vka_cnode_copy(&reply_cap_path_in_rt, &reply_cap_path_in_pd, seL4_CanWrite);
+        // error = vka_cnode_copy(&reply_cap_path_in_rt, &reply_cap_path_in_pd, seL4_CanWrite);
         error = vka_cnode_move(&reply_cap_path_in_rt, &reply_cap_path_in_pd);
         SERVER_GOTO_IF_ERR(error, "Failed to move reply cap (%d) while destroying PD (%d)\n",
                            pd->shared_data->reply_cap,
@@ -646,7 +687,7 @@ int pd_next_slot(pd_t *pd,
 }
 
 int pd_clear_slot(pd_t *pd,
-                 seL4_CPtr slot)
+                  seL4_CPtr slot)
 {
     // Try to delete slot contents
     cspacepath_t path;

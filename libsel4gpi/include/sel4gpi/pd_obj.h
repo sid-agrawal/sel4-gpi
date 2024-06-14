@@ -278,7 +278,16 @@ int pd_remove_resource(pd_t *pd,
 int pd_bulk_add_resource(pd_t *pd, linked_list_t *resources);
 
 /**
- * Remove all resources in the given space ID from the PD
+ * @brief Check if the PD holds a resource from the given space
+ *
+ * @param pd the target PD
+ * @param space_id space ID to check for
+ * @return true if the PD holds any resource from the given space, false otherwise
+ */
+bool pd_has_resources_in_space(pd_t *pd, uint32_t space_id);
+
+/**
+ * @brief Remove all resources in the given space ID from the PD
  *
  * @param pd the target PD
  * @param space_id remove all resources in this space from the PD
@@ -327,6 +336,7 @@ int pd_add_rde(pd_t *pd,
  * @param pd The target PD to remove an RDE from
  * @param type the type of the RDE
  * @param space_id the resource space of this RDE
+ *                 if RESSPC_ID_NULL, this will remove *all* entries of the given type
  * @return 0 on success, error otherwise
  */
 int pd_remove_rde(pd_t *pd,

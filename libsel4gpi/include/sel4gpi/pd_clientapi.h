@@ -213,6 +213,16 @@ int pd_client_map_resource(pd_client_context_t *conn,
  */
 void pd_client_exit(pd_client_context_t *conn);
 
+/**
+ * @brief Remove an RDE from a PD
+ * 
+ * @param conn the target PD's connection object
+ * @param type the type of RDE to remove
+ * @param space_id the space ID of the RDE to remove, or RESSPC_ID_NULL to remove all RDEs of the given type
+ * @return 0 on success, error otherwise
+*/
+int pd_client_remove_rde(pd_client_context_t *conn, gpi_cap_t type, uint64_t space_id);
+
 /** MODEL EXTRACTION & BENCHMARKING **/
 
 /**

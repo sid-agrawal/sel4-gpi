@@ -76,6 +76,9 @@ enum pd_component_funcs
     PD_FUNC_SHARE_RDE_REQ,
     PD_FUNC_SHARE_RDE_ACK,
 
+    PD_FUNC_REMOVE_RDE_REQ,
+    PD_FUNC_REMOVE_RDE_ACK,
+
     PD_FUNC_GIVE_RES_REQ,
     PD_FUNC_GIVE_RES_ACK,
 
@@ -172,6 +175,13 @@ enum pd_component_msgregs
 
     PDMSGREG_SHARE_RDE_ACK_END = PDMSGREG_LABEL0,
 
+    /* Remove RDE */
+    PDMSGREG_REMOVE_RDE_REQ_TYPE = PDMSGREG_LABEL0,
+    PDMSGREG_REMOVE_RDE_REQ_SPACE_ID,
+    PDMSGREG_REMOVE_RDE_REQ_END,
+
+    PDMSGREG_REMOVE_RDE_ACK_END = PDMSGREG_LABEL0,
+
     /* Give Resource */
     PDMSGREG_GIVE_RES_REQ_SPACE_ID = PDMSGREG_LABEL0,
     PDMSGREG_GIVE_RES_REQ_CLIENT_ID,
@@ -227,10 +237,34 @@ enum _pd_setup_type
 };
 typedef enum _pd_setup_type pd_setup_type_t;
 
-// Options for cleanup policies when a resource manager PD dies
+
+/**
+ * Options for cleanup policies when a resource manager PD dies.
+ * For each resource space that the killed PD was managing, the cleanup policy will be invoked.
+ * 
+ * PD_CLEANUP_RESOURCES_DIRECT
+ *  Any resources from the deleted resource space will be removed from other PDs that hold them.
+ *  Any PDs with RDEs for the deleted resource space will have the RDE removed.
+ * 
+ * PD_CLEANUP_RESOURCES_RECURSIVE
+ *  (XXX) Arya: Not implemented
+ *  Performs the same steps as PD_CLEANUP_MINIMAL, except it also recursively deleted any resources that mapped 
+ *  to other deleted resources.
+ * 
+ * PD_CLEANUP_DEPENDENTS_DIRECT
+ *  (XXX) Arya: Not implemented
+ *  Kill any PDs that either had an RDE for the deleted resource space, 
+ *  or held resources from the deleted resource space.
+ * 
+ * PD_CLEANUP_DEPENDENTS_RECURSIVE
+ *  Same as PD_CLEANUP_DEPENDENTS_DIRECT, except it also recursively kills any PDs that depended on other killed PDs.
+*/
 typedef enum _pd_cleanup_policy
 {
-    PD_CLEANUP_MINIMAL = 1, ///< Just remove any resources that the crashed PD was managing from other PDs
+    PD_CLEANUP_RESOURCES_DIRECT = 1,
+    PD_CLEANUP_RESOURCES_RECURSIVE,
+    PD_CLEANUP_DEPENDENTS_DIRECT,
+    PD_CLEANUP_DEPENDENTS_RECURSIVE,
 } pd_cleanup_policy_t;
 
 // Registry of PDs maintained by the server

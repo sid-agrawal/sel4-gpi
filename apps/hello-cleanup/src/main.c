@@ -28,6 +28,8 @@ size_t morecore_size = APP_MALLOC_SIZE;
 uintptr_t morecore_base = (uintptr_t)PD_HEAP_LOC;
 uintptr_t morecore_top = (uintptr_t)(PD_HEAP_LOC + APP_MALLOC_SIZE);
 
+#define N_CLIENT_REQUESTS 1 // Number of requests clients will make from servers
+
 typedef enum _hello_mode
 {
     HELLO_CLEANUP_SERVER_POKEMART_MODE, ///< Process will serve pokeballs
@@ -74,7 +76,7 @@ int pokeball_client(seL4_CPtr server_ep)
 {
     int error = 0;
 
-    while (1)
+    for (int i = 0; i < N_CLIENT_REQUESTS; i++)
     {
         PRINTF("I want to purchase one pokeball.\n");
 

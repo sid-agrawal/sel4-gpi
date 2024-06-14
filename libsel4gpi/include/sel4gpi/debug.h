@@ -14,7 +14,7 @@
 #define GPI_DEBUG 0x20
 #define FS_DEBUG 0x40 // (XXX) Arya: WIP to move remote resource server debug controls to this
 #define ALL_DEBUG 0x7f
-#define OSMOSIS_DEBUG (NO_DEBUG) // selectively enable component debug e.g. (PD_DEBUG | ADS_DEBUG)
+#define OSMOSIS_DEBUG (PD_DEBUG) // selectively enable component debug e.g. (PD_DEBUG | ADS_DEBUG)
 #define OSMOSIS_ERROR ALL_DEBUG             // selectively enable component error messages e.g. (PD_DEBUG | ADS_DEBUG)
 
 #if OSMOSIS_DEBUG

@@ -9,7 +9,7 @@
  * Define the cleanup policy for crashed resource manager PDs.
  * See pd_cleanup_policy_t for options.
 */
-#define GPI_CLEANUP_POLICY PD_CLEANUP_MINIMAL
+#define GPI_CLEANUP_POLICY PD_CLEANUP_DEPENDENTS_RECURSIVE
 
 /**
  * If true, forge the test process as a PD.

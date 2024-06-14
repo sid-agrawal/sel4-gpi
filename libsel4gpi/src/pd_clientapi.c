@@ -221,6 +221,18 @@ void pd_client_exit(pd_client_context_t *conn)
     seL4_Call(conn->badged_server_ep_cspath.capPtr, tag);
 }
 
+int pd_client_remove_rde(pd_client_context_t *conn, gpi_cap_t type, uint64_t space_id)
+{
+    seL4_SetMR(PDMSGREG_FUNC, PD_FUNC_REMOVE_RDE_REQ);
+    seL4_SetMR(PDMSGREG_REMOVE_RDE_REQ_TYPE, type);
+    seL4_SetMR(PDMSGREG_REMOVE_RDE_REQ_SPACE_ID, space_id);
+    seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0,
+                                                  PDMSGREG_REMOVE_RDE_REQ_END);
+    tag = seL4_Call(conn->badged_server_ep_cspath.capPtr, tag);
+
+    return seL4_MessageInfo_ptr_get_label(&tag);
+}
+
 void pd_client_bench_ipc(pd_client_context_t *conn, seL4_CPtr dummy_send_cap, seL4_CPtr dummy_recv_cap, bool cap_transfer)
 {
     seL4_SetCapReceivePath(SEL4UTILS_CNODE_SLOT, /* Position of the cap to the CNODE */

@@ -17,5 +17,6 @@ typedef struct _res_space
     linked_list_t *map_spaces; ///< List of res_space_t pointers, resource spaces that this space maps to
     pd_t *pd;                  ///< (XXX) Arya: this should probably be a pd ID
     void *data;                ///< Generic field for additional resource space data (not used)
-    bool deleted;              ///< Temporary, marks a space as deleted
+    bool deleted;              ///< Marks a space that will be deleted in the next sweep
+    bool deleting;             ///< Marks a space that is in the process of being deleted
 } res_space_t;

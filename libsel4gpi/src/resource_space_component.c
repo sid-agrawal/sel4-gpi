@@ -42,6 +42,7 @@ static void on_resspc_registry_delete(resource_server_registry_node_t *node_gen,
     resspc_component_registry_entry_t *node = (resspc_component_registry_entry_t *)node_gen;
 
     OSDB_PRINTF("Destroying resource space (%d)\n", node->space.id);
+    node->space.deleting = true;
 
     // Cleanup PDs according to cleanup policy
     error = pd_component_space_cleanup(node->space.resource_type, node->space.id);
@@ -169,7 +170,8 @@ int resspc_component_sweep(void)
     resource_server_registry_node_t *curr, *tmp;
     HASH_ITER(hh, get_resspc_component()->registry.head, curr, tmp)
     {
-        if (((resspc_component_registry_entry_t *)curr)->space.deleted)
+        resspc_component_registry_entry_t *entry = (resspc_component_registry_entry_t *)curr;
+        if (entry->space.deleted && !entry->space.deleting)
         {
             resource_server_registry_delete(&get_resspc_component()->registry, curr);
         }
@@ -325,8 +327,7 @@ static int resspc_new(res_space_t *res_space,
     res_space->data = config->data;
     res_space->map_spaces = linked_list_new();
     res_space->deleted = false;
-
-    // (XXX) Arya: todo, allow new type creation
+    res_space->deleting = false;
 
     return error;
 }

@@ -127,10 +127,7 @@ static int start_hello(hello_mode_t mode, pd_client_context_t *hello_pd)
 }
 
 /**
- * Cleanup policy 1a:
- * If a PD is killed that manages a resource space RS containing a set of resources R
- * - Remove the resources R from any PDs that hold them
- * - Remove any request edges for RS
+ * Simple test scenario for cleanup policies with one server/client and one resource type
  *
  * Scenario:
  * - Server PD serves pokeballs
@@ -139,12 +136,111 @@ static int start_hello(hello_mode_t mode, pd_client_context_t *hello_pd)
  *
  * Crash the server PD
  *
- * Expected outcome:
+ * Expected outcome of PD_CLEANUP_RESOURCES_DIRECT or PD_CLEANUP_RESOURCES_RECURSIVE:
  * - Dummy PD is unaffected
  * - Client PD remains running, but no longer holds any pokeball resource
  *   - It also loses the pokeball RDE
+ *
+ * Expected outcome of PD_CLEANUP_DEPENDENTS_DIRECT or PD_CLEANUP_DEPENDENTS_RECURSIVE:
+ * - Dummy PD is unaffected
+ * - Client PD is killed
  */
-int test_cleanup_policy_1a(env_t env)
+int test_cleanup_policy_1(env_t env)
+{
+    int error;
+
+    setup(env);
+
+    printf("------------------STARTING TEST: %s------------------\n", __func__);
+
+    /* Start the PDs */
+    pd_client_context_t hello_server_pd;
+    error = start_hello(HELLO_CLEANUP_SERVER_POKEMART_MODE, &hello_server_pd);
+    test_assert(error == 0);
+
+    pd_client_context_t hello_client_pd;
+    error = start_hello(HELLO_CLEANUP_CLIENT_POKEMART_MODE, &hello_client_pd);
+    test_assert(error == 0);
+
+    pd_client_context_t hello_dummy_pd;
+    error = start_hello(HELLO_CLEANUP_NOTHING_MODE, &hello_dummy_pd);
+    test_assert(error == 0);
+
+    /* Remove RDE from test process so that it won't be cleaned up by recursive cleanup */
+    error = pd_client_remove_rde(&pd_conn, hello_resource_type, hello_space_id);
+    test_assert(error == 0);
+
+    /* Print model state before crash */
+    printf("Dumping model state before crash\n");
+    error = pd_client_dump(&pd_conn, NULL, 0);
+    test_assert(error == 0);
+
+    /* Crash a PD */
+    printf("Crashing server PD\n");
+    error = pd_client_disconnect(&hello_server_pd);
+    test_assert(error == 0);
+
+    /* Print model state after crash */
+    printf("Dumping model state after crash\n");
+    error = pd_client_dump(&pd_conn, NULL, 0);
+    test_assert(error == 0);
+
+    /* Cleanup PDs */
+    error = pd_client_disconnect(&hello_client_pd);
+
+    if (error != seL4_NoError)
+    {
+        printf("WARNING: Failed to cleanup hello-client PD (%d), "
+               "this may be expected if the cleanup policy already destroyed it. \n",
+               hello_client_pd.id);
+    }
+
+    error = pd_client_disconnect(&hello_dummy_pd);
+    test_assert(error == 0);
+
+    printf("------------------ENDING: %s------------------\n", __func__);
+    return sel4test_get_result();
+}
+DEFINE_TEST(GPICL001, "Test the PD cleanup policy 1", test_cleanup_policy_1, true)
+
+/**
+ * More complicated test scenario for cleanup policies with two servers/clients and two resource types
+ *
+ * Scenario:
+ * - Pokemart server PD serves pokeballs
+ * - Pokemon daycare server PD
+ *     - Requests pokeballs from pokemart server
+ *     - Serves pokemon resources
+ *     - Pokemon map to pokeballs
+ * - Client PD 1 requests pokeballs from pokemart server
+ * - Client PD 2 requests pokemon from pokemon daycare server
+ * - Dummy PD does nothing
+ *
+ * Crash the pokemart server PD
+ *
+ * Expected outcome of PD_CLEANUP_RESOURCES_RECURSIVE:
+ * - Dummy PD is unaffected
+ * - Pokemon daycare server remains running, but it may no longer be operational
+ *   - It loses the pokeball RDE
+ * - Client PD 1 remains running, but no longer holds any pokeball resource
+ *   - It also loses the pokeball RDE
+ * - Client PD 2 remains running, but no longer holds any pokemon resource
+ *   - It also loses the pokemon RDE
+ *
+ * Expected outcome of PD_CLEANUP_DEPENDENTS_DIRECT:
+ * - Dummy PD is unaffected
+ * - Pokemon daycare server is killed
+ * - Client PD 1 is killed
+ * - Client PD 2 remains running, but no longer holds any pokemon resource
+ *   - It also loses the pokemon RDE
+ *
+ * Expected outcome of PD_CLEANUP_DEPENDENTS_RECURSIVE:
+ * - Dummy PD is unaffected
+ * - Pokemon daycare server is killed
+ * - Client PD 1 is killed
+ * - Client PD 2 is killed
+ */
+int test_cleanup_policy_2(env_t env)
 {
     int error;
 
@@ -167,7 +263,7 @@ int test_cleanup_policy_1a(env_t env)
 
     /* Print model state before crash */
     printf("Dumping model state before crash\n");
-    //error = pd_client_dump(&pd_conn, NULL, 0);
+    // error = pd_client_dump(&pd_conn, NULL, 0);
     test_assert(error == 0);
 
     /* Crash a PD */
@@ -177,7 +273,7 @@ int test_cleanup_policy_1a(env_t env)
 
     /* Print model state after crash */
     printf("Dumping model state after crash\n");
-    //error = pd_client_dump(&pd_conn, NULL, 0);
+    // error = pd_client_dump(&pd_conn, NULL, 0);
     test_assert(error == 0);
 
     /* Cleanup PDs */
@@ -189,33 +285,4 @@ int test_cleanup_policy_1a(env_t env)
     printf("------------------ENDING: %s------------------\n", __func__);
     return sel4test_get_result();
 }
-DEFINE_TEST(GPICL001, "Test the PD cleanup policy 1a", test_cleanup_policy_1a, true)
-
-/**
- * Cleanup policy 1b:
- * If a PD is killed that manages a resource space RS containing a set of resources R
- * - Remove the resources R from any PDs that hold them
- * - Remove any request edges for RS
- * - Recursively, remove any resource spaces that map to RS
- *
- * Scenario:
- * - Pokemart server PD serves pokeballs
- * - Pokemon daycare server PD
- *     - Requests pokeballs from pokemart server
- *     - Serves pokemon resources
- *     - Pokemon map to pokeballs
- * - Client PD 1 requests pokeballs from pokemart server
- * - Client PD 2 requests pokemon from pokemon daycare server
- * - Dummy PD does nothing
- *
- * Crash the pokemart server PD
- *
- * Expected outcome:
- * - Dummy PD is unaffected
- * - Client PD 1 remains running, but no longer holds any pokeball resource
- *   - It also loses the pokeball RDE
- * - Client PD 2 remains running, but no longer holds any pokemon resource
- *   - It also loses the pokemon RDE
- * - Pokemon daycare server remains running, but it may no longer be operational
- *   - It loses the pokeball RDE
- */
+DEFINE_TEST(GPICL002, "Test the PD cleanup policy 2", test_cleanup_policy_2, true)
