@@ -112,12 +112,13 @@ void mo_destroy(mo_t *mo, vka_t *server_vka)
     {
         // Check if the cap is the last copy - it should be
         // If not, it will cause errors with the VKA later
+#ifdef CONFIG_DEBUG_BUILD
         if (OSMOSIS_DEBUG && !seL4_DebugCapIsLastCopy(mo->vka_objects[i].cptr))
         {
             OSDB_PRINTERR("Freeing frame (%p) for MO (%d), cap (%d) is not last copy\n",
                           mo->frame_paddrs[i], mo->id, mo->vka_objects[i].cptr);
         }
-
+#endif
         vka_free_object(server_vka, &mo->vka_objects[i]);
     }
 

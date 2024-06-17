@@ -239,8 +239,7 @@ int forge_mo_cap_from_frames(seL4_CPtr *frame_caps,
         // assert(caps[i] != seL4_CapNull);
         mo->frame_caps_in_root_task[i] = frame_caps[i];
 
-        // (XXX) Arya: Should we have a non-debug function for this?
-        mo->frame_paddrs[i] = seL4_DebugCapPaddr(frame_caps[i]);
+        mo->frame_paddrs[i] = seL4_GetCapPaddr(frame_caps[i]);
     }
 
     SERVER_GOTO_IF_ERR(error, "Failed to initialize new MO object for forge\n");
