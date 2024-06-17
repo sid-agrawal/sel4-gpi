@@ -113,6 +113,7 @@ static seL4_MessageInfo_t handle_disconnect_req(seL4_Word sender_badge,
     uint32_t pd_id = client_data->pd.id;
 
     /* Remove the PD from registry, this will also destroy the PD */
+    client_data->pd.deletion_depth = 0; // This PD is the root of a deletion tree
     resource_server_registry_delete(&get_pd_component()->registry, (resource_server_registry_node_t *)client_data);
 
     // (XXX) Arya: Should we be deleting from registry or just decrementing?
@@ -916,14 +917,51 @@ err_goto:
     return error;
 }
 
-int pd_component_space_cleanup(gpi_cap_t space_type, uint32_t space_id)
+int pd_component_space_cleanup(uint32_t pd_id, gpi_cap_t space_type, uint32_t space_id)
 {
     int error = 0;
 
     OSDB_PRINTF("Starting to cleanup resource space %s_%d \n", cap_type_to_str(space_type), space_id);
 
-    // Iterate over all live PDs
+    // Find the manager PD of this resource space
+    pd_component_registry_entry_t *manager_data = pd_component_registry_get_entry_by_id(pd_id);
+    int depth = manager_data->pd.deletion_depth;
+
+    // Iterate over all live PDs to check if they should be deleted
     resource_server_registry_node_t *curr, *tmp;
+    HASH_ITER(hh, get_pd_component()->registry.head, curr, tmp)
+    {
+        pd_component_registry_entry_t *pd_entry = (pd_component_registry_entry_t *)curr;
+        pd_t *pd = &pd_entry->pd;
+
+        if (pd->id == get_gpi_server()->rt_pd_id || pd->deleted)
+        {
+            // Skip the root task, or a PD currently being deleted
+            continue;
+        }
+
+        // Check if we should delete this PD
+        if (GPI_CLEANUP_PD_DEPTH == -1 || depth + 1 <= GPI_CLEANUP_PD_DEPTH)
+        {
+            // Within PD deletion depth
+            // Check if the PD has a request edge for the deleted space, or holds any resource from the space
+            if (pd_rde_get(pd, space_type, space_id) || pd_has_resources_in_space(pd, space_id))
+            {
+                OSDB_PRINTF("Delete PD (%d) depending on %s_%d at depth\n", pd->id, cap_type_to_str(space_type),
+                            space_id, depth + 1);
+
+                // Set the deletion depth
+                pd->deletion_depth = depth + 1;
+
+                // Remove the PD from registry, this will also destroy the PD
+                resource_server_registry_delete(&get_pd_component()->registry, curr);
+
+                continue;
+            }
+        }
+    }
+
+    // Iterate over any live PDs to cleanup resources from the deleted space
     HASH_ITER(hh, get_pd_component()->registry.head, curr, tmp)
     {
         pd_component_registry_entry_t *pd_entry = (pd_component_registry_entry_t *)curr;
@@ -938,38 +976,16 @@ int pd_component_space_cleanup(gpi_cap_t space_type, uint32_t space_id)
         OSDB_PRINTF("Cleanup resource space %s_%d in PD(%d)\n", cap_type_to_str(space_type),
                     space_id, pd->id);
 
-        switch (GPI_CLEANUP_POLICY)
-        {
-        case PD_CLEANUP_RESOURCES_DIRECT:
-            // Remove an RDE if there is one
-            // Ignore errors if the RDE doesn't exist
-            rde_type_t rde_type = {.type = space_type};
-            pd_remove_rde(pd, rde_type, space_id);
+        // Remove an RDE if there is one
+        // Ignore errors if the RDE doesn't exist
+        rde_type_t rde_type = {.type = space_type};
+        pd_remove_rde(pd, rde_type, space_id);
 
-            // Remove resources belonging to the deleted space
-            error = pd_remove_resources_in_space(pd, space_id);
-            SERVER_GOTO_IF_ERR(error, "failed to remove resources in %s_%d from PD (%d)\n",
-                               cap_type_to_str(space_type),
-                               space_id, pd->id);
-            break;
-        case PD_CLEANUP_RESOURCES_RECURSIVE:
-            SERVER_GOTO_IF_COND(1, "Cleanup policy PD_CLEANUP_RESOURCES_RECURSIVE is not implemented\n");
-            break;
-        case PD_CLEANUP_DEPENDENTS_DIRECT:
-            SERVER_GOTO_IF_COND(1, "Cleanup policy PD_CLEANUP_DEPENDENTS_DIRECT is not implemented\n");
-            break;
-        case PD_CLEANUP_DEPENDENTS_RECURSIVE:
-            // Check if the PD has a request edge for the deleted space, or holds any resource from the space
-            if (pd_rde_get(pd, space_type, space_id) || pd_has_resources_in_space(pd, space_id))
-            {
-                /* Remove the PD from registry, this will also destroy the PD */
-                resource_server_registry_delete(&get_pd_component()->registry, curr);
-            }
-
-            break;
-        default:
-            gpi_panic("Unknown PD cleanup policy", GPI_CLEANUP_POLICY);
-        }
+        // Remove resources belonging to the deleted space
+        error = pd_remove_resources_in_space(pd, space_id);
+        SERVER_GOTO_IF_ERR(error, "failed to remove resources in %s_%d from PD (%d)\n",
+                           cap_type_to_str(space_type),
+                           space_id, pd->id);
     }
 
 err_goto:

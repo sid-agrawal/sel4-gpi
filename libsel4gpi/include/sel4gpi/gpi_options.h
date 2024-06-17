@@ -6,10 +6,38 @@
 */
 
 /**
- * Define the cleanup policy for crashed resource manager PDs.
- * See pd_cleanup_policy_t for options.
+ * Define the cleanup depth for crashed resource manager PDs.
+ * For each resource space that the killed PD was managing, the cleanup policy will be invoked.
+ * 
+ * Resource depth:
+ * - Traverse up to N PDs from the crashed resource manager, delete all affected resources
+ * 
+ * PD depth:
+ * - Delete dependent PDs up to depth N from the crashed resource manager
+ * 
+ * A depth of -1 means we will traverse infinitely
+ * 
+ * Sample policies:
+ * 
+ * CLEANUP_RESOURCES_DIRECT: resource_depth 1, pd_depth 0
+ *  Any resources from the deleted resource space will be removed from other PDs that hold them.
+ *  Any PDs with RDEs for the deleted resource space will have the RDE removed.
+ * 
+ * CLEANUP_RESOURCES_RECURSIVE: resource_depth -1, pd_depth 0
+ *  (XXX) Arya: Not implemented
+ *  Performs the same steps as PD_CLEANUP_MINIMAL, except it also recursively deletes any resources that mapped 
+ *  to other deleted resources.
+ * 
+ * CLEANUP_DEPENDENTS_DIRECT: resource_depth 0, pd_depth 1
+ *  (XXX) Arya: Not implemented
+ *  Kill any PDs that either had an RDE for the deleted resource space, 
+ *  or held resources from the deleted resource space.
+ * 
+ * CLEANUP_DEPENDENTS_RECURSIVE: resource_depth 0, pd_depth -1
+ *  Same as CLEANUP_DEPENDENTS_DIRECT, except it also recursively kills any PDs that depended on other killed PDs.
 */
-#define GPI_CLEANUP_POLICY PD_CLEANUP_DEPENDENTS_RECURSIVE
+#define GPI_CLEANUP_RESOURCE_DEPTH 1
+#define GPI_CLEANUP_PD_DEPTH 0
 
 /**
  * If true, forge the test process as a PD.

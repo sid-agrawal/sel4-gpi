@@ -237,36 +237,6 @@ enum _pd_setup_type
 };
 typedef enum _pd_setup_type pd_setup_type_t;
 
-
-/**
- * Options for cleanup policies when a resource manager PD dies.
- * For each resource space that the killed PD was managing, the cleanup policy will be invoked.
- * 
- * PD_CLEANUP_RESOURCES_DIRECT
- *  Any resources from the deleted resource space will be removed from other PDs that hold them.
- *  Any PDs with RDEs for the deleted resource space will have the RDE removed.
- * 
- * PD_CLEANUP_RESOURCES_RECURSIVE
- *  (XXX) Arya: Not implemented
- *  Performs the same steps as PD_CLEANUP_MINIMAL, except it also recursively deleted any resources that mapped 
- *  to other deleted resources.
- * 
- * PD_CLEANUP_DEPENDENTS_DIRECT
- *  (XXX) Arya: Not implemented
- *  Kill any PDs that either had an RDE for the deleted resource space, 
- *  or held resources from the deleted resource space.
- * 
- * PD_CLEANUP_DEPENDENTS_RECURSIVE
- *  Same as PD_CLEANUP_DEPENDENTS_DIRECT, except it also recursively kills any PDs that depended on other killed PDs.
-*/
-typedef enum _pd_cleanup_policy
-{
-    PD_CLEANUP_RESOURCES_DIRECT = 1,
-    PD_CLEANUP_RESOURCES_RECURSIVE,
-    PD_CLEANUP_DEPENDENTS_DIRECT,
-    PD_CLEANUP_DEPENDENTS_RECURSIVE,
-} pd_cleanup_policy_t;
-
 // Registry of PDs maintained by the server
 typedef struct _pd_component_registry_entry
 {
@@ -354,9 +324,10 @@ int pd_component_resource_cleanup(gpi_cap_t resource_type, uint32_t space_id, ui
 /**
  * To be called when a resource space is destroyed
  * Execute the cleanup policy for any PDs that still depend on the resource space
- *
+ * 
+ * @param pd_id ID of the PD that manages this space
  * @param space_type type of the deleted resource space
  * @param space_id ID of the deleted resource space
  * @return 0 on success, error otherwise
  */
-int pd_component_space_cleanup(gpi_cap_t space_type, uint32_t space_id);
+int pd_component_space_cleanup(uint32_t pd_id, gpi_cap_t space_type, uint32_t space_id);

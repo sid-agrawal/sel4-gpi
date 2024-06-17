@@ -137,7 +137,8 @@ typedef struct _pd
     osm_pd_shared_data_t *shared_data_in_PD; ///< PD's vaddr of the shared
 
     /* other general PD metadata */
-    bool deleted; ///< Set to true while the PD is being deleted
+    bool deleted;       ///< Set to true while the PD is being deleted
+    int deletion_depth; ///< If the PD is being deleted as a result of another PD, this is the recursive depth
 } pd_t;
 
 /**
@@ -176,33 +177,33 @@ int pd_send_cap(pd_t *pd,
 
 /**
  * @brief Allocate a free slot from the PD's cspace
- * 
+ *
  * @param pd the target PD
  * @param next_free_slot returns the allocated slot index
  * @return 0 on success, error otherwise
-*/
+ */
 int pd_next_slot(pd_t *pd,
                  seL4_CPtr *next_free_slot);
 
 /**
  * @brief Free a slot from the PD's cspace
- * 
+ *
  * @param pd the target PD
  * @param slot slot index to free
  * @return 0 on success, error otherwise
-*/
+ */
 int pd_free_slot(pd_t *pd,
                  seL4_CPtr slot);
 
 /**
  * @brief Delete the capability from a slot in the PD's cspace
- * 
+ *
  * @param pd the target PD
  * @param slot slot index to clear
  * @return 0 on success, error otherwise
-*/
+ */
 int pd_clear_slot(pd_t *pd,
-                 seL4_CPtr slot);
+                  seL4_CPtr slot);
 
 /**
  * Allocates an endpoint using the gpi server's vka, and copies to the pd cspace

@@ -45,7 +45,7 @@ static void on_resspc_registry_delete(resource_server_registry_node_t *node_gen,
     node->space.deleting = true;
 
     // Cleanup PDs according to cleanup policy
-    error = pd_component_space_cleanup(node->space.resource_type, node->space.id);
+    error = pd_component_space_cleanup(node->space.pd->id, node->space.resource_type, node->space.id);
     SERVER_GOTO_IF_ERR(error, "failed to cleanup PDs for deleted resource space (%d)\n", node->space.id);
 
     return;
