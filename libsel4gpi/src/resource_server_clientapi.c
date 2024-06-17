@@ -33,6 +33,17 @@ int start_resource_server_pd(gpi_cap_t rde_type,
                              seL4_CPtr *server_pd_cap,
                              uint64_t *space_id)
 {
+    return start_resource_server_pd_args(rde_type, rde_id, image_name, NULL, 0, server_pd_cap, space_id);
+}
+
+int start_resource_server_pd_args(gpi_cap_t rde_type,
+                                  uint64_t rde_id,
+                                  char *image_name,
+                                  seL4_Word *args_input,
+                                  uint argc_input,
+                                  seL4_CPtr *server_pd_cap,
+                                  uint64_t *space_id)
+{
     int error;
 
     // Current pd
@@ -68,10 +79,15 @@ int start_resource_server_pd(gpi_cap_t rde_type,
     }
 
     // Setup the args
-    int argc = 2;
+    int argc = 2 + argc_input;
     seL4_Word args[argc];
     args[0] = parent_ep_slot;
     args[1] = current_pd.id;
+
+    for (int i = 0; i < argc_input; i++)
+    {
+        args[i + 2] = args_input[i];
+    }
 
     // Start it
     error = sel4gpi_start_pd(cfg, &runnable, argc, args);

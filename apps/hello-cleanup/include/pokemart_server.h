@@ -11,6 +11,10 @@
 
 #include <sel4gpi/resource_server_remote_utils.h>
 
+/**
+ * @file A toy server that serves the "pokeball" resource
+ */
+
 #define POKEBALL_RESOURCE_TYPE_NAME "POKEBALL"
 
 typedef struct _pokemart_server_context
@@ -18,8 +22,15 @@ typedef struct _pokemart_server_context
     // Generic resource server context
     resource_server_context_t gen;
 
-    int count;
+    int count; ///< Track the number of pokeballs
 } pokemart_server_context_t;
+
+typedef struct _pokeball_client_context
+{
+    cspacepath_t ep;
+    int space_id;
+    int id;
+} pokeball_client_context_t;
 
 pokemart_server_context_t *get_pokemart_server(void);
 
@@ -30,7 +41,7 @@ int pokemart_server_init(void);
 
 /**
  * Called when the pokemart receives a request
-*/
+ */
 seL4_MessageInfo_t pokemart_request_handler(
     seL4_MessageInfo_t tag,
     seL4_Word sender_badge,
@@ -39,9 +50,9 @@ seL4_MessageInfo_t pokemart_request_handler(
 
 /**
  * Get a pokeball from the pokemart.
- * Good luck finding it in your bag.
- * 
+ *
  * @param server_ep the pokemart server endpoint
+ * @param result location of a pokeball connection structure to fill out
  * @return 0 on success, error otherwise
-*/
-int pokemart_client_get_pokeball(seL4_CPtr server_ep);
+ */
+int pokemart_client_get_pokeball(seL4_CPtr server_ep, pokeball_client_context_t *result);

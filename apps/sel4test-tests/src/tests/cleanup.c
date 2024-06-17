@@ -20,9 +20,6 @@
 #include <sel4gpi/pd_creation.h>
 #include <sel4gpi/resource_server_clientapi.h>
 
-#define HELLO_CLEANUP_APP "hello_cleanup"
-#define HELLO_RESOURCE_TYPE "POKEBALL"
-
 /**
  * Test the PD cleanup policies
  *
@@ -33,11 +30,21 @@
  * The cleanup policy is currently set by the defined GPI_CLEANUP_POLICY
  */
 
+#define HELLO_CLEANUP_APP "hello_cleanup"
+#define POKEMART_RESOURCE_TYPE "POKEBALL"
+#define DAYCARE_RESOURCE_TYPE "POKEMON"
+
 static ads_client_context_t ads_conn;
 static pd_client_context_t pd_conn;
 static seL4_CPtr self_ep;
-static gpi_cap_t hello_resource_type;
-static uint64_t hello_space_id;
+
+// Track the type/space ID of the pokemart server
+static gpi_cap_t pokemart_type;
+static uint64_t pokemart_space_id;
+
+// Track the type/space ID of the daycare server
+static gpi_cap_t daycare_type;
+static uint64_t daycare_space_id;
 
 // This needs to be the same as the definition in hello-cleanup/main.c
 typedef enum _hello_mode
@@ -83,12 +90,22 @@ static int start_hello(hello_mode_t mode, pd_client_context_t *hello_pd)
     if (mode == HELLO_CLEANUP_SERVER_POKEMART_MODE)
     {
         // Start the server with the resource server utility function
-        error = start_resource_server_pd(0, 0, HELLO_CLEANUP_APP,
-                                         &hello_pd->badged_server_ep_cspath.capPtr, &hello_space_id);
+        error = start_resource_server_pd_args(0, 0, HELLO_CLEANUP_APP, &mode, 1,
+                                         &hello_pd->badged_server_ep_cspath.capPtr, &pokemart_space_id);
 
         test_assert(error == 0);
 
-        hello_resource_type = sel4gpi_get_resource_type_code(HELLO_RESOURCE_TYPE);
+        pokemart_type = sel4gpi_get_resource_type_code(POKEMART_RESOURCE_TYPE);
+        return 0;
+    } else if (mode == HELLO_CLEANUP_SERVER_DAYCARE_MODE)
+    {
+        // Start the server with the resource server utility function
+        error = start_resource_server_pd_args(pokemart_type, pokemart_space_id, HELLO_CLEANUP_APP, &mode, 1,
+                                         &hello_pd->badged_server_ep_cspath.capPtr, &daycare_space_id);
+
+        test_assert(error == 0);
+
+        daycare_type = sel4gpi_get_resource_type_code(DAYCARE_RESOURCE_TYPE);
         return 0;
     }
 
@@ -112,7 +129,11 @@ static int start_hello(hello_mode_t mode, pd_client_context_t *hello_pd)
     // Share an RDE for client
     if (mode == HELLO_CLEANUP_CLIENT_POKEMART_MODE)
     {
-        error = pd_client_share_rde(hello_pd, hello_resource_type, hello_space_id);
+        error = pd_client_share_rde(hello_pd, pokemart_type, pokemart_space_id);
+        test_assert(error == 0);
+    } else if (mode == HELLO_CLEANUP_CLIENT_DAYCARE_MODE)
+    {
+        error = pd_client_share_rde(hello_pd, daycare_type, daycare_space_id);
         test_assert(error == 0);
     }
 
@@ -167,7 +188,7 @@ int test_cleanup_policy_1(env_t env)
     test_assert(error == 0);
 
     /* Remove RDE from test process so that it won't be cleaned up by recursive cleanup */
-    error = pd_client_remove_rde(&pd_conn, hello_resource_type, hello_space_id);
+    error = pd_client_remove_rde(&pd_conn, pokemart_type, pokemart_space_id);
     test_assert(error == 0);
 
     /* Print model state before crash */
@@ -249,36 +270,76 @@ int test_cleanup_policy_2(env_t env)
     printf("------------------STARTING TEST: %s------------------\n", __func__);
 
     /* Start the PDs */
-    pd_client_context_t hello_server_pd;
-    error = start_hello(HELLO_CLEANUP_SERVER_POKEMART_MODE, &hello_server_pd);
+    pd_client_context_t hello_server_pokemart_pd;
+    error = start_hello(HELLO_CLEANUP_SERVER_POKEMART_MODE, &hello_server_pokemart_pd);
     test_assert(error == 0);
 
-    pd_client_context_t hello_client_pd;
-    error = start_hello(HELLO_CLEANUP_CLIENT_POKEMART_MODE, &hello_client_pd);
+    pd_client_context_t hello_server_daycare_pd;
+    error = start_hello(HELLO_CLEANUP_SERVER_DAYCARE_MODE, &hello_server_daycare_pd);
+    test_assert(error == 0);
+
+    pd_client_context_t hello_client_pokemart_pd;
+    error = start_hello(HELLO_CLEANUP_CLIENT_POKEMART_MODE, &hello_client_pokemart_pd);
+    test_assert(error == 0);
+
+    pd_client_context_t hello_client_daycare_pd;
+    error = start_hello(HELLO_CLEANUP_CLIENT_DAYCARE_MODE, &hello_client_daycare_pd);
     test_assert(error == 0);
 
     pd_client_context_t hello_dummy_pd;
     error = start_hello(HELLO_CLEANUP_NOTHING_MODE, &hello_dummy_pd);
     test_assert(error == 0);
 
+    /* Remove RDEs from test process so that it won't be cleaned up by recursive cleanup */
+    error = pd_client_remove_rde(&pd_conn, pokemart_type, pokemart_space_id);
+    test_assert(error == 0);
+
+    error = pd_client_remove_rde(&pd_conn, daycare_type, daycare_space_id);
+    test_assert(error == 0);
+
     /* Print model state before crash */
     printf("Dumping model state before crash\n");
-    // error = pd_client_dump(&pd_conn, NULL, 0);
+    error = pd_client_dump(&pd_conn, NULL, 0);
     test_assert(error == 0);
 
     /* Crash a PD */
-    printf("Crashing server PD\n");
-    error = pd_client_disconnect(&hello_server_pd);
+    printf("Crashing pokemart server PD\n");
+    error = pd_client_disconnect(&hello_server_pokemart_pd);
     test_assert(error == 0);
 
     /* Print model state after crash */
     printf("Dumping model state after crash\n");
-    // error = pd_client_dump(&pd_conn, NULL, 0);
+    error = pd_client_dump(&pd_conn, NULL, 0);
     test_assert(error == 0);
 
     /* Cleanup PDs */
-    error = pd_client_disconnect(&hello_client_pd);
-    test_assert(error == 0);
+    error = pd_client_disconnect(&hello_server_daycare_pd);
+
+    if (error != seL4_NoError)
+    {
+        printf("WARNING: Failed to cleanup hello-server-daycare PD (%d), "
+               "this may be expected if the cleanup policy already destroyed it. \n",
+               hello_server_daycare_pd.id);
+    }
+
+    error = pd_client_disconnect(&hello_client_pokemart_pd);
+
+    if (error != seL4_NoError)
+    {
+        printf("WARNING: Failed to cleanup hello-client-pokemart PD (%d), "
+               "this may be expected if the cleanup policy already destroyed it. \n",
+               hello_client_pokemart_pd.id);
+    }
+
+    error = pd_client_disconnect(&hello_client_daycare_pd);
+
+    if (error != seL4_NoError)
+    {
+        printf("WARNING: Failed to cleanup hello-client-daycare PD (%d), "
+               "this may be expected if the cleanup policy already destroyed it. \n",
+               hello_client_daycare_pd.id);
+    }
+
     error = pd_client_disconnect(&hello_dummy_pd);
     test_assert(error == 0);
 

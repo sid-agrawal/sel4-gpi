@@ -4,7 +4,7 @@
 #define PRINTF(...)                                   \
     do                                                \
     {                                                 \
-        printf("hello-cleanup server: " __VA_ARGS__); \
+        printf("hello-cleanup pokemart-server: " __VA_ARGS__); \
     } while (0);
 
 #define CHECK_ERROR_GOTO(check, msg) \
@@ -77,7 +77,7 @@ seL4_MessageInfo_t pokemart_request_handler(
 
         /* Add the resource node */
         gpi_model_node_t *pokeball_node = add_resource_node(model_state, get_pokemart_server()->gen.resource_type,
-                                                         get_pokemart_server()->gen.default_space.id, pokeball_id);
+                                                            get_pokemart_server()->gen.default_space.id, pokeball_id);
         add_edge(model_state, GPI_EDGE_TYPE_HOLD, self_pd_node, pokeball_node);
         add_edge(model_state, GPI_EDGE_TYPE_HOLD, client_pd_node, pokeball_node);
         add_edge(model_state, GPI_EDGE_TYPE_SUBSET, pokeball_node, pokeball_space_node);
@@ -110,6 +110,11 @@ seL4_MessageInfo_t pokemart_request_handler(
         CHECK_ERROR_GOTO(error, "Failed to give the resource");
 
         PRINTF("... ah, how about this one? Here you go, it's pokeball #%d\n", pokeball_id);
+
+        seL4_MessageInfo_ptr_set_length(&reply_tag, 3);
+        seL4_SetMR(0, dest);
+        seL4_SetMR(1, get_pokemart_server()->gen.default_space.id);
+        seL4_SetMR(2, pokeball_id);
     }
 
 done:
@@ -117,13 +122,16 @@ done:
     return reply_tag;
 }
 
-int pokemart_client_get_pokeball(seL4_CPtr server_ep)
+int pokemart_client_get_pokeball(seL4_CPtr server_ep, pokeball_client_context_t *result)
 {
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0, 0);
 
     tag = seL4_Call(server_ep, tag);
 
     int error = seL4_MessageInfo_get_label(tag);
+    result->ep.capPtr = seL4_GetMR(0);
+    result->space_id = seL4_GetMR(1);
+    result->id = seL4_GetMR(2);
 
     return error;
 }

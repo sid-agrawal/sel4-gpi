@@ -16,6 +16,7 @@
 
 #include <sel4gpi/pd_utils.h>
 #include <pokemart_server.h>
+#include <daycare_server.h>
 
 /* dummy global for libsel4muslcsys */
 char _cpio_archive[1];
@@ -72,7 +73,7 @@ static char *mode_to_str(hello_mode_t mode)
         printf("hello-cleanup %s: " msg, mode_to_str(mode), __VA_ARGS__); \
     } while (0);
 
-int pokeball_client(seL4_CPtr server_ep)
+int pokemart_client(seL4_CPtr server_ep)
 {
     int error = 0;
 
@@ -80,7 +81,8 @@ int pokeball_client(seL4_CPtr server_ep)
     {
         PRINTF("I want to purchase one pokeball.\n");
 
-        error = pokemart_client_get_pokeball(server_ep);
+        pokeball_client_context_t result;
+        error = pokemart_client_get_pokeball(server_ep, &result);
 
         if (error == 0)
         {
@@ -89,6 +91,31 @@ int pokeball_client(seL4_CPtr server_ep)
         else
         {
             PRINTF("Wait, what? This isn't a pokeball.\n");
+            return error;
+        }
+    }
+
+    return error;
+}
+
+int daycare_client(seL4_CPtr server_ep)
+{
+    int error = 0;
+
+    for (int i = 0; i < N_CLIENT_REQUESTS; i++)
+    {
+        PRINTF("I want to adopt a pokemon.\n");
+
+        pokemon_client_context_t result;
+        error = daycare_client_get_pokemon(server_ep, &result);
+
+        if (error == 0)
+        {
+            PRINTF("It's so cute!\n");
+        }
+        else
+        {
+            PRINTF("Wait, what? This isn't a pokemon.\n");
             return error;
         }
     }
@@ -109,18 +136,10 @@ int main(int argc, char **argv)
     printf("hello-cleanup main!\n");
 
     /* parse args */
-    assert(argc == 2 || argc == 3); // argc is 2 for server mode, 3 otherwise
+    assert(argc == 3);
     seL4_CPtr parent_ep = (seL4_CPtr)atol(argv[0]);
     uint64_t parent_pd_id = (uint64_t)atol(argv[1]);
-
-    if (argc == 2)
-    {
-        mode = HELLO_CLEANUP_SERVER_POKEMART_MODE;
-    }
-    else
-    {
-        mode = (seL4_CPtr)atol(argv[2]);
-    }
+    mode = (seL4_CPtr)atol(argv[2]);
 
     printf("hello-cleanup: parent ep (%d), mode (%d) \n", (int)parent_ep, (int)mode);
 
@@ -137,9 +156,22 @@ int main(int argc, char **argv)
             parent_pd_id,
             pokemart_server_init);
         break;
+    case HELLO_CLEANUP_SERVER_DAYCARE_MODE:
+        error = resource_server_start(
+            &get_daycare_server()->gen,
+            POKEMON_RESOURCE_TYPE_NAME,
+            daycare_request_handler,
+            parent_ep,
+            parent_pd_id,
+            daycare_server_init);
+        break;
     case HELLO_CLEANUP_CLIENT_POKEMART_MODE:
         seL4_CPtr server_ep = sel4gpi_get_rde(sel4gpi_get_resource_type_code(POKEBALL_RESOURCE_TYPE_NAME));
-        error = pokeball_client(server_ep);
+        error = pokemart_client(server_ep);
+        break;
+    case HELLO_CLEANUP_CLIENT_DAYCARE_MODE:
+        server_ep = sel4gpi_get_rde(sel4gpi_get_resource_type_code(POKEMON_RESOURCE_TYPE_NAME));
+        error = daycare_client(server_ep);
         break;
     case HELLO_CLEANUP_NOTHING_MODE:
         error = do_nothing();

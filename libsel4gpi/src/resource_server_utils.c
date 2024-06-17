@@ -77,7 +77,7 @@ uint64_t resource_server_registry_insert_new_id(resource_server_registry_t *regi
     resource_server_registry_node_t *test_node;
     HASH_FIND(hh, registry->head, &new_id, sizeof(new_id), test_node);
 
-    // While a node exists with this ID, try another 
+    // While a node exists with this ID, try another
     while (test_node != NULL)
     {
         new_id = registry->id_counter++;
@@ -125,7 +125,7 @@ seL4_CPtr resource_server_make_badged_ep(vka_t *src_vka, vka_t *dst_vka, seL4_CP
 
     error = vka_cnode_mint(&dest,
                            &src,
-                           seL4_AllRights,
+                           seL4_NoRead, // So that recipients of resources cannot receive endpoint messages
                            badge);
 
     return dest.capPtr;
