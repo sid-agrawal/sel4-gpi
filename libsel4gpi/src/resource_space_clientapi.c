@@ -23,7 +23,7 @@
 
 int resspc_client_connect(seL4_CPtr server_ep,
                           char *resource_type,
-                          seL4_CPtr resource_server_ep,
+                          ep_client_context_t *resource_server_ep,
                           seL4_CPtr client_id,
                           resspc_client_context_t *ret_conn)
 {
@@ -46,7 +46,7 @@ int resspc_client_connect(seL4_CPtr server_ep,
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 2, RESSPCMSGREG_CONNECT_REQ_END);
     seL4_SetMR(RESSPCMSGREG_FUNC, RESSPC_FUNC_CONNECT_REQ);
     seL4_SetMR(RESSPCMSGREG_CONNECT_REQ_CLIENT_ID, client_id);
-    seL4_SetCap(0, resource_server_ep);
+    seL4_SetCap(0, resource_server_ep->badged_server_ep_cspath.capPtr);
     seL4_SetCap(1, mo_conn.badged_server_ep_cspath.capPtr);
 
     tag = seL4_Call(server_ep, tag);

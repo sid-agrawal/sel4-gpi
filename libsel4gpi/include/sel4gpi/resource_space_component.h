@@ -5,6 +5,7 @@
 
 #include <sel4gpi/resource_server_rt_utils.h>
 #include <sel4gpi/resource_space_obj.h>
+#include <sel4gpi/endpoint_component.h>
 
 /** @file APIs for managing and interacting with the resource space component
  *

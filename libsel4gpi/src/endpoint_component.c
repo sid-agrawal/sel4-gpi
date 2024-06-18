@@ -33,32 +33,27 @@ resource_component_context_t *get_ep_component(void)
  * @brief Allocates a new endpoint in client PD's CSpace, however the memory is from the RT's pool
  *
  * @param ep the EP object
- * @param server_vka unused, defined for resspc component's generic callback
+ * @param server_vka server's vka
  * @param server_vspace unused, defined for resspc component's generic callback
- * @param client_pd the PD where the endpoint will be installed
+ * @param arg0 unused, defined for resspc component's generic callback
  *
  */
-static int ep_new(ep_t *ep, vka_t *server_vka, vspace_t *server_vspace, pd_t *client_pd)
+static int ep_new(ep_t *ep, vka_t *server_vka, vspace_t *server_vspace, void *arg0)
 {
-    int error = 0;
-    cspacepath_t dest;
-
-    error = vka_cspace_alloc_path(client_pd->pd_vka, &dest);
-    SERVER_GOTO_IF_ERR(error, "Failed to allocate slot in client PD\n");
-
-    // alloc ep from gpi server's untyped
-    error = vka_utspace_alloc(server_vka, &dest, seL4_EndpointObject, seL4_EndpointBits, &ep->alloc_cookie);
-    SERVER_GOTO_IF_ERR(error, "Failed to allocate endpoint from RT's untyped\n");
-
-    ep->endpoint_in_PD = dest.capPtr;
-err_goto:
-    return error;
+    return vka_alloc_endpoint(server_vka, &ep->endpoint_in_RT);
 }
 
 static void ep_destroy(ep_t *ep, vka_t *server_vka)
 {
     // (XXX) Linh: the slot where this EP sits in any PD should be deleted during PD cleanup, right?
-    vka_utspace_free(server_vka, seL4_EndpointObject, seL4_EndpointBits, ep->alloc_cookie);
+#ifdef CONFIG_DEBUG_BUILD
+    seL4_Word is_last_copy = seL4_DebugCapIsLastCopy(ep->endpoint_in_RT.cptr);
+    if (!is_last_copy)
+    {
+        OSDB_PRINTERR("Attempting to free an endpoint that's not the last copy\n");
+    }
+#endif
+    // vka_free_object(server_vka, &ep->endpoint_in_RT);
 }
 
 /* callback when an EP is deleted */
@@ -86,18 +81,53 @@ static seL4_MessageInfo_t handle_ep_allocation(seL4_Word sender_badge)
         resource_component_registry_get_by_id(get_pd_component(), client_id);
     SERVER_GOTO_IF_COND(pd_data == NULL, "Couldn't find PD (%ld)\n", client_id);
 
-    error = resource_component_allocate(get_ep_component(), client_id, BADGE_OBJ_ID_NULL, false, (void *)&pd_data->pd,
+    error = resource_component_allocate(get_ep_component(), client_id, BADGE_OBJ_ID_NULL, false, NULL,
                                         (resource_server_registry_node_t **)&new_entry, &ret_cap);
     SERVER_GOTO_IF_ERR(error, "Failed to allocate new EP object\n");
 
     OSDB_PRINTF("Allocated new EP (%d)\n", new_entry->ep.id);
 
+    cspacepath_t ep_in_pd;
+    error = resource_server_transfer_cap(get_ep_component()->server_vka,
+                                         pd_data->pd.pd_vka,
+                                         new_entry->ep.endpoint_in_RT.cptr,
+                                         &ep_in_pd,
+                                         false, 0);
+    SERVER_GOTO_IF_ERR(error, "Failed to copy raw endpoint to PD %d\n", pd_data->pd.id);
+
     seL4_SetMR(EPMSGREG_CONNECT_ACK_SLOT, ret_cap);
-    seL4_SetMR(EPMSGREG_CONNECT_ACK_RAW_EP, new_entry->ep.endpoint_in_PD);
+    seL4_SetMR(EPMSGREG_CONNECT_ACK_RAW_EP, ep_in_pd.capPtr);
 
 err_goto:
     seL4_SetMR(EPMSGREG_FUNC, EP_FUNC_CONNECT_ACK);
     reply_tag = seL4_MessageInfo_new(error, 0, 0, EPMSGREG_CONNECT_ACK_END);
+    return reply_tag;
+}
+
+static seL4_MessageInfo_t handle_get_raw_endpoint(seL4_Word sender_badge)
+{
+    OSDB_PRINTF("Get Raw endpoint request from: ");
+    BADGE_PRINT(sender_badge);
+
+    int error = 0;
+    ep_component_registry_entry_t *ep_data = resource_component_registry_get_by_badge(get_ep_component(), sender_badge);
+    SERVER_GOTO_IF_COND(ep_data == NULL, "Cannot find EP data\n");
+
+    pd_component_registry_entry_t *pd_data =
+        resource_component_registry_get_by_id(get_pd_component(), get_client_id_from_badge(sender_badge));
+    SERVER_GOTO_IF_COND(pd_data == NULL, "Cannot find PD data\n");
+
+    cspacepath_t dest;
+    error = resource_server_transfer_cap(get_ep_component()->server_vka,
+                                         pd_data->pd.pd_vka,
+                                         ep_data->ep.endpoint_in_RT.cptr,
+                                         &dest, false, 0);
+    SERVER_GOTO_IF_ERR(error, "Failed to copy raw endpoint cap to PD %d\n", pd_data->pd.id);
+
+    seL4_SetMR(EPMSGREG_GET_RAW_ENDPOINT_ACK_SLOT, dest.capPtr);
+err_goto:
+    seL4_SetMR(EPMSGREG_FUNC, EP_FUNC_GET_RAW_ENDPOINT_ACK);
+    seL4_MessageInfo_t reply_tag = seL4_MessageInfo_new(error, 0, 0, EPMSGREG_GET_RAW_ENDPOINT_ACK_END);
     return reply_tag;
 }
 
@@ -118,7 +148,15 @@ static seL4_MessageInfo_t ep_component_handle(seL4_MessageInfo_t tag,
     }
     else
     {
-        SERVER_GOTO_IF_COND(1, "Unknown request received: %d\n", func);
+        switch (func)
+        {
+        case EP_FUNC_GET_RAW_ENDPOINT_REQ:
+            reply_tag = handle_get_raw_endpoint(sender_badge);
+            break;
+        default:
+            SERVER_GOTO_IF_COND(1, "Unknown request received: %d\n", func);
+            break;
+        }
     }
 
     return reply_tag;

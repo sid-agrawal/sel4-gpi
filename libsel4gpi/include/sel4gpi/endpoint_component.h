@@ -30,6 +30,9 @@ enum ep_component_funcs
 {
     EP_FUNC_CONNECT_REQ = 0,
     EP_FUNC_CONNECT_ACK,
+
+    EP_FUNC_GET_RAW_ENDPOINT_REQ,
+    EP_FUNC_GET_RAW_ENDPOINT_ACK
 };
 
 /* Designated purposes of each message register in the mini-protocol. */
@@ -46,6 +49,12 @@ enum ep_component_msgregs
     EPMSGREG_CONNECT_ACK_SLOT = EPMSGREG_LABEL0,
     EPMSGREG_CONNECT_ACK_RAW_EP,
     EPMSGREG_CONNECT_ACK_END,
+
+    /* Get Raw Endpoint */
+    EPMSGREG_GET_RAW_ENDPOINT_REQ_END = EPMSGREG_LABEL0,
+
+    EPMSGREG_GET_RAW_ENDPOINT_ACK_SLOT = EPMSGREG_LABEL0,
+    EPMSGREG_GET_RAW_ENDPOINT_ACK_END
 };
 
 /**
@@ -54,9 +63,8 @@ enum ep_component_msgregs
 typedef struct _ep
 {
     uint32_t id;
-    seL4_CPtr endpoint_in_PD; ///< the EP in the client PD's CSpace, the RT does not have a cap to this EP,
-                              ///< but it was allocated from the RT's memory pool
-    seL4_Word alloc_cookie;   ///< the allocation cookie for freeing the EP from RT's memory pool
+    vka_object_t endpoint_in_RT; ///< the EP in the RT's CSpace, it exists here
+                                 ///< for convenience during transfer and freeing
 } ep_t;
 
 /**

@@ -63,6 +63,17 @@
         }                                                        \
     } while (0)
 
+#define WARN(msg, ...) printf(COLORIZE("[%s() Warning] ", YELLOW) msg, __func__, ##__VA_ARGS__);
+
+#define WARN_IF_COND(c, msg, ...)     \
+    do                                \
+    {                                 \
+        if ((c))                      \
+        {                             \
+            WARN(msg, ##__VA_ARGS__); \
+        }                             \
+    } while (0)
+
 // (XXX) Arya: Occasionally I see a weird issue
 // where depending on the number of VA_ARGS, there
 // will be a page fault if the inner printf gets compiled

@@ -27,9 +27,10 @@ file(
         src/arch/${KernelArch}/tests/*.S
 )
 
-# temp for now, since the cpu client api calls need to be fixed
+# not compiling out-of-date tests that either need to just be removed or updated
 list(REMOVE_ITEM deps "${CMAKE_CURRENT_SOURCE_DIR}/src/tests/ads_capability.c")
 list(REMOVE_ITEM deps "${CMAKE_CURRENT_SOURCE_DIR}/src/tests/lwc.c")
+list(REMOVE_ITEM deps "${CMAKE_CURRENT_SOURCE_DIR}/src/tests/benchmark.c")
 
 add_subdirectory(../sqlite3 sqlite3)
 

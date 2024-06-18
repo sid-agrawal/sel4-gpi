@@ -97,31 +97,53 @@ uint64_t resource_server_registry_insert_new_id(resource_server_registry_t *regi
     return new_id;
 }
 
-/** mints a badged endpoint */
-static int mint_ep(vka_t *src_vka, vka_t *dst_vka, seL4_CPtr src_ep, cspacepath_t *dest, seL4_Word badge)
+int resource_server_transfer_cap(vka_t *src_vka,
+                                 vka_t *dst_vka,
+                                 seL4_CPtr src_ep,
+                                 cspacepath_t *dest,
+                                 bool mint,
+                                 seL4_Word badge)
 {
+    int error = 0;
     cspacepath_t src;
     vka_cspace_make_path(src_vka, src_ep, &src);
 
     if (dst_vka)
     {
-        vka_cspace_alloc_path(dst_vka, dest);
+        error = vka_cspace_alloc_path(dst_vka, dest);
     }
     else
     {
-        vka_cspace_alloc_path(src_vka, dest);
+        error = vka_cspace_alloc_path(src_vka, dest);
     }
 
-    return vka_cnode_mint(dest,
-                          &src,
-                          seL4_NoRead, // So that recipients of resources cannot receive endpoint messages
-                          badge);
+    GOTO_IF_ERR(error, "Failed to allocate slot\n");
+
+    if (mint)
+    {
+        return vka_cnode_mint(dest,
+                              &src,
+                              seL4_NoRead, // So that recipients of resources cannot receive endpoint messages
+                              badge);
+    }
+    else
+    {
+        return vka_cnode_copy(dest, &src, seL4_AllRights);
+    }
+
+err_goto:
+    return error;
 }
 
-seL4_CPtr resource_server_make_badged_ep_custom(vka_t *src_vka, vka_t *dst_vka, seL4_CPtr src_ep, seL4_Word custom_badge)
+seL4_CPtr resource_server_make_badged_ep_custom(vka_t *src_vka,
+                                                vka_t *dst_vka,
+                                                seL4_CPtr src_ep,
+                                                seL4_Word custom_badge)
 {
     cspacepath_t dest = {0};
-    mint_ep(src_vka, dst_vka, src_ep, &dest, custom_badge);
+    int error = resource_server_transfer_cap(src_vka, dst_vka, src_ep, &dest, true, custom_badge);
+    WARN_IF_COND(error, "Could not make custom badged endpoint\n");
+
     return dest.capPtr;
 }
 
@@ -137,11 +159,14 @@ seL4_CPtr resource_server_make_badged_ep(vka_t *src_vka, vka_t *dst_vka, seL4_CP
                                     space_id,
                                     res_id);
 
-    assert(badge != 0);
+    GOTO_IF_COND(badge == 0, "Failed to make badge\n");
 
     /* Mint the cap */
     cspacepath_t dest = {0};
-    error = mint_ep(src_vka, dst_vka, src_ep, &dest, badge);
+    error = resource_server_transfer_cap(src_vka, dst_vka, src_ep, &dest, true, badge);
 
     return dest.capPtr;
+
+err_goto:
+    return seL4_CapNull;
 }

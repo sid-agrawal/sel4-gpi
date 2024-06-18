@@ -99,14 +99,17 @@ int main(int argc, char **argv)
     seL4_MessageInfo_t tag;
 
     /* parse args */
-    seL4_CPtr parent_ep = (seL4_CPtr)atol(argv[0]);
+    ep_client_context_t parent_ep = {.badged_server_ep_cspath.capPtr = (seL4_CPtr)atol(argv[0])};
+    error = ep_client_get_raw_endpoint(&parent_ep);
+    CHECK_ERROR(error, "Failed to retrieve parent EP\n");
+
     seL4_CPtr kvstore_ep = (seL4_CPtr)atol(argv[1]);
     kvstore_mode_t mode = (seL4_CPtr)atol(argv[2]);
     seL4_CPtr fs_ep = sel4gpi_get_rde(sel4gpi_get_resource_type_code(FILE_RESOURCE_TYPE_NAME));
     seL4_CPtr mo_ep = sel4gpi_get_rde(GPICAP_TYPE_MO);
-    // seL4_Word affinity = seL4_TCB_GetAffinity()
 
-    printf("hello-kvstore: parent ep (%d), kvstore ep (%d), mode (%d), fs ep(%d), mo ep(%d) \n", (int)parent_ep, (int)kvstore_ep, (int)mode, (int)fs_ep, (int)mo_ep);
+    printf("hello-kvstore: parent ep (%d), kvstore ep (%d), mode (%d), fs ep(%d), mo ep(%d) \n",
+           (int)parent_ep.raw_endpoint, (int)kvstore_ep, (int)mode, (int)fs_ep, (int)mo_ep);
 
     /* initialize */
     // (XXX) Linh: TO BE REMOVED, terrible hack so that our separate threads test runs - only one thread can use the fs client at a time
@@ -151,7 +154,7 @@ main_exit:
     /* notify parent of test result */
     printf("hello-kvstore: Exiting, notifying parent of test result: %d\n", error);
     tag = seL4_MessageInfo_new(error, 0, 0, 0);
-    seL4_Send(parent_ep, tag);
+    seL4_Send(parent_ep.raw_endpoint, tag);
 
     while(1) {
         // (XXX) Arya: Do not exit, so we can dump the model state

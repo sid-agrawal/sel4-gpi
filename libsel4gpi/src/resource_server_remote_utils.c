@@ -59,9 +59,12 @@ int resource_server_start(resource_server_context_t *context,
     context->resspc_ep = sel4gpi_get_rde(GPICAP_TYPE_RESSPC);
     context->ads_conn.badged_server_ep_cspath.capPtr = sel4gpi_get_rde_by_space_id(sel4gpi_get_binded_ads_id(), GPICAP_TYPE_VMR);
     context->pd_conn = sel4gpi_get_pd_conn();
-    context->parent_ep = parent_ep;
     context->parent_pd_id = parent_pd_id;
     context->init_fn = init_fn;
+
+    context->parent_ep.badged_server_ep_cspath.capPtr = parent_ep;
+    error = ep_client_get_raw_endpoint(&context->parent_ep);
+    CHECK_ERROR(error, "Failed to retrieve parent EP\n");
 
     printf("Resource server ADS_CAP: %ld\n", (seL4_Word)context->ads_conn.badged_server_ep_cspath.capPtr);
     printf("Resource server PD_CAP: %ld\n", (seL4_Word)context->pd_conn.badged_server_ep_cspath.capPtr);
@@ -69,9 +72,9 @@ int resource_server_start(resource_server_context_t *context,
     printf("Resource server RESSPC ep: %ld\n", (seL4_Word)context->resspc_ep);
 
     /* Allocate the Endpoint that the server will be listening on. */
-    error = pd_client_alloc_ep(&context->pd_conn, &context->server_ep);
+    error = sel4gpi_alloc_endpoint(&context->server_ep);
     CHECK_ERROR(error, "Failed to allocate endpoint for resource server");
-    RESOURCE_SERVER_PRINTF("Allocated server ep at %d\n", (int)context->server_ep);
+    RESOURCE_SERVER_PRINTF("Allocated server ep at %d\n", (int)context->server_ep.raw_endpoint);
 
     RESOURCE_SERVER_PRINTF("Going to main function\n");
     return resource_server_main((void *)context);
@@ -88,7 +91,7 @@ static seL4_MessageInfo_t resource_server_recv(resource_server_context_t *contex
      * the reply param of api_recv(third param) is only used in the MCS kernel.
      **/
 
-    return api_recv(context->server_ep,
+    return api_recv(context->server_ep.raw_endpoint,
                     sender_badge_ptr,
                     context->mcs_reply);
 }
@@ -164,10 +167,10 @@ int resource_server_main(void *context_v)
         received_cap_path.capDepth);
 
     // Send our space ID to the parent process
-    RESOURCE_SERVER_PRINTF("Messaging parent process at slot %d, sending space ID %d\n", (int)context->parent_ep, context->default_space.id);
+    RESOURCE_SERVER_PRINTF("Messaging parent process at slot %d, sending space ID %d\n", (int)context->parent_ep.raw_endpoint, context->default_space.id);
     tag = seL4_MessageInfo_new(0, 0, 0, 1);
     seL4_SetMR(0, context->default_space.id);
-    seL4_Send(context->parent_ep, tag);
+    seL4_Send(context->parent_ep.raw_endpoint, tag);
 
 #if STORE_REPLY_CAP
     // Initialize the reply cap
@@ -331,7 +334,7 @@ int resource_server_new_res_space(resource_server_context_t *context,
 
     resspc_client_context_t space_conn;
     error = resspc_client_connect(context->resspc_ep, context->resource_type_name,
-                                  context->server_ep, client_id, &space_conn);
+                                  &context->server_ep, client_id, &space_conn);
     CHECK_ERROR_GOTO(error, "failed to register resource space for server", err_goto);
 
     context->resource_type = space_conn.resource_type;

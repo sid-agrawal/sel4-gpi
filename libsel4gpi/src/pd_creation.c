@@ -54,6 +54,7 @@ pd_config_t *sel4gpi_configure_process(const char *image_name,
                                        sel4gpi_runnable_t *ret_runnable)
 {
     int error = 0;
+    PD_CREATION_PRINT("Configuring new process with image: %s\n", image_name);
     pd_config_t *proc_cfg = NULL;
 
     seL4_CPtr pd_rde = sel4gpi_get_rde(GPICAP_TYPE_PD);
@@ -104,6 +105,7 @@ err_goto:
 
 pd_config_t *sel4gpi_configure_thread(void *thread_fn, seL4_CPtr fault_ep, sel4gpi_runnable_t *ret_runnable)
 {
+    PD_CREATION_PRINT("Configuring new thread\n");
     int error = 0;
     pd_config_t *cfg = NULL;
     seL4_CPtr pd_rde = sel4gpi_get_rde(GPICAP_TYPE_PD);
@@ -241,11 +243,11 @@ int sel4gpi_ads_configure(ads_config_t *cfg,
                     PD_CREATION_PRINT("Loading Elf\n");
                     error = ads_client_load_elf(&runnable->ads, &runnable->pd, cfg->image_name, &auto_entry_point);
                     GOTO_IF_ERR(error, "failed to load elf to ADS");
-                    PRINT_IF_COND(auto_entry_point != NULL && cfg->entry_point,
-                                  COLORIZE("Warning: ", CYAN) "Automatically found entry point (%p) differs from given one (%p)\n",
-                                  auto_entry_point, cfg->entry_point);
-                    PRINT_IF_COND(auto_entry_point == NULL && cfg->entry_point == NULL,
-                                  COLORIZE("Warning: ", CYAN) "PD has no entry point (either it was not found or was not given)\n");
+                    WARN_IF_COND(auto_entry_point != NULL && cfg->entry_point,
+                                 "Automatically found entry point (%p) differs from given one (%p)\n",
+                                 auto_entry_point, cfg->entry_point);
+                    WARN_IF_COND(auto_entry_point == NULL && cfg->entry_point == NULL,
+                                 "PD has no entry point (either it was not found or was not given)\n");
                 }
                 else if (vmr->type == SEL4UTILS_RES_TYPE_STACK)
                 {
@@ -309,7 +311,7 @@ static int rde_configure(pd_config_t *cfg, sel4gpi_runnable_t *runnable)
         for (linked_list_node_t *curr = cfg->rde_cfg->head; curr != NULL; curr = curr->next)
         {
             rde = (rde_config_t *)curr->data;
-            PD_CREATION_PRINT("Sharing RDE (type: %d, space ID: %d)\n", rde->type, rde->space_id);
+            PD_CREATION_PRINT("Sharing RDE (type: %s, space ID: %d)\n", cap_type_to_str(rde->type), rde->space_id);
             error = pd_client_share_rde(&runnable->pd, rde->type, rde->space_id);
             PRINT_IF_ERR(error, "Couldn't share RDE (type: %d, space ID: %d)\n", rde->type, rde->space_id);
         }
@@ -331,7 +333,7 @@ int sel4gpi_start_pd(pd_config_t *cfg, sel4gpi_runnable_t *runnable, int argc, s
     seL4_Word cnode_guard = api_make_guard_skip_word(seL4_WordBits - TEST_PROCESS_CSPACE_SIZE_BITS);
 
     mo_client_context_t ipc_mo = {0};
-    seL4_CPtr fault_ep_in_pd;
+    seL4_CPtr fault_ep_in_pd = 0;
     void *entry_point = NULL;
     void *stack = NULL;
     void *ipc_buf = NULL;
@@ -367,18 +369,18 @@ int sel4gpi_start_pd(pd_config_t *cfg, sel4gpi_runnable_t *runnable, int argc, s
         }
     }
 
-    if (cfg->fault_ep != seL4_CapNull)
-    {
-        PD_CREATION_PRINT("Sending fault EP (0x%lx) to PD\n", cfg->fault_ep);
-        error = pd_client_send_cap(&runnable->pd, cfg->fault_ep, &fault_ep_in_pd);
-        GOTO_IF_ERR(error, "Failed to send fault EP to PD\n");
-    }
-    else
-    {
-        error = pd_client_alloc_ep(&runnable->pd, &fault_ep_in_pd);
-        PD_CREATION_PRINT("Allocated new fault EP at 0x%lx\n", fault_ep_in_pd);
-        GOTO_IF_ERR(error, "Couldn't allocate fault EP for PD\n");
-    }
+    // if (cfg->fault_ep != seL4_CapNull)
+    // {
+    //     PD_CREATION_PRINT("Sending fault EP (0x%lx) to PD\n", cfg->fault_ep);
+    //     error = pd_client_send_cap(&runnable->pd, cfg->fault_ep, &fault_ep_in_pd);
+    //     GOTO_IF_ERR(error, "Failed to send fault EP to PD\n");
+    // }
+    // else
+    // {
+    //     error = pd_client_alloc_ep(&runnable->pd, &fault_ep_in_pd);
+    //     PD_CREATION_PRINT("Allocated new fault EP at 0x%lx\n", fault_ep_in_pd);
+    //     GOTO_IF_ERR(error, "Couldn't allocate fault EP for PD\n");
+    // }
 
     // (XXX) Linh: This whole `if` blob is to be removed with unified entry-point
     if (cfg->ads_cfg.stack_shared == GPI_DISJOINT)
@@ -580,4 +582,19 @@ char *sel4gpi_share_degree_to_str(gpi_share_degree_t share_deg)
     default:
         return "Invalid";
     }
+}
+
+void sel4gpi_add_rde_config(pd_config_t *cfg, gpi_cap_t rde_type, uint32_t space_id)
+{
+    rde_config_t *new_rde_cfg = calloc(1, sizeof(rde_config_t));
+    if (!new_rde_cfg)
+    {
+        WARN("Malloc failed!\n");
+        return;
+    }
+
+    new_rde_cfg->space_id = space_id;
+    new_rde_cfg->type = rde_type;
+
+    linked_list_insert(cfg->rde_cfg, new_rde_cfg);
 }

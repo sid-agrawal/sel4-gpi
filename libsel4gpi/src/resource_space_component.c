@@ -54,7 +54,7 @@ err_goto:
     OSDB_PRINTERR("Failed to delete resource space (%d)\n", node->space.id);
 }
 
-static seL4_MessageInfo_t handle_resspc_allocation_request(seL4_Word sender_badge, seL4_CPtr received_cap)
+static seL4_MessageInfo_t handle_resspc_allocation_request(seL4_Word sender_badge)
 {
     OSDB_PRINTF("Got resource space allocation request from client badge %lx.\n", sender_badge);
     int error = 0;
@@ -73,6 +73,10 @@ static seL4_MessageInfo_t handle_resspc_allocation_request(seL4_Word sender_badg
         resource_component_registry_get_by_id(get_pd_component(), client_id);
     SERVER_GOTO_IF_COND(client_pd == NULL, "Couldn't find client PD (%ld)\n", client_id);
 
+    ep_component_registry_entry_t *ep_data = (ep_component_registry_entry_t *)
+        resource_component_registry_get_by_badge(get_ep_component(), seL4_GetBadge(0));
+    SERVER_GOTO_IF_COND(ep_data == NULL, "Couldn't find resource server's tracked EP\n");
+
     // Attach the MO containing resource type name
     uint64_t mo_id = get_object_id_from_badge(seL4_GetBadge(1));
 
@@ -89,9 +93,10 @@ static seL4_MessageInfo_t handle_resspc_allocation_request(seL4_Word sender_badg
     resspc_component_registry_entry_t *space_entry;
     seL4_CPtr space_cap;
 
+    // We don't add the tracked endpoint handle to this config, because it now represents resource endpoints
     resspc_config_t resspc_config = {
         .type = type,
-        .ep = received_cap,
+        .ep = ep_data->ep.endpoint_in_RT.cptr,
         .pd = &server_pd->pd};
 
     error = resource_component_allocate(get_resspc_component(), server_pd->pd.id, BADGE_OBJ_ID_NULL,
@@ -108,7 +113,7 @@ static seL4_MessageInfo_t handle_resspc_allocation_request(seL4_Word sender_badg
     rde_type_t rde_type = {
         .type = type,
     };
-    error = pd_add_rde(&client_pd->pd, rde_type, resource_type_name, space_id, received_cap);
+    error = pd_add_rde(&client_pd->pd, rde_type, resource_type_name, space_id, ep_data->ep.endpoint_in_RT.cptr);
     SERVER_GOTO_IF_ERR(error, "Failed to add RDE to new resource space\n");
 
     // Add the type name to the server PD
@@ -288,7 +293,7 @@ static seL4_MessageInfo_t resspc_component_handle(seL4_MessageInfo_t tag,
     {
         SERVER_GOTO_IF_COND(func != RESSPC_FUNC_CONNECT_REQ,
                             "Received invalid request on the allocation endpoint\n");
-        reply_tag = handle_resspc_allocation_request(sender_badge, received_cap);
+        reply_tag = handle_resspc_allocation_request(sender_badge);
         *need_new_recv_cap = true;
     }
     else

@@ -106,6 +106,7 @@ typedef struct _pd_config
     linked_list_t *rde_cfg;          ///< the RDE config
     linked_list_t *gpi_res_type_cfg; ///< a list of GPICAP_TYPE_X resource types,
                                      ///< all resources of this type will be shared with the PD
+                                     ///< currently does not differentiate between resource spaces
     // ongoing: add configs for other resources here as needed
 } pd_config_t;
 
@@ -205,3 +206,13 @@ int sel4gpi_ads_configure(ads_config_t *cfg,
                           void **ret_entry_point,
                           void **ret_osm_data,
                           mo_client_context_t *ret_ipc_buf_mo);
+
+/**
+ * @brief Convenience function for configuring a new RDE to share with a PD (that's not yet started)
+ * Will malloc a new RDE config, which gets freed during sel4gpi_config_destroy
+ *
+ * @param cfg an existing PD config for an unstarted PD
+ * @param rde_type type of RDE to share
+ * @param space_id resource space ID of the RDE
+ */
+void sel4gpi_add_rde_config(pd_config_t *cfg, gpi_cap_t rde_type, uint32_t space_id);

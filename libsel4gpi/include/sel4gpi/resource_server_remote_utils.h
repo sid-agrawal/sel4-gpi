@@ -10,6 +10,7 @@
 #include <sel4gpi/ads_clientapi.h>
 #include <sel4gpi/mo_clientapi.h>
 #include <sel4gpi/pd_clientapi.h>
+#include <sel4gpi/endpoint_clientapi.h>
 #include <sel4gpi/resource_types.h>
 #include <sel4gpi/resource_server_utils.h>
 #include <sel4gpi/resource_server_clientapi.h>
@@ -43,14 +44,14 @@ typedef struct _resource_server_context
     uint64_t parent_pd_id;
 
     // RDEs and other EPs
-    seL4_CPtr parent_ep;
     seL4_CPtr mo_ep;
     seL4_CPtr resspc_ep;
+    ep_client_context_t parent_ep;
     ads_client_context_t ads_conn;
     pd_client_context_t pd_conn;
 
     // The server listens on this endpoint.
-    seL4_CPtr server_ep;
+    ep_client_context_t server_ep;
 
     // Other
     seL4_CPtr mcs_reply;

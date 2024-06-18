@@ -130,6 +130,24 @@ void resource_server_registry_dec(resource_server_registry_t *registry, resource
 uint64_t resource_server_registry_insert_new_id(resource_server_registry_t *registry, resource_server_registry_node_t *node);
 
 /**
+ * @brief Transfers a cap between the CSpaces in src_vka and dst_vka
+ *
+ * @param src_vka vka for the source endpoint
+ * @param dst_vka vka for the destination (or NULL, to use src vka for destination)
+ * @param src_ep source endpoint to badge
+ * @param dest empty cspacepath_t to fill in with destination slot
+ * @param mint if true, the cap being transfered is an endpoint cap, and will be minted rather than copied
+ * @param badge OPTIONAL a badge to mint onto the endpoint cap - only applies if mint = true,
+ * @return int
+ */
+int resource_server_transfer_cap(vka_t *src_vka,
+                                 vka_t *dst_vka,
+                                 seL4_CPtr src_ep,
+                                 cspacepath_t *dest,
+                                 bool mint,
+                                 seL4_Word badge);
+
+/**
  * Creates a badged version of an endpoint with a custom badge given
  * Used for an arbitrary non-OSmosis endpoint
  *

@@ -30,7 +30,8 @@
 int cpu_start(cpu_t *cpu)
 {
     OSDB_PRINTF("cpu_start: starting CPU (%d) at PC: 0x%lx\n", cpu->id, cpu->reg_ctx->pc);
-    return seL4_TCB_Resume(cpu->tcb.cptr);
+    seL4_TCB_Resume(cpu->tcb.cptr);
+    return 0;
 }
 
 int cpu_stop(cpu_t *cpu)

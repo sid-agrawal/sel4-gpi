@@ -50,8 +50,8 @@ int start_resource_server_pd_args(gpi_cap_t rde_type,
     pd_client_context_t current_pd = sel4gpi_get_pd_conn();
 
     // Create a temporary endpoint for the parent to listen on
-    seL4_CPtr ep;
-    error = pd_client_alloc_ep(&current_pd, &ep);
+    ep_client_context_t ep_conn;
+    error = sel4gpi_alloc_endpoint(&ep_conn);
     CHECK_ERROR(error, "failed to allocate endpoint");
 
     sel4gpi_runnable_t runnable = {0};
@@ -66,17 +66,17 @@ int start_resource_server_pd_args(gpi_cap_t rde_type,
 
     // Copy the parent ep to the new PD
     seL4_Word parent_ep_slot;
-    error = pd_client_send_cap(&runnable.pd, ep, &parent_ep_slot);
+    error = pd_client_send_cap(&runnable.pd, ep_conn.badged_server_ep_cspath.capPtr, &parent_ep_slot);
     CHECK_ERROR(error, "failed to send parent's ep cap to pd");
 
     // Copy the RDE to the new PD
     if (rde_id != 0)
     {
-
-        RESOURCE_SERVER_PRINTF("SENDING RDE\n");
-        error = pd_client_share_rde(&runnable.pd, rde_type, rde_id);
-        CHECK_ERROR(error, "failed to send rde to pd");
+        sel4gpi_add_rde_config(cfg, rde_type, rde_id);
     }
+
+    // By default, resource servers need to be able to create EPs
+    sel4gpi_add_rde_config(cfg, GPICAP_TYPE_EP, RESSPC_ID_NULL);
 
     // Setup the args
     int argc = 2 + argc_input;
@@ -95,7 +95,7 @@ int start_resource_server_pd_args(gpi_cap_t rde_type,
 
     // Wait for it to finish starting
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0, 0);
-    tag = seL4_Recv(ep, NULL);
+    tag = seL4_Recv(ep_conn.raw_endpoint, NULL);
     int n_caps = seL4_MessageInfo_get_extraCaps(tag);
     error = seL4_MessageInfo_get_label(tag);
     CHECK_ERROR(error, "message from server is a failure");

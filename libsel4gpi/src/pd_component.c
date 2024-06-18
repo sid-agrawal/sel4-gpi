@@ -276,8 +276,8 @@ static seL4_MessageInfo_t handle_share_rde_req(seL4_Word sender_badge, seL4_Mess
     seL4_Word type = seL4_GetMR(PDMSGREG_SHARE_RDE_REQ_TYPE);
     seL4_Word space_id = seL4_GetMR(PDMSGREG_SHARE_RDE_REQ_SPACE_ID);
 
-    OSDB_PRINTF("share_rde_req: Got request from client badge %lx for RDE type %ld with space %ld.\n",
-                sender_badge, type, space_id);
+    OSDB_PRINTF("share_rde_req: Got request from client badge %lx for RDE type %s with space %ld.\n",
+                sender_badge, cap_type_to_str(type), space_id);
 
     seL4_Word client_id = get_client_id_from_badge(sender_badge);
     pd_component_registry_entry_t *target_data = pd_component_registry_get_entry_by_badge(sender_badge);
@@ -560,6 +560,10 @@ static seL4_MessageInfo_t handle_runtime_setup_req(seL4_Word sender_badge, seL4_
             break;
         }
     }
+
+#if CONFIG_DEBUG_BUILD
+    seL4_DebugNameThread(target_cpu->cpu.tcb.cptr, target_pd->pd.image_name);
+#endif
 
     SERVER_GOTO_IF_ERR(error, "Failed to setup PD\n");
 err_goto:

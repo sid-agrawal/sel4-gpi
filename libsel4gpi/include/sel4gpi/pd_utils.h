@@ -9,6 +9,7 @@
 #include <sel4gpi/ads_clientapi.h>
 #include <sel4gpi/mo_clientapi.h>
 #include <sel4gpi/cpu_clientapi.h>
+#include <sel4gpi/endpoint_clientapi.h>
 
 /* We define a specific address for our static heap since we want the flexibility of allocating an MO for it
  * (rather than it being part of the ELF data) */
@@ -156,4 +157,10 @@ int sel4gpi_destroy_vmr(ads_client_context_t *vmr_rde, void *vaddr, mo_client_co
  */
 void *sel4gpi_new_sized_stack(ads_client_context_t *ads, size_t n_pages);
 
-// int sel4gpi_alloc_endpoint(ep_client_context_t *)
+/**
+ * @brief allocates a new tracked endpoint using the default EP RDE
+ *
+ * @param[out] ret_ep_conn empty connection context to fill in
+ * @return int 0 on success, 1 on failure
+ */
+int sel4gpi_alloc_endpoint(ep_client_context_t *ret_ep_conn);

@@ -60,12 +60,7 @@ char *sel4gpi_get_resource_type_name(gpi_cap_t type)
 seL4_CPtr sel4gpi_get_rde(int type)
 {
     seL4_CPtr slot = ((osm_pd_shared_data_t *)sel4runtime_get_osm_shared_data())->rde[type][0].slot_in_PD;
-
-    if (slot == seL4_CapNull)
-    {
-        printf(COLORIZE("Warning: could not find RDE (type: %d) for PD (%ld)\n", MAGENTA),
-               type, sel4gpi_get_pd_conn().id);
-    }
+    WARN_IF_COND(slot == seL4_CapNull, "Could not find RDE (type: %d) for PD (%ld)\n", type, sel4gpi_get_pd_conn().id);
 
     return slot;
 }
@@ -97,8 +92,7 @@ seL4_CPtr sel4gpi_get_rde_by_space_id(uint32_t space_id, gpi_cap_t type)
         }
     }
 
-    printf(COLORIZE("Warning: could not find RDE (type: %d, space: %d) for PD (%ld)\n", MAGENTA),
-           type, space_id, sel4gpi_get_pd_conn().id);
+    WARN("could not find RDE (type: %d, space: %d) for PD (%ld)\n", type, space_id, sel4gpi_get_pd_conn().id);
     return seL4_CapNull;
 }
 
@@ -215,6 +209,18 @@ int sel4gpi_destroy_vmr(ads_client_context_t *vmr_rde, void *vaddr, mo_client_co
 
     error = mo_component_client_disconnect(mo);
     GOTO_IF_ERR(error, "failed to disconnect MO\n");
+
+err_goto:
+    return error;
+}
+
+int sel4gpi_alloc_endpoint(ep_client_context_t *ret_ep_conn)
+{
+    int error = 0;
+    seL4_CPtr ep_rde = sel4gpi_get_rde(GPICAP_TYPE_EP);
+    GOTO_IF_COND(ep_rde == seL4_CapNull, "No EP RDE to request allocation\n");
+
+    error = ep_component_client_connect(ep_rde, ret_ep_conn);
 
 err_goto:
     return error;

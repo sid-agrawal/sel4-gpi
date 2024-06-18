@@ -36,7 +36,7 @@
 
 static ads_client_context_t ads_conn;
 static pd_client_context_t pd_conn;
-static seL4_CPtr self_ep;
+static ep_client_context_t self_ep;
 
 // Track the type/space ID of the pokemart server
 static gpi_cap_t pokemart_type;
@@ -70,7 +70,7 @@ static int setup(env_t env)
     pd_conn = sel4gpi_get_pd_conn();
 
     /* Create EP to listen for test results */
-    error = pd_client_alloc_ep(&pd_conn, &self_ep);
+    error = sel4gpi_alloc_endpoint(&self_ep);
     test_assert(error == 0);
 
     return error;
@@ -123,18 +123,16 @@ static int start_hello(hello_mode_t mode, pd_client_context_t *hello_pd)
     args[2] = mode;
 
     // Copy the parent ep
-    error = pd_client_send_cap(hello_pd, self_ep, &args[0]);
+    error = pd_client_send_cap(hello_pd, self_ep.badged_server_ep_cspath.capPtr, &args[0]);
     test_assert(error == 0);
 
     // Share an RDE for client
     if (mode == HELLO_CLEANUP_CLIENT_POKEMART_MODE)
     {
-        error = pd_client_share_rde(hello_pd, pokemart_type, pokemart_space_id);
-        test_assert(error == 0);
+        sel4gpi_add_rde_config(cfg, pokemart_type, pokemart_space_id);
     } else if (mode == HELLO_CLEANUP_CLIENT_DAYCARE_MODE)
     {
-        error = pd_client_share_rde(hello_pd, daycare_type, daycare_space_id);
-        test_assert(error == 0);
+        sel4gpi_add_rde_config(cfg, daycare_type, daycare_space_id);
     }
 
     // Start it

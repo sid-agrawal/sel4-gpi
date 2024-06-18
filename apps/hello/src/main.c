@@ -83,7 +83,12 @@ int main(int argc, char **argv)
         seL4_CPtr cap_arg = (seL4_CPtr)strtol(argv[0], NULL, 10);
         seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0, 0);
         printf("argc: %d cap_arg: %lx\n", argc, cap_arg);
-        seL4_Call(cap_arg, tag);
+
+        ep_client_context_t parent_ep = {.badged_server_ep_cspath.capPtr = cap_arg};
+        error = ep_client_get_raw_endpoint(&parent_ep);
+        assert(error == 0 && parent_ep.raw_endpoint != seL4_CapNull);
+
+        seL4_Call(parent_ep.raw_endpoint, tag);
 
         seL4_Word slot = seL4_GetMR(0);
 
@@ -96,7 +101,7 @@ int main(int argc, char **argv)
         printf("Attached given MO to vaddr %p\n", ret_vaddr);
 
         // tell sender we're done
-        seL4_Send(cap_arg, tag);
+        seL4_Send(parent_ep.raw_endpoint, tag);
     }
 
     printf(".... Goodbye Cruel World\n");

@@ -782,125 +782,116 @@ int pd_send_cap(pd_t *to_pd,
 {
     int error = 0;
     SERVER_GOTO_IF_COND(cap == 0, "pd_send_cap got a null cap to send\n");
+    SERVER_GOTO_IF_COND(badge == 0, "Cannot send a non-GPI cap to a PD\n");
 
-    OSDB_PRINTF("pd_send_cap: Sending cap %ld to PD%d: ", cap, to_pd->id);
-    BADGE_PRINT(badge);
-
-    seL4_Word new_badge;
-    cspacepath_t src, dest;
-    seL4_CPtr dest_cptr;
-    pd_hold_node_t *res;
+    gpi_cap_t cap_type = get_cap_type_from_badge(badge);
+    vka_t *server_vka;
+    seL4_CPtr server_src_cap;
     bool should_mint = true;
 
-    /*
-        Find out if the cap is an OSmosis cap or not.
-    */
-    if (badge)
+    OSDB_PRINTF("Sending %s cap to PD %d, with badge: ", cap_type_to_str(cap_type), to_pd->id);
+    BADGE_PRINT(badge);
+
+    switch (cap_type)
     {
-        gpi_cap_t cap_type = get_cap_type_from_badge(badge);
-        vka_t *server_vka;
-        seL4_CPtr server_src_cap;
+    case GPICAP_TYPE_ADS:
+        server_vka = get_ads_component()->server_vka;
+        server_src_cap = get_ads_component()->server_ep;
 
-        switch (cap_type)
+        // Copying the resource, so increase the reference count
+        if (inc_refcount)
         {
-        case GPICAP_TYPE_ADS:
-            server_vka = get_ads_component()->server_vka;
-            server_src_cap = get_ads_component()->server_ep;
-
-            // Copying the resource, so increase the reference count
-            if (inc_refcount)
-            {
-                resource_component_inc(get_ads_component(), get_object_id_from_badge(badge));
-            }
-            break;
-        case GPICAP_TYPE_MO:
-            server_vka = get_mo_component()->server_vka;
-            server_src_cap = get_mo_component()->server_ep;
-
-            // Copying the resource, so increase the reference count
-            if (inc_refcount)
-            {
-                resource_component_inc(get_mo_component(), get_object_id_from_badge(badge));
-            }
-            break;
-        case GPICAP_TYPE_CPU:
-            server_vka = get_cpu_component()->server_vka;
-            server_src_cap = get_cpu_component()->server_ep;
-
-            // Copying the resource, so increase the reference count
-            if (inc_refcount)
-            {
-                resource_component_inc(get_cpu_component(), get_object_id_from_badge(badge));
-            }
-            break;
-        case GPICAP_TYPE_PD:
-            server_vka = get_pd_component()->server_vka;
-            server_src_cap = get_pd_component()->server_ep;
-
-            // Copying the resource, so increase the reference count
-            if (inc_refcount)
-            {
-                resource_component_inc(get_pd_component(), get_object_id_from_badge(badge));
-            }
-            break;
-        case GPICAP_TYPE_EP:
-            server_vka = get_ep_component()->server_vka;
-            server_src_cap = get_ep_component()->server_ep;
-
-            // Copying the resource, so increase the reference count
-            if (inc_refcount)
-            {
-                resource_component_inc(get_ep_component(), get_object_id_from_badge(badge));
-            }
-            break;
-        default:
-            //  (XXX) Arya: allowing unknown cap type for now to send parent ep
-            OSDB_PRINTF("Warning: Unknown cap type %d in %s\n", cap_type, __FUNCTION__);
-            should_mint = false;
-            break;
+            resource_component_inc(get_ads_component(), get_object_id_from_badge(badge));
         }
+        break;
+    case GPICAP_TYPE_MO:
+        server_vka = get_mo_component()->server_vka;
+        server_src_cap = get_mo_component()->server_ep;
 
-        if (should_mint)
+        // Copying the resource, so increase the reference count
+        if (inc_refcount)
         {
-            seL4_CPtr new_cap = resource_server_make_badged_ep(server_vka,
-                                                               to_pd->pd_vka,
-                                                               server_src_cap,
-                                                               cap_type,
-                                                               get_space_id_from_badge(badge),
-                                                               get_object_id_from_badge(badge),
-                                                               to_pd->id);
-
-            SERVER_GOTO_IF_COND(new_cap == seL4_CapNull, "Failed to mint a new cap\n");
-
-            error = pd_add_resource(to_pd,
-                                    cap_type,
-                                    get_space_id_from_badge(badge),
-                                    get_object_id_from_badge(badge),
-                                    cap,
-                                    new_cap,
-                                    cap);
-            SERVER_PRINT_IF_ERR(error, "Warning: Failed to add cap to PD's resources\n");
-
-            if (update_core_cap)
-            {
-                error = pd_set_core_cap(to_pd, badge, new_cap);
-                SERVER_PRINT_IF_ERR(error, "Warning: failed to set the cap in PD's OSmosis data\n");
-            }
-
-            *slot = new_cap;
+            resource_component_inc(get_mo_component(), get_object_id_from_badge(badge));
         }
-        else
+        break;
+    case GPICAP_TYPE_CPU:
+        server_vka = get_cpu_component()->server_vka;
+        server_src_cap = get_cpu_component()->server_ep;
+
+        // Copying the resource, so increase the reference count
+        if (inc_refcount)
         {
-            // if this is a non-core cap, just copy
-            error = copy_cap_to_pd(to_pd, cap, slot);
+            resource_component_inc(get_cpu_component(), get_object_id_from_badge(badge));
         }
+        break;
+    case GPICAP_TYPE_PD:
+        server_vka = get_pd_component()->server_vka;
+        server_src_cap = get_pd_component()->server_ep;
+
+        // Copying the resource, so increase the reference count
+        if (inc_refcount)
+        {
+            resource_component_inc(get_pd_component(), get_object_id_from_badge(badge));
+        }
+        break;
+    case GPICAP_TYPE_EP:
+        server_vka = get_ep_component()->server_vka;
+        server_src_cap = get_ep_component()->server_ep;
+
+        // Copying the resource, so increase the reference count
+        if (inc_refcount)
+        {
+            resource_component_inc(get_ep_component(), get_object_id_from_badge(badge));
+        }
+        break;
+    default:
+        should_mint = false;
+        break;
     }
 
-    SERVER_GOTO_IF_ERR(error, "Failed to copy cap to PD\n");
+    if (should_mint)
+    {
+        seL4_CPtr new_cap = resource_server_make_badged_ep(server_vka,
+                                                           to_pd->pd_vka,
+                                                           server_src_cap,
+                                                           cap_type,
+                                                           get_space_id_from_badge(badge),
+                                                           get_object_id_from_badge(badge),
+                                                           to_pd->id);
+
+        SERVER_GOTO_IF_COND(new_cap == seL4_CapNull, "Failed to mint a new cap\n");
+
+        if (update_core_cap)
+        {
+            error = pd_set_core_cap(to_pd, badge, new_cap);
+            SERVER_PRINT_IF_ERR(error, "Warning: failed to set the cap in PD's OSmosis data\n");
+        }
+
+        error = pd_add_resource(to_pd,
+                                cap_type,
+                                get_space_id_from_badge(badge),
+                                get_object_id_from_badge(badge),
+                                cap,
+                                new_cap,
+                                cap);
+        SERVER_PRINT_IF_ERR(error, "Warning: Failed to add cap to PD's resources\n");
+
+        *slot = new_cap;
+    }
+    else
+    {
+        OSDB_PRINTF("[Warning]: Untracked cap being sent to PD\n");
+        cspacepath_t dest = {0};
+        error = resource_server_transfer_cap(get_pd_component()->server_vka, to_pd->pd_vka, cap, &dest, false, 0);
+        SERVER_GOTO_IF_ERR(error, "Failed to copy cap to PD\n");
+
+        *slot = dest.capPtr;
+    }
+
     OSDB_PRINTF("pd_send_cap: copied cap at %ld to child\n", *slot);
 
 err_goto:
-    return 0;
+    return error;
 }
 
 static int request_remote_rr(pd_t *pd, model_state_t *ms, uint64_t space_id, uint32_t obj_id,
@@ -918,6 +909,9 @@ static int request_remote_rr(pd_t *pd, model_state_t *ms, uint64_t space_id, uin
     OSDB_PRINTF("Resource ID 0x%x, space ID 0x%lx, server EP at %d\n", obj_id, space_id, (int)server_cap);
 
     // Pre-map the shared memory so resource server does not need to call root task
+    SERVER_GOTO_IF_COND(server_entry->space.pd == NULL,
+                        "Server with EP at %d does not have PD data\n", (int)server_cap);
+
     uint64_t server_ads_id = server_entry->space.pd->shared_data->ads_conn.id;
     error = ads_component_attach(server_ads_id, rr_mo_id, SEL4UTILS_RES_TYPE_SHARED_FRAMES, NULL, &rr_remote_vaddr);
     SERVER_GOTO_IF_ERR(error, "Failed to attach frame for remote rr to resource server\n");
@@ -986,7 +980,7 @@ err_goto:
 static int res_dump(pd_t *pd, model_state_t *ms, pd_hold_node_t *current_cap,
                     gpi_model_node_t *pd_node, uint64_t rr_mo_id, void *rr_local_vaddr)
 {
-    int error;
+    int error = 0;
 
     switch (current_cap->type)
     {
@@ -995,20 +989,22 @@ static int res_dump(pd_t *pd, model_state_t *ms, pd_hold_node_t *current_cap,
     case GPICAP_TYPE_ADS:
         ads_component_registry_entry_t *ads_data = (ads_component_registry_entry_t *)
             resource_component_registry_get_by_id(get_ads_component(), current_cap->res_id);
-        assert(ads_data != NULL);
+        SERVER_GOTO_IF_COND(ads_data == NULL, "Failed to find ADS data\n");
 
         ads_dump_rr(&ads_data->ads, ms, pd_node);
         break;
     case GPICAP_TYPE_MO:
         mo_component_registry_entry_t *mo_data = (mo_component_registry_entry_t *)
             resource_component_registry_get_by_id(get_mo_component(), current_cap->res_id);
-        assert(mo_data != NULL);
+        SERVER_GOTO_IF_COND(mo_data == NULL, "Failed to find MO data\n");
+
         mo_dump_rr(&mo_data->mo, ms, pd_node);
         break;
     case GPICAP_TYPE_CPU:
         cpu_component_registry_entry_t *cpu_data = (cpu_component_registry_entry_t *)
             resource_component_registry_get_by_id(get_cpu_component(), current_cap->res_id);
-        assert(cpu_data != NULL);
+        SERVER_GOTO_IF_COND(cpu_data == NULL, "Failed to find CPU data\n");
+
         cpu_dump_rr(&cpu_data->cpu, ms, pd_node);
         break;
     case GPICAP_TYPE_seL4:
@@ -1020,7 +1016,8 @@ static int res_dump(pd_t *pd, model_state_t *ms, pd_hold_node_t *current_cap,
             pd_component_registry_entry_t *pd_data = (pd_component_registry_entry_t *)
                 resource_component_registry_get_by_id(get_pd_component(), current_cap->res_id);
 
-            assert(pd_data != NULL);
+            SERVER_GOTO_IF_COND(pd_data == NULL, "Failed to find PD data\n");
+
             // pd_dump(&pd_data->pd);
             pd_dump_internal(&pd_data->pd, ms, rr_mo_id, rr_local_vaddr);
         }
@@ -1031,9 +1028,11 @@ static int res_dump(pd_t *pd, model_state_t *ms, pd_hold_node_t *current_cap,
     case GPICAP_TYPE_VMR:
         // (XXX) Arya: Do not need to dump VMR, handled in ADS component
         break;
+    case GPICAP_TYPE_EP:
+        // Don't dump endpoints, as they aren't part of the model, and tracked only for cleanup purposes
+        break;
     default:
         // This is a remote resource
-
         OSDB_PRINTF("Calling another PD to get the info for resource %s_%d_%d\n",
                     cap_type_to_str(current_cap->type), current_cap->space_id, current_cap->res_id);
 
@@ -1045,12 +1044,11 @@ static int res_dump(pd_t *pd, model_state_t *ms, pd_hold_node_t *current_cap,
         }
 
         error = request_remote_rr(pd, ms, current_cap->space_id, current_cap->res_id, rr_mo_id, rr_local_vaddr);
-        assert(error == 0);
-
         break;
     }
 
-    return 0;
+err_goto:
+    return error;
 }
 
 /**
@@ -1256,7 +1254,7 @@ int pd_set_core_cap(pd_t *pd, seL4_Word core_cap_badge, seL4_CPtr core_cap)
     int error = 0;
     uint64_t cap_type = get_cap_type_from_badge(core_cap_badge);
     uint64_t cap_id = get_object_id_from_badge(core_cap_badge);
-    OSDB_PRINTF("Setting PD%d's OSmosis %s cap\n", pd->id, cap_type_to_str(get_cap_type_from_badge(cap_type)));
+    OSDB_PRINTF("Setting PD%d's OSmosis %s cap\n", pd->id, cap_type_to_str(cap_type));
 
     switch (cap_type)
     {

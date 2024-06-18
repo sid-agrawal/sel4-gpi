@@ -328,6 +328,7 @@ void gpi_debug_print_resources(void)
     resource_component_debug_print(get_ads_component());
     resource_component_debug_print(get_cpu_component());
     resource_component_debug_print(get_mo_component());
+    resource_component_debug_print(get_ep_component());
     printf("*** DONE LISTING RESOURCES ***\n\n");
 
     printf("Expected resources to remain:\n");

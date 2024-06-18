@@ -40,12 +40,12 @@ int test_new_process_osmosis_shmem(env_t env)
     pd_config_t *proc_cfg = sel4gpi_configure_process("hello", DEFAULT_STACK_PAGES, DEFAULT_HEAP_PAGES, &runnable);
     test_assert(proc_cfg != NULL);
 
-    vka_object_t ep;
-    error = vka_alloc_endpoint(&env->vka, &ep);
+    ep_client_context_t ep_conn;
+    error = sel4gpi_alloc_endpoint(&ep_conn);
     test_error_eq(error, 0);
 
     seL4_CPtr slot;
-    error = pd_client_send_cap(&runnable.pd, ep.cptr, &slot);
+    error = pd_client_send_cap(&runnable.pd, ep_conn.badged_server_ep_cspath.capPtr, &slot);
     test_error_eq(error, 0);
 
     error = sel4gpi_start_pd(proc_cfg, &runnable, 1, &slot);
@@ -57,7 +57,7 @@ int test_new_process_osmosis_shmem(env_t env)
     test_error_eq(error, 0);
 
     seL4_SetCapReceivePath(ipc_cap.root, ipc_cap.capPtr, ipc_cap.capDepth);
-    seL4_Recv(ep.cptr, NULL);
+    seL4_Recv(ep_conn.raw_endpoint, NULL);
 
     pd_client_context_t self_pd = sel4gpi_get_pd_conn();
 
@@ -70,7 +70,7 @@ int test_new_process_osmosis_shmem(env_t env)
 
     seL4_SetMR(0, slot);
     tag = seL4_MessageInfo_new(0, 0, 0, 1);
-    seL4_ReplyRecv(ep.cptr, tag, NULL);
+    seL4_ReplyRecv(ep_conn.raw_endpoint, tag, NULL);
 
     sel4gpi_config_destroy(proc_cfg);
 
