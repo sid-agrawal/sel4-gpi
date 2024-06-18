@@ -47,14 +47,10 @@ typedef struct _sel4gpi_runnable
  */
 typedef enum _gpi_share_degree
 {
-    /** this resource is directly shared with the other PD, e.g. virt pages that map to the same phys page */
-    GPI_SHARED = 1,
-    /** this resource is copied into the other PD, e.g. virt pages with separate phys pages with contents copied */
-    GPI_COPY,
-    /** this resource exists in the other PD, but has no relation with the source PD */
-    GPI_DISJOINT,
-    /** this resource will not exist in the other PD*/
-    GPI_OMIT
+    GPI_SHARED = 1, ///< this resource is directly shared with the other PD, e.g. virt pages that map to the same phys page
+    GPI_COPY,       ///< this resource is copied into the other PD, e.g. virt pages with separate phys pages with contents copied
+    GPI_DISJOINT,   ///< this resource exists in the other PD, but has no relation with the source PD
+    GPI_OMIT        ///< this resource will not exist in the other PD
 } gpi_share_degree_t;
 
 /**
@@ -64,10 +60,8 @@ typedef struct _vmr_config
 {
     gpi_share_degree_t share_mode;
     sel4utils_reservation_type_t type;
-    /** vaddr to start of the VMR */
-    void *start;
-    /** number of pages in this VMR */
-    uint64_t region_pages;
+    void *start;           ///< vaddr to start of the VMR
+    uint64_t region_pages; ///< number of pages in this VMR
 } vmr_config_t;
 
 /**
@@ -75,10 +69,8 @@ typedef struct _vmr_config
  */
 typedef struct _ads_config
 {
-    /** only used if code_shared == GPI_DISJOINT */
-    const char *image_name;
-    /** if specified, will take precedence over any automatically found ones */
-    void *entry_point;
+    const char *image_name; ///< only used if code_shared == GPI_DISJOINT
+    void *entry_point;      ///< if specified, will take precedence over any automatically found ones
 
     /** if we're in the same ADS, configuring any of these as GPI_SHARED has no effect
      * (XXX) Linh: these are to be removed once we have a unified entry point,
@@ -88,8 +80,8 @@ typedef struct _ads_config
     gpi_share_degree_t stack_shared;
     size_t stack_pages;
 
-    /** list of vaddrs to non-contiguous VMRs to configure, the heap should be specified here
-     *  if we're in the same ADS, configuring any of these as GPI_SHARED has no effect
+    /** list of vaddrs to non-contiguous VMRs to configure, the heap should be specified here.
+     *  If we're in the same ADS, configuring any of these as GPI_SHARED has no effect
      */
     linked_list_t *vmr_cfgs;
 } ads_config_t;
@@ -108,12 +100,12 @@ typedef struct _rde_config
  */
 typedef struct _pd_config
 {
-    /** supply a fault-endpoint for the PD, if NULL, will create a new one */
-    seL4_CPtr fault_ep;
-    mo_client_context_t osm_data_mo;
-    ads_config_t ads_cfg;
-    linked_list_t *rde_cfg;
-    linked_list_t *gpi_res_type_cfg;
+    seL4_CPtr fault_ep;              ///< supply a fault-endpoint for the PD, if NULL, will create a new one
+    mo_client_context_t osm_data_mo; ///< the MO for holding a PD's OSmosis data
+    ads_config_t ads_cfg;            ///< the ADS config
+    linked_list_t *rde_cfg;          ///< the RDE config
+    linked_list_t *gpi_res_type_cfg; ///< a list of GPICAP_TYPE_X resource types,
+                                     ///< all resources of this type will be shared with the PD
     // ongoing: add configs for other resources here as needed
 } pd_config_t;
 

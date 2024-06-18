@@ -150,12 +150,18 @@ err_goto:
  * @param ret_tp returns the thread pointer after writing to the TLS
  * @return int returns 0 on success, 1 on failure
  */
-static int setup_tls_in_stack(void *dest_stack, size_t stack_pages, void *ipc_buffer_addr, void *osm_shared_data, void **ret_sp, void **ret_tp)
+static int setup_tls_in_stack(void *dest_stack,
+                              size_t stack_pages,
+                              void *ipc_buffer_addr,
+                              void *osm_shared_data,
+                              void **ret_sp,
+                              void **ret_tp)
 {
     int error = 0;
     size_t tls_size = sel4runtime_get_tls_size();
     /* make sure we're not going to use too much of the stack */
-    GOTO_IF_COND(tls_size > stack_pages * PAGE_SIZE_4K / 8, "TLS would use more than 1/8th of the application stack %zu/%zu", tls_size, stack_pages);
+    GOTO_IF_COND(tls_size > stack_pages * PAGE_SIZE_4K / 8,
+                 "TLS would use more than 1/8th of the application stack %zu/%zu", tls_size, stack_pages);
 
     uintptr_t tls_base = (uintptr_t)dest_stack - tls_size;
     uintptr_t tp = (uintptr_t)sel4runtime_write_tls_image((void *)tls_base);

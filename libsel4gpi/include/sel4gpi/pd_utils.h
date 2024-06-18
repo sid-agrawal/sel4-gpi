@@ -155,3 +155,5 @@ int sel4gpi_destroy_vmr(ads_client_context_t *vmr_rde, void *vaddr, mo_client_co
  * @return the top of the stack in the given ADS (NOT the current one)
  */
 void *sel4gpi_new_sized_stack(ads_client_context_t *ads, size_t n_pages);
+
+// int sel4gpi_alloc_endpoint(ep_client_context_t *)

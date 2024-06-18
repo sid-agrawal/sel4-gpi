@@ -17,6 +17,8 @@
 #include <unistd.h>
 
 #include <sel4gpi/pd_clientapi.h>
+#include <sel4gpi/endpoint_clientapi.h>
+#include <sel4gpi/pd_utils.h>
 #include <sel4bench/arch/sel4bench.h>
 #include <sel4/sel4.h>
 #include <vka/capops.h>
@@ -29,6 +31,7 @@ int test_new_vmm_native(env_t env)
     vm_native_context_t *vm;
     error = vm_native_setup(env->irq_handler, &env->vka, &env->vspace, env->page_directory, env->asid_pool, &env->simple, &vm);
     test_error_eq(error, 0);
+
 #ifdef CONFIG_DEBUG_BUILD
     seL4_DebugDumpScheduler();
 #endif
@@ -46,8 +49,16 @@ int test_new_vmm_native(env_t env)
 
 int test_new_vmm_osm(env_t env)
 {
-    int error;
+    int error = 0;
     printf("------------------STARTING: %s------------------\n", __func__);
+    seL4_CPtr ep_rde = sel4gpi_get_rde(GPICAP_TYPE_EP);
+    test_assert(ep_rde != seL4_CapNull);
+
+    ep_client_context_t ep = {0};
+    error = ep_component_client_connect(ep_rde, &ep);
+    test_error_eq(error, 0);
+    test_assert(ep.raw_endpoint != seL4_CapNull);
+
     return sel4test_get_result();
 }
 

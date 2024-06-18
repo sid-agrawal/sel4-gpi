@@ -38,6 +38,7 @@ void resource_types_initialize(void)
     insert_resource_type(GPICAP_TYPE_PCPU, "PCPU");
     insert_resource_type(GPICAP_TYPE_PD, "PD");
     insert_resource_type(GPICAP_TYPE_RESSPC, "RESSPC");
+    insert_resource_type(GPICAP_TYPE_EP, "EP");
     insert_resource_type(GPICAP_TYPE_seL4, "UNKNOWN");
 }
 

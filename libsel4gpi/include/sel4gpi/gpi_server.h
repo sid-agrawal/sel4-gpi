@@ -90,6 +90,7 @@ typedef struct _gpi_server_context
     resource_component_context_t cpu_component;
     resource_component_context_t pd_component;
     resource_component_context_t resspc_component;
+    resource_component_context_t ep_component;
 
     /* Track the GPI resource types */
     resource_server_registry_t resource_types;

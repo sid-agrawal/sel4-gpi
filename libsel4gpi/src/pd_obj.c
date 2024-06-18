@@ -25,6 +25,7 @@
 #include <sel4gpi/mo_component.h>
 #include <sel4gpi/ads_component.h>
 #include <sel4gpi/cpu_component.h>
+#include <sel4gpi/endpoint_component.h>
 #include <sel4gpi/cap_tracking.h>
 #include <sel4gpi/pd_obj.h>
 #include <sel4gpi/ads_obj.h>
@@ -491,6 +492,11 @@ pd_held_resource_on_delete(resource_server_registry_node_t *node_gen, void *pd_v
         // Wait to clean up resource spaces until later
         error = resspc_component_mark_delete(node->res_id);
         break;
+    case GPICAP_TYPE_EP:
+        error = resource_component_dec(get_ep_component(), node->res_id);
+        SERVER_GOTO_IF_ERR(error, "failed to decrement EP resource\n");
+        error = pd_component_remove_resource_from_rt(node->type, node->space_id, node->res_id);
+        break;
     default:
         // Otherwise, call the manager PD
         resspc_component_registry_entry_t *space_data = resource_space_get_entry_by_id(node->space_id);
@@ -521,7 +527,6 @@ int pd_new(pd_t *pd,
            mo_t *osm_data_mo)
 {
     int error;
-    // TODO Linh: fix this for forging of test PD
     OSDB_PRINTF("new PD: \n");
 
     SERVER_GOTO_IF_COND(osm_data_mo == NULL, "No MO given to hold PD's OSmosis data\n");
@@ -838,6 +843,16 @@ int pd_send_cap(pd_t *to_pd,
                 resource_component_inc(get_pd_component(), get_object_id_from_badge(badge));
             }
             break;
+        case GPICAP_TYPE_EP:
+            server_vka = get_ep_component()->server_vka;
+            server_src_cap = get_ep_component()->server_ep;
+
+            // Copying the resource, so increase the reference count
+            if (inc_refcount)
+            {
+                resource_component_inc(get_ep_component(), get_object_id_from_badge(badge));
+            }
+            break;
         default:
             //  (XXX) Arya: allowing unknown cap type for now to send parent ep
             OSDB_PRINTF("Warning: Unknown cap type %d in %s\n", cap_type, __FUNCTION__);
@@ -845,12 +860,6 @@ int pd_send_cap(pd_t *to_pd,
             break;
         }
 
-        // Find the pd where the cap is going, and basd
-        // Create a new badge and then badge the unbadged gpi-server cap with the new badge
-        // new badge = (old badge & client id mask) | (new client id << client id offset)
-
-        // forge a copy of the cap with the type, perms, and obj id, but different client id
-        // Insert it in the appropirate list
         if (should_mint)
         {
             seL4_CPtr new_cap = resource_server_make_badged_ep(server_vka,

@@ -230,10 +230,11 @@ enum pd_component_msgregs
     PDMSGREG_SHARE_RES_TYPE_ACK_END = PDMSGREG_LABEL0,
 };
 
+/** Mode of PD setup */
 enum _pd_setup_type
 {
-    PD_RUNTIME_SETUP = 1, // sets up the entire C runtime from scratch, writes any arguments onto the stack
-    PD_REGISTER_SETUP     // writes a limited number of arguments into registers only
+    PD_RUNTIME_SETUP = 1, ///< sets up the entire C runtime from scratch, writes any arguments onto the stack
+    PD_REGISTER_SETUP     ///< writes a limited number of arguments into registers only
 };
 typedef enum _pd_setup_type pd_setup_type_t;
 

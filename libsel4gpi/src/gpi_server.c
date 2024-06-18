@@ -24,6 +24,7 @@
 #include <sel4gpi/ads_component.h>
 #include <sel4gpi/cpu_component.h>
 #include <sel4gpi/resource_space_component.h>
+#include <sel4gpi/endpoint_component.h>
 #include <sel4gpi/badge_usage.h>
 #include <sel4gpi/debug.h>
 
@@ -122,6 +123,9 @@ gpi_server_parent_spawn_thread(simple_t *parent_simple, vka_t *parent_vka,
     /* Setup the CPU Component */
     cpu_component_initialize(parent_simple, parent_vka, parent_cspace_cspath.root, parent_vspace,
                              get_gpi_server()->server_thread, get_gpi_server()->server_ep_obj);
+
+    ep_component_initialize(parent_simple, parent_vka, parent_cspace_cspath.root, parent_vspace,
+                            get_gpi_server()->server_thread, get_gpi_server()->server_ep_obj);
 
     /* Initialize the root task's PD resource */
     forge_pd_for_root_task(get_gpi_server()->rt_pd_id);
@@ -290,6 +294,9 @@ void gpi_server_main()
             break;
         case GPICAP_TYPE_RESSPC:
             component = &get_gpi_server()->resspc_component;
+            break;
+        case GPICAP_TYPE_EP:
+            component = &get_gpi_server()->ep_component;
             break;
         default:
             gpi_panic("gpi_server_main: Unknown cap type.", cap_type);

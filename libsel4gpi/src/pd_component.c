@@ -37,13 +37,11 @@
 #include <sel4gpi/pd_creation.h>
 #include <sel4gpi/error_handle.h>
 #include <sel4gpi/resource_space_component.h>
+#include <sel4gpi/endpoint_component.h>
 
 // Defined for utility printing macros
 #define DEBUG_ID PD_DEBUG
 #define SERVER_ID PDSERVS
-
-// (XXX) Arya: to be extracted to another component
-resource_server_registry_t server_registry;
 
 resource_component_context_t *get_pd_component(void)
 {
@@ -725,8 +723,6 @@ int pd_component_initialize(simple_t *server_simple,
                                   server_vspace,
                                   server_thread,
                                   server_ep_obj.cptr);
-
-    resource_server_initialize_registry(&server_registry, NULL, NULL);
 }
 
 void forge_pd_for_root_task(uint64_t rt_id)
@@ -788,6 +784,9 @@ void forge_pd_cap_from_init_data(test_init_data_t *init_data, sel4utils_process_
 
     rde_type_t pd_type = {.type = GPICAP_TYPE_PD};
     pd_add_rde(pd, pd_type, "PD", get_pd_component()->space_id, get_gpi_server()->server_ep_obj.cptr);
+
+    rde_type_t ep_type = {.type = GPICAP_TYPE_EP};
+    pd_add_rde(pd, ep_type, "EP", get_ep_component()->space_id, get_gpi_server()->server_ep_obj.cptr);
 
     // Forge ADS cap
     seL4_CPtr child_as_cap; // This will be the ptr of the cap in the forged PD's cspace

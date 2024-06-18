@@ -14,14 +14,15 @@ typedef enum GPICAP_CORE_TYPE
 {
     // Core cap types
     GPICAP_TYPE_NONE = 0,
-    GPICAP_TYPE_ADS,
-    GPICAP_TYPE_VMR,
-    GPICAP_TYPE_MO,
-    GPICAP_TYPE_CPU,
-    GPICAP_TYPE_PCPU,
-    GPICAP_TYPE_PD,
-    GPICAP_TYPE_RESSPC, // resource space
-    GPICAP_TYPE_seL4,
+    GPICAP_TYPE_ADS,    ///< An address space
+    GPICAP_TYPE_VMR,    ///< A virtual memory region
+    GPICAP_TYPE_MO,     ///< A memory object
+    GPICAP_TYPE_CPU,    ///< A CPU object, currently primarily a TCB
+    GPICAP_TYPE_PCPU,   ///< Physical CPU core
+    GPICAP_TYPE_PD,     ///< A PD
+    GPICAP_TYPE_EP,     ///< An endpoint, this is not an actual OSmosis model resource type
+    GPICAP_TYPE_RESSPC, ///< A resource space
+    GPICAP_TYPE_seL4,   ///< An seL4 kernel object
 } gpi_cap_t;
 
 #define GPICAP_TYPE_MAX (GPICAP_TYPE_seL4 + 8) // Maximum number of resource types

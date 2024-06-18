@@ -130,6 +130,18 @@ void resource_server_registry_dec(resource_server_registry_t *registry, resource
 uint64_t resource_server_registry_insert_new_id(resource_server_registry_t *registry, resource_server_registry_node_t *node);
 
 /**
+ * Creates a badged version of an endpoint with a custom badge given
+ * Used for an arbitrary non-OSmosis endpoint
+ *
+ * @param src_vka vka for the source endpoint
+ * @param dst_vka vka for the destination (or NULL, to use src vka for destination)
+ * @param src_ep source endpoint to badge
+ * @param custom_badge a custom given badge
+ * @return the new resource's EP cap, null cap if failed
+ */
+seL4_CPtr resource_server_make_badged_ep_custom(vka_t *src_vka, vka_t *dst_vka, seL4_CPtr src_ep, seL4_Word custom_badge);
+
+/**
  * Creates a badged version of an endpoint for a particular resource
  *
  * @param src_vka vka for the source endpoint

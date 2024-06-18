@@ -12,6 +12,7 @@
 #include <sel4gpi/gpi_server.h>
 #include <sel4gpi/pd_utils.h>
 #include <sel4gpi/resource_server_utils.h>
+#include <sel4gpi/error_handle.h>
 
 /* --- Functions for managing a registry --- */
 
@@ -96,6 +97,34 @@ uint64_t resource_server_registry_insert_new_id(resource_server_registry_t *regi
     return new_id;
 }
 
+/** mints a badged endpoint */
+static int mint_ep(vka_t *src_vka, vka_t *dst_vka, seL4_CPtr src_ep, cspacepath_t *dest, seL4_Word badge)
+{
+    cspacepath_t src;
+    vka_cspace_make_path(src_vka, src_ep, &src);
+
+    if (dst_vka)
+    {
+        vka_cspace_alloc_path(dst_vka, dest);
+    }
+    else
+    {
+        vka_cspace_alloc_path(src_vka, dest);
+    }
+
+    return vka_cnode_mint(dest,
+                          &src,
+                          seL4_NoRead, // So that recipients of resources cannot receive endpoint messages
+                          badge);
+}
+
+seL4_CPtr resource_server_make_badged_ep_custom(vka_t *src_vka, vka_t *dst_vka, seL4_CPtr src_ep, seL4_Word custom_badge)
+{
+    cspacepath_t dest = {0};
+    mint_ep(src_vka, dst_vka, src_ep, &dest, custom_badge);
+    return dest.capPtr;
+}
+
 seL4_CPtr resource_server_make_badged_ep(vka_t *src_vka, vka_t *dst_vka, seL4_CPtr src_ep,
                                          gpi_cap_t resource_type, uint64_t space_id, uint64_t res_id, uint64_t client_id)
 {
@@ -111,22 +140,8 @@ seL4_CPtr resource_server_make_badged_ep(vka_t *src_vka, vka_t *dst_vka, seL4_CP
     assert(badge != 0);
 
     /* Mint the cap */
-    cspacepath_t src, dest;
-    vka_cspace_make_path(src_vka, src_ep, &src);
-
-    if (dst_vka)
-    {
-        vka_cspace_alloc_path(dst_vka, &dest);
-    }
-    else
-    {
-        vka_cspace_alloc_path(src_vka, &dest);
-    }
-
-    error = vka_cnode_mint(&dest,
-                           &src,
-                           seL4_NoRead, // So that recipients of resources cannot receive endpoint messages
-                           badge);
+    cspacepath_t dest = {0};
+    error = mint_ep(src_vka, dst_vka, src_ep, &dest, badge);
 
     return dest.capPtr;
 }

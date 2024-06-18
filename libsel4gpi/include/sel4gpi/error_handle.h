@@ -110,3 +110,15 @@
             OSDB_PRINTERR(COLORIZE("[ERROR] %s():\t", RED) msg, __func__, ##__VA_ARGS__); \
         }                                                                                 \
     } while (0)
+
+/* also prints the given badge in human-readable format */
+#define SERVER_PRINT_IF_ERR_BG(err, badge, msg, ...)                                      \
+    do                                                                                    \
+    {                                                                                     \
+        if ((err))                                                                        \
+        {                                                                                 \
+            error = 0;                                                                    \
+            OSDB_PRINTERR(COLORIZE("[ERROR] %s():\t", RED) msg, __func__, ##__VA_ARGS__); \
+            BADGE_PRINT((badge));                                                         \
+        }                                                                                 \
+    } while (0)
