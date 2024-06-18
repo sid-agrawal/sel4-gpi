@@ -590,61 +590,21 @@ void pd_destroy(pd_t *pd, vka_t *server_vka, vspace_t *server_vspace)
 
     /* below is copied from sel4utils_destroy_process */
     /* (XXX) Arya: eventually should be repartitioned to other components */
-    sel4utils_process_t *process = &pd->proc;
     vka_t *vka = server_vka;
 
     /* destroy the cnode */
-    if (process->own_cspace)
-    {
-        cspacepath_t path;
-        vka_cspace_make_path(vka, process->cspace.cptr, &path);
-        /* need to revoke the cnode to remove any self references that would keep the object
-         * alive when we try to delete it */
-        vka_cnode_revoke(&path);
-        vka_free_object(vka, &process->cspace);
-    }
-
-    /* begin copied from sel4utils_clean_up_thread */
-    sel4utils_thread_t *thread = &process->thread;
-
-    // We free the IPC buf and stack as MOs
-
-    if (thread->own_sc && thread->sched_context.cptr != 0)
-    {
-        vka_free_object(vka, &thread->sched_context);
-    }
-
-    if (thread->own_reply && thread->reply.cptr != 0)
-    {
-        vka_free_object(vka, &thread->reply);
-    }
-
-    memset(thread, 0, sizeof(sel4utils_thread_t));
-    /* end copied from sel4utils_clean_up_thread */
-
-    /* destroy the endpoint */
-    if (process->own_ep && process->fault_endpoint.cptr != 0)
-    {
-        vka_free_object(vka, &process->fault_endpoint);
-    }
-
-    /* destroy the page directory */
-    if (process->own_vspace)
-    {
-        vka_free_object(vka, &process->pd);
-    }
+    cspacepath_t path;
+    vka_cspace_make_path(vka, pd->cspace.cptr, &path);
+    /* need to revoke the cnode to remove any self references that would keep the object
+     * alive when we try to delete it */
+    vka_cnode_revoke(&path);
+    vka_free_object(vka, &pd->cspace);
 
     /* Free elf information */
-    if (process->elf_regions)
+    if (pd->elf_phdrs)
     {
-        free(process->elf_regions);
+        free(pd->elf_phdrs);
     }
-
-    if (process->elf_phdrs)
-    {
-        free(process->elf_phdrs);
-    }
-    /* end copied from sel4utils_destroy_process */
 
     // Hash table of holding resources
     // (XXX) Arya: This can trigger sys_munmap which is not supported
@@ -772,48 +732,38 @@ int pd_bootstrap_allocator(pd_t *pd,
 
 static int pd_setup_cspace(pd_t *pd, vka_t *vka)
 {
-    int error;
-    int size_bits = CSPACE_SIZE_BITS;
-    pd->cnode_guard = api_make_guard_skip_word(seL4_WordBits - size_bits);
+    int error = 0;
+    pd->cspace_size = CSPACE_SIZE_BITS;
+    pd->cnode_guard = api_make_guard_skip_word(seL4_WordBits - pd->cspace_size);
 
-    error = vka_alloc_cnode_object(vka, size_bits, &pd->proc.cspace);
+    error = vka_alloc_cnode_object(vka, pd->cspace_size, &pd->cspace);
     SERVER_GOTO_IF_ERR(error, "Failed to create PD %d's cspace", pd->id);
 
-    pd->proc.cspace_size = size_bits;
-    /* first slot is always 1, never allocate 0 as a cslot */
-    pd->proc.cspace_next_free = 1;
     pd->shared_data->cspace_root = PD_CAP_ROOT;
+    /* first slot is always 1, never allocate 0 as a cslot */
+    uint32_t cspace_next_free = 1;
 
     /*  mint the cnode cap into the PD's cspace */
     cspacepath_t src;
-    vka_cspace_make_path(vka, pd->proc.cspace.cptr, &src);
-    cspacepath_t dest = {.capPtr = pd->proc.cspace_next_free, .root = src.capPtr, .capDepth = pd->proc.cspace_size};
+    vka_cspace_make_path(vka, pd->cspace.cptr, &src);
+    cspacepath_t dest = {.capPtr = cspace_next_free, .root = src.capPtr, .capDepth = pd->cspace_size};
     error = vka_cnode_mint(&dest, &src, seL4_AllRights, pd->cnode_guard);
     SERVER_GOTO_IF_ERR(error, "Failed to mint PD %d's cnode into its cspace\n");
-    pd->proc.cspace_next_free++;
+    cspace_next_free++;
 
     /* Initialize a vka for the PD's cspace */
-    error = pd_bootstrap_allocator(pd, pd->proc.cspace.cptr, pd->proc.cspace_next_free,
+    error = pd_bootstrap_allocator(pd, pd->cspace.cptr, cspace_next_free,
                                    BIT(CSPACE_SIZE_BITS), CSPACE_SIZE_BITS, 0);
     SERVER_GOTO_IF_ERR(error, "Failed to setup allocator for PD %d\n", pd->id);
 
-    OSDB_PRINTF("PD next free slot: %ld\n", pd->proc.cspace_next_free);
+    OSDB_PRINTF("PD next free slot: %ld\n", cspace_next_free);
 
     return 0;
 
 err_goto:
-    if (pd->proc.cspace.cptr != 0)
+    if (pd->cspace.cptr != 0)
     {
-        vka_free_object(vka, &pd->proc.cspace);
-    }
-
-    if (pd->proc.pd.cptr != 0)
-    {
-        vka_free_object(vka, &pd->proc.pd);
-        if (pd->proc.vspace.data != 0)
-        {
-            ZF_LOGE("Could not clean up vspace\n");
-        }
+        vka_free_object(vka, &pd->cspace);
     }
 
     return 1;

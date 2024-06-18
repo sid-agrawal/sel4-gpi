@@ -1,4 +1,13 @@
-
+/**
+ * @file pd_obj.h
+ * @author Sid Agrawal(sid@sid-agrawal.ca)
+ * @brief Definitions for an OSmosis PD
+ * @version 0.1
+ * @date 2024-06-18
+ *
+ * @copyright Copyright (c) 2024
+ *
+ */
 #pragma once
 
 #include <stdint.h>
@@ -119,13 +128,14 @@ typedef struct _pd
     uint32_t id;
 
     /* Fields only used for process PDs */
-    sel4utils_process_t proc;
     uintptr_t sysinfo;
     int num_elf_phdrs;
     Elf64_Phdr *elf_phdrs;
     seL4_Word pagesz;
 
     /* Fields for all PDs */
+    vka_object_t cspace;                                    ///< Root CNode of for the PD
+    size_t cspace_size;                                     ///< Size bits of the root CNode
     const char *image_name;                                 ///< This is for model extraction only
     seL4_Word cnode_guard;                                  ///< cnode guard for this PD's cspace
     vka_t *pd_vka;                                          ///< Allocator for the PD's cspace

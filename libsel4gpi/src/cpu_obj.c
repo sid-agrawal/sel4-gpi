@@ -148,8 +148,6 @@ void cpu_dump_rr(cpu_t *cpu, model_state_t *ms, gpi_model_node_t *pd_node)
 
 void cpu_destroy(cpu_t *cpu)
 {
-    // (XXX) Linh: Ideally, we can destroy the thread struct here rather than in pd_destroy
-
     // Stop the CPU
     int error = cpu_stop(cpu);
 
@@ -160,6 +158,9 @@ void cpu_destroy(cpu_t *cpu)
 
     // Destroy the TCB
     vka_free_object(get_cpu_component()->server_vka, &cpu->tcb);
+
+    // (XXX) Linh: should we be freeing the IPC buffer, here?
+    // This is Same issue as the fault EP, the client of the CPU obj holds it
 
     // Free other things
     free(cpu->reg_ctx);

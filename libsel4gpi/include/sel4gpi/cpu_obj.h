@@ -1,4 +1,13 @@
-
+/**
+ * @file cpu_obj.h
+ * @author Sid Agrawal(sid@sid-agrawal.ca)
+ * @brief Definitions for an OSmosis CPU resource
+ * @version 0.1
+ * @date 2024-06-18
+ *
+ * @copyright Copyright (c) 2024
+ *
+ */
 #pragma once
 
 #include <stdint.h>
@@ -18,17 +27,16 @@ typedef struct _cpu
 {
     uint32_t id;
 
-    sel4utils_thread_t thread; // storage for some commonly used fields
-    vka_object_t tcb;
-    seL4_Word ipc_buf_addr;
-    seL4_CPtr ipc_frame_cap;
+    vka_object_t tcb;        ///< the TCB object
+    seL4_Word ipc_buf_addr;  ///< address of the IPC buffer in the TCB's binded ADS
+    seL4_CPtr ipc_frame_cap; ///< the frame cap for the IPC buffer
 
-    uint64_t binded_ads_id;
-    void *tls_base;
-    seL4_CPtr cspace; // the currently binded cspace, could potentially change if reconfigured
-    seL4_Word cspace_guard;
-    seL4_CPtr fault_ep;
-    seL4_UserContext *reg_ctx;
+    uint64_t binded_ads_id;    ///< ID of the ADS that is binded to the TCB
+    void *tls_base;            ///< address of the TLS base (currently unused)
+    seL4_CPtr cspace;          ///< cap to the currently binded cspace
+    seL4_Word cspace_guard;    ///< guard of the currently binded cspace
+    seL4_CPtr fault_ep;        ///< currently binded fault endpoint
+    seL4_UserContext *reg_ctx; ///< TCB register values that are to be written, NOT the current values
 } cpu_t;
 
 /**
@@ -48,7 +56,7 @@ int cpu_start(cpu_t *cpu);
 int cpu_stop(cpu_t *cpu);
 
 /**
- * @brief
+ * @brief Configures the IPC buffer, CSpace, ADS, and Fault endpoint binded to the CPU's TCB
  *
  * @param cpu cpu opject
  * @param vka

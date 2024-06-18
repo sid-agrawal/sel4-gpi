@@ -140,7 +140,7 @@ static seL4_MessageInfo_t handle_config_req(seL4_Word sender_badge,
     seL4_CPtr ipc_buf_frame = ipc_mo_data == NULL ? seL4_CapNull : ipc_mo_data->mo.frame_caps_in_root_task[0];
 
     /* Configure the vspace */
-    seL4_CNode cspace_root = pd_data->pd.proc.cspace.cptr;
+    seL4_CNode cspace_root = pd_data->pd.cspace.cptr;
 
     error = cpu_config_vspace(&cpu_data->cpu,
                               get_cpu_component()->server_vka,
@@ -335,9 +335,6 @@ int forge_cpu_cap_from_tcb(sel4utils_process_t *process, // Change this to the s
                                         (resource_server_registry_node_t **)&new_entry, &ret_cap);
     SERVER_GOTO_IF_ERR(error, "Failed to allocate new CPU object for forge\n");
 
-    /* Update the CPU object from TCB */
-    new_entry->cpu.thread = process->thread;
-    // client_reg_ptr->cpu.tls_base = &process->thread.tls_base;
     new_entry->cpu.cspace = process->cspace.cptr;
 
     *cap_ret = ret_cap;
