@@ -323,7 +323,7 @@ test_result_t basic_run_test(struct testcase *test, uintptr_t e)
     // (XXX) Arya: We aren't starting the test process as a normal PD yet,
     // so use this workaround to create a PD object anyway
     void *osm_shared_data;
-    forge_pd_cap_from_init_data(env->init, &env->test_process, &osm_shared_data);
+    forge_pd_cap_from_init_data(env->init, &env->test_process, env->init->name, &osm_shared_data);
     error = sel4utils_osm_spawn_process_v(&(env->test_process), osm_shared_data,
                                           &env->vka, &env->vspace,
                                           argc, argv, 1);

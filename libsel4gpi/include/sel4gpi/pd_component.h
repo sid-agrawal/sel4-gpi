@@ -266,9 +266,13 @@ void forge_pd_for_root_task(uint64_t rt_id);
  *
  * @param init_data the test driver's init data
  * @param test_process test process struct
+ * @param test_name the name of the test for model extraction and debugging purposes
  * @param osm_init_data returns the vaddr of the osmosis init data in the test PD
  */
-void forge_pd_cap_from_init_data(test_init_data_t *init_data, sel4utils_process_t *test_process, void **osm_init_data);
+void forge_pd_cap_from_init_data(test_init_data_t *init_data,
+                                 sel4utils_process_t *test_process,
+                                 const char *test_name,
+                                 void **osm_init_data);
 
 /**
  * To be called to cleanup a forged test PD object

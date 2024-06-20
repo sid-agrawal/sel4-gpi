@@ -741,7 +741,8 @@ void forge_pd_for_root_task(uint64_t rt_id)
 // (XXX) Arya: hack to store the test PD ID for destroying it later
 uint64_t test_pd_id;
 
-void forge_pd_cap_from_init_data(test_init_data_t *init_data, sel4utils_process_t *test_process, void **osm_shared_data)
+void forge_pd_cap_from_init_data(test_init_data_t *init_data, sel4utils_process_t *test_process,
+                                 const char *test_name, void **osm_shared_data)
 {
     int error = 0;
     SERVER_GOTO_IF_COND(init_data == NULL, "Test PD's init data is NULL\n");
@@ -835,6 +836,7 @@ void forge_pd_cap_from_init_data(test_init_data_t *init_data, sel4utils_process_
     pd->shared_data_in_PD = shared_data_vaddr;
     OSDB_PRINTF("Test process init data is at %p\n", pd->shared_data_in_PD);
 
+    pd->image_name = test_name;
 err_goto:
     return error;
 }

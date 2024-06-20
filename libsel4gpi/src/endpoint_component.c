@@ -50,10 +50,17 @@ static void ep_destroy(ep_t *ep, vka_t *server_vka)
     seL4_Word is_last_copy = seL4_DebugCapIsLastCopy(ep->endpoint_in_RT.cptr);
     if (!is_last_copy)
     {
-        OSDB_PRINTERR("Attempting to free an endpoint that's not the last copy\n");
+        OSDB_PRINTERR("Attempting to free EP (%d) with existing copies\n", ep->id);
     }
 #endif
-    // vka_free_object(server_vka, &ep->endpoint_in_RT);
+    // We need to revoke, since this endpoint might've been copied somewhere during inter-PD IPC,
+    // and for some reason didn't get deleted during `pd_destroy`
+    cspacepath_t path;
+    vka_cspace_make_path(server_vka, ep->endpoint_in_RT.cptr, &path);
+    int error = vka_cnode_revoke(&path);
+    SERVER_PRINT_IF_ERR(error, "Failed to revoke EP (%d), future allocations will fail!\n", ep->id);
+
+    vka_free_object(server_vka, &ep->endpoint_in_RT);
 }
 
 /* callback when an EP is deleted */
@@ -110,10 +117,11 @@ static seL4_MessageInfo_t handle_get_raw_endpoint(seL4_Word sender_badge)
     BADGE_PRINT(sender_badge);
 
     int error = 0;
-    ep_component_registry_entry_t *ep_data = resource_component_registry_get_by_badge(get_ep_component(), sender_badge);
+    ep_component_registry_entry_t *ep_data = (ep_component_registry_entry_t *)
+        resource_component_registry_get_by_badge(get_ep_component(), sender_badge);
     SERVER_GOTO_IF_COND(ep_data == NULL, "Cannot find EP data\n");
 
-    pd_component_registry_entry_t *pd_data =
+    pd_component_registry_entry_t *pd_data = (pd_component_registry_entry_t *)
         resource_component_registry_get_by_id(get_pd_component(), get_client_id_from_badge(sender_badge));
     SERVER_GOTO_IF_COND(pd_data == NULL, "Cannot find PD data\n");
 
