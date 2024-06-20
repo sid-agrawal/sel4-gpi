@@ -173,6 +173,11 @@ int xv6fs_init()
                             &server->shared_mem_vaddr);
   CHECK_ERROR(error, "failed to map shared mem page");
 
+  /* Initialize connection with ramdisk */
+
+  error = ramdisk_client_init(get_xv6fs_server()->rd_ep);
+  CHECK_ERROR(error, "failed to initialize ramdisk client");
+
   error = ramdisk_client_bind(get_xv6fs_server()->rd_ep, server->shared_mem);
   CHECK_ERROR(error, "failed to bind shared mem page");
 

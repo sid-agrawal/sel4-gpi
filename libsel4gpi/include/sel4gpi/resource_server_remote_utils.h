@@ -13,6 +13,7 @@
 #include <sel4gpi/resource_types.h>
 #include <sel4gpi/resource_server_utils.h>
 #include <sel4gpi/resource_server_clientapi.h>
+#include <sel4gpi/gpi_rpc.h>
 
 /** @file
  * Utility functions for non-RT PDs that serve GPI resources
@@ -25,6 +26,9 @@ typedef struct _resource_server_context
 {
     char resource_type_name[RESOURCE_TYPE_MAX_STRING_SIZE];
     gpi_cap_t resource_type;
+
+    // RPC server context
+    sel4gpi_rpc_server_t rpc_env;
 
     // Connection to the default resource space
     resspc_client_context_t default_space;

@@ -185,9 +185,6 @@ int resource_server_main(void *context_v)
         /* Receive a message */
         RESOURCE_SERVER_PRINTF("Ready to receive a message\n");
         tag = resource_server_recv(context, &sender_badge);
-        int op = seL4_GetMR(RSMSGREG_FUNC);
-        RESOURCE_SERVER_PRINTF("Received message, op is %d, passing to request handler\n", op);
-
         bool stored_reply = false;
 #if STORE_REPLY_CAP
         // Track the reply cap if the message is not from root task

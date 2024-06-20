@@ -504,8 +504,7 @@ pd_held_resource_on_delete(resource_server_registry_node_t *node_gen, void *pd_v
             break;
         }
 
-        error =
-            (space_data->space.server_ep, node->space_id, node->res_id);
+        error = resource_server_client_free(space_data->space.server_ep, node->space_id, node->res_id);
         break;
     }
 

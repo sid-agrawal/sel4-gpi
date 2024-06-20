@@ -11,6 +11,8 @@
 #include <sel4gpi/pd_clientapi.h>
 #include <sel4gpi/resource_server_remote_utils.h>
 #include <sel4gpi/model_exporting.h>
+#include <sel4gpi/gpi_rpc.h>
+#include <ramdisk_rpc.pb.h>
 
 #include <ramdisk_server.h>
 
@@ -224,6 +226,9 @@ int ramdisk_init()
         resource_server_create_resource(&server->gen, NULL, i);
     }
 
+    /* Initialize RPC server */
+    sel4gpi_rpc_server_init(&get_ramdisk_server()->gen.rpc_env, RamdiskMessage_msg, RamdiskReturnMessage_msg);
+
     return error;
 }
 
@@ -232,6 +237,12 @@ seL4_MessageInfo_t ramdisk_request_handler(seL4_MessageInfo_t tag, seL4_Word sen
     int error;
     void *mo_vaddr;
     *need_new_recv_cap = false;
+
+    RamdiskMessage msg;
+    RamdiskReturnMessage replyMsg = {
+        .which_msg = RamdiskReturnMessage_basic_tag
+    };
+
     unsigned int op = seL4_GetMR(RDMSGREG_FUNC);
     uint64_t obj_id = get_object_id_from_badge(sender_badge);
 
@@ -310,9 +321,12 @@ seL4_MessageInfo_t ramdisk_request_handler(seL4_MessageInfo_t tag, seL4_Word sen
         RAMDISK_PRINTF("Got message on badged EP with no object id\n");
         uint64_t client_id = get_client_id_from_badge(sender_badge);
 
-        switch (op)
+        error = sel4gpi_rpc_recv(&get_ramdisk_server()->gen.rpc_env, (void *)&msg);
+        CHECK_ERROR_GOTO(error, "Failed to decode RPC message", error, done);
+
+        switch (msg.op)
         {
-        case RD_FUNC_BIND_REQ:
+        case RamdiskAction_BIND:
             *need_new_recv_cap = true;
 
             RAMDISK_PRINTF("Binding MO for client %ld\n", client_id);
@@ -324,10 +338,8 @@ seL4_MessageInfo_t ramdisk_request_handler(seL4_MessageInfo_t tag, seL4_Word sen
             get_ramdisk_server()->shared_mem[client_id] = mo_vaddr;
 
             // RAMDISK_PRINTF("Can access vaddr %p, val 0x%x\n", mo_vaddr, *((int *)mo_vaddr));
-
-            seL4_SetMR(RDMSGREG_FUNC, RD_FUNC_BIND_ACK);
             break;
-        case RD_FUNC_UNBIND_REQ:
+        case RamdiskAction_UNBIND:
             RAMDISK_PRINTF("Unbinding MO for client %ld\n", client_id);
 
             /* Remove shared mem from server ADS */
@@ -337,10 +349,8 @@ seL4_MessageInfo_t ramdisk_request_handler(seL4_MessageInfo_t tag, seL4_Word sen
             CHECK_ERROR_GOTO(error, "Failed to unattach MO", error, done);
 
             // (XXX) Arya: Free the cap as well
-
-            seL4_SetMR(RDMSGREG_FUNC, RD_FUNC_BIND_ACK);
             break;
-        case RD_FUNC_CREATE_REQ:
+        case RamdiskAction_ALLOC:
             // Assign a new block to this ep
             uint64_t blockno;
             error = alloc_block(&blockno);
@@ -357,11 +367,10 @@ seL4_MessageInfo_t ramdisk_request_handler(seL4_MessageInfo_t tag, seL4_Word sen
             CHECK_ERROR_GOTO(error, "Failed to give the resource", error, done);
 
             // Send the reply
-            seL4_MessageInfo_ptr_set_length(&reply_tag, RDMSGREG_CREATE_ACK_END);
-            seL4_SetMR(RDMSGREG_CREATE_ACK_DEST, dest);
-            seL4_SetMR(RDMSGREG_CREATE_ACK_SPACE_ID, get_ramdisk_server()->gen.default_space.id);
-            seL4_SetMR(RDMSGREG_CREATE_ACK_RES_ID, blockno);
-            seL4_SetMR(RDMSGREG_FUNC, RD_FUNC_CREATE_ACK);
+            replyMsg.which_msg = RamdiskReturnMessage_alloc_tag;
+            replyMsg.msg.alloc.blockId = blockno;
+            replyMsg.msg.alloc.spaceId = get_ramdisk_server()->gen.default_space.id;
+            replyMsg.msg.alloc.slot = dest;
 
             RAMDISK_PRINTF("Resource is in dest slot %d\n", (int)dest);
             break;
@@ -374,6 +383,11 @@ seL4_MessageInfo_t ramdisk_request_handler(seL4_MessageInfo_t tag, seL4_Word sen
     { /* Handle Typed Request */
         RAMDISK_PRINTF("Got message on EP with badge: %lx\n", sender_badge);
 
+        // Parse the RPC message
+        error = sel4gpi_rpc_recv(&get_ramdisk_server()->gen.rpc_env, (void *)&msg);
+        CHECK_ERROR_GOTO(error, "Failed to decode RPC message", error, done);
+
+        // Get info from badge
         gpi_cap_t cap_type = get_cap_type_from_badge(sender_badge);
         CHECK_ERROR_GOTO(cap_type != get_ramdisk_server()->gen.resource_type,
                          "ramdisk server got invalid captype in badged EP",
@@ -382,12 +396,12 @@ seL4_MessageInfo_t ramdisk_request_handler(seL4_MessageInfo_t tag, seL4_Word sen
         uint64_t client_id = get_client_id_from_badge(sender_badge);
         RAMDISK_PRINTF("Got op for blockno %ld\n", blockno);
 
-        switch (op)
+        switch (msg.op)
         {
-        case RD_FUNC_READ_REQ:
+        case RamdiskAction_READ:
             RAMDISK_PRINTF("Op is read\n");
 
-            /* Attach memory object to server ADS */
+            /* Find the previously attached shared memory */
             mo_vaddr = get_ramdisk_server()->shared_mem[client_id];
             CHECK_ERROR_GOTO(mo_vaddr == NULL, "MO for client did not exist", RD_SERVER_ERROR_UNKNOWN, done);
             *need_new_recv_cap = false;
@@ -399,17 +413,12 @@ seL4_MessageInfo_t ramdisk_request_handler(seL4_MessageInfo_t tag, seL4_Word sen
 
             RAMDISK_PRINTF("Read block\n");
 
-            /* (XXX) Arya: Todo Detach MO from server ADS */
             // ARYA-TODO what if the MO is not of RAMDISK_BLOCK_SIZE?
-            // error = ads_client_rm(&get_ramdisk_server()->gen.ads_conn, mo_vaddr, RAMDISK_BLOCK_SIZE);
-            // CHECK_ERROR_GOTO(error, "failed to detach client's MO from ADS", error, done);
-
-            seL4_SetMR(RDMSGREG_FUNC, RD_FUNC_READ_ACK);
             break;
-        case RD_FUNC_WRITE_REQ:
+        case RamdiskAction_WRITE:
             RAMDISK_PRINTF("Op is write\n");
 
-            //* Attach memory object to server ADS */
+            /* Find the previously attached shared memory */
             mo_vaddr = get_ramdisk_server()->shared_mem[client_id];
             CHECK_ERROR_GOTO(mo_vaddr == NULL, "MO for client did not exist", RD_SERVER_ERROR_UNKNOWN, done);
             *need_new_recv_cap = false;
@@ -419,12 +428,7 @@ seL4_MessageInfo_t ramdisk_request_handler(seL4_MessageInfo_t tag, seL4_Word sen
             RAMDISK_PRINTF("Writing from %p to blockno %ld\n", mo_vaddr, blockno);
             memcpy(ramdisk_vaddr, mo_vaddr, RAMDISK_BLOCK_SIZE);
 
-            /* (XXX) Arya: Todo Detach MO from server ADS */
             // ARYA-TODO what if the MO is not of RAMDISK_BLOCK_SIZE?
-            // error = ads_client_rm(&get_ramdisk_server()->gen.ads_conn, mo_vaddr, RAMDISK_BLOCK_SIZE);
-            // CHECK_ERROR_GOTO(error, "failed to detach client's MO from ADS", error, done);
-
-            seL4_SetMR(RDMSGREG_FUNC, RD_FUNC_WRITE_ACK);
             break;
         default:
             RAMDISK_PRINTF("Op is %d\n", op);
@@ -433,6 +437,18 @@ seL4_MessageInfo_t ramdisk_request_handler(seL4_MessageInfo_t tag, seL4_Word sen
     }
 
 done:
-    seL4_MessageInfo_ptr_set_label(&reply_tag, error);
+
+    if (sender_badge == 0)
+    {
+        seL4_MessageInfo_ptr_set_label(&reply_tag, error);
+    }
+    else
+    {
+        replyMsg.errorCode = error;
+
+        // Fill out the default return message
+        sel4gpi_rpc_reply(&get_ramdisk_server()->gen.rpc_env, (void *)&replyMsg, &reply_tag);
+    }
+
     return reply_tag;
 }

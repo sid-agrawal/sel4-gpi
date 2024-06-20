@@ -100,6 +100,11 @@ typedef struct _gpi_server_context
     // ID of the root task's PD and ADS
     uint64_t rt_pd_id;
     uint64_t rt_ads_id;
+
+    /* Track a pending model extraction */
+    bool pending_extraction;          ///< True if a model extraction is currently in progress
+    model_state_t model_state;        ///< Partial model state for a pending model extraction
+    seL4_CPtr model_extraction_reply; ///< The reply cap for the pending model extraction
 } gpi_server_context_t;
 
 /**
@@ -111,10 +116,10 @@ gpi_server_context_t *get_gpi_server(void);
 
 /**
  * Used for an unrecoverable fault in the gpi server
-*/
+ */
 void gpi_panic(char *reason, uint64_t code);
 
 /**
  * Debug function prints all core resources in existence
-*/
+ */
 void gpi_debug_print_resources(void);

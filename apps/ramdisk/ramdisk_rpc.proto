@@ -1,0 +1,35 @@
+syntax = "proto3";
+
+enum RamdiskAction {
+    BIND = 0;       /* bind a client with some shared memory frame */
+    UNBIND = 1;     /* unbind a client with some shared memory frame */
+    ALLOC = 2;      /* request a new free block from the ramdisk */
+    READ = 3;       /* request to read a block */
+    WRITE = 4;      /* request to write a block */
+};
+
+/* message type for all ramdisk request messages */
+message RamdiskMessage {
+    RamdiskAction op = 1;
+};
+
+/* return from a basic ramdisk message */
+message RamdiskBasicReturnMessage {
+    /* No content */
+};
+
+/* return from a ramdisk alloc message */
+message RamdiskAllocReturnMessage {
+    uint64 slot = 1;        /* destination slot of the allocated block */
+    uint32 blockId = 2;     /* The allocated block ID */
+    uint32 spaceId = 3;     /* The block space ID */
+}
+
+/* message type for all ramdisk return messages */
+message RamdiskReturnMessage {
+    uint32 errorCode = 1;   /* Can we use an enum for the error code? */
+    oneof msg {
+        RamdiskBasicReturnMessage basic = 2;
+        RamdiskAllocReturnMessage alloc = 3;
+    };
+};
