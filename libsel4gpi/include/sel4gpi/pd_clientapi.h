@@ -158,16 +158,6 @@ int pd_client_free_slot(pd_client_context_t *conn,
 int pd_client_clear_slot(pd_client_context_t *conn,
                         seL4_CPtr slot);
 
-/**
- * @brief Create a badged copy of an endpoint capability
- *
- * @param conn client connection object
- * @param ret_ep location of result endpoint
- * @return int 0 on success, -1 on failure.
- */
-int pd_client_alloc_ep(pd_client_context_t *conn,
-                       seL4_CPtr *ret_ep);
-
 /** RESOURCE SERVER PD OPERATIONS **/
 
 /**

@@ -54,39 +54,6 @@ extern char _cpio_archive_end[];
 static int pd_setup_cspace(pd_t *pd, vka_t *vka);
 static int pd_dump_internal(pd_t *pd, model_state_t *ms, uint64_t rr_mo_id, void *rr_local_vaddr);
 
-int copy_cap_to_pd(pd_t *to_pd,
-                   seL4_CPtr cap,
-                   seL4_Word *slot)
-{
-    int error;
-    seL4_CPtr free_slot;
-
-    error = pd_next_slot(to_pd, &free_slot);
-    if (error != 0)
-    {
-        ZF_LOGE("copy_cap_to_pd: Failed to get a free slot in PD\n");
-        return error;
-    }
-
-    cspacepath_t src, dest;
-    vka_cspace_make_path(get_gpi_server()->server_vka, cap, &src);
-    vka_cspace_make_path(to_pd->pd_vka, free_slot, &dest);
-
-    error = vka_cnode_copy(&dest, &src, seL4_AllRights);
-    if (error != 0)
-    {
-        ZF_LOGE("copy_cap_to_pd: Failed to copy cap\n");
-        return error;
-    }
-
-    if (slot != NULL)
-    {
-        *slot = free_slot;
-    }
-
-    return 0;
-}
-
 int pd_add_resource(pd_t *pd, gpi_cap_t type, uint32_t space_id, uint32_t res_id,
                     seL4_CPtr slot_in_RT, seL4_CPtr slot_in_PD, seL4_CPtr slot_in_serverPD)
 {
@@ -434,14 +401,13 @@ int pd_bulk_add_resource(pd_t *pd, linked_list_t *resources)
         seL4_CPtr copied_res = resource_server_make_badged_ep(get_pd_component()->server_vka, pd->pd_vka,
                                                               resource_space_data->space.server_ep, resource_space_data->space.resource_type,
                                                               res->space_id, res->res_id, pd->id);
-        seL4_CPtr slot_in_PD;
-        in_error = copy_cap_to_pd(pd, copied_res, &slot_in_PD);
+
         SERVER_PRINT_IF_ERR(in_error, "Warning: Could not mint resource endpoint\n");
         error = error || in_error;
 
         if (!in_error)
         {
-            in_error = pd_add_resource(pd, res->type, res->space_id, res->res_id, res->slot_in_RT_Debug, slot_in_PD, res->slot_in_ServerPD_Debug);
+            in_error = pd_add_resource(pd, res->type, res->space_id, res->res_id, res->slot_in_RT_Debug, copied_res, res->slot_in_ServerPD_Debug);
             SERVER_PRINT_IF_ERR(in_error, "Warning: failed to add resource (type: %s, space_id: %d) to PD %d\n", cap_type_to_str(res->type), res->space_id, pd->id);
             error = error || in_error;
         }
@@ -669,27 +635,6 @@ int pd_free_slot(pd_t *pd,
     */
     pd->pd_vka->cspace_free(pd->pd_vka->data, slot);
     return 0;
-}
-
-int pd_alloc_ep(pd_t *pd,
-                vka_t *server_vka,
-                seL4_CPtr *ret_ep)
-{
-    // alloc slot in pd
-    cspacepath_t dest;
-
-    int error = vka_cspace_alloc_path(pd->pd_vka, &dest);
-    if (error)
-    {
-        return error;
-    }
-
-    // alloc ep from gpi server's untyped
-    seL4_Word res;
-    error = vka_utspace_alloc(server_vka, &dest, seL4_EndpointObject, seL4_EndpointBits, &res);
-
-    *ret_ep = error == seL4_NoError ? dest.capPtr : seL4_CapNull;
-    return error;
 }
 
 int pd_bootstrap_allocator(pd_t *pd,
@@ -1016,7 +961,7 @@ static int res_dump(pd_t *pd, model_state_t *ms, pd_hold_node_t *current_cap,
             pd_component_registry_entry_t *pd_data = (pd_component_registry_entry_t *)
                 resource_component_registry_get_by_id(get_pd_component(), current_cap->res_id);
 
-            SERVER_GOTO_IF_COND(pd_data == NULL, "Failed to find PD data\n");
+            SERVER_GOTO_IF_COND(pd_data == NULL, "Failed to find PD%d's data\n", current_cap->res_id);
 
             // pd_dump(&pd_data->pd);
             pd_dump_internal(&pd_data->pd, ms, rr_mo_id, rr_local_vaddr);

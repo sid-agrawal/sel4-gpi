@@ -216,17 +216,6 @@ int pd_clear_slot(pd_t *pd,
                   seL4_CPtr slot);
 
 /**
- * Allocates an endpoint using the gpi server's vka, and copies to the pd cspace
- *
- * @param pd The pd to allocate an endpoint for
- * @param server_vka VKA of the gpi server
- * @param ret_ep slot of the allocated ep in the PD's cspace
- */
-int pd_alloc_ep(pd_t *pd,
-                vka_t *server_vka,
-                seL4_CPtr *ret_ep);
-
-/**
  * Bootstraps a VKA allocator for the PD's cspace
  * Requires an existing 1-level cspace
  *
@@ -353,17 +342,6 @@ int pd_add_rde(pd_t *pd,
 int pd_remove_rde(pd_t *pd,
                   rde_type_t type,
                   uint32_t space_id);
-
-/**
- * @brief Send a cap to a PD's cspace without badging (does NOT add the cap to the PD's resources set)
- *
- * @param to_pd destination PD
- * @param cap the cap to send
- * @param slot the slot in destination cspace
- */
-int copy_cap_to_pd(pd_t *to_pd,
-                   seL4_CPtr cap,
-                   seL4_Word *slot);
 
 /**
  * Gets the entry of the PD's RDE corresponding

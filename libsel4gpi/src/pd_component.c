@@ -188,30 +188,6 @@ err_goto:
     return tag;
 }
 
-static seL4_MessageInfo_t handle_alloc_ep_req(seL4_Word sender_badge,
-                                              seL4_MessageInfo_t old_tag)
-{
-    OSDB_PRINTF("Got alloc ep request from client badge %lx.\n", sender_badge);
-    int error = 0;
-
-    pd_component_registry_entry_t *client_data = pd_component_registry_get_entry_by_badge(sender_badge);
-    SERVER_GOTO_IF_COND(client_data == NULL, "Failed to find client badge %lx.\n", sender_badge);
-
-    seL4_CPtr slot;
-    error = pd_alloc_ep(&client_data->pd,
-                        get_pd_component()->server_vka,
-                        &slot);
-
-    seL4_SetMR(PDMSGREG_ALLOC_EP_PD_SLOT, slot);
-    OSDB_PRINTF("Allocated ep in slot %d\n", (int)slot);
-
-err_goto:
-    seL4_SetMR(PDMSGREG_FUNC, PD_FUNC_ALLOC_EP_ACK);
-    seL4_MessageInfo_t tag = seL4_MessageInfo_new(error, 0, 0,
-                                                  PDMSGREG_ALLOC_EP_ACK_END);
-    return tag;
-}
-
 static seL4_MessageInfo_t handle_send_cap_req(seL4_Word sender_badge,
                                               seL4_MessageInfo_t old_tag,
                                               seL4_CPtr received_cap)
@@ -641,9 +617,6 @@ static seL4_MessageInfo_t pd_component_handle(seL4_MessageInfo_t tag,
         case PD_FUNC_CLEAR_SLOT_REQ:
             reply_tag = handle_clear_slot_req(sender_badge, tag);
             break;
-        case PD_FUNC_ALLOC_EP_REQ:
-            reply_tag = handle_alloc_ep_req(sender_badge, tag);
-            break;
         case PD_FUNC_SENDCAP_REQ:
             reply_tag = handle_send_cap_req(sender_badge, tag, received_cap);
             *need_new_recv_cap = true;
@@ -765,6 +738,8 @@ void forge_pd_cap_from_init_data(test_init_data_t *init_data, sel4utils_process_
     pd->shared_data->pd_conn.id = test_pd_id;
 
     // Split the test process' cspace and initialize a vka with half
+    // (XXX) Linh: need to fix - we're bootstrapping an allocator twice here
+    //            (it was bootstrapped once in resource_component_allocate)
     seL4_CPtr mid_slot = DIV_ROUND_UP(init_data->free_slots.start + init_data->free_slots.end, 2);
     error = pd_bootstrap_allocator(pd, test_process->cspace.cptr,
                                    mid_slot, init_data->free_slots.end,
@@ -814,8 +789,12 @@ void forge_pd_cap_from_init_data(test_init_data_t *init_data, sel4utils_process_
     resource_component_inc(get_cpu_component(), cpu_id); // Increase the refcount since the CPU is bound to PD
 
     // Copy the PD cap to the test process
-    error = copy_cap_to_pd(pd, pd_cap_in_rt, &pd->shared_data->pd_conn.badged_server_ep_cspath.capPtr);
+    cspacepath_t pd_cap_in_PD = {0};
+    error = resource_server_transfer_cap(get_pd_component()->server_vka, pd->pd_vka,
+                                         pd_cap_in_rt, &pd_cap_in_PD, false, 0);
     SERVER_GOTO_IF_ERR(error, "Failed to copy cap to PD\n");
+    pd->shared_data->pd_conn.badged_server_ep_cspath = pd_cap_in_PD;
+
     pd_add_resource(pd, GPICAP_TYPE_PD, get_pd_component()->space_id, pd->id,
                     seL4_CapNull, pd->shared_data->pd_conn.badged_server_ep_cspath.capPtr, seL4_CapNull);
 

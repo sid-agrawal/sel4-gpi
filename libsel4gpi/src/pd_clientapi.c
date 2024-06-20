@@ -144,25 +144,6 @@ int pd_client_clear_slot(pd_client_context_t *conn,
     return seL4_MessageInfo_ptr_get_label(&tag);
 }
 
-/**
- * @brief Create a badged copy of an endpoint capability
- *
- * @param conn client connection object
- * @param ret_ep location of result endpoint
- * @return int 0 on success, -1 on failure.
- */
-int pd_client_alloc_ep(pd_client_context_t *conn,
-                       seL4_CPtr *ret_ep)
-{
-    seL4_SetMR(PDMSGREG_FUNC, PD_FUNC_ALLOC_EP_REQ);
-    seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0,
-                                                  PDMSGREG_ALLOC_EP_REQ_END);
-    tag = seL4_Call(conn->badged_server_ep_cspath.capPtr, tag);
-    *ret_ep = seL4_GetMR(PDMSGREG_ALLOC_EP_PD_SLOT);
-
-    return seL4_MessageInfo_ptr_get_label(&tag);
-}
-
 int pd_client_share_rde(pd_client_context_t *target_pd,
                         gpi_cap_t cap_type,
                         uint64_t space_id)
