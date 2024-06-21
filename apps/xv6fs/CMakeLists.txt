@@ -14,39 +14,35 @@ if(KernelArchRiscV)
     set(arch arm)
 endif()
 
+SEL4_GENERATE_PROTOBUF(proto_srcs proto_hdrs ${CMAKE_CURRENT_SOURCE_DIR}/fs_rpc.proto)
+
 file(GLOB client_deps src/fs_client/*.c)
 list(SORT client_deps)
-add_library(fs_client STATIC EXCLUDE_FROM_ALL ${client_deps})
-target_include_directories(fs_client PUBLIC include/fs_client include/shared)
-target_link_libraries(fs_client muslc sel4 utils sel4test sel4gpi ramdisk_client)
+add_library(fs_client STATIC EXCLUDE_FROM_ALL ${client_deps} ${proto_srcs})
+target_include_directories(fs_client PUBLIC ${CMAKE_CURRENT_BINARY_DIR} include/fs_client include/shared)
+target_link_libraries(fs_client muslc sel4 utils sel4test sel4gpi ramdisk_client sel4nanopb)
 
 file(GLOB server_deps src/fs_server/*.c)
 list(SORT server_deps)
-add_executable(fs_server EXCLUDE_FROM_ALL ${server_deps})
+add_executable(fs_server EXCLUDE_FROM_ALL ${server_deps} ${proto_srcs})
 set_target_properties(
     fs_server
     PROPERTIES
     COMPILE_DEFINITIONS FS_EXECUTABLE=1)
-target_include_directories(fs_server PRIVATE include/shared include/fs_server)
+target_include_directories(fs_server PRIVATE ${CMAKE_CURRENT_BINARY_DIR} include/shared include/fs_server)
 target_link_libraries(
     fs_server
     PUBLIC
         sel4_autoconf
         muslc
-        sel4bench
         sel4
         utils
         sel4runtime
-        sel4allocman
-        sel4vka
         sel4utils
-        sel4rpc
-        sel4test
         sel4sync
         sel4muslcsys
-        sel4testsupport
         sel4gpi
-        sel4serialserver_tests
         ramdisk_client
-    PRIVATE sel4test-driver_Config
+        sel4nanopb
+    PRIVATE sel4_autoconf
 )

@@ -13,6 +13,7 @@
 
 #include <sel4gpi/ads_clientapi.h>
 #include <sel4gpi/pd_clientapi.h>
+#include <sel4gpi/gpi_rpc.h>
 
 #include <fs_shared.h>
 
@@ -82,7 +83,10 @@ typedef struct _global_xv6fs_client_context_t
     gpi_cap_t file_cap_type;
     uint32_t space_id;
 
-    // Temporary fields for naive implementation
+    // RPC context with file server
+    sel4gpi_rpc_client_t rpc_client;
+
+    // Shared memory frame with the file server, sent on every request
     mo_client_context_t *shared_mem;
     void *shared_mem_vaddr;
 } global_xv6fs_client_context_t;

@@ -1,0 +1,71 @@
+syntax = "proto3";
+
+message FsCreateMessage {
+    uint64 flags = 1;   /* file creation flags */
+};
+
+message FsLinkMessage {
+    /* No content */
+};
+
+message FsReadMessage {
+    uint32 n = 1;       /* number of bytes to read */
+    uint32 offset = 2;  /* offset to start reading at */
+};
+
+message FsWriteMessage {
+    uint32 n = 1;       /* number of bytes to write */
+    uint32 offset = 2;  /* offset to start writing at */
+};
+
+message FsCloseMessage {
+    /* No content */
+};
+
+message FsUnlinkMessage {
+    /* No content */
+};
+
+message FsStatMessage {
+    /* No content */
+};
+
+/* message type for all ramdisk request messages */
+message FsMessage {
+    oneof msg {
+        FsCreateMessage create = 1;
+        FsLinkMessage link = 2;
+        FsReadMessage read = 3;
+        FsWriteMessage write = 4;
+        FsCloseMessage close = 5;
+        FsUnlinkMessage unlink = 6;
+        FsStatMessage stat = 7;
+    };
+};
+
+message FsBasicReturnMessage {
+    /* No content */
+};
+
+message FsCreateReturnMessage {
+    uint64 slot = 1;        /* destination slot of the allocated file */
+}
+
+message FsReadReturnMessage {
+    uint32 n = 1;           /* number of bytes read */
+}
+
+message FsWriteReturnMessage {
+    uint32 n = 1;           /* number of bytes written */
+}
+
+/* message type for all fs return messages */
+message FsReturnMessage {
+    uint32 errorCode = 1;   /* Can we use an enum for the error code? */
+    oneof msg {
+        FsBasicReturnMessage basic = 2;
+        FsCreateReturnMessage create = 3;
+        FsReadReturnMessage read = 4;
+        FsWriteReturnMessage write = 5;
+    };
+};

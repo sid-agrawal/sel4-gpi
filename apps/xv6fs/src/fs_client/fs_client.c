@@ -14,6 +14,8 @@
 #include <sel4gpi/pd_clientapi.h>
 #include <sel4gpi/resource_server_remote_utils.h>
 #include <sel4gpi/pd_utils.h>
+#include <sel4gpi/gpi_rpc.h>
+#include <fs_rpc.pb.h>
 
 #include <libc_fs_helpers.h>
 #include <fs_shared.h>
@@ -172,6 +174,10 @@ xv6fs_client_init(void)
   /* Override libc fs ops */
   init_global_libc_fs_ops();
 
+  /* Setup RPC */
+  seL4_CPtr server_ep = sel4gpi_get_rde_by_space_id(get_xv6fs_client()->space_id, get_xv6fs_client()->file_cap_type);
+  sel4gpi_rpc_client_init(&get_xv6fs_client()->rpc_client, server_ep, FsMessage_msg, FsReturnMessage_msg);
+
   return error;
 }
 
@@ -180,6 +186,11 @@ int xv6fs_client_set_namespace(uint64_t ns_id)
   XV6FS_PRINTF("Client of FS server will use namespace %ld\n", ns_id);
 
   get_xv6fs_client()->space_id = ns_id;
+
+  /* Setup RPC */
+  seL4_CPtr server_ep = sel4gpi_get_rde_by_space_id(get_xv6fs_client()->space_id, get_xv6fs_client()->file_cap_type);
+  sel4gpi_rpc_client_init(&get_xv6fs_client()->rpc_client, server_ep, FsMessage_msg, FsReturnMessage_msg);
+
   return 0;
 }
 
@@ -208,14 +219,16 @@ int xv6fs_client_link_file(seL4_CPtr file, const char *path)
   strcpy(get_xv6fs_client()->shared_mem_vaddr, path);
 
   // Send IPC to fs server
-  seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 2, FSMSGREG_LINK_REQ_END);
-  seL4_SetMR(FSMSGREG_FUNC, FS_FUNC_LINK_REQ);
-  seL4_SetCap(0, get_xv6fs_client()->shared_mem->badged_server_ep_cspath.capPtr);
-  seL4_SetCap(1, file);
+  seL4_CPtr caps[2] = {get_xv6fs_client()->shared_mem->badged_server_ep_cspath.capPtr, file};
 
-  tag = seL4_Call(sel4gpi_get_rde_by_space_id(get_xv6fs_client()->space_id, get_xv6fs_client()->file_cap_type), tag);
+  FsMessage msg = {
+      .which_msg = FsMessage_link_tag};
 
-  return seL4_MessageInfo_get_label(tag);
+  FsReturnMessage ret_msg;
+
+  error = sel4gpi_rpc_call(&get_xv6fs_client()->rpc_client, &msg, 2, caps, &ret_msg);
+
+  return error || ret_msg.errorCode;
 }
 
 /* Remote fs access functions to override libc fs ops */
@@ -235,22 +248,26 @@ static int xv6fs_libc_open(const char *pathname, int flags, int modes)
   strcpy(get_xv6fs_client()->shared_mem_vaddr, pathname);
 
   // Send IPC to fs server
-  seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 1, FSMSGREG_CREATE_REQ_END);
-  seL4_SetMR(FSMSGREG_FUNC, FS_FUNC_CREATE_REQ);
-  seL4_SetMR(FSMSGREG_CREATE_REQ_FLAGS, flags);
-  seL4_SetCap(0, get_xv6fs_client()->shared_mem->badged_server_ep_cspath.capPtr);
-  // (XXX) Currently ignore modes
+  seL4_CPtr caps[1] = {get_xv6fs_client()->shared_mem->badged_server_ep_cspath.capPtr};
 
-  // Alloc received cap ep
-  tag = seL4_Call(sel4gpi_get_rde_by_space_id(get_xv6fs_client()->space_id, get_xv6fs_client()->file_cap_type), tag);
+  FsMessage msg = {
+      .which_msg = FsMessage_create_tag,
+      .msg.create = {
+          .flags = flags,
+          // (XXX) Currently ignore modes
+      }};
 
-  if (seL4_MessageInfo_get_label(tag) != seL4_NoError)
+  FsReturnMessage ret_msg;
+
+  error = sel4gpi_rpc_call(&get_xv6fs_client()->rpc_client, &msg, 1, caps, &ret_msg);
+
+  if (error || ret_msg.errorCode)
   {
     return -1;
   }
 
   // Add file to FD table
-  seL4_CPtr dest = seL4_GetMR(FSMSGREG_CREATE_ACK_DEST);
+  seL4_CPtr dest = ret_msg.msg.create.slot;
   int fd = fd_bind(dest);
 
   if (fd == -1)
@@ -266,6 +283,8 @@ static int xv6fs_libc_open(const char *pathname, int flags, int modes)
 
 static int xv6fs_libc_pread(int fd, void *buf, int count, int offset)
 {
+  int error = 0;
+
   XV6FS_PRINTF("xv6fs_libc_read fd %d len %d offset %d\n", fd, count, offset);
 
   if (count > RAMDISK_BLOCK_SIZE)
@@ -290,20 +309,27 @@ static int xv6fs_libc_pread(int fd, void *buf, int count, int offset)
   }
 
   // Send IPC to fs server
-  seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 1, FSMSGREG_READ_REQ_END);
-  seL4_SetMR(FSMSGREG_FUNC, FS_FUNC_READ_REQ);
-  seL4_SetMR(FSMSGREG_READ_REQ_N, count);
-  seL4_SetMR(FSMSGREG_READ_REQ_OFFSET, offset);
-  seL4_SetCap(0, get_xv6fs_client()->shared_mem->badged_server_ep_cspath.capPtr);
-  tag = seL4_Call(file->badged_server_ep_cspath.capPtr, tag);
+  seL4_CPtr caps[1] = {get_xv6fs_client()->shared_mem->badged_server_ep_cspath.capPtr};
 
-  if (seL4_MessageInfo_get_label(tag) != seL4_NoError)
+  FsMessage msg = {
+      .which_msg = FsMessage_read_tag,
+      .msg.read = {
+          .n = count,
+          .offset = offset,
+      }};
+
+  FsReturnMessage ret_msg;
+
+  error = sel4gpi_rpc_call_ep(&get_xv6fs_client()->rpc_client, file->badged_server_ep_cspath.capPtr,
+                              &msg, 1, caps, &ret_msg);
+
+  if (error || ret_msg.errorCode)
   {
     return -1;
   }
 
   // Copy from shared mem to buf
-  int bytes_read = seL4_GetMR(FSMSGREG_READ_ACK_N);
+  int bytes_read = ret_msg.msg.read.n;
   if (bytes_read > 0)
   {
     memcpy(buf, get_xv6fs_client()->shared_mem_vaddr, bytes_read);
@@ -337,6 +363,7 @@ static int xv6fs_libc_read(int fd, void *buf, int count)
 static int xv6fs_libc_write(int fd, const void *buf, int count)
 {
   XV6FS_PRINTF("xv6fs_libc_write fd %d len %d\n", fd, count);
+  int error = 0;
 
   // Check for /dev/null
   if (fd == dev_null_fd)
@@ -366,20 +393,27 @@ static int xv6fs_libc_write(int fd, const void *buf, int count)
   }
 
   // Send IPC to fs server
-  seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 1, FSMSGREG_WRITE_REQ_END);
-  seL4_SetMR(FSMSGREG_FUNC, FS_FUNC_WRITE_REQ);
-  seL4_SetMR(FSMSGREG_WRITE_REQ_N, count);
-  seL4_SetMR(FSMSGREG_WRITE_REQ_OFFSET, file->offset);
-  seL4_SetCap(0, get_xv6fs_client()->shared_mem->badged_server_ep_cspath.capPtr);
-  tag = seL4_Call(file->badged_server_ep_cspath.capPtr, tag);
+  seL4_CPtr caps[1] = {get_xv6fs_client()->shared_mem->badged_server_ep_cspath.capPtr};
 
-  if (seL4_MessageInfo_get_label(tag) != seL4_NoError)
+  FsMessage msg = {
+      .which_msg = FsMessage_write_tag,
+      .msg.write = {
+          .n = count,
+          .offset = file->offset,
+      }};
+
+  FsReturnMessage ret_msg;
+
+  error = sel4gpi_rpc_call_ep(&get_xv6fs_client()->rpc_client, file->badged_server_ep_cspath.capPtr,
+                              &msg, 1, caps, &ret_msg);
+
+  if (error || ret_msg.errorCode)
   {
     return -1;
   }
 
   // Update file offset
-  int bytes_written = seL4_GetMR(FSMSGREG_WRITE_ACK_N);
+  int bytes_written = ret_msg.msg.write.n;
   if (bytes_written > 0)
   {
     file->offset += bytes_written;
@@ -409,14 +443,19 @@ static int xv6fs_libc_close(int fd)
   }
 
   // Send IPC to fs server
-  seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0, FS_FUNC_CLOSE_REQ);
-  seL4_SetMR(FSMSGREG_FUNC, FS_FUNC_CLOSE_REQ);
-  tag = seL4_Call(file->badged_server_ep_cspath.capPtr, tag);
+  FsMessage msg = {
+      .which_msg = FsMessage_close_tag,
+  };
 
-  if (seL4_MessageInfo_get_label(tag) != seL4_NoError)
+  FsReturnMessage ret_msg;
+
+  error = sel4gpi_rpc_call_ep(&get_xv6fs_client()->rpc_client, file->badged_server_ep_cspath.capPtr,
+                              &msg, 0, NULL, &ret_msg);
+
+  if (error || ret_msg.errorCode)
   {
     XV6FS_PRINTF("Server failed to close file\n");
-    error = -1;
+    return -1;
   }
 
   // Close the FD locally
@@ -468,6 +507,7 @@ char *xv6fs_libc_getcwd(char *buf, size_t size)
 int xv6fs_libc_fstat(int fd, struct stat *buf)
 {
   XV6FS_PRINTF("xv6fs_libc_fstat fd %d\n", fd);
+  int error = 0;
 
   // Find the file by fd
   xv6fs_client_context_t *file = fd_get(fd);
@@ -478,12 +518,18 @@ int xv6fs_libc_fstat(int fd, struct stat *buf)
   }
 
   // Send IPC to fs server
-  seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 1, FSMSGREG_STAT_REQ_END);
-  seL4_SetMR(FSMSGREG_FUNC, FS_FUNC_STAT_REQ);
-  seL4_SetCap(0, get_xv6fs_client()->shared_mem->badged_server_ep_cspath.capPtr);
-  tag = seL4_Call(file->badged_server_ep_cspath.capPtr, tag);
+  seL4_CPtr caps[1] = {get_xv6fs_client()->shared_mem->badged_server_ep_cspath.capPtr};
 
-  if (seL4_MessageInfo_get_label(tag) != seL4_NoError)
+  FsMessage msg = {
+      .which_msg = FsMessage_stat_tag,
+  };
+
+  FsReturnMessage ret_msg;
+
+  error = sel4gpi_rpc_call_ep(&get_xv6fs_client()->rpc_client, file->badged_server_ep_cspath.capPtr,
+                              &msg, 1, caps, &ret_msg);
+
+  if (error || ret_msg.errorCode)
   {
     return -1;
   }
@@ -588,12 +634,17 @@ static int xv6fs_libc_unlink(const char *pathname)
   strcpy(get_xv6fs_client()->shared_mem_vaddr, pathname);
 
   // Send IPC to fs server
-  seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 1, FSMSGREG_UNLINK_REQ_END);
-  seL4_SetMR(FSMSGREG_FUNC, FS_FUNC_UNLINK_REQ);
-  seL4_SetCap(0, get_xv6fs_client()->shared_mem->badged_server_ep_cspath.capPtr);
-  tag = seL4_Call(sel4gpi_get_rde_by_space_id(get_xv6fs_client()->space_id, get_xv6fs_client()->file_cap_type), tag);
+  seL4_CPtr caps[1] = {get_xv6fs_client()->shared_mem->badged_server_ep_cspath.capPtr};
 
-  if (seL4_MessageInfo_get_label(tag) != seL4_NoError)
+  FsMessage msg = {
+      .which_msg = FsMessage_unlink_tag,
+  };
+
+  FsReturnMessage ret_msg;
+
+  error = sel4gpi_rpc_call(&get_xv6fs_client()->rpc_client, &msg, 1, caps, &ret_msg);
+
+  if (error || ret_msg.errorCode)
   {
     error = -1;
   }

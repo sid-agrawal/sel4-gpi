@@ -19,6 +19,8 @@
 #include <sel4gpi/resource_server_remote_utils.h>
 #include <sel4gpi/resource_space_clientapi.h>
 #include <sel4gpi/error_handle.h>
+#include <sel4gpi/gpi_rpc.h>
+#include <fs_rpc.pb.h>
 
 #include <ramdisk_client.h>
 #include <libc_fs_helpers.h>
@@ -200,6 +202,9 @@ int xv6fs_init()
   resource_server_initialize_registry(&get_xv6fs_server()->file_registry, file_registry_entry_on_delete, NULL);
   resource_server_initialize_registry(&get_xv6fs_server()->ns_registry, ns_registry_entry_on_delete, NULL);
 
+  /* Initialize RPC server */
+  sel4gpi_rpc_server_init(&get_xv6fs_server()->gen.rpc_env, FsMessage_msg, FsReturnMessage_msg);
+
   XV6FS_PRINTF("Initialized file system\n");
 
   return error;
@@ -212,7 +217,10 @@ seL4_MessageInfo_t xv6fs_request_handler(seL4_MessageInfo_t tag, seL4_Word sende
   *need_new_recv_cap = false;
   unsigned int op = seL4_GetMR(FSMSGREG_FUNC);
   uint64_t obj_id = get_object_id_from_badge(sender_badge);
-
+  uint64_t ns_id;
+  FsMessage msg;
+  FsReturnMessage reply_msg = {
+      .which_msg = FsReturnMessage_basic_tag};
   seL4_MessageInfo_t reply_tag = seL4_MessageInfo_new(0, 0, 0, 0);
 
   if (sender_badge == 0)
@@ -345,9 +353,12 @@ seL4_MessageInfo_t xv6fs_request_handler(seL4_MessageInfo_t tag, seL4_Word sende
     XV6FS_PRINTF("Received badged request with no object id\n");
 
     char *pathname;
+    error = sel4gpi_rpc_recv(&get_xv6fs_server()->gen.rpc_env, (void *)&msg);
+    CHECK_ERROR_GOTO(error, "Failed to decode RPC message", error, done);
 
-    switch (op)
+    switch (msg.which_msg)
     {
+#if 0 // (XXX) Arya: New NS momentarily broken while swapping to protobuf
     case RS_FUNC_NEW_NS_REQ:
       XV6FS_PRINTF("Got request for new namespace\n");
 
@@ -375,10 +386,11 @@ seL4_MessageInfo_t xv6fs_request_handler(seL4_MessageInfo_t tag, seL4_Word sende
       seL4_SetMR(RDMSGREG_FUNC, RS_FUNC_NEW_NS_ACK);
       seL4_SetMR(RSMSGREG_NEW_NS_ACK_ID, ns_id);
       break;
-    case FS_FUNC_CREATE_REQ:
+#endif
+    case FsMessage_create_tag:
       *need_new_recv_cap = true;
 
-      int open_flags = seL4_GetMR(FSMSGREG_CREATE_REQ_FLAGS);
+      int open_flags = msg.msg.create.flags;
 
       /* Attach memory object to server ADS (contains pathname) */
       error = resource_server_attach_mo(&get_xv6fs_server()->gen, cap, &mo_vaddr);
@@ -463,12 +475,11 @@ seL4_MessageInfo_t xv6fs_request_handler(seL4_MessageInfo_t tag, seL4_Word sende
       error = resource_server_unattach(&get_xv6fs_server()->gen, mo_vaddr);
       CHECK_ERROR_GOTO(error, "Failed to unattach MO", error, done);
 
-      // Send the reply
-      seL4_MessageInfo_ptr_set_length(&reply_tag, FSMSGREG_CREATE_ACK_END);
-      seL4_SetMR(FSMSGREG_CREATE_ACK_DEST, dest);
-      seL4_SetMR(RSMSGREG_FUNC, FS_FUNC_CREATE_ACK);
+      // Set the reply
+      reply_msg.which_msg = FsReturnMessage_create_tag;
+      reply_msg.msg.create.slot = dest;
       break;
-    case FS_FUNC_LINK_REQ:
+    case FsMessage_link_tag:
       *need_new_recv_cap = true;
 
       /* Attach memory object to server ADS (contains pathname) */
@@ -507,11 +518,9 @@ seL4_MessageInfo_t xv6fs_request_handler(seL4_MessageInfo_t tag, seL4_Word sende
 
       /* Do the link */
       error = xv6fs_sys_dolink2(reg_entry->file, pathname);
-
-      seL4_MessageInfo_ptr_set_length(&reply_tag, FSMSGREG_LINK_ACK_END);
-      seL4_SetMR(RDMSGREG_FUNC, FS_FUNC_LINK_ACK);
+      CHECK_ERROR_GOTO(error, "Failed to link", FS_SERVER_ERROR_UNKNOWN, done);
       break;
-    case FS_FUNC_UNLINK_REQ:
+    case FsMessage_unlink_tag:
       *need_new_recv_cap = true;
 
       /* Attach memory object to server ADS (contains pathname) */
@@ -537,9 +546,6 @@ seL4_MessageInfo_t xv6fs_request_handler(seL4_MessageInfo_t tag, seL4_Word sende
       XV6FS_PRINTF("Unlink pathname %s\n", pathname);
       error = xv6fs_sys_unlink(pathname);
       CHECK_ERROR_GOTO(error, "Failed to unlink", FS_SERVER_ERROR_UNKNOWN, done);
-
-      seL4_MessageInfo_ptr_set_length(&reply_tag, FSMSGREG_UNLINK_ACK_END);
-      seL4_SetMR(RDMSGREG_FUNC, FS_FUNC_UNLINK_ACK);
       break;
     default:
       CHECK_ERROR_GOTO(1, "got invalid op on badged ep without obj id", error, done);
@@ -548,7 +554,10 @@ seL4_MessageInfo_t xv6fs_request_handler(seL4_MessageInfo_t tag, seL4_Word sende
   else
   {
     /* Handle Request On Specific Resource */
-    XV6FS_PRINTF("Received badged request with object id %lx\n", get_object_id_from_badge(sender_badge));
+    XV6FS_PRINTF("Received badged request with object id 0x%lx\n", get_object_id_from_badge(sender_badge));
+
+    error = sel4gpi_rpc_recv(&get_xv6fs_server()->gen.rpc_env, (void *)&msg);
+    CHECK_ERROR_GOTO(error, "Failed to decode RPC message", error, done);
 
     int ret;
     file_registry_entry_t *reg_entry =
@@ -565,13 +574,13 @@ seL4_MessageInfo_t xv6fs_request_handler(seL4_MessageInfo_t tag, seL4_Word sende
 
     XV6FS_PRINTF("Got request for file with id %ld\n", reg_entry->file->id);
 
-    switch (op)
+    switch (msg.which_msg)
     {
-    case FS_FUNC_READ_REQ:
+    case FsMessage_read_tag:
       *need_new_recv_cap = true;
 
-      int n_bytes_to_read = seL4_GetMR(FSMSGREG_READ_REQ_N);
-      int offset = seL4_GetMR(FSMSGREG_READ_REQ_OFFSET);
+      int n_bytes_to_read = msg.msg.read.n;
+      int offset = msg.msg.read.offset;
 
       /* Attach memory object to server ADS */
       error = resource_server_attach_mo(&get_xv6fs_server()->gen, cap, &mo_vaddr);
@@ -581,15 +590,14 @@ seL4_MessageInfo_t xv6fs_request_handler(seL4_MessageInfo_t tag, seL4_Word sende
       int n_bytes_ret = xv6fs_sys_read(reg_entry->file, mo_vaddr, n_bytes_to_read, offset);
       XV6FS_PRINTF("Read %d bytes from file\n", n_bytes_ret);
 
-      seL4_MessageInfo_ptr_set_length(&reply_tag, FSMSGREG_READ_ACK_END);
-      seL4_SetMR(RDMSGREG_FUNC, FS_FUNC_READ_ACK);
-      seL4_SetMR(FSMSGREG_READ_ACK_N, n_bytes_ret);
+      reply_msg.which_msg = FsReturnMessage_read_tag;
+      reply_msg.msg.read.n = n_bytes_ret;
       break;
-    case FS_FUNC_WRITE_REQ:
+    case FsMessage_write_tag:
       *need_new_recv_cap = true;
-      
-      n_bytes_to_read = seL4_GetMR(FSMSGREG_READ_REQ_N);
-      offset = seL4_GetMR(FSMSGREG_READ_REQ_OFFSET);
+
+      n_bytes_to_read = msg.msg.write.n;
+      offset = msg.msg.write.offset;
 
       /* Attach memory object to server ADS */
       error = resource_server_attach_mo(&get_xv6fs_server()->gen, cap, &mo_vaddr);
@@ -599,20 +607,16 @@ seL4_MessageInfo_t xv6fs_request_handler(seL4_MessageInfo_t tag, seL4_Word sende
       n_bytes_ret = xv6fs_sys_write(reg_entry->file, mo_vaddr, n_bytes_to_read, offset);
       XV6FS_PRINTF("Wrote %d bytes to file\n", n_bytes_ret);
 
-      seL4_MessageInfo_ptr_set_length(&reply_tag, FSMSGREG_WRITE_ACK_END);
-      seL4_SetMR(RDMSGREG_FUNC, FS_FUNC_WRITE_ACK);
-      seL4_SetMR(FSMSGREG_WRITE_ACK_N, n_bytes_ret);
+      reply_msg.which_msg = FsReturnMessage_write_tag;
+      reply_msg.msg.write.n = n_bytes_ret;
       break;
-    case FS_FUNC_CLOSE_REQ:
+    case FsMessage_close_tag:
       XV6FS_PRINTF("Close file (%d)\n", reg_entry->file->id);
 
       /* Remove the ref in the registry entry */
       resource_server_registry_dec(&get_xv6fs_server()->file_registry, (resource_server_registry_node_t *)reg_entry);
-
-      seL4_MessageInfo_ptr_set_length(&reply_tag, FSMSGREG_CLOSE_ACK_END);
-      seL4_SetMR(RDMSGREG_FUNC, FS_FUNC_CLOSE_ACK);
       break;
-    case FS_FUNC_STAT_REQ:
+    case FsMessage_stat_tag:
       *need_new_recv_cap = true;
 
       /* Attach memory object to server ADS */
@@ -621,9 +625,6 @@ seL4_MessageInfo_t xv6fs_request_handler(seL4_MessageInfo_t tag, seL4_Word sende
 
       /* Call function stat */
       error = xv6fs_sys_stat(reg_entry->file, (struct stat *)mo_vaddr);
-
-      seL4_MessageInfo_ptr_set_length(&reply_tag, FSMSGREG_STAT_ACK_END);
-      seL4_SetMR(RDMSGREG_FUNC, FS_FUNC_STAT_ACK);
       break;
     default:
       CHECK_ERROR_GOTO(1, "got invalid op on badged ep with obj id", FS_SERVER_ERROR_UNKNOWN, done);
@@ -631,7 +632,16 @@ seL4_MessageInfo_t xv6fs_request_handler(seL4_MessageInfo_t tag, seL4_Word sende
   }
 
 done:
-  seL4_MessageInfo_ptr_set_label(&reply_tag, error);
+  if (sender_badge == 0)
+  {
+    seL4_MessageInfo_ptr_set_label(&reply_tag, error);
+  }
+  else
+  {
+    reply_msg.errorCode = error;
+    sel4gpi_rpc_reply(&get_xv6fs_server()->gen.rpc_env, (void *)&reply_msg, &reply_tag);
+  }
+
   return reply_tag;
 }
 
@@ -682,7 +692,7 @@ void disk_rw(struct buf *b, int write)
 // (XXX) Arya: what about releasing?
 void map_file_to_block(uint64_t file_id, uint32_t blockno)
 {
-  #if TRACK_MAP_RELATIONS
+#if TRACK_MAP_RELATIONS
   int error = 0;
 
   file_registry_entry_t *reg_entry = (file_registry_entry_t *)
@@ -708,5 +718,5 @@ void map_file_to_block(uint64_t file_id, uint32_t blockno)
 err_goto:
   ZF_LOGF("Failed to map file to block\n");
 
-  #endif
+#endif
 }

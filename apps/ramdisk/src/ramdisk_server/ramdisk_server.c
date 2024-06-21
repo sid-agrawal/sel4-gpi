@@ -239,7 +239,7 @@ seL4_MessageInfo_t ramdisk_request_handler(seL4_MessageInfo_t tag, seL4_Word sen
     *need_new_recv_cap = false;
 
     RamdiskMessage msg;
-    RamdiskReturnMessage replyMsg = {
+    RamdiskReturnMessage reply_msg = {
         .which_msg = RamdiskReturnMessage_basic_tag
     };
 
@@ -367,10 +367,10 @@ seL4_MessageInfo_t ramdisk_request_handler(seL4_MessageInfo_t tag, seL4_Word sen
             CHECK_ERROR_GOTO(error, "Failed to give the resource", error, done);
 
             // Send the reply
-            replyMsg.which_msg = RamdiskReturnMessage_alloc_tag;
-            replyMsg.msg.alloc.blockId = blockno;
-            replyMsg.msg.alloc.spaceId = get_ramdisk_server()->gen.default_space.id;
-            replyMsg.msg.alloc.slot = dest;
+            reply_msg.which_msg = RamdiskReturnMessage_alloc_tag;
+            reply_msg.msg.alloc.blockId = blockno;
+            reply_msg.msg.alloc.spaceId = get_ramdisk_server()->gen.default_space.id;
+            reply_msg.msg.alloc.slot = dest;
 
             RAMDISK_PRINTF("Resource is in dest slot %d\n", (int)dest);
             break;
@@ -444,10 +444,8 @@ done:
     }
     else
     {
-        replyMsg.errorCode = error;
-
-        // Fill out the default return message
-        sel4gpi_rpc_reply(&get_ramdisk_server()->gen.rpc_env, (void *)&replyMsg, &reply_tag);
+        reply_msg.errorCode = error;
+        sel4gpi_rpc_reply(&get_ramdisk_server()->gen.rpc_env, (void *)&reply_msg, &reply_tag);
     }
 
     return reply_tag;
