@@ -43,6 +43,7 @@ int test_new_process_osmosis_shmem(env_t env)
     ep_client_context_t ep_conn;
     error = sel4gpi_alloc_endpoint(&ep_conn);
     test_error_eq(error, 0);
+    test_assert(ep_conn.raw_endpoint != seL4_CapNull);
 
     seL4_CPtr slot;
     error = pd_client_send_cap(&runnable.pd, ep_conn.badged_server_ep_cspath.capPtr, &slot);

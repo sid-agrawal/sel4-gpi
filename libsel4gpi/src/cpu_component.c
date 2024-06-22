@@ -103,9 +103,6 @@ static seL4_MessageInfo_t handle_config_req(seL4_Word sender_badge,
 
     int error = 0;
 
-    // We should have 2 capsunwrapped: the PD, and the ADS
-    SERVER_GOTO_IF_COND(seL4_MessageInfo_ptr_get_capsUnwrapped(&old_tag) < 2, "Config request requires 2 capsUnwrapped\n");
-
     /* Find the client */
     cpu_component_registry_entry_t *cpu_data = (cpu_component_registry_entry_t *)
         resource_component_registry_get_by_badge(get_cpu_component(), sender_badge);
@@ -170,9 +167,6 @@ static seL4_MessageInfo_t handle_change_vspace_req(seL4_Word sender_badge,
     OSDB_PRINTF("Got change vspace from client badge %lx\n", sender_badge);
 
     int error = 0;
-
-    // We should have 1 capsunwrapped: the ADS
-    SERVER_GOTO_IF_COND(seL4_MessageInfo_ptr_get_capsUnwrapped(&old_tag) < 1, "Change vspace request requires 1 capsUnwrapped\n");
 
     /* Find the client */
     cpu_component_registry_entry_t *client_data = (cpu_component_registry_entry_t *)

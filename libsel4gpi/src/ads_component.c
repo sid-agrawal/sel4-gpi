@@ -308,8 +308,6 @@ static seL4_MessageInfo_t handle_load_elf_request(seL4_Word sender_badge, seL4_M
     int error = 0;
     char *image_name;
     void *entry_point;
-    SERVER_GOTO_IF_COND(seL4_MessageInfo_get_capsUnwrapped(old_tag) < 2,
-                        "Missing cap for target PD in capsUnwrapped\n");
 
     // Find target ADS
     ads_component_registry_entry_t *target_ads = (ads_component_registry_entry_t *)

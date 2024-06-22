@@ -13,6 +13,7 @@
 #include <sel4/sel4.h>
 #include <vka/vka.h>
 #include <vka/object.h>
+#include <sel4gpi/gpi_client.h>
 
 /** The client context for an endpoint - this is a bit weird, since there's 2 endpoints wrapped in this:
  *  1) badged_server_ep_cspath: the endpoint to the EP component, which allocates new **tracked** endpoints
@@ -44,12 +45,33 @@ typedef struct _ep_client_context
 int ep_component_client_connect(seL4_CPtr server_ep_cap, ep_client_context_t *ret_conn);
 
 /**
- * @brief retrieves the raw, underlying endpoint of an endpoint context, and fills it in the given context
- * This is used when a PD is sent a tracked endpoint, it will receive only the badged version that allows
- * communication with the EP component. In order to listen on the actual endpoint, it needs to retrieve it via
- * this API call.
+ * @brief Retrieves the raw, underlying endpoint of an endpoint context in the CSpace of the
+ * given target PD.
+ *
+ * @param target_PD the target PD to get the EP slot from
+ * @param ep_conn the EP context held by the **current** PD (NOT the target)
+ * @param[out] ret_ep returns the slot of the raw EP in target PD
+ * @return int 0 on success, 1 on failure.
+ */
+int ep_client_get_raw_endpoint_in_PD(pd_client_context_t *target_PD, ep_client_context_t *ep_conn, seL4_CPtr *ret_ep);
+
+/**
+ * @brief retrieves the raw, underlying endpoint of an endpoint context for the current PD,
+ * and fills it in the given context. This is used when a PD is sent a tracked endpoint,
+ * it will receive only the badged version that allows communication with the EP component.
+ * In order to listen on the actual endpoint, it needs to retrieve it via this API call.
  *
  * @param ep_conn the endpoint context
  * @return int 0 on success, 1 on failure
  */
 int ep_client_get_raw_endpoint(ep_client_context_t *ep_conn);
+
+/**
+ * @brief Forges a tracked endpoint from an existing endpoint. This is only meant to be called by the
+ * test PDs, since their endpoints were already set up by sel4test.
+ *
+ * @param server_ep_cap RDE to EP component
+ * @param ret_conn[out] EP connection object
+ * @return int 0 on success, 1 on failure.
+ */
+int ep_client_forge(seL4_CPtr server_ep_cap, seL4_CPtr ep_to_forge, ep_client_context_t *ret_conn);

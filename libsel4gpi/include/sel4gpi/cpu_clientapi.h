@@ -13,6 +13,7 @@
 
 #include <sel4gpi/cpu_component.h>
 #include <sel4gpi/gpi_client.h>
+#include <sel4gpi/endpoint_clientapi.h>
 
 /**
  * @brief   Initialize the cpu client.
@@ -51,6 +52,7 @@ int cpu_client_start(cpu_client_context_t *conn);
  * @param ipc_buf_mo MO of the the ipc buf for the cpu (OPTIONAL)
  * @param cnode_guard guard configured for the PD's croot
  * @param fault_ep_position w.r.t the PD's cspace, the fault endpoint (OPTIONAL)
+ *                          this is not sent as an unwrapped cap, as the limit is 3
  * @param ipc_buf_addr w.r.t the given ADS, address to IPC buf (OPTIONAL)
  * @return int returns 0 on success, 1 on failure
  */

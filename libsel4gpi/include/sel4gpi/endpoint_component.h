@@ -32,7 +32,10 @@ enum ep_component_funcs
     EP_FUNC_CONNECT_ACK,
 
     EP_FUNC_GET_RAW_ENDPOINT_REQ,
-    EP_FUNC_GET_RAW_ENDPOINT_ACK
+    EP_FUNC_GET_RAW_ENDPOINT_ACK,
+
+    EP_FUNC_FORGE_REQ,
+    EP_FUNC_FORGE_ACK
 };
 
 /* Designated purposes of each message register in the mini-protocol. */
@@ -54,7 +57,13 @@ enum ep_component_msgregs
     EPMSGREG_GET_RAW_ENDPOINT_REQ_END = EPMSGREG_LABEL0,
 
     EPMSGREG_GET_RAW_ENDPOINT_ACK_SLOT = EPMSGREG_LABEL0,
-    EPMSGREG_GET_RAW_ENDPOINT_ACK_END
+    EPMSGREG_GET_RAW_ENDPOINT_ACK_END,
+
+    /* Forge an endpoint */
+    EPMSGREG_FORGE_REQ_END = EPMSGREG_LABEL0,
+
+    EPMSGREG_FORGE_ACK_SLOT = EPMSGREG_LABEL0,
+    EPMSGREG_FORGE_ACK_END
 };
 
 /**

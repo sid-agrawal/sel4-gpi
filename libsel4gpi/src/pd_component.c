@@ -455,8 +455,6 @@ static seL4_MessageInfo_t handle_runtime_setup_req(seL4_Word sender_badge, seL4_
 
     int error = 0;
 
-    SERVER_GOTO_IF_COND(seL4_MessageInfo_get_capsUnwrapped(old_tag) < 1, "Missing cap for target PD in capsUnwrapped\n");
-
     pd_component_registry_entry_t *target_pd = (pd_component_registry_entry_t *)
         resource_component_registry_get_by_badge(get_pd_component(), sender_badge);
     SERVER_GOTO_IF_COND(target_pd == NULL, "Couldn't find target PD (%ld)\n", get_object_id_from_badge(sender_badge));

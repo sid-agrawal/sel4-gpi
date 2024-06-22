@@ -103,7 +103,7 @@ err_goto:
     return proc_cfg;
 }
 
-pd_config_t *sel4gpi_configure_thread(void *thread_fn, seL4_CPtr fault_ep, sel4gpi_runnable_t *ret_runnable)
+pd_config_t *sel4gpi_configure_thread(void *thread_fn, ep_client_context_t *fault_ep, sel4gpi_runnable_t *ret_runnable)
 {
     PD_CREATION_PRINT("Configuring new thread\n");
     int error = 0;
@@ -333,7 +333,6 @@ int sel4gpi_prepare_pd(pd_config_t *cfg, sel4gpi_runnable_t *runnable, int argc,
     seL4_Word cnode_guard = api_make_guard_skip_word(seL4_WordBits - TEST_PROCESS_CSPACE_SIZE_BITS);
 
     mo_client_context_t ipc_mo = {0};
-    seL4_CPtr fault_ep_in_pd = 0;
     void *entry_point = NULL;
     void *stack = NULL;
     void *ipc_buf = NULL;
@@ -369,24 +368,29 @@ int sel4gpi_prepare_pd(pd_config_t *cfg, sel4gpi_runnable_t *runnable, int argc,
         }
     }
 
-    // if (cfg->fault_ep != seL4_CapNull)
-    // {
-    //     PD_CREATION_PRINT("Sending fault EP (0x%lx) to PD\n", cfg->fault_ep);
-    //     error = pd_client_send_cap(&runnable->pd, cfg->fault_ep, &fault_ep_in_pd);
-    //     GOTO_IF_ERR(error, "Failed to send fault EP to PD\n");
-    // }
-    // else
-    // {
-    //     error = pd_client_alloc_ep(&runnable->pd, &fault_ep_in_pd);
-    //     PD_CREATION_PRINT("Allocated new fault EP at 0x%lx\n", fault_ep_in_pd);
-    //     GOTO_IF_ERR(error, "Couldn't allocate fault EP for PD\n");
-    // }
+    if (cfg->fault_ep.badged_server_ep_cspath.capPtr == seL4_CapNull)
+    {
+        error = sel4gpi_alloc_endpoint(&cfg->fault_ep);
+        GOTO_IF_COND(error || cfg->fault_ep.badged_server_ep_cspath.capPtr == seL4_CapNull,
+                     "Couldn't allocate fault EP for PD\n");
+        PD_CREATION_PRINT("Allocated new fault EP \n");
+    }
+
+    ep_client_context_t fault_ep_in_PD = {0};
+    error = pd_client_send_cap(&runnable->pd,
+                               cfg->fault_ep.badged_server_ep_cspath.capPtr,
+                               &fault_ep_in_PD.badged_server_ep_cspath.capPtr);
+    GOTO_IF_ERR(error, "Failed to send fault EP to PD\n");
+
+    // error = ep_client_get_raw_endpoint_in_PD()
+    GOTO_IF_ERR(error, "Failed to get raw EP in target PD's CSpace\n");
+    PD_CREATION_PRINT("Sent fault EP to PD in slot 0x%lx\n", fault_ep_in_PD.raw_endpoint);
 
     // (XXX) Linh: This whole `if` blob is to be removed with unified entry-point
     if (cfg->ads_cfg.stack_shared == GPI_DISJOINT)
     {
         PD_CREATION_PRINT("Setting up runtime\n");
-        pd_setup_type_t setup_mode = cfg->ads_cfg.code_shared == GPI_DISJOINT ? PD_RUNTIME_SETUP : PD_REGISTER_SETUP;
+        pd_setup_type_t setup_mode = runnable->ads.id != sel4gpi_get_binded_ads_id() ? PD_RUNTIME_SETUP : PD_REGISTER_SETUP;
 
         if (setup_mode == PD_REGISTER_SETUP)
         {
@@ -412,13 +416,13 @@ int sel4gpi_prepare_pd(pd_config_t *cfg, sel4gpi_runnable_t *runnable, int argc,
         GOTO_IF_ERR(error, "failed to prepare runtime");
     }
 
-    PD_CREATION_PRINT("Configuring CPU Object, fault_ep: %lx\n", fault_ep_in_pd);
+    PD_CREATION_PRINT("Configuring CPU Object, fault_ep: %lx\n", fault_ep_in_PD.raw_endpoint);
     error = cpu_client_config(&runnable->cpu,
                               &runnable->ads,
                               &runnable->pd,
                               &ipc_mo,
                               cnode_guard,
-                              fault_ep_in_pd,
+                              fault_ep_in_PD.raw_endpoint,
                               (seL4_Word)ipc_buf);
     GOTO_IF_ERR(error, "failed to configure CPU\n");
 
@@ -493,10 +497,15 @@ pd_config_t *sel4gpi_generate_proc_config(const char *image_name, size_t stack_p
     return proc_cfg;
 }
 
-pd_config_t *sel4gpi_generate_thread_config(void *thread_fn, seL4_CPtr fault_ep, mo_client_context_t *osm_data_mo)
+pd_config_t *sel4gpi_generate_thread_config(void *thread_fn,
+                                            ep_client_context_t *fault_ep,
+                                            mo_client_context_t *osm_data_mo)
 {
     pd_config_t *thread_cfg = calloc(1, sizeof(pd_config_t));
-    thread_cfg->fault_ep = fault_ep;
+    if (fault_ep)
+    {
+        thread_cfg->fault_ep = *fault_ep;
+    }
     thread_cfg->osm_data_mo = *osm_data_mo;
 
     ads_config_t thread_ads_cfg = {

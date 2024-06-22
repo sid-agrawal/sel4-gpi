@@ -44,7 +44,11 @@ int test_native_threads(env_t env)
     int error;
     sel4utils_thread_t thread;
 
-    sel4utils_thread_config_t t_cfg = thread_config_default(&env->simple, env->cspace_root, api_make_guard_skip_word(seL4_WordBits - TEST_PROCESS_CSPACE_SIZE_BITS), env->endpoint, seL4_MaxPrio);
+    sel4utils_thread_config_t t_cfg = thread_config_default(&env->simple,
+                                                            env->cspace_root,
+                                                            api_make_guard_skip_word(seL4_WordBits - TEST_PROCESS_CSPACE_SIZE_BITS),
+                                                            env->endpoint,
+                                                            seL4_MaxPrio);
     error = sel4utils_configure_thread_config(&env->vka, &env->vspace, &env->vspace, t_cfg, &thread);
 
     test_error_eq(error, 0);
@@ -58,9 +62,12 @@ int test_osm_threads(env_t env)
 {
     int error;
     printf("------------------STARTING: %s------------------\n", __func__);
+    ep_client_context_t fault_ep = {0};
+    error = ep_client_forge(sel4gpi_get_rde(GPICAP_TYPE_EP), env->endpoint, &fault_ep);
+    test_assert(!error && fault_ep.badged_server_ep_cspath.capPtr != seL4_CapNull);
 
     sel4gpi_runnable_t runnable = {0};
-    pd_config_t *cfg = sel4gpi_configure_thread(test_thread, env->endpoint, &runnable);
+    pd_config_t *cfg = sel4gpi_configure_thread(test_thread, &fault_ep, &runnable);
     test_assert(cfg != NULL);
 
     seL4_Word arg0 = 1;

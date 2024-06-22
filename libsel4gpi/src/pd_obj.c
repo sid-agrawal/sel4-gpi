@@ -726,8 +726,7 @@ int pd_send_cap(pd_t *to_pd,
                 bool update_core_cap)
 {
     int error = 0;
-    SERVER_GOTO_IF_COND(cap == 0, "pd_send_cap got a null cap to send\n");
-    SERVER_GOTO_IF_COND(badge == 0, "Cannot send a non-GPI cap to a PD\n");
+    SERVER_GOTO_IF_COND(badge == 0 && cap == 0, "Both badge and cap to send are NULL\n");
 
     gpi_cap_t cap_type = get_cap_type_from_badge(badge);
     vka_t *server_vka;
@@ -790,6 +789,7 @@ int pd_send_cap(pd_t *to_pd,
         }
         break;
     default:
+        // (XXX) Linh: what happens when we send non-core GPI caps?
         should_mint = false;
         break;
     }
@@ -816,9 +816,9 @@ int pd_send_cap(pd_t *to_pd,
                                 cap_type,
                                 get_space_id_from_badge(badge),
                                 get_object_id_from_badge(badge),
-                                cap,
+                                server_src_cap,
                                 new_cap,
-                                cap);
+                                server_src_cap);
         SERVER_PRINT_IF_ERR(error, "Warning: Failed to add cap to PD's resources\n");
 
         *slot = new_cap;

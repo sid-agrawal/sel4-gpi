@@ -16,6 +16,7 @@
 #include <utils/ansi_color.h>
 #include <sel4gpi/badge_usage.h>
 #include <sel4gpi/linked_list.h>
+#include <sel4gpi/endpoint_clientapi.h>
 
 #define DEFAULT_STACK_PAGES 16
 #define DEFAULT_HEAP_PAGES 100
@@ -100,7 +101,7 @@ typedef struct _rde_config
  */
 typedef struct _pd_config
 {
-    seL4_CPtr fault_ep;              ///< supply a fault-endpoint for the PD, if NULL, will create a new one
+    ep_client_context_t fault_ep;    ///< supply a tracked fault-endpoint for the PD, if NULL, will create a new one
     mo_client_context_t osm_data_mo; ///< the MO for holding a PD's OSmosis data
     ads_config_t ads_cfg;            ///< the ADS config
     linked_list_t *rde_cfg;          ///< the RDE config
@@ -133,7 +134,7 @@ pd_config_t *sel4gpi_configure_process(const char *image_name,
  *                     the ADS context returned will be the exact same as the current ADS
  * @return pd_config_t* returns the PD configuration, NULL on failure. Caller is responsbile for freeing the config.
  */
-pd_config_t *sel4gpi_configure_thread(void *thread_fn, seL4_CPtr fault_ep, sel4gpi_runnable_t *ret_runnable);
+pd_config_t *sel4gpi_configure_thread(void *thread_fn, ep_client_context_t *fault_ep, sel4gpi_runnable_t *ret_runnable);
 
 /**
  * @brief configures a runnable entity given a created PD and prepares it for execution (via cpu_start)
@@ -171,11 +172,12 @@ pd_config_t *sel4gpi_generate_proc_config(const char *image_name, size_t stack_p
  * @brief generates a PD configuration that describes a thread
  *
  * @param thread_fn the thread's entry function
- * @param fault_ep the fault endpoint for the thread (OPTIONAL, if not specified, a new one will be allocated)
+ * @param fault_ep the tracked fault endpoint for the thread (OPTIONAL, if not specified, a new one will be allocated)
  * @param osm_data_mo the MO for holding OSmosis data
  * @return pd_config_t*
  */
-pd_config_t *sel4gpi_generate_thread_config(void *thread_fn, seL4_CPtr fault_ep, mo_client_context_t *osm_data_mo);
+pd_config_t *sel4gpi_generate_thread_config(void *thread_fn, ep_client_context_t *fault_ep,
+                                            mo_client_context_t *osm_data_mo);
 
 /**
  * @brief frees all memory used by a config and the config itself
