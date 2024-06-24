@@ -64,7 +64,11 @@ int test_osm_threads(env_t env)
     test_assert(cfg != NULL);
 
     seL4_Word arg0 = 1;
-    error = sel4gpi_start_pd(cfg, &runnable, 1, &arg0);
+    error = sel4gpi_prepare_pd(cfg, &runnable, 1, &arg0);
+    test_assert(error == 0);
+
+    error = sel4gpi_start_pd(&runnable);
+    test_assert(error == 0);
 
     // terrible sleep mechanism to allow thread to run bc we don't have usleep
     int i = 0;

@@ -48,7 +48,10 @@ int test_new_process_osmosis_shmem(env_t env)
     error = pd_client_send_cap(&runnable.pd, ep_conn.badged_server_ep_cspath.capPtr, &slot);
     test_error_eq(error, 0);
 
-    error = sel4gpi_start_pd(proc_cfg, &runnable, 1, &slot);
+    error = sel4gpi_prepare_pd(proc_cfg, &runnable, 1, &slot);
+    test_error_eq(error, 0);
+
+    error = sel4gpi_start_pd(&runnable);
     test_error_eq(error, 0);
 
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0, 0);

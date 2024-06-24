@@ -144,7 +144,15 @@ pd_config_t *sel4gpi_configure_thread(void *thread_fn, seL4_CPtr fault_ep, sel4g
  * @param args the arguments
  * @return int returns 0 on success, 1 on failure
  */
-int sel4gpi_start_pd(pd_config_t *cfg, sel4gpi_runnable_t *runnable, int argc, seL4_Word *args);
+int sel4gpi_prepare_pd(pd_config_t *cfg, sel4gpi_runnable_t *runnable, int argc, seL4_Word *args);
+
+/**
+ * @brief start a prepared PD (via cpu_start)
+ *
+ * @param runnable a runnable struct already populated
+ * @return int returns 0 on success, 1 on failure
+ */
+int sel4gpi_start_pd(sel4gpi_runnable_t *runnable);
 
 /* helpers to get commonly used PD configurations */
 /**

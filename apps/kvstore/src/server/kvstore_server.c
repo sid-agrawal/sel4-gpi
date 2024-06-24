@@ -250,7 +250,10 @@ int kvstore_server_start_thread(seL4_CPtr *kvstore_ep)
     seL4_CPtr temp_ep_in_PD;
     pd_client_send_cap(&runnable.pd, ep_conn.badged_server_ep_cspath.capPtr, &temp_ep_in_PD);
 
-    error = sel4gpi_start_pd(cfg, &runnable, 1, (seL4_Word *)&temp_ep_in_PD);
+    error = sel4gpi_prepare_pd(cfg, &runnable, 1, (seL4_Word *)&temp_ep_in_PD);
+    GOTO_IF_ERR(error, "Failed to prepare PD\n");
+
+    error = sel4gpi_start_pd(&runnable);
     GOTO_IF_ERR(error, "Failed to start PD\n");
 
     seL4_CPtr receive_slot;

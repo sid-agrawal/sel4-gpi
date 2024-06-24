@@ -110,7 +110,10 @@ static int start_kvstore_server(seL4_CPtr *kvstore_ep, uint64_t fs_nsid, pd_clie
     sel4gpi_add_rde_config(cfg, GPICAP_TYPE_EP, RESSPC_ID_NULL);
 
     // Start it
-    error = sel4gpi_start_pd(cfg, &runnable, argc, args);
+    error = sel4gpi_prepare_pd(cfg, &runnable, argc, args);
+    test_error_eq(error, 0);
+
+    error = sel4gpi_start_pd(&runnable);
     test_error_eq(error, 0);
 
     // Wait for it to finish starting
@@ -194,7 +197,10 @@ static int start_hello_kvstore(kvstore_mode_t kvstore_mode,
     }
 
     // Start it
-    error = sel4gpi_start_pd(cfg, &runnable, argc, args);
+    error = sel4gpi_prepare_pd(cfg, &runnable, argc, args);
+    test_error_eq(error, 0);
+
+    error = sel4gpi_start_pd(&runnable);
     test_error_eq(error, 0);
 
     sel4gpi_config_destroy(cfg);

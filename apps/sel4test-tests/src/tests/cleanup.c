@@ -136,7 +136,10 @@ static int start_hello(hello_mode_t mode, pd_client_context_t *hello_pd)
     }
 
     // Start it
-    error = sel4gpi_start_pd(cfg, &runnable, argc, args);
+    error = sel4gpi_prepare_pd(cfg, &runnable, argc, args);
+    test_error_eq(error, 0);
+
+    error = sel4gpi_start_pd(&runnable);
     test_error_eq(error, 0);
 
     // The hello processes are simple and won't message to say they're started

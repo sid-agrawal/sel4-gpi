@@ -146,7 +146,10 @@ static int spawn_pd_osm(env_t env)
     args[0] = slot;
     args[1] = 0;
 
-    error = sel4gpi_start_pd(cfg, &runnable, argc, args);
+    error = sel4gpi_prepare_pd(cfg, &runnable, argc, args);
+    test_error_eq(error, 0);
+
+    error = sel4gpi_start_pd(&runnable);
     test_error_eq(error, 0);
 
     sel4gpi_config_destroy(cfg);

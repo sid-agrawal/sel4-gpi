@@ -90,7 +90,10 @@ int start_resource_server_pd_args(gpi_cap_t rde_type,
     }
 
     // Start it
-    error = sel4gpi_start_pd(cfg, &runnable, argc, args);
+    error = sel4gpi_prepare_pd(cfg, &runnable, argc, args);
+    CHECK_ERROR(error, "failed to prepare pd");
+
+    error = sel4gpi_start_pd(&runnable);
     CHECK_ERROR(error, "failed to start pd");
 
     // Wait for it to finish starting

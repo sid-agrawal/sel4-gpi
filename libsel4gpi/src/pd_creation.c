@@ -80,6 +80,7 @@ pd_config_t *sel4gpi_configure_process(const char *image_name,
 
     error = ads_component_client_connect(ads_rde, &ret_runnable->ads);
     GOTO_IF_ERR(error, "failed to allocate a new ADS");
+    printf("TEMPA allocated a new ads, %d\n", ret_runnable->ads.id);
 
     /* new CPU */
     // (XXX) Linh: for now, we'll just assume we always need a new CPU resource, configuration is TBD
@@ -321,7 +322,7 @@ err_goto:
     return error;
 }
 
-int sel4gpi_start_pd(pd_config_t *cfg, sel4gpi_runnable_t *runnable, int argc, seL4_Word *args)
+int sel4gpi_prepare_pd(pd_config_t *cfg, sel4gpi_runnable_t *runnable, int argc, seL4_Word *args)
 {
     int error;
 
@@ -422,12 +423,19 @@ int sel4gpi_start_pd(pd_config_t *cfg, sel4gpi_runnable_t *runnable, int argc, s
                               (seL4_Word)ipc_buf);
     GOTO_IF_ERR(error, "failed to configure CPU\n");
 
+err_goto:
+    // TODO cleanup things we've allocated
+    return error;
+}
+
+int sel4gpi_start_pd(sel4gpi_runnable_t *runnable)
+{
+    int error = 0;
     PD_CREATION_PRINT("Starting CPU\n");
     error = cpu_client_start(&runnable->cpu);
     GOTO_IF_ERR(error, "failed to start CPU");
 
 err_goto:
-    // TODO cleanup things we've allocated
     return error;
 }
 
