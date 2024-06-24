@@ -14,7 +14,6 @@
 #include <sel4utils/process.h>
 #include <sel4gpi/model_exporting.h>
 #include <sel4gpi/resource_server_utils.h>
-#include <sel4gpi/gpi_client.h>
 #include <sel4gpi/pd_creation.h>
 
 typedef struct _pd pd_t;

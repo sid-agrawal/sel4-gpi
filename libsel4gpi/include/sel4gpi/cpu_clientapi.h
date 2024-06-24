@@ -12,8 +12,11 @@
 #include <vspace/vspace.h>
 
 #include <sel4gpi/cpu_component.h>
-#include <sel4gpi/gpi_client.h>
+#include <sel4gpi/cpu_client_context.h>
 #include <sel4gpi/endpoint_clientapi.h>
+#include <sel4gpi/ads_client_context.h>
+#include <sel4gpi/mo_client_context.h>
+#include <sel4gpi/pd_client_context.h>
 
 /**
  * @brief   Initialize the cpu client.

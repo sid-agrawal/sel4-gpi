@@ -23,7 +23,10 @@
 #include <utils/uthash.h>
 #include <sel4gpi/pd_utils.h>
 #include <sel4gpi/bench_utils.h>
-#include <sel4gpi/gpi_client.h>
+#include <sel4gpi/ads_client_context.h>
+#include <sel4gpi/mo_client_context.h>
+#include <sel4gpi/pd_client_context.h>
+#include <sel4gpi/cpu_client_context.h>
 #include <sel4gpi/pd_creation.h>
 #include <fs_client.h>
 #include <ramdisk_client.h>

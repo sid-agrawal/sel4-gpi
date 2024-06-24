@@ -13,7 +13,7 @@
 #include <sel4/sel4.h>
 #include <vka/vka.h>
 #include <vka/object.h>
-#include <sel4gpi/gpi_client.h>
+#include <sel4gpi/pd_client_context.h>
 
 /** The client context for an endpoint - this is a bit weird, since there's 2 endpoints wrapped in this:
  *  1) badged_server_ep_cspath: the endpoint to the EP component, which allocates new **tracked** endpoints

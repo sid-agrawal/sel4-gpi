@@ -15,7 +15,6 @@
 #include <sel4gpi/ads_clientapi.h>
 #include <sel4gpi/badge_usage.h>
 #include <sel4gpi/debug.h>
-#include <sel4gpi/gpi_client.h>
 #include <sel4gpi/pd_utils.h>
 
 // Defined for utility printing macros

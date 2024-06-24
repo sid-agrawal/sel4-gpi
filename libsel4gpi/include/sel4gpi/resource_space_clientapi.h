@@ -2,9 +2,10 @@
 #include <stdint.h>
 #include <sel4/sel4.h>
 
-#include <sel4gpi/gpi_client.h>
+#include <sel4gpi/resource_space_client_context.h>
 #include <sel4gpi/resource_space_component.h>
 #include <sel4gpi/endpoint_clientapi.h>
+#include <sel4gpi/gpi_options.h>
 
 /**
  * Allocate a new resource space

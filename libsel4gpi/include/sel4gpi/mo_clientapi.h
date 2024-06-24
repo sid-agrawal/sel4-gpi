@@ -12,7 +12,7 @@
 #include <vspace/vspace.h>
 
 #include <sel4gpi/mo_component.h>
-#include <sel4gpi/gpi_client.h>
+#include <sel4gpi/mo_client_context.h>
 
 /**
  * @brief   Initialize the MO client.

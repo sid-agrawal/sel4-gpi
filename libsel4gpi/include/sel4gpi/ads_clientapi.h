@@ -12,7 +12,6 @@
 #include <vspace/vspace.h>
 
 #include <sel4gpi/ads_component.h>
-#include <sel4gpi/gpi_client.h>
 #include <sel4gpi/pd_creation.h>
 
 /**

@@ -10,10 +10,8 @@
  */
 
 #include <sel4gpi/mo_clientapi.h>
-#include <sel4gpi/ads_clientapi.h>
 #include <sel4gpi/badge_usage.h>
 #include <sel4gpi/debug.h>
-#include <sel4gpi/gpi_client.h>
 
 // Defined for utility printing macros
 #define DEBUG_ID MO_DEBUG

@@ -12,7 +12,6 @@
 #include <sel4gpi/cpu_clientapi.h>
 #include <sel4gpi/badge_usage.h>
 #include <sel4gpi/debug.h>
-#include <sel4gpi/gpi_client.h>
 
 // Defined for utility printing macros
 #define DEBUG_ID CPU_DEBUG

@@ -29,7 +29,6 @@
 #include <sel4gpi/gpi_server.h>
 #include <sel4gpi/badge_usage.h>
 #include <sel4gpi/debug.h>
-#include <sel4gpi/gpi_client.h>
 #include <sel4gpi/error_handle.h>
 
 // Defined for utility printing macros

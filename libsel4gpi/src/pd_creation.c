@@ -73,7 +73,6 @@ pd_config_t *sel4gpi_configure_process(const char *image_name,
     /* new PD */
     error = pd_component_client_connect(pd_rde, &osm_data_mo, &ret_runnable->pd);
     GOTO_IF_ERR(error, "Failed to create new PD\n");
-
     /* new ADS*/
     seL4_CPtr ads_rde = sel4gpi_get_rde(GPICAP_TYPE_ADS);
     GOTO_IF_COND(ads_rde == seL4_CapNull, "Can't make new ADS, no ADS RDE\n");

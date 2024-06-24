@@ -17,6 +17,10 @@
 #include <sel4gpi/badge_usage.h>
 #include <sel4gpi/linked_list.h>
 #include <sel4gpi/endpoint_clientapi.h>
+#include <sel4gpi/ads_client_context.h>
+#include <sel4gpi/mo_client_context.h>
+#include <sel4gpi/pd_client_context.h>
+#include <sel4gpi/cpu_client_context.h>
 
 #define DEFAULT_STACK_PAGES 16
 #define DEFAULT_HEAP_PAGES 100

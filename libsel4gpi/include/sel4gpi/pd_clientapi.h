@@ -18,6 +18,8 @@
  * @file Definition of the client API for interacting with the PD component
 */
 
+#define PD_MAX_ARGC 4
+
 /** PD CREATION / INITIALIZATION **/
 
 /**

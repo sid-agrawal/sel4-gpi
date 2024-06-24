@@ -14,7 +14,6 @@
 #include <sel4gpi/pd_clientapi.h>
 #include <sel4gpi/badge_usage.h>
 #include <sel4gpi/debug.h>
-#include <sel4gpi/gpi_client.h>
 #include <sel4gpi/pd_utils.h>
 #include <sel4gpi/error_handle.h>
 
@@ -245,6 +244,8 @@ int pd_client_runtime_setup(pd_client_context_t *target_pd,
                             void *osm_data_in_PD,
                             pd_setup_type_t setup_type)
 {
+    int error = 0;
+    GOTO_IF_COND(argc > PD_MAX_ARGC, "Cannot setup PD with more than 4 arguments\n");
     seL4_SetMR(PDMSGREG_FUNC, PD_FUNC_SETUP_REQ);
     seL4_SetCap(0, target_ads->badged_server_ep_cspath.capPtr);
     seL4_SetCap(1, target_cpu->badged_server_ep_cspath.capPtr);
@@ -286,6 +287,9 @@ int pd_client_runtime_setup(pd_client_context_t *target_pd,
     tag = seL4_Call(target_pd->badged_server_ep_cspath.capPtr, tag);
 
     return seL4_MessageInfo_get_label(tag);
+
+err_goto:
+    return 1;
 }
 
 int pd_client_share_resource_by_type(pd_client_context_t *src_pd, pd_client_context_t *dest_pd, gpi_cap_t res_type)
