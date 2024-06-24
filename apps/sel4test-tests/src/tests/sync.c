@@ -151,22 +151,34 @@ int test_mutex(env_t env)
 
     printf("------------------STARTING TEST: %s------------------\n", __func__);
 
-    /* Create shared MO and notification */
+    /* Create shared MO */
     mo_client_context_t mo_conn;
     error = mo_component_client_connect(sel4gpi_get_rde(GPICAP_TYPE_MO), 1, &mo_conn);
     test_assert(error == 0);
 
+    /* Create shared notification */
     vka_object_t notif;
     error = vka_alloc_notification(&env->vka, &notif);
     test_assert(error == 0);
 
+    // Badge it, so we can set a value
+    cspacepath_t notif_src, notif_badged;
+    vka_cspace_make_path(&env->vka, notif.cptr, &notif_src);
+    error = vka_cspace_alloc_path(&env->vka, &notif_badged);
+    test_assert(error == 0);
+    error = vka_cnode_mint(&notif_badged, &notif_src, seL4_AllRights, 0x1);
+    test_assert(error == 0);
+
+    // Set the mutex to initially available
+    seL4_Signal(notif_badged.capPtr);
+
     /* Start the PDs */
     hello_context_t sync_pd_1;
-    error = initialize_hello(HELLO_SYNC_1, notif.cptr, &mo_conn, &sync_pd_1);
+    error = initialize_hello(HELLO_SYNC_1, notif_badged.capPtr, &mo_conn, &sync_pd_1);
     test_assert(error == 0);
 
     hello_context_t sync_pd_2;
-    error = initialize_hello(HELLO_SYNC_2, notif.cptr, &mo_conn, &sync_pd_2);
+    error = initialize_hello(HELLO_SYNC_2, notif_badged.capPtr, &mo_conn, &sync_pd_2);
     test_assert(error == 0);
 
     error = start_hello(&sync_pd_1);

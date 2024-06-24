@@ -69,18 +69,19 @@ static char *mode_to_str(hello_mode_t mode)
         printf("hello-sync %s: " msg, mode_to_str(mode), __VA_ARGS__); \
     } while (0);
 
-int critical_loop(sync_mutex_t *mx, void *shared_vaddr)
+int critical_loop(seL4_CPtr notif, void *shared_vaddr)
 {
     int error = 0;
+    seL4_Word notif_badge;
 
     volatile int *shared_int = (int *)shared_vaddr;
 
     for (int i = 0; i < N_ITERS; i++)
     {
 #if USE_MX
-        error = sync_mutex_lock(mx);
+        seL4_Wait(notif, &notif_badge);
 
-        if (error)
+        if (!notif_badge)
         {
             PRINTF("Failed to lock mutex\n");
             return error;
@@ -93,7 +94,7 @@ int critical_loop(sync_mutex_t *mx, void *shared_vaddr)
 
         for (int j = 0; j < 1000; j++)
         {
-            //seL4_Yield();
+            seL4_Yield();
 
             if (*shared_int != mode)
             {
@@ -104,13 +105,7 @@ int critical_loop(sync_mutex_t *mx, void *shared_vaddr)
 
         PRINTF("Leaving critical section\n");
 #if USE_MX
-        error = sync_mutex_unlock(mx);
-
-        if (error)
-        {
-            PRINTF("Failed to unlock mutex\n");
-            return error;
-        }
+        seL4_Signal(notif);
 #endif
     }
 
@@ -145,17 +140,8 @@ int main(int argc, char **argv)
         goto main_exit;
     }
 
-    /* initialize sync */
-    sync_mutex_t mx;
-    error = sync_mutex_init(&mx, notif_ep);
-
-    if (error)
-    {
-        PRINTF("Failed to initialize mutex\n");
-    }
-
     /* run critical loop */
-    error = critical_loop(&mx, shared_vaddr);
+    error = critical_loop(notif_ep, shared_vaddr);
 
 main_exit:
 

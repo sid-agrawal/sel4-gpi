@@ -32,6 +32,5 @@ target_link_libraries(
         sel4utils
         sel4muslcsys
         sel4gpi
-        sel4sync
     PRIVATE sel4_autoconf
 )
