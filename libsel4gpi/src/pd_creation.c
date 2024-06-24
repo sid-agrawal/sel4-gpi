@@ -80,7 +80,6 @@ pd_config_t *sel4gpi_configure_process(const char *image_name,
 
     error = ads_component_client_connect(ads_rde, &ret_runnable->ads);
     GOTO_IF_ERR(error, "failed to allocate a new ADS");
-    printf("TEMPA allocated a new ads, %d\n", ret_runnable->ads.id);
 
     /* new CPU */
     // (XXX) Linh: for now, we'll just assume we always need a new CPU resource, configuration is TBD
