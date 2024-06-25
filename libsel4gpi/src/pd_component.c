@@ -719,7 +719,7 @@ void forge_pd_cap_from_init_data(test_init_data_t *init_data, sel4utils_process_
 
     /* Allocate an MO to hold PD's OSmosis data */
     mo_t *shared_data_mo;
-    error = mo_component_allocate(1, &shared_data_mo);
+    error = mo_component_allocate_rt(1, &shared_data_mo);
     SERVER_GOTO_IF_ERR(error, "Failed to allocate MO for new PD's init data\n");
 
     /* Allocate the PD object */

@@ -52,17 +52,19 @@ static void on_mo_registry_delete(resource_server_registry_node_t *node_gen, voi
     mo_destroy(&node->mo, get_mo_component()->server_vka);
 }
 
-int mo_component_allocate(int num_pages, mo_t **ret_mo)
+int mo_component_allocate_rt(int num_pages, mo_t **ret_mo)
 {
     int error = 0;
     mo_component_registry_entry_t *new_entry;
+
+    mo_new_args_t alloc_args = {.num_pages = num_pages, .paddr = 0};
 
     error = resource_component_allocate(
         get_mo_component(),
         get_gpi_server()->rt_pd_id,
         BADGE_OBJ_ID_NULL,
         false,
-        (void *)num_pages,
+        (void *)&alloc_args,
         (resource_server_registry_node_t **)&new_entry, NULL);
     SERVER_GOTO_IF_ERR(error, "Failed to allocate new MO object for RT\n");
 
@@ -86,10 +88,18 @@ static seL4_MessageInfo_t handle_mo_allocation_request(seL4_Word sender_badge)
     mo_component_registry_entry_t *new_entry;
     uint32_t client_id = get_client_id_from_badge(sender_badge);
     seL4_Word num_pages = seL4_GetMR(MOMSGREG_CONNECT_REQ_NUM_PAGES);
+    uintptr_t paddr = seL4_GetMR(MOMSGREG_CONNECT_REQ_PADDR);
 
     OSDB_PRINTF("Got connect request for %ld pages\n", num_pages);
 
-    error = resource_component_allocate(get_mo_component(), client_id, BADGE_OBJ_ID_NULL, false, (void *)num_pages,
+    if (paddr)
+    {
+        OSDB_PRINTF("Sender requested specific paddr: %lx\n", paddr);
+    }
+
+    mo_new_args_t alloc_args = {.num_pages = num_pages, .paddr = paddr};
+
+    error = resource_component_allocate(get_mo_component(), client_id, BADGE_OBJ_ID_NULL, false, (void *)&alloc_args,
                                         (resource_server_registry_node_t **)&new_entry, &ret_cap);
     SERVER_GOTO_IF_ERR(error, "Failed to allocate new MO object\n");
 

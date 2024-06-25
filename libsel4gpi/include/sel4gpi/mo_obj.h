@@ -27,6 +27,17 @@ typedef struct _mo
 } mo_t;
 
 /**
+ * @brief arguments to provide to `mo_new`
+ * this needs to be a struct to adhere to the
+ * allocation function pointer for resource components
+ */
+typedef struct _mo_new_args
+{
+    uint32_t num_pages;
+    uintptr_t paddr;
+} mo_new_args_t;
+
+/**
  * @brief Create a new MO object
  *
  * @param mo mo object
@@ -38,7 +49,7 @@ typedef struct _mo
 int mo_new(mo_t *mo,
            vka_t *vka,
            vspace_t *vspace,
-           int num_pages);
+           mo_new_args_t *alloc_args);
 
 /**
  * @param mo mo object to dump the RR for

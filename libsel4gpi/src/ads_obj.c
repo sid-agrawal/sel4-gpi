@@ -587,7 +587,7 @@ static int ads_deep_copy(ads_t *dst_ads, mo_t *src_mo, attach_node_t *new_attach
     // Make a new MO
     // The "client" to hold this MO is the root task
     mo_t *new_mo;
-    error = mo_component_allocate(num_pages, &new_mo);
+    error = mo_component_allocate_rt(num_pages, &new_mo);
     SERVER_GOTO_IF_ERR(error, "Failed to allocate a new MO for deep copy\n");
 
     // Attach the new MO in the new ADS

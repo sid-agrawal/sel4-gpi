@@ -1085,7 +1085,7 @@ int pd_dump(pd_t *pd)
 
     /* Allocate MO for remote rr requests */
     mo_t *rr_mo;
-    error = mo_component_allocate(REMOTE_RR_N_PAGES, &rr_mo);
+    error = mo_component_allocate_rt(REMOTE_RR_N_PAGES, &rr_mo);
     SERVER_GOTO_IF_ERR(error, "Failed to allocate MO for remote resource relation requests\n");
 
     void *rr_mo_va;

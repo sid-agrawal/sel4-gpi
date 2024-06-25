@@ -25,32 +25,67 @@
 #define DEBUG_ID MO_DEBUG
 #define SERVER_ID MOSERVS
 
-int mo_new(mo_t *mo,
-           vka_t *vka,
-           vspace_t *vspace,
-           int num_pages)
+static int alloc_frames(vka_t *vka, mo_t *mo, uint32_t num_pages)
 {
     int error = 0;
-
-    mo->num_pages = num_pages;
-    mo->frame_caps_in_root_task = malloc(num_pages * sizeof(seL4_CPtr));
-    mo->frame_paddrs = malloc(num_pages * sizeof(uintptr_t));
-    mo->vka_objects = malloc(num_pages * sizeof(vka_object_t));
-    GOTO_IF_COND(mo->frame_caps_in_root_task == NULL || mo->frame_paddrs == NULL || mo->vka_objects == NULL,
-                 "malloc ran out of memory to allocate MO with %d frames\n", num_pages);
-
-    /* Allocate frames */
     for (int i = 0; i < num_pages; i++)
     {
-        error = vka_alloc_frame_maybe_device(get_mo_component()->server_vka,
+        error = vka_alloc_frame_maybe_device(vka,
                                              seL4_PageBits,
                                              false,
                                              &mo->vka_objects[i]);
-        assert(error == 0);
-        GOTO_IF_COND(error, "failed to allocate page for MO\n");
+        SERVER_GOTO_IF_ERR(error, "failed to allocate page for MO\n");
         mo->frame_caps_in_root_task[i] = mo->vka_objects[i].cptr;
         mo->frame_paddrs[i] = vka_object_paddr(vka, &mo->vka_objects[i]);
     }
+
+err_goto:
+    // TODO: free frames if something failed mid-allocation
+    return error;
+}
+
+static int alloc_frames_at_paddr(vka_t *vka, mo_t *mo, uint32_t num_pages, uintptr_t paddr)
+{
+    int error = 0;
+    uintptr_t curr = paddr;
+
+    for (size_t i = 0; i < num_pages; i++)
+    {
+        error = vka_alloc_frame_at(vka, seL4_PageBits, curr, &mo->vka_objects[i]);
+        SERVER_GOTO_IF_ERR(error, "failed to allocate page for MO\n");
+        mo->frame_caps_in_root_task[i] = mo->vka_objects[i].cptr;
+        mo->frame_paddrs[i] = curr; // is it possible for VKA to succeed and return a different paddr?
+        curr += SIZE_BITS_TO_BYTES(seL4_PageBits);
+    }
+
+err_goto:
+    return error;
+}
+
+int mo_new(mo_t *mo,
+           vka_t *vka,
+           vspace_t *vspace,
+           mo_new_args_t *alloc_args)
+{
+    int error = 0;
+
+    mo->num_pages = alloc_args->num_pages;
+    mo->frame_caps_in_root_task = malloc(alloc_args->num_pages * sizeof(seL4_CPtr));
+    mo->frame_paddrs = malloc(alloc_args->num_pages * sizeof(uintptr_t));
+    mo->vka_objects = malloc(alloc_args->num_pages * sizeof(vka_object_t));
+    SERVER_GOTO_IF_COND(mo->frame_caps_in_root_task == NULL || mo->frame_paddrs == NULL || mo->vka_objects == NULL,
+                        "malloc ran out of memory to allocate MO with %d frames\n", alloc_args->num_pages);
+
+    /* Allocate frames */
+    if (alloc_args->paddr)
+    {
+        error = alloc_frames_at_paddr(vka, mo, alloc_args->num_pages, alloc_args->paddr);
+    }
+    else
+    {
+        error = alloc_frames(vka, mo, alloc_args->num_pages);
+    }
+    SERVER_GOTO_IF_ERR(error, "Failed to allocate MO frames\n");
 
     /* The root task holds the MO by default */
     error = pd_add_resource_by_id(get_gpi_server()->rt_pd_id, GPICAP_TYPE_MO, get_mo_component()->space_id, mo->id,

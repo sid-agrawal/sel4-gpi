@@ -60,6 +60,7 @@ enum mo_component_msgregs
 
     /* Connect / New */
     MOMSGREG_CONNECT_REQ_NUM_PAGES = MOMSGREG_LABEL0,
+    MOMSGREG_CONNECT_REQ_PADDR,
     MOMSGREG_CONNECT_REQ_END,
 
     MOMSGREG_CONNECT_ACK_ID = MOMSGREG_LABEL0,
@@ -116,4 +117,4 @@ int forge_mo_cap_from_frames(seL4_CPtr *frame_caps,
  * @param ret_mo returns the allocated MO
  * @return 0 on success, error otherwise
 */
-int mo_component_allocate(int num_pages, mo_t **ret_mo);
+int mo_component_allocate_rt(int num_pages, mo_t **ret_mo);
