@@ -225,7 +225,8 @@ enum pd_component_msgregs
 enum _pd_setup_type
 {
     PD_RUNTIME_SETUP = 1, ///< sets up the entire C runtime from scratch, writes any arguments onto the stack
-    PD_REGISTER_SETUP     ///< writes a limited number of arguments into registers only
+    PD_REGISTER_SETUP,    ///< writes a limited number of arguments into registers only
+    PD_GUEST_SETUP        ///< writes the necessary registers to run a guest
 };
 typedef enum _pd_setup_type pd_setup_type_t;
 

@@ -159,6 +159,18 @@ int cpu_set_local_context(cpu_t *cpu, void *entry_point,
 int cpu_set_remote_context(cpu_t *cpu, void *entry_point, void *init_stack);
 
 /**
+ * @brief sets the CPU object's registers to the given kernel entry point
+ * intended usage: running a guest
+ * currently only supports linux guests
+ *
+ * @param cpu the target CPU
+ * @param kernel_entry address of instruction to start execution at
+ * @param kernel_dtb address of DTB to pass to the guest
+ * @return int
+ */
+int cpu_set_guest_context(cpu_t *cpu, uintptr_t kernel_entry, uintptr_t kernel_dtb);
+
+/**
  * @brief elevates a CPU by creating a VCPU and binding it to the TCB
  * currently only supports ARM arch
  *

@@ -49,7 +49,7 @@ static void ep_destroy(ep_t *ep, vka_t *server_vka)
     seL4_Word is_last_copy = seL4_DebugCapIsLastCopy(ep->endpoint_in_RT.cptr);
     if (!is_last_copy)
     {
-        OSDB_PRINTERR("Attempting to free EP (%d) with existing copies\n", ep->id);
+        WARN("Attempting to free EP (%d) with existing copies\n", ep->id);
     }
 #endif
     /* We need to revoke for a few reasons:

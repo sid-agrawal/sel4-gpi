@@ -527,6 +527,10 @@ static seL4_MessageInfo_t handle_runtime_setup_req(seL4_Word sender_badge, seL4_
                                           argc > 2 ? (void *)args[2] : NULL,
                                           stack_top);
             break;
+        case PD_GUEST_SETUP:
+            SERVER_GOTO_IF_COND(argc == 0, "Setting up a guest requires at least one argument for the DTB\n");
+            error = cpu_set_guest_context(&target_cpu->cpu, entry_point, (uintptr_t)args[0]);
+            break;
         default:
             error = 1;
             OSDB_PRINTERR("Invalid PD setup mode specified\n");
