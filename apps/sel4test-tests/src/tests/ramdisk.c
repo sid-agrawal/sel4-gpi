@@ -69,9 +69,6 @@ int test_ramdisk(env_t env)
                               (void **)&buf);
     test_assert(error == 0);
 
-    error = ramdisk_client_init(ramdisk_client_ep);
-    test_assert(error == seL4_NoError);
-
     // Set up shared memory 
     error = ramdisk_client_bind(ramdisk_client_ep, &mo_conn);
     test_assert(error == seL4_NoError);

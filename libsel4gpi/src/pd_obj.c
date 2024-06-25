@@ -52,7 +52,7 @@ extern char _cpio_archive_end[];
 #define SERVER_ID PDSERVS
 
 static int pd_setup_cspace(pd_t *pd, vka_t *vka);
-static int pd_dump_internal(pd_t *pd, model_state_t *ms, uint64_t rr_mo_id, void *rr_local_vaddr);
+static int pd_dump_internal(pd_t *pd, model_state_t *ms);
 
 int pd_add_resource(pd_t *pd, gpi_cap_t type, uint32_t space_id, uint32_t res_id,
                     seL4_CPtr slot_in_RT, seL4_CPtr slot_in_PD, seL4_CPtr slot_in_serverPD)
@@ -352,11 +352,11 @@ int pd_remove_rde(pd_t *pd,
         if (rde.type.type == type.type && (rde.space_id == space_id || space_id == RESSPC_ID_NULL))
         {
             found_entry = true;
-            
+
             error = pd_remove_rde_by_idx(pd, type, i);
             SERVER_GOTO_IF_ERR(error, "Failed to remove RDE[%d][%d] from PD (%d)\n", type, i, pd->id);
 
-            if (space_id != RESSPC_ID_NULL) 
+            if (space_id != RESSPC_ID_NULL)
             {
                 break;
             }
@@ -471,7 +471,7 @@ pd_held_resource_on_delete(resource_server_registry_node_t *node_gen, void *pd_v
         // If the space is deleted,
         // or the manager PD is this PD itself,
         // then there's no point in notifying the manager
-        if (space_data->space.deleted || space_data->space.pd->id == pd->id)
+        if (space_data->space.deleted || space_data->space.pd_id == pd->id)
         {
             break;
         }
@@ -514,6 +514,10 @@ int pd_new(pd_t *pd,
     SERVER_GOTO_IF_ERR(error, "Failed to setup PD's CSpace\n");
 
     pd->image_name = "PD"; // default name, since if a PD isn't a process, this never gets set
+
+    // Allocate the RT->PD notification
+    error = vka_alloc_notification(server_vka, &pd->notification);
+    SERVER_GOTO_IF_ERR(error, "Failed to allocate PD's notification\n");
 
 err_goto:
     return error;
@@ -569,6 +573,11 @@ void pd_destroy(pd_t *pd, vka_t *server_vka, vspace_t *server_vspace)
      * alive when we try to delete it */
     vka_cnode_revoke(&path);
     vka_free_object(vka, &pd->cspace);
+
+    /* destroy the notification object */
+    vka_cspace_make_path(vka, pd->notification.cptr, &path);
+    vka_cnode_revoke(&path);
+    vka_free_object(vka, &pd->notification);
 
     /* Free elf information */
     if (pd->elf_phdrs)
@@ -839,6 +848,8 @@ err_goto:
     return error;
 }
 
+// (XXX) Arya: To be removed
+#if 0
 static int request_remote_rr(pd_t *pd, model_state_t *ms, uint64_t space_id, uint32_t obj_id,
                              uint64_t rr_mo_id, void *rr_local_vaddr)
 {
@@ -861,31 +872,6 @@ static int request_remote_rr(pd_t *pd, model_state_t *ms, uint64_t space_id, uin
     error = ads_component_attach(server_ads_id, rr_mo_id, SEL4UTILS_RES_TYPE_SHARED_FRAMES, NULL, &rr_remote_vaddr);
     SERVER_GOTO_IF_ERR(error, "Failed to attach frame for remote rr to resource server\n");
 
-#if 0
-    cspacepath_t rr_frame_copy_path;
-    error = vka_cspace_alloc_path(get_gpi_server()->server_vka, &rr_frame_copy_path);
-    if (error != seL4_NoError)
-    {
-        OSDB_PRINTF("Failed to allocate path for RR frame copy %d", error);
-        return -1;
-    }
-
-    error = vka_cnode_copy(&rr_frame_copy_path, &rr_frame_path, seL4_AllRights);
-    if (error != seL4_NoError)
-    {
-        OSDB_PRINTF("Failed to copy RR frame cap cap, error: %d", error);
-        return -1;
-    }
-
-    void *rr_remote_vaddr = vspace_map_pages(&server_entry->space.pd->proc.vspace, &rr_frame_copy_path.capPtr, NULL,
-                                             seL4_AllRights, 1, seL4_LargePageBits, 1);
-    if (rr_remote_vaddr == NULL)
-    {
-        OSDB_PRINTF("Failed to map RR frame to resource server, %d", error);
-        return -1;
-    }
-#endif
-
     // Get RR from remote resource server
     error = resource_server_client_get_rr(server_cap, space_id, obj_id, pd->id,
                                           server_entry->space.pd->id,
@@ -906,12 +892,6 @@ static int request_remote_rr(pd_t *pd, model_state_t *ms, uint64_t space_id, uin
 
     combine_model_states(ms, ms2);
 
-// Remove remotely-mapped memory
-#if 0
-    vspace_unmap_pages(&server_entry->space.pd->proc.vspace, rr_remote_vaddr, 1, seL4_LargePageBits, NULL);
-    vka_cnode_delete(&rr_frame_copy_path);
-#endif
-
 err_goto:
     if (rr_remote_vaddr != NULL)
     {
@@ -920,12 +900,33 @@ err_goto:
 
     return error;
 }
+#endif
+
+// Queue some async model extraction work for the PD
+static void pd_queue_model_extraction_work(pd_component_registry_entry_t *pd_entry, gpi_res_id_t *res)
+{
+    // Add to the list
+    linked_list_insert(pd_entry->pending_model_state, (void *)res);
+    get_gpi_server()->model_extraction_n_missing++;
+
+    // Notify the PD
+    seL4_Signal(pd_entry->pd.notification.cptr);
+}
 
 // Add rows to model state for one resource
-static int res_dump(pd_t *pd, model_state_t *ms, pd_hold_node_t *current_cap,
-                    gpi_model_node_t *pd_node, uint64_t rr_mo_id, void *rr_local_vaddr)
+static int res_dump(pd_t *pd, model_state_t *ms, pd_hold_node_t *current_cap, gpi_model_node_t *pd_node)
 {
     int error = 0;
+
+    /* Check if the resource is already dumped */
+    gpi_model_node_t *res_node = get_resource_node(ms, current_cap->type, current_cap->space_id, current_cap->res_id);
+    if (res_node)
+    {
+        return 0; // This resource is already dumped
+    }
+
+    /* Add the resource node */
+    res_node = add_resource_node(ms, current_cap->type, current_cap->space_id, current_cap->res_id);
 
     switch (current_cap->type)
     {
@@ -963,8 +964,7 @@ static int res_dump(pd_t *pd, model_state_t *ms, pd_hold_node_t *current_cap,
 
             SERVER_GOTO_IF_COND(pd_data == NULL, "Failed to find PD%d's data\n", current_cap->res_id);
 
-            // pd_dump(&pd_data->pd);
-            pd_dump_internal(&pd_data->pd, ms, rr_mo_id, rr_local_vaddr);
+            pd_dump_internal(&pd_data->pd, ms);
         }
         break;
     case GPICAP_TYPE_RESSPC:
@@ -977,18 +977,22 @@ static int res_dump(pd_t *pd, model_state_t *ms, pd_hold_node_t *current_cap,
         // Don't dump endpoints, as they aren't part of the model, and tracked only for cleanup purposes
         break;
     default:
-        // This is a remote resource
-        OSDB_PRINTF("Calling another PD to get the info for resource %s_%d_%d\n",
-                    cap_type_to_str(current_cap->type), current_cap->space_id, current_cap->res_id);
+        /* Find the resource space */
+        resspc_component_registry_entry_t *space_entry = resource_space_get_entry_by_id(current_cap->space_id);
+        SERVER_GOTO_IF_COND(space_entry == NULL, "Failed to find resource space (%d)\n", current_cap->space_id);
 
-        // (XXX) Arya: workaround to not request for individual files, there may be a better way
-        gpi_cap_t file_type = get_resource_type_code("FILE");
-        if (current_cap->type == file_type)
-        {
-            break;
-        }
+        /* Find the resource server */
+        pd_component_registry_entry_t *manager_pd_entry = (pd_component_registry_entry_t *)
+            resource_component_registry_get_by_id(get_pd_component(), space_entry->space.pd_id);
+        SERVER_GOTO_IF_COND(manager_pd_entry == NULL, "Failed to find PD (%d)\n", space_entry->space.pd_id);
 
-        error = request_remote_rr(pd, ms, current_cap->space_id, current_cap->res_id, rr_mo_id, rr_local_vaddr);
+        /* Request info about the resource */
+        gpi_res_id_t *res_node = calloc(1, sizeof(gpi_res_id_t));
+        res_node->type = current_cap->type;
+        res_node->space_id = current_cap->space_id;
+        res_node->object_id = current_cap->res_id;
+
+        pd_queue_model_extraction_work(manager_pd_entry, res_node);
         break;
     }
 
@@ -999,14 +1003,21 @@ err_goto:
 /**
  * Dump the given PD to the given model state
  */
-static int pd_dump_internal(pd_t *pd, model_state_t *ms, uint64_t rr_mo_id, void *rr_local_vaddr)
+static int pd_dump_internal(pd_t *pd, model_state_t *ms)
 {
     int error;
+
+    /* Check if the PD is already dumped */
+    gpi_model_node_t *pd_node = get_pd_node(ms, pd->id);
+    if (pd_node)
+    {
+        return 0; // This PD is already dumped
+    }
 
     // Don't add the PD resource space, it is just an implementation detail but not part of the model
 
     /* Add the PD node */
-    gpi_model_node_t *pd_node = add_pd_node(ms, pd->image_name, pd->id);
+    pd_node = add_pd_node(ms, pd->image_name, pd->id);
 
     /* Add request edges for all RDEs from this PD */
     for (int i = 0; i < GPICAP_TYPE_MAX; i++)
@@ -1018,33 +1029,27 @@ static int pd_dump_internal(pd_t *pd, model_state_t *ms, uint64_t rr_mo_id, void
             if (rde.type.type != GPICAP_TYPE_NONE)
             {
                 resspc_component_registry_entry_t *rm = resource_space_get_entry_by_id(rde.space_id);
-
-                if (rm == NULL)
-                {
-                    ZF_LOGF("Couldn't find resource space with ID %d\n", rde.space_id);
-                }
-
-                // (XXX) Arya: Update model extraction to include resource spaces
+                SERVER_GOTO_IF_COND(rm == NULL, "Couldn't find resource space (%d)\n", rde.space_id);
 
                 /* Add the resource server PD node */
-                int server_pd_id = rm->space.pd ? rm->space.pd->id : 0;
-                gpi_model_node_t *resource_manager_pd = add_pd_node(ms, NULL, server_pd_id);
+                gpi_model_node_t *resource_manager_pd = add_pd_node(ms, NULL, rm->space.pd_id);
                 add_request_edge(ms, pd_node, resource_manager_pd, rde.type.type);
 
-                /**
-                 *  For files, walk the file system now
-                 *  (XXX) Arya: should there be a general pre-fetch stage for all resource spaces?
-                 **/
-                gpi_cap_t file_type = get_resource_type_code("FILE");
-                if (rde.type.type == file_type)
+                /* Request info about the space */
+                if (rm->space.pd_id != get_gpi_server()->rt_pd_id)
                 {
-                    // (XXX) Arya: Workaround to get all files in the file system
-                    // Find the server that created this resource based on the resource id
-                    uint64_t obj_id = rde.space_id;
-                    uint64_t server_id = rde.space_id;
+                    /* Find the resource server PD */
+                    pd_component_registry_entry_t *manager_pd_entry = (pd_component_registry_entry_t *)
+                        resource_component_registry_get_by_id(get_pd_component(), rm->space.pd_id);
+                    SERVER_GOTO_IF_COND(rm == NULL, "Couldn't find PD (%d)\n", rde.space_id);
 
-                    error = request_remote_rr(pd, ms, server_id, obj_id, rr_mo_id, rr_local_vaddr);
-                    assert(error == 0);
+                    /* Queue the request */
+                    gpi_res_id_t *space_res_node = calloc(1, sizeof(gpi_res_id_t));
+                    space_res_node->type = rde.type.type;
+                    space_res_node->space_id = rde.space_id;
+                    space_res_node->object_id = BADGE_OBJ_ID_NULL;
+
+                    pd_queue_model_extraction_work(manager_pd_entry, space_res_node);
                 }
             }
         }
@@ -1054,16 +1059,17 @@ static int pd_dump_internal(pd_t *pd, model_state_t *ms, uint64_t rr_mo_id, void
     for (pd_hold_node_t *current_cap = (pd_hold_node_t *)pd->hold_registry.head; current_cap != NULL; current_cap = (pd_hold_node_t *)current_cap->gen.hh.next)
     {
         // print_pd_osm_cap_info(current_cap);
-        if (res_dump(pd, ms, current_cap, pd_node, rr_mo_id, rr_local_vaddr) != 0)
+        if (res_dump(pd, ms, current_cap, pd_node) != 0)
         {
             return 1;
         }
     }
 
+err_goto:
     return error;
 }
 
-int pd_dump(pd_t *pd)
+int pd_dump(pd_t *pd, model_state_t *ms)
 {
     int error = 0;
 
@@ -1079,39 +1085,6 @@ int pd_dump(pd_t *pd)
             }
     */
 
-    /* Initialize the model state */
-    model_state_t *ms = (model_state_t *)malloc(sizeof(model_state_t));
-    init_model_state(ms, NULL, 0);
-
-    /* Allocate MO for remote rr requests */
-    mo_t *rr_mo;
-    error = mo_component_allocate_rt(REMOTE_RR_N_PAGES, &rr_mo);
-    SERVER_GOTO_IF_ERR(error, "Failed to allocate MO for remote resource relation requests\n");
-
-    void *rr_mo_va;
-    error = ads_component_attach_to_rt(rr_mo->id, &rr_mo_va);
-    SERVER_GOTO_IF_ERR(error, "Failed to attach MO for remote resource relation requests\n");
-
-#if 0
-    // (XXX) Arya: not able to use MO for remote rr request, since it would require calls back to pd component
-    vka_object_t rr_frame_obj;
-    error = vka_alloc_frame(get_gpi_server()->server_vka, seL4_LargePageBits, &rr_frame_obj);
-    if (error != seL4_NoError)
-    {
-        return error;
-    }
-
-    cspacepath_t rr_frame_path;
-    vka_cspace_make_path(get_gpi_server()->server_vka, rr_frame_obj.cptr, &rr_frame_path);
-
-    void *rr_local_vaddr = vspace_map_pages(get_pd_component()->server_vspace, &rr_frame_obj.cptr, NULL,
-                                            seL4_AllRights, 1, seL4_LargePageBits, 1);
-    if (rr_local_vaddr == NULL)
-    {
-        return 1;
-    }
-#endif
-
     /* Add a special node for the RT */
     gpi_model_node_t *rt_node = get_root_node(ms);
 
@@ -1125,34 +1098,34 @@ int pd_dump(pd_t *pd)
     for (pd_hold_node_t *current_cap = (pd_hold_node_t *)rt_pd->hold_registry.head; current_cap != NULL; current_cap = (pd_hold_node_t *)current_cap->gen.hh.next)
     {
         // print_pd_osm_cap_info(current_cap);
-        if (res_dump(rt_pd, ms, current_cap, rt_node, rr_mo->id, rr_mo_va) != 0)
+        if (res_dump(rt_pd, ms, current_cap, rt_node) != 0)
         {
             return 1;
         }
     }
 
     /* Add the PD's data */
-    error = pd_dump_internal(pd, ms, rr_mo->id, rr_mo_va);
+    error = pd_dump_internal(pd, ms);
     SERVER_GOTO_IF_ERR(error, "Failed PD dump\n");
 
-    /* Free the frame used for rr requests */
-    error = ads_component_remove_from_rt(rr_mo_va);
-    SERVER_GOTO_IF_ERR(error, "Failed to remove MO for remote resource relation requests\n");
+    // Don't print the model state yet if there is anything we are waiting on
+    if (get_gpi_server()->model_extraction_n_missing == 0)
+    {
+        print_model_state(ms);
+        destroy_model_state(ms);
+        get_gpi_server()->pending_extraction = false;
+    }
+
 #if 0
-    vspace_unmap_pages(get_pd_component()->server_vspace, rr_local_vaddr, 1, seL4_LargePageBits, get_pd_component()->server_vka);
-#endif
-
-    print_model_state(ms);
-    destroy_model_state(ms);
-
     /* Print RDE Info*/
     for (int i = 0; i < GPICAP_TYPE_MAX; i++)
     {
         for (int j = 0; j < MAX_NS_PER_RDE; j++)
         {
-            // print_pd_osm_rde_info(&pd->shared_data->rde[i][j]);
+            print_pd_osm_rde_info(&pd->shared_data->rde[i][j]);
         }
     }
+#endif
 
 err_goto:
     return error;

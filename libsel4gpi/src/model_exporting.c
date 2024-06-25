@@ -257,13 +257,18 @@ void print_model_state(model_state_t *model_state)
     }
 }
 
+// Get a node from the model state
+static gpi_model_node_t *get_node(model_state_t *model_state, char *id)
+{
+    gpi_model_node_t *node;
+    HASH_FIND_STR(model_state->nodes, id, node);
+    return node;
+}
+
 // Add a node to the model state
 static gpi_model_node_t *add_node(model_state_t *model_state, gpi_node_type_t node_type, char *id, char *data)
 {
-    gpi_model_node_t *node;
-
-    // HASH_FIND(hh, model_state->nodes, id, CSV_MAX_STRING_SIZE, node);
-    HASH_FIND_STR(model_state->nodes, id, node);
+    gpi_model_node_t *node = get_node(model_state, id);
 
     if (node != NULL)
     {
@@ -401,6 +406,14 @@ gpi_model_node_t *add_resource_node(model_state_t *model_state, gpi_cap_t res_ty
     return add_node(model_state, GPI_NODE_TYPE_RESOURCE, node_id, cap_type_to_str(res_type));
 }
 
+gpi_model_node_t *get_resource_node(model_state_t *model_state, gpi_cap_t res_type, uint64_t res_space_id, uint64_t res_id)
+{
+    char node_id[CSV_MAX_STRING_SIZE];
+    get_resource_id(res_type, res_space_id, res_id, node_id);
+
+    return get_node(model_state, node_id);
+}
+
 gpi_model_node_t *add_resource_space_node(model_state_t *model_state, gpi_cap_t resource_type, uint64_t res_space_id)
 {
     char node_id[CSV_MAX_STRING_SIZE];
@@ -416,6 +429,14 @@ gpi_model_node_t *add_pd_node(model_state_t *model_state, const char *pd_name, u
     get_pd_id(pd_id, node_id);
 
     return add_node(model_state, GPI_NODE_TYPE_PD, node_id, pd_name);
+}
+
+gpi_model_node_t *get_pd_node(model_state_t *model_state, uint64_t pd_id)
+{
+    char node_id[CSV_MAX_STRING_SIZE];
+    get_pd_id(pd_id, node_id);
+
+    return get_node(model_state, node_id);
 }
 
 gpi_model_node_t *get_root_node(model_state_t *model_state)

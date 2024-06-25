@@ -100,7 +100,7 @@ typedef struct _resspc_config
 {
     gpi_cap_t type; ///< Type of resources in the space
     seL4_CPtr ep;   ///< Raw endpoint of the resource space manager
-    pd_t *pd;       ///< Handle to the manager PD
+    uint32_t pd_id; ///< ID of the manager PD
     void *data;     ///< Field for some generic data (not used)
 } resspc_config_t;
 
@@ -127,38 +127,38 @@ resspc_component_registry_entry_t *resource_space_get_entry_by_id(seL4_Word spac
 /**
  * Add a map connection from one resource space to another
  * This allows us to map a resource in the first space to a resource in the second space
- * 
+ *
  * @param src_spc_id ID of the source resource space
  * @param dest_spc_id ID of the destination resource space
  * @return 0 on success, error otherwise
-*/
+ */
 int resspc_component_map_space(uint64_t src_spc_id, uint64_t dest_spc_id);
 
 /**
  * Check if the source resource space maps to the destination resource space
- * 
+ *
  * @param src_space_id ID of the source resource space
  * @param dest_space_id ID of the destination resource space
  * @return 1 if the mapping exists, 0 otherwise
-*/
+ */
 int resspc_check_map(uint64_t src_space_id, uint64_t dest_space_id);
 
 /**
  * Mark a resource space for deletion
  * This is used while destroying a PD that manages the resource space
  * The spaces marked for deletion will be swept later with resspc_component_sweep()
- * 
+ *
  * @param spc_id
  * @return 0 on success, error otherwise
-*/
+ */
 int resspc_component_mark_delete(uint64_t spc_id);
 
 /**
  * Sweep any resource spaces marked for deletion
- * 
+ *
  * This executes the cleanup policy for resource spaces
  * (XXX) Arya: Todo, specify the cleanup policies
- * 
+ *
  * @return 0 on success, error otherwise
-*/
+ */
 int resspc_component_sweep(void);

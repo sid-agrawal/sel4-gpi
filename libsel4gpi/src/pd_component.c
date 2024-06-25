@@ -37,10 +37,17 @@
 #include <sel4gpi/error_handle.h>
 #include <sel4gpi/resource_space_component.h>
 #include <sel4gpi/endpoint_component.h>
+#include <sel4gpi/gpi_rpc.h>
 
 // Defined for utility printing macros
 #define DEBUG_ID PD_DEBUG
 #define SERVER_ID PDSERVS
+
+// The RPC message structures
+static sel4gpi_rpc_env_t rpc_env = {
+    .request_desc = &PdMessage_msg,
+    .reply_desc = &PdReturnMessage_msg,
+};
 
 resource_component_context_t *get_pd_component(void)
 {
@@ -66,7 +73,18 @@ static void on_pd_registry_delete(resource_server_registry_node_t *node_gen, voi
 
     OSDB_PRINTF("Destroying PD(%d, %s)\n", node->pd.id, node->pd.image_name);
 
+    // Destroy PD
     pd_destroy(&node->pd, get_pd_component()->server_vka, get_pd_component()->server_vspace);
+
+    // Reduce the model state counter, if we were waiting on this PD
+    if (get_gpi_server()->pending_extraction)
+    {
+        get_gpi_server()->model_extraction_n_missing -= node->pending_model_state->count;
+    }
+
+    // Destroy pending work lists
+    linked_list_destroy(node->pending_frees, true);
+    linked_list_destroy(node->pending_model_state, true);
 }
 
 static seL4_MessageInfo_t handle_pd_allocation(seL4_Word sender_badge)
@@ -87,6 +105,10 @@ static seL4_MessageInfo_t handle_pd_allocation(seL4_Word sender_badge)
     SERVER_GOTO_IF_ERR(error, "failed to allocat a PD\n");
 
     OSDB_PRINTF("Successfully allocated a new PD %d.\n", new_entry->pd.id);
+
+    /* Initialize the registry entry */
+    new_entry->pending_frees = linked_list_new();
+    new_entry->pending_model_state = linked_list_new();
 
     /* Return this badged end point in the return message. */
     seL4_SetMR(PDMSGREG_CONNECT_ACK_SLOT, ret_cap);
@@ -223,7 +245,7 @@ err_goto:
     return tag;
 }
 
-static seL4_MessageInfo_t handle_dump_cap_req(seL4_Word sender_badge, seL4_MessageInfo_t old_tag)
+static seL4_MessageInfo_t handle_dump_cap_req(seL4_Word sender_badge, seL4_MessageInfo_t old_tag, bool *should_reply)
 {
     OSDB_PRINTF("Got dump-cap request from client badge %lx.\n", sender_badge);
     int error = 0;
@@ -231,16 +253,38 @@ static seL4_MessageInfo_t handle_dump_cap_req(seL4_Word sender_badge, seL4_Messa
     assert(seL4_MessageInfo_get_extraCaps(old_tag) == 0);
     assert(seL4_MessageInfo_get_label(old_tag) == 0);
 
+    /* Check if a model extraction is already in progress */
+    SERVER_GOTO_IF_COND(get_gpi_server()->pending_extraction, "Model extraction is already in progress\n");
+
     /* Find the client */
     pd_component_registry_entry_t *client_data = pd_component_registry_get_entry_by_badge(sender_badge);
     SERVER_GOTO_IF_COND(client_data == NULL, "Couldn't find PD (%ld)\n", get_object_id_from_badge(sender_badge));
 
-    error = pd_dump(&client_data->pd);
+    /* Initialize the extraction */
+    get_gpi_server()->pending_extraction = true;
+    get_gpi_server()->model_extraction_n_missing = 0;
+
+    model_state_t *ms = (model_state_t *)malloc(sizeof(model_state_t));
+    init_model_state(ms, NULL, 0);
+
+    /* Start the extraction */
+    error = pd_dump(&client_data->pd, ms);
 
 err_goto:
-    seL4_SetMR(PDMSGREG_FUNC, PD_FUNC_DUMP_ACK);
-    seL4_MessageInfo_t tag = seL4_MessageInfo_new(error, 0, 0,
-                                                  PDMSGREG_DUMP_ACK_END);
+    // Only reply now if there is an error,
+    // otherwise reply asynchronously when the operation is finished
+
+    seL4_MessageInfo_t tag;
+    if (error != seL4_NoError)
+    {
+        seL4_SetMR(PDMSGREG_FUNC, PD_FUNC_DUMP_ACK);
+        tag = seL4_MessageInfo_new(error, 0, 0, PDMSGREG_DUMP_ACK_END);
+    }
+    else
+    {
+        *should_reply = false;
+    }
+
     return tag;
 }
 
@@ -578,7 +622,7 @@ static seL4_MessageInfo_t handle_share_resource_type_req(seL4_Word sender_badge,
 err_goto:
     if (resources)
     {
-        linked_list_destroy(resources);
+        linked_list_destroy(resources, false);
     }
 
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(error, 0, 0, PDMSGREG_SHARE_RES_TYPE_ACK_END);
@@ -587,10 +631,60 @@ err_goto:
     return tag;
 }
 
+static seL4_MessageInfo_t handle_get_work_req(seL4_Word sender_badge, seL4_MessageInfo_t old_tag)
+{
+    int error = 0;
+    PdReturnMessage ret_msg = {
+        .which_msg = PdReturnMessage_work_tag}
+
+    OSDB_PRINTF("Got request for work: ");
+    BADGE_PRINT(sender_badge);
+
+    /* Find the target PD */
+    pd_component_registry_entry_t *pd_data = (pd_component_registry_entry_t *)
+        resource_component_registry_get_by_badge(get_pd_component(), sender_badge);
+    SERVER_GOTO_IF_COND(pd_data == NULL, "Failed to find PD (%d)\n", get_object_id_from_badge(sender_badge));
+
+    SERVER_GOTO_IF_COND(get_client_id_from_badge(sender_badge) != get_object_id_from_badge(sender_badge),
+                        "Invalid request for work from a different PD (%d)\n",
+                        get_client_id_from_badge(sender_badge));
+
+    /* Return the next piece of work, if there is any */
+    gpi_res_id_t *work_res;
+    if (pd_data->pending_model_state->count > 0)
+    {
+        // Prioritize model extraction before free
+        // The model state may change during the extraction, bias towards including more information rather than less
+        linked_list_pop_head(pd_data->pending_model_state, &work_res);
+        ret_msg.msg.work.action = PdWorkAction_EXTRACT;
+        ret_msg.msg.work.spaceId = work_res->space_id;
+        ret_msg.msg.work.objectId = work_res->object_id;
+    }
+    else if (pd_data->pending_frees->count > 0)
+    {
+        linked_list_pop_head(pd_data->pending_frees, &work_res);
+        ret_msg.msg.work.action = PdWorkAction_FREE;
+        ret_msg.msg.work.spaceId = work_res->space_id;
+        ret_msg.msg.work.objectId = work_res->object_id;
+    }
+    else
+    {
+        // No work to be done
+        ret_msg.msg.work.action = PdWorkAction_NONE;
+    }
+
+err_goto:
+    seL4_MessageInfo_t tag;
+    ret_msg.errorCode = error;
+    sel4gpi_rpc_reply(&rpc_env, &ret_msg, &tag);
+    return tag;
+}
+
 static seL4_MessageInfo_t pd_component_handle(seL4_MessageInfo_t tag,
                                               seL4_Word sender_badge,
                                               seL4_CPtr received_cap,
-                                              bool *need_new_recv_cap)
+                                              bool *need_new_recv_cap,
+                                              bool *should_reply)
 {
     int error = 0; // unused, to appease the error handling macros
     enum pd_component_funcs func = seL4_GetMR(PDMSGREG_FUNC);
@@ -623,7 +717,7 @@ static seL4_MessageInfo_t pd_component_handle(seL4_MessageInfo_t tag,
             *need_new_recv_cap = true;
             break;
         case PD_FUNC_DUMP_REQ:
-            reply_tag = handle_dump_cap_req(sender_badge, tag);
+            reply_tag = handle_dump_cap_req(sender_badge, tag, should_reply);
             break;
         case PD_FUNC_SHARE_RDE_REQ:
             reply_tag = handle_share_rde_req(sender_badge, tag);
@@ -650,6 +744,9 @@ static seL4_MessageInfo_t pd_component_handle(seL4_MessageInfo_t tag,
             break;
         case PD_FUNC_SHARE_RES_TYPE_REQ:
             reply_tag = handle_share_resource_type_req(sender_badge, tag);
+            break;
+        case PD_FUNC_GET_WORK_REQ:
+            reply_tag = handle_get_work_req(sender_badge, tag);
             break;
         default:
             SERVER_GOTO_IF_COND(1, "Unknown request received: %d\n", func);
@@ -681,6 +778,7 @@ int pd_component_initialize(simple_t *server_simple,
     resspc_config_t resspc_config = {
         .type = GPICAP_TYPE_PD,
         .ep = get_gpi_server()->server_ep_obj.cptr,
+        .pd_id = get_gpi_server()->rt_pd_id,
     };
 
     error = resource_component_allocate(get_resspc_component(), get_gpi_server()->rt_pd_id, BADGE_OBJ_ID_NULL, false, (void *)&resspc_config,

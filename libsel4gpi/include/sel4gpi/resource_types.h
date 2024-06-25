@@ -28,6 +28,16 @@ typedef enum GPICAP_CORE_TYPE
 #define GPICAP_TYPE_MAX (GPICAP_TYPE_seL4 + 8) // Maximum number of resource types
 
 /**
+ * Fields to uniquely identify a resource
+ */
+typedef struct _gpi_res_id
+{
+    gpi_cap_t type;
+    uint32_t space_id;
+    uint32_t object_id;
+} gpi_res_id_t;
+
+/**
  * Gets the gpi_cap_t code for a resource type by name
  * If the resource type does not yet exist, allocates a new code
  * 

@@ -85,6 +85,18 @@ int cpu_config_vspace(cpu_t *cpu,
 int cpu_change_vspace(cpu_t *cpu,
                       vka_t *vka,
                       vspace_t *vspace);
+
+/**
+ * @brief Bind a notification object to a CPU
+ * (XXX) Arya: I find it strange to do this operation on a CPU
+ * I only added it here since it is a TCB operation
+ * 
+ * @param cpu cpu object
+ * @param notif the notification
+ * @return itn 0 on success, error otherwise
+ */
+int cpu_bind_notif(cpu_t *cpu, seL4_CPtr notif);
+
 /**
  * @brief Create a new cpu object
  *

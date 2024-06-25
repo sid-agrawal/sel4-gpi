@@ -100,6 +100,15 @@ err_goto:
     return error;
 }
 
+int cpu_bind_notif(cpu_t *cpu, seL4_CPtr notif)
+{
+    OSDB_PRINTF("cpu_change_vspace: Binding notification to CPU\n");
+
+    int error = seL4_TCB_BindNotification(cpu->tcb.cptr, notif);
+
+    return error;
+}
+
 int cpu_new(cpu_t *cpu,
             vka_t *vka,
             vspace_t *vspace,

@@ -138,11 +138,22 @@ void combine_model_states(model_state_t *dest, model_state_t *src);
  *
  * @param model_state
  * @param res_type type of the resource
- * @param res_space_id resource space the resource is from (XXX to be removed)
+ * @param res_space_id resource space the resource is from
  * @param res_id unique ID of the resource (unique given the resource type)
  * @return The model node for the resource
  */
 gpi_model_node_t *add_resource_node(model_state_t *model_state, gpi_cap_t res_type, uint64_t res_space_id, uint64_t res_id);
+
+/**
+ * Get a resource from the model state
+ *
+ * @param model_state
+ * @param res_type type of the resource
+ * @param res_space_id resource space the resource is from
+ * @param res_id unique ID of the resource (unique given the resource type)
+ * @return The model node for the resource, or NULL if it does not exist
+ */
+gpi_model_node_t *get_resource_node(model_state_t *model_state, gpi_cap_t res_type, uint64_t res_space_id, uint64_t res_id);
 
 /**
  * Add extra data to a node
@@ -171,6 +182,15 @@ gpi_model_node_t *add_resource_space_node(model_state_t *model_state, gpi_cap_t 
  * @return The model node for the PD
  */
 gpi_model_node_t *add_pd_node(model_state_t *model_state, const char *pd_name, uint64_t pd_id);
+
+/**
+ * Get a PD node from the model state
+ *
+ * @param model_state
+ * @param pd_id unique ID of the PD
+ * @return The model node for the PD, or NULL if it does not exist
+ */
+gpi_model_node_t *get_pd_node(model_state_t *model_state, uint64_t pd_id);
 
 /**
  * Returns the root node of the model state (the root task PD)

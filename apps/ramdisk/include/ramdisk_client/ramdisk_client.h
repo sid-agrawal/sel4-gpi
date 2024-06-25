@@ -37,13 +37,6 @@ int start_ramdisk_pd(seL4_CPtr *ramdisk_pd_cap,
                      uint64_t *ramdisk_id);
 
 /**
- * Initialize the current PD as a ramdisk client
- * 
- * @param server_ep the endpoint of the ramdisk server 
- */
-int ramdisk_client_init(seL4_CPtr server_ep);
-
-/**
  * @brief
  * Establish shared memory with ramdisk
  * Shared memory will be used for future read/write calls

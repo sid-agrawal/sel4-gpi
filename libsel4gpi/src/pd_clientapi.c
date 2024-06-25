@@ -16,6 +16,7 @@
 #include <sel4gpi/debug.h>
 #include <sel4gpi/pd_utils.h>
 #include <sel4gpi/error_handle.h>
+#include <sel4gpi/gpi_rpc.h>
 
 /**
  * @file Client-side calls for interacting with the PD component
@@ -24,6 +25,11 @@
 // Defined for utility printing macros
 #define DEBUG_ID PD_DEBUG
 #define SERVER_ID PDSERVC
+
+static sel4gpi_rpc_env_t rpc_env = {
+    .request_desc = &PdMessage_msg,
+    .reply_desc = &PdReturnMessage_msg,
+};
 
 int pd_component_client_connect(seL4_CPtr server_ep_cap,
                                 mo_client_context_t *osm_data_mo,
@@ -191,6 +197,28 @@ int pd_client_map_resource(pd_client_context_t *conn,
     return seL4_MessageInfo_ptr_get_label(&tag);
 }
 #endif
+
+int pd_client_get_work(pd_client_context_t *conn, PdWorkReturnMessage *work)
+{
+    seL4_SetMR(PDMSGREG_FUNC, PD_FUNC_GET_WORK_REQ);
+
+    seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0,
+                                                  PDMSGREG_GET_WORK_REQ_END);
+    tag = seL4_Call(conn->badged_server_ep_cspath.capPtr, tag);
+
+    // (XXX) Arya: Once we convert everything to protobuf, we can do the call all at once
+    PdReturnMessage ret_msg;
+    int error = sel4gpi_rpc_recv_reply(&rpc_env, (void *) &ret_msg);
+
+    error |= ret_msg.errorCode;
+
+    if (!error)
+    {
+        *work = ret_msg.msg.work;
+    }
+
+    return error;
+}
 
 void pd_client_exit(pd_client_context_t *conn)
 {

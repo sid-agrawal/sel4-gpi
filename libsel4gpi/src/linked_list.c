@@ -1,6 +1,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <stdarg.h>
+#include <stdbool.h>
 #include <sel4gpi/linked_list.h>
 
 void linked_list_insert_many(linked_list_t *list, int count, ...)
@@ -37,12 +38,33 @@ void linked_list_insert(linked_list_t *list, void *data)
     }
 }
 
+void linked_list_pop_head(linked_list_t *list, void **data)
+{
+    if (list && list->head)
+    {
+        linked_list_node_t *node = list->head;
+        *data = node->data;
+        list->head = node->next;
+        list->count--;
+
+        if (list->head)
+        {
+            list->head->prev = NULL;
+        }
+
+        free(node);
+    }
+    else {
+        *data = NULL;
+    }
+}
+
 linked_list_t *linked_list_new(void)
 {
     return calloc(1, sizeof(linked_list_t));
 }
 
-void linked_list_destroy(linked_list_t *list)
+void linked_list_destroy(linked_list_t *list, bool free_data)
 {
     if (list)
     {
@@ -51,6 +73,12 @@ void linked_list_destroy(linked_list_t *list)
         while (curr != NULL)
         {
             next = curr->next;
+
+            if (free_data)
+            {
+                free(curr->data);
+            }
+
             free(curr);
             curr = next;
         }

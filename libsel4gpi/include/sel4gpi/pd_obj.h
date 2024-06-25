@@ -135,6 +135,8 @@ typedef struct _pd
 
     /* Fields for all PDs */
     vka_object_t cspace;                                    ///< Root CNode of for the PD
+    vka_object_t notification;                              ///< Notification for RT->PD communication, 
+                                                            ///< should be bound to CPU
     size_t cspace_size;                                     ///< Size bits of the root CNode
     const char *image_name;                                 ///< This is for model extraction only
     seL4_Word cnode_guard;                                  ///< cnode guard for this PD's cspace
@@ -165,7 +167,15 @@ int pd_new(pd_t *pd,
            vspace_t *server_vspace,
            mo_t *osm_data_mo);
 
-int pd_dump(pd_t *pd);
+/**
+ * Dump the model state of a PD
+ * This will recursively expand to other PDs by hold or request edges
+ *
+ * @param pd The PD to start at
+ * @param ms the model state to add this PD's state to
+ * @return 0 on success, error on failure
+ */
+int pd_dump(pd_t *pd, model_state_t *ms);
 
 /**
  * Send a cap to another PD's CSpace (badge and copy), and also adds it to the PD's resources set (if applicable)

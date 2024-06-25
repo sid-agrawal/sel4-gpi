@@ -106,6 +106,7 @@ typedef struct _gpi_server_context
     bool pending_extraction;          ///< True if a model extraction is currently in progress
     model_state_t model_state;        ///< Partial model state for a pending model extraction
     seL4_CPtr model_extraction_reply; ///< The reply cap for the pending model extraction
+    int model_extraction_n_missing;   ///< Number of missing replies before model state is complete
 } gpi_server_context_t;
 
 /**

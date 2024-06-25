@@ -91,7 +91,10 @@ enum pd_component_funcs
     PD_FUNC_SETUP_ACK,
 
     PD_FUNC_SHARE_RES_TYPE_REQ,
-    PD_FUNC_SHARE_RES_TYPE_ACK
+    PD_FUNC_SHARE_RES_TYPE_ACK,
+
+    PD_FUNC_GET_WORK_REQ,
+    PD_FUNC_GET_WORK_ACK,
 };
 
 /* Designated purposes of each message register in the mini-protocol. */
@@ -219,6 +222,11 @@ enum pd_component_msgregs
     PDMSGREG_SHARE_RES_TYPE_REQ_END,
 
     PDMSGREG_SHARE_RES_TYPE_ACK_END = PDMSGREG_LABEL0,
+
+    /* PD get work */
+    PDMSGREG_GET_WORK_REQ_END = PDMSGREG_LABEL0,
+
+    // (XXX) Arya: Get work response is through nanopb, eventually all requests will use nanopb
 };
 
 /** Mode of PD setup */
@@ -235,6 +243,11 @@ typedef struct _pd_component_registry_entry
 {
     resource_server_registry_node_t gen;
     pd_t pd;
+
+    /* Pending Work */
+    linked_list_t *pending_frees;       ///< List of gpi_res_id_t for resources to free from a resource space
+                                        ///< that this PD manages
+    linked_list_t *pending_model_state; ///< List of resources for which we need the model state from this PD
 } pd_component_registry_entry_t;
 
 /**
@@ -321,7 +334,7 @@ int pd_component_resource_cleanup(gpi_cap_t resource_type, uint32_t space_id, ui
 /**
  * To be called when a resource space is destroyed
  * Execute the cleanup policy for any PDs that still depend on the resource space
- * 
+ *
  * @param pd_id ID of the PD that manages this space
  * @param space_type type of the deleted resource space
  * @param space_id ID of the deleted resource space

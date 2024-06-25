@@ -1,9 +1,9 @@
 #include <pokemart_server.h>
 #include <sel4gpi/pd_utils.h>
 
-#define PRINTF(...)                                   \
-    do                                                \
-    {                                                 \
+#define PRINTF(...)                                            \
+    do                                                         \
+    {                                                          \
         printf("hello-cleanup pokemart-server: " __VA_ARGS__); \
     } while (0);
 
@@ -47,27 +47,70 @@ seL4_MessageInfo_t pokemart_request_handler(
     seL4_MessageInfo_t reply_tag = seL4_MessageInfo_new(0, 0, 0, 0);
 
     // Pokemart does only one thing right now
+    PRINTF("Let me look here...\n");
 
-    int op = seL4_GetMR(RSMSGREG_FUNC);
+    // Create a pokeball
+    get_pokemart_server()->count++;
+    int pokeball_id = get_pokemart_server()->count;
 
-    if (op == RS_FUNC_GET_RR_REQ)
+    error = resource_server_create_resource(&get_pokemart_server()->gen,
+                                            &get_pokemart_server()->gen.default_space,
+                                            pokeball_id);
+    CHECK_ERROR_GOTO(error, "Failed to give the resource");
+
+    // Give the pokeball
+    seL4_CPtr dest;
+    error = resource_server_give_resource(&get_pokemart_server()->gen,
+                                          get_pokemart_server()->gen.default_space.id,
+                                          pokeball_id,
+                                          get_client_id_from_badge(sender_badge),
+                                          &dest);
+    CHECK_ERROR_GOTO(error, "Failed to give the resource");
+
+    PRINTF("... ah, how about this one? Here you go, it's pokeball #%d\n", pokeball_id);
+
+    seL4_MessageInfo_ptr_set_length(&reply_tag, 3);
+    seL4_SetMR(0, dest);
+    seL4_SetMR(1, get_pokemart_server()->gen.default_space.id);
+    seL4_SetMR(2, pokeball_id);
+
+done:
+    seL4_MessageInfo_ptr_set_label(&reply_tag, error);
+    return reply_tag;
+}
+
+int pokemart_work_handler(
+    PdWorkReturnMessage *work)
+{
+    int error = 0;
+    seL4_MessageInfo_t reply_tag = seL4_MessageInfo_new(0, 0, 0, 0);
+
+    int op = work->action;
+    if (op == PdWorkAction_EXTRACT)
     {
-        uint64_t pokeball_id = seL4_GetMR(RSMSGREG_EXTRACT_RR_REQ_ID);
-        uint64_t pd_id = seL4_GetMR(RSMSGREG_EXTRACT_RR_REQ_PD_ID);
-        uint64_t pokemart_pd_id = seL4_GetMR(RSMSGREG_EXTRACT_RR_REQ_RS_PD_ID);
+        uint64_t pokeball_id = work->objectId;
+        uint64_t pokemart_pd_id = sel4gpi_get_pd_conn().id;
 
+        // Allocate an MO for the extraction
+        mo_client_context_t mo_conn;
+        size_t mem_size = SIZE_BITS_TO_BYTES(MO_PAGE_BITS);
+        error = mo_component_client_connect(sel4gpi_get_rde(GPICAP_TYPE_MO), 1, &mo_conn);
+        assert(error == 0);
+
+        void *mem_vaddr;
+        error = resource_server_attach_mo(get_daycare_server(), mo_conn.badged_server_ep_cspath.capPtr, &mem_vaddr);
+        assert(error == 0);
+
+        // Initialize model state
         PRINTF("Get rr for pokeball #%ld\n", pokeball_id);
-        void *mem_vaddr = (void *)seL4_GetMR(RSMSGREG_EXTRACT_RR_REQ_VADDR);
         model_state_t *model_state = (model_state_t *)mem_vaddr;
         void *free_mem = mem_vaddr + sizeof(model_state_t);
-        size_t free_size = seL4_GetMR(RSMSGREG_EXTRACT_RR_REQ_SIZE) - sizeof(model_state_t);
-
-        // Initialize the model state
+        size_t free_size = mem_size - sizeof(model_state_t);
         init_model_state(model_state, free_mem, free_size);
 
         /* Add the PD nodes */
         gpi_model_node_t *self_pd_node = add_pd_node(model_state, NULL, pokemart_pd_id);
-        gpi_model_node_t *client_pd_node = add_pd_node(model_state, NULL, pd_id);
+        // gpi_model_node_t *client_pd_node = add_pd_node(model_state, NULL, pd_id);
 
         /* Add the pokeball resource space node */
         gpi_model_node_t *pokeball_space_node = add_resource_space_node(model_state,
@@ -79,47 +122,19 @@ seL4_MessageInfo_t pokemart_request_handler(
         gpi_model_node_t *pokeball_node = add_resource_node(model_state, get_pokemart_server()->gen.resource_type,
                                                             get_pokemart_server()->gen.default_space.id, pokeball_id);
         add_edge(model_state, GPI_EDGE_TYPE_HOLD, self_pd_node, pokeball_node);
-        add_edge(model_state, GPI_EDGE_TYPE_HOLD, client_pd_node, pokeball_node);
+        // add_edge(model_state, GPI_EDGE_TYPE_HOLD, client_pd_node, pokeball_node);
         add_edge(model_state, GPI_EDGE_TYPE_SUBSET, pokeball_node, pokeball_space_node);
 
         clean_model_state(model_state);
-
-        seL4_SetMR(RSMSGREG_FUNC, RS_FUNC_GET_RR_ACK);
     }
     else
     {
-        // Pokemart does only one thing right now
-        PRINTF("Let me look here...\n");
-
-        // Create a pokeball
-        get_pokemart_server()->count++;
-        int pokeball_id = get_pokemart_server()->count;
-
-        error = resource_server_create_resource(&get_pokemart_server()->gen,
-                                                &get_pokemart_server()->gen.default_space,
-                                                pokeball_id);
-        CHECK_ERROR_GOTO(error, "Failed to give the resource");
-
-        // Give the pokeball
-        seL4_CPtr dest;
-        error = resource_server_give_resource(&get_pokemart_server()->gen,
-                                              get_pokemart_server()->gen.default_space.id,
-                                              pokeball_id,
-                                              get_client_id_from_badge(sender_badge),
-                                              &dest);
-        CHECK_ERROR_GOTO(error, "Failed to give the resource");
-
-        PRINTF("... ah, how about this one? Here you go, it's pokeball #%d\n", pokeball_id);
-
-        seL4_MessageInfo_ptr_set_length(&reply_tag, 3);
-        seL4_SetMR(0, dest);
-        seL4_SetMR(1, get_pokemart_server()->gen.default_space.id);
-        seL4_SetMR(2, pokeball_id);
+        PRINTF("Unknown work action\n");
+        error = 1;
     }
 
 done:
-    seL4_MessageInfo_ptr_set_label(&reply_tag, error);
-    return reply_tag;
+    return error;
 }
 
 int pokemart_client_get_pokeball(seL4_CPtr server_ep, pokeball_client_context_t *result)

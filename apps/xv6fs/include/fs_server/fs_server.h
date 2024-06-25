@@ -70,6 +70,14 @@ int xv6fs_init();
 /**
  * To handle client requests to the fs server
  */
-seL4_MessageInfo_t xv6fs_request_handler(seL4_MessageInfo_t tag, seL4_Word sender_badge, seL4_CPtr cap, bool *need_new_recv_cap);
+seL4_MessageInfo_t xv6fs_request_handler(seL4_MessageInfo_t tag,
+                                         seL4_Word sender_badge,
+                                         seL4_CPtr cap,
+                                         bool *need_new_recv_cap);
+
+/**
+ * To handle root task requests to the ramdisk server
+ */
+int xv6fs_work_handler(PdWorkReturnMessage *work);
 
 xv6fs_server_context_t *get_xv6fs_server(void);

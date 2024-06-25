@@ -47,7 +47,10 @@
 
 #define USE_RPC 1
 
-sel4gpi_rpc_client_t rpc_client;
+static sel4gpi_rpc_env_t rpc_client = {
+    .request_desc = &RamdiskMessage_msg,
+    .reply_desc = &RamdiskReturnMessage_msg,
+};
 
 int start_ramdisk_pd(seL4_CPtr *ramdisk_pd_cap,
                      uint64_t *ramdisk_id)
@@ -61,16 +64,6 @@ int start_ramdisk_pd(seL4_CPtr *ramdisk_pd_cap,
     return 0;
 }
 
-int ramdisk_client_init(seL4_CPtr server_ep)
-{
-    int error = 0;
-
-    /* initialise rpc client */
-    error = sel4gpi_rpc_client_init(&rpc_client, server_ep, RamdiskMessage_msg, RamdiskReturnMessage_msg);
-
-    return error;
-}
-
 int ramdisk_client_bind(seL4_CPtr server_ep_cap,
                         mo_client_context_t *mo)
 {
@@ -82,7 +75,7 @@ int ramdisk_client_bind(seL4_CPtr server_ep_cap,
 
     RamdiskReturnMessage reply;
 
-    error = sel4gpi_rpc_call(&rpc_client, &request, 1, &mo->badged_server_ep_cspath.capPtr, &reply);
+    error = sel4gpi_rpc_call(&rpc_client, server_ep_cap, &request, 1, &mo->badged_server_ep_cspath.capPtr, &reply);
 
     return error || reply.errorCode;
 
@@ -108,7 +101,7 @@ int ramdisk_client_unbind(seL4_CPtr server_ep_cap)
 
     RamdiskReturnMessage reply;
 
-    error = sel4gpi_rpc_call(&rpc_client, &request, 0, NULL, &reply);
+    error = sel4gpi_rpc_call(&rpc_client, server_ep_cap, &request, 0, NULL, &reply);
 
     return error || reply.errorCode;
 
@@ -134,7 +127,7 @@ int ramdisk_client_alloc_block(seL4_CPtr server_ep_cap,
 
     RamdiskReturnMessage reply;
 
-    error = sel4gpi_rpc_call(&rpc_client, &request, 0, NULL, &reply);
+    error = sel4gpi_rpc_call(&rpc_client, server_ep_cap, &request, 0, NULL, &reply);
 
     if (reply.which_msg != RamdiskReturnMessage_alloc_tag)
     {
@@ -173,7 +166,7 @@ int ramdisk_client_read(ramdisk_client_context_t *conn)
 
     RamdiskReturnMessage reply;
 
-    error = sel4gpi_rpc_call_ep(&rpc_client, conn->badged_server_ep_cspath.capPtr, &request, 0, NULL, &reply);
+    error = sel4gpi_rpc_call(&rpc_client, conn->badged_server_ep_cspath.capPtr, &request, 0, NULL, &reply);
 
     return error || reply.errorCode;
 
@@ -200,7 +193,7 @@ int ramdisk_client_write(ramdisk_client_context_t *conn)
 
     RamdiskReturnMessage reply;
 
-    error = sel4gpi_rpc_call_ep(&rpc_client, conn->badged_server_ep_cspath.capPtr, &request, 0, NULL, &reply);
+    error = sel4gpi_rpc_call(&rpc_client, conn->badged_server_ep_cspath.capPtr, &request, 0, NULL, &reply);
 
     return error || reply.errorCode;
 

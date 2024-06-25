@@ -49,6 +49,11 @@ seL4_MessageInfo_t pokemart_request_handler(
     bool *need_new_recv_cap);
 
 /**
+ * To handle root task requests to the pokemart server
+ */
+int pokemart_work_handler(PdWorkReturnMessage *work);
+
+/**
  * Get a pokeball from the pokemart.
  *
  * @param server_ep the pokemart server endpoint

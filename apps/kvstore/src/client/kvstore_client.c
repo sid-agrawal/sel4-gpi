@@ -117,7 +117,7 @@ static int configure_separate_ads()
     GOTO_IF_ERR(error, "Failed to configure other ADS\n");
     kvserv_ads = runnable.ads;
 
-    linked_list_destroy(&other_vmr_cfg);
+    linked_list_destroy(&other_vmr_cfg, false);
 
     self_cpu_conn = sel4gpi_get_cpu_conn();
     error = cpu_client_change_vspace(&self_cpu_conn, &kvserv_ads);

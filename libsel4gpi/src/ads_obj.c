@@ -705,7 +705,7 @@ int ads_copy(vspace_t *loader,
 
 err_goto:
     // TODO if error: cleanup reservation
-    linked_list_destroy(src_attaches);
+    linked_list_destroy(src_attaches, false);
     return error;
 }
 

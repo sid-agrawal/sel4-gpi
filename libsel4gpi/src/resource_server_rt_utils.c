@@ -17,7 +17,7 @@ int resource_component_initialize(
     resource_component_context_t *component,
     gpi_cap_t resource_type,
     uint64_t space_id,
-    seL4_MessageInfo_t (*request_handler)(seL4_MessageInfo_t, seL4_Word, seL4_CPtr, bool *),
+    seL4_MessageInfo_t (*request_handler)(seL4_MessageInfo_t, seL4_Word, seL4_CPtr, bool *, bool *),
     int (*new_obj)(resource_component_object_t *, vka_t *, vspace_t *, void *),
     void (*on_registry_delete)(resource_server_registry_node_t *, void *),
     size_t reg_entry_size,
@@ -54,12 +54,21 @@ void resource_component_handle(resource_component_context_t *component,
 
     int error = 0;
     bool needs_new_receive_slot = false;
+    bool should_reply = true;
 
     // Handle the message
-    seL4_MessageInfo_t reply_tag = component->request_handler(tag, sender_badge, received_cap->capPtr, &needs_new_receive_slot);
+    seL4_MessageInfo_t reply_tag = component->request_handler(
+        tag,
+        sender_badge,
+        received_cap->capPtr,
+        &needs_new_receive_slot,
+        &should_reply);
 
     // Send the reply
-    resource_component_reply(component, reply_tag);
+    if (should_reply)
+    {
+        resource_component_reply(component, reply_tag);
+    }
 
     // Allocate a new receive slot if needed
     if (needs_new_receive_slot)

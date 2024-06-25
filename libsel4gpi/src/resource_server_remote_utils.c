@@ -47,6 +47,7 @@
 int resource_server_start(resource_server_context_t *context,
                           char *server_type,
                           seL4_MessageInfo_t (*request_handler)(seL4_MessageInfo_t, seL4_Word, seL4_CPtr, bool *),
+                          int (*work_handler)(PdWorkReturnMessage *),
                           seL4_CPtr parent_ep,
                           uint64_t parent_pd_id,
                           int (*init_fn)())
@@ -55,6 +56,7 @@ int resource_server_start(resource_server_context_t *context,
 
     strncpy(context->resource_type_name, server_type, RESOURCE_TYPE_MAX_STRING_SIZE);
     context->request_handler = request_handler;
+    context->work_handler = work_handler;
     context->mo_ep = sel4gpi_get_rde(GPICAP_TYPE_MO);
     context->resspc_ep = sel4gpi_get_rde(GPICAP_TYPE_RESSPC);
     context->ads_conn.badged_server_ep_cspath.capPtr = sel4gpi_get_rde_by_space_id(sel4gpi_get_binded_ads_id(), GPICAP_TYPE_VMR);
@@ -100,18 +102,13 @@ static seL4_MessageInfo_t resource_server_recv(resource_server_context_t *contex
  * Reply function for MCS or non-MCS kernel
  */
 static void resource_server_reply(resource_server_context_t *context,
-                                  seL4_MessageInfo_t tag,
-                                  bool stored_reply)
+                                  seL4_MessageInfo_t tag)
 {
 #if STORE_REPLY_CAP
-    if (stored_reply)
-    {
-        seL4_Send(sel4gpi_get_reply_cap(), tag);
-        return;
-    }
-#endif
-
+    seL4_Send(sel4gpi_get_reply_cap(), tag);
+#else
     api_reply(context->mcs_reply, tag);
+#endif
 }
 
 static int resource_server_next_slot(resource_server_context_t *context,
@@ -188,14 +185,36 @@ int resource_server_main(void *context_v)
         /* Receive a message */
         RESOURCE_SERVER_PRINTF("Ready to receive a message\n");
         tag = resource_server_recv(context, &sender_badge);
-        bool stored_reply = false;
-#if STORE_REPLY_CAP
-        // Track the reply cap if the message is not from root task
-        if (sender_badge != 0)
+
+        /* If the sender badge is 0, then we were woken up by the RT, and should check for work */
+        if (sender_badge == 0)
         {
-            stored_reply = true;
-            sel4gpi_store_reply_cap();
+            /* Perform any pending work the RT requested */
+            while (1)
+            {
+                PdWorkReturnMessage work;
+                error = pd_client_get_work(&context->pd_conn, &work);
+                CHECK_ERROR_GOTO(error, "failed to get work from RT", exit_main);
+
+                if (work.action != PdWorkAction_NONE)
+                {
+                    RESOURCE_SERVER_PRINTF("Got some work from RT (action: %d, space id: %d, object id: %d)\n",
+                                           work.action,
+                                           work.spaceId,
+                                           work.objectId);
+                }
+                else
+                {
+                    // There is no more work to be done for now
+                    break;
+                }
+            }
+
+            continue;
         }
+
+#if STORE_REPLY_CAP
+        sel4gpi_store_reply_cap();
 #endif
 
         /* Handle the message */
@@ -228,14 +247,10 @@ int resource_server_main(void *context_v)
         }
 
         /* Reply to message */
-        resource_server_reply(context, reply_tag, stored_reply);
+        resource_server_reply(context, reply_tag);
 
 #if STORE_REPLY_CAP
-        // Clear the reply cap
-        if (stored_reply)
-        {
-            sel4gpi_clear_reply_cap();
-        }
+        sel4gpi_clear_reply_cap();
 #endif
     }
 

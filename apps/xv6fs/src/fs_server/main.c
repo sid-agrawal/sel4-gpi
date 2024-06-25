@@ -50,6 +50,7 @@ int main(int argc, char **argv)
         &get_xv6fs_server()->gen,
         FILE_RESOURCE_TYPE_NAME,
         xv6fs_request_handler,
+        xv6fs_work_handler,
         parent_ep,
         parent_pd_id,
         xv6fs_init);

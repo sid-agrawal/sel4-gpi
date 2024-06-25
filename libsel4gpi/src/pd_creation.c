@@ -583,7 +583,7 @@ void sel4gpi_config_destroy(pd_config_t *cfg)
         {
             free((vmr_config_t *)curr->data);
         }
-        linked_list_destroy(cfg->ads_cfg.vmr_cfgs);
+        linked_list_destroy(cfg->ads_cfg.vmr_cfgs, false);
     }
 
     if (cfg->rde_cfg)
@@ -592,12 +592,12 @@ void sel4gpi_config_destroy(pd_config_t *cfg)
         {
             free((rde_config_t *)curr->data);
         }
-        linked_list_destroy(cfg->rde_cfg);
+        linked_list_destroy(cfg->rde_cfg, false);
     }
 
     if (cfg->gpi_res_type_cfg)
     {
-        linked_list_destroy(cfg->gpi_res_type_cfg);
+        linked_list_destroy(cfg->gpi_res_type_cfg, false);
     }
 
     free(cfg);

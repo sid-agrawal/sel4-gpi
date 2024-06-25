@@ -197,7 +197,8 @@ err_goto:
 static seL4_MessageInfo_t ep_component_handle(seL4_MessageInfo_t tag,
                                               seL4_Word sender_badge,
                                               seL4_CPtr received_cap,
-                                              bool *need_new_recv_cap)
+                                              bool *need_new_recv_cap,
+                                              bool *should_reply)
 {
     int error = 0; // unused, to appease the error handling macros
     enum ep_component_funcs func = seL4_GetMR(EPMSGREG_FUNC);
@@ -246,6 +247,7 @@ int ep_component_initialize(simple_t *server_simple,
     resspc_config_t resspc_config = {
         .type = GPICAP_TYPE_EP,
         .ep = get_gpi_server()->server_ep_obj.cptr,
+        .pd_id = get_gpi_server()->rt_pd_id,
     };
 
     error = resource_component_allocate(get_resspc_component(), get_gpi_server()->rt_pd_id,

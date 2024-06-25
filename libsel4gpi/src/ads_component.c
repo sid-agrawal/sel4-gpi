@@ -65,6 +65,7 @@ static int create_vmr_space(uint32_t client_id, resspc_component_registry_entry_
     resspc_config_t resspc_config = {
         .type = GPICAP_TYPE_VMR,
         .ep = get_gpi_server()->server_ep_obj.cptr,
+        .pd_id = get_gpi_server()->rt_pd_id,
     };
 
     error = resource_component_allocate(get_resspc_component(), get_gpi_server()->rt_pd_id, BADGE_OBJ_ID_NULL, false,
@@ -462,7 +463,8 @@ err_goto:
 static seL4_MessageInfo_t ads_component_handle(seL4_MessageInfo_t tag,
                                                seL4_Word sender_badge,
                                                seL4_CPtr received_cap,
-                                               bool *need_new_recv_cap)
+                                               bool *need_new_recv_cap,
+                                               bool *should_reply)
 {
     int error = 0; // unused, to appease the error handling macros
     enum ads_component_funcs func = seL4_GetMR(ADSMSGREG_FUNC);
@@ -530,6 +532,7 @@ int ads_component_initialize(simple_t *server_simple,
     resspc_config_t resspc_config = {
         .type = GPICAP_TYPE_ADS,
         .ep = get_gpi_server()->server_ep_obj.cptr,
+        .pd_id = get_gpi_server()->rt_pd_id,
     };
 
     error = resource_component_allocate(get_resspc_component(), get_gpi_server()->rt_pd_id, BADGE_OBJ_ID_NULL, false,

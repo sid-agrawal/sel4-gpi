@@ -1,0 +1,33 @@
+syntax = "proto3";
+
+enum PdWorkAction {
+    NONE = 0;           /* there is no work to be done */
+    EXTRACT = 1;        /* work action to extract model state */
+    FREE = 2;           /* work action to free a resource */
+};
+
+/* message type for all PD component request messages */
+message PdMessage {
+    /* No content, WIP */
+};
+
+/* return from a basic ramdisk message */
+message PdBasicReturnMessage {
+    /* No content */
+};
+
+/* return from a ramdisk alloc message */
+message PdWorkReturnMessage {
+    PdWorkAction action = 1;        /* which work action to perform */
+    uint32 spaceId = 3;             /* space ID for the work */
+    uint32 objectId = 2;            /* object ID for the work */
+}
+
+/* message type for all ramdisk return messages */
+message PdReturnMessage {
+    uint32 errorCode = 1;   /* Can we use an enum for the error code? */
+    oneof msg {
+        PdBasicReturnMessage basic = 2;
+        PdWorkReturnMessage work = 3;
+    };
+};

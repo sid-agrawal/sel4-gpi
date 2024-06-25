@@ -41,6 +41,7 @@ int main(int argc, char **argv)
         &get_ramdisk_server()->gen,
         BLOCK_RESOURCE_TYPE_NAME,
         ramdisk_request_handler,
+        ramdisk_work_handler,
         parent_ep,
         parent_pd_id,
         ramdisk_init);

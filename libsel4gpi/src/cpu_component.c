@@ -148,6 +148,10 @@ static seL4_MessageInfo_t handle_config_req(seL4_Word sender_badge,
                               ipc_buf_frame,
                               ipc_buf_addr);
 
+    /* Set the bound notification */
+    // (XXX) Arya: I'm not sure where this should go
+    error = cpu_bind_notif(&cpu_data->cpu, pd_data->pd.notification.cptr);
+
     // (XXX) Arya: here, the issue with va_args was seen before adding the CPU object ID to the format
     SERVER_GOTO_IF_ERR(error, "Failed to configure vspace for CPU (%ld)\n", get_object_id_from_badge(sender_badge));
 
@@ -250,7 +254,8 @@ err_goto:
 static seL4_MessageInfo_t cpu_component_handle(seL4_MessageInfo_t tag,
                                                seL4_Word sender_badge,
                                                seL4_CPtr received_cap,
-                                               bool *need_new_recv_cap)
+                                               bool *need_new_recv_cap,
+                                               bool *should_reply)
 {
     int error = 0; // unused, to appease the error handling macros
     enum cpu_component_funcs func = seL4_GetMR(CPUMSGREG_FUNC);
@@ -311,10 +316,12 @@ int cpu_component_initialize(simple_t *server_simple,
     resspc_config_t resspc_config = {
         .type = GPICAP_TYPE_CPU,
         .ep = get_gpi_server()->server_ep_obj.cptr,
+        .pd_id = get_gpi_server()->rt_pd_id,
     };
 
-    error = resource_component_allocate(get_resspc_component(), get_gpi_server()->rt_pd_id, BADGE_OBJ_ID_NULL, false, (void *)&resspc_config,
-                                        (resource_server_registry_node_t **)&space_entry, NULL);
+    error = resource_component_allocate(get_resspc_component(), get_gpi_server()->rt_pd_id, BADGE_OBJ_ID_NULL,
+                                        false, (void *)&resspc_config, (resource_server_registry_node_t **)&space_entry, 
+                                        NULL);
     assert(error == 0);
 
     // Initialize the component

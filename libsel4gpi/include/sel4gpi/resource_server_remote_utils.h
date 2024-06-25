@@ -25,36 +25,33 @@
  */
 typedef struct _resource_server_context
 {
-    char resource_type_name[RESOURCE_TYPE_MAX_STRING_SIZE];
-    gpi_cap_t resource_type;
+    char resource_type_name[RESOURCE_TYPE_MAX_STRING_SIZE]; ///< Text name of the resource served by the component
+    gpi_cap_t resource_type;                                ///< Code of the resource type served by the component
+    sel4gpi_rpc_env_t rpc_env;                              //< RPC server context
+    resspc_client_context_t default_space;                  ///< Connection to the default resource space
 
-    // RPC server context
-    sel4gpi_rpc_server_t rpc_env;
+    seL4_MessageInfo_t (*request_handler)( ///< Callback called when the server receives a client request
+        seL4_MessageInfo_t tag,
+        seL4_Word sender_badge,
+        seL4_CPtr received_cap,
+        bool *need_new_reply_cap);
 
-    // Connection to the default resource space
-    resspc_client_context_t default_space;
+    int (*work_handler)( ///< Callback called when the RT needs the server to do some work
+        PdWorkReturnMessage *work);
 
-    // Run to serve requests
-    seL4_MessageInfo_t (*request_handler)(seL4_MessageInfo_t, seL4_Word, seL4_CPtr, bool *);
+    int (*init_fn)(); ///< Run once when the server is started
 
-    // Run once when the server is started
-    int (*init_fn)();
-
-    // Client ID of the parent PD
-    uint64_t parent_pd_id;
+    uint64_t parent_pd_id; ///< Client ID of the parent PD
 
     // RDEs and other EPs
-    seL4_CPtr mo_ep;
-    seL4_CPtr resspc_ep;
-    ep_client_context_t parent_ep;
-    ads_client_context_t ads_conn;
-    pd_client_context_t pd_conn;
+    seL4_CPtr mo_ep;               ///< MO request ep
+    seL4_CPtr resspc_ep;           ///< Resource space request ep
+    ep_client_context_t parent_ep; ///< Parent's EP, used to notify once started
+    ads_client_context_t ads_conn; ///< This PD's current ADS object
+    pd_client_context_t pd_conn;   ///< This PD's PD object
+    ep_client_context_t server_ep; ///< The server's own endpoint that it listens for requests on
 
-    // The server listens on this endpoint.
-    ep_client_context_t server_ep;
-
-    // Other
-    seL4_CPtr mcs_reply;
+    seL4_CPtr mcs_reply; ///< Unused
 } resource_server_context_t;
 
 /**
@@ -67,14 +64,18 @@ typedef struct _resource_server_context
  *                  param: seL4_Word badge, the request's badge
  *                  param: seL4_CPtr cap, the received cap
  *                  return: seL4_MessageInfo_t reply info
+ * @param work_handler Function to handle work requests from the RT
+ *                  param: PdWorkReturnMessage *work, the work details
+ *                  return: 0 on success, error otherwise
  * @param parent_ep Endpoint of the parent process
- * @param parent_pd_id the PD ID of the parent, so we can create an RDE 
+ * @param parent_pd_id the PD ID of the parent, so we can create an RDE
  * @param init_fn To run at the beginning of main thread execution
  * @return 0 on successful exit, nonzero otherwise
  */
 int resource_server_start(resource_server_context_t *context,
                           char *server_type,
                           seL4_MessageInfo_t (*request_handler)(seL4_MessageInfo_t, seL4_Word, seL4_CPtr, bool *),
+                          int (*work_handler)(PdWorkReturnMessage *),
                           seL4_CPtr parent_ep,
                           uint64_t parent_pd_id,
                           int (*init_fn)());

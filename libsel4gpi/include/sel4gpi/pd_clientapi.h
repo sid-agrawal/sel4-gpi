@@ -13,6 +13,7 @@
 
 #include <sel4gpi/pd_component.h>
 #include <sel4gpi/pd_creation.h>
+#include <pd_rpc.pb.h>
 
 /**
  * @file Definition of the client API for interacting with the PD component
@@ -23,7 +24,7 @@
 /** PD CREATION / INITIALIZATION **/
 
 /**
- * @brief   Initialize the pd client.
+ * @brief Create a new PD
  *
  * @param server_ep_cap Well known server endpoint cap.
  * @param osm_data_mo an MO for holding the PD's OSmosis data
@@ -194,6 +195,15 @@ int pd_client_map_resource(pd_client_context_t *conn,
                            seL4_Word src_res_id,
                            seL4_Word dest_res_id);
 #endif
+
+/**
+ * For a resource server to check if there is any work the root task needs it to do
+ * 
+ * @param conn the resource server's pd connection
+ * @param work this structure gets filled out with the return work
+ * @return 0 on success, error otherwise
+ */
+int pd_client_get_work(pd_client_context_t *conn, PdWorkReturnMessage *work);
 
 /** OTHER FUNCTIONS FOR ACTIVE PDs **/
 

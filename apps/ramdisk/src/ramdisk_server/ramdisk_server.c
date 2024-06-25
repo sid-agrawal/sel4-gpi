@@ -227,7 +227,7 @@ int ramdisk_init()
     }
 
     /* Initialize RPC server */
-    sel4gpi_rpc_server_init(&get_ramdisk_server()->gen.rpc_env, RamdiskMessage_msg, RamdiskReturnMessage_msg);
+    sel4gpi_rpc_env_init(&get_ramdisk_server()->gen.rpc_env, &RamdiskMessage_msg, &RamdiskReturnMessage_msg);
 
     return error;
 }
@@ -449,4 +449,10 @@ done:
     }
 
     return reply_tag;
+}
+
+int ramdisk_work_handler(PdWorkReturnMessage *work)
+{
+    // Unimplemented
+    assert(0);
 }

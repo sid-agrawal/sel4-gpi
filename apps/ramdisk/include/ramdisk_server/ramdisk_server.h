@@ -52,7 +52,15 @@ int ramdisk_init();
 
 /**
  * To handle client requests to the ramdisk server
-*/
-seL4_MessageInfo_t ramdisk_request_handler(seL4_MessageInfo_t tag, seL4_Word sender_badge, seL4_CPtr cap, bool *need_new_recv_cap);
+ */
+seL4_MessageInfo_t ramdisk_request_handler(seL4_MessageInfo_t tag,
+                                           seL4_Word sender_badge,
+                                           seL4_CPtr cap,
+                                           bool *need_new_recv_cap);
+
+/**
+ * To handle root task requests to the ramdisk server
+ */
+int ramdisk_work_handler(PdWorkReturnMessage *work);
 
 ramdisk_server_context_t *get_ramdisk_server(void);

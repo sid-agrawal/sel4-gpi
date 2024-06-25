@@ -176,10 +176,6 @@ int xv6fs_init()
   CHECK_ERROR(error, "failed to map shared mem page");
 
   /* Initialize connection with ramdisk */
-
-  error = ramdisk_client_init(get_xv6fs_server()->rd_ep);
-  CHECK_ERROR(error, "failed to initialize ramdisk client");
-
   error = ramdisk_client_bind(get_xv6fs_server()->rd_ep, server->shared_mem);
   CHECK_ERROR(error, "failed to bind shared mem page");
 
@@ -203,7 +199,7 @@ int xv6fs_init()
   resource_server_initialize_registry(&get_xv6fs_server()->ns_registry, ns_registry_entry_on_delete, NULL);
 
   /* Initialize RPC server */
-  sel4gpi_rpc_server_init(&get_xv6fs_server()->gen.rpc_env, FsMessage_msg, FsReturnMessage_msg);
+  sel4gpi_rpc_env_init(&get_xv6fs_server()->gen.rpc_env, &FsMessage_msg, &FsReturnMessage_msg);
 
   XV6FS_PRINTF("Initialized file system\n");
 
@@ -719,4 +715,11 @@ err_goto:
   ZF_LOGF("Failed to map file to block\n");
 
 #endif
+}
+
+
+int xv6fs_work_handler(PdWorkReturnMessage *work)
+{
+    // Unimplemented
+    assert(0);
 }

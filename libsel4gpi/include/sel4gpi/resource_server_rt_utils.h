@@ -47,33 +47,33 @@ typedef struct _resource_component_registry_entry
  */
 typedef struct _resource_component_context
 {
-    gpi_cap_t resource_type;
+    gpi_cap_t resource_type; ///< The type of resoruce this component serves
 
-    // Run to serve requests
-    seL4_MessageInfo_t (*request_handler)(seL4_MessageInfo_t, seL4_Word, seL4_CPtr, bool *);
+    seL4_MessageInfo_t (*request_handler)( ///< Callback to serve requests
+        seL4_MessageInfo_t tag,            ///< Message tag for incoming request
+        seL4_Word badge,                   ///< Sender badge
+        seL4_CPtr cap,                     ///< Received cap
+        bool *need_new_recv_cap,           ///< Handler should set to true if it used the receive cap (default false)
+        bool *should_reply);               ///< Handler should set to false if no reply should be sent (default true)
 
-    // Run to allocate a new obj
-    int (*new_obj)(resource_component_object_t *, vka_t *, vspace_t *, void *);
+    int (*new_obj)(                       ///< Callback to allocate a new obj
+        resource_component_object_t *obj, ///< The new generic object
+        vka_t *server_vka,                ///< Server's vka
+        vspace_t *server_vspace,          ///< Server's vspace
+        void *arg0);                      ///< Optional argument
 
-    // Component's default resource space ID
-    uint64_t space_id;
+    uint64_t space_id;                   //< Component's default resource space ID
+    resource_server_registry_t registry; ///< Registry of the component's resources
+    size_t reg_entry_size;               ///< Size in bits of a registry entry
 
-    // Registry of the component's resources
-    resource_server_registry_t registry;
-    size_t reg_entry_size;
-
-    // Handles to root task vka, etc.
     simple_t *server_simple;
     vka_t *server_vka;
     seL4_CPtr server_cspace;
     vspace_t *server_vspace;
     sel4utils_thread_t server_thread;
 
-    // The server listens on this endpoint.
-    seL4_CPtr server_ep;
-
-    // Other
-    seL4_CPtr mcs_reply;
+    seL4_CPtr server_ep; ///< The component listens on this endpoint.
+    seL4_CPtr mcs_reply; ///< Unused
 } resource_component_context_t;
 
 /**
@@ -97,7 +97,7 @@ int resource_component_initialize(
     resource_component_context_t *component,
     gpi_cap_t resource_type,
     uint64_t space_id,
-    seL4_MessageInfo_t (*request_handler)(seL4_MessageInfo_t, seL4_Word, seL4_CPtr, bool *),
+    seL4_MessageInfo_t (*request_handler)(seL4_MessageInfo_t, seL4_Word, seL4_CPtr, bool *, bool *),
     int (*new_obj)(resource_component_object_t *, vka_t *, vspace_t *, void *),
     void (*on_registry_delete)(resource_server_registry_node_t *, void *),
     size_t reg_entry_size,
@@ -166,24 +166,24 @@ resource_component_registry_entry_t *resource_component_registry_get_by_id(resou
 /**
  * Increment the reference count to a resource object
  * If the count reaches zero, the object is destroyed
- * 
+ *
  * @param component
  * @param object_id ID of the object
-*/
+ */
 int resource_component_inc(resource_component_context_t *component,
                            uint64_t object_id);
 
 /**
  * Decrement the reference count to a resource object
  * If the count reaches zero, the object is destroyed
- * 
+ *
  * @param component
  * @param object_id ID of the object
-*/
+ */
 int resource_component_dec(resource_component_context_t *component,
                            uint64_t object_id);
 
 /**
  * Debug function to print the existing resources in a resource component
-*/
+ */
 void resource_component_debug_print(resource_component_context_t *component);

@@ -82,9 +82,7 @@ typedef struct _global_xv6fs_client_context_t
     vka_t *client_vka;
     gpi_cap_t file_cap_type;
     uint32_t space_id;
-
-    // RPC context with file server
-    sel4gpi_rpc_client_t rpc_client;
+    seL4_CPtr server_ep;
 
     // Shared memory frame with the file server, sent on every request
     mo_client_context_t *shared_mem;

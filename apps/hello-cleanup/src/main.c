@@ -29,7 +29,7 @@ size_t morecore_size = APP_MALLOC_SIZE;
 uintptr_t morecore_base = (uintptr_t)PD_HEAP_LOC;
 uintptr_t morecore_top = (uintptr_t)(PD_HEAP_LOC + APP_MALLOC_SIZE);
 
-#define N_CLIENT_REQUESTS 1 // Number of requests clients will make from servers
+#define N_CLIENT_REQUESTS 5 // Number of requests clients will make from servers
 
 typedef enum _hello_mode
 {
@@ -152,6 +152,7 @@ int main(int argc, char **argv)
             &get_pokemart_server()->gen,
             POKEBALL_RESOURCE_TYPE_NAME,
             pokemart_request_handler,
+            pokemart_work_handler,
             parent_ep,
             parent_pd_id,
             pokemart_server_init);
@@ -161,6 +162,7 @@ int main(int argc, char **argv)
             &get_daycare_server()->gen,
             POKEMON_RESOURCE_TYPE_NAME,
             daycare_request_handler,
+            daycare_work_handler,
             parent_ep,
             parent_pd_id,
             daycare_server_init);

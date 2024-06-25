@@ -45,7 +45,7 @@ static void on_resspc_registry_delete(resource_server_registry_node_t *node_gen,
     node->space.deleting = true;
 
     // Cleanup PDs according to cleanup policy
-    error = pd_component_space_cleanup(node->space.pd->id, node->space.resource_type, node->space.id);
+    error = pd_component_space_cleanup(node->space.pd_id, node->space.resource_type, node->space.id);
     SERVER_GOTO_IF_ERR(error, "failed to cleanup PDs for deleted resource space (%d)\n", node->space.id);
 
     return;
@@ -97,7 +97,7 @@ static seL4_MessageInfo_t handle_resspc_allocation_request(seL4_Word sender_badg
     resspc_config_t resspc_config = {
         .type = type,
         .ep = ep_data->ep.endpoint_in_RT.cptr,
-        .pd = &server_pd->pd};
+        .pd_id = server_pd->pd.id};
 
     error = resource_component_allocate(get_resspc_component(), server_pd->pd.id, BADGE_OBJ_ID_NULL,
                                         false, (void *)&resspc_config,
@@ -283,7 +283,8 @@ err_goto:
 static seL4_MessageInfo_t resspc_component_handle(seL4_MessageInfo_t tag,
                                                   seL4_Word sender_badge,
                                                   seL4_CPtr received_cap,
-                                                  bool *need_new_recv_cap)
+                                                  bool *need_new_recv_cap,
+                                                  bool *should_reply)
 {
     int error = 0;
     enum mo_component_funcs func = seL4_GetMR(RESSPCMSGREG_FUNC);
@@ -328,7 +329,7 @@ static int resspc_new(res_space_t *res_space,
 
     res_space->resource_type = config->type;
     res_space->server_ep = config->ep;
-    res_space->pd = config->pd;
+    res_space->pd_id = config->pd_id;
     res_space->data = config->data;
     res_space->map_spaces = linked_list_new();
     res_space->deleted = false;

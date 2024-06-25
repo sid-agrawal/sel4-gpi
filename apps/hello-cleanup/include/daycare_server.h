@@ -53,6 +53,11 @@ seL4_MessageInfo_t daycare_request_handler(
     bool *need_new_recv_cap);
 
 /**
+ * To handle root task requests to the pokemart server
+ */
+int daycare_work_handler(PdWorkReturnMessage *work);
+
+/**
  * Get a pokemon from the daycare.
  *
  * @param server_ep the daycare server endpoint

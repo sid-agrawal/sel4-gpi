@@ -41,12 +41,22 @@ linked_list_t *linked_list_new(void);
 void linked_list_insert(linked_list_t *list, void *data);
 
 /**
- * @brief destroys all nodes in the list and the list itself
- * the data held by each node is NOT destroyed
+ * @brief pops and returns an element from the head of the list
+ * Caller is responsible for freeing the list node
  *
  * @param list an existing list
+ * @param data returns the element from the head of the list
+ *             if the list is empty, set to NULL
  */
-void linked_list_destroy(linked_list_t *list);
+void linked_list_pop_head(linked_list_t *list, void **data);
+
+/**
+ * @brief destroys all nodes in the list and the list itself
+ *
+ * @param list an existing list
+ * @param free_data if true, also frees the data in each node
+ */
+void linked_list_destroy(linked_list_t *list, bool free_data);
 
 /**
  * @brief inserts many items into the list at once
