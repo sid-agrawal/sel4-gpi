@@ -66,7 +66,8 @@ typedef struct _vmr_config
 {
     gpi_share_degree_t share_mode;
     sel4utils_reservation_type_t type;
-    void *start;           ///< vaddr to start of the VMR
+    void *start;           ///< vaddr to start of the VMR in the src ADS
+    void *dest_start;      ///< vaddr to the start of VMR in the destination ADS (can be NULL to use `start`)
     uint64_t region_pages; ///< number of pages in this VMR
 } vmr_config_t;
 

@@ -287,16 +287,17 @@ static seL4_MessageInfo_t handle_copy_req(seL4_Word sender_badge)
         resource_component_registry_get_by_badge(get_ads_component(), dst_ads_badge);
     SERVER_GOTO_IF_COND_BG(dst_ads_data == NULL, dst_ads_badge, "Couldn't find dst ADS: ");
 
-    vmr_config_t cfg = {.start = (void *)seL4_GetMR(ADSMSGREG_SHALLOW_COPY_REQ_VA),
-                        .region_pages = seL4_GetMR(ADSMSGREG_SHALLOW_COPY_REQ_PAGES),
-                        .share_mode = (gpi_share_degree_t)seL4_GetMR(ADSMSGREG_SHALLOW_COPY_REQ_MODE),
-                        .type = (sel4utils_reservation_type_t)seL4_GetMR(ADSMSGREG_SHALLOW_COPY_REQ_TYPE)};
+    vmr_config_t cfg = {.start = (void *)seL4_GetMR(ADSMSGREG_COPY_REQ_SRC_VA),
+                        .dest_start = (void *)seL4_GetMR(ADSMSGREG_COPY_REQ_DEST_VA),
+                        .region_pages = seL4_GetMR(ADSMSGREG_COPY_REQ_PAGES),
+                        .share_mode = (gpi_share_degree_t)seL4_GetMR(ADSMSGREG_COPY_REQ_MODE),
+                        .type = (sel4utils_reservation_type_t)seL4_GetMR(ADSMSGREG_COPY_REQ_TYPE)};
 
     error = ads_copy(get_ads_component()->server_vspace, get_ads_component()->server_vka,
                      &src_ads_data->ads, &dst_ads_data->ads, &cfg);
 err_goto:
-    seL4_SetMR(ADSMSGREG_FUNC, ADS_FUNC_SHALLOW_COPY_ACK);
-    reply_tag = seL4_MessageInfo_new(error, 0, 0, ADSMSGREG_SHALLOW_COPY_ACK_END);
+    seL4_SetMR(ADSMSGREG_FUNC, ADS_FUNC_COPY_ACK);
+    reply_tag = seL4_MessageInfo_new(error, 0, 0, ADSMSGREG_COPY_ACK_END);
     return reply_tag;
 }
 
@@ -488,7 +489,7 @@ static seL4_MessageInfo_t ads_component_handle(seL4_MessageInfo_t tag,
         case ADS_FUNC_RESERVE_REQ:
             reply_tag = handle_reserve_req(sender_badge, tag);
             break;
-        case ADS_FUNC_SHALLOW_COPY_REQ:
+        case ADS_FUNC_COPY_REQ:
             reply_tag = handle_copy_req(sender_badge);
             break;
         case ADS_FUNC_TESTING_REQ:

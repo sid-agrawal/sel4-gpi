@@ -653,6 +653,13 @@ int ads_copy(vspace_t *loader,
         linked_list_insert(src_attaches, attach_node);
     }
 
+    /* if we wanted to map a certain VMR at a different address in the destination ADS, there can only be
+     * one source reservation, as the requestor can only provide one destination vaddr.
+     */
+    SERVER_GOTO_IF_COND(src_attaches->count > 1 && cfg->dest_start != NULL,
+                        "Specified a destination vaddr (%p) for a source VMR(%s, %p) with non-contiguous regions\n",
+                        human_readable_va_res_type(cfg->type), cfg->start, cfg->dest_start);
+
     for (linked_list_node_t *curr = src_attaches->head; curr != NULL; curr = curr->next)
     {
         attach_node_t *src_attach_node = (attach_node_t *)curr->data;
@@ -662,7 +669,10 @@ int ads_copy(vspace_t *loader,
                     src_attach_node->n_pages, src_ads->id, dst_ads->id);
 
         attach_node_t *new_attach_node;
-        error = ads_reserve(dst_ads, (void *)src_attach_node->vaddr, src_attach_node->n_pages,
+        void *attach_vaddr = cfg->dest_start != NULL && src_attaches->count == 1
+                                 ? cfg->dest_start
+                                 : (void *)src_attach_node->vaddr;
+        error = ads_reserve(dst_ads, attach_vaddr, src_attach_node->n_pages,
                             MO_PAGE_BITS, src_attach_node->type, &new_attach_node);
         SERVER_GOTO_IF_ERR(error, "Failed to reserve region\n");
 

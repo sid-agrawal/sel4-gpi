@@ -112,30 +112,6 @@ int ads_client_attach_to_reserve(ads_vmr_context_t *reservation,
     return seL4_MessageInfo_get_label(tag);
 }
 
-int ads_client_shallow_copy(ads_client_context_t *conn, seL4_CPtr free_slot, void *omit_vaddr, ads_client_context_t *ret_conn)
-{
-    // Alloc a slot for the incoming cap.
-    /* Send a REQ message to the server on its public EP */
-    seL4_SetCapReceivePath(SEL4UTILS_CNODE_SLOT, /* Position of the cap to the CNODE */
-                           free_slot,            /* CPTR in this CSPACE */
-                           /* This works coz we have a single level cnode with no guard.*/
-                           seL4_WordBits); /* Depth i.e. how many bits of free_slot to interpret*/
-
-    OSDB_PRINTF("Set a receive path for the badged ep: %d\n", (int)free_slot);
-
-    seL4_SetMR(ADSMSGREG_FUNC, ADS_FUNC_SHALLOW_COPY_REQ);
-    seL4_SetMR(ADSMSGREG_SHALLOW_COPY_REQ_OMIT_VA, omit_vaddr != NULL ? (seL4_Word)omit_vaddr : 0);
-    seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0,
-                                                  ADSMSGREG_SHALLOW_COPY_REQ_END);
-
-    OSDB_PRINTF("Sending clone request to server via EP: %lu.\n",
-                conn->badged_server_ep_cspath.capPtr);
-    tag = seL4_Call(conn->badged_server_ep_cspath.capPtr, tag);
-
-    ret_conn->badged_server_ep_cspath.capPtr = free_slot;
-    return seL4_MessageInfo_get_label(tag);
-}
-
 int ads_client_rm(ads_client_context_t *conn, void *vaddr)
 {
     seL4_SetMR(ADSMSGREG_FUNC, ADS_FUNC_RM_REQ);
@@ -179,16 +155,17 @@ int ads_client_copy(ads_client_context_t *src_ads, ads_client_context_t *dst_ads
 {
     OSDB_PRINTF("Sending %s request for VMR (%s)\n",
                 sel4gpi_share_degree_to_str(vmr_cfg->share_mode), human_readable_va_res_type(vmr_cfg->type));
-                
-    seL4_SetMR(ADSMSGREG_FUNC, ADS_FUNC_SHALLOW_COPY_REQ);
+
+    seL4_SetMR(ADSMSGREG_FUNC, ADS_FUNC_COPY_REQ);
     seL4_SetCap(0, dst_ads->badged_server_ep_cspath.capPtr);
-    seL4_SetMR(ADSMSGREG_SHALLOW_COPY_REQ_PAGES, vmr_cfg->region_pages);
-    seL4_SetMR(ADSMSGREG_SHALLOW_COPY_REQ_TYPE, (seL4_Word)vmr_cfg->type);
-    seL4_SetMR(ADSMSGREG_SHALLOW_COPY_REQ_VA, (seL4_Word)vmr_cfg->start);
-    seL4_SetMR(ADSMSGREG_SHALLOW_COPY_REQ_MODE, (seL4_Word)vmr_cfg->share_mode);
+    seL4_SetMR(ADSMSGREG_COPY_REQ_PAGES, vmr_cfg->region_pages);
+    seL4_SetMR(ADSMSGREG_COPY_REQ_TYPE, (seL4_Word)vmr_cfg->type);
+    seL4_SetMR(ADSMSGREG_COPY_REQ_SRC_VA, (seL4_Word)vmr_cfg->start);
+    seL4_SetMR(ADSMSGREG_COPY_REQ_DEST_VA, (seL4_Word)vmr_cfg->dest_start);
+    seL4_SetMR(ADSMSGREG_COPY_REQ_MODE, (seL4_Word)vmr_cfg->share_mode);
 
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 1,
-                                                  ADSMSGREG_SHALLOW_COPY_REQ_END);
+                                                  ADSMSGREG_COPY_REQ_END);
 
     tag = seL4_Call(src_ads->badged_server_ep_cspath.capPtr, tag);
     return seL4_MessageInfo_get_label(tag);

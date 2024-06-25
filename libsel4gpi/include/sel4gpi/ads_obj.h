@@ -192,6 +192,8 @@ int ads_bind(ads_t *ads, vka_t *vka, seL4_CPtr *cpu_cap);
 /**
  * @brief Copies a VMR from src_ads to dst_ads.
  * The copying method depends on what is set in the given config
+ * If config omits a vaddr and size, will search for the VMR corresponding
+ * to the given type (if not SEL4UTILS_RES_TYPE_GENERIC or SEL4UTILS_RES_TYPE_SHARED_FRAMES)
  *
  * @param loader vspace of the function running this
  * @param vka vka object to allocate cspace slots and PT from
