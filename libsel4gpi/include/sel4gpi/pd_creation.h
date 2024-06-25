@@ -52,10 +52,11 @@ typedef struct _sel4gpi_runnable
  */
 typedef enum _gpi_share_degree
 {
-    GPI_SHARED = 1, ///< this resource is directly shared with the other PD, e.g. virt pages that map to the same phys page
-    GPI_COPY,       ///< this resource is copied into the other PD, e.g. virt pages with separate phys pages with contents copied
+    GPI_SHARED = 1, ///< this resource is directly shared with the other PD,
+                    ///< e.g. virt pages that map to the same phys page
+    GPI_COPY,       ///< this resource is copied into the other PD,
+                    ///< e.g. virt pages with separate phys pages with contents copied
     GPI_DISJOINT,   ///< this resource exists in the other PD, but has no relation with the source PD
-    GPI_OMIT        ///< this resource will not exist in the other PD
 } gpi_share_degree_t;
 
 /**

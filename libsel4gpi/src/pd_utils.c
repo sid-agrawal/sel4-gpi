@@ -172,22 +172,35 @@ void sel4gpi_set_exit_cb(void)
     sel4runtime_set_exit(sel4gpi_exit_cb);
 }
 
-void *sel4gpi_get_vmr(ads_client_context_t *vmr_rde, int num_pages, void *vaddr,
-                      sel4utils_reservation_type_t vmr_type, mo_client_context_t *ret_mo)
+static void *get_vmr(ads_client_context_t *vmr_rde,
+                     int num_pages,
+                     void *vaddr,
+                     sel4utils_reservation_type_t vmr_type,
+                     uintptr_t paddr,
+                     mo_client_context_t *ret_mo)
 {
     int error;
     GOTO_IF_COND(num_pages <= 0, "Invalid VMR pages specified: %d\n", num_pages);
-    pd_client_context_t self_pd = sel4gpi_get_pd_conn();
 
     seL4_CPtr mo_rde = sel4gpi_get_rde(GPICAP_TYPE_MO);
-
+    GOTO_IF_COND(mo_rde == seL4_CapNull, "No MO RDE to allocate from\n");
     mo_client_context_t mo;
-    error = mo_component_client_connect(mo_rde, num_pages, &mo);
+    if (paddr)
+    {
+        error = mo_component_client_connect_paddr(mo_rde, num_pages, paddr, &mo);
+    }
+    else
+    {
+        error = mo_component_client_connect(mo_rde, num_pages, &mo);
+    }
     GOTO_IF_ERR(error, "failed to allocate MO\n");
-
     void *new_vaddr;
     error = ads_client_attach(vmr_rde, vaddr, &mo, vmr_type, &new_vaddr);
     GOTO_IF_ERR(error, "failed to attach MO\n");
+    WARN_IF_COND(vaddr && (new_vaddr != vaddr), "ADS attached vaddr (%lx) differs from requested (%lx)\n",
+                 new_vaddr, vaddr);
+    WARN_IF_COND(paddr && vaddr && (paddr == (uintptr_t)vaddr) && (new_vaddr != (uintptr_t)paddr),
+                 "Identity mapping failed\n");
 
     if (ret_mo)
     {
@@ -198,6 +211,22 @@ void *sel4gpi_get_vmr(ads_client_context_t *vmr_rde, int num_pages, void *vaddr,
 
 err_goto:
     return NULL;
+}
+
+void *sel4gpi_get_vmr(ads_client_context_t *vmr_rde, int num_pages, void *vaddr,
+                      sel4utils_reservation_type_t vmr_type, mo_client_context_t *ret_mo)
+{
+    return get_vmr(vmr_rde, num_pages, vaddr, vmr_type, 0, ret_mo);
+}
+
+void *sel4gpi_get_vmr_at_paddr(ads_client_context_t *vmr_rde,
+                               int num_pages,
+                               void *vaddr,
+                               sel4utils_reservation_type_t vmr_type,
+                               uintptr_t paddr,
+                               mo_client_context_t *ret_mo)
+{
+    return get_vmr(vmr_rde, num_pages, vaddr, vmr_type, paddr, ret_mo);
 }
 
 int sel4gpi_destroy_vmr(ads_client_context_t *vmr_rde, void *vaddr, mo_client_context_t *mo)

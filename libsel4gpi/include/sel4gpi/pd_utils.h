@@ -133,19 +133,42 @@ void sel4gpi_set_exit_cb(void);
  * @param num_pages number of pages
  * @param vaddr OPTIONAL, address in which the VMR should be mapped
  * @param vmr_type type of VMR, e.g. stack, heap, IPC buffer, etc.
- * @param ret_mo OPTIONAL, returns a reference to the MO object for this VMR
+ * @param[out] ret_mo OPTIONAL, returns a reference to the MO object for this VMR
  * @return virtual address of the VMR, if vaddr argument is specified, it should be the same (or NULL, on failure)
  */
-void *sel4gpi_get_vmr(ads_client_context_t *vmr_rde, int num_pages, void *vaddr, sel4utils_reservation_type_t vmr_type, mo_client_context_t *ret_mo);
+void *sel4gpi_get_vmr(ads_client_context_t *vmr_rde,
+                      int num_pages,
+                      void *vaddr,
+                      sel4utils_reservation_type_t vmr_type,
+                      mo_client_context_t *ret_mo);
+
+/**
+ * @brief obtains a new VMR for an MO at a specific physical address.
+ * For identity mapping, specify vaddr to be the same as paddr
+ *
+ * @param vmr_rde the ADS which the VMR belongs to
+ * @param num_pages number of pages
+ * @param vaddr OPTIONAL, address in which the VMR should be mapped
+ * @param vmr_type type of VMR, e.g. stack, heap, IPC buffer, etc.
+ * @param paddr the phys address of of the MO
+ * @param[out] ret_mo OPTIONAL, returns a reference to the MO object for this VMR
+ * @return virtual address of the VMR, if vaddr argument is specified, it should be the same (or NULL, on failure)
+ */
+void *sel4gpi_get_vmr_at_paddr(ads_client_context_t *vmr_rde,
+                               int num_pages,
+                               void *vaddr,
+                               sel4utils_reservation_type_t vmr_type,
+                               uintptr_t paddr,
+                               mo_client_context_t *ret_mo);
 
 /**
  * Unattach an MO from the given ADS then destroy it
- * 
+ *
  * @param vmr_rde the ADS where the MO is attached
  * @param vaddr the vaddr where the MO is attached
  * @param mo connection to the MO to destroy
  * @return 0 on success, error otherwise
-*/
+ */
 int sel4gpi_destroy_vmr(ads_client_context_t *vmr_rde, void *vaddr, mo_client_context_t *mo);
 
 /**

@@ -59,6 +59,7 @@ static int alloc_frames_at_paddr(vka_t *vka, mo_t *mo, uint32_t num_pages, uintp
     }
 
 err_goto:
+    // TODO: free frames if something failed mid-allocation
     return error;
 }
 

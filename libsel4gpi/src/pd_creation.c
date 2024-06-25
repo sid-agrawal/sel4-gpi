@@ -281,8 +281,6 @@ int sel4gpi_ads_configure(ads_config_t *cfg,
                 }
 
                 break;
-            case GPI_OMIT:
-                break;
             default:
                 GOTO_IF_COND(1, "Invalid sharing degree specified (%d) for VMR (%p)\n", vmr->share_mode, vmr->start);
                 break;
@@ -592,8 +590,6 @@ char *sel4gpi_share_degree_to_str(gpi_share_degree_t share_deg)
         return "Deep Copy";
     case GPI_DISJOINT:
         return "Disjoint";
-    case GPI_OMIT:
-        return "Omitted";
     default:
         return "Invalid";
     }
