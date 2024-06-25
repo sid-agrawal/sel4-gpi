@@ -88,6 +88,16 @@ int cpu_client_start(cpu_client_context_t *conn)
     return seL4_MessageInfo_ptr_get_label(&tag);
 }
 
+int cpu_client_elevate_priviledges(cpu_client_context_t *conn)
+{
+    seL4_SetMR(CPUMSGREG_FUNC, CPU_FUNC_ELEVATE_REQ);
+    seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0,
+                                                  CPUMSGREG_ELEVATE_REQ_END);
+    tag = seL4_Call(conn->badged_server_ep_cspath.capPtr, tag);
+
+    return seL4_MessageInfo_ptr_get_label(&tag);
+}
+
 int cpu_client_set_tls_base(cpu_client_context_t *cpu, void *tls_base)
 {
     seL4_SetMR(CPUMSGREG_FUNC, CPU_FUNC_SET_TLS_REQ);

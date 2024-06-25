@@ -61,7 +61,10 @@ enum cpu_component_funcs
     CPU_FUNC_SET_TLS_ACK,
 
     CPU_FUNC_SUSPEND_REQ,
-    CPU_FUNC_SUSPEND_ACK
+    CPU_FUNC_SUSPEND_ACK,
+
+    CPU_FUNC_ELEVATE_REQ,
+    CPU_FUNC_ELEVATE_ACK
 };
 
 /* Designated purposes of each message register in the mini-protocol. */
@@ -117,7 +120,12 @@ enum cpu_component_msgregs
     /* Suspend */
     CPUMSGREG_SUSPEND_REQ_END = CPUMSGREG_LABEL0,
 
-    CPUMSGREG_SUSPEND_ACK_END = CPUMSGREG_LABEL0
+    CPUMSGREG_SUSPEND_ACK_END = CPUMSGREG_LABEL0,
+
+    /* Elevate */
+    CPUMSGREG_ELEVATE_REQ_END = CPUMSGREG_LABEL0,
+
+    CPUMSGREG_ELEVATE_ACK_END = CPUMSGREG_LABEL0
 };
 
 /* Per-client context maintained by the server. */

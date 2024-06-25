@@ -1,3 +1,13 @@
+/**
+ * @file endpoint_clientapi.c
+ * @author Linh Pham (phamhlinh01@gmail.com)
+ * @brief client facing functions for tracked endpoint operations
+ * @version 0.1
+ * @date 2024-06-25
+ *
+ * @copyright Copyright (c) 2024
+ *
+ */
 #include <sel4gpi/endpoint_clientapi.h>
 #include <sel4gpi/endpoint_component.h>
 

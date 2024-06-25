@@ -1,7 +1,7 @@
 /**
  * @file endpoint_clientapi.h
  * @author Linh Pham (phamhlinh01@gmail.com)
- * @brief API calls to allocate tracked endpoints
+ * @brief client facing functions for tracked endpoint operations
  * @version 0.1
  * @date 2024-06-18
  *

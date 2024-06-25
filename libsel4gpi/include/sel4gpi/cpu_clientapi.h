@@ -39,7 +39,8 @@ int cpu_component_client_disconnect(cpu_client_context_t *conn);
 /**
  * @brief starts a execution of a CPU object.
  * Requires an ADS and PD have already been binded to the CPU (via cpu_client_config)
- * Assumes that any necessary state (stack or register arguments, entry points) in the ADS has already been set up for the CPU
+ * Assumes that any necessary state (stack or register arguments, entry points)
+ * in the ADS has already been set up for the CPU
  *
  * @param conn client connection object
  * @return int 0 on success, 1 on failure.
@@ -76,6 +77,14 @@ int cpu_client_config(cpu_client_context_t *cpu,
  */
 int cpu_client_change_vspace(cpu_client_context_t *conn,
                              ads_client_context_t *ads_conn);
+
+/**
+ * @brief elevate priviledges of a CPU (e.g. for running a guest)
+ *
+ * @param conn the CPU to elevate
+ * @return int 0 on success, -1 on failure.
+ */
+int cpu_client_elevate_priviledges(cpu_client_context_t *conn);
 
 /* ======================================= CONVENIENCE FUNCTIONS (NOT PART OF FRAMEWORK) ================================================= */
 /**

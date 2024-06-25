@@ -214,7 +214,8 @@ static seL4_MessageInfo_t handle_set_tls_req(seL4_Word sender_badge, seL4_Messag
     OSDB_PRINTF("Got set TLS base request:");
     BADGE_PRINT(sender_badge);
 
-    cpu_component_registry_entry_t *cpu_data = (cpu_component_registry_entry_t *)resource_component_registry_get_by_badge(get_cpu_component(), sender_badge);
+    cpu_component_registry_entry_t *cpu_data = (cpu_component_registry_entry_t *)
+        resource_component_registry_get_by_badge(get_cpu_component(), sender_badge);
     SERVER_GOTO_IF_COND_BG(cpu_data == NULL, sender_badge, "Couldn't find CPU data\n");
     void *tls_base = (void *)seL4_GetMR(CPUMSGREG_SET_TLS_REQ_BASE);
 
@@ -224,6 +225,25 @@ static seL4_MessageInfo_t handle_set_tls_req(seL4_Word sender_badge, seL4_Messag
 err_goto:
     seL4_SetMR(CPUMSGREG_FUNC, CPU_FUNC_SET_TLS_ACK);
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(error, 0, 0, CPUMSGREG_SET_TLS_ACK_END);
+    return tag;
+}
+
+static seL4_MessageInfo_t handle_elevate_req(seL4_Word sender_badge)
+{
+    int error = 0;
+    OSDB_PRINTF("Got elevate CPU request:");
+    BADGE_PRINT(sender_badge);
+
+    cpu_component_registry_entry_t *cpu_data = (cpu_component_registry_entry_t *)
+        resource_component_registry_get_by_badge(get_cpu_component(), sender_badge);
+    SERVER_GOTO_IF_COND_BG(cpu_data == NULL, sender_badge, "Couldn't find CPU data\n");
+
+    error = cpu_elevate(&cpu_data->cpu);
+    SERVER_GOTO_IF_ERR(error, "Failed to set TLS \n");
+
+err_goto:
+    seL4_SetMR(CPUMSGREG_FUNC, CPU_FUNC_ELEVATE_ACK);
+    seL4_MessageInfo_t tag = seL4_MessageInfo_new(error, 0, 0, CPUMSGREG_ELEVATE_ACK_END);
     return tag;
 }
 
@@ -259,6 +279,9 @@ static seL4_MessageInfo_t cpu_component_handle(seL4_MessageInfo_t tag,
             break;
         case CPU_FUNC_SET_TLS_REQ:
             reply_tag = handle_set_tls_req(sender_badge, tag);
+            break;
+        case CPU_FUNC_ELEVATE_REQ:
+            reply_tag = handle_elevate_req(sender_badge);
             break;
         default:
             SERVER_GOTO_IF_COND(1, "Unknown request received: %d\n", func);

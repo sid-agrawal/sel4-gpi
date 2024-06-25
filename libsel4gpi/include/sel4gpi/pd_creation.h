@@ -112,6 +112,7 @@ typedef struct _pd_config
     linked_list_t *gpi_res_type_cfg; ///< a list of GPICAP_TYPE_X resource types,
                                      ///< all resources of this type will be shared with the PD
                                      ///< currently does not differentiate between resource spaces
+    bool elevated_cpu;               ///< whether the CPU should have elevated priviledges
     // ongoing: add configs for other resources here as needed
 } pd_config_t;
 

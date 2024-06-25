@@ -45,7 +45,6 @@ static int ep_new(ep_t *ep, vka_t *server_vka, vspace_t *server_vspace, void *ar
 
 static void ep_destroy(ep_t *ep, vka_t *server_vka)
 {
-    // (XXX) Linh: the slot where this EP sits in any PD should be deleted during PD cleanup, right?
 #ifdef CONFIG_DEBUG_BUILD
     seL4_Word is_last_copy = seL4_DebugCapIsLastCopy(ep->endpoint_in_RT.cptr);
     if (!is_last_copy)
@@ -53,10 +52,14 @@ static void ep_destroy(ep_t *ep, vka_t *server_vka)
         OSDB_PRINTERR("Attempting to free EP (%d) with existing copies\n", ep->id);
     }
 #endif
-    // We need to revoke, since this endpoint might've been copied into a CPU's TCB, which may not be deleted yet
-    // (XXX) Linh: It's possible for a CPU to exist beyond a PD's lifetime if other things `hold` it
-    //             I think a CPU configured with a certain PD's CSpace should be destroyed along with the PD
-    //             -> this needs more thought
+    /* We need to revoke for a few reasons:
+     *    - this endpoint might've been copied into a CPU's TCB, which may not be deleted yet
+     *    - If this was the listening endpoint for a resource server PD, we might also still
+     *      have the badged version of this (as a resource) lying around.
+     * (XXX) Linh: It's possible for a CPU to exist beyond a PD's lifetime if other things `hold` it
+     *            I think a CPU configured with a certain PD's CSpace should be destroyed along with the PD
+     *            -> this needs more thought
+     */
     cspacepath_t path;
     vka_cspace_make_path(server_vka, ep->endpoint_in_RT.cptr, &path);
     int error = vka_cnode_revoke(&path);

@@ -30,13 +30,13 @@ typedef struct _cpu
     vka_object_t tcb;        ///< the TCB object
     seL4_Word ipc_buf_addr;  ///< address of the IPC buffer in the TCB's binded ADS
     seL4_CPtr ipc_frame_cap; ///< the frame cap for the IPC buffer
-
     uint64_t binded_ads_id;    ///< ID of the ADS that is binded to the TCB
     void *tls_base;            ///< address of the TLS base (currently unused)
     seL4_CPtr cspace;          ///< cap to the currently binded cspace
     seL4_Word cspace_guard;    ///< guard of the currently binded cspace
     seL4_CPtr fault_ep;        ///< currently binded fault endpoint
     seL4_UserContext *reg_ctx; ///< TCB register values that are to be written, NOT the current values
+    vka_object_t vcpu;         ///< VCPU object (only exists if CPU is elevated)
 } cpu_t;
 
 /**
@@ -123,7 +123,8 @@ void cpu_destroy(cpu_t *cpu);
  *
  * @param cpu the target CPU object
  * @param tls_base address of the TLS base in the ADS configured for this CPU
- * @param write_reg if true, write the TLS base value into the appropriate register immediately, otherwise only the CPU's user context metadata will be set
+ * @param write_reg if true, write the TLS base value into the appropriate register immediately,
+ *                  otherwise only the CPU's user context metadata will be set
  * @return int returns 0 on success, 1 on failure
  */
 int cpu_set_tls_base(cpu_t *cpu, void *tls_base, bool write_reg);
@@ -156,3 +157,12 @@ int cpu_set_local_context(cpu_t *cpu, void *entry_point,
  * @return int returns 0 on success, 1 on failure
  */
 int cpu_set_remote_context(cpu_t *cpu, void *entry_point, void *init_stack);
+
+/**
+ * @brief elevates a CPU by creating a VCPU and binding it to the TCB
+ * currently only supports ARM arch
+ *
+ * @param cpu CPU to elevate
+ * @return int returns 0 on success, 1 on failure
+ */
+int cpu_elevate(cpu_t *cpu);

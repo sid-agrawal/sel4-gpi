@@ -49,11 +49,12 @@ int cpu_config_vspace(cpu_t *cpu,
                       seL4_CPtr ipc_buffer_frame,
                       seL4_Word ipc_buf_addr)
 {
+    int error = 0;
     OSDB_PRINTF("Configuring CPU, cspace: %lx, cspace_guard: %lx, fault_ep: %lx, ipc_buf_addr: %lx, ipc_buf_frame: %lx\n",
                 root_cnode, cnode_guard, fault_ep, ipc_buf_addr, ipc_buffer_frame);
 
     seL4_CPtr vspace_root = vspace->get_root(vspace); // root page table
-    assert(vspace_root != 0);
+    SERVER_GOTO_IF_COND(vspace_root == seL4_CapNull, "Couldn't find root page table\n");
 
     cpu->cspace = root_cnode;
     cpu->cspace_guard = cnode_guard;
@@ -61,22 +62,20 @@ int cpu_config_vspace(cpu_t *cpu,
     cpu->ipc_buf_addr = ipc_buf_addr;
     cpu->ipc_frame_cap = ipc_buffer_frame;
 
-    int error = seL4_TCB_Configure(cpu->tcb.cptr,
-                                   fault_ep,   // fault endpoint
-                                   root_cnode, // root cnode
-                                   cnode_guard,
-                                   vspace_root,
-                                   0, // domain
-                                   ipc_buf_addr,
-                                   ipc_buffer_frame);
-    assert(error == 0);
+    error = seL4_TCB_Configure(cpu->tcb.cptr,
+                               fault_ep,   // fault endpoint
+                               root_cnode, // root cnode
+                               cnode_guard,
+                               vspace_root,
+                               0, // domain
+                               ipc_buf_addr,
+                               ipc_buffer_frame);
+    SERVER_GOTO_IF_ERR(error, "Failed to configure TCB\n");
 
     error = seL4_TCB_SetPriority(cpu->tcb.cptr, seL4_CapInitThreadTCB, seL4_MaxPrio - 1);
-    assert(error == 0);
 
-    // sel4debug_dump_registers(cpu->tcb.cptr);
-
-    return 0;
+err_goto:
+    return error;
 }
 
 int cpu_change_vspace(cpu_t *cpu,
@@ -84,19 +83,20 @@ int cpu_change_vspace(cpu_t *cpu,
                       vspace_t *vspace)
 {
     OSDB_PRINTF("cpu_change_vspace: Configuring CPU\n");
-
+    int error = 0;
     seL4_CPtr vspace_root = vspace->get_root(vspace); // root page table
-    assert(vspace_root != 0);
+    SERVER_GOTO_IF_COND(vspace_root == seL4_CapNull, "Couldn't find root page table\n");
 
-    int error = seL4_TCB_Configure(cpu->tcb.cptr,
-                                   cpu->fault_ep, // fault endpoint
-                                   cpu->cspace,   // root cnode
-                                   cpu->cspace_guard,
-                                   vspace_root,
-                                   0, // domain
-                                   cpu->ipc_buf_addr,
-                                   cpu->ipc_frame_cap);
+    error = seL4_TCB_Configure(cpu->tcb.cptr,
+                               cpu->fault_ep, // fault endpoint
+                               cpu->cspace,   // root cnode
+                               cpu->cspace_guard,
+                               vspace_root,
+                               0, // domain
+                               cpu->ipc_buf_addr,
+                               cpu->ipc_frame_cap);
 
+err_goto:
     return error;
 }
 
@@ -212,7 +212,17 @@ int cpu_set_remote_context(cpu_t *cpu, void *entry_point, void *init_stack)
     error = seL4_TCB_WriteRegisters(cpu->tcb.cptr, 0, 0, sizeof(seL4_UserContext) / sizeof(seL4_Word), cpu->reg_ctx);
     SERVER_GOTO_IF_ERR(error, "failed to write TCB registers\n");
 
-    // sel4debug_dump_registers(cpu->tcb.cptr);
+err_goto:
+    return error;
+}
+
+int cpu_elevate(cpu_t *cpu)
+{
+    int error = 0;
+    error = vka_alloc_vcpu(get_cpu_component()->server_vka, &cpu->vcpu);
+    SERVER_GOTO_IF_ERR(error, "Failed to allocate a VCPU\n");
+
+    error = seL4_ARM_VCPU_SetTCB(cpu->vcpu.cptr, cpu->tcb.cptr);
 
 err_goto:
     return error;
