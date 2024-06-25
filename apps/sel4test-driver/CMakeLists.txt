@@ -46,7 +46,6 @@ set(LibNanopb ON CACHE BOOL "" FORCE)
 sel4_projects_libs_import_libraries()
 add_subdirectory(../../libsel4testsupport libsel4testsupport)
 add_subdirectory(../../libsel4gpi libsel4gpi)
-add_subdirectory(../../vmm libsel4vmm)
 
 file(
     GLOB
@@ -64,6 +63,7 @@ add_subdirectory(../sel4test-tests sel4test-tests)
 add_subdirectory(../ramdisk ramdisk)
 add_subdirectory(../xv6fs xv6fs)
 add_subdirectory(../kvstore kvstore)
+add_subdirectory(../sel4test-vmm sel4test-vmm)
 add_subdirectory(../hello hello)
 add_subdirectory(../hello-kvstore hello-kvstore)
 add_subdirectory(../hello-benchmark hello-benchmark)
