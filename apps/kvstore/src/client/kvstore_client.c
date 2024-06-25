@@ -61,11 +61,7 @@ static int configure_separate_ads()
     error = ads_component_client_connect(ads_rde, &runnable.ads);
     GOTO_IF_ERR(error, "failed to allocate a new ADS");
 
-    ads_config_t other_ads_cfg = {
-        .code_shared = GPI_COPY,
-        .stack_shared = GPI_SHARED,
-        .stack_pages = DEFAULT_STACK_PAGES,
-    };
+    ads_config_t other_ads_cfg = {0};
 
     linked_list_t other_vmr_cfg = {0};
     int n_cfgs = 0;

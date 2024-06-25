@@ -76,16 +76,8 @@ typedef struct _vmr_config
  */
 typedef struct _ads_config
 {
-    const char *image_name; ///< only used if code_shared == GPI_DISJOINT
+    const char *image_name; ///< only used if ADS config contains a CODE region that's GPI_DISJOINT
     void *entry_point;      ///< if specified, will take precedence over any automatically found ones
-
-    /** if we're in the same ADS, configuring any of these as GPI_SHARED has no effect
-     * (XXX) Linh: these are to be removed once we have a unified entry point,
-     *             this should match up with the sharing degree specified inside vmr_cfgs
-     */
-    gpi_share_degree_t code_shared;
-    gpi_share_degree_t stack_shared;
-    size_t stack_pages;
 
     /** list of vaddrs to non-contiguous VMRs to configure, the heap should be specified here.
      *  If we're in the same ADS, configuring any of these as GPI_SHARED has no effect

@@ -81,7 +81,6 @@ pd_config_t *sel4gpi_configure_process(const char *image_name,
     GOTO_IF_ERR(error, "failed to allocate a new ADS");
 
     /* new CPU */
-    // (XXX) Linh: for now, we'll just assume we always need a new CPU resource, configuration is TBD
     seL4_CPtr cpu_rde = sel4gpi_get_rde(GPICAP_TYPE_CPU);
     GOTO_IF_COND(cpu_rde == seL4_CapNull, "No CPU RDE\n");
 
@@ -127,7 +126,6 @@ pd_config_t *sel4gpi_configure_thread(void *thread_fn, ep_client_context_t *faul
     ret_runnable->ads = sel4gpi_get_ads_conn();
 
     /* new CPU */
-    // (XXX) Linh: for now, we'll just assume we always need a new CPU resource, configuration is TBD
     seL4_CPtr cpu_rde = sel4gpi_get_rde(GPICAP_TYPE_CPU);
     GOTO_IF_COND(cpu_rde == seL4_CapNull, "No CPU RDE\n");
 
@@ -250,8 +248,8 @@ int sel4gpi_ads_configure(ads_config_t *cfg,
                 }
                 else if (vmr->type == SEL4UTILS_RES_TYPE_STACK)
                 {
-                    PD_CREATION_PRINT("Allocating stack (%zu pages)\n", cfg->stack_pages);
-                    void *stack = sel4gpi_new_sized_stack(&vmr_rde, cfg->stack_pages);
+                    PD_CREATION_PRINT("Allocating stack (%zu pages)\n", vmr->region_pages);
+                    void *stack = sel4gpi_new_sized_stack(&vmr_rde, vmr->region_pages);
                     if (ret_stack)
                     {
                         *ret_stack = stack;
@@ -316,6 +314,26 @@ static int rde_configure(pd_config_t *cfg, sel4gpi_runnable_t *runnable)
 
 err_goto:
     return error;
+}
+
+static vmr_config_t *find_vmr_cfg_by_type(ads_config_t *cfg, sel4utils_reservation_type_t type)
+{
+    vmr_config_t *found = NULL;
+    if (cfg->vmr_cfgs)
+    {
+        vmr_config_t *vmr = NULL;
+        for (linked_list_node_t *curr = cfg->vmr_cfgs->head; curr != NULL; curr = curr->next)
+        {
+            vmr = (vmr_config_t *)curr->data;
+            if (vmr->type == type)
+            {
+                found = vmr;
+                break;
+            }
+        }
+    }
+
+    return found;
 }
 
 int sel4gpi_prepare_pd(pd_config_t *cfg, sel4gpi_runnable_t *runnable, int argc, seL4_Word *args)
@@ -384,16 +402,16 @@ int sel4gpi_prepare_pd(pd_config_t *cfg, sel4gpi_runnable_t *runnable, int argc,
     PD_CREATION_PRINT("Sent fault EP to PD in slot 0x%lx\n", fault_ep_in_PD.raw_endpoint);
 
     // (XXX) Linh: This whole `if` blob is to be removed with unified entry-point
-    if (cfg->ads_cfg.stack_shared == GPI_DISJOINT)
+    vmr_config_t *stack_cfg = find_vmr_cfg_by_type(&cfg->ads_cfg, SEL4UTILS_RES_TYPE_STACK);
+    if (stack_cfg && stack_cfg->share_mode != GPI_SHARED)
     {
         PD_CREATION_PRINT("Setting up runtime\n");
         pd_setup_type_t setup_mode = runnable->ads.id != sel4gpi_get_binded_ads_id() ? PD_RUNTIME_SETUP : PD_REGISTER_SETUP;
-
         if (setup_mode == PD_REGISTER_SETUP)
         {
             PD_CREATION_PRINT("C Runtime already initialized, setup the TLS ourselves\n");
             void *tp = NULL;
-            error = setup_tls_in_stack(stack, cfg->ads_cfg.stack_pages, ipc_buf, osm_shared_data, &stack, &tp);
+            error = setup_tls_in_stack(stack, stack_cfg->region_pages, ipc_buf, osm_shared_data, &stack, &tp);
             GOTO_IF_ERR(error, "failed to write TLS\n");
 
             error = cpu_client_set_tls_base(&runnable->cpu, tp);
@@ -443,9 +461,6 @@ pd_config_t *sel4gpi_generate_proc_config(const char *image_name, size_t stack_p
                                           size_t heap_pages, mo_client_context_t *osm_data_mo)
 {
     pd_config_t *proc_cfg = calloc(1, sizeof(pd_config_t));
-    proc_cfg->ads_cfg.code_shared = GPI_DISJOINT;
-    proc_cfg->ads_cfg.stack_shared = GPI_DISJOINT;
-    proc_cfg->ads_cfg.stack_pages = stack_pages;
     proc_cfg->ads_cfg.image_name = image_name;
     proc_cfg->osm_data_mo = *osm_data_mo;
 
@@ -466,6 +481,7 @@ pd_config_t *sel4gpi_generate_proc_config(const char *image_name, size_t stack_p
     vmr_config_t *stack_vmr = calloc(1, sizeof(vmr_config_t));
     stack_vmr->type = SEL4UTILS_RES_TYPE_STACK;
     stack_vmr->share_mode = GPI_DISJOINT;
+    stack_vmr->region_pages = stack_pages;
     n_cfgs++;
 
     vmr_config_t *ipc_buf_vmr = calloc(1, sizeof(vmr_config_t));
@@ -504,20 +520,14 @@ pd_config_t *sel4gpi_generate_thread_config(void *thread_fn,
         thread_cfg->fault_ep = *fault_ep;
     }
     thread_cfg->osm_data_mo = *osm_data_mo;
-
-    ads_config_t thread_ads_cfg = {
-        .entry_point = thread_fn,
-        .code_shared = GPI_SHARED,
-        .stack_shared = GPI_DISJOINT,
-        .stack_pages = DEFAULT_STACK_PAGES};
-
-    thread_cfg->ads_cfg = thread_ads_cfg;
+    thread_cfg->ads_cfg.entry_point = thread_fn;
     thread_cfg->ads_cfg.vmr_cfgs = linked_list_new();
 
     int n_cfgs = 0;
     vmr_config_t *stack_cfg = calloc(1, sizeof(vmr_config_t));
     stack_cfg->type = SEL4UTILS_RES_TYPE_STACK;
     stack_cfg->share_mode = GPI_DISJOINT;
+    stack_cfg->region_pages = DEFAULT_STACK_PAGES;
     n_cfgs++;
 
     vmr_config_t *ipc_buf_cfg = calloc(1, sizeof(vmr_config_t));
