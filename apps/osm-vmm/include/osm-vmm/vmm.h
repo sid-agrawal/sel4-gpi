@@ -32,11 +32,24 @@
 #define VMM_PRINT(...)
 #endif // VMM_DBG
 
-// typedef struct _vmm_context
-// {
-
-// } vmm_context_t;
-
+/**
+ * @brief Holds information about a VM for a
+ * seL4-test VMM implementation
+ */
+typedef struct _vm_context
+{
+    vka_object_t vcpu;
+    vka_object_t vspace_root;
+    vspace_t vspace;
+    sel4utils_alloc_data_t vspace_data;
+    vka_object_t tcb;
+    vka_object_t sched_ctxt;
+    seL4_CPtr fault_ep;
+    vka_object_t cspace;
+    vka_object_t *dev_frames;
+    size_t n_dev_frames;
+    vka_object_t gic_vcpu_frame;
+} vm_context_t;
 // int vmm_init()
 
 /**

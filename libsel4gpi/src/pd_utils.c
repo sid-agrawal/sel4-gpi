@@ -187,11 +187,11 @@ static void *get_vmr(ads_client_context_t *vmr_rde,
     mo_client_context_t mo;
     if (paddr)
     {
-        error = mo_component_client_connect_paddr(mo_rde, num_pages, paddr, &mo);
+        error = mo_component_client_connect_paddr(mo_rde, num_pages, MO_PAGE_BITS, paddr, &mo);
     }
     else
     {
-        error = mo_component_client_connect(mo_rde, num_pages, &mo);
+        error = mo_component_client_connect(mo_rde, num_pages, MO_PAGE_BITS, &mo);
     }
     GOTO_IF_ERR(error, "failed to allocate MO\n");
     void *new_vaddr;

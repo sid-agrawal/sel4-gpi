@@ -41,6 +41,7 @@ int test_fs(env_t env)
     mo_client_context_t mo_conn;
     error = mo_component_client_connect(sel4gpi_get_rde(GPICAP_TYPE_MO),
                                         RR_MO_N_PAGES,
+                                        MO_PAGE_BITS,
                                         &mo_conn);
     test_assert(error == 0);
     printf("Finished mo_component_client_connect\n");
@@ -320,6 +321,7 @@ int test_multiple_fs(env_t env)
     mo_client_context_t mo_conn;
     error = mo_component_client_connect(sel4gpi_get_rde(GPICAP_TYPE_MO),
                                         RR_MO_N_PAGES,
+                                        MO_PAGE_BITS,
                                         &mo_conn);
     test_assert(error == 0);
     printf("Finished mo_component_client_connect\n");

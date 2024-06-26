@@ -61,6 +61,7 @@ enum mo_component_msgregs
     /* Connect / New */
     MOMSGREG_CONNECT_REQ_NUM_PAGES = MOMSGREG_LABEL0,
     MOMSGREG_CONNECT_REQ_PADDR,
+    MOMSGREG_CONNECT_REQ_PAGE_BITS,
     MOMSGREG_CONNECT_REQ_END,
 
     MOMSGREG_CONNECT_ACK_ID = MOMSGREG_LABEL0,
@@ -91,9 +92,10 @@ resource_component_context_t *get_mo_component(void);
 
 /**
  * @brief forges an MO resource given the list of frames.
+ * Since this is currently only used for forging ELF regions, assume that page sizes are 4KB
  * (XXX) Arya: Eventually we should be able to remove this entirely.
  * For now, it is used when forging ADS attachments only.
- * 
+ *
  * @param frame_caps the frames belonging to the MO
  * @param num_pages total number of pages
  * @param client_pd_id the PD which holds the MO

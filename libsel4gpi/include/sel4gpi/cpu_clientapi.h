@@ -49,6 +49,14 @@ int cpu_client_start(cpu_client_context_t *conn);
 
 /**
  * @brief Configures a CPU object by binding it to the given ADS and PD
+ * NOTE: the fault endpoint's refcount is not increased here for a few reasons:
+ *       1) we can't send more than 3 unwrapped caps, and don't have a way to indicate which
+ *          EP within the EP component's metadata to refcount -> this could be solved
+ *          with other workarounds
+ *       2) if the refcount to this EP has reached 0, all PDs holding it have exited,
+ *          and nothing will be able to reference it anymore. If the CPU object binded
+ *          to this EP is still lying around, it will have to be reconfigured regardless
+ *          of whether the EP still exists or not.
  *
  * @param cpu the CPU object to configure
  * @param ads the ADS object to bind

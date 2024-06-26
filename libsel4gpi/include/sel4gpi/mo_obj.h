@@ -15,6 +15,7 @@
 #include <sel4gpi/model_exporting.h>
 
 #define MO_PAGE_BITS seL4_PageBits
+#define MO_LARGE_PAGE_BITS seL4_LargePageBits
 
 typedef struct _mo
 {
@@ -24,6 +25,7 @@ typedef struct _mo
     vka_object_t *vka_objects;
     uintptr_t *frame_paddrs;
     uint32_t num_pages;
+    size_t page_bits;
 } mo_t;
 
 /**
@@ -34,6 +36,7 @@ typedef struct _mo
 typedef struct _mo_new_args
 {
     uint32_t num_pages;
+    size_t page_bits;
     uintptr_t paddr;
 } mo_new_args_t;
 

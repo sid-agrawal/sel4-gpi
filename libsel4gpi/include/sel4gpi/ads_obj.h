@@ -44,6 +44,7 @@ typedef struct _attach_node
     reservation_t res;                 ///< Reservation in the vspace
     sel4utils_reservation_type_t type; ///< Reservation type
     uint32_t n_pages;                  ///< Number of pages
+    size_t page_bits;                  ///< size bits of an individual page
 
     // (XXX) Arya: Assumes we only need to attach one MO to a reservation
     bool mo_attached;      ///< True if an MO is attached (next fields are valid only if true)
@@ -160,6 +161,7 @@ int ads_attach(ads_t *ads,
 
 /**
  * Use to forge an ADS attach from a vspace attach
+ * Will assume the page size is the same as the MO frames
  * (XXX) Arya: to be deprecated eventually
  *
  * @param ads ads object

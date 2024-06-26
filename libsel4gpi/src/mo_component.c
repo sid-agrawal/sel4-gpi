@@ -59,7 +59,7 @@ int mo_component_allocate_rt(int num_pages, mo_t **ret_mo)
     int error = 0;
     mo_component_registry_entry_t *new_entry;
 
-    mo_new_args_t alloc_args = {.num_pages = num_pages, .paddr = 0};
+    mo_new_args_t alloc_args = {.num_pages = num_pages, .paddr = 0, .page_bits = MO_PAGE_BITS};
 
     error = resource_component_allocate(
         get_mo_component(),
@@ -91,15 +91,16 @@ static seL4_MessageInfo_t handle_mo_allocation_request(seL4_Word sender_badge)
     uint32_t client_id = get_client_id_from_badge(sender_badge);
     seL4_Word num_pages = seL4_GetMR(MOMSGREG_CONNECT_REQ_NUM_PAGES);
     uintptr_t paddr = seL4_GetMR(MOMSGREG_CONNECT_REQ_PADDR);
+    size_t page_bits = seL4_GetMR(MOMSGREG_CONNECT_REQ_PAGE_BITS);
 
-    OSDB_PRINTF("Got connect request for %ld pages\n", num_pages);
+    OSDB_PRINTF("Got connect request for %ld pages of size: %zu\n", num_pages, SIZE_BITS_TO_BYTES(page_bits));
 
     if (paddr)
     {
         OSDB_PRINTF("Sender requested specific paddr: %lx\n", paddr);
     }
 
-    mo_new_args_t alloc_args = {.num_pages = num_pages, .paddr = paddr};
+    mo_new_args_t alloc_args = {.num_pages = num_pages, .paddr = paddr, .page_bits = page_bits};
 
     error = resource_component_allocate(get_mo_component(), client_id, BADGE_OBJ_ID_NULL, false, (void *)&alloc_args,
                                         (resource_server_registry_node_t **)&new_entry, &ret_cap);
@@ -242,6 +243,7 @@ int forge_mo_cap_from_frames(seL4_CPtr *frame_caps,
     assert(mo->frame_caps_in_root_task != NULL);
     assert(mo->frame_paddrs != NULL);
 
+    mo->page_bits = MO_PAGE_BITS;
     mo->num_pages = num_pages;
     for (int i = 0; i < num_pages; i++)
     {

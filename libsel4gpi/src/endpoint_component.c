@@ -54,13 +54,14 @@ static void ep_destroy(ep_t *ep, vka_t *server_vka)
         WARN("Attempting to free EP (%d) with existing copies\n", ep->id);
     }
 #endif
-    /* We need to revoke for a few reasons:
-     *    - this endpoint might've been copied into a CPU's TCB, which may not be deleted yet
-     *    - If this was the listening endpoint for a resource server PD, we might also still
-     *      have the badged version of this (as a resource) lying around.
-     * (XXX) Linh: It's possible for a CPU to exist beyond a PD's lifetime if other things `hold` it
-     *            I think a CPU configured with a certain PD's CSpace should be destroyed along with the PD
-     *            -> this needs more thought
+    /* Revoking here because this endpoint might've been copied into a CPU's TCB (as a fault EP),
+     * which may not be deleted yet. The TCB will be bounded to an invalid fault endpoint, which is fine
+     * because no PDs `hold` this EP anymore, rendering it effectively useless
+     *
+     * Additionally, if this was the the listening endpoint for a resource server PD, it's expected that the
+     * badged versions (representing resources) got deleted when client PDs and the resource server PD is destroyed
+     *
+     * (XXX) Linh: there is a problem with the test PDs having multiple CSpaces which will leave references to this cap
      */
     cspacepath_t path;
     vka_cspace_make_path(server_vka, ep->endpoint_in_RT.cptr, &path);
@@ -138,15 +139,20 @@ static seL4_MessageInfo_t handle_get_raw_endpoint(seL4_MessageInfo_t old_tag, se
     BADGE_PRINT(sender_badge);
 
     seL4_Uint64 extra_caps = seL4_MessageInfo_get_extraCaps(old_tag);
-    seL4_Word pd_badge = sender_badge;
-    if (extra_caps > 0)
+    pd_component_registry_entry_t *pd_data = NULL;
+    if (seL4_MessageInfo_get_capsUnwrapped(old_tag) > 0)
     {
-        pd_badge = seL4_GetBadge(0);
-        OSDB_PRINTF("Extra caps detected, retrieving raw endpoint in target PD%d\n", get_client_id_from_badge(pd_badge));
+        OSDB_PRINTF("Unwrapped caps detected, retrieving raw endpoint in target PD%d\n",
+                    get_object_id_from_badge(seL4_GetBadge(0)));
+        pd_data = (pd_component_registry_entry_t *)
+            resource_component_registry_get_by_badge(get_pd_component(), seL4_GetBadge(0));
+    }
+    else
+    {
+        pd_data = (pd_component_registry_entry_t *)
+            resource_component_registry_get_by_id(get_pd_component(), get_client_id_from_badge(sender_badge));
     }
 
-    pd_component_registry_entry_t *pd_data = (pd_component_registry_entry_t *)
-        resource_component_registry_get_by_id(get_pd_component(), get_client_id_from_badge(pd_badge));
     SERVER_GOTO_IF_COND(pd_data == NULL, "Cannot find PD data\n");
 
     ep_component_registry_entry_t *ep_data = (ep_component_registry_entry_t *)

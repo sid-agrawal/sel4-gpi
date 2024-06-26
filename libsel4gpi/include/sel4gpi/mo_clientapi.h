@@ -19,11 +19,13 @@
  *
  * @param server_ep_cap Well known server endpoint cap.
  * @param num_pages number of pages in MO
- * @param ret_conn client's connection object
+ * @param page_bits size bits of an individual page
+ * @param ret_conn[out] client's connection object
  * @return int 0 on success, 1 on failure.
  */
 int mo_component_client_connect(seL4_CPtr server_ep_cap,
                                 seL4_Word num_pages,
+                                size_t page_bits,
                                 mo_client_context_t *ret_conn);
 
 /**
@@ -31,12 +33,14 @@ int mo_component_client_connect(seL4_CPtr server_ep_cap,
  *
  * @param server_ep_cap the MO RDE
  * @param num_pages number of pages in MO
+ * @param page_bits size bits of an individual page
  * @param paddr physical address to allocate at
  * @param ret_conn returns the new MO context
  * @return int 0 on success, 1 on failure
  */
 int mo_component_client_connect_paddr(seL4_CPtr server_ep_cap,
                                       seL4_Word num_pages,
+                                      size_t page_bits,
                                       uintptr_t paddr,
                                       mo_client_context_t *ret_conn);
 

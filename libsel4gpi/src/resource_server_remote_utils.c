@@ -358,7 +358,7 @@ int resource_server_extraction_setup(resource_server_context_t *context,
 
     // Allocate an MO for the extraction
     size_t mem_size = SIZE_BITS_TO_BYTES(MO_PAGE_BITS) * n_pages;
-    error = mo_component_client_connect(sel4gpi_get_rde(GPICAP_TYPE_MO), n_pages, mo);
+    error = mo_component_client_connect(sel4gpi_get_rde(GPICAP_TYPE_MO), n_pages, MO_PAGE_BITS, mo);
     CHECK_ERROR_GOTO(error, "failed to allocate MO for model extraction", err_goto);
 
     void *mem_vaddr;

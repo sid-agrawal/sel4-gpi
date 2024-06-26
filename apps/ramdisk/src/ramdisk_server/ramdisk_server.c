@@ -201,6 +201,7 @@ int ramdisk_init()
 
     error = mo_component_client_connect(server->gen.mo_ep,
                                         n_pages,
+                                        MO_PAGE_BITS,
                                         server->ramdisk_mo);
     CHECK_ERROR(error, "failed to allocate virtual disk");
     RAMDISK_PRINTF("Allocated ramdisk\n");

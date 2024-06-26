@@ -26,12 +26,13 @@ void *sel4gpi_new_sized_stack(ads_client_context_t *ads_rde, size_t n_pages)
 
     size_t res_size = (n_pages + 1) * (SIZE_BITS_TO_BYTES(MO_PAGE_BITS));
     ads_vmr_context_t reservation;
-    error = ads_client_reserve(ads_rde, slot, NULL, res_size, SEL4UTILS_RES_TYPE_STACK, &reservation, &vaddr);
+    error = ads_client_reserve(ads_rde, slot, NULL, res_size, MO_PAGE_BITS,
+                               SEL4UTILS_RES_TYPE_STACK, &reservation, &vaddr);
     GOTO_IF_ERR(error, "failed to reserve VMR for stack\n");
 
     /* allocate MO */
     mo_client_context_t mo;
-    error = mo_component_client_connect(mo_rde, n_pages, &mo);
+    error = mo_component_client_connect(mo_rde, n_pages, MO_PAGE_BITS, &mo);
     GOTO_IF_ERR(error, "failed to allocate MO\n");
 
     /* attach MO to ADS */
@@ -67,7 +68,7 @@ pd_config_t *sel4gpi_configure_process(const char *image_name,
 
     /* allocate MO for PD's OSmosis data */
     mo_client_context_t osm_data_mo;
-    error = mo_component_client_connect(mo_rde, 1, &osm_data_mo);
+    error = mo_component_client_connect(mo_rde, 1, MO_PAGE_BITS, &osm_data_mo);
     GOTO_IF_ERR(error, "Failed to allocat OSmosis data MO\n");
 
     /* new PD */
@@ -116,7 +117,7 @@ pd_config_t *sel4gpi_configure_thread(void *thread_fn, ep_client_context_t *faul
 
     /* new PD */
     mo_client_context_t osm_data_mo;
-    error = mo_component_client_connect(mo_rde, 1, &osm_data_mo);
+    error = mo_component_client_connect(mo_rde, 1, MO_PAGE_BITS, &osm_data_mo);
     GOTO_IF_ERR(error, "Failed to allocat OSmosis data MO\n");
 
     error = pd_component_client_connect(pd_rde, &osm_data_mo, &ret_runnable->pd);
@@ -255,6 +256,13 @@ int sel4gpi_ads_configure(ads_config_t *cfg,
                         *ret_stack = stack;
                     }
                     GOTO_IF_ERR(stack == NULL, "failed to allocate a new stack");
+                }
+                else if (vmr->mo)
+                {
+                    PD_CREATION_PRINT("Attaching provided MO for a %s VMR", human_readable_va_res_type(vmr->type));
+                    void *vmr_addr = NULL;
+                    error = ads_client_attach(&vmr_rde, vmr->start, vmr->mo, vmr->type, &vmr_addr);
+                    GOTO_IF_ERR(error, "Failed to attach MO to VMR\n");
                 }
                 else
                 {
@@ -397,7 +405,7 @@ int sel4gpi_prepare_pd(pd_config_t *cfg, sel4gpi_runnable_t *runnable, int argc,
                                &fault_ep_in_PD.badged_server_ep_cspath.capPtr);
     GOTO_IF_ERR(error, "Failed to send fault EP to PD\n");
 
-    // error = ep_client_get_raw_endpoint_in_PD()
+    error = ep_client_get_raw_endpoint_in_PD(&runnable->pd, &cfg->fault_ep, &fault_ep_in_PD.raw_endpoint);
     GOTO_IF_ERR(error, "Failed to get raw EP in target PD's CSpace\n");
     PD_CREATION_PRINT("Sent fault EP to PD in slot 0x%lx\n", fault_ep_in_PD.raw_endpoint);
 

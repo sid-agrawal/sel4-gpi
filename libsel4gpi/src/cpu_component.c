@@ -113,7 +113,7 @@ static seL4_MessageInfo_t handle_config_req(seL4_Word sender_badge,
     pd_component_registry_entry_t *pd_data = pd_component_registry_get_entry_by_badge(seL4_GetBadge(0));
     SERVER_GOTO_IF_COND(pd_data == NULL, "Couldn't find PD (%ld)\n", get_object_id_from_badge(seL4_GetBadge(0)));
 
-    /* Get Fault EP */
+    /* Get Fault EP - we do not increase the refcount for it here, see note in cpu_client_config() */
     seL4_CPtr fault_ep = seL4_GetMR(CPUMSGREG_CONFIG_FAULT_EP);
 
     /* Get IPC buf addr */

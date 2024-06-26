@@ -34,7 +34,7 @@ int ads_component_client_disconnect(ads_client_context_t *conn);
 
 /**
  * Attach an MO to an ADS, and simultaneously reserve the VMR of the correct
- * size to attach to
+ * size to attach to. The page size will be inferred from the MO
  *
  * @param conn the VMR RDE for the ADS to attach to
  * @param vaddr virtual address to attach at, can be NULL
@@ -56,15 +56,17 @@ int ads_client_attach(ads_client_context_t *conn,
  * @param free_slot a slot to receive a cap in
  * @param vaddr requested reservation address (or NULL)
  * @param size size in bytes of the region to reserve
+ * @param page_bits size of an individual page
  * @param vmr_type the type of virtual memory (e.g. stack, heap, ipc buffer)
- * @param ret_conn returns the context for the reserved VMR
- * @param ret_vaddr return virtual address where the MO was attached.
+ * @param[out] ret_conn returns the context for the reserved VMR
+ * @param[out] ret_vaddr return virtual address where the MO was attached.
  * @return int 0 on success, 1 on failure
  */
 int ads_client_reserve(ads_client_context_t *conn,
                        seL4_CPtr free_slot,
                        void *vaddr,
                        size_t size,
+                       size_t page_bits,
                        sel4utils_reservation_type_t vmr_type,
                        ads_vmr_context_t *ret_conn,
                        void **ret_vaddr);

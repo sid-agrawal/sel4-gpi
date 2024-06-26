@@ -153,7 +153,7 @@ int test_mutex(env_t env)
 
     /* Create shared MO */
     mo_client_context_t mo_conn;
-    error = mo_component_client_connect(sel4gpi_get_rde(GPICAP_TYPE_MO), 1, &mo_conn);
+    error = mo_component_client_connect(sel4gpi_get_rde(GPICAP_TYPE_MO), 1, MO_PAGE_BITS, &mo_conn);
     test_assert(error == 0);
 
     /* Create shared notification */

@@ -80,7 +80,8 @@ target_link_libraries(
         sel4testsupport
         sel4gpi
         sel4serialserver_tests
-        sel4test_vmm
+        # sel4test_vmm
+        osm_vmm
         ramdisk_client
         fs_client
         sqlite3

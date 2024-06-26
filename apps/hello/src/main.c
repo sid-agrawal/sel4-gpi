@@ -61,6 +61,7 @@ int main(int argc, char **argv)
     mo_client_context_t mo_conn;
     error = mo_component_client_connect(mo_server_ep,
                                         5,
+                                        MO_PAGE_BITS,
                                         &mo_conn);
 
     assert(error == 0);
@@ -98,6 +99,7 @@ int main(int argc, char **argv)
                                   &mo_conn,
                                   SEL4UTILS_RES_TYPE_GENERIC,
                                   &ret_vaddr);
+        assert(error == 0);
         printf("Attached given MO to vaddr %p\n", ret_vaddr);
 
         // tell sender we're done

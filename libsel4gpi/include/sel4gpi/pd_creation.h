@@ -54,7 +54,8 @@ typedef enum _gpi_share_degree
 {
     GPI_SHARED = 1, ///< this resource is directly shared with the other PD,
                     ///< e.g. virt pages that map to the same phys page
-    GPI_COPY,       ///< this resource is copied into the other PD,
+    GPI_COPY,       ///< (XXX) Linh: Remove this option
+                    ///< this resource is copied into the other PD,
                     ///< e.g. virt pages with separate phys pages with contents copied
     GPI_DISJOINT,   ///< this resource exists in the other PD, but has no relation with the source PD
 } gpi_share_degree_t;
@@ -66,21 +67,26 @@ typedef struct _vmr_config
 {
     gpi_share_degree_t share_mode;
     sel4utils_reservation_type_t type;
-    void *start;           ///< vaddr to start of the VMR in the src ADS
-    void *dest_start;      ///< vaddr to the start of VMR in the destination ADS (can be NULL to use `start`)
-    uint64_t region_pages; ///< number of pages in this VMR
+    void *start;             ///< vaddr to start of the VMR in the src ADS, only optional if share_mode = GPI_DISJOINT
+    void *dest_start;        ///< OPTIONAL vaddr to the start of VMR in the destination ADS
+                             ///< can be NULL to use `start`, only takes effect if share_mode != GPI_DISJOINT
+    uint64_t region_pages;   ///< number of pages in this VMR, ignored if an MO is provided
+    mo_client_context_t *mo; ///< OPTIONAL an MO to use to map the VMR, only takes effect if share_mode != GPI_SHARED
 } vmr_config_t;
 
 /**
  * @brief Configuration of an entire ADS, the type of sharing is w.r.t. the current ADS
+ * Although this is an ADS configuration, it is combined with MO sharing as well
+ * caller can provide an MO which will both be shared with the created PD and mapped
+ * to the specified VMR
  */
 typedef struct _ads_config
 {
     const char *image_name; ///< only used if ADS config contains a CODE region that's GPI_DISJOINT
     void *entry_point;      ///< if specified, will take precedence over any automatically found ones
 
-    /** list of vaddrs to non-contiguous VMRs to configure, the heap should be specified here.
-     *  If we're in the same ADS, configuring any of these as GPI_SHARED has no effect
+    /** list of vaddrs to non-contiguous VMRs to configure
+     *  if we're in the same ADS, configuring any of these as GPI_SHARED has no effect
      */
     linked_list_t *vmr_cfgs;
 } ads_config_t;

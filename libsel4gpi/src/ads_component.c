@@ -138,8 +138,9 @@ static seL4_MessageInfo_t handle_reserve_req(seL4_Word sender_badge, seL4_Messag
     uint32_t client_id = get_client_id_from_badge(sender_badge);
     void *vaddr = (void *)seL4_GetMR(ADSMSGREG_RESERVE_REQ_VA);
     size_t size = (size_t)seL4_GetMR(ADSMSGREG_RESERVE_REQ_SIZE);
+    size_t page_bits = (size_t)seL4_GetMR(ADSMSGREG_RESERVE_REQ_PAGE_BITS);
     sel4utils_reservation_type_t vmr_type = (sel4utils_reservation_type_t)seL4_GetMR(ADSMSGREG_RESERVE_REQ_TYPE);
-    uint32_t num_pages = DIV_ROUND_UP(size, SIZE_BITS_TO_BYTES(MO_PAGE_BITS));
+    uint32_t num_pages = DIV_ROUND_UP(size, SIZE_BITS_TO_BYTES(page_bits));
     seL4_CPtr ret_cap;
 
     /* Find the ADS */
@@ -150,7 +151,7 @@ static seL4_MessageInfo_t handle_reserve_req(seL4_Word sender_badge, seL4_Messag
 
     // Make the reservation
     attach_node_t *reservation;
-    error = ads_reserve(&ads_entry->ads, vaddr, num_pages, MO_PAGE_BITS, vmr_type, &reservation);
+    error = ads_reserve(&ads_entry->ads, vaddr, num_pages, page_bits, vmr_type, &reservation);
     SERVER_GOTO_IF_ERR(error, "Failed to make reservation (%p)\n", vaddr);
 
     // Make a cap for the reservation
@@ -368,6 +369,7 @@ err_goto:
 
 /**
  * @brief forges an ADS attachment (and MO) from a given reservation.
+ * Since this is currently only used for forging ELF regions, assume that page sizes are 4KB
  *
  * @param ads the ADS to forge the attachment in
  * @param res the reservation to forge

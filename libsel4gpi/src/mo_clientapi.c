@@ -19,12 +19,14 @@
 
 static int mo_connect(seL4_CPtr server_ep_cap,
                       seL4_Word num_pages,
+                      size_t page_bits,
                       uintptr_t paddr,
                       mo_client_context_t *ret_conn)
 {
     seL4_SetMR(MOMSGREG_FUNC, MO_FUNC_CONNECT_REQ);
     seL4_SetMR(MOMSGREG_CONNECT_REQ_NUM_PAGES, num_pages);
     seL4_SetMR(MOMSGREG_CONNECT_REQ_PADDR, paddr);
+    seL4_SetMR(MOMSGREG_CONNECT_REQ_PAGE_BITS, page_bits);
 
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0, MOMSGREG_CONNECT_REQ_END);
     tag = seL4_Call(server_ep_cap, tag);
@@ -37,17 +39,19 @@ static int mo_connect(seL4_CPtr server_ep_cap,
 
 int mo_component_client_connect(seL4_CPtr server_ep_cap,
                                 seL4_Word num_pages,
+                                size_t page_bits,
                                 mo_client_context_t *ret_conn)
 {
-    return mo_connect(server_ep_cap, num_pages, 0, ret_conn);
+    return mo_connect(server_ep_cap, num_pages, page_bits, 0, ret_conn);
 }
 
 int mo_component_client_connect_paddr(seL4_CPtr server_ep_cap,
                                       seL4_Word num_pages,
+                                      size_t page_bits,
                                       uintptr_t paddr,
                                       mo_client_context_t *ret_conn)
 {
-    return mo_connect(server_ep_cap, num_pages, paddr, ret_conn);
+    return mo_connect(server_ep_cap, num_pages, page_bits, paddr, ret_conn);
 }
 
 int mo_component_client_disconnect(mo_client_context_t *conn)

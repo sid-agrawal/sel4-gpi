@@ -25,13 +25,13 @@
 #define DEBUG_ID MO_DEBUG
 #define SERVER_ID MOSERVS
 
-static int alloc_frames(vka_t *vka, mo_t *mo, uint32_t num_pages)
+static int alloc_frames(vka_t *vka, mo_t *mo, uint32_t num_pages, size_t page_bits)
 {
     int error = 0;
     for (int i = 0; i < num_pages; i++)
     {
         error = vka_alloc_frame_maybe_device(vka,
-                                             seL4_PageBits,
+                                             page_bits,
                                              false,
                                              &mo->vka_objects[i]);
         SERVER_GOTO_IF_ERR(error, "failed to allocate page for MO\n");
@@ -44,18 +44,18 @@ err_goto:
     return error;
 }
 
-static int alloc_frames_at_paddr(vka_t *vka, mo_t *mo, uint32_t num_pages, uintptr_t paddr)
+static int alloc_frames_at_paddr(vka_t *vka, mo_t *mo, uint32_t num_pages, size_t page_bits, uintptr_t paddr)
 {
     int error = 0;
     uintptr_t curr = paddr;
 
     for (size_t i = 0; i < num_pages; i++)
     {
-        error = vka_alloc_frame_at(vka, seL4_PageBits, curr, &mo->vka_objects[i]);
+        error = vka_alloc_frame_at(vka, page_bits, curr, &mo->vka_objects[i]);
         SERVER_GOTO_IF_ERR(error, "failed to allocate page for MO\n");
         mo->frame_caps_in_root_task[i] = mo->vka_objects[i].cptr;
         mo->frame_paddrs[i] = curr; // is it possible for VKA to succeed and return a different paddr?
-        curr += SIZE_BITS_TO_BYTES(seL4_PageBits);
+        curr += SIZE_BITS_TO_BYTES(page_bits);
     }
 
 err_goto:
@@ -71,6 +71,7 @@ int mo_new(mo_t *mo,
     int error = 0;
 
     mo->num_pages = alloc_args->num_pages;
+    mo->page_bits = alloc_args->page_bits;
     mo->frame_caps_in_root_task = malloc(alloc_args->num_pages * sizeof(seL4_CPtr));
     mo->frame_paddrs = malloc(alloc_args->num_pages * sizeof(uintptr_t));
     mo->vka_objects = malloc(alloc_args->num_pages * sizeof(vka_object_t));
@@ -80,11 +81,11 @@ int mo_new(mo_t *mo,
     /* Allocate frames */
     if (alloc_args->paddr)
     {
-        error = alloc_frames_at_paddr(vka, mo, alloc_args->num_pages, alloc_args->paddr);
+        error = alloc_frames_at_paddr(vka, mo, alloc_args->num_pages, alloc_args->page_bits, alloc_args->paddr);
     }
     else
     {
-        error = alloc_frames(vka, mo, alloc_args->num_pages);
+        error = alloc_frames(vka, mo, alloc_args->num_pages, alloc_args->page_bits);
     }
     SERVER_GOTO_IF_ERR(error, "Failed to allocate MO frames\n");
 

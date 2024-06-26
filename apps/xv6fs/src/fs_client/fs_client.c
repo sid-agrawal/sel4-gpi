@@ -163,6 +163,7 @@ xv6fs_client_init(void)
 
   error = mo_component_client_connect(sel4gpi_get_rde(GPICAP_TYPE_MO),
                                       1,
+                                      MO_PAGE_BITS,
                                       get_xv6fs_client()->shared_mem);
   CHECK_ERROR(error, "failed to allocate shared mem page");
 

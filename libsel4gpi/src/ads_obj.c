@@ -63,7 +63,7 @@ static void on_attach_registry_delete(resource_server_registry_node_t *node_gen,
         // Otherwise, sel4utils will attempt to free the frame caps and their corresponding untyped
         // Which we do not want, since the MO continues to exist
         sel4utils_unmap_pages(ads->vspace, node->vaddr + node->mo_offset,
-                              node->n_frames, MO_PAGE_BITS, VSPACE_PRESERVE);
+                              node->n_frames, node->page_bits, VSPACE_PRESERVE);
 
         // Free the frame caps (duplicated for this attach)
         for (int i = 0; i < node->n_frames; i++)
@@ -175,7 +175,7 @@ int ads_reserve(ads_t *ads,
                 attach_node_t **ret_node)
 {
     int error = 0;
-    int cacheable = 1;
+    int cacheable = vmr_type == SEL4UTILS_RES_TYPE_DEVICE ? 0 : 1;
     vspace_t *target = ads->vspace;
 
     /* Reserve the range in the vspace */
@@ -185,7 +185,7 @@ int ads_reserve(ads_t *ads,
     {
         res = sel4utils_reserve_range_aligned(target,
                                               num_pages * PAGE_SIZE_4K,
-                                              MO_PAGE_BITS,
+                                              size_bits,
                                               rights,
                                               cacheable,
                                               &vaddr);
@@ -223,6 +223,7 @@ int ads_reserve(ads_t *ads,
     attach_node->type = vmr_type;
     attach_node->n_pages = num_pages;
     attach_node->gen.object_id = (uint64_t)vaddr;
+    attach_node->page_bits = size_bits;
     resource_server_registry_insert(&ads->attach_registry, (resource_server_registry_node_t *)attach_node);
 
     // The root task holds the VMR by default
@@ -313,10 +314,18 @@ int ads_attach_to_res(ads_t *ads,
                       mo_t *mo)
 {
     int error = 0;
+    SERVER_GOTO_IF_COND(mo->page_bits != reservation->page_bits,
+                        "Trying to attach MO of page size %zu to reservation of page size %zu\n",
+                        SIZE_BITS_TO_BYTES(mo->page_bits),
+                        SIZE_BITS_TO_BYTES(reservation->page_bits));
 
-    OSDB_PRINTF("attaching mo (id %lu, pages: %d) to reservation(vaddr: %p, type: %s, pages: %d) offset %ld\n",
+    OSDB_PRINTF("attaching mo (id %lu, pages: %d, page size: %zu)"
+                "to reservation(vaddr: %p, type: %s, pages: %d) offset %ld\n",
                 mo->id, mo->num_pages,
-                reservation->vaddr, human_readable_va_res_type(reservation->type), reservation->n_pages,
+                SIZE_BITS_TO_BYTES(mo->page_bits),
+                reservation->vaddr,
+                human_readable_va_res_type(reservation->type),
+                reservation->n_pages,
                 offset);
 
     reservation->frame_caps = malloc(sizeof(seL4_CPtr) * mo->num_pages);
@@ -368,7 +377,7 @@ int ads_attach(ads_t *ads,
 
     /* Reserve the VMR */
     attach_node_t *attach_node;
-    error = ads_reserve(ads, vaddr, mo->num_pages, MO_PAGE_BITS, vmr_type, &attach_node);
+    error = ads_reserve(ads, vaddr, mo->num_pages, mo->page_bits, vmr_type, &attach_node);
 
     if (error)
     {
@@ -420,6 +429,7 @@ int ads_forge_attach(ads_t *ads, sel4utils_res_t *res, mo_t *mo)
     attach_node->mo_attached = true;
     attach_node->mo_id = mo->id;
     attach_node->mo_offset = 0;
+    attach_node->page_bits = mo->page_bits;
 
     resource_server_registry_insert(&ads->attach_registry, (resource_server_registry_node_t *)attach_node);
 
@@ -673,7 +683,7 @@ int ads_copy(vspace_t *loader,
                                  ? cfg->dest_start
                                  : (void *)src_attach_node->vaddr;
         error = ads_reserve(dst_ads, attach_vaddr, src_attach_node->n_pages,
-                            MO_PAGE_BITS, src_attach_node->type, &new_attach_node);
+                            src_attach_node->page_bits, src_attach_node->type, &new_attach_node);
         SERVER_GOTO_IF_ERR(error, "Failed to reserve region\n");
 
         // Find the original MO

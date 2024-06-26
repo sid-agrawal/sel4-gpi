@@ -61,6 +61,7 @@ int ads_client_reserve(ads_client_context_t *conn,
                        seL4_CPtr free_slot,
                        void *vaddr,
                        size_t size,
+                       size_t page_bits,
                        sel4utils_reservation_type_t vmr_type,
                        ads_vmr_context_t *ret_conn,
                        void **ret_vaddr)
@@ -74,6 +75,7 @@ int ads_client_reserve(ads_client_context_t *conn,
     seL4_SetMR(ADSMSGREG_RESERVE_REQ_VA, (seL4_Word)vaddr);
     seL4_SetMR(ADSMSGREG_RESERVE_REQ_TYPE, (seL4_Word)vmr_type);
     seL4_SetMR(ADSMSGREG_RESERVE_REQ_SIZE, (seL4_Word)size);
+    seL4_SetMR(ADSMSGREG_RESERVE_REQ_PAGE_BITS, (seL4_Word)page_bits);
 
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0,
                                                   ADSMSGREG_RESERVE_REQ_END);

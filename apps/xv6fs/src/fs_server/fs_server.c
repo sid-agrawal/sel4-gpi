@@ -165,6 +165,7 @@ int xv6fs_init()
 
   error = mo_component_client_connect(server->gen.mo_ep,
                                       1,
+                                      MO_PAGE_BITS,
                                       server->shared_mem);
   CHECK_ERROR(error, "failed to allocate shared mem page");
 
