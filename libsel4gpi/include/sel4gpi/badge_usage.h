@@ -17,6 +17,7 @@
 
 #define BADGE_OBJ_ID_NULL 0xfffff
 #define MAX_BADGE_STR_SIZE 512
+#define NOTIF_BADGE 0xffffffffffffffff // Badge value reserved for RT->PD notifications
 
 // requires that SERVER_ID and DEBUG_ID are defined
 #define BADGE_PRINT(badge)                                                                 \
@@ -79,11 +80,11 @@ uint64_t gpi_new_badge(gpi_cap_t cap_type,
 
 /**
  * Make a universal identifier for a resource
- * 
+ *
  * @param type the resource type
  * @param space_id the resource space
  * @param object_id the resource ID, unique within the space
-*/
+ */
 uint64_t universal_res_id(gpi_cap_t type, uint64_t space_id, uint64_t object_id);
 
 /**

@@ -131,7 +131,8 @@ static seL4_MessageInfo_t handle_mo_disconnect_request(seL4_Word sender_badge)
     SERVER_GOTO_IF_COND(pd_data == NULL, "Couldn't find PD (%ld)\n", get_client_id_from_badge(sender_badge));
 
     /* Remove the MO from the client PD */
-    pd_remove_resource(&pd_data->pd, GPICAP_TYPE_MO, get_mo_component()->space_id, mo_id);
+    error = pd_remove_resource(&pd_data->pd, GPICAP_TYPE_MO, get_mo_component()->space_id, mo_id);
+    SERVER_GOTO_IF_ERR(error, "Failed to remove MO from PD\n");
 
     // This will reduce the refcount of the MO, and then it will be deleted if necessary
 
@@ -162,7 +163,7 @@ static seL4_MessageInfo_t mo_component_handle(seL4_MessageInfo_t tag,
         switch (func)
         {
         case MO_FUNC_DISCONNECT_REQ:
-            handle_mo_disconnect_request(sender_badge);
+            reply_tag = handle_mo_disconnect_request(sender_badge);
             break;
         default:
             SERVER_GOTO_IF_COND(1, "Unknown request received: %d\n", func);

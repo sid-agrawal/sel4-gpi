@@ -515,9 +515,18 @@ int pd_new(pd_t *pd,
 
     pd->image_name = "PD"; // default name, since if a PD isn't a process, this never gets set
 
-    // Allocate the RT->PD notification
+    // Allocate and badge the RT->PD notification
     error = vka_alloc_notification(server_vka, &pd->notification);
     SERVER_GOTO_IF_ERR(error, "Failed to allocate PD's notification\n");
+
+    cspacepath_t src, dest;
+    vka_cspace_make_path(server_vka, pd->notification.cptr, &src);
+    error = vka_cspace_alloc_path(server_vka, &dest);
+    SERVER_GOTO_IF_ERR(error, "Failed to allocate slot for PD's badged notification\n");
+
+    error = vka_cnode_mint(&dest, &src, seL4_NoRead, NOTIF_BADGE);
+    SERVER_GOTO_IF_ERR(error, "Failed to mint PD's badged notification\n");
+    pd->badged_notification = dest.capPtr;
 
 err_goto:
     return error;
@@ -578,6 +587,7 @@ void pd_destroy(pd_t *pd, vka_t *server_vka, vspace_t *server_vspace)
     vka_cspace_make_path(vka, pd->notification.cptr, &path);
     vka_cnode_revoke(&path);
     vka_free_object(vka, &pd->notification);
+    vka_cspace_free(vka, pd->badged_notification);
 
     /* Free elf information */
     if (pd->elf_phdrs)
@@ -856,7 +866,7 @@ static void pd_queue_model_extraction_work(pd_component_registry_entry_t *pd_ent
     get_gpi_server()->model_extraction_n_missing++;
 
     // Notify the PD
-    seL4_Signal(pd_entry->pd.notification.cptr);
+    seL4_Signal(pd_entry->pd.badged_notification);
 }
 
 // Add rows to model state for one resource

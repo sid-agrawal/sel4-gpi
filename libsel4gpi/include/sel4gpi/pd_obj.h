@@ -135,8 +135,9 @@ typedef struct _pd
 
     /* Fields for all PDs */
     vka_object_t cspace;                                    ///< Root CNode of for the PD
-    vka_object_t notification;                              ///< Notification for RT->PD communication, 
+    vka_object_t notification;                              ///< Notification for RT->PD communication,
                                                             ///< should be bound to CPU
+    seL4_CPtr badged_notification;                          ///< Badged version of notification, RT uses this one
     size_t cspace_size;                                     ///< Size bits of the root CNode
     const char *image_name;                                 ///< This is for model extraction only
     seL4_Word cnode_guard;                                  ///< cnode guard for this PD's cspace

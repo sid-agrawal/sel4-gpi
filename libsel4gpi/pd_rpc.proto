@@ -11,19 +11,19 @@ message PdMessage {
     /* No content, WIP */
 };
 
-/* return from a basic ramdisk message */
+/* return from a basic PD Component message */
 message PdBasicReturnMessage {
     /* No content */
 };
 
-/* return from a ramdisk alloc message */
+/* return from a get work message */
 message PdWorkReturnMessage {
     PdWorkAction action = 1;        /* which work action to perform */
     uint32 spaceId = 3;             /* space ID for the work */
     uint32 objectId = 2;            /* object ID for the work */
 }
 
-/* message type for all ramdisk return messages */
+/* message type for all PD Component return messages */
 message PdReturnMessage {
     uint32 errorCode = 1;   /* Can we use an enum for the error code? */
     oneof msg {

@@ -186,8 +186,8 @@ int resource_server_main(void *context_v)
         RESOURCE_SERVER_PRINTF("Ready to receive a message\n");
         tag = resource_server_recv(context, &sender_badge);
 
-        /* If the sender badge is 0, then we were woken up by the RT, and should check for work */
-        if (sender_badge == 0)
+        /* If the sender badge is NOTIF_BADGE, then we were woken up by the RT, and should check for work */
+        if (sender_badge == NOTIF_BADGE)
         {
             /* Perform any pending work the RT requested */
             while (1)
@@ -225,35 +225,21 @@ int resource_server_main(void *context_v)
                                                                 received_cap_path.capPtr,
                                                                 &need_new_receive_slot);
 
-        /**
-         * Clear slot only if needed
-         * Some requests come from the root task, so we cannot message it
-         * */
-        if (need_new_receive_slot)
-        {
-            // We need to finish setting up for the next request before responding to this one
-            // This is because the next request could be from the RT, in which case we cannot
-            // be requesting a new slot after it is sent
-
-            // Save state of message registers for reply
-            seL4_Word arg0 = seL4_GetMR(0);
-            seL4_Word arg1 = seL4_GetMR(1);
-
-            RESOURCE_SERVER_PRINTF("Clearing cap receive slot\n");
-            error = resource_server_clear_slot(context, received_cap_path.capPtr);
-            CHECK_ERROR_GOTO(error, "failed to clear cap receive slot", exit_main);
-
-            // Restore state of message registers for reply
-            seL4_SetMR(0, arg0);
-            seL4_SetMR(1, arg1);
-        }
-
         /* Reply to message */
         resource_server_reply(context, reply_tag);
 
 #if STORE_REPLY_CAP
+        /* Clear the reply cap */
         sel4gpi_clear_reply_cap();
 #endif
+
+        /* Clear receive slot only if it was used */
+        if (need_new_receive_slot)
+        {
+            RESOURCE_SERVER_PRINTF("Clearing cap receive slot\n");
+            error = resource_server_clear_slot(context, received_cap_path.capPtr);
+            CHECK_ERROR_GOTO(error, "failed to clear cap receive slot", exit_main);
+        }
     }
 
 exit_main:

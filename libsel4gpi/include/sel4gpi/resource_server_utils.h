@@ -9,7 +9,7 @@
  * Utility functions for all servers of GPI resources, both in RT and other PDs
  */
 
-#define RESOURCE_SERVER_DEBUG 1
+#define RESOURCE_SERVER_DEBUG 0
 #define SERVER_UTILS "SERVER_UTILS"
 
 // Could use the server's debug function instead
