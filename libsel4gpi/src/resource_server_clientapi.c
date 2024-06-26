@@ -116,47 +116,6 @@ int start_resource_server_pd_args(gpi_cap_t rde_type,
     return 0;
 }
 
-int resource_server_client_get_rr(seL4_CPtr server_ep,
-                                  seL4_Word space_id,
-                                  seL4_Word res_id,
-                                  seL4_Word pd_id,
-                                  seL4_Word server_pd_id,
-                                  void *remote_vaddr,
-                                  void *local_vaddr,
-                                  size_t size,
-                                  model_state_t **ret_state)
-{
-    RESOURCE_SERVER_PRINTF("requesting resource relations for ID 0x%lx\n", res_id);
-    RESOURCE_SERVER_PRINTF("Shared mem local addr: %p, remote addr: %p\n", local_vaddr, remote_vaddr);
-
-    // Send IPC to resource server
-    seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0, RSMSGREG_EXTRACT_RR_REQ_END);
-    seL4_SetMR(RSMSGREG_FUNC, RS_FUNC_GET_RR_REQ);
-    seL4_SetMR(RSMSGREG_EXTRACT_RR_REQ_VADDR, (seL4_Word)remote_vaddr);
-    seL4_SetMR(RSMSGREG_EXTRACT_RR_REQ_SIZE, size);
-    seL4_SetMR(RSMSGREG_EXTRACT_RR_REQ_SPACE, space_id);
-    seL4_SetMR(RSMSGREG_EXTRACT_RR_REQ_ID, res_id);
-    seL4_SetMR(RSMSGREG_EXTRACT_RR_REQ_PD_ID, pd_id);
-    seL4_SetMR(RSMSGREG_EXTRACT_RR_REQ_RS_PD_ID, server_pd_id);
-
-    tag = seL4_Call(server_ep, tag);
-
-    // Adjust result state's pointers if successful
-    int result = seL4_MessageInfo_get_label(tag);
-    if (result == seL4_NoError)
-    {
-        model_state_t *model_state = (model_state_t *)local_vaddr;
-
-        gpi_model_state_component_t *old_mem_start = model_state->mem_start;
-        model_state->mem_start = (gpi_model_state_component_t *)(local_vaddr + sizeof(model_state_t));
-        model_state->mem_ptr = model_state->mem_ptr - old_mem_start + model_state->mem_start;
-
-        *ret_state = model_state;
-    }
-
-    return result;
-}
-
 int resource_server_client_new_ns(seL4_CPtr server_ep,
                                   uint64_t *ns_id)
 {

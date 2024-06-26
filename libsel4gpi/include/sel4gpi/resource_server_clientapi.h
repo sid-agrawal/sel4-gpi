@@ -101,36 +101,6 @@ int start_resource_server_pd_args(gpi_cap_t rde_type,
                                   uint64_t *space_id);
 
 /**
- * \brief Request a resource server to dump resource relations
- *
- * This function is only usable by the root task
- *
- * @param server_ep Unbadged ep of the resource server
- * @param space_id The space ID of the resource to dump relations for
- * @param res_id The ID of the resource to dump relations for
- * @param pd_id The id of the pd that has the resource (for the has_access_to row)
- * @param server_pd_id The id of the server pd
- * @param remote_vaddr location of shared memory in the resource server
- * @param local_vaddr location of shared memory in the caller
- * @param size size of shared memory
- * @param model_state_t Location of the resulting model state
- *                     (same as local_vaddr on success)
- * @return
- *      RS_NOERROR if dump completed successfully
- *      RS_ERROR_RR_SIZE if size was too small to write RR
- *      + Error codes for the respective resource server
- */
-int resource_server_client_get_rr(seL4_CPtr server_ep,
-                                  seL4_Word space_id,
-                                  seL4_Word res_id,
-                                  seL4_Word pd_id,
-                                  seL4_Word server_pd_id,
-                                  void *remote_vaddr,
-                                  void *local_vaddr,
-                                  size_t size,
-                                  model_state_t **ret_state);
-
-/**
  * Request a new namespace ID from a resource server
  *
  * @param server_ep the EP of the resource server

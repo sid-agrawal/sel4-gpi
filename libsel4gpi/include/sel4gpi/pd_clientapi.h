@@ -205,6 +205,14 @@ int pd_client_map_resource(pd_client_context_t *conn,
  */
 int pd_client_get_work(pd_client_context_t *conn, PdWorkReturnMessage *work);
 
+/**
+ * @brief For a resource server to send a subgraph as a response to pd_client_get_work
+ * 
+ * @param conn the resource server's pd connection
+ * @param mo_conn an MO containing the model subgraph
+ */
+int pd_client_send_subgraph(pd_client_context_t *conn, mo_client_context_t *mo_conn);
+
 /** OTHER FUNCTIONS FOR ACTIVE PDs **/
 
 /**
@@ -229,6 +237,9 @@ int pd_client_remove_rde(pd_client_context_t *conn, gpi_cap_t type, uint64_t spa
 
 /**
  * @brief Dump the PD.
+ * Note: This call may take a long time, since it may require subgraphs from multiple PDs
+ * This should not be called by a resource server, since it may need to provide a subgraph
+ *
  * @param conn client connection object
  * @param buf buffer to dump the PD into
  * @param size size of the buffer

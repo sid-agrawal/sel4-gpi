@@ -443,7 +443,7 @@ int ads_rm(ads_t *ads, vka_t *vka, void *vaddr)
 
     if (node == 0)
     {
-        ZF_LOGE("Failed to find VMR to remove\n");
+        ZF_LOGE("Failed to find VMR (%p) to remove\n", vaddr);
         return 1;
     }
 

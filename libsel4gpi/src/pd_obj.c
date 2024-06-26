@@ -848,60 +848,6 @@ err_goto:
     return error;
 }
 
-// (XXX) Arya: To be removed
-#if 0
-static int request_remote_rr(pd_t *pd, model_state_t *ms, uint64_t space_id, uint32_t obj_id,
-                             uint64_t rr_mo_id, void *rr_local_vaddr)
-{
-    int error = 0;
-    void *rr_remote_vaddr = NULL;
-
-    resspc_component_registry_entry_t *server_entry = resource_space_get_entry_by_id(space_id);
-    SERVER_GOTO_IF_COND(server_entry == NULL, "Failed to find resource server with ID 0x%lx\n", space_id);
-
-    model_state_t *ms2;
-    seL4_CPtr server_cap = server_entry->space.server_ep;
-
-    OSDB_PRINTF("Resource ID 0x%x, space ID 0x%lx, server EP at %d\n", obj_id, space_id, (int)server_cap);
-
-    // Pre-map the shared memory so resource server does not need to call root task
-    SERVER_GOTO_IF_COND(server_entry->space.pd == NULL,
-                        "Server with EP at %d does not have PD data\n", (int)server_cap);
-
-    uint64_t server_ads_id = server_entry->space.pd->shared_data->ads_conn.id;
-    error = ads_component_attach(server_ads_id, rr_mo_id, SEL4UTILS_RES_TYPE_SHARED_FRAMES, NULL, &rr_remote_vaddr);
-    SERVER_GOTO_IF_ERR(error, "Failed to attach frame for remote rr to resource server\n");
-
-    // Get RR from remote resource server
-    error = resource_server_client_get_rr(server_cap, space_id, obj_id, pd->id,
-                                          server_entry->space.pd->id,
-                                          rr_remote_vaddr, rr_local_vaddr,
-                                          SIZE_BITS_TO_BYTES(seL4_PageBits) * REMOTE_RR_N_PAGES,
-                                          &ms2);
-
-    if (error == RS_ERROR_DNE)
-    {
-        // The resource was deleted and the PD component didn't know
-        // (XXX) Arya: Eventually, the PD component should be told
-        // For now, just omit deleted resources from the model state
-        error = 0;
-    }
-
-    SERVER_GOTO_IF_COND(error == RS_ERROR_RR_SIZE, "remote resource relations need larger memory\n");
-    SERVER_GOTO_IF_ERR(error, "Unknown error getting remote resource relations\n");
-
-    combine_model_states(ms, ms2);
-
-err_goto:
-    if (rr_remote_vaddr != NULL)
-    {
-        error = ads_component_rm_by_vaddr(server_ads_id, rr_remote_vaddr);
-    }
-
-    return error;
-}
-#endif
-
 // Queue some async model extraction work for the PD
 static void pd_queue_model_extraction_work(pd_component_registry_entry_t *pd_entry, gpi_res_id_t *res)
 {
@@ -922,11 +868,19 @@ static int res_dump(pd_t *pd, model_state_t *ms, pd_hold_node_t *current_cap, gp
     gpi_model_node_t *res_node = get_resource_node(ms, current_cap->type, current_cap->space_id, current_cap->res_id);
     if (res_node)
     {
-        return 0; // This resource is already dumped
+        /* Just add the hold edge */
+        assert(pd_node != NULL);
+        add_edge(ms, GPI_EDGE_TYPE_HOLD, pd_node, res_node);
+
+        return 0;
     }
 
     /* Add the resource node */
     res_node = add_resource_node(ms, current_cap->type, current_cap->space_id, current_cap->res_id);
+
+    /* Add the hold edge */
+    assert(pd_node != NULL);
+    add_edge(ms, GPI_EDGE_TYPE_HOLD, pd_node, res_node);
 
     switch (current_cap->type)
     {
@@ -1107,14 +1061,6 @@ int pd_dump(pd_t *pd, model_state_t *ms)
     /* Add the PD's data */
     error = pd_dump_internal(pd, ms);
     SERVER_GOTO_IF_ERR(error, "Failed PD dump\n");
-
-    // Don't print the model state yet if there is anything we are waiting on
-    if (get_gpi_server()->model_extraction_n_missing == 0)
-    {
-        print_model_state(ms);
-        destroy_model_state(ms);
-        get_gpi_server()->pending_extraction = false;
-    }
 
 #if 0
     /* Print RDE Info*/

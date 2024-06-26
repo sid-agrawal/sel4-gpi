@@ -260,30 +260,35 @@ static seL4_MessageInfo_t handle_dump_cap_req(seL4_Word sender_badge, seL4_Messa
     pd_component_registry_entry_t *client_data = pd_component_registry_get_entry_by_badge(sender_badge);
     SERVER_GOTO_IF_COND(client_data == NULL, "Couldn't find PD (%ld)\n", get_object_id_from_badge(sender_badge));
 
-    /* Initialize the extraction */
-    get_gpi_server()->pending_extraction = true;
-    get_gpi_server()->model_extraction_n_missing = 0;
-
-    model_state_t *ms = (model_state_t *)malloc(sizeof(model_state_t));
+    /* Initialize the model state */
+    model_state_t *ms = calloc(1, sizeof(model_state_t));
     init_model_state(ms, NULL, 0);
+    get_gpi_server()->model_extraction_n_missing = 0;
 
     /* Start the extraction */
     error = pd_dump(&client_data->pd, ms);
 
-err_goto:
-    // Only reply now if there is an error,
-    // otherwise reply asynchronously when the operation is finished
+    /* If we are waiting on missing pieces, bookkeep the state and don't reply yet */
+    if (get_gpi_server()->model_extraction_n_missing > 0)
+    {
+        get_gpi_server()->pending_extraction = true;
+        get_gpi_server()->model_state = ms;
 
-    seL4_MessageInfo_t tag;
-    if (error != seL4_NoError)
-    {
-        seL4_SetMR(PDMSGREG_FUNC, PD_FUNC_DUMP_ACK);
-        tag = seL4_MessageInfo_new(error, 0, 0, PDMSGREG_DUMP_ACK_END);
-    }
-    else
-    {
+        cspacepath_t reply_path;
+        vka_cspace_alloc_path(get_pd_component()->server_vka, &reply_path);
+        seL4_CNode_SaveCaller(reply_path.root, reply_path.capPtr, reply_path.capDepth);
+        get_gpi_server()->model_extraction_reply = reply_path.capPtr;
+
         *should_reply = false;
+    } else {
+        /* Print and free the model state */
+        print_model_state(ms);
+        destroy_model_state(ms);
     }
+
+err_goto:
+    seL4_SetMR(PDMSGREG_FUNC, PD_FUNC_DUMP_ACK);
+    seL4_MessageInfo_t tag = seL4_MessageInfo_new(error, 0, 0, PDMSGREG_DUMP_ACK_END);
 
     return tag;
 }
@@ -635,7 +640,7 @@ static seL4_MessageInfo_t handle_get_work_req(seL4_Word sender_badge, seL4_Messa
 {
     int error = 0;
     PdReturnMessage ret_msg = {
-        .which_msg = PdReturnMessage_work_tag}
+        .which_msg = PdReturnMessage_work_tag};
 
     OSDB_PRINTF("Got request for work: ");
     BADGE_PRINT(sender_badge);
@@ -671,6 +676,78 @@ static seL4_MessageInfo_t handle_get_work_req(seL4_Word sender_badge, seL4_Messa
     {
         // No work to be done
         ret_msg.msg.work.action = PdWorkAction_NONE;
+    }
+
+    /* Free the node */
+    free(work_res);
+
+err_goto:
+    seL4_MessageInfo_t tag;
+    ret_msg.errorCode = error;
+    sel4gpi_rpc_reply(&rpc_env, &ret_msg, &tag);
+    return tag;
+}
+
+static seL4_MessageInfo_t handle_send_subgraph_req(seL4_Word sender_badge, seL4_MessageInfo_t old_tag)
+{
+    int error = 0;
+    PdReturnMessage ret_msg = {
+        .which_msg = PdReturnMessage_work_tag};
+
+    OSDB_PRINTF("Got a subgraph from: ");
+    BADGE_PRINT(sender_badge);
+
+    // (XXX) Arya: doesn't do any authentication, or check if we actually needed this piece
+    // For simplicity, just decrement the counter of "remaining pieces"
+    SERVER_GOTO_IF_COND(!get_gpi_server()->pending_extraction,
+                        "Got subgraph but when there is no pending model extraction\n");
+
+    /* Attach the included MO */
+    seL4_Word mo_badge = seL4_GetBadge(0);
+    SERVER_GOTO_IF_COND(get_cap_type_from_badge(mo_badge) != GPICAP_TYPE_MO, "Provided cap was not an MO\n");
+
+    void *mo_vaddr;
+    error = ads_component_attach_to_rt(get_object_id_from_badge(mo_badge), &mo_vaddr);
+    SERVER_GOTO_IF_ERR(error, "Failed to attach MO to RT\n");
+
+    // Update model state's pointers
+    model_state_t *model_state = (model_state_t *)mo_vaddr;
+    gpi_model_state_component_t *old_mem_start = model_state->mem_start;
+    model_state->mem_start = (gpi_model_state_component_t *)(mo_vaddr + sizeof(model_state_t));
+    model_state->mem_ptr = model_state->mem_ptr - old_mem_start + model_state->mem_start;
+
+    // Combine with current model state
+    combine_model_states(get_gpi_server()->model_state, model_state);
+
+    // Update the pending model counter
+    get_gpi_server()->model_extraction_n_missing--;
+
+    /* Unattach the MO */
+    error = ads_component_remove_from_rt(mo_vaddr);
+    SERVER_GOTO_IF_ERR(error, "Failed to remove MO from RT\n");
+
+    /* Check if the extraction is finished */
+    if (get_gpi_server()->model_extraction_n_missing == 0)
+    {
+        OSDB_PRINTF("Current model extraction is finished\n");
+
+        // Print the model state
+        print_model_state(get_gpi_server()->model_state);
+
+        // Cleanup the model state
+        destroy_model_state(get_gpi_server()->model_state);
+        get_gpi_server()->pending_extraction = false;
+
+        // Reply to the PD that requested the extraction
+        seL4_SetMR(PDMSGREG_FUNC, PD_FUNC_DUMP_ACK);
+        seL4_Send(get_gpi_server()->model_extraction_reply, seL4_MessageInfo_new(0, 0, 0, 0));
+
+        // Free the reply cap's slot
+        vka_cspace_free(get_pd_component()->server_vka, get_gpi_server()->model_extraction_reply);
+    }
+    else
+    {
+        OSDB_PRINTF("Current model extraction is still missing %d pieces\n", get_gpi_server()->model_extraction_n_missing);
     }
 
 err_goto:
@@ -747,6 +824,9 @@ static seL4_MessageInfo_t pd_component_handle(seL4_MessageInfo_t tag,
             break;
         case PD_FUNC_GET_WORK_REQ:
             reply_tag = handle_get_work_req(sender_badge, tag);
+            break;
+        case PD_FUNC_SEND_SUBGRAPH_REQ:
+            reply_tag = handle_send_subgraph_req(sender_badge, tag);
             break;
         default:
             SERVER_GOTO_IF_COND(1, "Unknown request received: %d\n", func);

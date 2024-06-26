@@ -105,7 +105,9 @@ int daycare_work_handler(
         assert(error == 0);
 
         void *mem_vaddr;
-        error = resource_server_attach_mo(get_daycare_server(), mo_conn.badged_server_ep_cspath.capPtr, &mem_vaddr);
+        error = resource_server_attach_mo(&get_daycare_server()->gen,
+                                          mo_conn.badged_server_ep_cspath.capPtr,
+                                          &mem_vaddr);
         assert(error == 0);
 
         // Initialize model state
@@ -141,6 +143,18 @@ int daycare_work_handler(
         add_edge(model_state, GPI_EDGE_TYPE_MAP, pokemon_node, pokeball_node);
 
         clean_model_state(model_state);
+
+        /* Send the state to the RT */
+        pd_client_context_t pd_conn = sel4gpi_get_pd_conn();
+        error = pd_client_send_subgraph(&pd_conn, &mo_conn);
+        assert(error == 0);
+
+        /* Remove & destroy the MO */
+        error = resource_server_unattach(&get_daycare_server()->gen, mem_vaddr);
+        assert(error == 0);
+
+        error = mo_component_client_disconnect(&mo_conn);
+        assert(error == 0);
     }
     else
     {

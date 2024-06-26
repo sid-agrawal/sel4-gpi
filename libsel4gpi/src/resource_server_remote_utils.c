@@ -202,6 +202,8 @@ int resource_server_main(void *context_v)
                                            work.action,
                                            work.spaceId,
                                            work.objectId);
+
+                    context->work_handler(&work);
                 }
                 else
                 {

@@ -95,6 +95,9 @@ enum pd_component_funcs
 
     PD_FUNC_GET_WORK_REQ,
     PD_FUNC_GET_WORK_ACK,
+
+    PD_FUNC_SEND_SUBGRAPH_REQ,
+    PD_FUNC_SEND_SUBGRAPH_ACK,
 };
 
 /* Designated purposes of each message register in the mini-protocol. */
@@ -227,6 +230,9 @@ enum pd_component_msgregs
     PDMSGREG_GET_WORK_REQ_END = PDMSGREG_LABEL0,
 
     // (XXX) Arya: Get work response is through nanopb, eventually all requests will use nanopb
+
+    /* PD send subgraph */
+    PDMSGREG_SEND_SUBGRAPH_REQ_END = PDMSGREG_LABEL0,
 };
 
 /** Mode of PD setup */
