@@ -476,7 +476,16 @@ pd_held_resource_on_delete(resource_server_registry_node_t *node_gen, void *pd_v
             break;
         }
 
-        error = resource_server_client_free(space_data->space.server_ep, node->space_id, node->res_id);
+        // Find the manager PD
+        pd_component_registry_entry_t *manager_pd_data = pd_component_registry_get_entry_by_id(space_data->space.pd_id);
+
+        // Queue the "free" operation for the resource manager
+        pd_work_entry_t *work_entry = calloc(1, sizeof(pd_work_entry_t));
+        work_entry->res_id.type = node->type;
+        work_entry->res_id.space_id = node->space_id;
+        work_entry->res_id.object_id = node->res_id;
+
+        pd_component_queue_free_work(manager_pd_data, work_entry);
         break;
     }
 
@@ -858,17 +867,6 @@ err_goto:
     return error;
 }
 
-// Queue some async model extraction work for the PD
-static void pd_queue_model_extraction_work(pd_component_registry_entry_t *pd_entry, gpi_res_id_t *res)
-{
-    // Add to the list
-    linked_list_insert(pd_entry->pending_model_state, (void *)res);
-    get_gpi_server()->model_extraction_n_missing++;
-
-    // Notify the PD
-    seL4_Signal(pd_entry->pd.badged_notification);
-}
-
 // Add rows to model state for one resource
 static int res_dump(pd_t *pd, model_state_t *ms, pd_hold_node_t *current_cap, gpi_model_node_t *pd_node)
 {
@@ -923,8 +921,7 @@ static int res_dump(pd_t *pd, model_state_t *ms, pd_hold_node_t *current_cap, gp
     case GPICAP_TYPE_PD:
         if (current_cap->res_id != pd->id)
         {
-            pd_component_registry_entry_t *pd_data = (pd_component_registry_entry_t *)
-                resource_component_registry_get_by_id(get_pd_component(), current_cap->res_id);
+            pd_component_registry_entry_t *pd_data = pd_component_registry_get_entry_by_id(current_cap->res_id);
 
             SERVER_GOTO_IF_COND(pd_data == NULL, "Failed to find PD%d's data\n", current_cap->res_id);
 
@@ -946,17 +943,18 @@ static int res_dump(pd_t *pd, model_state_t *ms, pd_hold_node_t *current_cap, gp
         SERVER_GOTO_IF_COND(space_entry == NULL, "Failed to find resource space (%d)\n", current_cap->space_id);
 
         /* Find the resource server */
-        pd_component_registry_entry_t *manager_pd_entry = (pd_component_registry_entry_t *)
-            resource_component_registry_get_by_id(get_pd_component(), space_entry->space.pd_id);
+        pd_component_registry_entry_t *manager_pd_entry =
+            pd_component_registry_get_entry_by_id(space_entry->space.pd_id);
         SERVER_GOTO_IF_COND(manager_pd_entry == NULL, "Failed to find PD (%d)\n", space_entry->space.pd_id);
 
         /* Request info about the resource */
-        gpi_res_id_t *res_node = calloc(1, sizeof(gpi_res_id_t));
-        res_node->type = current_cap->type;
-        res_node->space_id = current_cap->space_id;
-        res_node->object_id = current_cap->res_id;
+        pd_work_entry_t *work_node = calloc(1, sizeof(gpi_res_id_t));
+        work_node->res_id.type = current_cap->type;
+        work_node->res_id.space_id = current_cap->space_id;
+        work_node->res_id.object_id = current_cap->res_id;
+        work_node->client_pd_id = pd->id;
 
-        pd_queue_model_extraction_work(manager_pd_entry, res_node);
+        pd_component_queue_model_extraction_work(manager_pd_entry, work_node);
         break;
     }
 
@@ -1003,17 +1001,18 @@ static int pd_dump_internal(pd_t *pd, model_state_t *ms)
                 if (rm->space.pd_id != get_gpi_server()->rt_pd_id)
                 {
                     /* Find the resource server PD */
-                    pd_component_registry_entry_t *manager_pd_entry = (pd_component_registry_entry_t *)
-                        resource_component_registry_get_by_id(get_pd_component(), rm->space.pd_id);
+                    pd_component_registry_entry_t *manager_pd_entry =
+                        pd_component_registry_get_entry_by_id(rm->space.pd_id);
                     SERVER_GOTO_IF_COND(rm == NULL, "Couldn't find PD (%d)\n", rde.space_id);
 
-                    /* Queue the request */
-                    gpi_res_id_t *space_res_node = calloc(1, sizeof(gpi_res_id_t));
-                    space_res_node->type = rde.type.type;
-                    space_res_node->space_id = rde.space_id;
-                    space_res_node->object_id = BADGE_OBJ_ID_NULL;
+                    /* Request info about the resource space */
+                    pd_work_entry_t *work_node = calloc(1, sizeof(gpi_res_id_t));
+                    work_node->res_id.type = rde.type.type;
+                    work_node->res_id.space_id = rde.space_id;
+                    work_node->res_id.object_id = BADGE_OBJ_ID_NULL;
+                    work_node->client_pd_id = pd->id;
 
-                    pd_queue_model_extraction_work(manager_pd_entry, space_res_node);
+                    pd_component_queue_model_extraction_work(manager_pd_entry, work_node);
                 }
             }
         }
@@ -1053,8 +1052,7 @@ int pd_dump(pd_t *pd, model_state_t *ms)
     gpi_model_node_t *rt_node = get_root_node(ms);
 
     /* Add caps from RT (not all caps, just specially tracked ones) */
-    pd_component_registry_entry_t *rt_entry = (pd_component_registry_entry_t *)
-        resource_component_registry_get_by_id(get_pd_component(), get_gpi_server()->rt_pd_id);
+    pd_component_registry_entry_t *rt_entry = pd_component_registry_get_entry_by_id(get_gpi_server()->rt_pd_id);
 
     assert(rt_entry != NULL);
     pd_t *rt_pd = &rt_entry->pd;

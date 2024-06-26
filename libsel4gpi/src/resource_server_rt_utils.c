@@ -116,8 +116,7 @@ int resource_component_allocate(resource_component_context_t *component,
     if (ret_cap != NULL)
     {
         // Find the client PD
-        pd_component_registry_entry_t *pd_data = (pd_component_registry_entry_t *)
-            resource_component_registry_get_by_id(get_pd_component(), client_id);
+        pd_component_registry_entry_t *pd_data = pd_component_registry_get_entry_by_id(client_id);
         SERVER_GOTO_IF_COND(pd_data == NULL, "Couldn't find PD (%ld)\n", client_id);
 
         vka_t *client_vka = pd_data->pd.pd_vka;

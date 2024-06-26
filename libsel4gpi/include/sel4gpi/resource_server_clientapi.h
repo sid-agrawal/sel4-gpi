@@ -21,14 +21,8 @@ enum rs_errors
 // IPC Message register values for RSMSGREG_FUNC
 enum rs_funcs
 {
-    RS_FUNC_GET_RR_REQ = 0,
-    RS_FUNC_GET_RR_ACK,
-
-    RS_FUNC_NEW_NS_REQ,
+    RS_FUNC_NEW_NS_REQ = 0,
     RS_FUNC_NEW_NS_ACK,
-
-    RS_FUNC_FREE_REQ,
-    RS_FUNC_FREE_ACK,
 
     RS_FUNC_END,
 };
@@ -42,28 +36,10 @@ enum rs_msgregs
     /* This is a convenience label for IPC MessageInfo length. */
     RSMSGREG_LABEL0,
 
-    /* Extract RR */
-    RSMSGREG_EXTRACT_RR_REQ_SIZE = RSMSGREG_LABEL0,
-    RSMSGREG_EXTRACT_RR_REQ_VADDR,
-    RSMSGREG_EXTRACT_RR_REQ_SPACE,
-    RSMSGREG_EXTRACT_RR_REQ_ID,
-    RSMSGREG_EXTRACT_RR_REQ_PD_ID,
-    RSMSGREG_EXTRACT_RR_REQ_RS_PD_ID,
-    RSMSGREG_EXTRACT_RR_REQ_END,
-
-    RSMSGREG_EXTRACT_RR_ACK_END = RSMSGREG_LABEL0,
-
     /* New NS */
     RSMSGREG_NEW_NS_REQ_END = RSMSGREG_LABEL0,
     RSMSGREG_NEW_NS_ACK_ID = RSMSGREG_LABEL0,
     RSMSGREG_NEW_NS_ACK_END,
-
-    /* Free Resource */
-    RSMSGREG_FREE_REQ_SPACE_ID = RSMSGREG_LABEL0,
-    RSMSGREG_FREE_REQ_OBJ_ID,
-    RSMSGREG_FREE_REQ_END,
-
-    RSMSGREG_FREE_ACK_END,
 };
 
 /**
@@ -109,19 +85,3 @@ int start_resource_server_pd_args(gpi_cap_t rde_type,
  */
 int resource_server_client_new_ns(seL4_CPtr server_ep,
                                   uint64_t *ns_id);
-
-/**
- * \brief Notify a resource server to free a resource
- * The server may keep a reference count and simply decrement
- * the count rather than immediately freeing the resource
- *
- * This function is only usable by the root task
- *
- * @param server_ep unbadged EP of the resource server
- * @param space_id the space ID of the resource
- * @param object_id the object ID of the resource
- * @return RS_NOERROR on success, error otherwise
- */
-int resource_server_client_free(seL4_CPtr server_ep,
-                                seL4_Word space_id,
-                                seL4_Word object_id);

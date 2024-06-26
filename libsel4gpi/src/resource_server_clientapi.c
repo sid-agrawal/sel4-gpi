@@ -134,23 +134,3 @@ int resource_server_client_new_ns(seL4_CPtr server_ep,
 
     return result;
 }
-
-int resource_server_client_free(seL4_CPtr server_ep,
-                                seL4_Word space_id,
-                                seL4_Word object_id)
-{
-    RESOURCE_SERVER_PRINTF("Requesting to free resource (space: %ld, id: %ld) from server ep (%d)\n",
-                           space_id, object_id, (int)server_ep);
-
-    // Send IPC to resource server
-    seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0, RSMSGREG_FREE_REQ_END);
-    seL4_SetMR(RSMSGREG_FUNC, RS_FUNC_FREE_REQ);
-    seL4_SetMR(RSMSGREG_FREE_REQ_SPACE_ID, space_id);
-    seL4_SetMR(RSMSGREG_FREE_REQ_OBJ_ID, object_id);
-
-    tag = seL4_Call(server_ep, tag);
-
-    int result = seL4_MessageInfo_get_label(tag);
-
-    return result;
-}

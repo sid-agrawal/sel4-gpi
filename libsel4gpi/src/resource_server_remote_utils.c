@@ -200,8 +200,8 @@ int resource_server_main(void *context_v)
                 {
                     RESOURCE_SERVER_PRINTF("Got some work from RT (action: %d, space id: %d, object id: %d)\n",
                                            work.action,
-                                           work.spaceId,
-                                           work.objectId);
+                                           work.space_id,
+                                           work.object_id);
 
                     context->work_handler(&work);
                 }
@@ -344,6 +344,55 @@ int resource_server_new_res_space(resource_server_context_t *context,
     *ret_conn = space_conn;
 
     RESOURCE_SERVER_PRINTF("Registered resource server, space ID is 0x%lx\n", space_conn.id);
+
+err_goto:
+    return error;
+}
+
+int resource_server_extraction_setup(resource_server_context_t *context,
+                                     int n_pages,
+                                     mo_client_context_t *mo,
+                                     model_state_t **ms)
+{
+    int error = 0;
+
+    // Allocate an MO for the extraction
+    size_t mem_size = SIZE_BITS_TO_BYTES(MO_PAGE_BITS) * n_pages;
+    error = mo_component_client_connect(sel4gpi_get_rde(GPICAP_TYPE_MO), n_pages, mo);
+    CHECK_ERROR_GOTO(error, "failed to allocate MO for model extraction", err_goto);
+
+    void *mem_vaddr;
+    error = resource_server_attach_mo(context,
+                                      mo->badged_server_ep_cspath.capPtr,
+                                      &mem_vaddr);
+    CHECK_ERROR_GOTO(error, "failed to attach MO for model extraction", err_goto);
+
+    // Initialize model state
+    *ms = (model_state_t *)mem_vaddr;
+    void *free_mem = mem_vaddr + sizeof(model_state_t);
+    size_t free_size = mem_size - sizeof(model_state_t);
+    init_model_state(*ms, free_mem, free_size);
+
+err_goto:
+    return error;
+}
+
+int resource_server_extraction_finish(resource_server_context_t *context, mo_client_context_t *mo, model_state_t *ms)
+{
+    int error = 0;
+
+    clean_model_state(ms);
+
+    /* Send the state to the RT */
+    pd_client_context_t pd_conn = sel4gpi_get_pd_conn();
+    error = pd_client_send_subgraph(&pd_conn, mo);
+    assert(error == 0);
+
+    /* Remove & destroy the MO */
+    error = resource_server_unattach(context, (void *)ms);
+    assert(error == 0);
+    error = mo_component_client_disconnect(mo);
+    assert(error == 0);
 
 err_goto:
     return error;

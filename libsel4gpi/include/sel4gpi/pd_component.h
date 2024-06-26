@@ -244,6 +244,15 @@ enum _pd_setup_type
 };
 typedef enum _pd_setup_type pd_setup_type_t;
 
+// Data to send when a PD requests work
+typedef struct _pd_work_entry
+{
+    gpi_res_id_t res_id;   ///< Identifier of the resource the work is for
+    uint32_t client_pd_id; ///< Identifier of the PD the work is for
+                           ///< For model extraction: The client PD that held the resource we are extracting
+                           ///< For resource free: Currently unused
+} pd_work_entry_t;
+
 // Registry of PDs maintained by the server
 typedef struct _pd_component_registry_entry
 {
@@ -251,9 +260,10 @@ typedef struct _pd_component_registry_entry
     pd_t pd;
 
     /* Pending Work */
-    linked_list_t *pending_frees;       ///< List of gpi_res_id_t for resources to free from a resource space
+    linked_list_t *pending_frees;       ///< List of pd_work_entry_t for resources to free from a resource space
                                         ///< that this PD manages
-    linked_list_t *pending_model_state; ///< List of resources for which we need the model state from this PD
+    linked_list_t *pending_model_state; ///< List of pd_work_entry_t for resources for which we need the model 
+                                        ///< state from this PD
 } pd_component_registry_entry_t;
 
 /**
@@ -347,3 +357,36 @@ int pd_component_resource_cleanup(gpi_cap_t resource_type, uint32_t space_id, ui
  * @return 0 on success, error otherwise
  */
 int pd_component_space_cleanup(uint32_t pd_id, gpi_cap_t space_type, uint32_t space_id);
+
+/**
+ * Get a PD from the registry by ID
+ * 
+ * @param object_id the PD ID
+ * @return the PD's registry entry, or NULL if not found
+ */
+pd_component_registry_entry_t *pd_component_registry_get_entry_by_id(seL4_Word object_id);
+
+/**
+ * Get a PD from the registry by badge
+ * 
+ * @param badge the PD resource badge
+ * @return the PD's registry entry, or NULL if not found
+ */
+pd_component_registry_entry_t *pd_component_registry_get_entry_by_badge(seL4_Word badge);
+
+/**
+ * Queue some model extraction work for the PD to complete
+ * The work must be part of a currently pending model state extraction task
+ * 
+ * @param pd_entry the target PD
+ * @param work the details of the work
+ */
+void pd_component_queue_model_extraction_work(pd_component_registry_entry_t *pd_entry, pd_work_entry_t *work);
+
+/**
+ * Queue a resource for a resource server to free
+ * 
+ * @param pd_entry the target PD
+ * @param work the details of the work
+ */
+void pd_component_queue_free_work(pd_component_registry_entry_t *pd_entry, pd_work_entry_t *work);

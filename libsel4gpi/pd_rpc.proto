@@ -19,8 +19,9 @@ message PdBasicReturnMessage {
 /* return from a get work message */
 message PdWorkReturnMessage {
     PdWorkAction action = 1;        /* which work action to perform */
-    uint32 spaceId = 3;             /* space ID for the work */
-    uint32 objectId = 2;            /* object ID for the work */
+    uint32 space_id = 2;             /* space ID for the work */
+    uint32 object_id = 3;            /* object ID for the work */
+    uint32 pd_id = 4;                /* client PD ID for the work */
 }
 
 /* message type for all PD Component return messages */

@@ -64,13 +64,11 @@ static seL4_MessageInfo_t handle_resspc_allocation_request(seL4_Word sender_badg
     uint64_t client_id = seL4_GetMR(RESSPCMSGREG_CONNECT_REQ_CLIENT_ID);
 
     // Find the resource server PD
-    pd_component_registry_entry_t *server_pd = (pd_component_registry_entry_t *)
-        resource_component_registry_get_by_id(get_pd_component(), caller_id);
+    pd_component_registry_entry_t *server_pd = pd_component_registry_get_entry_by_id(caller_id);
     SERVER_GOTO_IF_COND(server_pd == NULL, "Couldn't find resource server PD (%ld)\n", caller_id);
 
     // Find the client PD (to receive the resource space RDE)
-    pd_component_registry_entry_t *client_pd = (pd_component_registry_entry_t *)
-        resource_component_registry_get_by_id(get_pd_component(), client_id);
+    pd_component_registry_entry_t *client_pd = pd_component_registry_get_entry_by_id(client_id);
     SERVER_GOTO_IF_COND(client_pd == NULL, "Couldn't find client PD (%ld)\n", client_id);
 
     ep_component_registry_entry_t *ep_data = (ep_component_registry_entry_t *)
@@ -140,8 +138,7 @@ int resspc_component_mark_delete(uint64_t space_id)
     int error = 0;
 
     // Find the resource space
-    resspc_component_registry_entry_t *space_entry = (resspc_component_registry_entry_t *)
-        resource_component_registry_get_by_id(get_resspc_component(), space_id);
+    resspc_component_registry_entry_t *space_entry = resource_space_get_entry_by_id(space_id);
     SERVER_GOTO_IF_COND(space_entry == NULL, "Couldn't find resource space (%ld)\n", space_id);
 
     // (XXX) Arya: We can't clean up the server endpoint because it might be used for another resource space
@@ -193,13 +190,11 @@ static seL4_MessageInfo_t handle_create_resource_request(seL4_Word sender_badge)
     uint64_t res_id = seL4_GetMR(RESSPCMSGREG_CREATE_RES_REQ_RES_ID);
 
     // Find the resource space
-    resspc_component_registry_entry_t *space_entry = (resspc_component_registry_entry_t *)
-        resource_component_registry_get_by_id(get_resspc_component(), space_id);
+    resspc_component_registry_entry_t *space_entry = resource_space_get_entry_by_id(space_id);
     SERVER_GOTO_IF_COND(space_entry == NULL, "Couldn't find resource space (%ld)\n", space_id);
 
     // Find the resource server PD
-    pd_component_registry_entry_t *server_pd = (pd_component_registry_entry_t *)
-        resource_component_registry_get_by_id(get_pd_component(), client_id);
+    pd_component_registry_entry_t *server_pd = pd_component_registry_get_entry_by_id(client_id);
     SERVER_GOTO_IF_COND(server_pd == NULL, "Couldn't find resource server PD (%ld)\n", client_id);
 
     gpi_cap_t resource_type = space_entry->space.resource_type;
@@ -225,13 +220,11 @@ int resspc_component_map_space(uint64_t src_spc_id, uint64_t dest_spc_id)
     OSDB_PRINTF("Mapping resource space (%d) to resource space (%d)\n", src_spc_id, dest_spc_id);
 
     // Find the source resource space
-    resspc_component_registry_entry_t *src_space_entry = (resspc_component_registry_entry_t *)
-        resource_component_registry_get_by_id(get_resspc_component(), src_spc_id);
+    resspc_component_registry_entry_t *src_space_entry = resource_space_get_entry_by_id(src_spc_id);
     SERVER_GOTO_IF_COND(src_space_entry == NULL, "Couldn't find resource space (%ld)\n", src_spc_id);
 
     // Find the destination resource space
-    resspc_component_registry_entry_t *dst_space_entry = (resspc_component_registry_entry_t *)
-        resource_component_registry_get_by_id(get_resspc_component(), dest_spc_id);
+    resspc_component_registry_entry_t *dst_space_entry = resource_space_get_entry_by_id(dest_spc_id);
     SERVER_GOTO_IF_COND(dst_space_entry == NULL, "Couldn't find resource space (%ld)\n", dest_spc_id);
 
     // Track the mapping
@@ -263,8 +256,7 @@ int resspc_check_map(uint64_t src_space_id, uint64_t dest_space_id)
     int error = 0;
 
     // Find the source resource space
-    resspc_component_registry_entry_t *src_space_entry = (resspc_component_registry_entry_t *)
-        resource_component_registry_get_by_id(get_resspc_component(), src_space_id);
+    resspc_component_registry_entry_t *src_space_entry = resource_space_get_entry_by_id(src_space_id);
     SERVER_GOTO_IF_COND(src_space_entry == NULL, "Couldn't find resource space (%ld)\n", src_space_id);
 
     // Check the mappings

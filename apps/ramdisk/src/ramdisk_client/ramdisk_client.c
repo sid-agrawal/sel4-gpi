@@ -135,8 +135,8 @@ int ramdisk_client_alloc_block(seL4_CPtr server_ep_cap,
     }
 
     ret_conn->badged_server_ep_cspath.capPtr = reply.msg.alloc.slot;
-    ret_conn->space_id = reply.msg.alloc.spaceId;
-    ret_conn->res_id = reply.msg.alloc.blockId;
+    ret_conn->space_id = reply.msg.alloc.space_id;
+    ret_conn->res_id = reply.msg.alloc.block_id;
 
     return error || reply.errorCode;
 

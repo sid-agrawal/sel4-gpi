@@ -76,8 +76,7 @@ static int create_vmr_space(uint32_t client_id, resspc_component_registry_entry_
     // Add the VMR RDE for the VMR space
     if (client_id != get_gpi_server()->rt_pd_id)
     {
-        pd_component_registry_entry_t *client_pd_data = (pd_component_registry_entry_t *)
-            resource_component_registry_get_by_id(get_pd_component(), client_id);
+        pd_component_registry_entry_t *client_pd_data = pd_component_registry_get_entry_by_id(client_id);
         SERVER_GOTO_IF_COND(client_pd_data == NULL, "Couldn't find PD (%d)\n", client_id);
 
         rde_type_t type = {.type = GPICAP_TYPE_VMR};
@@ -317,8 +316,8 @@ static seL4_MessageInfo_t handle_load_elf_request(seL4_Word sender_badge, seL4_M
                         get_object_id_from_badge(sender_badge));
 
     // Find target PD
-    pd_component_registry_entry_t *target_pd = (pd_component_registry_entry_t *)
-        resource_component_registry_get_by_id(get_pd_component(), get_object_id_from_badge(seL4_GetBadge(0)));
+    pd_component_registry_entry_t *target_pd =
+        pd_component_registry_get_entry_by_id(get_object_id_from_badge(seL4_GetBadge(0)));
     SERVER_GOTO_IF_COND(target_pd == NULL, "Couldn't find target PD (%ld)\n",
                         get_object_id_from_badge(seL4_GetBadge(0)));
 

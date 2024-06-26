@@ -84,8 +84,7 @@ static int ep_component_allocate(uint32_t client_pd,
                                  ep_component_registry_entry_t **ret_ep_reg_entry)
 {
     int error = 0;
-    pd_component_registry_entry_t *pd_data = (pd_component_registry_entry_t *)
-        resource_component_registry_get_by_id(get_pd_component(), client_pd);
+    pd_component_registry_entry_t *pd_data = pd_component_registry_get_entry_by_id(client_pd);
     SERVER_GOTO_IF_COND(pd_data == NULL, "Couldn't find PD (%ld)\n", client_pd);
 
     error = resource_component_allocate(get_ep_component(), client_pd, BADGE_OBJ_ID_NULL, false, NULL,

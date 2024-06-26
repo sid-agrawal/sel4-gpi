@@ -88,28 +88,20 @@ int pokemart_work_handler(
     int op = work->action;
     if (op == PdWorkAction_EXTRACT)
     {
-        uint64_t pokeball_id = work->objectId;
+        uint64_t pokeball_id = work->object_id;
         uint64_t pokemart_pd_id = sel4gpi_get_pd_conn().id;
 
         PRINTF("Get rr for pokeball #%ld\n", pokeball_id);
 
-        // Allocate an MO for the extraction
-        mo_client_context_t mo_conn;
-        size_t mem_size = SIZE_BITS_TO_BYTES(MO_PAGE_BITS);
-        error = mo_component_client_connect(sel4gpi_get_rde(GPICAP_TYPE_MO), 1, &mo_conn);
-        assert(error == 0);
-
-        void *mem_vaddr;
-        error = resource_server_attach_mo(&get_pokemart_server()->gen,
-                                          mo_conn.badged_server_ep_cspath.capPtr,
-                                          &mem_vaddr);
-        assert(error == 0);
-
-        // Initialize model state
-        model_state_t *model_state = (model_state_t *)mem_vaddr;
-        void *free_mem = mem_vaddr + sizeof(model_state_t);
-        size_t free_size = mem_size - sizeof(model_state_t);
-        init_model_state(model_state, free_mem, free_size);
+        /* Initialize the model state */
+        mo_client_context_t mo;
+        model_state_t *model_state;
+        error = resource_server_extraction_setup(&get_pokemart_server()->gen, 1, &mo, &model_state);
+        if (error)
+        {
+            PRINTF("Failed to setup model extraction\n");
+            return error;
+        }
 
         /* Add the PD nodes */
         gpi_model_node_t *self_pd_node = add_pd_node(model_state, NULL, pokemart_pd_id);
@@ -131,19 +123,13 @@ int pokemart_work_handler(
             add_edge(model_state, GPI_EDGE_TYPE_SUBSET, pokeball_node, pokeball_space_node);
         }
 
-        clean_model_state(model_state);
-
-        /* Send the state to the RT */
-        pd_client_context_t pd_conn = sel4gpi_get_pd_conn();
-        error = pd_client_send_subgraph(&pd_conn, &mo_conn);
-        assert(error == 0);
-
-        /* Remove & destroy the MO */
-        error = resource_server_unattach(&get_pokemart_server()->gen, mem_vaddr);
-        assert(error == 0);
-
-        error = mo_component_client_disconnect(&mo_conn);
-        assert(error == 0);
+        /* Send the result */
+        error = resource_server_extraction_finish(&get_pokemart_server()->gen, &mo, model_state);
+        if (error)
+        {
+            PRINTF("Failed to finish model extraction\n");
+            return error;
+        }
     }
     else
     {

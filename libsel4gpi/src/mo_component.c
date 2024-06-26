@@ -126,8 +126,8 @@ static seL4_MessageInfo_t handle_mo_disconnect_request(seL4_Word sender_badge)
     uint64_t mo_id = get_object_id_from_badge(sender_badge);
 
     /* Find the PD */
-    pd_component_registry_entry_t *pd_data = (pd_component_registry_entry_t *)
-        resource_component_registry_get_by_id(get_pd_component(), get_client_id_from_badge(sender_badge));
+    pd_component_registry_entry_t *pd_data =
+        pd_component_registry_get_entry_by_id(get_client_id_from_badge(sender_badge));
     SERVER_GOTO_IF_COND(pd_data == NULL, "Couldn't find PD (%ld)\n", get_client_id_from_badge(sender_badge));
 
     /* Remove the MO from the client PD */

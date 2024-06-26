@@ -21,8 +21,8 @@ message RamdiskBasicReturnMessage {
 /* return from a ramdisk alloc message */
 message RamdiskAllocReturnMessage {
     uint64 slot = 1;        /* destination slot of the allocated block */
-    uint32 blockId = 2;     /* The allocated block ID */
-    uint32 spaceId = 3;     /* The block space ID */
+    uint32 block_id = 2;     /* The allocated block ID */
+    uint32 space_id = 3;     /* The block space ID */
 }
 
 /* message type for all ramdisk return messages */

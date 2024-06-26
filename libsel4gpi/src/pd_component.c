@@ -54,13 +54,13 @@ resource_component_context_t *get_pd_component(void)
     return &get_gpi_server()->pd_component;
 }
 
-static pd_component_registry_entry_t *pd_component_registry_get_entry_by_id(seL4_Word object_id)
+pd_component_registry_entry_t *pd_component_registry_get_entry_by_id(seL4_Word object_id)
 {
     return (pd_component_registry_entry_t *)
         resource_component_registry_get_by_id(get_pd_component(), object_id);
 }
 
-static pd_component_registry_entry_t *pd_component_registry_get_entry_by_badge(seL4_Word badge)
+pd_component_registry_entry_t *pd_component_registry_get_entry_by_badge(seL4_Word badge)
 {
     return (pd_component_registry_entry_t *)
         resource_component_registry_get_by_badge(get_pd_component(), badge);
@@ -280,7 +280,9 @@ static seL4_MessageInfo_t handle_dump_cap_req(seL4_Word sender_badge, seL4_Messa
         get_gpi_server()->model_extraction_reply = reply_path.capPtr;
 
         *should_reply = false;
-    } else {
+    }
+    else
+    {
         /* Print and free the model state */
         print_model_state(ms);
         destroy_model_state(ms);
@@ -503,8 +505,7 @@ static seL4_MessageInfo_t handle_runtime_setup_req(seL4_Word sender_badge, seL4_
 
     int error = 0;
 
-    pd_component_registry_entry_t *target_pd = (pd_component_registry_entry_t *)
-        resource_component_registry_get_by_badge(get_pd_component(), sender_badge);
+    pd_component_registry_entry_t *target_pd = pd_component_registry_get_entry_by_badge(sender_badge);
     SERVER_GOTO_IF_COND(target_pd == NULL, "Couldn't find target PD (%ld)\n", get_object_id_from_badge(sender_badge));
 
     ads_component_registry_entry_t *target_ads = (ads_component_registry_entry_t *)
@@ -604,11 +605,11 @@ static seL4_MessageInfo_t handle_share_resource_type_req(seL4_Word sender_badge,
     OSDB_PRINTF("Got Share Resource Type Request: ");
     BADGE_PRINT(sender_badge);
 
-    pd_component_registry_entry_t *src_pd_data = (pd_component_registry_entry_t *)resource_component_registry_get_by_badge(get_pd_component(), sender_badge);
+    pd_component_registry_entry_t *src_pd_data = pd_component_registry_get_entry_by_badge(sender_badge);
     SERVER_GOTO_IF_COND_BG(src_pd_data == NULL, sender_badge, "Failed to find source PD data ");
 
     seL4_Word dst_pd_badge = seL4_GetBadge(0);
-    pd_component_registry_entry_t *dst_pd_data = (pd_component_registry_entry_t *)resource_component_registry_get_by_badge(get_pd_component(), dst_pd_badge);
+    pd_component_registry_entry_t *dst_pd_data = pd_component_registry_get_entry_by_badge(dst_pd_badge);
     SERVER_GOTO_IF_COND_BG(dst_pd_data == NULL, dst_pd_badge, "Failed to find dest PD data ");
 
     SERVER_GOTO_IF_COND(src_pd_data->pd.id == dst_pd_data->pd.id, "Invalid sharing of resources between the same PD (%d -> %d)\n", src_pd_data->pd.id, dst_pd_data->pd.id);
@@ -646,8 +647,7 @@ static seL4_MessageInfo_t handle_get_work_req(seL4_Word sender_badge, seL4_Messa
     BADGE_PRINT(sender_badge);
 
     /* Find the target PD */
-    pd_component_registry_entry_t *pd_data = (pd_component_registry_entry_t *)
-        resource_component_registry_get_by_badge(get_pd_component(), sender_badge);
+    pd_component_registry_entry_t *pd_data = pd_component_registry_get_entry_by_badge(sender_badge);
     SERVER_GOTO_IF_COND(pd_data == NULL, "Failed to find PD (%d)\n", get_object_id_from_badge(sender_badge));
 
     SERVER_GOTO_IF_COND(get_client_id_from_badge(sender_badge) != get_object_id_from_badge(sender_badge),
@@ -655,22 +655,24 @@ static seL4_MessageInfo_t handle_get_work_req(seL4_Word sender_badge, seL4_Messa
                         get_client_id_from_badge(sender_badge));
 
     /* Return the next piece of work, if there is any */
-    gpi_res_id_t *work_res;
+    pd_work_entry_t *work_res;
     if (pd_data->pending_model_state->count > 0)
     {
         // Prioritize model extraction before free
         // The model state may change during the extraction, bias towards including more information rather than less
         linked_list_pop_head(pd_data->pending_model_state, &work_res);
         ret_msg.msg.work.action = PdWorkAction_EXTRACT;
-        ret_msg.msg.work.spaceId = work_res->space_id;
-        ret_msg.msg.work.objectId = work_res->object_id;
+        ret_msg.msg.work.space_id = work_res->res_id.space_id;
+        ret_msg.msg.work.object_id = work_res->res_id.object_id;
+        ret_msg.msg.work.pd_id = work_res->client_pd_id;
     }
     else if (pd_data->pending_frees->count > 0)
     {
         linked_list_pop_head(pd_data->pending_frees, &work_res);
         ret_msg.msg.work.action = PdWorkAction_FREE;
-        ret_msg.msg.work.spaceId = work_res->space_id;
-        ret_msg.msg.work.objectId = work_res->object_id;
+        ret_msg.msg.work.space_id = work_res->res_id.space_id;
+        ret_msg.msg.work.object_id = work_res->res_id.object_id;
+        ret_msg.msg.work.pd_id = work_res->client_pd_id;
     }
     else
     {
@@ -1153,4 +1155,23 @@ int pd_component_space_cleanup(uint32_t pd_id, gpi_cap_t space_type, uint32_t sp
 
 err_goto:
     return error;
+}
+
+void pd_component_queue_model_extraction_work(pd_component_registry_entry_t *pd_entry, pd_work_entry_t *work)
+{
+    // Add to the list
+    linked_list_insert(pd_entry->pending_model_state, (void *)work);
+    get_gpi_server()->model_extraction_n_missing++;
+
+    // Notify the PD
+    seL4_Signal(pd_entry->pd.badged_notification);
+}
+
+void pd_component_queue_free_work(pd_component_registry_entry_t *pd_entry, pd_work_entry_t *work)
+{
+    // Add to the list
+    linked_list_insert(pd_entry->pending_frees, (void *)work);
+
+    // Notify the PD
+    seL4_Signal(pd_entry->pd.badged_notification);
 }

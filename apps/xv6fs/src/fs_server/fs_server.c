@@ -211,146 +211,32 @@ seL4_MessageInfo_t xv6fs_request_handler(seL4_MessageInfo_t tag, seL4_Word sende
   int error;
   void *mo_vaddr;
   *need_new_recv_cap = false;
-  unsigned int op = seL4_GetMR(FSMSGREG_FUNC);
+
+  // Get info from badge
+  uint64_t client_id = get_client_id_from_badge(sender_badge);
   uint64_t obj_id = get_object_id_from_badge(sender_badge);
-  uint64_t ns_id;
+  uint64_t ns_id = get_space_id_from_badge(sender_badge);
+  gpi_cap_t cap_type = get_cap_type_from_badge(sender_badge);
+
+  CHECK_ERROR_GOTO(sender_badge == 0, "Got message on unbadged ep", FS_SERVER_ERROR_UNKNOWN, done);
+  CHECK_ERROR_GOTO(cap_type != get_xv6fs_server()->gen.resource_type, "Got invalid captype",
+                   RD_SERVER_ERROR_UNKNOWN, done);
+
+  // Decode the RPC message
   FsMessage msg;
   FsReturnMessage reply_msg = {
       .which_msg = FsReturnMessage_basic_tag};
+
+  error = sel4gpi_rpc_recv(&get_xv6fs_server()->gen.rpc_env, (void *)&msg);
+  CHECK_ERROR_GOTO(error, "Failed to decode RPC message", error, done);
+
+  // Handle the message
   seL4_MessageInfo_t reply_tag = seL4_MessageInfo_new(0, 0, 0, 0);
-
-  if (sender_badge == 0)
-  { /* Handle Unbadged Request */
-    XV6FS_PRINTF("Received unbadged request\n");
-
-    switch (op)
-    {
-    case RS_FUNC_GET_RR_REQ:
-      uint64_t pd_id = seL4_GetMR(RSMSGREG_EXTRACT_RR_REQ_PD_ID);
-      uint64_t fs_pd_id = seL4_GetMR(RSMSGREG_EXTRACT_RR_REQ_RS_PD_ID);
-      uint64_t ns_id = seL4_GetMR(RSMSGREG_EXTRACT_RR_REQ_ID);
-
-      void *mem_vaddr = (void *)seL4_GetMR(RSMSGREG_EXTRACT_RR_REQ_VADDR);
-      model_state_t *model_state = (model_state_t *)mem_vaddr;
-      void *free_mem = mem_vaddr + sizeof(model_state_t);
-      size_t free_size = seL4_GetMR(RSMSGREG_EXTRACT_RR_REQ_SIZE) - sizeof(model_state_t);
-
-      /* Update pathname for namespace */
-      char path[MAXPATH];
-      strcpy(path, ROOT_DIR);
-
-      if (ns_id != get_xv6fs_server()->gen.default_space.id)
-      {
-        fs_namespace_entry_t *ns = (fs_namespace_entry_t *)resource_server_registry_get_by_id(&get_xv6fs_server()->ns_registry, ns_id);
-
-        if (ns == NULL)
-        {
-          XV6FS_PRINTF("Namespace did not exist for dumprr\n");
-          error = RS_ERROR_NS;
-          goto done;
-        }
-
-        apply_prefix(ns->ns_prefix, path);
-      }
-
-      /* List all the files in the NS */
-      int n_files;
-      uint32_t inums[16];
-
-      error = xv6fs_sys_walk(path, false, inums, &n_files);
-      CHECK_ERROR_GOTO(error, "Failed to walk FS", FS_SERVER_ERROR_UNKNOWN, done);
-
-      /* Initialize the model state */
-      init_model_state(model_state, free_mem, free_size);
-
-      // (XXX) Arya: A lot of this should be moved to PD component once we have resource spaces implemented
-
-      /* Add the PD nodes */
-      gpi_model_node_t *self_pd_node = add_pd_node(model_state, NULL, fs_pd_id);
-      gpi_model_node_t *client_pd_node = add_pd_node(model_state, NULL, pd_id);
-
-      /* Add the file resource space node */
-      gpi_model_node_t *file_space_node = add_resource_space_node(model_state, get_xv6fs_server()->gen.resource_type,
-                                                                  get_xv6fs_server()->gen.default_space.id);
-      add_edge(model_state, GPI_EDGE_TYPE_HOLD, self_pd_node, file_space_node);
-
-      /* Add the block resource space node */
-      // (XXX) Arya: Assumes all blocks belong to the same block space
-      gpi_cap_t block_cap_type = sel4gpi_get_resource_type_code(BLOCK_RESOURCE_TYPE_NAME);
-      uint64_t block_space_id = get_xv6fs_server()->naive_blocks[0].space_id;
-      gpi_model_node_t *block_space_node = add_resource_space_node(model_state, block_cap_type, block_space_id);
-      add_edge(model_state, GPI_EDGE_TYPE_MAP, file_space_node, block_space_node);
-
-      /* Add nodes for all files and blocks */
-      int n_blocknos = 100; // (XXX) Arya: assumes there are no more than 100 blocks per file
-      int *blocknos = malloc(sizeof(int) * n_blocknos);
-      for (int i = 0; i < n_files; i++)
-      {
-        XV6FS_PRINTF("Get RR for fileno %ld\n", inums[i]);
-
-        /* Add the file resource node */
-        gpi_model_node_t *file_node = add_resource_node(model_state, get_xv6fs_server()->gen.resource_type,
-                                                        get_xv6fs_server()->gen.default_space.id, inums[i]);
-        add_edge(model_state, GPI_EDGE_TYPE_HOLD, self_pd_node, file_node);
-        add_edge(model_state, GPI_EDGE_TYPE_HOLD, client_pd_node, file_node);
-        add_edge(model_state, GPI_EDGE_TYPE_SUBSET, file_node, file_space_node);
-
-        /* Add relations for blocks */
-        error = xv6fs_sys_inode_blocknos(inums[i], blocknos, n_blocknos, &n_blocknos);
-        CHECK_ERROR_GOTO(error, "Failed to get blocknos for file", FS_SERVER_ERROR_UNKNOWN, done);
-        XV6FS_PRINTF("File has %d blocks\n", n_blocknos);
-
-        uint64_t block_id;
-        for (int j = 0; j < n_blocknos; j++)
-        {
-          block_id = get_xv6fs_server()->naive_blocks[blocknos[j]].res_id;
-
-          gpi_model_node_t *block_node = add_resource_node(model_state, block_cap_type, block_space_id, block_id);
-          add_edge(model_state, GPI_EDGE_TYPE_MAP, file_node, block_node);
-        }
-      }
-
-      free(blocknos);
-      clean_model_state(model_state);
-
-      seL4_SetMR(RSMSGREG_FUNC, RS_FUNC_GET_RR_ACK);
-      break;
-    case RS_FUNC_FREE_REQ:
-      // Actually don't do much when a file is freed, it's the same as file close
-      // We still want to keep it in the file system, but we can reduce the refcount
-      uint64_t file_id = seL4_GetMR(RSMSGREG_FREE_REQ_OBJ_ID);
-
-      // Find the registry entry
-      file_registry_entry_t *reg_entry = (file_registry_entry_t *)resource_server_registry_get_by_id(
-          &get_xv6fs_server()->file_registry,
-          file_id);
-
-      if (reg_entry == NULL)
-      {
-        // No-op if the file doesn't exist / isn't open
-        XV6FS_PRINTF("Received file (%d) to free, file isn't open\n");
-      }
-      else
-      {
-        // Decrement the refcount
-        resource_server_registry_dec(&get_xv6fs_server()->file_registry, (resource_server_registry_node_t *)reg_entry);
-      }
-
-      seL4_MessageInfo_ptr_set_length(&reply_tag, RSMSGREG_FREE_ACK_END);
-      seL4_SetMR(RSMSGREG_FUNC, RS_FUNC_FREE_ACK);
-      break;
-    default:
-      XV6FS_PRINTF("Op is %d\n", op);
-      CHECK_ERROR_GOTO(1, "got invalid op on unbadged ep", error, done);
-    }
-  }
-  else if (obj_id == BADGE_OBJ_ID_NULL)
+  if (obj_id == BADGE_OBJ_ID_NULL)
   { /* Handle Request Not Associated to Object */
     XV6FS_PRINTF("Received badged request with no object id\n");
 
     char *pathname;
-    error = sel4gpi_rpc_recv(&get_xv6fs_server()->gen.rpc_env, (void *)&msg);
-    CHECK_ERROR_GOTO(error, "Failed to decode RPC message", error, done);
 
     switch (msg.which_msg)
     {
@@ -552,24 +438,14 @@ seL4_MessageInfo_t xv6fs_request_handler(seL4_MessageInfo_t tag, seL4_Word sende
     /* Handle Request On Specific Resource */
     XV6FS_PRINTF("Received badged request with object id 0x%lx\n", get_object_id_from_badge(sender_badge));
 
-    error = sel4gpi_rpc_recv(&get_xv6fs_server()->gen.rpc_env, (void *)&msg);
-    CHECK_ERROR_GOTO(error, "Failed to decode RPC message", error, done);
-
-    int ret;
+    // Find the file in the registry
     file_registry_entry_t *reg_entry =
         (file_registry_entry_t *)resource_server_registry_get_by_badge(
             &get_xv6fs_server()->file_registry,
             sender_badge);
-
-    if (reg_entry == NULL)
-    {
-      XV6FS_PRINTF("Received invalid badge\n");
-      error = FS_SERVER_ERROR_BADGE;
-      goto done;
-    }
+    CHECK_ERROR_GOTO(reg_entry == NULL, "Received invalid badge\n", FS_SERVER_ERROR_BADGE, done);
 
     XV6FS_PRINTF("Got request for file with id %ld\n", reg_entry->file->id);
-
     switch (msg.which_msg)
     {
     case FsMessage_read_tag:
@@ -628,16 +504,8 @@ seL4_MessageInfo_t xv6fs_request_handler(seL4_MessageInfo_t tag, seL4_Word sende
   }
 
 done:
-  if (sender_badge == 0)
-  {
-    seL4_MessageInfo_ptr_set_label(&reply_tag, error);
-  }
-  else
-  {
-    reply_msg.errorCode = error;
-    sel4gpi_rpc_reply(&get_xv6fs_server()->gen.rpc_env, (void *)&reply_msg, &reply_tag);
-  }
-
+  reply_msg.errorCode = error;
+  sel4gpi_rpc_reply(&get_xv6fs_server()->gen.rpc_env, (void *)&reply_msg, &reply_tag);
   return reply_tag;
 }
 
@@ -717,9 +585,133 @@ err_goto:
 #endif
 }
 
-
 int xv6fs_work_handler(PdWorkReturnMessage *work)
 {
-    // Unimplemented
-    assert(0);
+  int error = 0;
+  seL4_MessageInfo_t reply_tag = seL4_MessageInfo_new(0, 0, 0, 0);
+
+  int op = work->action;
+  if (op == PdWorkAction_EXTRACT)
+  {
+    uint64_t space_id = work->space_id;
+    uint64_t blockno = work->object_id;
+    uint64_t fs_pd_id = sel4gpi_get_pd_conn().id;
+    uint64_t client_pd_id = work->pd_id;
+
+    /* Initialize the model state */
+    mo_client_context_t mo;
+    model_state_t *model_state;
+    error = resource_server_extraction_setup(&get_xv6fs_server()->gen, 4, &mo, &model_state);
+    CHECK_ERROR_GOTO(error, "Failed to setup model extraction\n", RD_SERVER_ERROR_UNKNOWN, err_goto);
+
+    /* Update pathname for namespace */
+    char path[MAXPATH];
+    strcpy(path, ROOT_DIR);
+
+    if (space_id != get_xv6fs_server()->gen.default_space.id)
+    {
+      fs_namespace_entry_t *ns = (fs_namespace_entry_t *)resource_server_registry_get_by_id(
+          &get_xv6fs_server()->ns_registry,
+          space_id);
+
+      if (ns == NULL)
+      {
+        XV6FS_PRINTF("Namespace did not exist for dumprr\n");
+        error = RS_ERROR_NS;
+        goto err_goto;
+      }
+
+      apply_prefix(ns->ns_prefix, path);
+    }
+
+    /* List all the files in the NS */
+    int n_files;
+    uint32_t inums[16];
+
+    error = xv6fs_sys_walk(path, false, inums, &n_files);
+    CHECK_ERROR_GOTO(error, "Failed to walk FS", FS_SERVER_ERROR_UNKNOWN, err_goto);
+
+    // (XXX) Arya: A lot of this should be moved to PD component once we have resource spaces implemented
+
+    /* Add the PD nodes */
+    gpi_model_node_t *self_pd_node = add_pd_node(model_state, NULL, fs_pd_id);
+    gpi_model_node_t *client_pd_node = add_pd_node(model_state, NULL, client_pd_id);
+
+    /* Add the file resource space node */
+    gpi_model_node_t *file_space_node = add_resource_space_node(model_state, get_xv6fs_server()->gen.resource_type,
+                                                                get_xv6fs_server()->gen.default_space.id);
+    add_edge(model_state, GPI_EDGE_TYPE_HOLD, self_pd_node, file_space_node);
+
+    /* Add the block resource space node */
+    // (XXX) Arya: Assumes all blocks belong to the same block space
+    gpi_cap_t block_cap_type = sel4gpi_get_resource_type_code(BLOCK_RESOURCE_TYPE_NAME);
+    uint64_t block_space_id = get_xv6fs_server()->naive_blocks[0].space_id;
+    gpi_model_node_t *block_space_node = add_resource_space_node(model_state, block_cap_type, block_space_id);
+    add_edge(model_state, GPI_EDGE_TYPE_MAP, file_space_node, block_space_node);
+
+    /* Add nodes for all files and blocks */
+    int n_blocknos = 100; // (XXX) Arya: assumes there are no more than 100 blocks per file
+    int *blocknos = malloc(sizeof(int) * n_blocknos);
+    for (int i = 0; i < n_files; i++)
+    {
+      XV6FS_PRINTF("Get RR for fileno %ld\n", inums[i]);
+
+      /* Add the file resource node */
+      gpi_model_node_t *file_node = add_resource_node(model_state, get_xv6fs_server()->gen.resource_type,
+                                                      get_xv6fs_server()->gen.default_space.id, inums[i]);
+      add_edge(model_state, GPI_EDGE_TYPE_HOLD, self_pd_node, file_node);
+      add_edge(model_state, GPI_EDGE_TYPE_HOLD, client_pd_node, file_node);
+      add_edge(model_state, GPI_EDGE_TYPE_SUBSET, file_node, file_space_node);
+
+      /* Add relations for blocks */
+      error = xv6fs_sys_inode_blocknos(inums[i], blocknos, n_blocknos, &n_blocknos);
+      CHECK_ERROR_GOTO(error, "Failed to get blocknos for file", FS_SERVER_ERROR_UNKNOWN, err_goto);
+      XV6FS_PRINTF("File has %d blocks\n", n_blocknos);
+
+      uint64_t block_id;
+      for (int j = 0; j < n_blocknos; j++)
+      {
+        block_id = get_xv6fs_server()->naive_blocks[blocknos[j]].res_id;
+
+        gpi_model_node_t *block_node = add_resource_node(model_state, block_cap_type, block_space_id, block_id);
+        add_edge(model_state, GPI_EDGE_TYPE_MAP, file_node, block_node);
+      }
+    }
+
+    free(blocknos);
+
+    /* Send the result */
+    error = resource_server_extraction_finish(&get_xv6fs_server()->gen, &mo, model_state);
+    CHECK_ERROR_GOTO(error, "Failed to finish model extraction\n", RD_SERVER_ERROR_UNKNOWN, err_goto);
+  }
+  else if (op == PdWorkAction_FREE)
+  {
+    // Actually don't do much when a file is freed, it's the same as file close
+    // We still want to keep it in the file system, but we can reduce the refcount
+    uint64_t file_id = work->object_id;
+
+    // Find the registry entry
+    file_registry_entry_t *reg_entry = (file_registry_entry_t *)resource_server_registry_get_by_id(
+        &get_xv6fs_server()->file_registry,
+        file_id);
+
+    if (reg_entry == NULL)
+    {
+      // No-op if the file doesn't exist / isn't open
+      XV6FS_PRINTF("Received file (%d) to free, file isn't open\n");
+    }
+    else
+    {
+      // Decrement the refcount
+      resource_server_registry_dec(&get_xv6fs_server()->file_registry, (resource_server_registry_node_t *)reg_entry);
+    }
+  }
+  else
+  {
+    XV6FS_PRINTF("Unknown work action\n");
+    error = 1;
+  }
+
+err_goto:
+  return error;
 }

@@ -138,3 +138,27 @@ int resource_server_give_resource(resource_server_context_t *context,
 int resource_server_new_res_space(resource_server_context_t *context,
                                   uint64_t client_id,
                                   resspc_client_context_t *ret_conn);
+
+/**
+ * Setup for the resource server to begin model extraction
+ *
+ * @param context
+ * @param n_pages number of pages to allocate for the MO
+ * @param mo this structure will be filled out with the MO allocated for model extraction
+ * @param ms returns the location of the model state
+ * @return 0 on success, error otherwise
+ */
+int resource_server_extraction_setup(resource_server_context_t *context,
+                                     int n_pages,
+                                     mo_client_context_t *mo,
+                                     model_state_t **ms);
+
+/**
+ * Finish model extraction by sending the result to the RT and destroying the allocated MO
+ *
+ * @param context
+ * @param mo the MO allocated for model extraction
+ * @param ms returns the location of the model state
+ * @return 0 on success, error otherwise
+ */
+int resource_server_extraction_finish(resource_server_context_t *context, mo_client_context_t *mo, model_state_t *ms);

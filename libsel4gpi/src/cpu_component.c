@@ -108,8 +108,7 @@ static seL4_MessageInfo_t handle_config_req(seL4_Word sender_badge,
         resource_component_registry_get_by_badge(get_cpu_component(), sender_badge);
     SERVER_GOTO_IF_COND(cpu_data == NULL, "Couldn't find CPU (%ld)\n", get_object_id_from_badge(sender_badge));
 
-    pd_component_registry_entry_t *pd_data = (pd_component_registry_entry_t *)
-        resource_component_registry_get_by_badge(get_pd_component(), seL4_GetBadge(0));
+    pd_component_registry_entry_t *pd_data = pd_component_registry_get_entry_by_badge(seL4_GetBadge(0));
     SERVER_GOTO_IF_COND(pd_data == NULL, "Couldn't find PD (%ld)\n", get_object_id_from_badge(seL4_GetBadge(0)));
 
     /* Get Fault EP */
@@ -178,8 +177,8 @@ static seL4_MessageInfo_t handle_change_vspace_req(seL4_Word sender_badge,
     SERVER_GOTO_IF_COND(client_data == NULL, "Couldn't find CPU (%ld)\n", get_object_id_from_badge(sender_badge));
 
     /* Find the PD */
-    pd_component_registry_entry_t *pd_data = (pd_component_registry_entry_t *)
-        resource_component_registry_get_by_id(get_pd_component(), get_client_id_from_badge(sender_badge));
+    pd_component_registry_entry_t *pd_data =
+        pd_component_registry_get_entry_by_id(get_client_id_from_badge(sender_badge));
     SERVER_GOTO_IF_COND(pd_data == NULL, "Couldn't find PD (%ld)\n", get_client_id_from_badge(sender_badge));
 
     /* Find the ADS */
@@ -320,7 +319,7 @@ int cpu_component_initialize(simple_t *server_simple,
     };
 
     error = resource_component_allocate(get_resspc_component(), get_gpi_server()->rt_pd_id, BADGE_OBJ_ID_NULL,
-                                        false, (void *)&resspc_config, (resource_server_registry_node_t **)&space_entry, 
+                                        false, (void *)&resspc_config, (resource_server_registry_node_t **)&space_entry,
                                         NULL);
     assert(error == 0);
 

@@ -11,6 +11,7 @@
 #include <sel4gpi/pd_clientapi.h>
 #include <sel4gpi/resource_server_remote_utils.h>
 #include <sel4gpi/model_exporting.h>
+#include <sel4gpi/pd_utils.h>
 #include <sel4gpi/gpi_rpc.h>
 #include <ramdisk_rpc.pb.h>
 
@@ -232,97 +233,38 @@ int ramdisk_init()
     return error;
 }
 
-seL4_MessageInfo_t ramdisk_request_handler(seL4_MessageInfo_t tag, seL4_Word sender_badge, seL4_CPtr cap, bool *need_new_recv_cap)
+seL4_MessageInfo_t ramdisk_request_handler(
+    seL4_MessageInfo_t tag,
+    seL4_Word sender_badge,
+    seL4_CPtr cap,
+    bool *need_new_recv_cap)
 {
     int error;
     void *mo_vaddr;
     *need_new_recv_cap = false;
 
+    // Get info from badge
+    uint64_t client_id = get_client_id_from_badge(sender_badge);
+    uint64_t obj_id = get_object_id_from_badge(sender_badge);
+    gpi_cap_t cap_type = get_cap_type_from_badge(sender_badge);
+
+    CHECK_ERROR_GOTO(sender_badge == 0, "Got message on unbadged ep", RD_SERVER_ERROR_UNKNOWN, done);
+    CHECK_ERROR_GOTO(cap_type != get_ramdisk_server()->gen.resource_type, "Got invalid captype",
+                     RD_SERVER_ERROR_UNKNOWN, done);
+
+    // Decode the RPC message
     RamdiskMessage msg;
     RamdiskReturnMessage reply_msg = {
-        .which_msg = RamdiskReturnMessage_basic_tag
-    };
+        .which_msg = RamdiskReturnMessage_basic_tag};
 
-    unsigned int op = seL4_GetMR(RDMSGREG_FUNC);
-    uint64_t obj_id = get_object_id_from_badge(sender_badge);
+    error = sel4gpi_rpc_recv(&get_ramdisk_server()->gen.rpc_env, (void *)&msg);
+    CHECK_ERROR_GOTO(error, "Failed to decode RPC message", error, done);
 
+    // Handle the message
     seL4_MessageInfo_t reply_tag = seL4_MessageInfo_new(0, 0, 0, 0);
-    if (sender_badge == 0)
-    { /* Handle Unbadged Request */
-        RAMDISK_PRINTF("Got message on unbadged EP\n");
-
-        switch (op)
-        {
-        case RS_FUNC_GET_RR_REQ:
-            uint64_t blockno = seL4_GetMR(RSMSGREG_EXTRACT_RR_REQ_ID);
-            uint64_t pd_id = seL4_GetMR(RSMSGREG_EXTRACT_RR_REQ_PD_ID);
-            uint64_t rd_pd_id = seL4_GetMR(RSMSGREG_EXTRACT_RR_REQ_RS_PD_ID);
-
-            RAMDISK_PRINTF("Get RR for blockno %d\n", blockno);
-            void *mem_vaddr = (void *)seL4_GetMR(RSMSGREG_EXTRACT_RR_REQ_VADDR);
-            model_state_t *model_state = (model_state_t *)mem_vaddr;
-            void *free_mem = mem_vaddr + sizeof(model_state_t);
-            size_t free_size = seL4_GetMR(RSMSGREG_EXTRACT_RR_REQ_SIZE) - sizeof(model_state_t);
-
-            // Initialize the model state
-            init_model_state(model_state, free_mem, free_size);
-
-            // (XXX) Arya: A lot of this should be moved to PD component once we have resource spaces implemented
-
-            /* Add the PD nodes */
-            gpi_model_node_t *self_pd_node = add_pd_node(model_state, NULL, rd_pd_id);
-            gpi_model_node_t *client_pd_node = add_pd_node(model_state, NULL, pd_id);
-
-            /* Add the block resource space node */
-            gpi_model_node_t *block_space_node = add_resource_space_node(model_state,
-                                                                         get_ramdisk_server()->gen.resource_type,
-                                                                         get_ramdisk_server()->gen.default_space.id);
-            add_edge(model_state, GPI_EDGE_TYPE_HOLD, self_pd_node, block_space_node);
-
-            /* Add the resource node */
-
-            gpi_model_node_t *block_node = add_resource_node(model_state, get_ramdisk_server()->gen.resource_type,
-                                                             1, blockno);
-            add_edge(model_state, GPI_EDGE_TYPE_HOLD, self_pd_node, block_node);
-            add_edge(model_state, GPI_EDGE_TYPE_HOLD, client_pd_node, block_node);
-            add_edge(model_state, GPI_EDGE_TYPE_SUBSET, block_node, block_space_node);
-
-            // Add RR from block to MO
-            // (XXX) Arya: Actually don't show this, we are pretending these are real blocks?
-            // char mo_res_id[CSV_MAX_STRING_SIZE];
-            // make_res_id(mo_res_id, GPICAP_TYPE_MO, get_ramdisk_server()->ramdisk_mo->id);
-            // add_resource_depends_on_rr(rr_state, block_res_id, mo_res_id, row_ptr);
-
-            clean_model_state(model_state);
-
-            seL4_SetMR(RDMSGREG_FUNC, RS_FUNC_GET_RR_ACK);
-            RAMDISK_PRINTF("Returning RR\n");
-
-            break;
-        case RS_FUNC_FREE_REQ:
-            uint64_t space_id = seL4_GetMR(RSMSGREG_FREE_REQ_SPACE_ID);
-            uint64_t obj_id = seL4_GetMR(RSMSGREG_FREE_REQ_OBJ_ID);
-
-            RAMDISK_PRINTF("Free blockno %d\n", obj_id);
-
-            assert(space_id == get_ramdisk_server()->gen.default_space.id);
-
-            free_block(obj_id);
-
-            seL4_SetMR(RDMSGREG_FUNC, RS_FUNC_FREE_ACK);
-            break;
-        default:
-            RAMDISK_PRINTF("Op is %d\n", op);
-            CHECK_ERROR_GOTO(1, "got invalid op on unbadged ep", error, done);
-        }
-    }
-    else if (obj_id == BADGE_OBJ_ID_NULL)
-    { /* Handle Untyped Request */
+    if (obj_id == BADGE_OBJ_ID_NULL)
+    {
         RAMDISK_PRINTF("Got message on badged EP with no object id\n");
-        uint64_t client_id = get_client_id_from_badge(sender_badge);
-
-        error = sel4gpi_rpc_recv(&get_ramdisk_server()->gen.rpc_env, (void *)&msg);
-        CHECK_ERROR_GOTO(error, "Failed to decode RPC message", error, done);
 
         switch (msg.op)
         {
@@ -368,8 +310,8 @@ seL4_MessageInfo_t ramdisk_request_handler(seL4_MessageInfo_t tag, seL4_Word sen
 
             // Send the reply
             reply_msg.which_msg = RamdiskReturnMessage_alloc_tag;
-            reply_msg.msg.alloc.blockId = blockno;
-            reply_msg.msg.alloc.spaceId = get_ramdisk_server()->gen.default_space.id;
+            reply_msg.msg.alloc.block_id = blockno;
+            reply_msg.msg.alloc.space_id = get_ramdisk_server()->gen.default_space.id;
             reply_msg.msg.alloc.slot = dest;
 
             RAMDISK_PRINTF("Resource is in dest slot %d\n", (int)dest);
@@ -380,21 +322,8 @@ seL4_MessageInfo_t ramdisk_request_handler(seL4_MessageInfo_t tag, seL4_Word sen
         }
     }
     else
-    { /* Handle Typed Request */
+    {
         RAMDISK_PRINTF("Got message on EP with badge: %lx\n", sender_badge);
-
-        // Parse the RPC message
-        error = sel4gpi_rpc_recv(&get_ramdisk_server()->gen.rpc_env, (void *)&msg);
-        CHECK_ERROR_GOTO(error, "Failed to decode RPC message", error, done);
-
-        // Get info from badge
-        gpi_cap_t cap_type = get_cap_type_from_badge(sender_badge);
-        CHECK_ERROR_GOTO(cap_type != get_ramdisk_server()->gen.resource_type,
-                         "ramdisk server got invalid captype in badged EP",
-                         RD_SERVER_ERROR_UNKNOWN, done);
-        uint64_t blockno = obj_id;
-        uint64_t client_id = get_client_id_from_badge(sender_badge);
-        RAMDISK_PRINTF("Got op for blockno %ld\n", blockno);
 
         switch (msg.op)
         {
@@ -407,8 +336,8 @@ seL4_MessageInfo_t ramdisk_request_handler(seL4_MessageInfo_t tag, seL4_Word sen
             *need_new_recv_cap = false;
 
             /* Read ramdisk */
-            void *ramdisk_vaddr = ramdisk_ptr(blockno);
-            RAMDISK_PRINTF("Reading from blockno %ld to %p\n", blockno, mo_vaddr);
+            void *ramdisk_vaddr = ramdisk_ptr(obj_id);
+            RAMDISK_PRINTF("Reading from blockno %ld to %p\n", obj_id, mo_vaddr);
             memcpy(mo_vaddr, ramdisk_vaddr, RAMDISK_BLOCK_SIZE);
 
             RAMDISK_PRINTF("Read block\n");
@@ -424,8 +353,8 @@ seL4_MessageInfo_t ramdisk_request_handler(seL4_MessageInfo_t tag, seL4_Word sen
             *need_new_recv_cap = false;
 
             /* Write ramdisk */
-            ramdisk_vaddr = ramdisk_ptr(blockno);
-            RAMDISK_PRINTF("Writing from %p to blockno %ld\n", mo_vaddr, blockno);
+            ramdisk_vaddr = ramdisk_ptr(obj_id);
+            RAMDISK_PRINTF("Writing from %p to blockno %ld\n", mo_vaddr, obj_id);
             memcpy(ramdisk_vaddr, mo_vaddr, RAMDISK_BLOCK_SIZE);
 
             // ARYA-TODO what if the MO is not of RAMDISK_BLOCK_SIZE?
@@ -437,22 +366,75 @@ seL4_MessageInfo_t ramdisk_request_handler(seL4_MessageInfo_t tag, seL4_Word sen
     }
 
 done:
-
-    if (sender_badge == 0)
-    {
-        seL4_MessageInfo_ptr_set_label(&reply_tag, error);
-    }
-    else
-    {
-        reply_msg.errorCode = error;
-        sel4gpi_rpc_reply(&get_ramdisk_server()->gen.rpc_env, (void *)&reply_msg, &reply_tag);
-    }
-
+    reply_msg.errorCode = error;
+    sel4gpi_rpc_reply(&get_ramdisk_server()->gen.rpc_env, (void *)&reply_msg, &reply_tag);
     return reply_tag;
 }
 
 int ramdisk_work_handler(PdWorkReturnMessage *work)
 {
-    // Unimplemented
-    assert(0);
+    int error = 0;
+    seL4_MessageInfo_t reply_tag = seL4_MessageInfo_new(0, 0, 0, 0);
+
+    int op = work->action;
+    if (op == PdWorkAction_EXTRACT)
+    {
+        uint64_t space_id = work->space_id;
+        uint64_t blockno = work->object_id;
+        uint64_t ramdisk_pd_id = sel4gpi_get_pd_conn().id;
+
+        assert(space_id == get_ramdisk_server()->gen.default_space.id);
+
+        /* Initialize the model state */
+        mo_client_context_t mo;
+        model_state_t *model_state;
+        error = resource_server_extraction_setup(&get_ramdisk_server()->gen, 1, &mo, &model_state);
+        CHECK_ERROR_GOTO(error, "Failed to setup model extraction\n", RD_SERVER_ERROR_UNKNOWN, err_goto);
+
+        /* Add the PD nodes */
+        gpi_model_node_t *self_pd_node = add_pd_node(model_state, NULL, ramdisk_pd_id);
+
+        /* Add the block resource space node */
+        gpi_model_node_t *block_space_node = add_resource_space_node(model_state,
+                                                                     get_ramdisk_server()->gen.resource_type,
+                                                                     get_ramdisk_server()->gen.default_space.id);
+        add_edge(model_state, GPI_EDGE_TYPE_HOLD, self_pd_node, block_space_node);
+
+        if (blockno != BADGE_OBJ_ID_NULL)
+        {
+            /* Add the resource node */
+            gpi_model_node_t *block_node = add_resource_node(model_state, get_ramdisk_server()->gen.resource_type,
+                                                             1, blockno);
+            add_edge(model_state, GPI_EDGE_TYPE_HOLD, self_pd_node, block_node);
+            add_edge(model_state, GPI_EDGE_TYPE_SUBSET, block_node, block_space_node);
+
+            // Add RR from block to MO
+            // (XXX) Arya: Actually don't show this, we are pretending these are real blocks?
+            // char mo_res_id[CSV_MAX_STRING_SIZE];
+            // make_res_id(mo_res_id, GPICAP_TYPE_MO, get_ramdisk_server()->ramdisk_mo->id);
+            // add_resource_depends_on_rr(rr_state, block_res_id, mo_res_id, row_ptr);
+        }
+
+        /* Send the result */
+        error = resource_server_extraction_finish(&get_ramdisk_server()->gen, &mo, model_state);
+        CHECK_ERROR_GOTO(error, "Failed to finish model extraction\n", RD_SERVER_ERROR_UNKNOWN, err_goto);
+    }
+    else if (op == PdWorkAction_FREE)
+    {
+        uint64_t space_id = work->space_id;
+        uint64_t blockno = work->object_id;
+
+        assert(space_id == get_ramdisk_server()->gen.default_space.id);
+
+        RAMDISK_PRINTF("Free blockno %d\n", blockno);
+        free_block(blockno);
+    }
+    else
+    {
+        RAMDISK_PRINTF("Unknown work action\n");
+        error = 1;
+    }
+
+err_goto:
+    return error;
 }
