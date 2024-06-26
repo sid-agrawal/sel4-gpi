@@ -139,7 +139,7 @@ void mo_destroy(mo_t *mo, vka_t *server_vka)
 {
     if (mo->vka_objects == NULL)
     {
-        OSDB_PRINTERR("Can't free frames for MO (%d), no associated vka objects\n", mo->id);
+        WARN("Can't free frames for MO (%d), no associated vka objects\n", mo->id);
         return;
     }
 
