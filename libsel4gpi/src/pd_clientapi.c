@@ -208,7 +208,7 @@ int pd_client_get_work(pd_client_context_t *conn, PdWorkReturnMessage *work)
 
     // (XXX) Arya: Once we convert everything to protobuf, we can do the call all at once
     PdReturnMessage ret_msg;
-    int error = sel4gpi_rpc_recv_reply(&rpc_env, (void *) &ret_msg);
+    int error = sel4gpi_rpc_recv_reply(&rpc_env, (void *)&ret_msg);
 
     error |= ret_msg.errorCode;
 
@@ -220,18 +220,22 @@ int pd_client_get_work(pd_client_context_t *conn, PdWorkReturnMessage *work)
     return error;
 }
 
-int pd_client_send_subgraph(pd_client_context_t *conn, mo_client_context_t *mo_conn)
+int pd_client_send_subgraph(pd_client_context_t *conn, mo_client_context_t *mo_conn, bool has_data)
 {
     seL4_SetMR(PDMSGREG_FUNC, PD_FUNC_SEND_SUBGRAPH_REQ);
+    seL4_SetMR(PDMSGREG_SEND_SUBGRAPH_REQ_HAS_DATA, has_data);
 
-    seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 1,
+    if (has_data)
+    {
+        seL4_SetCap(0, mo_conn->badged_server_ep_cspath.capPtr);
+    }
+    seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, has_data,
                                                   PDMSGREG_SEND_SUBGRAPH_REQ_END);
-    seL4_SetCap(0, mo_conn->badged_server_ep_cspath.capPtr);
     tag = seL4_Call(conn->badged_server_ep_cspath.capPtr, tag);
 
     // (XXX) Arya: Once we convert everything to protobuf, we can do the call all at once
     PdReturnMessage ret_msg;
-    int error = sel4gpi_rpc_recv_reply(&rpc_env, (void *) &ret_msg);
+    int error = sel4gpi_rpc_recv_reply(&rpc_env, (void *)&ret_msg);
     error |= ret_msg.errorCode;
 
     return error;

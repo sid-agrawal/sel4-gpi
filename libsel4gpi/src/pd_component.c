@@ -699,34 +699,39 @@ static seL4_MessageInfo_t handle_send_subgraph_req(seL4_Word sender_badge, seL4_
     OSDB_PRINTF("Got a subgraph from: ");
     BADGE_PRINT(sender_badge);
 
+    bool has_data = seL4_GetMR(PDMSGREG_SEND_SUBGRAPH_REQ_HAS_DATA);
+
     // (XXX) Arya: doesn't do any authentication, or check if we actually needed this piece
     // For simplicity, just decrement the counter of "remaining pieces"
     SERVER_GOTO_IF_COND(!get_gpi_server()->pending_extraction,
                         "Got subgraph but when there is no pending model extraction\n");
 
-    /* Attach the included MO */
-    seL4_Word mo_badge = seL4_GetBadge(0);
-    SERVER_GOTO_IF_COND(get_cap_type_from_badge(mo_badge) != GPICAP_TYPE_MO, "Provided cap was not an MO\n");
+    if (has_data)
+    {
+        /* Attach the included MO */
+        seL4_Word mo_badge = seL4_GetBadge(0);
+        SERVER_GOTO_IF_COND(get_cap_type_from_badge(mo_badge) != GPICAP_TYPE_MO, "Provided cap was not an MO\n");
 
-    void *mo_vaddr;
-    error = ads_component_attach_to_rt(get_object_id_from_badge(mo_badge), &mo_vaddr);
-    SERVER_GOTO_IF_ERR(error, "Failed to attach MO to RT\n");
+        void *mo_vaddr;
+        error = ads_component_attach_to_rt(get_object_id_from_badge(mo_badge), &mo_vaddr);
+        SERVER_GOTO_IF_ERR(error, "Failed to attach MO to RT\n");
 
-    // Update model state's pointers
-    model_state_t *model_state = (model_state_t *)mo_vaddr;
-    gpi_model_state_component_t *old_mem_start = model_state->mem_start;
-    model_state->mem_start = (gpi_model_state_component_t *)(mo_vaddr + sizeof(model_state_t));
-    model_state->mem_ptr = model_state->mem_ptr - old_mem_start + model_state->mem_start;
+        // Update model state's pointers
+        model_state_t *model_state = (model_state_t *)mo_vaddr;
+        gpi_model_state_component_t *old_mem_start = model_state->mem_start;
+        model_state->mem_start = (gpi_model_state_component_t *)(mo_vaddr + sizeof(model_state_t));
+        model_state->mem_ptr = model_state->mem_ptr - old_mem_start + model_state->mem_start;
 
-    // Combine with current model state
-    combine_model_states(get_gpi_server()->model_state, model_state);
+        // Combine with current model state
+        combine_model_states(get_gpi_server()->model_state, model_state);
+
+        /* Unattach the MO */
+        error = ads_component_remove_from_rt(mo_vaddr);
+        SERVER_GOTO_IF_ERR(error, "Failed to remove MO from RT\n");
+    }
 
     // Update the pending model counter
     get_gpi_server()->model_extraction_n_missing--;
-
-    /* Unattach the MO */
-    error = ads_component_remove_from_rt(mo_vaddr);
-    SERVER_GOTO_IF_ERR(error, "Failed to remove MO from RT\n");
 
     /* Check if the extraction is finished */
     if (get_gpi_server()->model_extraction_n_missing == 0)

@@ -232,7 +232,8 @@ enum pd_component_msgregs
     // (XXX) Arya: Get work response is through nanopb, eventually all requests will use nanopb
 
     /* PD send subgraph */
-    PDMSGREG_SEND_SUBGRAPH_REQ_END = PDMSGREG_LABEL0,
+    PDMSGREG_SEND_SUBGRAPH_REQ_HAS_DATA = PDMSGREG_LABEL0,
+    PDMSGREG_SEND_SUBGRAPH_REQ_END,
 };
 
 /** Mode of PD setup */

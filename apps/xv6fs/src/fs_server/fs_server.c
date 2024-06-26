@@ -401,6 +401,11 @@ seL4_MessageInfo_t xv6fs_request_handler(seL4_MessageInfo_t tag, seL4_Word sende
       /* Do the link */
       error = xv6fs_sys_dolink2(reg_entry->file, pathname);
       CHECK_ERROR_GOTO(error, "Failed to link", FS_SERVER_ERROR_UNKNOWN, done);
+
+      // Unattach the MO
+      error = resource_server_unattach(&get_xv6fs_server()->gen, mo_vaddr);
+      CHECK_ERROR_GOTO(error, "Failed to unattach MO", error, done);
+      
       break;
     case FsMessage_unlink_tag:
       *need_new_recv_cap = true;
@@ -428,6 +433,11 @@ seL4_MessageInfo_t xv6fs_request_handler(seL4_MessageInfo_t tag, seL4_Word sende
       XV6FS_PRINTF("Unlink pathname %s\n", pathname);
       error = xv6fs_sys_unlink(pathname);
       CHECK_ERROR_GOTO(error, "Failed to unlink", FS_SERVER_ERROR_UNKNOWN, done);
+
+      // Unattach the MO
+      error = resource_server_unattach(&get_xv6fs_server()->gen, mo_vaddr);
+      CHECK_ERROR_GOTO(error, "Failed to unattach MO", error, done);
+
       break;
     default:
       CHECK_ERROR_GOTO(1, "got invalid op on badged ep without obj id", error, done);
@@ -462,6 +472,10 @@ seL4_MessageInfo_t xv6fs_request_handler(seL4_MessageInfo_t tag, seL4_Word sende
       int n_bytes_ret = xv6fs_sys_read(reg_entry->file, mo_vaddr, n_bytes_to_read, offset);
       XV6FS_PRINTF("Read %d bytes from file\n", n_bytes_ret);
 
+      // Unattach the MO
+      error = resource_server_unattach(&get_xv6fs_server()->gen, mo_vaddr);
+      CHECK_ERROR_GOTO(error, "Failed to unattach MO", error, done);
+
       reply_msg.which_msg = FsReturnMessage_read_tag;
       reply_msg.msg.read.n = n_bytes_ret;
       break;
@@ -478,6 +492,10 @@ seL4_MessageInfo_t xv6fs_request_handler(seL4_MessageInfo_t tag, seL4_Word sende
       // Perform file write
       n_bytes_ret = xv6fs_sys_write(reg_entry->file, mo_vaddr, n_bytes_to_read, offset);
       XV6FS_PRINTF("Wrote %d bytes to file\n", n_bytes_ret);
+
+      // Unattach the MO
+      error = resource_server_unattach(&get_xv6fs_server()->gen, mo_vaddr);
+      CHECK_ERROR_GOTO(error, "Failed to unattach MO", error, done);
 
       reply_msg.which_msg = FsReturnMessage_write_tag;
       reply_msg.msg.write.n = n_bytes_ret;
@@ -497,6 +515,10 @@ seL4_MessageInfo_t xv6fs_request_handler(seL4_MessageInfo_t tag, seL4_Word sende
 
       /* Call function stat */
       error = xv6fs_sys_stat(reg_entry->file, (struct stat *)mo_vaddr);
+
+      // Unattach the MO
+      error = resource_server_unattach(&get_xv6fs_server()->gen, mo_vaddr);
+      CHECK_ERROR_GOTO(error, "Failed to unattach MO", error, done);
       break;
     default:
       CHECK_ERROR_GOTO(1, "got invalid op on badged ep with obj id", FS_SERVER_ERROR_UNKNOWN, done);
@@ -594,15 +616,21 @@ int xv6fs_work_handler(PdWorkReturnMessage *work)
   if (op == PdWorkAction_EXTRACT)
   {
     uint64_t space_id = work->space_id;
-    uint64_t blockno = work->object_id;
-    uint64_t fs_pd_id = sel4gpi_get_pd_conn().id;
+    uint64_t fileno = work->object_id;
     uint64_t client_pd_id = work->pd_id;
+
+    if (fileno != BADGE_OBJ_ID_NULL)
+    {
+      /* File system only does extraction at a space-level, not at a file-level */
+      error = resource_server_extraction_no_data(&get_xv6fs_server()->gen);
+      CHECK_ERROR_GOTO(error, "Failed to finish model extraction\n", FS_SERVER_ERROR_UNKNOWN, err_goto);
+    }
 
     /* Initialize the model state */
     mo_client_context_t mo;
     model_state_t *model_state;
     error = resource_server_extraction_setup(&get_xv6fs_server()->gen, 4, &mo, &model_state);
-    CHECK_ERROR_GOTO(error, "Failed to setup model extraction\n", RD_SERVER_ERROR_UNKNOWN, err_goto);
+    CHECK_ERROR_GOTO(error, "Failed to setup model extraction\n", FS_SERVER_ERROR_UNKNOWN, err_goto);
 
     /* Update pathname for namespace */
     char path[MAXPATH];
@@ -634,22 +662,18 @@ int xv6fs_work_handler(PdWorkReturnMessage *work)
     // (XXX) Arya: A lot of this should be moved to PD component once we have resource spaces implemented
 
     /* Add the PD nodes */
-    gpi_model_node_t *self_pd_node = add_pd_node(model_state, NULL, fs_pd_id);
-    gpi_model_node_t *client_pd_node = add_pd_node(model_state, NULL, client_pd_id);
+    char client_pd_id_str[CSV_MAX_STRING_SIZE];
+    get_pd_id(client_pd_id, client_pd_id_str);
 
     /* Add the file resource space node */
-    gpi_model_node_t *file_space_node = add_resource_space_node(model_state, get_xv6fs_server()->gen.resource_type,
-                                                                get_xv6fs_server()->gen.default_space.id);
-    add_edge(model_state, GPI_EDGE_TYPE_HOLD, self_pd_node, file_space_node);
-
-    /* Add the block resource space node */
-    // (XXX) Arya: Assumes all blocks belong to the same block space
-    gpi_cap_t block_cap_type = sel4gpi_get_resource_type_code(BLOCK_RESOURCE_TYPE_NAME);
-    uint64_t block_space_id = get_xv6fs_server()->naive_blocks[0].space_id;
-    gpi_model_node_t *block_space_node = add_resource_space_node(model_state, block_cap_type, block_space_id);
-    add_edge(model_state, GPI_EDGE_TYPE_MAP, file_space_node, block_space_node);
+    char file_space_id[CSV_MAX_STRING_SIZE];
+    get_resource_space_id(get_xv6fs_server()->gen.resource_type,
+                          get_xv6fs_server()->gen.default_space.id,
+                          file_space_id);
 
     /* Add nodes for all files and blocks */
+    gpi_cap_t block_cap_type = sel4gpi_get_resource_type_code(BLOCK_RESOURCE_TYPE_NAME);
+    uint32_t block_space_id = get_xv6fs_server()->naive_blocks[0].space_id; // (XXX) Arya: Assume only one block space
     int n_blocknos = 100; // (XXX) Arya: assumes there are no more than 100 blocks per file
     int *blocknos = malloc(sizeof(int) * n_blocknos);
     for (int i = 0; i < n_files; i++)
@@ -657,11 +681,12 @@ int xv6fs_work_handler(PdWorkReturnMessage *work)
       XV6FS_PRINTF("Get RR for fileno %ld\n", inums[i]);
 
       /* Add the file resource node */
-      gpi_model_node_t *file_node = add_resource_node(model_state, get_xv6fs_server()->gen.resource_type,
-                                                      get_xv6fs_server()->gen.default_space.id, inums[i]);
-      add_edge(model_state, GPI_EDGE_TYPE_HOLD, self_pd_node, file_node);
-      add_edge(model_state, GPI_EDGE_TYPE_HOLD, client_pd_node, file_node);
-      add_edge(model_state, GPI_EDGE_TYPE_SUBSET, file_node, file_space_node);
+      char file_id[CSV_MAX_STRING_SIZE];
+      get_resource_id(get_xv6fs_server()->gen.resource_type,
+                      get_xv6fs_server()->gen.default_space.id,
+                      inums[i],
+                      file_id);
+      add_edge_by_id(model_state, GPI_EDGE_TYPE_HOLD, client_pd_id_str, file_id);
 
       /* Add relations for blocks */
       error = xv6fs_sys_inode_blocknos(inums[i], blocknos, n_blocknos, &n_blocknos);
@@ -673,8 +698,9 @@ int xv6fs_work_handler(PdWorkReturnMessage *work)
       {
         block_id = get_xv6fs_server()->naive_blocks[blocknos[j]].res_id;
 
-        gpi_model_node_t *block_node = add_resource_node(model_state, block_cap_type, block_space_id, block_id);
-        add_edge(model_state, GPI_EDGE_TYPE_MAP, file_node, block_node);
+        char block_id_str[CSV_MAX_STRING_SIZE];
+        get_resource_id(block_cap_type, block_space_id, block_id, block_id_str);
+        add_edge_by_id(model_state, GPI_EDGE_TYPE_MAP, file_id, block_id_str);
       }
     }
 

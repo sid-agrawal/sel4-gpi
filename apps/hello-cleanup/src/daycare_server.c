@@ -100,6 +100,18 @@ int daycare_work_handler(
 
         PRINTF("Get rr for pokemon #%ld\n", pokemon_id);
 
+        if (pokemon_id == BADGE_OBJ_ID_NULL)
+        {
+            /* Daycare only does extraction at a pokemon-level, not at a space-level */
+            error = resource_server_extraction_no_data(&get_daycare_server()->gen);
+
+            if (error)
+            {
+                PRINTF("Failed to send no-data model extraction\n");
+                return error;
+            }
+        }
+
         /* Initialize the model state */
         mo_client_context_t mo;
         model_state_t *model_state;
@@ -110,33 +122,21 @@ int daycare_work_handler(
             return error;
         }
 
-        /* Add the PD node */
-        gpi_model_node_t *self_pd_node = add_pd_node(model_state, NULL, daycare_pd_id);
-        // gpi_model_node_t *client_pd_node = add_pd_node(model_state, NULL, pd_id);
+        /* Add the pokemon -> pokeball map edge*/
+        char pokemon_id_str[CSV_MAX_STRING_SIZE];
+        char pokeball_id_str[CSV_MAX_STRING_SIZE];
 
-        /* Add the pokemon resource space node */
-        gpi_model_node_t *pokemon_space_node = add_resource_space_node(model_state,
-                                                                       get_daycare_server()->gen.resource_type,
-                                                                       get_daycare_server()->gen.default_space.id);
-        add_edge(model_state, GPI_EDGE_TYPE_HOLD, self_pd_node, pokemon_space_node);
+        get_resource_id(get_daycare_server()->gen.resource_type,
+                        get_daycare_server()->gen.default_space.id,
+                        pokemon_id,
+                        &pokemon_id_str);
 
-        if (pokemon_id != BADGE_OBJ_ID_NULL)
-        {
-            /* Add the resource node */
-            gpi_model_node_t *pokemon_node = add_resource_node(model_state, get_daycare_server()->gen.resource_type,
-                                                               get_daycare_server()->gen.default_space.id, pokemon_id);
-            add_edge(model_state, GPI_EDGE_TYPE_HOLD, self_pd_node, pokemon_node);
-            // add_edge(model_state, GPI_EDGE_TYPE_HOLD, client_pd_node, pokemon_node);
-            add_edge(model_state, GPI_EDGE_TYPE_SUBSET, pokemon_node, pokemon_space_node);
+        get_resource_id(sel4gpi_get_resource_type_code(POKEBALL_RESOURCE_TYPE_NAME),
+                        get_daycare_server()->pokeballs[pokemon_id].space_id,
+                        get_daycare_server()->pokeballs[pokemon_id].id,
+                        &pokeball_id_str);
 
-            /* Add the pokeball node */
-            gpi_model_node_t *pokeball_node = add_resource_node(model_state,
-                                                                sel4gpi_get_resource_type_code(POKEBALL_RESOURCE_TYPE_NAME),
-                                                                get_daycare_server()->pokeballs[pokemon_id].space_id,
-                                                                get_daycare_server()->pokeballs[pokemon_id].id);
-            add_edge(model_state, GPI_EDGE_TYPE_HOLD, self_pd_node, pokeball_node);
-            add_edge(model_state, GPI_EDGE_TYPE_MAP, pokemon_node, pokeball_node);
-        }
+        add_edge_by_id(model_state, GPI_EDGE_TYPE_MAP, pokemon_id_str, pokeball_id_str);
 
         /* Send the result */
         error = resource_server_extraction_finish(&get_daycare_server()->gen, &mo, model_state);

@@ -162,3 +162,11 @@ int resource_server_extraction_setup(resource_server_context_t *context,
  * @return 0 on success, error otherwise
  */
 int resource_server_extraction_finish(resource_server_context_t *context, mo_client_context_t *mo, model_state_t *ms);
+
+/**
+ * Finish a model extraction if there is no data to send
+ * 
+ * @param context
+ * @return 0 on success, error otherwise
+ */
+int resource_server_extraction_no_data(resource_server_context_t *context);

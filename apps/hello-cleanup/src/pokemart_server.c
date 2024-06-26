@@ -93,43 +93,10 @@ int pokemart_work_handler(
 
         PRINTF("Get rr for pokeball #%ld\n", pokeball_id);
 
-        /* Initialize the model state */
-        mo_client_context_t mo;
-        model_state_t *model_state;
-        error = resource_server_extraction_setup(&get_pokemart_server()->gen, 1, &mo, &model_state);
-        if (error)
-        {
-            PRINTF("Failed to setup model extraction\n");
-            return error;
-        }
-
-        /* Add the PD nodes */
-        gpi_model_node_t *self_pd_node = add_pd_node(model_state, NULL, pokemart_pd_id);
-        // gpi_model_node_t *client_pd_node = add_pd_node(model_state, NULL, pd_id);
-
-        /* Add the pokeball resource space node */
-        gpi_model_node_t *pokeball_space_node = add_resource_space_node(model_state,
-                                                                        get_pokemart_server()->gen.resource_type,
-                                                                        get_pokemart_server()->gen.default_space.id);
-        add_edge(model_state, GPI_EDGE_TYPE_HOLD, self_pd_node, pokeball_space_node);
-
-        if (pokeball_id != BADGE_OBJ_ID_NULL)
-        {
-            /* Add the resource node */
-            gpi_model_node_t *pokeball_node = add_resource_node(model_state, get_pokemart_server()->gen.resource_type,
-                                                                get_pokemart_server()->gen.default_space.id, pokeball_id);
-            add_edge(model_state, GPI_EDGE_TYPE_HOLD, self_pd_node, pokeball_node);
-            // add_edge(model_state, GPI_EDGE_TYPE_HOLD, client_pd_node, pokeball_node);
-            add_edge(model_state, GPI_EDGE_TYPE_SUBSET, pokeball_node, pokeball_space_node);
-        }
+        /* Pokeballs never have any resource relations */
 
         /* Send the result */
-        error = resource_server_extraction_finish(&get_pokemart_server()->gen, &mo, model_state);
-        if (error)
-        {
-            PRINTF("Failed to finish model extraction\n");
-            return error;
-        }
+        error = resource_server_extraction_no_data(&get_pokemart_server()->gen);
     }
     else
     {

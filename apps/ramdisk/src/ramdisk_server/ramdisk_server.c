@@ -384,39 +384,12 @@ int ramdisk_work_handler(PdWorkReturnMessage *work)
         uint64_t ramdisk_pd_id = sel4gpi_get_pd_conn().id;
 
         assert(space_id == get_ramdisk_server()->gen.default_space.id);
+        assert(blockno == BADGE_OBJ_ID_NULL || (blockno >= 0 && blockno < (RAMDISK_SIZE_BYTES / RAMDISK_BLOCK_SIZE)));
 
-        /* Initialize the model state */
-        mo_client_context_t mo;
-        model_state_t *model_state;
-        error = resource_server_extraction_setup(&get_ramdisk_server()->gen, 1, &mo, &model_state);
-        CHECK_ERROR_GOTO(error, "Failed to setup model extraction\n", RD_SERVER_ERROR_UNKNOWN, err_goto);
-
-        /* Add the PD nodes */
-        gpi_model_node_t *self_pd_node = add_pd_node(model_state, NULL, ramdisk_pd_id);
-
-        /* Add the block resource space node */
-        gpi_model_node_t *block_space_node = add_resource_space_node(model_state,
-                                                                     get_ramdisk_server()->gen.resource_type,
-                                                                     get_ramdisk_server()->gen.default_space.id);
-        add_edge(model_state, GPI_EDGE_TYPE_HOLD, self_pd_node, block_space_node);
-
-        if (blockno != BADGE_OBJ_ID_NULL)
-        {
-            /* Add the resource node */
-            gpi_model_node_t *block_node = add_resource_node(model_state, get_ramdisk_server()->gen.resource_type,
-                                                             1, blockno);
-            add_edge(model_state, GPI_EDGE_TYPE_HOLD, self_pd_node, block_node);
-            add_edge(model_state, GPI_EDGE_TYPE_SUBSET, block_node, block_space_node);
-
-            // Add RR from block to MO
-            // (XXX) Arya: Actually don't show this, we are pretending these are real blocks?
-            // char mo_res_id[CSV_MAX_STRING_SIZE];
-            // make_res_id(mo_res_id, GPICAP_TYPE_MO, get_ramdisk_server()->ramdisk_mo->id);
-            // add_resource_depends_on_rr(rr_state, block_res_id, mo_res_id, row_ptr);
-        }
+        /* Blocks never have any resource relations */
 
         /* Send the result */
-        error = resource_server_extraction_finish(&get_ramdisk_server()->gen, &mo, model_state);
+        error = resource_server_extraction_no_data(&get_ramdisk_server()->gen);
         CHECK_ERROR_GOTO(error, "Failed to finish model extraction\n", RD_SERVER_ERROR_UNKNOWN, err_goto);
     }
     else if (op == PdWorkAction_FREE)

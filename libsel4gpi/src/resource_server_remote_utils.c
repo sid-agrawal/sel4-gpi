@@ -385,14 +385,26 @@ int resource_server_extraction_finish(resource_server_context_t *context, mo_cli
 
     /* Send the state to the RT */
     pd_client_context_t pd_conn = sel4gpi_get_pd_conn();
-    error = pd_client_send_subgraph(&pd_conn, mo);
-    assert(error == 0);
+    error = pd_client_send_subgraph(&pd_conn, mo, true);
+    CHECK_ERROR_GOTO(error, "Failed to send subgraph\n", err_goto);
 
     /* Remove & destroy the MO */
     error = resource_server_unattach(context, (void *)ms);
-    assert(error == 0);
+    CHECK_ERROR_GOTO(error, "Failed to unattach MO for model extraction\n", err_goto);
     error = mo_component_client_disconnect(mo);
-    assert(error == 0);
+    CHECK_ERROR_GOTO(error, "Failed to delete MO for model extraction\n", err_goto);
+
+err_goto:
+    return error;
+}
+
+int resource_server_extraction_no_data(resource_server_context_t *context)
+{
+    int error = 0;
+
+    /* Send the state to the RT */
+    pd_client_context_t pd_conn = sel4gpi_get_pd_conn();
+    error = pd_client_send_subgraph(&pd_conn, NULL, false);
 
 err_goto:
     return error;

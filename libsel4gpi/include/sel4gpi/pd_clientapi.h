@@ -210,8 +210,10 @@ int pd_client_get_work(pd_client_context_t *conn, PdWorkReturnMessage *work);
  * 
  * @param conn the resource server's pd connection
  * @param mo_conn an MO containing the model subgraph
+ * @param has_data true if including an MO, false if there is no data to send
+ * @return 0 on success, error otherwise
  */
-int pd_client_send_subgraph(pd_client_context_t *conn, mo_client_context_t *mo_conn);
+int pd_client_send_subgraph(pd_client_context_t *conn, mo_client_context_t *mo_conn, bool has_data);
 
 /** OTHER FUNCTIONS FOR ACTIVE PDs **/
 

@@ -6,6 +6,7 @@
 #include <sel4gpi/resource_server_rt_utils.h>
 #include <sel4gpi/resource_space_obj.h>
 #include <sel4gpi/endpoint_component.h>
+#include <sel4gpi/model_exporting.h>
 
 /** @file APIs for managing and interacting with the resource space component
  *
@@ -162,3 +163,12 @@ int resspc_component_mark_delete(uint64_t spc_id);
  * @return 0 on success, error otherwise
  */
 int resspc_component_sweep(void);
+
+/**
+ * Add any relations of a given space to the model state
+ * 
+ * @param space the target space
+ * @param ms the model state
+ * @param pd_node the node for the PD being extracted (unused)
+ */
+void resspc_dump_rr(res_space_t *space, model_state_t *ms, gpi_model_node_t *pd_node);

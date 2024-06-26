@@ -874,62 +874,89 @@ static int res_dump(pd_t *pd, model_state_t *ms, pd_hold_node_t *current_cap, gp
 
     /* Check if the resource is already dumped */
     gpi_model_node_t *res_node = get_resource_node(ms, current_cap->type, current_cap->space_id, current_cap->res_id);
-    if (res_node)
-    {
-        /* Just add the hold edge */
-        assert(pd_node != NULL);
-        add_edge(ms, GPI_EDGE_TYPE_HOLD, pd_node, res_node);
-
-        return 0;
-    }
-
-    /* Add the resource node */
-    res_node = add_resource_node(ms, current_cap->type, current_cap->space_id, current_cap->res_id);
-
-    /* Add the hold edge */
-    assert(pd_node != NULL);
-    add_edge(ms, GPI_EDGE_TYPE_HOLD, pd_node, res_node);
 
     switch (current_cap->type)
     {
     case GPICAP_TYPE_NONE:
         break;
     case GPICAP_TYPE_ADS:
-        ads_component_registry_entry_t *ads_data = (ads_component_registry_entry_t *)
-            resource_component_registry_get_by_id(get_ads_component(), current_cap->res_id);
-        SERVER_GOTO_IF_COND(ads_data == NULL, "Failed to find ADS data\n");
+        if (!res_node)
+        {
+            /* Add the resource node */
+            res_node = add_resource_node(ms, current_cap->type, current_cap->space_id, current_cap->res_id);
 
-        ads_dump_rr(&ads_data->ads, ms, pd_node);
+            ads_component_registry_entry_t *ads_data = (ads_component_registry_entry_t *)
+                resource_component_registry_get_by_id(get_ads_component(), current_cap->res_id);
+            SERVER_GOTO_IF_COND(ads_data == NULL, "Failed to find ADS data\n");
+
+            ads_dump_rr(&ads_data->ads, ms, pd_node);
+        }
+
+        /* Add the hold edge */
+        add_edge(ms, GPI_EDGE_TYPE_HOLD, pd_node, res_node);
+
         break;
     case GPICAP_TYPE_MO:
-        mo_component_registry_entry_t *mo_data = (mo_component_registry_entry_t *)
-            resource_component_registry_get_by_id(get_mo_component(), current_cap->res_id);
-        SERVER_GOTO_IF_COND(mo_data == NULL, "Failed to find MO data\n");
+        if (!res_node)
+        {
+            /* Add the resource node */
+            res_node = add_resource_node(ms, current_cap->type, current_cap->space_id, current_cap->res_id);
 
-        mo_dump_rr(&mo_data->mo, ms, pd_node);
+            mo_component_registry_entry_t *mo_data = (mo_component_registry_entry_t *)
+                resource_component_registry_get_by_id(get_mo_component(), current_cap->res_id);
+            SERVER_GOTO_IF_COND(mo_data == NULL, "Failed to find MO data\n");
+
+            mo_dump_rr(&mo_data->mo, ms, pd_node);
+        }
+
+        /* Add the hold edge */
+        add_edge(ms, GPI_EDGE_TYPE_HOLD, pd_node, res_node);
         break;
     case GPICAP_TYPE_CPU:
-        cpu_component_registry_entry_t *cpu_data = (cpu_component_registry_entry_t *)
-            resource_component_registry_get_by_id(get_cpu_component(), current_cap->res_id);
-        SERVER_GOTO_IF_COND(cpu_data == NULL, "Failed to find CPU data\n");
+        if (!res_node)
+        {
+            /* Add the resource node */
+            res_node = add_resource_node(ms, current_cap->type, current_cap->space_id, current_cap->res_id);
 
-        cpu_dump_rr(&cpu_data->cpu, ms, pd_node);
+            cpu_component_registry_entry_t *cpu_data = (cpu_component_registry_entry_t *)
+                resource_component_registry_get_by_id(get_cpu_component(), current_cap->res_id);
+            SERVER_GOTO_IF_COND(cpu_data == NULL, "Failed to find CPU data\n");
+
+            cpu_dump_rr(&cpu_data->cpu, ms, pd_node);
+        }
+
+        /* Add the hold edge */
+        add_edge(ms, GPI_EDGE_TYPE_HOLD, pd_node, res_node);
         break;
     case GPICAP_TYPE_seL4:
         // Use some other method to get the cap details
         break;
     case GPICAP_TYPE_PD:
-        if (current_cap->res_id != pd->id)
+        if (!res_node && current_cap->res_id != pd->id)
         {
+            /* Add the PD Node */
             pd_component_registry_entry_t *pd_data = pd_component_registry_get_entry_by_id(current_cap->res_id);
-
             SERVER_GOTO_IF_COND(pd_data == NULL, "Failed to find PD%d's data\n", current_cap->res_id);
 
             pd_dump_internal(&pd_data->pd, ms);
         }
+
+        // Don't add a hold edge for PDs
         break;
     case GPICAP_TYPE_RESSPC:
-        // (XXX) Arya: do not dump resource space here, it will be dumped with resources
+        resspc_component_registry_entry_t *space_data = resource_space_get_entry_by_id(current_cap->res_id);
+            SERVER_GOTO_IF_COND(space_data == NULL, "Failed to find resource space data\n");
+        res_node = get_resource_space_node(ms, space_data->space.resource_type, space_data->space.id);
+
+        if (!res_node)
+        {
+            /* Add the resource space node */
+            res_node = add_resource_space_node(ms, space_data->space.resource_type, space_data->space.id);
+            resspc_dump_rr(&space_data->space, ms, pd_node);
+        }
+
+        /* Add the hold edge */
+        add_edge(ms, GPI_EDGE_TYPE_HOLD, pd_node, res_node);
         break;
     case GPICAP_TYPE_VMR:
         // (XXX) Arya: Do not need to dump VMR, handled in ADS component
@@ -938,23 +965,37 @@ static int res_dump(pd_t *pd, model_state_t *ms, pd_hold_node_t *current_cap, gp
         // Don't dump endpoints, as they aren't part of the model, and tracked only for cleanup purposes
         break;
     default:
-        /* Find the resource space */
-        resspc_component_registry_entry_t *space_entry = resource_space_get_entry_by_id(current_cap->space_id);
-        SERVER_GOTO_IF_COND(space_entry == NULL, "Failed to find resource space (%d)\n", current_cap->space_id);
+        if (!res_node)
+        {
+            /* Add the resource node */
+            res_node = add_resource_node(ms, current_cap->type, current_cap->space_id, current_cap->res_id);
 
-        /* Find the resource server */
-        pd_component_registry_entry_t *manager_pd_entry =
-            pd_component_registry_get_entry_by_id(space_entry->space.pd_id);
-        SERVER_GOTO_IF_COND(manager_pd_entry == NULL, "Failed to find PD (%d)\n", space_entry->space.pd_id);
+            /* Find the resource space */
+            resspc_component_registry_entry_t *space_entry = resource_space_get_entry_by_id(current_cap->space_id);
+            SERVER_GOTO_IF_COND(space_entry == NULL, "Failed to find resource space (%d)\n", current_cap->space_id);
 
-        /* Request info about the resource */
-        pd_work_entry_t *work_node = calloc(1, sizeof(gpi_res_id_t));
-        work_node->res_id.type = current_cap->type;
-        work_node->res_id.space_id = current_cap->space_id;
-        work_node->res_id.object_id = current_cap->res_id;
-        work_node->client_pd_id = pd->id;
+            /* Add the subset edge */
+            char space_id[CSV_MAX_STRING_SIZE];
+            get_resource_space_id(space_entry->space.resource_type, space_entry->space.id, &space_id);
+            add_edge_by_id(ms, GPI_EDGE_TYPE_SUBSET, res_node->id, space_id);
 
-        pd_component_queue_model_extraction_work(manager_pd_entry, work_node);
+            /* Find the resource server */
+            pd_component_registry_entry_t *manager_pd_entry =
+                pd_component_registry_get_entry_by_id(space_entry->space.pd_id);
+            SERVER_GOTO_IF_COND(manager_pd_entry == NULL, "Failed to find PD (%d)\n", space_entry->space.pd_id);
+
+            /* Request additional relations for the resource */
+            pd_work_entry_t *work_node = calloc(1, sizeof(gpi_res_id_t));
+            work_node->res_id.type = current_cap->type;
+            work_node->res_id.space_id = current_cap->space_id;
+            work_node->res_id.object_id = current_cap->res_id;
+            work_node->client_pd_id = pd->id;
+
+            pd_component_queue_model_extraction_work(manager_pd_entry, work_node);
+        }
+
+        /* Add the hold edge */
+        add_edge(ms, GPI_EDGE_TYPE_HOLD, pd_node, res_node);
         break;
     }
 
@@ -968,6 +1009,8 @@ err_goto:
 static int pd_dump_internal(pd_t *pd, model_state_t *ms)
 {
     int error;
+
+    OSDB_PRINTF("Extracting state of PD (%d)\n", pd->id);
 
     /* Check if the PD is already dumped */
     gpi_model_node_t *pd_node = get_pd_node(ms, pd->id);
@@ -994,8 +1037,9 @@ static int pd_dump_internal(pd_t *pd, model_state_t *ms)
                 SERVER_GOTO_IF_COND(rm == NULL, "Couldn't find resource space (%d)\n", rde.space_id);
 
                 /* Add the resource server PD node */
-                gpi_model_node_t *resource_manager_pd = add_pd_node(ms, NULL, rm->space.pd_id);
-                add_request_edge(ms, pd_node, resource_manager_pd, rde.type.type);
+                char resource_manager_pd_id[CSV_MAX_STRING_SIZE];
+                get_pd_id(rm->space.pd_id, &resource_manager_pd_id);
+                add_request_edge_by_id(ms, pd_node->id, resource_manager_pd_id, rde.type.type);
 
                 /* Request info about the space */
                 if (rm->space.pd_id != get_gpi_server()->rt_pd_id)
