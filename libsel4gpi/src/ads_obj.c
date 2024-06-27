@@ -176,6 +176,7 @@ int ads_reserve(ads_t *ads,
 {
     int error = 0;
     int cacheable = vmr_type == SEL4UTILS_RES_TYPE_DEVICE ? 0 : 1;
+    CPRINTF("vaddr: %p, reserving as cacheable? %d\n", vaddr, cacheable);
     vspace_t *target = ads->vspace;
 
     /* Reserve the range in the vspace */
@@ -184,7 +185,7 @@ int ads_reserve(ads_t *ads,
     if (vaddr == NULL)
     {
         res = sel4utils_reserve_range_aligned(target,
-                                              num_pages * PAGE_SIZE_4K,
+                                              num_pages * SIZE_BITS_TO_BYTES(size_bits),
                                               size_bits,
                                               rights,
                                               cacheable,
@@ -194,7 +195,7 @@ int ads_reserve(ads_t *ads,
     {
         res = sel4utils_reserve_range_at(target,
                                          vaddr,
-                                         num_pages * PAGE_SIZE_4K,
+                                         num_pages * SIZE_BITS_TO_BYTES(size_bits),
                                          rights, cacheable);
     }
 
@@ -339,7 +340,7 @@ int ads_attach_to_res(ads_t *ads,
                                          NULL,
                                          reservation->vaddr + offset,
                                          mo->num_pages,
-                                         MO_PAGE_BITS,
+                                         mo->page_bits,
                                          reservation->res);
     SERVER_GOTO_IF_ERR(error, "Failed to map pages\n");
 

@@ -61,7 +61,7 @@ typedef enum _gpi_share_degree
 } gpi_share_degree_t;
 
 /**
- * @brief configuration of a particular VMR, do not use for the stack and ELF regions
+ * @brief configuration of a particular VMR
  */
 typedef struct _vmr_config
 {
@@ -71,6 +71,7 @@ typedef struct _vmr_config
     void *dest_start;        ///< OPTIONAL vaddr to the start of VMR in the destination ADS
                              ///< can be NULL to use `start`, only takes effect if share_mode != GPI_DISJOINT
     uint64_t region_pages;   ///< number of pages in this VMR, ignored if an MO is provided
+    size_t page_bits;        ///< OPTIONAL size of an individual page in this VMR, 4K pages by default
     mo_client_context_t *mo; ///< OPTIONAL an MO to use to map the VMR, only takes effect if share_mode != GPI_SHARED
 } vmr_config_t;
 
@@ -231,3 +232,28 @@ int sel4gpi_ads_configure(ads_config_t *cfg,
  * @param space_id resource space ID of the RDE
  */
 void sel4gpi_add_rde_config(pd_config_t *cfg, gpi_cap_t rde_type, uint32_t space_id);
+
+/**
+ * @brief Convenience function for adding a new VMR config to an ADS config
+ * Will malloc a new VMR config, which gets freed during sel4gpi_config_destroy
+ *
+ * see \ref vmr_config_t for more details on the listed params
+ * and \ref ads_config_t for a higher-level explanation of ADS configuration
+ *
+ * @param cfg the ADS config, if no VMR config list was already created, will make a new one
+ * @param share_mode sharing type
+ * @param type the sel4utils_reservation_type_t of the VMR
+ * @param start start address of the VMR (in the current ADS)
+ * @param dest_start OPTIONAL start address of the VMR (in the destination ADS)
+ * @param region_pages number of pages in the VMR
+ * @param page_bits OPTIONAL size of an individual page
+ * @param mo OPTIONAL an MO to map to the VMR
+ */
+void sel4gpi_add_vmr_config(ads_config_t *cfg,
+                            gpi_share_degree_t share_mode,
+                            sel4utils_reservation_type_t type,
+                            void *start,
+                            void *dest_start,
+                            uint64_t region_pages,
+                            size_t page_bits,
+                            mo_client_context_t *mo);

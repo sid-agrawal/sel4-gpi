@@ -390,7 +390,7 @@ static void handle_give_resource_req(seL4_Word sender_badge, PdGiveResourceMessa
 
     /* Create a new badged EP for the resource */
     seL4_CPtr dest = resource_server_make_badged_ep(get_pd_component()->server_vka, recipient_data->pd.pd_vka,
-                                                    resource_space_data->space.server_ep, 
+                                                    resource_space_data->space.server_ep,
                                                     resource_space_data->space.resource_type,
                                                     space_id, resource_id, recipient_id);
     reply_msg->msg.give_resource.slot = dest;
@@ -574,8 +574,12 @@ static void handle_runtime_setup_req(seL4_Word sender_badge, PdSetupMessage *msg
                                           stack_top);
             break;
         case PdSetupType_PD_GUEST_SETUP:
-            SERVER_GOTO_IF_COND(argc == 0, "Setting up a guest requires at least one argument for the DTB\n");
-            error = cpu_set_guest_context(&target_cpu->cpu, entry_point, (uintptr_t)msg->args[0]);
+            error = cpu_elevate(&target_cpu->cpu);
+            if (!error)
+            {
+                SERVER_GOTO_IF_COND(argc == 0, "Setting up a guest requires at least one argument for the DTB\n");
+                error = cpu_set_guest_context(&target_cpu->cpu, entry_point, (uintptr_t)msg->args[0]);
+            }
             break;
         default:
             error = 1;
@@ -744,11 +748,10 @@ static void handle_send_subgraph_req(seL4_Word sender_badge, PdSendSubgraphMessa
         // Reply to the PD that requested the extraction
         PdReturnMessage dump_return_msg = {
             .which_msg = PdReturnMessage_basic_tag,
-            .errorCode = PdComponentError_NONE
-        };
+            .errorCode = PdComponentError_NONE};
 
         seL4_MessageInfo_t dump_return_tag;
-        sel4gpi_rpc_reply(&get_pd_component()->rpc_env, (void *) &dump_return_msg, &dump_return_tag);
+        sel4gpi_rpc_reply(&get_pd_component()->rpc_env, (void *)&dump_return_msg, &dump_return_tag);
         seL4_Send(get_gpi_server()->model_extraction_reply, dump_return_tag);
 
         // Free the reply cap's slot

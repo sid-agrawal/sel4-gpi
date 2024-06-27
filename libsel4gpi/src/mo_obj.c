@@ -130,10 +130,10 @@ void mo_dump_rr(mo_t *mo, model_state_t *ms, gpi_model_node_t *pd_node)
         num_pages++;
     }
 
-    // Set the number of pages as extra data on the MO
-    char num_pages_str[CSV_MAX_STRING_SIZE];
-    snprintf(num_pages_str, CSV_MAX_STRING_SIZE, "%d", num_pages);
-    set_node_extra(mo_node, num_pages_str);
+    // Set the number of pages and starting phys addr as extra data on the MO
+    char extra_str[CSV_MAX_STRING_SIZE];
+    snprintf(extra_str, CSV_MAX_STRING_SIZE, "0x%lx,%d", mo->frame_paddrs[0], num_pages);
+    set_node_extra(mo_node, extra_str);
 }
 
 void mo_destroy(mo_t *mo, vka_t *server_vka)

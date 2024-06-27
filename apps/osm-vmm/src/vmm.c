@@ -5,6 +5,7 @@
  */
 #include <stddef.h>
 #include <stdint.h>
+#include <utils/page.h>
 #include <sel4/sel4.h>
 #include <sel4gpi/error_handle.h>
 #include <sel4gpi/debug.h>
@@ -92,6 +93,25 @@ extern char _guest_dtb_image_end[];
 extern char _guest_initrd_image[];
 extern char _guest_initrd_image_end[];
 
+// int start_thread_handling_pd(void)
+// {
+//     sel4gpi_configure_thread()
+// }
+
+// static void handle_fault(void *arg0, void *arg1, void *arg2)
+// {
+//     VMM_PRINT("in handle_fault\n");
+//     vm_context_t *vm = (vm_context_t *)arg0;
+//     seL4_CPtr fault_ep = (seL4_CPtr)arg1;
+//     while (1)
+//     {
+//         seL4_MessageInfo_t info = seL4_Recv(fault_ep, NULL);
+//         VMM_PRINT("fault: %s\n", fault_to_string(seL4_MessageInfo_get_label(info)));
+//         fault_handle_vcpu_exception(vm);
+//         vcpu_print_regs(vm->vcpu.cptr);
+//     }
+// }
+
 int new_guest(void)
 {
     int error = 0;
@@ -132,12 +152,15 @@ int new_guest(void)
     GOTO_IF_ERR(error, "failed to allocate a new CPU");
 
     size_t guest_ram_pages = BYTES_TO_SIZE_BITS_PAGES(GUEST_RAM_SIZE, MO_LARGE_PAGE_BITS);
-    void *guest_ram_curr_vspace = sel4gpi_get_vmr_at_paddr(&vmr_rde,
-                                                           guest_ram_pages,
-                                                           NULL,
-                                                           SEL4UTILS_RES_TYPE_DEVICE,
-                                                           (void *)GUEST_RAM_PADDR,
-                                                           NULL);
+    mo_client_context_t guest_ram_mo = {0};
+#ifdef BOARD_qemu_arm_virt
+    // On QEMU, there is a special reserved region for VM guest RAM
+    void *guest_ram_curr_vspace = sel4gpi_get_vmr_at_paddr(&vmr_rde, guest_ram_pages, NULL, SEL4UTILS_RES_TYPE_DEVICE,
+                                                           MO_LARGE_PAGE_BITS, (void *)GUEST_RAM_VADDR, &guest_ram_mo);
+#elif BOARD_odroidc4
+    void *guest_ram_curr_vspace = sel4gpi_get_vmr(&vmr_rde, guest_ram_pages, NULL, SEL4UTILS_RES_TYPE_DEVICE,
+                                                  MO_LARGE_PAGE_BITS, &guest_ram_mo);
+#endif // BOARD_qemu_arm_virt
     GOTO_IF_COND(guest_ram_curr_vspace == NULL, "Failed to reserve region for guest RAM in current ADS\n");
 
     size_t kernel_size = _guest_kernel_image_end - _guest_kernel_image;
@@ -158,31 +181,52 @@ int new_guest(void)
                                                          (uintptr_t)guest_initrd_curr_vspace,
                                                          initrd_size);
 
-    cfg->elevated_cpu = true;
-    cfg->ads_cfg.entry_point = (void *)kernel_pc_curr_vspace;
+    uintptr_t kernel_pc_vm_vspace = (uintptr_t)GUEST_RAM_VADDR + (kernel_pc_curr_vspace - (uintptr_t)guest_ram_curr_vspace);
 
-    int n_vmrs = 0;
-    vmr_config_t *serial_dev_cfg = calloc(1, sizeof(vmr_config_t));
-    serial_dev_cfg->region_pages = 1;
-    serial_dev_cfg->start = (void *)SERIAL_PADDR;
-    serial_dev_cfg->share_mode = GPI_DISJOINT;
-    serial_dev_cfg->type = SEL4UTILS_RES_TYPE_DEVICE;
-    n_vmrs++;
+    cfg->elevated_cpu = true;
+    cfg->ads_cfg.entry_point = (void *)kernel_pc_vm_vspace;
+
+#ifdef BOARD_qemu_arm_virt
+    mo_client_context_t serial_dev_mo = {0};
+    error = mo_component_client_connect_paddr(mo_rde, 1, MO_PAGE_BITS, SERIAL_PADDR, &serial_dev_mo);
+    sel4gpi_add_vmr_config(&cfg->ads_cfg, GPI_DISJOINT, SEL4UTILS_RES_TYPE_DEVICE, (void *)SERIAL_PADDR,
+                           NULL, 1, MO_PAGE_BITS, &serial_dev_mo);
+#elif BOARD_odroidc4
+    mo_client_context_t bus1_mo = {0};
+    error = mo_component_client_connect_paddr(mo_rde, 1, MO_LARGE_PAGE_BITS, ODROID_BUS1, &bus1_mo);
+    sel4gpi_add_vmr_config(&cfg->ads_cfg, GPI_DISJOINT, SEL4UTILS_RES_TYPE_DEVICE, (void *)ODROID_BUS1,
+                           NULL, 1, MO_LARGE_PAGE_BITS, &bus1_mo);
+
+    mo_client_context_t bus2_mo = {0};
+    error = mo_component_client_connect_paddr(mo_rde, 1, MO_LARGE_PAGE_BITS, ODROID_BUS2, &bus2_mo);
+    sel4gpi_add_vmr_config(&cfg->ads_cfg, GPI_DISJOINT, SEL4UTILS_RES_TYPE_DEVICE, (void *)ODROID_BUS2,
+                           NULL, 1, MO_LARGE_PAGE_BITS, &bus2_mo);
+
+    mo_client_context_t bus3_mo = {0};
+    error = mo_component_client_connect_paddr(mo_rde, 1, MO_PAGE_BITS, ODROID_BUS3, &bus3_mo);
+    sel4gpi_add_vmr_config(&cfg->ads_cfg, GPI_DISJOINT, SEL4UTILS_RES_TYPE_DEVICE, (void *)ODROID_BUS3, NULL,
+                           BYTES_TO_SIZE_BITS_PAGES(MiB_TO_BYTES(1), MO_LARGE_PAGE_BITS), MO_PAGE_BITS, &bus3_mo);
+#endif // BOARD_qemu_arm_virt
 
     mo_client_context_t gic_mo = {0};
-    error = mo_component_client_connect(mo_rde, 1, MO_PAGE_BITS, &gic_mo);
-    vmr_config_t *gic_dev_cfg = calloc(1, sizeof(vmr_config_t));
-    gic_dev_cfg->start = (void *)LINUX_GIC_PADDR;
-    gic_dev_cfg->mo = &gic_mo;
-    gic_dev_cfg->share_mode = GPI_DISJOINT;
-    gic_dev_cfg->type = SEL4UTILS_RES_TYPE_DEVICE;
-    n_vmrs++;
+    error = mo_component_client_connect_paddr(mo_rde, 1, MO_PAGE_BITS, GIC_PADDR, &gic_mo);
+    GOTO_IF_ERR(error, "Could not allocate MO for GIC dev region\n");
+    sel4gpi_add_vmr_config(&cfg->ads_cfg, GPI_DISJOINT, SEL4UTILS_RES_TYPE_DEVICE, (void *)LINUX_GIC_PADDR,
+                           NULL, 1, MO_PAGE_BITS, &gic_mo);
 
-    cfg->ads_cfg.vmr_cfgs = linked_list_new();
-    linked_list_insert_many(cfg->ads_cfg.vmr_cfgs, n_vmrs, serial_dev_cfg, gic_dev_cfg);
+    sel4gpi_add_vmr_config(&cfg->ads_cfg, GPI_DISJOINT, SEL4UTILS_RES_TYPE_DEVICE, (void *)GUEST_RAM_VADDR,
+                           NULL, guest_ram_pages, MO_LARGE_PAGE_BITS, &guest_ram_mo);
 
-    error = sel4gpi_prepare_pd(cfg, &runnable, 0, NULL);
+    seL4_Word arg = GUEST_DTB_VADDR;
+    error = sel4gpi_prepare_pd(cfg, &runnable, 1, &arg);
     GOTO_IF_ERR(error, "Failed to setup VM-PD\n");
+
+    error = sel4gpi_start_pd(&runnable);
+
+    while (1)
+    {
+        seL4_Yield();
+    }
 
 err_goto:
     sel4gpi_config_destroy(cfg);

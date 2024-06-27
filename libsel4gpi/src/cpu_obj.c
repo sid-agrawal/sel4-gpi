@@ -133,6 +133,10 @@ void cpu_dump_rr(cpu_t *cpu, model_state_t *ms, gpi_model_node_t *pd_node)
 
     /* Add the Virtual CPU node */
     gpi_model_node_t *cpu_node = add_resource_node(ms, GPICAP_TYPE_CPU, 1, cpu->id);
+    if (cpu->vcpu.cptr != seL4_CapNull)
+    {
+        set_node_extra(cpu_node, "elevated");
+    }
     add_edge(ms, GPI_EDGE_TYPE_HOLD, pd_node, cpu_node);
     add_edge(ms, GPI_EDGE_TYPE_SUBSET, cpu_node, vcpu_space_node);
 

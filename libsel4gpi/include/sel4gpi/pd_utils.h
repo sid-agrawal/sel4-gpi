@@ -140,6 +140,7 @@ void *sel4gpi_get_vmr(ads_client_context_t *vmr_rde,
                       int num_pages,
                       void *vaddr,
                       sel4utils_reservation_type_t vmr_type,
+                      size_t page_bits,
                       mo_client_context_t *ret_mo);
 
 /**
@@ -150,6 +151,7 @@ void *sel4gpi_get_vmr(ads_client_context_t *vmr_rde,
  * @param num_pages number of pages
  * @param vaddr OPTIONAL, address in which the VMR should be mapped
  * @param vmr_type type of VMR, e.g. stack, heap, IPC buffer, etc.
+ * @param size_t page_bits size of an individual page
  * @param paddr the phys address of of the MO
  * @param[out] ret_mo OPTIONAL, returns a reference to the MO object for this VMR
  * @return virtual address of the VMR, if vaddr argument is specified, it should be the same (or NULL, on failure)
@@ -158,6 +160,7 @@ void *sel4gpi_get_vmr_at_paddr(ads_client_context_t *vmr_rde,
                                int num_pages,
                                void *vaddr,
                                sel4utils_reservation_type_t vmr_type,
+                               size_t page_bits,
                                uintptr_t paddr,
                                mo_client_context_t *ret_mo);
 

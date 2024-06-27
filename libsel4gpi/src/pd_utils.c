@@ -182,22 +182,25 @@ static void *get_vmr(ads_client_context_t *vmr_rde,
                      int num_pages,
                      void *vaddr,
                      sel4utils_reservation_type_t vmr_type,
+                     size_t page_bits,
                      uintptr_t paddr,
                      mo_client_context_t *ret_mo)
 {
     int error;
     GOTO_IF_COND(num_pages <= 0, "Invalid VMR pages specified: %d\n", num_pages);
+    GOTO_IF_COND(page_bits != MO_PAGE_BITS && page_bits != MO_LARGE_PAGE_BITS,
+                 "Invalid page size specified: %zu\n", page_bits);
 
     seL4_CPtr mo_rde = sel4gpi_get_rde(GPICAP_TYPE_MO);
     GOTO_IF_COND(mo_rde == seL4_CapNull, "No MO RDE to allocate from\n");
     mo_client_context_t mo;
     if (paddr)
     {
-        error = mo_component_client_connect_paddr(mo_rde, num_pages, MO_PAGE_BITS, paddr, &mo);
+        error = mo_component_client_connect_paddr(mo_rde, num_pages, page_bits, paddr, &mo);
     }
     else
     {
-        error = mo_component_client_connect(mo_rde, num_pages, MO_PAGE_BITS, &mo);
+        error = mo_component_client_connect(mo_rde, num_pages, page_bits, &mo);
     }
     GOTO_IF_ERR(error, "failed to allocate MO\n");
     void *new_vaddr;
@@ -220,19 +223,20 @@ err_goto:
 }
 
 void *sel4gpi_get_vmr(ads_client_context_t *vmr_rde, int num_pages, void *vaddr,
-                      sel4utils_reservation_type_t vmr_type, mo_client_context_t *ret_mo)
+                      sel4utils_reservation_type_t vmr_type, size_t page_bits, mo_client_context_t *ret_mo)
 {
-    return get_vmr(vmr_rde, num_pages, vaddr, vmr_type, 0, ret_mo);
+    return get_vmr(vmr_rde, num_pages, vaddr, vmr_type, page_bits, 0, ret_mo);
 }
 
 void *sel4gpi_get_vmr_at_paddr(ads_client_context_t *vmr_rde,
                                int num_pages,
                                void *vaddr,
                                sel4utils_reservation_type_t vmr_type,
+                               size_t page_bits,
                                uintptr_t paddr,
                                mo_client_context_t *ret_mo)
 {
-    return get_vmr(vmr_rde, num_pages, vaddr, vmr_type, paddr, ret_mo);
+    return get_vmr(vmr_rde, num_pages, vaddr, vmr_type, page_bits, paddr, ret_mo);
 }
 
 int sel4gpi_destroy_vmr(ads_client_context_t *vmr_rde, void *vaddr, mo_client_context_t *mo)

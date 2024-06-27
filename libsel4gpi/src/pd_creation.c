@@ -255,7 +255,7 @@ int sel4gpi_ads_configure(ads_config_t *cfg,
                 }
                 else if (vmr->mo)
                 {
-                    PD_CREATION_PRINT("Attaching provided MO for a %s VMR", human_readable_va_res_type(vmr->type));
+                    PD_CREATION_PRINT("Attaching provided MO for a %s VMR\n", human_readable_va_res_type(vmr->type));
                     void *vmr_addr = NULL;
                     error = ads_client_attach(&vmr_rde, vmr->start, vmr->mo, vmr->type, &vmr_addr);
                     GOTO_IF_ERR(error, "Failed to attach MO to VMR\n");
@@ -265,7 +265,8 @@ int sel4gpi_ads_configure(ads_config_t *cfg,
                     PD_CREATION_PRINT("Allocating VMR (%s) with %lu pages at %p\n",
                                       human_readable_va_res_type(vmr->type), vmr->region_pages, vmr->start);
                     mo_client_context_t mo = {0};
-                    void *vmr_addr = sel4gpi_get_vmr(&vmr_rde, vmr->region_pages, vmr->start, vmr->type, &mo);
+                    void *vmr_addr = sel4gpi_get_vmr(&vmr_rde, vmr->region_pages, vmr->start, vmr->type,
+                                                     vmr->page_bits ? vmr->page_bits : MO_PAGE_BITS, &mo);
                     GOTO_IF_ERR(vmr_addr == NULL, "failed to allocate VMR (%s@%p)\n", vmr->type, vmr->start);
 
                     if (vmr->type == SEL4UTILS_RES_TYPE_IPC_BUF)
@@ -635,4 +636,33 @@ void sel4gpi_add_rde_config(pd_config_t *cfg, gpi_cap_t rde_type, uint32_t space
     new_rde_cfg->type = rde_type;
 
     linked_list_insert(cfg->rde_cfg, new_rde_cfg);
+}
+
+void sel4gpi_add_vmr_config(ads_config_t *cfg,
+                            gpi_share_degree_t share_mode,
+                            sel4utils_reservation_type_t type,
+                            void *start,
+                            void *dest_start,
+                            uint64_t region_pages,
+                            size_t page_bits,
+                            mo_client_context_t *mo)
+{
+    if (cfg)
+    {
+        if (!cfg->vmr_cfgs)
+        {
+            cfg->vmr_cfgs = linked_list_new();
+        }
+
+        vmr_config_t *new_vmr_cfg = calloc(1, sizeof(vmr_config_t));
+        new_vmr_cfg->share_mode = share_mode;
+        new_vmr_cfg->type = type;
+        new_vmr_cfg->start = start;
+        new_vmr_cfg->dest_start = dest_start;
+        new_vmr_cfg->region_pages = region_pages;
+        new_vmr_cfg->page_bits = page_bits;
+        new_vmr_cfg->mo = mo;
+
+        linked_list_insert(cfg->vmr_cfgs, new_vmr_cfg);
+    }
 }
