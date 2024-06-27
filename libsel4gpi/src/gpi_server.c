@@ -105,27 +105,22 @@ gpi_server_parent_spawn_thread(simple_t *parent_simple, vka_t *parent_vka,
 
     /* Setup the Resource Space Component */
     // This component must be initialized first so that the other components can make their own resource spaces
-    resspc_component_initialize(parent_simple, parent_vka, parent_cspace_cspath.root, parent_vspace,
-                                get_gpi_server()->server_thread, get_gpi_server()->server_ep_obj);
+    resspc_component_initialize(parent_vka, parent_vspace, get_gpi_server()->server_ep_obj);
 
     /* Setup the PD Component */
-    pd_component_initialize(parent_simple, parent_vka, parent_cspace_cspath.root, parent_vspace,
-                            get_gpi_server()->server_thread, get_gpi_server()->server_ep_obj);
+    pd_component_initialize(parent_vka, parent_vspace, get_gpi_server()->server_ep_obj);
 
     /* Setup the ADS Component */
-    ads_component_initialize(parent_simple, parent_vka, parent_cspace_cspath.root, parent_vspace,
-                             get_gpi_server()->server_thread, get_gpi_server()->server_ep_obj);
+    ads_component_initialize(parent_vka, parent_vspace, get_gpi_server()->server_ep_obj);
 
     /* Setup MO Component */
-    mo_component_initialize(parent_simple, parent_vka, parent_cspace_cspath.root, parent_vspace,
-                            get_gpi_server()->server_thread, get_gpi_server()->server_ep_obj);
+    mo_component_initialize(parent_vka, parent_vspace, get_gpi_server()->server_ep_obj);
 
     /* Setup the CPU Component */
-    cpu_component_initialize(parent_simple, parent_vka, parent_cspace_cspath.root, parent_vspace,
-                             get_gpi_server()->server_thread, get_gpi_server()->server_ep_obj);
+    cpu_component_initialize(parent_vka, parent_vspace, get_gpi_server()->server_ep_obj);
 
-    ep_component_initialize(parent_simple, parent_vka, parent_cspace_cspath.root, parent_vspace,
-                            get_gpi_server()->server_thread, get_gpi_server()->server_ep_obj);
+    /* Setup the Endpoint component */
+    ep_component_initialize(parent_vka, parent_vspace, get_gpi_server()->server_ep_obj);
 
     /* Initialize the root task's PD resource */
     forge_pd_for_root_task(get_gpi_server()->rt_pd_id);

@@ -1,0 +1,24 @@
+syntax = "proto3";
+
+enum ResSpcComponentError {
+    NONE = 0;           /* no error */
+    UNKNOWN = 11;       /* (XXX) manually set to seL4_NumErrors */
+}
+
+/* message type for all PD component request messages */
+message ResSpcMessage {
+    /* No content, WIP */
+};
+
+/* return from a basic ResSpc Component message */
+message ResSpcBasicReturnMessage {
+    /* No content */
+};
+
+/* message type for all ResSpc Component return messages */
+message ResSpcReturnMessage {
+    ResSpcComponentError errorCode = 1;
+    oneof msg {
+        ResSpcBasicReturnMessage basic = 2;
+    };
+};

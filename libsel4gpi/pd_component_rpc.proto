@@ -1,7 +1,12 @@
 syntax = "proto3";
 
+enum PdComponentError {
+    NONE = 0;           /* no error */
+    UNKNOWN = 11;       /* (XXX) manually set to seL4_NumErrors */
+}
+
 enum PdWorkAction {
-    NONE = 0;           /* there is no work to be done */
+    NO_WORK = 0;        /* there is no work to be done */
     EXTRACT = 1;        /* work action to extract model state */
     FREE = 2;           /* work action to free a resource */
 };
@@ -26,7 +31,7 @@ message PdWorkReturnMessage {
 
 /* message type for all PD Component return messages */
 message PdReturnMessage {
-    uint32 errorCode = 1;   /* Can we use an enum for the error code? */
+    PdComponentError errorCode = 1;
     oneof msg {
         PdBasicReturnMessage basic = 2;
         PdWorkReturnMessage work = 3;

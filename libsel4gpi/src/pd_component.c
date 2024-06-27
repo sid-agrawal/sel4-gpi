@@ -677,7 +677,7 @@ static seL4_MessageInfo_t handle_get_work_req(seL4_Word sender_badge, seL4_Messa
     else
     {
         // No work to be done
-        ret_msg.msg.work.action = PdWorkAction_NONE;
+        ret_msg.msg.work.action = PdWorkAction_NO_WORK;
     }
 
     /* Free the node */
@@ -850,11 +850,8 @@ err_goto:
 
 /** --- Functions callable by root task --- **/
 
-int pd_component_initialize(simple_t *server_simple,
-                            vka_t *server_vka,
-                            seL4_CPtr server_cspace,
+int pd_component_initialize(vka_t *server_vka,
                             vspace_t *server_vspace,
-                            sel4utils_thread_t server_thread,
                             vka_object_t server_ep_obj)
 {
     int error = 0;
@@ -880,12 +877,11 @@ int pd_component_initialize(simple_t *server_simple,
                                   (int (*)(resource_component_object_t *, vka_t *, vspace_t *, void *))pd_new,
                                   on_pd_registry_delete,
                                   sizeof(pd_component_registry_entry_t),
-                                  server_simple,
                                   server_vka,
-                                  server_cspace,
                                   server_vspace,
-                                  server_thread,
-                                  server_ep_obj.cptr);
+                                  server_ep_obj.cptr,
+                                  PdMessage_msg,
+                                  PdReturnMessage_msg);
 }
 
 void forge_pd_for_root_task(uint64_t rt_id)

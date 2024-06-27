@@ -13,7 +13,7 @@
 
 #include <sel4gpi/pd_component.h>
 #include <sel4gpi/pd_creation.h>
-#include <pd_rpc.pb.h>
+#include <pd_component_rpc.pb.h>
 
 /**
  * @file Definition of the client API for interacting with the PD component

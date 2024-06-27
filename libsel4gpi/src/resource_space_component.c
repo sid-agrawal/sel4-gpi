@@ -24,6 +24,8 @@
 #include <sel4gpi/error_handle.h>
 #include <sel4gpi/linked_list.h>
 #include <sel4gpi/resource_space_component.h>
+#include <sel4gpi/gpi_rpc.h>
+#include <resspc_component_rpc.pb.h>
 
 // Defined for utility printing macros
 #define DEBUG_ID RESSPC_DEBUG
@@ -330,11 +332,8 @@ static int resspc_new(res_space_t *res_space,
     return error;
 }
 
-int resspc_component_initialize(simple_t *server_simple,
-                                vka_t *server_vka,
-                                seL4_CPtr server_cspace,
+int resspc_component_initialize(vka_t *server_vka,
                                 vspace_t *server_vspace,
-                                sel4utils_thread_t server_thread,
                                 vka_object_t server_ep_obj)
 {
     // Initialize the component
@@ -345,12 +344,11 @@ int resspc_component_initialize(simple_t *server_simple,
                                   (int (*)(resource_component_object_t *, vka_t *, vspace_t *, void *))resspc_new,
                                   on_resspc_registry_delete,
                                   sizeof(resspc_component_registry_entry_t),
-                                  server_simple,
                                   server_vka,
-                                  server_cspace,
                                   server_vspace,
-                                  server_thread,
-                                  server_ep_obj.cptr);
+                                  server_ep_obj.cptr,
+                                  ResSpcMessage_msg,
+                                  ResSpcReturnMessage_msg);
 
     // Treat the "resource space of resource spaces" as a special registry entry
     resspc_component_registry_entry_t *reg_entry = calloc(1, get_resspc_component()->reg_entry_size);

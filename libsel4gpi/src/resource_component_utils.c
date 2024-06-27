@@ -1,16 +1,17 @@
 #pragma once
 
 #include <sel4gpi/gpi_server.h>
-#include <sel4gpi/resource_server_rt_utils.h>
+#include <sel4gpi/resource_component_utils.h>
 #include <sel4gpi/error_handle.h>
 #include <sel4gpi/pd_component.h>
+#include <sel4gpi/gpi_rpc.h>
 
 #define DEBUG_ID GPI_DEBUG
 #define SERVER_ID GPISERVS
 
 static void resource_component_reply(resource_component_context_t *component, seL4_MessageInfo_t tag)
 {
-    api_reply(component->server_thread.reply.cptr, tag);
+    api_reply(component->mcs_reply, tag);
 }
 
 int resource_component_initialize(
@@ -21,24 +22,22 @@ int resource_component_initialize(
     int (*new_obj)(resource_component_object_t *, vka_t *, vspace_t *, void *),
     void (*on_registry_delete)(resource_server_registry_node_t *, void *),
     size_t reg_entry_size,
-    simple_t *server_simple,
     vka_t *server_vka,
-    seL4_CPtr server_cspace,
     vspace_t *server_vspace,
-    sel4utils_thread_t server_thread,
-    seL4_CPtr server_ep)
+    seL4_CPtr server_ep,
+    pb_msgdesc_t request_msgdesc,
+    pb_msgdesc_t reply_msgdesc)
 {
     component->resource_type = resource_type;
     component->space_id = space_id;
     component->request_handler = request_handler;
     component->new_obj = new_obj;
     component->reg_entry_size = reg_entry_size;
-    component->server_simple = server_simple;
     component->server_vka = server_vka;
-    component->server_cspace = server_cspace;
     component->server_vspace = server_vspace;
-    component->server_thread = server_thread;
     component->server_ep = server_ep;
+    component->request_msgdesc = request_msgdesc;
+    component->reply_msgdesc = reply_msgdesc;
 
     resource_server_initialize_registry(&component->registry, on_registry_delete, NULL);
 

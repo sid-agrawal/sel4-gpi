@@ -3,7 +3,7 @@
 #include <stdint.h>
 #include <sel4/sel4.h>
 
-#include <sel4gpi/resource_server_rt_utils.h>
+#include <sel4gpi/resource_component_utils.h>
 #include <sel4gpi/resource_space_obj.h>
 #include <sel4gpi/endpoint_component.h>
 #include <sel4gpi/model_exporting.h>
@@ -108,11 +108,8 @@ typedef struct _resspc_config
 /**
  * To initialize the resource space component at the beginning of execution
  */
-int resspc_component_initialize(simple_t *server_simple,
-                                vka_t *server_vka,
-                                seL4_CPtr server_cspace,
+int resspc_component_initialize(vka_t *server_vka,
                                 vspace_t *server_vspace,
-                                sel4utils_thread_t server_thread,
                                 vka_object_t server_ep_obj);
 
 /* Global server instance accessor functions. */

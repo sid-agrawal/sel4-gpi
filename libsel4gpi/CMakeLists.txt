@@ -10,7 +10,14 @@ project(libsel4gpi C)
 
 include(nanopb)
 
-SEL4_GENERATE_PROTOBUF(proto_srcs proto_hdrs ${CMAKE_CURRENT_SOURCE_DIR}/pd_rpc.proto)
+SEL4_GENERATE_PROTOBUF(proto_srcs proto_hdrs 
+    ${CMAKE_CURRENT_SOURCE_DIR}/ads_component_rpc.proto
+    ${CMAKE_CURRENT_SOURCE_DIR}/cpu_component_rpc.proto
+    ${CMAKE_CURRENT_SOURCE_DIR}/ep_component_rpc.proto
+    ${CMAKE_CURRENT_SOURCE_DIR}/mo_component_rpc.proto
+    ${CMAKE_CURRENT_SOURCE_DIR}/pd_component_rpc.proto
+    ${CMAKE_CURRENT_SOURCE_DIR}/resspc_component_rpc.proto
+)
 
 file(GLOB deps src/*.c)
 

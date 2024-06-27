@@ -1,0 +1,24 @@
+syntax = "proto3";
+
+enum MoComponentError {
+    NONE = 0;           /* no error */
+    UNKNOWN = 11;       /* (XXX) manually set to seL4_NumErrors */
+}
+
+/* message type for all PD component request messages */
+message MoMessage {
+    /* No content, WIP */
+};
+
+/* return from a basic MO Component message */
+message MoBasicReturnMessage {
+    /* No content */
+};
+
+/* message type for all MO Component return messages */
+message MoReturnMessage {
+    MoComponentError errorCode = 1;
+    oneof msg {
+        MoBasicReturnMessage basic = 2;
+    };
+};

@@ -31,6 +31,8 @@
 #include <sel4gpi/badge_usage.h>
 #include <sel4gpi/debug.h>
 #include <sel4gpi/error_handle.h>
+#include <sel4gpi/gpi_rpc.h>
+#include <mo_component_rpc.pb.h>
 
 // Defined for utility printing macros
 #define DEBUG_ID MO_DEBUG
@@ -178,11 +180,8 @@ err_goto:
     return err_tag;
 }
 
-int mo_component_initialize(simple_t *server_simple,
-                            vka_t *server_vka,
-                            seL4_CPtr server_cspace,
+int mo_component_initialize(vka_t *server_vka,
                             vspace_t *server_vspace,
-                            sel4utils_thread_t server_thread,
                             vka_object_t server_ep_obj)
 {
     int error = 0;
@@ -208,12 +207,11 @@ int mo_component_initialize(simple_t *server_simple,
                                   (int (*)(resource_component_object_t *, vka_t *, vspace_t *, void *))mo_new,
                                   on_mo_registry_delete,
                                   sizeof(mo_component_registry_entry_t),
-                                  server_simple,
                                   server_vka,
-                                  server_cspace,
                                   server_vspace,
-                                  server_thread,
-                                  server_ep_obj.cptr);
+                                  server_ep_obj.cptr,
+                                  MoMessage_msg,
+                                  MoReturnMessage_msg);
 }
 
 /** --- Functions callable by root task --- **/

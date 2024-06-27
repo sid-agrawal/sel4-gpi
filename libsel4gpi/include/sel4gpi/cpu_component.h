@@ -12,7 +12,7 @@
 #include <vspace/vspace.h>
 
 #include <sel4gpi/cpu_obj.h>
-#include <sel4gpi/resource_server_rt_utils.h>
+#include <sel4gpi/resource_component_utils.h>
 
 /** @file APIs for managing and interacting with the serial server thread.
  *
@@ -138,11 +138,8 @@ typedef struct _cpu_component_registry_entry
 /**
  * To initialize the cpu component at the beginning of execution
  */
-int cpu_component_initialize(simple_t *server_simple,
-                             vka_t *server_vka,
-                             seL4_CPtr server_cspace,
+int cpu_component_initialize(vka_t *server_vka,
                              vspace_t *server_vspace,
-                             sel4utils_thread_t server_thread,
                              vka_object_t server_ep_obj);
 
 /* Global server instance accessor functions. */

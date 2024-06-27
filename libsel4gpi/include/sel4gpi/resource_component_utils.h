@@ -11,6 +11,7 @@
 #include <sel4gpi/badge_usage.h>
 #include <sel4gpi/debug.h>
 #include <sel4gpi/resource_server_utils.h>
+#include <sel4gpi/gpi_rpc.h>
 
 /** @file
  * Utility functions for RT components that serve GPI resources
@@ -66,14 +67,14 @@ typedef struct _resource_component_context
     resource_server_registry_t registry; ///< Registry of the component's resources
     size_t reg_entry_size;               ///< Size in bits of a registry entry
 
-    simple_t *server_simple;
     vka_t *server_vka;
-    seL4_CPtr server_cspace;
     vspace_t *server_vspace;
-    sel4utils_thread_t server_thread;
 
     seL4_CPtr server_ep; ///< The component listens on this endpoint.
     seL4_CPtr mcs_reply; ///< Unused
+
+    pb_msgdesc_t request_msgdesc; ///< The message description for RPC messages to this component
+    pb_msgdesc_t reply_msgdesc;   ///< The message description for RPC replies from this component
 } resource_component_context_t;
 
 /**
@@ -86,12 +87,11 @@ typedef struct _resource_component_context
  * @param new_obj function called to allocate a new object from the component
  * @param on_registry_delete function to be called when registry entry is deleted
  * @param reg_entry_size the size of a registry entry for this component
- * @param server_simple
- * @param server_vka
- * @param server_cspace
- * @param server_vspace
- * @param server_thread
- * @param server_ep
+ * @param server_vka the vka to use for the component's operations, 
+ *                   should be configured to the cspace where the componenent is running
+ * @param server_vspace the vspace of the context where the component is running
+ * @param server_ep the endpoint that this component listens on
+ * @param 
  */
 int resource_component_initialize(
     resource_component_context_t *component,
@@ -101,12 +101,11 @@ int resource_component_initialize(
     int (*new_obj)(resource_component_object_t *, vka_t *, vspace_t *, void *),
     void (*on_registry_delete)(resource_server_registry_node_t *, void *),
     size_t reg_entry_size,
-    simple_t *server_simple,
     vka_t *server_vka,
-    seL4_CPtr server_cspace,
     vspace_t *server_vspace,
-    sel4utils_thread_t server_thread,
-    seL4_CPtr server_ep);
+    seL4_CPtr server_ep,
+    pb_msgdesc_t request_msgdesc,
+    pb_msgdesc_t reply_msgdesc);
 
 /**
  * Handle a message to a resource component

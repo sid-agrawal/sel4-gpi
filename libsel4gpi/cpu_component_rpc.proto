@@ -1,0 +1,24 @@
+syntax = "proto3";
+
+enum CpuComponentError {
+    NONE = 0;           /* no error */
+    UNKNOWN = 11;       /* (XXX) manually set to seL4_NumErrors */
+}
+
+/* message type for all PD component request messages */
+message CpuMessage {
+    /* No content, WIP */
+};
+
+/* return from a basic Cpu Component message */
+message CpuBasicReturnMessage {
+    /* No content */
+};
+
+/* message type for all Cpu Component return messages */
+message CpuReturnMessage {
+    CpuComponentError errorCode = 1;
+    oneof msg {
+        CpuBasicReturnMessage basic = 2;
+    };
+};

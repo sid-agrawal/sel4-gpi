@@ -196,7 +196,7 @@ int resource_server_main(void *context_v)
                 error = pd_client_get_work(&context->pd_conn, &work);
                 CHECK_ERROR_GOTO(error, "failed to get work from RT", exit_main);
 
-                if (work.action != PdWorkAction_NONE)
+                if (work.action != PdWorkAction_NO_WORK)
                 {
                     RESOURCE_SERVER_PRINTF("Got some work from RT (action: %d, space id: %d, object id: %d)\n",
                                            work.action,

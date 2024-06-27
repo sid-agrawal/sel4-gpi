@@ -32,6 +32,8 @@
 #include <sel4gpi/badge_usage.h>
 #include <sel4gpi/debug.h>
 #include <sel4gpi/error_handle.h>
+#include <sel4gpi/gpi_rpc.h>
+#include <cpu_component_rpc.pb.h>
 
 // Defined for utility printing macros
 #define DEBUG_ID CPU_DEBUG
@@ -300,11 +302,8 @@ err_goto:
     return err_tag;
 }
 
-int cpu_component_initialize(simple_t *server_simple,
-                             vka_t *server_vka,
-                             seL4_CPtr server_cspace,
+int cpu_component_initialize(vka_t *server_vka,
                              vspace_t *server_vspace,
-                             sel4utils_thread_t server_thread,
                              vka_object_t server_ep_obj)
 {
     int error = 0;
@@ -331,12 +330,11 @@ int cpu_component_initialize(simple_t *server_simple,
                                   (int (*)(resource_component_object_t *, vka_t *, vspace_t *, void *))cpu_new,
                                   on_cpu_registry_delete,
                                   sizeof(cpu_component_registry_entry_t),
-                                  server_simple,
                                   server_vka,
-                                  server_cspace,
                                   server_vspace,
-                                  server_thread,
-                                  server_ep_obj.cptr);
+                                  server_ep_obj.cptr,
+                                  CpuMessage_msg,
+                                  CpuReturnMessage_msg);
 }
 
 /** --- Functions callable by root task --- **/

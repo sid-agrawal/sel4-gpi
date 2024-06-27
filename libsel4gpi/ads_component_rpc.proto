@@ -1,0 +1,24 @@
+syntax = "proto3";
+
+enum AdsComponentError {
+    NONE = 0;           /* no error */
+    UNKNOWN = 11;       /* (XXX) manually set to seL4_NumErrors */
+}
+
+/* message type for all PD component request messages */
+message AdsMessage {
+    /* No content, WIP */
+};
+
+/* return from a basic ADS Component message */
+message AdsBasicReturnMessage {
+    /* No content */
+};
+
+/* message type for all ADS Component return messages */
+message AdsReturnMessage {
+    AdsComponentError errorCode = 1;
+    oneof msg {
+        AdsBasicReturnMessage basic = 2;
+    };
+};
