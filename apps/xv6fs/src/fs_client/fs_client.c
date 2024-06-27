@@ -704,3 +704,29 @@ static void init_global_libc_fs_ops(void)
   libc_fs_ops.fcntl = xv6fs_libc_fcntl;
   libc_fs_ops.access = xv6fs_libc_access;
 }
+
+/**
+ * Request a new namespace ID from the file server
+ *
+ * @param ns_id returns the newly allocated NS ID
+ * @return 0 on success, error otherwise
+ */
+int xv6fs_client_new_ns(uint64_t *ns_id)
+{
+  XV6FS_PRINTF("Requesting new namespace from server ep\n");
+
+  FsMessage msg = {
+      .which_msg = FsMessage_ns_tag,
+  };
+
+  FsReturnMessage ret_msg;
+
+  int error = sel4gpi_rpc_call(&rpc_client, get_xv6fs_client()->server_ep, (void *)&msg, 0, NULL, (void *)&ret_msg);
+  error |= ret_msg.errorCode;
+
+  if (!error) {
+    *ns_id = ret_msg.msg.ns.space_id;
+  }
+
+  return error;
+}

@@ -129,12 +129,12 @@ int daycare_work_handler(
         get_resource_id(get_daycare_server()->gen.resource_type,
                         get_daycare_server()->gen.default_space.id,
                         pokemon_id,
-                        &pokemon_id_str);
+                        pokemon_id_str);
 
         get_resource_id(sel4gpi_get_resource_type_code(POKEBALL_RESOURCE_TYPE_NAME),
                         get_daycare_server()->pokeballs[pokemon_id].space_id,
                         get_daycare_server()->pokeballs[pokemon_id].id,
-                        &pokeball_id_str);
+                        pokeball_id_str);
 
         add_edge_by_id(model_state, GPI_EDGE_TYPE_MAP, pokemon_id_str, pokeball_id_str);
 

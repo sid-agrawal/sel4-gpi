@@ -115,22 +115,3 @@ int start_resource_server_pd_args(gpi_cap_t rde_type,
 
     return 0;
 }
-
-int resource_server_client_new_ns(seL4_CPtr server_ep,
-                                  uint64_t *ns_id)
-{
-    RESOURCE_SERVER_PRINTF("Requesting new namespace from server ep (%d)\n", (int)server_ep);
-
-    // Send IPC to resource server
-    seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0, RSMSGREG_NEW_NS_REQ_END);
-    seL4_SetMR(RSMSGREG_FUNC, RS_FUNC_NEW_NS_REQ);
-    tag = seL4_Call(server_ep, tag);
-
-    int result = seL4_MessageInfo_get_label(tag);
-    if (result == seL4_NoError)
-    {
-        *ns_id = seL4_GetMR(RSMSGREG_NEW_NS_ACK_ID);
-    }
-
-    return result;
-}

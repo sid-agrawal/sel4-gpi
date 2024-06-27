@@ -18,30 +18,6 @@ enum rs_errors
     RS_NUM_ERRORS
 };
 
-// IPC Message register values for RSMSGREG_FUNC
-enum rs_funcs
-{
-    RS_FUNC_NEW_NS_REQ = 0,
-    RS_FUNC_NEW_NS_ACK,
-
-    RS_FUNC_END,
-};
-
-// Message registers for all remote resource server requests
-enum rs_msgregs
-{
-    /* These are fixed headers in every message. */
-    RSMSGREG_FUNC = 0,
-
-    /* This is a convenience label for IPC MessageInfo length. */
-    RSMSGREG_LABEL0,
-
-    /* New NS */
-    RSMSGREG_NEW_NS_REQ_END = RSMSGREG_LABEL0,
-    RSMSGREG_NEW_NS_ACK_ID = RSMSGREG_LABEL0,
-    RSMSGREG_NEW_NS_ACK_END,
-};
-
 /**
  * Starts a resource server in a new PD
  * @param rde_type cap type of RDE to add, optional
@@ -75,13 +51,3 @@ int start_resource_server_pd_args(gpi_cap_t rde_type,
                                   uint argc,
                                   seL4_CPtr *server_pd_cap,
                                   uint64_t *space_id);
-
-/**
- * Request a new namespace ID from a resource server
- *
- * @param server_ep the EP of the resource server
- * @param ns_id returns the newly allocated NS ID
- * @return RS_NOERROR on success, error otherwise
- */
-int resource_server_client_new_ns(seL4_CPtr server_ep,
-                                  uint64_t *ns_id);

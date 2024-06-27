@@ -18,7 +18,7 @@
 
 #define KVSTORE_SERVER_APP "kvstore_server"
 #define HELLO_KVSTORE_APP "hello_kvstore"
-#define DUMP_MODEL true
+#define DUMP_MODEL false
 
 static ads_client_context_t ads_conn;
 static pd_client_context_t pd_conn;
@@ -67,6 +67,9 @@ static int setup(env_t env)
 
     /* Start FS server process */
     error = start_xv6fs_pd(ramdisk_id, &fs_pd.badged_server_ep_cspath.capPtr, &fs_id);
+    test_assert(error == 0);
+
+    error = xv6fs_client_init();
     test_assert(error == 0);
 
     /* Add FS ep to RDE */
@@ -296,10 +299,10 @@ int test_kvstore_diff_namespace(env_t env)
     seL4_CPtr fs_ep = sel4gpi_get_rde(file_cap_type);
     uint64_t nsid_1, nsid_2;
 
-    error = resource_server_client_new_ns(fs_ep, &nsid_1);
+    error = xv6fs_client_new_ns(&nsid_1);
     test_assert(error == 0);
 
-    error = resource_server_client_new_ns(fs_ep, &nsid_2);
+    error = xv6fs_client_new_ns(&nsid_2);
     test_assert(error == 0);
 
     /* Start the kvstore PD */

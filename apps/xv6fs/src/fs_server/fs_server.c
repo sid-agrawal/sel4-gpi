@@ -218,9 +218,9 @@ seL4_MessageInfo_t xv6fs_request_handler(seL4_MessageInfo_t tag, seL4_Word sende
   uint64_t ns_id = get_space_id_from_badge(sender_badge);
   gpi_cap_t cap_type = get_cap_type_from_badge(sender_badge);
 
-  CHECK_ERROR_GOTO(sender_badge == 0, "Got message on unbadged ep", FS_SERVER_ERROR_UNKNOWN, done);
+  CHECK_ERROR_GOTO(sender_badge == 0, "Got message on unbadged ep", FsError_UNKNOWN, done);
   CHECK_ERROR_GOTO(cap_type != get_xv6fs_server()->gen.resource_type, "Got invalid captype",
-                   RD_SERVER_ERROR_UNKNOWN, done);
+                   FsError_UNKNOWN, done);
 
   // Decode the RPC message
   FsMessage msg;
@@ -240,8 +240,7 @@ seL4_MessageInfo_t xv6fs_request_handler(seL4_MessageInfo_t tag, seL4_Word sende
 
     switch (msg.which_msg)
     {
-#if 0 // (XXX) Arya: New NS momentarily broken while swapping to protobuf
-    case RS_FUNC_NEW_NS_REQ:
+    case FsMessage_ns_tag:
       XV6FS_PRINTF("Got request for new namespace\n");
 
       resspc_client_context_t resspc_conn;
@@ -249,7 +248,7 @@ seL4_MessageInfo_t xv6fs_request_handler(seL4_MessageInfo_t tag, seL4_Word sende
 
       // Register a new resource space for the NS
       error = resource_server_new_res_space(&get_xv6fs_server()->gen, get_client_id_from_badge(sender_badge), &resspc_conn);
-      CHECK_ERROR_GOTO(error, "Failed to create a new resource space for namespace\n", FS_SERVER_ERROR_UNKNOWN, done);
+      CHECK_ERROR_GOTO(error, "Failed to create a new resource space for namespace\n", FsError_UNKNOWN, done);
       XV6FS_PRINTF("Registered new namespace with ID %ld\n", resspc_conn.id);
       ns_id = resspc_conn.id;
 
@@ -262,13 +261,12 @@ seL4_MessageInfo_t xv6fs_request_handler(seL4_MessageInfo_t tag, seL4_Word sende
 
       // Create directory in global FS
       error = xv6fs_sys_mkdir(ns_entry->ns_prefix);
-      CHECK_ERROR_GOTO(error, "Failed to make new directory for namespace\n", FS_SERVER_ERROR_UNKNOWN, done);
+      CHECK_ERROR_GOTO(error, "Failed to make new directory for namespace\n", FsError_UNKNOWN, done);
 
-      seL4_MessageInfo_ptr_set_length(&reply_tag, RSMSGREG_NEW_NS_ACK_END);
-      seL4_SetMR(RDMSGREG_FUNC, RS_FUNC_NEW_NS_ACK);
-      seL4_SetMR(RSMSGREG_NEW_NS_ACK_ID, ns_id);
+      // Set the reply
+      reply_msg.which_msg = FsReturnMessage_ns_tag;
+      reply_msg.msg.ns.space_id = ns_id;
       break;
-#endif
     case FsMessage_create_tag:
       *need_new_recv_cap = true;
 
@@ -298,12 +296,12 @@ seL4_MessageInfo_t xv6fs_request_handler(seL4_MessageInfo_t tag, seL4_Word sende
       XV6FS_PRINTF("Server opening file %s, flags 0x%x\n", pathname, open_flags);
 
       struct file *file = xv6fs_sys_open(pathname, open_flags);
-      error = file == NULL ? FS_SERVER_ERROR_UNKNOWN : FS_SERVER_NOERROR;
+      error = file == NULL ? FsError_UNKNOWN : FsError_NONE;
       if (error != 0)
       {
         // Don't announce failed to open files as error, not usually an error
         XV6FS_PRINTF("File did not exist\n");
-        error = FS_SERVER_ERROR_NOFILE;
+        error = FsError_NO_FILE;
         goto done;
       }
 
@@ -337,7 +335,7 @@ seL4_MessageInfo_t xv6fs_request_handler(seL4_MessageInfo_t tag, seL4_Word sende
       int n_files;
       uint32_t inums[16];
       error = xv6fs_sys_walk(ROOT_DIR, true, inums, &n_files);
-      CHECK_ERROR_GOTO(error, "Failed to walk FS", FS_SERVER_ERROR_UNKNOWN, done);
+      CHECK_ERROR_GOTO(error, "Failed to walk FS", FsError_UNKNOWN, done);
 #endif
 
       // Create the resource endpoint
@@ -392,7 +390,7 @@ seL4_MessageInfo_t xv6fs_request_handler(seL4_MessageInfo_t tag, seL4_Word sende
       if (reg_entry == NULL)
       {
         XV6FS_PRINTF("Received invalid file to link\n");
-        error = FS_SERVER_ERROR_BADGE;
+        error = FsError_BADGE;
         goto done;
       }
 
@@ -400,12 +398,12 @@ seL4_MessageInfo_t xv6fs_request_handler(seL4_MessageInfo_t tag, seL4_Word sende
 
       /* Do the link */
       error = xv6fs_sys_dolink2(reg_entry->file, pathname);
-      CHECK_ERROR_GOTO(error, "Failed to link", FS_SERVER_ERROR_UNKNOWN, done);
+      CHECK_ERROR_GOTO(error, "Failed to link", FsError_UNKNOWN, done);
 
       // Unattach the MO
       error = resource_server_unattach(&get_xv6fs_server()->gen, mo_vaddr);
       CHECK_ERROR_GOTO(error, "Failed to unattach MO", error, done);
-      
+
       break;
     case FsMessage_unlink_tag:
       *need_new_recv_cap = true;
@@ -432,7 +430,7 @@ seL4_MessageInfo_t xv6fs_request_handler(seL4_MessageInfo_t tag, seL4_Word sende
 
       XV6FS_PRINTF("Unlink pathname %s\n", pathname);
       error = xv6fs_sys_unlink(pathname);
-      CHECK_ERROR_GOTO(error, "Failed to unlink", FS_SERVER_ERROR_UNKNOWN, done);
+      CHECK_ERROR_GOTO(error, "Failed to unlink", FsError_UNKNOWN, done);
 
       // Unattach the MO
       error = resource_server_unattach(&get_xv6fs_server()->gen, mo_vaddr);
@@ -453,7 +451,7 @@ seL4_MessageInfo_t xv6fs_request_handler(seL4_MessageInfo_t tag, seL4_Word sende
         (file_registry_entry_t *)resource_server_registry_get_by_badge(
             &get_xv6fs_server()->file_registry,
             sender_badge);
-    CHECK_ERROR_GOTO(reg_entry == NULL, "Received invalid badge\n", FS_SERVER_ERROR_BADGE, done);
+    CHECK_ERROR_GOTO(reg_entry == NULL, "Received invalid badge\n", FsError_BADGE, done);
 
     XV6FS_PRINTF("Got request for file with id %ld\n", reg_entry->file->id);
     switch (msg.which_msg)
@@ -521,7 +519,7 @@ seL4_MessageInfo_t xv6fs_request_handler(seL4_MessageInfo_t tag, seL4_Word sende
       CHECK_ERROR_GOTO(error, "Failed to unattach MO", error, done);
       break;
     default:
-      CHECK_ERROR_GOTO(1, "got invalid op on badged ep with obj id", FS_SERVER_ERROR_UNKNOWN, done);
+      CHECK_ERROR_GOTO(1, "got invalid op on badged ep with obj id", FsError_UNKNOWN, done);
     }
   }
 
@@ -623,14 +621,14 @@ int xv6fs_work_handler(PdWorkReturnMessage *work)
     {
       /* File system only does extraction at a space-level, not at a file-level */
       error = resource_server_extraction_no_data(&get_xv6fs_server()->gen);
-      CHECK_ERROR_GOTO(error, "Failed to finish model extraction\n", FS_SERVER_ERROR_UNKNOWN, err_goto);
+      CHECK_ERROR_GOTO(error, "Failed to finish model extraction\n", FsError_UNKNOWN, err_goto);
     }
 
     /* Initialize the model state */
     mo_client_context_t mo;
     model_state_t *model_state;
     error = resource_server_extraction_setup(&get_xv6fs_server()->gen, 4, &mo, &model_state);
-    CHECK_ERROR_GOTO(error, "Failed to setup model extraction\n", FS_SERVER_ERROR_UNKNOWN, err_goto);
+    CHECK_ERROR_GOTO(error, "Failed to setup model extraction\n", FsError_UNKNOWN, err_goto);
 
     /* Update pathname for namespace */
     char path[MAXPATH];
@@ -657,7 +655,7 @@ int xv6fs_work_handler(PdWorkReturnMessage *work)
     uint32_t inums[16];
 
     error = xv6fs_sys_walk(path, false, inums, &n_files);
-    CHECK_ERROR_GOTO(error, "Failed to walk FS", FS_SERVER_ERROR_UNKNOWN, err_goto);
+    CHECK_ERROR_GOTO(error, "Failed to walk FS", FsError_UNKNOWN, err_goto);
 
     // (XXX) Arya: A lot of this should be moved to PD component once we have resource spaces implemented
 
@@ -690,7 +688,7 @@ int xv6fs_work_handler(PdWorkReturnMessage *work)
 
       /* Add relations for blocks */
       error = xv6fs_sys_inode_blocknos(inums[i], blocknos, n_blocknos, &n_blocknos);
-      CHECK_ERROR_GOTO(error, "Failed to get blocknos for file", FS_SERVER_ERROR_UNKNOWN, err_goto);
+      CHECK_ERROR_GOTO(error, "Failed to get blocknos for file", FsError_UNKNOWN, err_goto);
       XV6FS_PRINTF("File has %d blocks\n", n_blocknos);
 
       uint64_t block_id;
@@ -708,7 +706,7 @@ int xv6fs_work_handler(PdWorkReturnMessage *work)
 
     /* Send the result */
     error = resource_server_extraction_finish(&get_xv6fs_server()->gen, &mo, model_state);
-    CHECK_ERROR_GOTO(error, "Failed to finish model extraction\n", RD_SERVER_ERROR_UNKNOWN, err_goto);
+    CHECK_ERROR_GOTO(error, "Failed to finish model extraction\n", FsError_UNKNOWN, err_goto);
   }
   else if (op == PdWorkAction_FREE)
   {

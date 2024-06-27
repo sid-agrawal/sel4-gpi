@@ -248,9 +248,9 @@ seL4_MessageInfo_t ramdisk_request_handler(
     uint64_t obj_id = get_object_id_from_badge(sender_badge);
     gpi_cap_t cap_type = get_cap_type_from_badge(sender_badge);
 
-    CHECK_ERROR_GOTO(sender_badge == 0, "Got message on unbadged ep", RD_SERVER_ERROR_UNKNOWN, done);
+    CHECK_ERROR_GOTO(sender_badge == 0, "Got message on unbadged ep", RamdiskError_UNKNOWN, done);
     CHECK_ERROR_GOTO(cap_type != get_ramdisk_server()->gen.resource_type, "Got invalid captype",
-                     RD_SERVER_ERROR_UNKNOWN, done);
+                     RamdiskError_UNKNOWN, done);
 
     // Decode the RPC message
     RamdiskMessage msg;
@@ -297,7 +297,7 @@ seL4_MessageInfo_t ramdisk_request_handler(
             uint64_t blockno;
             error = alloc_block(&blockno);
 
-            CHECK_ERROR_GOTO(error, "no more free blocks to assign", RD_SERVER_ERROR_NO_BLOCKS, done);
+            CHECK_ERROR_GOTO(error, "no more free blocks to assign", RamdiskError_NO_BLOCKS, done);
 
             // Create the resource endpoint
             seL4_CPtr dest;
@@ -318,7 +318,7 @@ seL4_MessageInfo_t ramdisk_request_handler(
             break;
         default:
             RAMDISK_PRINTF("Op is %d\n", op);
-            CHECK_ERROR_GOTO(1, "got invalid op on badged ep without obj id", RD_SERVER_ERROR_UNKNOWN, done);
+            CHECK_ERROR_GOTO(1, "got invalid op on badged ep without obj id", RamdiskError_UNKNOWN, done);
         }
     }
     else
@@ -332,7 +332,7 @@ seL4_MessageInfo_t ramdisk_request_handler(
 
             /* Find the previously attached shared memory */
             mo_vaddr = get_ramdisk_server()->shared_mem[client_id];
-            CHECK_ERROR_GOTO(mo_vaddr == NULL, "MO for client did not exist", RD_SERVER_ERROR_UNKNOWN, done);
+            CHECK_ERROR_GOTO(mo_vaddr == NULL, "MO for client did not exist", RamdiskError_UNKNOWN, done);
             *need_new_recv_cap = false;
 
             /* Read ramdisk */
@@ -349,7 +349,7 @@ seL4_MessageInfo_t ramdisk_request_handler(
 
             /* Find the previously attached shared memory */
             mo_vaddr = get_ramdisk_server()->shared_mem[client_id];
-            CHECK_ERROR_GOTO(mo_vaddr == NULL, "MO for client did not exist", RD_SERVER_ERROR_UNKNOWN, done);
+            CHECK_ERROR_GOTO(mo_vaddr == NULL, "MO for client did not exist", RamdiskError_UNKNOWN, done);
             *need_new_recv_cap = false;
 
             /* Write ramdisk */
@@ -361,7 +361,7 @@ seL4_MessageInfo_t ramdisk_request_handler(
             break;
         default:
             RAMDISK_PRINTF("Op is %d\n", op);
-            CHECK_ERROR_GOTO(1, "got invalid op on badged ep with obj id", RD_SERVER_ERROR_UNKNOWN, done);
+            CHECK_ERROR_GOTO(1, "got invalid op on badged ep with obj id", RamdiskError_UNKNOWN, done);
         }
     }
 
@@ -390,7 +390,7 @@ int ramdisk_work_handler(PdWorkReturnMessage *work)
 
         /* Send the result */
         error = resource_server_extraction_no_data(&get_ramdisk_server()->gen);
-        CHECK_ERROR_GOTO(error, "Failed to finish model extraction\n", RD_SERVER_ERROR_UNKNOWN, err_goto);
+        CHECK_ERROR_GOTO(error, "Failed to finish model extraction\n", RamdiskError_UNKNOWN, err_goto);
     }
     else if (op == PdWorkAction_FREE)
     {

@@ -1,5 +1,12 @@
 syntax = "proto3";
 
+enum FsError {
+    NONE = 0;                    /* no error */
+    UNKNOWN = 11;                /* (XXX) Arya: Manually set to the seL4_NumErrors */
+    BADGE = 12;                  /* invalid badge provided */
+    NO_FILE = 13;                /* the file does not exist */
+};
+
 message FsCreateMessage {
     uint64 flags = 1;   /* file creation flags */
 };
@@ -30,6 +37,10 @@ message FsStatMessage {
     /* No content */
 };
 
+message FsCreateNamespaceMessage {
+    /* No content */
+}
+
 /* message type for all ramdisk request messages */
 message FsMessage {
     oneof msg {
@@ -40,6 +51,7 @@ message FsMessage {
         FsCloseMessage close = 5;
         FsUnlinkMessage unlink = 6;
         FsStatMessage stat = 7;
+        FsCreateNamespaceMessage ns = 8;
     };
 };
 
@@ -59,13 +71,18 @@ message FsWriteReturnMessage {
     uint32 n = 1;           /* number of bytes written */
 }
 
+message FsCreateNamespaceReturnMessage {
+    uint32 space_id = 1;    /* resource space ID of the new namespace */
+}
+
 /* message type for all fs return messages */
 message FsReturnMessage {
-    uint32 errorCode = 1;   /* Can we use an enum for the error code? */
+    FsError errorCode = 1;
     oneof msg {
         FsBasicReturnMessage basic = 2;
         FsCreateReturnMessage create = 3;
         FsReadReturnMessage read = 4;
         FsWriteReturnMessage write = 5;
+        FsCreateNamespaceReturnMessage ns = 6;
     };
 };

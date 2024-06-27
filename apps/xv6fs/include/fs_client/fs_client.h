@@ -64,6 +64,14 @@ int xv6fs_client_get_file(int fd, seL4_CPtr *file_ep);
 */
 int xv6fs_client_link_file(seL4_CPtr file, const char *path);
 
+/**
+ * Request a new namespace from the file server
+ *
+ * @param ns_id returns the ID of the new NS
+ * @return 0 on success, error otherwise
+ */
+int xv6fs_client_new_ns(uint64_t *ns_id);
+
 /*
 Context of the client for a single file
 */

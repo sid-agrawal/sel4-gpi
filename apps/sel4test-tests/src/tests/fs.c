@@ -184,11 +184,9 @@ int test_fs(env_t env)
     }
     free(write_buf);
 
-    // (XXX) Arya: New NS momentarily broken while swapping to protobuf
-#if 0
     // Create a namespace
     uint64_t ns_id;
-    error = resource_server_client_new_ns(fs_client_ep, &ns_id);
+    error = xv6fs_client_new_ns(&ns_id);
     test_assert(error == 0);
     test_assert(ns_id != 0);
 
@@ -230,7 +228,7 @@ int test_fs(env_t env)
     test_assert(strcmp(buf, TEST_STR_3) == 0);
 
     // Link file in another new NS
-    error = resource_server_client_new_ns(fs_client_ep, &ns_id);
+    error = xv6fs_client_new_ns(&ns_id);
     test_assert(error == 0);
     test_assert(ns_id != 0);
     error = xv6fs_client_set_namespace(ns_id);
@@ -250,7 +248,6 @@ int test_fs(env_t env)
     nbytes = read(f, buf, strlen(TEST_STR_3) + 1);
     test_assert(nbytes == strlen(TEST_STR_3) + 1);
     test_assert(strcmp(buf, TEST_STR_3) == 0);
-#endif
 
     // Print whole-pd model state
     // error = pd_client_dump(&pd_conn, NULL, 0);

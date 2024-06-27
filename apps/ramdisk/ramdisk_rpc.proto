@@ -1,5 +1,11 @@
 syntax = "proto3";
 
+enum RamdiskError {
+    NONE = 0;                    /* no error */
+    UNKNOWN = 11;                /* (XXX) Arya: Manually set to the seL4_NumErrors */
+    NO_BLOCKS = 12;              /* no more blocks to allocate */
+};
+
 enum RamdiskAction {
     BIND = 0;       /* bind a client with some shared memory frame */
     UNBIND = 1;     /* unbind a client with some shared memory frame */
@@ -27,7 +33,7 @@ message RamdiskAllocReturnMessage {
 
 /* message type for all ramdisk return messages */
 message RamdiskReturnMessage {
-    uint32 errorCode = 1;   /* Can we use an enum for the error code? */
+    RamdiskError errorCode = 1; 
     oneof msg {
         RamdiskBasicReturnMessage basic = 2;
         RamdiskAllocReturnMessage alloc = 3;
