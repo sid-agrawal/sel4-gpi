@@ -911,17 +911,33 @@ void forge_pd_cap_from_init_data(test_init_data_t *init_data, sel4utils_process_
     seL4_CPtr pd_cap_in_rt;
     pd_component_registry_entry_t *new_entry;
     error = resource_component_allocate(get_pd_component(), get_gpi_server()->rt_pd_id,
-                                        BADGE_OBJ_ID_NULL, false, shared_data_mo,
+                                        BADGE_OBJ_ID_NULL, true, NULL,
                                         (resource_server_registry_node_t **)&new_entry, &pd_cap_in_rt);
     SERVER_GOTO_IF_ERR(error, "Failed to allocate PD for forging");
 
     pd_t *pd = &new_entry->pd;
     test_pd_id = pd->id;
+
+    // (XXX) Linh: Fragments copied over from pd_new() - workaround so that we can
+    // initialize the test PD data without making a new CSpace
+    pd->shared_data_mo_id = shared_data_mo->id;
+    error = ads_component_attach_to_rt(shared_data_mo->id, (void **)&pd->shared_data);
+    SERVER_GOTO_IF_ERR(error, "Failed to attach init data MO to RT\n");
+
+    pd->shared_data->rde_count = 0;
+    memset(pd->shared_data->rde, 0, sizeof(osmosis_rde_t) * MAX_PD_OSM_RDE);
     pd->shared_data->pd_conn.id = test_pd_id;
 
+    pd_initialize_hold_registry(pd);
+    pd->cspace = test_process->cspace;
+    pd->cspace_size = init_data->cspace_size_bits;
+    pd->cnode_guard = api_make_guard_skip_word(seL4_WordBits - init_data->cspace_size_bits);
+    pd->elf_phdrs = test_process->elf_phdrs;
+    pd->num_elf_phdrs = test_process->num_elf_phdrs;
+    pd->pagesz = test_process->pagesz;
+    pd->sysinfo = test_process->sysinfo;
+
     // Split the test process' cspace and initialize a vka with half
-    // (XXX) Linh: need to fix - we're bootstrapping an allocator twice here
-    //            (it was bootstrapped once in resource_component_allocate)
     seL4_CPtr mid_slot = DIV_ROUND_UP(init_data->free_slots.start + init_data->free_slots.end, 2);
     error = pd_bootstrap_allocator(pd, test_process->cspace.cptr,
                                    mid_slot, init_data->free_slots.end,

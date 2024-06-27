@@ -47,13 +47,6 @@ static int ep_new(ep_t *ep, vka_t *server_vka, vspace_t *server_vspace, void *ar
 
 static void ep_destroy(ep_t *ep, vka_t *server_vka)
 {
-#ifdef CONFIG_DEBUG_BUILD
-    seL4_Word is_last_copy = seL4_DebugCapIsLastCopy(ep->endpoint_in_RT.cptr);
-    if (!is_last_copy)
-    {
-        WARN("Attempting to free EP (%d) with existing copies\n", ep->id);
-    }
-#endif
     /* Revoking here because this endpoint might've been copied into a CPU's TCB (as a fault EP),
      * which may not be deleted yet. The TCB will be bounded to an invalid fault endpoint, which is fine
      * because no PDs `hold` this EP anymore, rendering it effectively useless
@@ -61,7 +54,6 @@ static void ep_destroy(ep_t *ep, vka_t *server_vka)
      * Additionally, if this was the the listening endpoint for a resource server PD, it's expected that the
      * badged versions (representing resources) got deleted when client PDs and the resource server PD is destroyed
      *
-     * (XXX) Linh: there is a problem with the test PDs having multiple CSpaces which will leave references to this cap
      */
     cspacepath_t path;
     vka_cspace_make_path(server_vka, ep->endpoint_in_RT.cptr, &path);

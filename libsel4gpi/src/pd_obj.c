@@ -496,6 +496,11 @@ err_goto:
     }
 }
 
+void pd_initialize_hold_registry(pd_t *pd)
+{
+    resource_server_initialize_registry(&pd->hold_registry, pd_held_resource_on_delete, (void *)pd);
+}
+
 int pd_new(pd_t *pd,
            vka_t *server_vka,
            vspace_t *server_vspace,
@@ -511,7 +516,7 @@ int pd_new(pd_t *pd,
     SERVER_GOTO_IF_ERR(error, "Failed to attach init data MO to RT\n");
 
     // Initialize the hold registry
-    resource_server_initialize_registry(&pd->hold_registry, pd_held_resource_on_delete, (void *)pd);
+    pd_initialize_hold_registry(pd);
 
     // Setup init data
     pd->shared_data->rde_count = 0;

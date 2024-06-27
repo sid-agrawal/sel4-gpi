@@ -417,3 +417,11 @@ int pd_set_core_cap(pd_t *pd, seL4_Word core_cap_badge, seL4_CPtr core_cap);
  * @param path returns the full path to the given slot
  */
 void pd_make_path(pd_t *pd, seL4_CPtr cap, cspacepath_t *path);
+
+/**
+ * @brief Workaround function to initialize the hold registry of a PD
+ * from outside the PD component. Currently only used for test PD forging.
+ *
+ * @param pd the PD to initialize
+ */
+void pd_initialize_hold_registry(pd_t *pd);
