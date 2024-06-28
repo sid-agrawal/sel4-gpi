@@ -123,13 +123,13 @@ static seL4_MessageInfo_t handle_resspc_allocation_request(seL4_Word sender_badg
     error = ads_component_remove_from_rt((void *)resource_type_name);
     SERVER_GOTO_IF_ERR(error, "Failed to remove MO from root task\n");
 
-    seL4_SetMR(PDMSGREG_FUNC, RESSPC_FUNC_CONNECT_ACK);
+    seL4_SetMR(RESSPCMSGREG_FUNC, RESSPC_FUNC_CONNECT_ACK);
     seL4_SetMR(RESSPCMSGREG_CONNECT_ACK_ID, space_id);
     seL4_SetMR(RESSPCMSGREG_CONNECT_ACK_TYPE, type);
     seL4_SetMR(RESSPCMSGREG_CONNECT_ACK_SLOT, space_cap);
 
 err_goto:
-    seL4_SetMR(PDMSGREG_FUNC, RESSPC_FUNC_CONNECT_ACK);
+    seL4_SetMR(RESSPCMSGREG_FUNC, RESSPC_FUNC_CONNECT_ACK);
     reply_tag = seL4_MessageInfo_new(error, 0, 0,
                                      RESSPCMSGREG_CONNECT_ACK_END);
     return reply_tag;
@@ -209,7 +209,7 @@ static seL4_MessageInfo_t handle_create_resource_request(seL4_Word sender_badge)
                             seL4_CapNull, seL4_CapNull, seL4_CapNull);
 
 err_goto:
-    seL4_SetMR(PDMSGREG_FUNC, RESSPC_FUNC_CREATE_RES_ACK);
+    seL4_SetMR(RESSPCMSGREG_FUNC, RESSPC_FUNC_CREATE_RES_ACK);
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(error, 0, 0,
                                                   RESSPCMSGREG_CREATE_RES_ACK_END);
     return tag;
@@ -247,7 +247,7 @@ static seL4_MessageInfo_t handle_map_space_request(seL4_Word sender_badge)
     error = resspc_component_map_space(src_spc_id, dest_spc_id);
 
 err_goto:
-    seL4_SetMR(PDMSGREG_FUNC, RESSPC_FUNC_MAP_SPACE_ACK);
+    seL4_SetMR(RESSPCMSGREG_FUNC, RESSPC_FUNC_MAP_SPACE_ACK);
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(error, 0, 0,
                                                   RESSPCMSGREG_MAP_SPACE_ACK_END);
     return tag;
