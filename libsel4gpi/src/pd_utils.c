@@ -92,7 +92,8 @@ seL4_CPtr sel4gpi_get_rde_by_space_id(uint32_t space_id, gpi_cap_t type)
         }
     }
 
-    WARN("could not find RDE (type: %d, space: %d) for PD (%ld)\n", type, space_id, sel4gpi_get_pd_conn().id);
+    UNCONDITIONAL_WARN("could not find RDE (type: %d, space: %d) for PD (%ld)\n",
+                       type, space_id, sel4gpi_get_pd_conn().id);
     return seL4_CapNull;
 }
 

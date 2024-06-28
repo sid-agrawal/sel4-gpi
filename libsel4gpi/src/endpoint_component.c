@@ -58,7 +58,10 @@ static void ep_destroy(ep_t *ep, vka_t *server_vka)
     cspacepath_t path;
     vka_cspace_make_path(server_vka, ep->endpoint_in_RT.cptr, &path);
     int error = vka_cnode_revoke(&path);
-    SERVER_PRINT_IF_ERR(error, "Failed to revoke EP (%d), future allocations will fail!\n", ep->id);
+    if (error)
+    {
+        OSDB_PRINTERR("Failed to revoke EP (%d), future allocations will fail!\n", ep->id);
+    }
 
     vka_free_object(server_vka, &ep->endpoint_in_RT);
 }

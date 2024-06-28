@@ -63,8 +63,8 @@ int pd_add_resource(pd_t *pd, gpi_cap_t type, uint32_t space_id, uint32_t res_id
 
     if (node != NULL)
     {
-        OSDB_PRINTF("Warning: adding resource with existing ID (%lx), do not insert again\n", res_node_id);
-        BADGE_PRINT(res_node_id);
+        OSDB_PRINT_VERBOSE("Warning: adding resource with existing ID (%lx), do not insert again\n", res_node_id);
+        // BADGE_PRINT(res_node_id);
     }
     else
     {
@@ -402,13 +402,13 @@ int pd_bulk_add_resource(pd_t *pd, linked_list_t *resources)
                                                               resource_space_data->space.server_ep, resource_space_data->space.resource_type,
                                                               res->space_id, res->res_id, pd->id);
 
-        SERVER_PRINT_IF_ERR(in_error, "Warning: Could not mint resource endpoint\n");
+        WARN_IF_COND(in_error, "Could not mint resource endpoint\n");
         error = error || in_error;
 
         if (!in_error)
         {
             in_error = pd_add_resource(pd, res->type, res->space_id, res->res_id, res->slot_in_RT_Debug, copied_res, res->slot_in_ServerPD_Debug);
-            SERVER_PRINT_IF_ERR(in_error, "Warning: failed to add resource (type: %s, space_id: %d) to PD %d\n", cap_type_to_str(res->type), res->space_id, pd->id);
+            WARN_IF_COND(in_error, "failed to add resource (type: %s, space_id: %d) to PD %d\n", cap_type_to_str(res->type), res->space_id, pd->id);
             error = error || in_error;
         }
     }
@@ -842,7 +842,7 @@ int pd_send_cap(pd_t *to_pd,
         if (update_core_cap)
         {
             error = pd_set_core_cap(to_pd, badge, new_cap);
-            SERVER_PRINT_IF_ERR(error, "Warning: failed to set the cap in PD's OSmosis data\n");
+            SERVER_WARN_IF_COND(error, "Warning: failed to set the cap in PD's OSmosis data\n");
         }
 
         error = pd_add_resource(to_pd,
@@ -852,7 +852,7 @@ int pd_send_cap(pd_t *to_pd,
                                 server_src_cap,
                                 new_cap,
                                 server_src_cap);
-        SERVER_PRINT_IF_ERR(error, "Warning: Failed to add cap to PD's resources\n");
+        SERVER_WARN_IF_COND(error, "Warning: Failed to add cap to PD's resources\n");
 
         *slot = new_cap;
     }

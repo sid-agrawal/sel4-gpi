@@ -148,7 +148,7 @@ err_goto:
 static seL4_MessageInfo_t handle_next_slot_req(seL4_Word sender_badge,
                                                seL4_MessageInfo_t old_tag)
 {
-    // OSDB_PRINTF("Got next slot request from client badge %lx.\n", sender_badge);
+    OSDB_PRINT_VERBOSE("Got next slot request from client badge %lx.\n", sender_badge);
     int error = 0;
 
     pd_component_registry_entry_t *client_data = pd_component_registry_get_entry_by_badge(sender_badge);
@@ -170,7 +170,7 @@ err_goto:
 static seL4_MessageInfo_t handle_free_slot_req(seL4_Word sender_badge,
                                                seL4_MessageInfo_t old_tag)
 {
-    // OSDB_PRINTF("Got free slot request from client badge %lx.\n", sender_badge);
+    OSDB_PRINT_VERBOSE("Got free slot request from client badge %lx.\n", sender_badge);
     int error = 0;
 
     pd_component_registry_entry_t *client_data = pd_component_registry_get_entry_by_badge(sender_badge);
@@ -192,7 +192,7 @@ err_goto:
 static seL4_MessageInfo_t handle_clear_slot_req(seL4_Word sender_badge,
                                                 seL4_MessageInfo_t old_tag)
 {
-    // OSDB_PRINTF("Got clear slot request from client badge %lx.\n", sender_badge);
+    OSDB_PRINT_VERBOSE("Got clear slot request from client badge %lx.\n", sender_badge);
     int error = 0;
 
     pd_component_registry_entry_t *client_data = pd_component_registry_get_entry_by_badge(sender_badge);
@@ -217,9 +217,9 @@ static seL4_MessageInfo_t handle_send_cap_req(seL4_Word sender_badge,
     int error = 0;
 
     /* This only works if the extra cap is a GPI core cap (badged version of GPI server EP) */
-    OSDB_PRINTF("received_cap: %lu (badge: %lx)\n", received_cap, seL4_GetBadge(0));
-    OSDB_PRINTF("Unwrapped: %s\n",
-                seL4_MessageInfo_get_capsUnwrapped(old_tag) ? "true" : "false");
+    OSDB_PRINT_VERBOSE("received_cap: %lu (badge: %lx)\n", received_cap, seL4_GetBadge(0));
+    OSDB_PRINT_VERBOSE("Unwrapped: %s\n",
+                       seL4_MessageInfo_get_capsUnwrapped(old_tag) ? "true" : "false");
 
     /* Find the client */
     pd_component_registry_entry_t *client_data = pd_component_registry_get_entry_by_badge(sender_badge);
@@ -375,8 +375,8 @@ static seL4_MessageInfo_t handle_give_resource_req(seL4_Word sender_badge, seL4_
     seL4_Word space_id = seL4_GetMR(PDMSGREG_GIVE_RES_REQ_SPACE_ID);
     seL4_Word resource_id = seL4_GetMR(PDMSGREG_GIVE_RES_REQ_RES_ID);
 
-    // OSDB_PRINTF("Got give resource request from client badge %lx, space ID %ld, resource ID %ld.\n",
-    //             sender_badge, space_id, resource_id);
+    OSDB_PRINT_VERBOSE("Got give resource request from client badge %lx, space ID %ld, resource ID %ld.\n",
+                       sender_badge, space_id, resource_id);
 
     pd_component_registry_entry_t *server_data = pd_component_registry_get_entry_by_id(server_id);
     pd_component_registry_entry_t *recipient_data = pd_component_registry_get_entry_by_id(recipient_id);
@@ -390,8 +390,8 @@ static seL4_MessageInfo_t handle_give_resource_req(seL4_Word sender_badge, seL4_
     pd_hold_node_t *resource_data = (pd_hold_node_t *)resource_server_registry_get_by_id(&server_data->pd.hold_registry, res_node_id);
     SERVER_GOTO_IF_COND(resource_data == NULL, "Couldn't find resource (%lx)\n", res_node_id);
 
-    // OSDB_PRINTF("resource server %ld gives resource in space %ld with ID %ld to client %ld\n",
-    //             server_id, space_id, resource_id, recipient_id);
+    OSDB_PRINT_VERBOSE("resource server %ld gives resource in space %ld with ID %ld to client %ld\n",
+                       server_id, space_id, resource_id, recipient_id);
 
     /* Create a new badged EP for the resource */
     seL4_CPtr dest = resource_server_make_badged_ep(get_pd_component()->server_vka, recipient_data->pd.pd_vka,
@@ -1011,7 +1011,7 @@ void forge_pd_cap_from_init_data(test_init_data_t *init_data, sel4utils_process_
 
     *osm_shared_data = shared_data_vaddr;
     pd->shared_data_in_PD = shared_data_vaddr;
-    OSDB_PRINTF("Test process init data is at %p\n", pd->shared_data_in_PD);
+    OSDB_PRINT_VERBOSE("Test process init data is at %p\n", pd->shared_data_in_PD);
 
     pd->image_name = test_name;
 err_goto:

@@ -316,7 +316,7 @@ static int rde_configure(pd_config_t *cfg, sel4gpi_runnable_t *runnable)
             rde = (rde_config_t *)curr->data;
             PD_CREATION_PRINT("Sharing RDE (type: %s, space ID: %d)\n", cap_type_to_str(rde->type), rde->space_id);
             error = pd_client_share_rde(&runnable->pd, rde->type, rde->space_id);
-            PRINT_IF_ERR(error, "Couldn't share RDE (type: %d, space ID: %d)\n", rde->type, rde->space_id);
+            WARN_IF_COND(error, "Couldn't share RDE (type: %d, space ID: %d)\n", rde->type, rde->space_id);
         }
     }
 
@@ -387,7 +387,7 @@ int sel4gpi_prepare_pd(pd_config_t *cfg, sel4gpi_runnable_t *runnable, int argc,
             gpi_cap_t type = (gpi_cap_t)curr->data;
             PD_CREATION_PRINT("Sharing %s Resources with PD\n", cap_type_to_str(type));
             error = pd_client_share_resource_by_type(&self_pd_conn, &runnable->pd, type);
-            PRINT_IF_ERR(error, "Failed to share %s resources with PD\n", cap_type_to_str(type));
+            WARN_IF_COND(error, "Failed to share %s resources with PD\n", cap_type_to_str(type));
         }
     }
 
@@ -631,7 +631,7 @@ void sel4gpi_add_rde_config(pd_config_t *cfg, gpi_cap_t rde_type, uint32_t space
     rde_config_t *new_rde_cfg = calloc(1, sizeof(rde_config_t));
     if (!new_rde_cfg)
     {
-        WARN("Malloc failed!\n");
+        UNCONDITIONAL_WARN("Malloc failed!\n");
         return;
     }
 
