@@ -19,7 +19,7 @@
  * @file Definition of the client API for interacting with the PD component
 */
 
-#define PD_MAX_ARGC 4
+#define PD_MAX_ARGC 8 // Should be the same as the length of the args array in the protobuf file
 
 /** PD CREATION / INITIALIZATION **/
 
@@ -102,7 +102,7 @@ int pd_client_share_rde(pd_client_context_t *target_pd,
  * @param entry_point the address of the instruction to start executing at (in the target ADS)
  * @param ipc_buf_addr the address of the IPC buffer for the (PD, ADS, CPU) combination
  * @param osm_data_in_PD address of the OSmosis data frame within the target ADS
- * @param setup_type the type of setup (see pd_setup_type_t for details)
+ * @param setup_type the type of setup (see PdSetupType for details)
  * @return int 0 on success
  */
 int pd_client_runtime_setup(pd_client_context_t *target_pd,
@@ -114,7 +114,7 @@ int pd_client_runtime_setup(pd_client_context_t *target_pd,
                             void *entry_point,
                             void *ipc_buf_addr,
                             void *osm_data_in_PD,
-                            pd_setup_type_t setup_type);
+                            PdSetupType setup_type);
 
 /**
  * @brief shares all resources of the given type from src_pd to dest_pd
@@ -222,8 +222,9 @@ int pd_client_send_subgraph(pd_client_context_t *conn, mo_client_context_t *mo_c
  * This call has no reply
  *
  * @param conn the connection of the PD that is exiting
+ * @param code the exit code
  */
-void pd_client_exit(pd_client_context_t *conn);
+void pd_client_exit(pd_client_context_t *conn, int code);
 
 /**
  * @brief Remove an RDE from a PD

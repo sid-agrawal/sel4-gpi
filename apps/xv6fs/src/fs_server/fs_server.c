@@ -207,7 +207,8 @@ int xv6fs_init()
   return error;
 }
 
-seL4_MessageInfo_t xv6fs_request_handler(seL4_MessageInfo_t tag, seL4_Word sender_badge, seL4_CPtr cap, bool *need_new_recv_cap)
+seL4_MessageInfo_t xv6fs_request_handler(seL4_MessageInfo_t tag, seL4_Word sender_badge,
+                                         seL4_CPtr cap, bool *need_new_recv_cap)
 {
   int error;
   void *mo_vaddr;
@@ -248,7 +249,8 @@ seL4_MessageInfo_t xv6fs_request_handler(seL4_MessageInfo_t tag, seL4_Word sende
       uint64_t ns_id;
 
       // Register a new resource space for the NS
-      error = resource_server_new_res_space(&get_xv6fs_server()->gen, get_client_id_from_badge(sender_badge), &resspc_conn);
+      error = resource_server_new_res_space(&get_xv6fs_server()->gen,
+                                            get_client_id_from_badge(sender_badge), &resspc_conn);
       CHECK_ERROR_GOTO(error, "Failed to create a new resource space for namespace\n", FsError_UNKNOWN, done);
       XV6FS_PRINTF("Registered new namespace with ID %ld\n", resspc_conn.id);
       ns_id = resspc_conn.id;
@@ -363,6 +365,12 @@ seL4_MessageInfo_t xv6fs_request_handler(seL4_MessageInfo_t tag, seL4_Word sende
     case FsMessage_link_tag:
       *need_new_recv_cap = true;
 
+      seL4_Word file_badge = seL4_GetBadge(1);
+      CHECK_ERROR_GOTO(get_cap_type_from_badge(file_badge) != get_xv6fs_server()->gen.resource_type,
+                       "Cap was not file",
+                       FsError_BADGE,
+                       done);
+
       /* Attach memory object to server ADS (contains pathname) */
       error = resource_server_attach_mo(&get_xv6fs_server()->gen, cap, &mo_vaddr);
       CHECK_ERROR_GOTO(error, "Failed to attach MO", error, done);
@@ -384,13 +392,11 @@ seL4_MessageInfo_t xv6fs_request_handler(seL4_MessageInfo_t tag, seL4_Word sende
       }
 
       /* Find the file to link */
-      seL4_Word file_badge = seL4_GetBadge(1);
-
       reg_entry = (file_registry_entry_t *)resource_server_registry_get_by_badge(&get_xv6fs_server()->file_registry, file_badge);
 
       if (reg_entry == NULL)
       {
-        XV6FS_PRINTF("Received invalid file to link\n");
+        XV6FS_PRINTF("Received invalid file to link, number (%d)\n", get_object_id_from_badge(file_badge));
         error = FsError_BADGE;
         goto done;
       }
@@ -673,7 +679,7 @@ int xv6fs_work_handler(PdWorkReturnMessage *work)
     /* Add nodes for all files and blocks */
     gpi_cap_t block_cap_type = sel4gpi_get_resource_type_code(BLOCK_RESOURCE_TYPE_NAME);
     uint32_t block_space_id = get_xv6fs_server()->naive_blocks[0].space_id; // (XXX) Arya: Assume only one block space
-    int n_blocknos = 100; // (XXX) Arya: assumes there are no more than 100 blocks per file
+    int n_blocknos = 100;                                                   // (XXX) Arya: assumes there are no more than 100 blocks per file
     int *blocknos = malloc(sizeof(int) * n_blocknos);
     for (int i = 0; i < n_files; i++)
     {

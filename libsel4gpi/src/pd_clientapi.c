@@ -31,70 +31,100 @@ static sel4gpi_rpc_env_t rpc_env = {
     .reply_desc = &PdReturnMessage_msg,
 };
 
-int pd_component_client_connect(seL4_CPtr server_ep_cap,
+int pd_component_client_connect(seL4_CPtr server_ep,
                                 mo_client_context_t *osm_data_mo,
                                 pd_client_context_t *ret_conn)
 {
-    /* Set request type */
-    seL4_SetMR(PDMSGREG_FUNC, PD_FUNC_CONNECT_REQ);
-    seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 1, PDMSGREG_CONNECT_REQ_END);
-    seL4_SetCap(0, osm_data_mo->badged_server_ep_cspath.capPtr);
+    OSDB_PRINTF("Sending connect request to PD component\n");
 
-    tag = seL4_Call(server_ep_cap, tag);
+    int error = 0;
 
-    ret_conn->badged_server_ep_cspath.capPtr = seL4_GetMR(PDMSGREG_CONNECT_ACK_SLOT);
-    ret_conn->id = seL4_GetMR(PDMSGREG_CONNECT_ACK_ID);
+    PdMessage msg = {
+        .which_msg = PdMessage_alloc_tag,
+        .msg = {0},
+    };
 
-    return seL4_MessageInfo_ptr_get_label(&tag);
+    PdReturnMessage ret_msg = {0};
+
+    error = sel4gpi_rpc_call(&rpc_env, server_ep, (void *)&msg,
+                             1, &osm_data_mo->badged_server_ep_cspath.capPtr, (void *)&ret_msg);
+
+    error |= ret_msg.errorCode;
+
+    if (!error)
+    {
+        ret_conn->badged_server_ep_cspath.capPtr = ret_msg.msg.alloc.slot;
+        ret_conn->id = ret_msg.msg.alloc.id;
+    }
+
+    return error;
 }
 
 int pd_client_disconnect(pd_client_context_t *conn)
 {
-    seL4_SetMR(PDMSGREG_FUNC, PD_FUNC_DISCONNECT_REQ);
-    seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0,
-                                                  PDMSGREG_DISCONNECT_REQ_END);
+    OSDB_PRINTF("Sending disconnect request to PD component\n");
 
-    OSDB_PRINTF("Sending disconnect request for PD via EP: %lu.\n",
-                conn->badged_server_ep_cspath.capPtr);
+    int error = 0;
 
-    tag = seL4_Call(conn->badged_server_ep_cspath.capPtr, tag);
+    PdMessage msg = {
+        .which_msg = PdMessage_disconnect_tag,
+    };
 
-    return seL4_MessageInfo_get_label(tag);
+    PdReturnMessage ret_msg;
+
+    error = sel4gpi_rpc_call(&rpc_env, conn->badged_server_ep_cspath.capPtr, (void *)&msg,
+                             0, NULL, (void *)&ret_msg);
+    error |= ret_msg.errorCode;
+
+    return error;
 }
 
 int pd_client_dump(pd_client_context_t *conn,
                    char *buf,
                    size_t buf_sz)
 {
-    seL4_SetMR(PDMSGREG_FUNC, PD_FUNC_DUMP_REQ);
+    OSDB_PRINTF("Sending dump request to PD component\n");
 
-    seL4_SetMR(PDMSGREG_DUMP_REQ_BUF_VA, (seL4_Word)buf);
-    seL4_SetMR(PDMSGREG_DUMP_REQ_BUF_SZ, (seL4_Word)buf_sz);
-    seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0,
-                                                  PDMSGREG_DUMP_REQ_END);
+    int error = 0;
 
-    OSDB_PRINTF("Sending dump RR request to PD via EP: %lu.\n",
-                conn->badged_server_ep_cspath.capPtr);
-    // (XXX) Linh: for some reason, this doesn't block if we try to dump a test PD's state and causes issues
-    tag = seL4_Call(conn->badged_server_ep_cspath.capPtr, tag);
-    return seL4_MessageInfo_ptr_get_label(&tag);
+    PdMessage msg = {
+        .which_msg = PdMessage_dump_tag,
+        // (XXX) Arya: not currently sending buffer, just printing state in the RT
+    };
+
+    PdReturnMessage ret_msg;
+
+    error = sel4gpi_rpc_call(&rpc_env, conn->badged_server_ep_cspath.capPtr, (void *)&msg,
+                             0, NULL, (void *)&ret_msg);
+    error |= ret_msg.errorCode;
+
+    return error;
 }
 
 static int send_cap_req(pd_client_context_t *conn, seL4_CPtr cap_to_send, seL4_Word *slot, bool is_core)
 {
-    seL4_SetMR(PDMSGREG_FUNC, PD_FUNC_SENDCAP_REQ);
-    seL4_SetMR(PDMSGREG_SEND_CAP_REQ_IS_CORE, (seL4_Word)is_core);
-    seL4_SetCap(0, cap_to_send);
-    seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 1,
-                                                  PDMSGREG_SEND_CAP_REQ_END);
-    tag = seL4_Call(conn->badged_server_ep_cspath.capPtr, tag);
+    OSDB_PRINTF("Sending 'send cap' request to PD component\n");
 
-    if (slot)
+    int error = 0;
+
+    PdMessage msg = {
+        .which_msg = PdMessage_send_cap_tag,
+        .msg.send_cap = {
+            .is_core_cap = is_core,
+        }};
+
+    PdReturnMessage ret_msg;
+
+    error = sel4gpi_rpc_call(&rpc_env, conn->badged_server_ep_cspath.capPtr, (void *)&msg,
+                             1, &cap_to_send, (void *)&ret_msg);
+    error |= ret_msg.errorCode;
+
+    if (!error && slot)
     {
-        *slot = seL4_GetMR(PDMSGREG_SEND_CAP_PD_SLOT);
+        *slot = ret_msg.msg.send_cap.slot;
     }
 
-    return seL4_MessageInfo_ptr_get_label(&tag);
+    return error;
 }
 
 // convenient wrapper for send_cap_req
@@ -116,51 +146,93 @@ int pd_client_send_core_cap(pd_client_context_t *conn,
 int pd_client_next_slot(pd_client_context_t *conn,
                         seL4_Word *slot)
 {
-    seL4_SetMR(PDMSGREG_FUNC, PD_FUNC_NEXT_SLOT_REQ);
-    seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0,
-                                                  PDMSGREG_NEXT_SLOT_REQ_END);
-    tag = seL4_Call(conn->badged_server_ep_cspath.capPtr, tag);
-    *slot = seL4_GetMR(PDMSGREG_NEXT_SLOT_PD_SLOT);
+    OSDB_PRINTF("Sending 'next slot' request to PD component\n");
 
-    return seL4_MessageInfo_ptr_get_label(&tag);
+    int error = 0;
+
+    PdMessage msg = {
+        .which_msg = PdMessage_next_slot_tag,
+    };
+
+    PdReturnMessage ret_msg;
+
+    error = sel4gpi_rpc_call(&rpc_env, conn->badged_server_ep_cspath.capPtr, (void *)&msg,
+                             0, NULL, (void *)&ret_msg);
+    error |= ret_msg.errorCode;
+
+    if (!error)
+    {
+        *slot = ret_msg.msg.next_slot.slot;
+    }
+
+    return error;
 }
 
 int pd_client_free_slot(pd_client_context_t *conn,
                         seL4_CPtr slot)
 {
-    seL4_SetMR(PDMSGREG_FUNC, PD_FUNC_FREE_SLOT_REQ);
-    seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0,
-                                                  PDMSGREG_FREE_SLOT_REQ_END);
-    seL4_SetMR(PDMSGREG_FREE_SLOT_REQ_SLOT, slot);
-    tag = seL4_Call(conn->badged_server_ep_cspath.capPtr, tag);
+    OSDB_PRINTF("Sending 'free slot' request to PD component\n");
 
-    return seL4_MessageInfo_ptr_get_label(&tag);
+    int error = 0;
+
+    PdMessage msg = {
+        .which_msg = PdMessage_free_slot_tag,
+    };
+
+    PdReturnMessage ret_msg;
+
+    error = sel4gpi_rpc_call(&rpc_env, conn->badged_server_ep_cspath.capPtr, (void *)&msg,
+                             0, NULL, (void *)&ret_msg);
+    error |= ret_msg.errorCode;
+
+    return error;
 }
 
 int pd_client_clear_slot(pd_client_context_t *conn,
                          seL4_CPtr slot)
 {
-    seL4_SetMR(PDMSGREG_FUNC, PD_FUNC_CLEAR_SLOT_REQ);
-    seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0,
-                                                  PDMSGREG_CLEAR_SLOT_REQ_END);
-    seL4_SetMR(PDMSGREG_CLEAR_SLOT_REQ_SLOT, slot);
-    tag = seL4_Call(conn->badged_server_ep_cspath.capPtr, tag);
+    // OSDB_PRINTF("Sending 'clear slot' request to PD component\n");
 
-    return seL4_MessageInfo_ptr_get_label(&tag);
+    int error = 0;
+
+    PdMessage msg = {
+        .which_msg = PdMessage_clear_slot_tag,
+        .msg.clear_slot = {
+            .slot = slot,
+        }
+    };
+
+    PdReturnMessage ret_msg;
+
+    error = sel4gpi_rpc_call(&rpc_env, conn->badged_server_ep_cspath.capPtr, (void *)&msg,
+                             0, NULL, (void *)&ret_msg);
+    error |= ret_msg.errorCode;
+
+    return error;
 }
 
 int pd_client_share_rde(pd_client_context_t *target_pd,
                         gpi_cap_t cap_type,
                         uint64_t space_id)
 {
-    seL4_SetMR(PDMSGREG_FUNC, PD_FUNC_SHARE_RDE_REQ);
-    seL4_SetMR(PDMSGREG_SHARE_RDE_REQ_TYPE, cap_type);
-    seL4_SetMR(PDMSGREG_SHARE_RDE_REQ_SPACE_ID, space_id);
-    seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0,
-                                                  PDMSGREG_SHARE_RDE_REQ_END);
-    tag = seL4_Call(target_pd->badged_server_ep_cspath.capPtr, tag);
+    OSDB_PRINTF("Sending 'share RDE' request to PD component\n");
 
-    return seL4_MessageInfo_ptr_get_label(&tag);
+    int error = 0;
+
+    PdMessage msg = {
+        .which_msg = PdMessage_share_rde_tag,
+        .msg.share_rde = {
+            .res_type = cap_type,
+            .space_id = space_id,
+        }};
+
+    PdReturnMessage ret_msg;
+
+    error = sel4gpi_rpc_call(&rpc_env, target_pd->badged_server_ep_cspath.capPtr, (void *)&msg,
+                             0, NULL, (void *)&ret_msg);
+    error |= ret_msg.errorCode;
+
+    return error;
 }
 
 int pd_client_give_resource(pd_client_context_t *conn,
@@ -169,16 +241,30 @@ int pd_client_give_resource(pd_client_context_t *conn,
                             seL4_Word resource_id,
                             seL4_CPtr *dest)
 {
-    seL4_SetMR(PDMSGREG_FUNC, PD_FUNC_GIVE_RES_REQ);
-    seL4_SetMR(PDMSGREG_GIVE_RES_REQ_SPACE_ID, res_space_id);
-    seL4_SetMR(PDMSGREG_GIVE_RES_REQ_CLIENT_ID, recipient_id);
-    seL4_SetMR(PDMSGREG_GIVE_RES_REQ_RES_ID, resource_id);
-    seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0,
-                                                  PDMSGREG_GIVE_RES_REQ_END);
-    tag = seL4_Call(conn->badged_server_ep_cspath.capPtr, tag);
-    *dest = seL4_GetMR(PDMSGREG_GIVE_RES_ACK_DEST);
+    OSDB_PRINTF("Sending 'give resource' request to PD component: PD (%d), Space (%d), Object (%d)\n",
+                recipient_id, res_space_id, resource_id);
 
-    return seL4_MessageInfo_ptr_get_label(&tag);
+    int error = 0;
+
+    PdMessage msg = {
+        .which_msg = PdMessage_give_resource_tag,
+        .msg.give_resource = {
+            .space_id = res_space_id,
+            .pd_id = recipient_id,
+            .object_id = resource_id,
+        }};
+
+    PdReturnMessage ret_msg;
+
+    error = sel4gpi_rpc_call(&rpc_env, conn->badged_server_ep_cspath.capPtr, (void *)&msg,
+                             0, NULL, (void *)&ret_msg);
+    error |= ret_msg.errorCode;
+
+    if (!error) {
+        *dest = ret_msg.msg.give_resource.slot;
+    }
+
+    return error;
 }
 
 #if TRACK_MAP_RELATIONS
@@ -186,30 +272,41 @@ int pd_client_map_resource(pd_client_context_t *conn,
                            seL4_Word src_res_id,
                            seL4_Word dest_res_id)
 {
-    seL4_SetMR(PDMSGREG_FUNC, PD_FUNC_MAP_RES_REQ);
-    seL4_SetMR(PDMSGREG_MAP_RES_REQ_SRC_ID, src_res_id);
-    seL4_SetMR(PDMSGREG_MAP_RES_REQ_DEST_ID, dest_res_id);
+    OSDB_PRINTF("Sending 'map resource' request to PD component\n");
 
-    seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0,
-                                                  PDMSGREG_MAP_RES_REQ_END);
-    tag = seL4_Call(conn->badged_server_ep_cspath.capPtr, tag);
+    int error = 0;
 
-    return seL4_MessageInfo_ptr_get_label(&tag);
+    PdMessage msg = {
+        .which_msg = PdMessage_map_resource_tag,
+        .msg.map_resource = {
+            .src_resource = src_res_id,
+            .dest_resource = dest_res_id,
+        }};
+
+    PdReturnMessage ret_msg;
+
+    error = sel4gpi_rpc_call(&rpc_env, conn->badged_server_ep_cspath.capPtr, (void *)&msg,
+                             0, NULL, (void *)&ret_msg);
+    error |= ret_msg.errorCode;
+
+    return error;
 }
 #endif
 
 int pd_client_get_work(pd_client_context_t *conn, PdWorkReturnMessage *work)
 {
-    seL4_SetMR(PDMSGREG_FUNC, PD_FUNC_GET_WORK_REQ);
+    OSDB_PRINTF("Sending 'get work' request to PD component\n");
 
-    seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0,
-                                                  PDMSGREG_GET_WORK_REQ_END);
-    tag = seL4_Call(conn->badged_server_ep_cspath.capPtr, tag);
+    int error = 0;
 
-    // (XXX) Arya: Once we convert everything to protobuf, we can do the call all at once
+    PdMessage msg = {
+        .which_msg = PdMessage_get_work_tag,
+    };
+
     PdReturnMessage ret_msg;
-    int error = sel4gpi_rpc_recv_reply(&rpc_env, (void *)&ret_msg);
 
+    error = sel4gpi_rpc_call(&rpc_env, conn->badged_server_ep_cspath.capPtr, (void *)&msg,
+                             0, NULL, (void *)&ret_msg);
     error |= ret_msg.errorCode;
 
     if (!error)
@@ -222,64 +319,101 @@ int pd_client_get_work(pd_client_context_t *conn, PdWorkReturnMessage *work)
 
 int pd_client_send_subgraph(pd_client_context_t *conn, mo_client_context_t *mo_conn, bool has_data)
 {
-    seL4_SetMR(PDMSGREG_FUNC, PD_FUNC_SEND_SUBGRAPH_REQ);
-    seL4_SetMR(PDMSGREG_SEND_SUBGRAPH_REQ_HAS_DATA, has_data);
+    OSDB_PRINTF("Sending 'send subgraph' request to PD component\n");
 
-    if (has_data)
-    {
-        seL4_SetCap(0, mo_conn->badged_server_ep_cspath.capPtr);
-    }
-    seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, has_data,
-                                                  PDMSGREG_SEND_SUBGRAPH_REQ_END);
-    tag = seL4_Call(conn->badged_server_ep_cspath.capPtr, tag);
+    int error = 0;
 
-    // (XXX) Arya: Once we convert everything to protobuf, we can do the call all at once
+    PdMessage msg = {
+        .which_msg = PdMessage_send_subgraph_tag,
+        .msg.send_subgraph = {
+            .has_data = has_data,
+        }};
+
     PdReturnMessage ret_msg;
-    int error = sel4gpi_rpc_recv_reply(&rpc_env, (void *)&ret_msg);
+
+    error = sel4gpi_rpc_call(&rpc_env, conn->badged_server_ep_cspath.capPtr, (void *)&msg,
+                             1, &mo_conn->badged_server_ep_cspath.capPtr, (void *)&ret_msg);
     error |= ret_msg.errorCode;
 
     return error;
 }
 
-void pd_client_exit(pd_client_context_t *conn)
+void pd_client_exit(pd_client_context_t *conn, int code)
 {
-    seL4_SetMR(PDMSGREG_FUNC, PD_FUNC_EXIT_REQ);
+    OSDB_PRINTF("Sending 'exit' message to PD component\n");
 
-    seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0,
-                                                  PDMSGREG_EXIT_REQ_END);
-    seL4_Call(conn->badged_server_ep_cspath.capPtr, tag);
+    int error = 0;
+
+    PdMessage msg = {
+        .which_msg = PdMessage_exit_tag,
+        .msg.exit = {
+            .exit_code = code,
+        }};
+
+    PdReturnMessage ret_msg;
+
+    error = sel4gpi_rpc_call(&rpc_env, conn->badged_server_ep_cspath.capPtr, (void *)&msg,
+                             0, NULL, (void *)&ret_msg);
+
+    // This message should not return
+    ZF_LOGF("Failed to send 'exit' message to PD component\n");
 }
 
 int pd_client_remove_rde(pd_client_context_t *conn, gpi_cap_t type, uint64_t space_id)
 {
-    seL4_SetMR(PDMSGREG_FUNC, PD_FUNC_REMOVE_RDE_REQ);
-    seL4_SetMR(PDMSGREG_REMOVE_RDE_REQ_TYPE, type);
-    seL4_SetMR(PDMSGREG_REMOVE_RDE_REQ_SPACE_ID, space_id);
-    seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0,
-                                                  PDMSGREG_REMOVE_RDE_REQ_END);
-    tag = seL4_Call(conn->badged_server_ep_cspath.capPtr, tag);
+    OSDB_PRINTF("Sending 'remove RDE' request to PD component\n");
 
-    return seL4_MessageInfo_ptr_get_label(&tag);
+    int error = 0;
+
+    PdMessage msg = {
+        .which_msg = PdMessage_remove_rde_tag,
+        .msg.remove_rde = {
+            .res_type = type,
+            .space_id = space_id,
+        }};
+
+    PdReturnMessage ret_msg;
+
+    error = sel4gpi_rpc_call(&rpc_env, conn->badged_server_ep_cspath.capPtr, (void *)&msg,
+                             0, NULL, (void *)&ret_msg);
+    error |= ret_msg.errorCode;
+
+    return error;
 }
 
 void pd_client_bench_ipc(pd_client_context_t *conn, seL4_CPtr dummy_send_cap, seL4_CPtr dummy_recv_cap, bool cap_transfer)
 {
+    OSDB_PRINTF("Sending 'bench IPC' request to PD component\n");
+
+    int error = 0;
+
+    PdMessage msg = {
+        .which_msg = PdMessage_bench_ipc_tag,
+        .msg.bench_ipc = {
+            .do_cap_transfer = cap_transfer,
+        }};
+
+    PdReturnMessage ret_msg;
+
     seL4_SetCapReceivePath(SEL4UTILS_CNODE_SLOT, /* Position of the cap to the CNODE */
                            dummy_recv_cap,       /* CPTR in this CSPACE */
                            /* This works coz we have a single level cnode with no guard.*/
                            seL4_WordBits); /* Depth i.e. how many bits of free_slot to interpret*/
-    seL4_SetMR(PDMSGREG_FUNC, PD_FUNC_BENCH_IPC_REQ);
-    seL4_SetMR(PDMSGREG_BENCH_IPC_REQ_CAP_TRANSFER, cap_transfer);
-    int num_caps = 0;
+
     if (cap_transfer)
     {
-        seL4_SetCap(0, dummy_send_cap);
-        num_caps = 1;
+        error = sel4gpi_rpc_call(&rpc_env, conn->badged_server_ep_cspath.capPtr, (void *)&msg,
+                                 1, &dummy_send_cap, (void *)&ret_msg);
     }
-    seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, num_caps, PDMSGREG_BENCH_IPC_REQ_END);
-    tag = seL4_Call(conn->badged_server_ep_cspath.capPtr, tag);
+    else
+    {
+        error = sel4gpi_rpc_call(&rpc_env, conn->badged_server_ep_cspath.capPtr, (void *)&msg,
+                                 0, NULL, (void *)&ret_msg);
+    }
 
-    assert(seL4_MessageInfo_ptr_get_label(&tag) == 0);
+    error |= ret_msg.errorCode;
+
+    return error;
 }
 
 int pd_client_runtime_setup(pd_client_context_t *target_pd,
@@ -291,64 +425,55 @@ int pd_client_runtime_setup(pd_client_context_t *target_pd,
                             void *entry_point,
                             void *ipc_buf_addr,
                             void *osm_data_in_PD,
-                            pd_setup_type_t setup_type)
+                            PdSetupType setup_type)
 {
+    OSDB_PRINTF("Sending 'runtime setup' request to PD component\n");
+
     int error = 0;
-    GOTO_IF_COND(argc > PD_MAX_ARGC, "Cannot setup PD with more than 4 arguments\n");
-    seL4_SetMR(PDMSGREG_FUNC, PD_FUNC_SETUP_REQ);
-    seL4_SetCap(0, target_ads->badged_server_ep_cspath.capPtr);
-    seL4_SetCap(1, target_cpu->badged_server_ep_cspath.capPtr);
 
-    seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 2,
-                                                  PDMSGREG_SETUP_REQ_END);
+    GOTO_IF_COND(argc > PD_MAX_ARGC, "Cannot setup PD with more than %d arguments\n", PD_MAX_ARGC);
 
-    seL4_SetMR(PDMSGREG_SETUP_REQ_ARGC, argc);
+    PdMessage msg = {
+        .which_msg = PdMessage_setup_tag,
+        .msg.setup = {
+            .entry_point = entry_point,
+            .ipc_buf_addr = ipc_buf_addr,
+            .setup_mode = setup_type,
+            .stack_top = stack_pos,
+            .osm_data_addr = osm_data_in_PD,
+            .args_count = argc,
+        }};
+    memcpy(msg.msg.setup.args, args, sizeof(seL4_Word) * argc);
 
-    OSDB_PRINTF("Setting up process with %d args: [", argc);
-    for (int i = 0; i < argc; i++)
-    {
-        OSDB_PRINTF_2("%ld, ", args[i]);
+    seL4_CPtr caps[2] = {target_ads->badged_server_ep_cspath.capPtr, target_cpu->badged_server_ep_cspath.capPtr};
 
-        switch (i)
-        {
-        case 0:
-            seL4_SetMR(PDMSGREG_SETUP_REQ_ARG0, args[i]);
-            break;
-        case 1:
-            seL4_SetMR(PDMSGREG_SETUP_REQ_ARG1, args[i]);
-            break;
-        case 2:
-            seL4_SetMR(PDMSGREG_SETUP_REQ_ARG2, args[i]);
-            break;
-        case 3:
-            seL4_SetMR(PDMSGREG_SETUP_REQ_ARG3, args[i]);
-            break;
-        }
-    }
-    OSDB_PRINTF_2("]\n");
+    PdReturnMessage ret_msg;
 
-    seL4_SetMR(PDMSGREG_SETUP_REQ_STACK, (seL4_Word)stack_pos);
-    seL4_SetMR(PDMSGREG_SETUP_REQ_ENTRY_POINT, (seL4_Word)entry_point);
-    seL4_SetMR(PDMSGREG_SETUP_REQ_IPC_BUF, (seL4_Word)ipc_buf_addr);
-    seL4_SetMR(PDMSGREG_SETUP_REQ_OSM_DATA, (seL4_Word)osm_data_in_PD);
-    seL4_SetMR(PDMSGREG_SETUP_REQ_TYPE, setup_type);
-
-    tag = seL4_Call(target_pd->badged_server_ep_cspath.capPtr, tag);
-
-    return seL4_MessageInfo_get_label(tag);
+    error = sel4gpi_rpc_call(&rpc_env, target_pd->badged_server_ep_cspath.capPtr, (void *)&msg,
+                             2, caps, (void *)&ret_msg);
+    error |= ret_msg.errorCode;
 
 err_goto:
-    return 1;
+    return error;
 }
 
 int pd_client_share_resource_by_type(pd_client_context_t *src_pd, pd_client_context_t *dest_pd, gpi_cap_t res_type)
 {
-    seL4_SetMR(PDMSGREG_FUNC, PD_FUNC_SHARE_RES_TYPE_REQ);
-    seL4_SetMR(PDMSGREG_SHARE_RES_TYPE_REQ_TYPE, res_type);
-    seL4_SetCap(0, dest_pd->badged_server_ep_cspath.capPtr);
+    OSDB_PRINTF("Sending 'share resource by type' request to PD component\n");
 
-    seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 1, PDMSGREG_SHARE_RES_TYPE_REQ_END);
-    tag = seL4_Call(src_pd->badged_server_ep_cspath.capPtr, tag);
+    int error = 0;
 
-    return seL4_MessageInfo_get_label(tag);
+    PdMessage msg = {
+        .which_msg = PdMessage_share_res_type_tag,
+        .msg.share_res_type = {
+            .res_type = res_type,
+        }};
+
+    PdReturnMessage ret_msg;
+
+    error = sel4gpi_rpc_call(&rpc_env, src_pd->badged_server_ep_cspath.capPtr, (void *)&msg,
+                             1, &dest_pd->badged_server_ep_cspath.capPtr, (void *)&ret_msg);
+    error |= ret_msg.errorCode;
+
+    return error;
 }

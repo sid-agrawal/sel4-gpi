@@ -197,8 +197,10 @@ err_goto:
 }
 
 static seL4_MessageInfo_t ep_component_handle(seL4_MessageInfo_t tag,
+                                              void *msg_p,
                                               seL4_Word sender_badge,
                                               seL4_CPtr received_cap,
+                                              void *reply_msg_p,
                                               bool *need_new_recv_cap,
                                               bool *should_reply)
 {
@@ -265,6 +267,6 @@ int ep_component_initialize(vka_t *server_vka,
                                   server_vka,
                                   server_vspace,
                                   server_ep_obj.cptr,
-                                  EpMessage_msg,
-                                  EpReturnMessage_msg);
+                                  &EpMessage_msg,
+                                  &EpReturnMessage_msg);
 }

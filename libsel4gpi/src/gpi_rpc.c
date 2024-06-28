@@ -24,6 +24,7 @@ int sel4gpi_rpc_call(sel4gpi_rpc_env_t *env, seL4_CPtr ep, void *msg,
                      int n_caps, seL4_CPtr *caps, void *reply)
 {
     pb_ostream_t stream = pb_ostream_from_IPC(0);
+    // Check not overwriting caps
     bool ret = pb_encode_delimited(&stream, env->request_desc, msg);
     if (!ret)
     {

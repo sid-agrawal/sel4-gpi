@@ -410,25 +410,25 @@ int sel4gpi_prepare_pd(pd_config_t *cfg, sel4gpi_runnable_t *runnable, int argc,
     PD_CREATION_PRINT("Sent fault EP to PD in slot 0x%lx\n", fault_ep_in_PD.raw_endpoint);
 
     // (XXX) Linh: This whole `if` blob is to be removed with unified entry-point
-    pd_setup_type_t setup_mode;
+    PdSetupType setup_mode;
     if (cfg->elevated_cpu)
     {
-        setup_mode = PD_GUEST_SETUP;
+        setup_mode = PdSetupType_PD_GUEST_SETUP;
     }
     else if (runnable->ads.id == sel4gpi_get_binded_ads_id())
     {
-        setup_mode = PD_REGISTER_SETUP;
+        setup_mode = PdSetupType_PD_REGISTER_SETUP;
     }
     else
     {
-        setup_mode = PD_RUNTIME_SETUP;
+        setup_mode = PdSetupType_PD_RUNTIME_SETUP;
     }
 
     vmr_config_t *stack_cfg = find_vmr_cfg_by_type(&cfg->ads_cfg, SEL4UTILS_RES_TYPE_STACK);
     if (stack_cfg && stack_cfg->share_mode != GPI_SHARED)
     {
         PD_CREATION_PRINT("Setting up runtime\n");
-        if (setup_mode == PD_REGISTER_SETUP)
+        if (setup_mode == PdSetupType_PD_REGISTER_SETUP)
         {
             PD_CREATION_PRINT("C Runtime already initialized, setup the TLS ourselves\n");
             void *tp = NULL;

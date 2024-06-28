@@ -1,4 +1,5 @@
 syntax = "proto3";
+import 'nanopb.proto';
 
 enum PdComponentError {
     NONE = 0;           /* no error */
@@ -11,22 +12,139 @@ enum PdWorkAction {
     FREE = 2;           /* work action to free a resource */
 };
 
-/* message type for all PD component request messages */
-message PdMessage {
-    /* No content, WIP */
+enum PdSetupType {
+    PD_RUNTIME_SETUP = 0;   /* sets up the entire C runtime from scratch, writes any arguments onto the stack */
+    PD_REGISTER_SETUP = 1;  /* writes a limited number of arguments into registers only */
+    PD_GUEST_SETUP = 2;     /* writes the necessary registers to run a guest */
 };
 
-/* return from a basic PD Component message */
+message PdAllocMessage {
+    /* No content */
+};
+
+message PdDisconnectMessage {
+    /* No content */
+};
+
+message PdNextSlotMessage {
+    /* No content */
+};
+
+message PdFreeSlotMessage {
+    uint64 slot = 1;            /* the slot number to free */
+};
+
+message PdClearSlotMessage {
+    uint64 slot = 1;            /* the slot number to free */
+};
+
+message PdSendCapMessage {
+    bool is_core_cap = 1;       /* true if the cap is a core cap (PD's own PD, ADS, or CPU) */
+};
+
+message PdDumpMessage {
+    /* No content */
+};
+
+message PdShareRDEMessage {
+    uint32 res_type = 1;        /* resource type of the RDE */
+    uint32 space_id = 2;        /* space ID of the RDE */
+};
+
+message PdRemoveRDEMessage {
+    uint32 res_type = 1;        /* resource type of the RDE */
+    uint32 space_id = 2;        /* space ID of the RDE */
+};
+
+message PdGiveResourceMessage {
+    uint32 pd_id = 1;           /* ID of the PD to receive the resource */
+    uint32 space_id = 2;        /* ID of the resource's space */
+    uint32 object_id = 3;       /* the resource's object ID */
+};
+
+message PdExitMessage {
+    uint64 exit_code = 1;       /* exit code of the PD */
+};
+
+message PdBenchIPCMessage {
+    bool do_cap_transfer = 1;   /* if true, send a cap through IPC in reply */
+};
+
+message PdSetupMessage {
+    uint64 stack_top = 1;           /* address of the stack in the PD's ADS */
+    uint64 entry_point = 2;         /* address of the code entry point in the PD's ADS */
+    uint64 ipc_buf_addr = 3;        /* address of the IPC buffer in the PD's ADS */
+    uint64 osm_data_addr = 4;       /* address of the init data in the PD's ADS */
+    PdSetupType setup_mode = 5;     /* the PD's setup mode */
+    repeated uint64 args = 6 [(nanopb).max_count = 8]; /* args for the main function */
+};
+
+message PdShareResTypeMessage {
+    uint32 res_type = 1;        /* resource type of the RDE */
+};
+
+message PdGetWorkMessage {
+    /* No content */
+};
+
+message PdSendSubgraphMessage {
+    bool has_data = 1;            /* true if this message contains data */
+};
+
+message PdMapResourceMessage {
+    uint64 src_resource = 1;      /* global ID of the source resource */
+    uint64 dest_resource = 2;     /* global ID of the dest resource */
+}
+
+/* message type for all PD component request messages */
+message PdMessage {
+    oneof msg {
+        PdAllocMessage alloc = 1;
+        PdDisconnectMessage disconnect = 2;
+        PdNextSlotMessage next_slot = 3;
+        PdClearSlotMessage clear_slot = 4;
+        PdSendCapMessage send_cap = 5;
+        PdDumpMessage dump = 6;
+        PdShareRDEMessage share_rde = 7;
+        PdRemoveRDEMessage remove_rde = 8;
+        PdGiveResourceMessage give_resource = 9;
+        PdExitMessage exit = 10;
+        PdBenchIPCMessage bench_ipc = 11;
+        PdSetupMessage setup = 12;
+        PdShareResTypeMessage share_res_type = 13;
+        PdGetWorkMessage get_work = 14;
+        PdSendSubgraphMessage send_subgraph = 15;
+        PdFreeSlotMessage free_slot = 16;
+        PdMapResourceMessage map_resource = 17;
+    }
+};
+
 message PdBasicReturnMessage {
     /* No content */
 };
 
-/* return from a get work message */
 message PdWorkReturnMessage {
-    PdWorkAction action = 1;        /* which work action to perform */
+    PdWorkAction action = 1;         /* which work action to perform */
     uint32 space_id = 2;             /* space ID for the work */
     uint32 object_id = 3;            /* object ID for the work */
     uint32 pd_id = 4;                /* client PD ID for the work */
+}
+
+message PdAllocReturnMessage {
+    uint64 slot = 1;                /* slot where the PD cap is placed */
+    uint32 id = 2;                  /* ID of the new PD */
+}
+
+message PdNextSlotReturnMessage {
+    uint64 slot = 1;                /* free slot */
+}
+
+message PdSendCapReturnMessage {
+    uint64 slot = 1;                /* slot where the cap was placed in the receiver PD */
+}
+
+message PdGiveResourceReturnMessage {
+    uint64 slot = 1;                /* slot where the cap was placed in the receiver PD */
 }
 
 /* message type for all PD Component return messages */
@@ -35,5 +153,9 @@ message PdReturnMessage {
     oneof msg {
         PdBasicReturnMessage basic = 2;
         PdWorkReturnMessage work = 3;
+        PdAllocReturnMessage alloc = 4;
+        PdNextSlotReturnMessage next_slot = 5;
+        PdSendCapReturnMessage send_cap = 6;
+        PdGiveResourceReturnMessage give_resource = 7;
     };
 };

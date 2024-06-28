@@ -226,7 +226,7 @@ int xv6fs_client_link_file(seL4_CPtr file, const char *path)
 
   FsMessage msg = {
       .which_msg = FsMessage_link_tag};
-
+ 
   FsReturnMessage ret_msg;
 
   error = sel4gpi_rpc_call(&rpc_client, get_xv6fs_client()->server_ep, &msg, 2, caps, &ret_msg);

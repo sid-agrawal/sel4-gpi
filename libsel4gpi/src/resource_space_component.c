@@ -275,8 +275,10 @@ err_goto:
 }
 
 static seL4_MessageInfo_t resspc_component_handle(seL4_MessageInfo_t tag,
+                                                  void *msg_p,
                                                   seL4_Word sender_badge,
                                                   seL4_CPtr received_cap,
+                                                  void *msg_reply_p,
                                                   bool *need_new_recv_cap,
                                                   bool *should_reply)
 {
@@ -347,8 +349,8 @@ int resspc_component_initialize(vka_t *server_vka,
                                   server_vka,
                                   server_vspace,
                                   server_ep_obj.cptr,
-                                  ResSpcMessage_msg,
-                                  ResSpcReturnMessage_msg);
+                                  &ResSpcMessage_msg,
+                                  &ResSpcReturnMessage_msg);
 
     // Treat the "resource space of resource spaces" as a special registry entry
     resspc_component_registry_entry_t *reg_entry = calloc(1, get_resspc_component()->reg_entry_size);
@@ -378,7 +380,7 @@ void resspc_dump_rr(res_space_t *space, model_state_t *ms, gpi_model_node_t *pd_
     for (linked_list_node_t *curr = space->map_spaces->head; curr != NULL; curr = curr->next)
     {
         maps_to = (res_space_t *)curr->data;
-        
+
         get_resource_space_id(maps_to->resource_type, maps_to->id, &maps_to_id);
         add_edge_by_id(ms, GPI_EDGE_TYPE_MAP, space_node->id, maps_to_id);
     }

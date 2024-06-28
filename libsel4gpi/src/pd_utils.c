@@ -164,7 +164,7 @@ static void sel4gpi_exit_cb(int code)
 {
     /* Notify the pd component to destruct this PD */
     pd_client_context_t pd_conn = sel4gpi_get_pd_conn();
-    pd_client_exit(&pd_conn);
+    pd_client_exit(&pd_conn, code);
 }
 
 void sel4gpi_set_exit_cb(void)

@@ -236,15 +236,6 @@ enum pd_component_msgregs
     PDMSGREG_SEND_SUBGRAPH_REQ_END,
 };
 
-/** Mode of PD setup */
-enum _pd_setup_type
-{
-    PD_RUNTIME_SETUP = 1, ///< sets up the entire C runtime from scratch, writes any arguments onto the stack
-    PD_REGISTER_SETUP,    ///< writes a limited number of arguments into registers only
-    PD_GUEST_SETUP        ///< writes the necessary registers to run a guest
-};
-typedef enum _pd_setup_type pd_setup_type_t;
-
 // Data to send when a PD requests work
 typedef struct _pd_work_entry
 {

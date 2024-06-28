@@ -9,6 +9,11 @@
 #define DEBUG_ID GPI_DEBUG
 #define SERVER_ID GPISERVS
 
+// Generic buffer size for RPC messages, in bytes
+// Must be larger than any RPC message in the system
+// We could use the generated Message_size constants instead, if we wanted to be more precise
+#define RPC_MSG_MAX_SIZE 256
+
 static void resource_component_reply(resource_component_context_t *component, seL4_MessageInfo_t tag)
 {
     api_reply(component->mcs_reply, tag);
@@ -18,15 +23,15 @@ int resource_component_initialize(
     resource_component_context_t *component,
     gpi_cap_t resource_type,
     uint64_t space_id,
-    seL4_MessageInfo_t (*request_handler)(seL4_MessageInfo_t, seL4_Word, seL4_CPtr, bool *, bool *),
+    seL4_MessageInfo_t (*request_handler)(seL4_MessageInfo_t, void *, seL4_Word, seL4_CPtr, void *, bool *, bool *),
     int (*new_obj)(resource_component_object_t *, vka_t *, vspace_t *, void *),
     void (*on_registry_delete)(resource_server_registry_node_t *, void *),
     size_t reg_entry_size,
     vka_t *server_vka,
     vspace_t *server_vspace,
     seL4_CPtr server_ep,
-    pb_msgdesc_t request_msgdesc,
-    pb_msgdesc_t reply_msgdesc)
+    pb_msgdesc_t *request_msgdesc,
+    pb_msgdesc_t *reply_msgdesc)
 {
     component->resource_type = resource_type;
     component->space_id = space_id;
@@ -36,8 +41,7 @@ int resource_component_initialize(
     component->server_vka = server_vka;
     component->server_vspace = server_vspace;
     component->server_ep = server_ep;
-    component->request_msgdesc = request_msgdesc;
-    component->reply_msgdesc = reply_msgdesc;
+    sel4gpi_rpc_env_init(&component->rpc_env, request_msgdesc, reply_msgdesc);
 
     resource_server_initialize_registry(&component->registry, on_registry_delete, NULL);
 
@@ -55,13 +59,29 @@ void resource_component_handle(resource_component_context_t *component,
     bool needs_new_receive_slot = false;
     bool should_reply = true;
 
+    char rpc_msg_buf[RPC_MSG_MAX_SIZE];
+    char rpc_reply_buf[RPC_MSG_MAX_SIZE];
+
+    // (XXX) Arya: Remove once all components are converted
+    if (component->resource_type == GPICAP_TYPE_PD) {
+        error = sel4gpi_rpc_recv(&component->rpc_env, (void *)rpc_msg_buf);
+        assert(error == 0);
+    }
+
     // Handle the message
     seL4_MessageInfo_t reply_tag = component->request_handler(
         tag,
+        (void *)rpc_msg_buf,
         sender_badge,
         received_cap->capPtr,
+        (void *)rpc_reply_buf,
         &needs_new_receive_slot,
         &should_reply);
+
+    // (XXX) Arya: Remove once all components are converted
+    if (component->resource_type == GPICAP_TYPE_PD) {
+        error = sel4gpi_rpc_reply(&component->rpc_env, (void *)rpc_reply_buf, &reply_tag);
+    }
 
     // Send the reply
     if (should_reply)

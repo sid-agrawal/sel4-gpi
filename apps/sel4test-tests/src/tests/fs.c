@@ -240,6 +240,11 @@ int test_fs(env_t env)
     test_assert(error == 0);
 
     error = xv6fs_client_link_file(file, TEST_FNAME_3);
+    test_assert(error == 0);
+
+    // Grant permission on ep
+    // Receive slot in FS
+    
     error = close(f);
     test_assert(error == 0); // (XXX) Arya: Note we cannot close the original file until it is linked
 

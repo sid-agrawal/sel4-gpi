@@ -28,7 +28,6 @@
 #include <sel4gpi/pd_component.h>
 #include <sel4gpi/pd_obj.h>
 #include <sel4gpi/test_init_data.h>
-
 #include <sel4gpi/ads_clientapi.h>
 #include <sel4gpi/gpi_server.h>
 #include <sel4gpi/badge_usage.h>
@@ -87,19 +86,21 @@ static void on_pd_registry_delete(resource_server_registry_node_t *node_gen, voi
     linked_list_destroy(node->pending_model_state, true);
 }
 
-static seL4_MessageInfo_t handle_pd_allocation(seL4_Word sender_badge)
+static void handle_pd_allocation(seL4_Word sender_badge, PdReturnMessage *reply_msg)
 {
     OSDB_PRINTF("Got connect request from badge %lx\n", sender_badge);
+
     int error = 0;
-    seL4_MessageInfo_t reply_tag;
     seL4_CPtr ret_cap;
     pd_component_registry_entry_t *new_entry;
     uint32_t client_id = get_client_id_from_badge(sender_badge);
 
+    /* Find the MO to use for PD's OSmosis data */
     mo_component_registry_entry_t *osm_mo_entry =
         resource_component_registry_get_by_badge(get_mo_component(), seL4_GetBadge(0));
     SERVER_GOTO_IF_COND_BG(osm_mo_entry == NULL, seL4_GetBadge(0), "Failed to find MO for OSmosis data: ");
 
+    /* Allocate a new PD */
     error = resource_component_allocate(get_pd_component(), client_id, BADGE_OBJ_ID_NULL, false, &osm_mo_entry->mo,
                                         (resource_server_registry_node_t **)&new_entry, &ret_cap);
     SERVER_GOTO_IF_ERR(error, "failed to allocat a PD\n");
@@ -111,21 +112,20 @@ static seL4_MessageInfo_t handle_pd_allocation(seL4_Word sender_badge)
     new_entry->pending_model_state = linked_list_new();
 
     /* Return this badged end point in the return message. */
-    seL4_SetMR(PDMSGREG_CONNECT_ACK_SLOT, ret_cap);
-    seL4_SetMR(PDMSGREG_CONNECT_ACK_ID, new_entry->pd.id);
+    reply_msg->msg.alloc.slot = ret_cap;
+    reply_msg->msg.alloc.id = new_entry->pd.id;
 
 err_goto:
-    seL4_SetMR(PDMSGREG_FUNC, PD_FUNC_CONNECT_ACK);
-    reply_tag = seL4_MessageInfo_new(error, 0, 0, PDMSGREG_CONNECT_ACK_END);
-    return reply_tag;
+    reply_msg->which_msg = PdReturnMessage_alloc_tag;
+    reply_msg->errorCode = error;
 }
 
-static seL4_MessageInfo_t handle_disconnect_req(seL4_Word sender_badge,
-                                                seL4_MessageInfo_t old_tag)
+static void handle_disconnect_req(seL4_Word sender_badge, PdDisconnectMessage *msg, PdReturnMessage *reply_msg)
 {
     OSDB_PRINTF("Got disconnect request from client badge %lx.\n", sender_badge);
     int error = 0;
 
+    /* Find the target PD */
     pd_component_registry_entry_t *client_data = pd_component_registry_get_entry_by_badge(sender_badge);
     SERVER_GOTO_IF_COND(client_data == NULL, "Couldn't find PD (%ld)\n", get_object_id_from_badge(sender_badge));
 
@@ -140,13 +140,11 @@ static seL4_MessageInfo_t handle_disconnect_req(seL4_Word sender_badge,
     OSDB_PRINTF("Cleaned up PD %d.\n", pd_id);
 
 err_goto:
-    seL4_SetMR(PDMSGREG_FUNC, PD_FUNC_DISCONNECT_ACK);
-    seL4_MessageInfo_t tag = seL4_MessageInfo_new(error, 0, 0, PDMSGREG_DISCONNECT_ACK_END);
-    return tag;
+    reply_msg->which_msg = PdReturnMessage_basic_tag;
+    reply_msg->errorCode = error;
 }
 
-static seL4_MessageInfo_t handle_next_slot_req(seL4_Word sender_badge,
-                                               seL4_MessageInfo_t old_tag)
+static void handle_next_slot_req(seL4_Word sender_badge, PdNextSlotMessage *msg, PdReturnMessage *reply_msg)
 {
     OSDB_PRINT_VERBOSE("Got next slot request from client badge %lx.\n", sender_badge);
     int error = 0;
@@ -158,17 +156,14 @@ static seL4_MessageInfo_t handle_next_slot_req(seL4_Word sender_badge,
     error = pd_next_slot(&client_data->pd,
                          &slot);
 
-    seL4_SetMR(PDMSGREG_NEXT_SLOT_PD_SLOT, slot);
+    reply_msg->msg.next_slot.slot = slot;
 
 err_goto:
-    seL4_SetMR(PDMSGREG_FUNC, PD_FUNC_NEXT_SLOT_ACK);
-    seL4_MessageInfo_t tag = seL4_MessageInfo_new(error, 0, 0,
-                                                  PDMSGREG_NEXT_SLOT_ACK_END);
-    return tag;
+    reply_msg->which_msg = PdReturnMessage_next_slot_tag;
+    reply_msg->errorCode = error;
 }
 
-static seL4_MessageInfo_t handle_free_slot_req(seL4_Word sender_badge,
-                                               seL4_MessageInfo_t old_tag)
+static void handle_free_slot_req(seL4_Word sender_badge, PdFreeSlotMessage *msg, PdReturnMessage *reply_msg)
 {
     OSDB_PRINT_VERBOSE("Got free slot request from client badge %lx.\n", sender_badge);
     int error = 0;
@@ -176,21 +171,18 @@ static seL4_MessageInfo_t handle_free_slot_req(seL4_Word sender_badge,
     pd_component_registry_entry_t *client_data = pd_component_registry_get_entry_by_badge(sender_badge);
     SERVER_GOTO_IF_COND(client_data == NULL, "Couldn't find PD (%ld)\n", get_object_id_from_badge(sender_badge));
 
-    seL4_Word slot = seL4_GetMR(PDMSGREG_FREE_SLOT_REQ_SLOT);
+    seL4_Word slot = msg->slot;
 
     // Ignore error from clear slot, error occurs if the slot was already empty
     pd_clear_slot(&client_data->pd, slot);
     error = pd_free_slot(&client_data->pd, slot);
 
 err_goto:
-    seL4_SetMR(PDMSGREG_FUNC, PD_FUNC_FREE_SLOT_ACK);
-    seL4_MessageInfo_t tag = seL4_MessageInfo_new(error, 0, 0,
-                                                  PDMSGREG_FREE_SLOT_ACK_END);
-    return tag;
+    reply_msg->which_msg = PdReturnMessage_basic_tag;
+    reply_msg->errorCode = error;
 }
 
-static seL4_MessageInfo_t handle_clear_slot_req(seL4_Word sender_badge,
-                                                seL4_MessageInfo_t old_tag)
+static void handle_clear_slot_req(seL4_Word sender_badge, PdClearSlotMessage *msg, PdReturnMessage *reply_msg)
 {
     OSDB_PRINT_VERBOSE("Got clear slot request from client badge %lx.\n", sender_badge);
     int error = 0;
@@ -198,36 +190,33 @@ static seL4_MessageInfo_t handle_clear_slot_req(seL4_Word sender_badge,
     pd_component_registry_entry_t *client_data = pd_component_registry_get_entry_by_badge(sender_badge);
     SERVER_GOTO_IF_COND(client_data == NULL, "Couldn't find PD (%ld)\n", get_object_id_from_badge(sender_badge));
 
-    seL4_Word slot = seL4_GetMR(PDMSGREG_CLEAR_SLOT_REQ_SLOT);
+    seL4_Word slot = msg->slot;
 
     error = pd_clear_slot(&client_data->pd, slot);
 
 err_goto:
-    seL4_SetMR(PDMSGREG_FUNC, PD_FUNC_CLEAR_SLOT_ACK);
-    seL4_MessageInfo_t tag = seL4_MessageInfo_new(error, 0, 0,
-                                                  PDMSGREG_CLEAR_SLOT_ACK_END);
-    return tag;
+    reply_msg->which_msg = PdReturnMessage_basic_tag;
+    reply_msg->errorCode = error;
 }
 
-static seL4_MessageInfo_t handle_send_cap_req(seL4_Word sender_badge,
-                                              seL4_MessageInfo_t old_tag,
-                                              seL4_CPtr received_cap)
+static void handle_send_cap_req(seL4_Word sender_badge, PdSendCapMessage *msg, PdReturnMessage *reply_msg,
+                                seL4_CPtr received_cap)
 {
     OSDB_PRINTF("Got send-cap request from client badge %lx.\n", sender_badge);
     int error = 0;
 
     /* This only works if the extra cap is a GPI core cap (badged version of GPI server EP) */
     OSDB_PRINT_VERBOSE("received_cap: %lu (badge: %lx)\n", received_cap, seL4_GetBadge(0));
-    OSDB_PRINT_VERBOSE("Unwrapped: %s\n",
-                       seL4_MessageInfo_get_capsUnwrapped(old_tag) ? "true" : "false");
 
     /* Find the client */
     pd_component_registry_entry_t *client_data = pd_component_registry_get_entry_by_badge(sender_badge);
     SERVER_GOTO_IF_COND(client_data == NULL, "Couldn't find PD (%ld)\n", get_object_id_from_badge(sender_badge));
 
+    /* Get the cap to send */
     seL4_Word received_caps_badge = seL4_GetBadge(0);
-    bool is_core_cap = (bool)seL4_GetMR(PDMSGREG_SEND_CAP_REQ_IS_CORE);
+    bool is_core_cap = msg->is_core_cap;
 
+    /* Send the cap to the target */
     seL4_Word slot;
     error = pd_send_cap(&client_data->pd,
                         received_cap,
@@ -236,22 +225,18 @@ static seL4_MessageInfo_t handle_send_cap_req(seL4_Word sender_badge,
                         true,
                         is_core_cap);
 
-    seL4_SetMR(PDMSGREG_SEND_CAP_PD_SLOT, slot);
+    reply_msg->msg.send_cap.slot = slot;
 
 err_goto:
-    seL4_SetMR(PDMSGREG_FUNC, PD_FUNC_SENDCAP_ACK);
-    seL4_MessageInfo_t tag = seL4_MessageInfo_new(error, 0, 0,
-                                                  PDMSGREG_SEND_CAP_ACK_END);
-    return tag;
+    reply_msg->which_msg = PdReturnMessage_send_cap_tag;
+    reply_msg->errorCode = error;
 }
 
-static seL4_MessageInfo_t handle_dump_cap_req(seL4_Word sender_badge, seL4_MessageInfo_t old_tag, bool *should_reply)
+static void handle_dump_cap_req(seL4_Word sender_badge, PdDumpMessage *msg,
+                                PdReturnMessage *reply_msg, bool *should_reply)
 {
     OSDB_PRINTF("Got dump-cap request from client badge %lx.\n", sender_badge);
     int error = 0;
-
-    assert(seL4_MessageInfo_get_extraCaps(old_tag) == 0);
-    assert(seL4_MessageInfo_get_label(old_tag) == 0);
 
     /* Check if a model extraction is already in progress */
     SERVER_GOTO_IF_COND(get_gpi_server()->pending_extraction, "Model extraction is already in progress\n");
@@ -289,32 +274,34 @@ static seL4_MessageInfo_t handle_dump_cap_req(seL4_Word sender_badge, seL4_Messa
     }
 
 err_goto:
-    seL4_SetMR(PDMSGREG_FUNC, PD_FUNC_DUMP_ACK);
-    seL4_MessageInfo_t tag = seL4_MessageInfo_new(error, 0, 0, PDMSGREG_DUMP_ACK_END);
-
-    return tag;
+    reply_msg->which_msg = PdReturnMessage_basic_tag;
+    reply_msg->errorCode = error;
 }
 
-static seL4_MessageInfo_t handle_share_rde_req(seL4_Word sender_badge, seL4_MessageInfo_t old_tag)
+static void handle_share_rde_req(seL4_Word sender_badge, PdShareRDEMessage *msg, PdReturnMessage *reply_msg)
 {
     int error = 0;
 
-    seL4_Word type = seL4_GetMR(PDMSGREG_SHARE_RDE_REQ_TYPE);
-    seL4_Word space_id = seL4_GetMR(PDMSGREG_SHARE_RDE_REQ_SPACE_ID);
+    seL4_Word type = msg->res_type;
+    seL4_Word space_id = msg->space_id;
 
     OSDB_PRINTF("share_rde_req: Got request from client badge %lx for RDE type %s with space %ld.\n",
                 sender_badge, cap_type_to_str(type), space_id);
 
+    /* Find the source PD */
     seL4_Word client_id = get_client_id_from_badge(sender_badge);
-    pd_component_registry_entry_t *target_data = pd_component_registry_get_entry_by_badge(sender_badge);
     pd_component_registry_entry_t *client_data = pd_component_registry_get_entry_by_id(client_id);
-
-    SERVER_GOTO_IF_COND(target_data == NULL, "Couldn't find target PD (%ld)\n", get_object_id_from_badge(sender_badge));
     SERVER_GOTO_IF_COND(client_data == NULL, "Couldn't find client PD (%ld)\n", client_id);
 
+    /* Find the destination PD */
+    pd_component_registry_entry_t *target_data = pd_component_registry_get_entry_by_badge(sender_badge);
+    SERVER_GOTO_IF_COND(target_data == NULL, "Couldn't find target PD (%ld)\n", get_object_id_from_badge(sender_badge));
+
+    /* Find the source RDE */
     osmosis_rde_t *rde = pd_rde_get(&client_data->pd, type, space_id);
     SERVER_GOTO_IF_COND(rde == NULL, "share_rde_req: Failed to find RDE for type %ld and space %ld.\n", type, space_id);
 
+    /* Check if RDE already exists in target */
     osmosis_rde_t *target_pd_rde = pd_rde_get(&target_data->pd, type, space_id);
     if (target_pd_rde != NULL)
     {
@@ -322,9 +309,13 @@ static seL4_MessageInfo_t handle_share_rde_req(seL4_Word sender_badge, seL4_Mess
         goto err_goto;
     }
 
+    /* Find the space for the RDE */
     resspc_component_registry_entry_t *resource_space_data = resource_space_get_entry_by_id(rde->space_id);
-    SERVER_GOTO_IF_COND(resource_space_data == NULL, "share_rde_req: Failed to find resource space ID %d.\n", rde->space_id);
+    SERVER_GOTO_IF_COND(resource_space_data == NULL,
+                        "share_rde_req: Failed to find resource space ID %d.\n",
+                        rde->space_id);
 
+    /* Copy the RDE */
     rde_type_t rde_type = {.type = type};
     error = pd_add_rde(&target_data->pd,
                        rde_type,
@@ -333,61 +324,65 @@ static seL4_MessageInfo_t handle_share_rde_req(seL4_Word sender_badge, seL4_Mess
                        resource_space_data->space.server_ep);
 
 err_goto:
-    seL4_SetMR(PDMSGREG_FUNC, PD_FUNC_SHARE_RDE_ACK);
-    seL4_MessageInfo_t tag = seL4_MessageInfo_new(error, 0, 0,
-                                                  PDMSGREG_SHARE_RDE_ACK_END);
-    return tag;
+    reply_msg->which_msg = PdReturnMessage_basic_tag;
+    reply_msg->errorCode = error;
 }
 
-static seL4_MessageInfo_t handle_remove_rde_req(seL4_Word sender_badge, seL4_MessageInfo_t old_tag)
+static void handle_remove_rde_req(seL4_Word sender_badge, PdRemoveRDEMessage *msg, PdReturnMessage *reply_msg)
 {
     int error = 0;
 
-    seL4_Word type = seL4_GetMR(PDMSGREG_REMOVE_RDE_REQ_TYPE);
-    seL4_Word space_id = seL4_GetMR(PDMSGREG_REMOVE_RDE_REQ_SPACE_ID);
+    seL4_Word type = msg->res_type;
+    seL4_Word space_id = msg->space_id;
 
     OSDB_PRINTF("remove_rde_req: Got request from client badge %lx for RDE type %ld with space %ld.\n",
                 sender_badge, type, space_id);
 
+    /* Find the client PD */
     seL4_Word client_id = get_client_id_from_badge(sender_badge);
     pd_component_registry_entry_t *target_data = pd_component_registry_get_entry_by_badge(sender_badge);
 
     SERVER_GOTO_IF_COND(target_data == NULL, "Couldn't find target PD (%ld)\n", get_object_id_from_badge(sender_badge));
 
+    /* Remove the RDE */
     rde_type_t rde_type = {.type = type};
     error = pd_remove_rde(&target_data->pd,
                           rde_type,
                           space_id);
 
 err_goto:
-    seL4_SetMR(PDMSGREG_FUNC, PD_FUNC_REMOVE_RDE_ACK);
-    seL4_MessageInfo_t tag = seL4_MessageInfo_new(error, 0, 0,
-                                                  PDMSGREG_REMOVE_RDE_ACK_END);
-    return tag;
+    reply_msg->which_msg = PdReturnMessage_basic_tag;
+    reply_msg->errorCode = error;
 }
 
-static seL4_MessageInfo_t handle_give_resource_req(seL4_Word sender_badge, seL4_MessageInfo_t old_tag)
+static void handle_give_resource_req(seL4_Word sender_badge, PdGiveResourceMessage *msg, PdReturnMessage *reply_msg)
 {
     int error = 0;
 
     seL4_Word server_id = get_object_id_from_badge(sender_badge);
-    seL4_Word recipient_id = seL4_GetMR(PDMSGREG_GIVE_RES_REQ_CLIENT_ID);
-    seL4_Word space_id = seL4_GetMR(PDMSGREG_GIVE_RES_REQ_SPACE_ID);
-    seL4_Word resource_id = seL4_GetMR(PDMSGREG_GIVE_RES_REQ_RES_ID);
+    seL4_Word recipient_id = msg->pd_id;
+    seL4_Word space_id = msg->space_id;
+    seL4_Word resource_id = msg->object_id;
 
     OSDB_PRINT_VERBOSE("Got give resource request from client badge %lx, space ID %ld, resource ID %ld.\n",
                        sender_badge, space_id, resource_id);
 
+    /* Find the resource server PD */
     pd_component_registry_entry_t *server_data = pd_component_registry_get_entry_by_id(server_id);
-    pd_component_registry_entry_t *recipient_data = pd_component_registry_get_entry_by_id(recipient_id);
-    resspc_component_registry_entry_t *resource_space_data = resource_space_get_entry_by_id(space_id);
-
     SERVER_GOTO_IF_COND(server_data == NULL, "Couldn't find server PD (%ld)\n", server_id);
+
+    /* Find the recipient PD */
+    pd_component_registry_entry_t *recipient_data = pd_component_registry_get_entry_by_id(recipient_id);
     SERVER_GOTO_IF_COND(recipient_data == NULL, "Couldn't find target PD (%ld)\n", recipient_id);
+
+    /* Find the resource space */
+    resspc_component_registry_entry_t *resource_space_data = resource_space_get_entry_by_id(space_id);
     SERVER_GOTO_IF_COND(resource_space_data == NULL, "Couldn't find resource space (%ld)\n", space_id);
 
+    /* Find the resource */
     uint64_t res_node_id = universal_res_id(resource_space_data->space.resource_type, space_id, resource_id);
-    pd_hold_node_t *resource_data = (pd_hold_node_t *)resource_server_registry_get_by_id(&server_data->pd.hold_registry, res_node_id);
+    pd_hold_node_t *resource_data = (pd_hold_node_t *)
+        resource_server_registry_get_by_id(&server_data->pd.hold_registry, res_node_id);
     SERVER_GOTO_IF_COND(resource_data == NULL, "Couldn't find resource (%lx)\n", res_node_id);
 
     OSDB_PRINT_VERBOSE("resource server %ld gives resource in space %ld with ID %ld to client %ld\n",
@@ -395,9 +390,10 @@ static seL4_MessageInfo_t handle_give_resource_req(seL4_Word sender_badge, seL4_
 
     /* Create a new badged EP for the resource */
     seL4_CPtr dest = resource_server_make_badged_ep(get_pd_component()->server_vka, recipient_data->pd.pd_vka,
-                                                    resource_space_data->space.server_ep, resource_space_data->space.resource_type,
+                                                    resource_space_data->space.server_ep, 
+                                                    resource_space_data->space.resource_type,
                                                     space_id, resource_id, recipient_id);
-    seL4_SetMR(PDMSGREG_GIVE_RES_ACK_DEST, dest);
+    reply_msg->msg.give_resource.slot = dest;
 
     // Add the resource to the PD object
     // (XXX) Arya: How to handle duplicate entries to the same resource?
@@ -407,10 +403,8 @@ static seL4_MessageInfo_t handle_give_resource_req(seL4_Word sender_badge, seL4_
     SERVER_GOTO_IF_ERR(error, "Failed to add resource to PD (%ld)\n", recipient_id);
 
 err_goto:
-    seL4_SetMR(PDMSGREG_FUNC, PD_FUNC_GIVE_RES_ACK);
-    seL4_MessageInfo_t tag = seL4_MessageInfo_new(error, 0, 0,
-                                                  PDMSGREG_GIVE_RES_ACK_END);
-    return tag;
+    reply_msg->which_msg = PdReturnMessage_give_resource_tag;
+    reply_msg->errorCode = error;
 }
 
 #if TRACK_MAP_RELATIONS
@@ -451,13 +445,13 @@ err_goto:
 #endif
 
 #if TRACK_MAP_RELATIONS
-static seL4_MessageInfo_t handle_map_resource_req(seL4_Word sender_badge, seL4_MessageInfo_t old_tag)
+static void handle_map_resource_req(seL4_Word sender_badge, PdMapResourceMessage *msg, PdReturnMessage *reply_msg)
 {
     int error = 0;
 
     seL4_Word server_id = get_object_id_from_badge(sender_badge);
-    seL4_Word src_res_id = seL4_GetMR(PDMSGREG_MAP_RES_REQ_SRC_ID);
-    seL4_Word dest_res_id = seL4_GetMR(PDMSGREG_MAP_RES_REQ_DEST_ID);
+    seL4_Word src_res_id = msg->src_resource;
+    seL4_Word dest_res_id = msg->dest_resource;
 
     OSDB_PRINTF("Got map resource request from client badge %lx, srd ID %lx, dest ID %lx.\n",
                 sender_badge, src_res_id, dest_res_id);
@@ -465,28 +459,43 @@ static seL4_MessageInfo_t handle_map_resource_req(seL4_Word sender_badge, seL4_M
     error = pd_component_map_resources(server_id, src_res_id, dest_res_id);
 
 err_goto:
-    seL4_SetMR(PDMSGREG_FUNC, PD_FUNC_MAP_RES_ACK);
-    seL4_MessageInfo_t tag = seL4_MessageInfo_new(error, 0, 0,
-                                                  PDMSGREG_MAP_RES_ACK_END);
-    return tag;
+    reply_msg->which_msg = PdReturnMessage_give_resource_tag;
+    reply_msg->errorCode = error;
 }
 #endif
 
-static seL4_MessageInfo_t handle_exit_req(seL4_Word sender_badge, seL4_MessageInfo_t old_tag)
+static void handle_exit_req(seL4_Word sender_badge, PdExitMessage *msg)
 {
-    OSDB_PRINTF("Got exit request from client badge %lx\n", sender_badge);
+    OSDB_PRINTF("Got exit request from client badge %lx, exit code %d\n", sender_badge, msg->exit_code);
+    int error = 0;
 
-    handle_disconnect_req(sender_badge, old_tag);
+    /* Find the target PD */
+    pd_component_registry_entry_t *client_data = pd_component_registry_get_entry_by_badge(sender_badge);
+    SERVER_GOTO_IF_COND(client_data == NULL, "Couldn't find PD (%ld)\n", get_object_id_from_badge(sender_badge));
+
+    uint32_t pd_id = client_data->pd.id;
+
+    /* Remove the PD from registry, this will also destroy the PD */
+    client_data->pd.deletion_depth = 0; // This PD is the root of a deletion tree
+    resource_server_registry_delete(&get_pd_component()->registry, (resource_server_registry_node_t *)client_data);
+
+    OSDB_PRINTF("Cleaned up exited PD (%d)\n", pd_id);
+
+err_goto:
+    OSDB_PRINTERR("Error while cleaning up exited PD (%d)\n", pd_id);
 }
 
-static seL4_MessageInfo_t handle_ipc_bench_req(void)
+static void handle_ipc_bench_req(PdBenchIPCMessage *msg, PdReturnMessage *reply_msg)
 {
-    seL4_SetMR(PDMSGREG_FUNC, PD_FUNC_BENCH_IPC_ACK);
-    bool do_cap_transfer = seL4_GetMR(PDMSGREG_BENCH_IPC_REQ_CAP_TRANSFER);
+    int error = 0;
+    bool do_cap_transfer = msg->do_cap_transfer;
 
     int num_caps = 0;
     if (do_cap_transfer)
     {
+        // (XXX) Arya: this doesn't work with the new setup for protobuf, because no component should
+        // return a cap through IPC
+        gpi_panic("IPC bench does not currently work with cap transfer\n", 1);
         seL4_CPtr dummy_reply_cap;
         int error = vka_cspace_alloc(get_pd_component()->server_vka, &dummy_reply_cap);
         assert(error == 0);
@@ -494,73 +503,60 @@ static seL4_MessageInfo_t handle_ipc_bench_req(void)
         num_caps = 1;
     }
 
-    seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, num_caps, PDMSGREG_BENCH_IPC_ACK_END);
-    return tag;
+err_goto:
+    reply_msg->which_msg = PdReturnMessage_basic_tag;
+    reply_msg->errorCode = error;
 }
 
-static seL4_MessageInfo_t handle_runtime_setup_req(seL4_Word sender_badge, seL4_MessageInfo_t old_tag)
+static void handle_runtime_setup_req(seL4_Word sender_badge, PdSetupMessage *msg, PdReturnMessage *reply_msg)
 {
     OSDB_PRINTF("Got runtime setup request from client badge: ");
     BADGE_PRINT(sender_badge);
 
     int error = 0;
 
+    /* Find the target PD */
     pd_component_registry_entry_t *target_pd = pd_component_registry_get_entry_by_badge(sender_badge);
     SERVER_GOTO_IF_COND(target_pd == NULL, "Couldn't find target PD (%ld)\n", get_object_id_from_badge(sender_badge));
 
+    /* Find the target ADS */
     ads_component_registry_entry_t *target_ads = (ads_component_registry_entry_t *)
         resource_component_registry_get_by_id(get_ads_component(), get_object_id_from_badge(seL4_GetBadge(0)));
-    SERVER_GOTO_IF_COND(target_ads == NULL, "Couldn't find target ADS (%ld)\n", get_object_id_from_badge(seL4_GetBadge(0)));
+    SERVER_GOTO_IF_COND(target_ads == NULL,
+                        "Couldn't find target ADS (%ld)\n",
+                        get_object_id_from_badge(seL4_GetBadge(0)));
 
+    /* Find the target CPU */
     cpu_component_registry_entry_t *target_cpu = (cpu_component_registry_entry_t *)
         resource_component_registry_get_by_id(get_cpu_component(), get_object_id_from_badge(seL4_GetBadge(1)));
-    SERVER_GOTO_IF_COND(target_cpu == NULL, "Couldn't find target CPU (%ld)\n", get_object_id_from_badge(seL4_GetBadge(1)));
+    SERVER_GOTO_IF_COND(target_cpu == NULL,
+                        "Couldn't find target CPU (%ld)\n",
+                        get_object_id_from_badge(seL4_GetBadge(1)));
 
     /* parse the arguments */
-    int argc = seL4_GetMR(PDMSGREG_SETUP_REQ_ARGC);
+    int argc = msg->args_count;
 
     // These brackets limit the scope of argc/argv so we may goto err_goto
     {
-        seL4_Word args[argc];
-
-        for (int i = 0; i < argc; i++)
-        {
-            switch (i)
-            {
-            case 0:
-                args[i] = seL4_GetMR(PDMSGREG_SETUP_REQ_ARG0);
-                break;
-            case 1:
-                args[i] = seL4_GetMR(PDMSGREG_SETUP_REQ_ARG1);
-                break;
-            case 2:
-                args[i] = seL4_GetMR(PDMSGREG_SETUP_REQ_ARG2);
-                break;
-            case 3:
-                args[i] = seL4_GetMR(PDMSGREG_SETUP_REQ_ARG3);
-                break;
-            }
-        }
-
         char string_args[argc][WORD_STRING_SIZE];
         char *argv[argc];
 
         for (int i = 0; i < argc; i++)
         {
             argv[i] = string_args[i];
-            snprintf(argv[i], WORD_STRING_SIZE, "%" PRIuPTR "", args[i]);
+            snprintf(argv[i], WORD_STRING_SIZE, "%" PRIuPTR "", msg->args[i]);
         }
 
         // (XXX) Linh: stack_top meaning differs depending on what PD we're starting, should fix as this is not so nice
-        void *stack_top = (void *)seL4_GetMR(PDMSGREG_SETUP_REQ_STACK);
-        void *entry_point = (void *)seL4_GetMR(PDMSGREG_SETUP_REQ_ENTRY_POINT);
-        void *ipc_buf_addr = (void *)seL4_GetMR(PDMSGREG_SETUP_REQ_IPC_BUF);
-        pd_setup_type_t setup_mode = (pd_setup_type_t)seL4_GetMR(PDMSGREG_SETUP_REQ_TYPE);
+        void *stack_top = (void *)msg->stack_top;
+        void *entry_point = (void *)msg->entry_point;
+        void *ipc_buf_addr = (void *)msg->ipc_buf_addr;
+        target_pd->pd.shared_data_in_PD = (void *)msg->osm_data_addr;
+        PdSetupType setup_mode = msg->setup_mode;
 
-        target_pd->pd.shared_data_in_PD = (void *)seL4_GetMR(PDMSGREG_SETUP_REQ_OSM_DATA);
         switch (setup_mode)
         {
-        case PD_RUNTIME_SETUP:
+        case PdSetupType_PD_RUNTIME_SETUP:
             void *init_stack;
             error = ads_write_arguments(&target_pd->pd, target_ads->ads.vspace, ipc_buf_addr, stack_top,
                                         argc, argv, &init_stack);
@@ -569,17 +565,17 @@ static seL4_MessageInfo_t handle_runtime_setup_req(seL4_Word sender_badge, seL4_
                 error = cpu_set_remote_context(&target_cpu->cpu, entry_point, init_stack);
             }
             break;
-        case PD_REGISTER_SETUP:
+        case PdSetupType_PD_REGISTER_SETUP:
             error = cpu_set_local_context(&target_cpu->cpu,
                                           entry_point,
-                                          argc > 0 ? (void *)args[0] : NULL,
-                                          argc > 1 ? (void *)args[1] : NULL,
-                                          argc > 2 ? (void *)args[2] : NULL,
+                                          argc > 0 ? (void *)msg->args[0] : NULL,
+                                          argc > 1 ? (void *)msg->args[1] : NULL,
+                                          argc > 2 ? (void *)msg->args[2] : NULL,
                                           stack_top);
             break;
-        case PD_GUEST_SETUP:
+        case PdSetupType_PD_GUEST_SETUP:
             SERVER_GOTO_IF_COND(argc == 0, "Setting up a guest requires at least one argument for the DTB\n");
-            error = cpu_set_guest_context(&target_cpu->cpu, entry_point, (uintptr_t)args[0]);
+            error = cpu_set_guest_context(&target_cpu->cpu, entry_point, (uintptr_t)msg->args[0]);
             break;
         default:
             error = 1;
@@ -587,43 +583,51 @@ static seL4_MessageInfo_t handle_runtime_setup_req(seL4_Word sender_badge, seL4_
             break;
         }
     }
+    SERVER_GOTO_IF_ERR(error, "Failed to setup PD\n");
 
 #if CONFIG_DEBUG_BUILD
     seL4_DebugNameThread(target_cpu->cpu.tcb.cptr, target_pd->pd.image_name);
 #endif
 
-    SERVER_GOTO_IF_ERR(error, "Failed to setup PD\n");
 err_goto:
-    seL4_MessageInfo_t tag = seL4_MessageInfo_new(error, 0, 0, PDMSGREG_SETUP_ACK_END);
-    seL4_SetMR(PDMSGREG_FUNC, PD_FUNC_SETUP_ACK);
-    return tag;
+    reply_msg->which_msg = PdReturnMessage_basic_tag;
+    reply_msg->errorCode = error;
 }
 
-static seL4_MessageInfo_t handle_share_resource_type_req(seL4_Word sender_badge, seL4_MessageInfo_t old_tag)
+static void handle_share_resource_type_req(seL4_Word sender_badge,
+                                           PdShareResTypeMessage *msg, PdReturnMessage *reply_msg)
 {
     int error = 0;
     OSDB_PRINTF("Got Share Resource Type Request: ");
     BADGE_PRINT(sender_badge);
+    gpi_cap_t res_type = (gpi_cap_t)msg->res_type;
 
+    /* Find the source PD */
     pd_component_registry_entry_t *src_pd_data = pd_component_registry_get_entry_by_badge(sender_badge);
     SERVER_GOTO_IF_COND_BG(src_pd_data == NULL, sender_badge, "Failed to find source PD data ");
 
+    /* Find the destination PD */
     seL4_Word dst_pd_badge = seL4_GetBadge(0);
     pd_component_registry_entry_t *dst_pd_data = pd_component_registry_get_entry_by_badge(dst_pd_badge);
     SERVER_GOTO_IF_COND_BG(dst_pd_data == NULL, dst_pd_badge, "Failed to find dest PD data ");
 
-    SERVER_GOTO_IF_COND(src_pd_data->pd.id == dst_pd_data->pd.id, "Invalid sharing of resources between the same PD (%d -> %d)\n", src_pd_data->pd.id, dst_pd_data->pd.id);
+    /* Check for invalid sharing */
+    SERVER_GOTO_IF_COND(src_pd_data->pd.id == dst_pd_data->pd.id,
+                        "Invalid sharing of resources between the same PD (%d -> %d)\n",
+                        src_pd_data->pd.id, dst_pd_data->pd.id);
 
-    gpi_cap_t res_type = (gpi_cap_t)seL4_GetMR(PDMSGREG_SHARE_RES_TYPE_REQ_TYPE);
-    SERVER_GOTO_IF_COND(res_type != GPICAP_TYPE_MO &&
-                            res_type < GPICAP_TYPE_seL4, // (XXX) Arya: how to check for non-core resources?
+    SERVER_GOTO_IF_COND(res_type != GPICAP_TYPE_MO && res_type < GPICAP_TYPE_seL4,
+                        // (XXX) Arya: how to check for non-core resources?
                         "Sharing of resource type %s not permitted.\n",
                         cap_type_to_str(res_type));
+
+    /* Share all resources of given type */
     linked_list_t *resources = pd_get_resources_of_type(&src_pd_data->pd, res_type);
     error = pd_bulk_add_resource(&dst_pd_data->pd, resources);
     SERVER_GOTO_IF_ERR(error, "Error occurred during resource sharing (some may still have been successful)\n");
 
-    OSDB_PRINTF("Shared %s resources between PDs (%d -> %d)\n", cap_type_to_str(res_type), src_pd_data->pd.id, dst_pd_data->pd.id);
+    OSDB_PRINTF("Shared %s resources between PDs (%d -> %d)\n", cap_type_to_str(res_type),
+                src_pd_data->pd.id, dst_pd_data->pd.id);
 
 err_goto:
     if (resources)
@@ -631,18 +635,13 @@ err_goto:
         linked_list_destroy(resources, false);
     }
 
-    seL4_MessageInfo_t tag = seL4_MessageInfo_new(error, 0, 0, PDMSGREG_SHARE_RES_TYPE_ACK_END);
-    seL4_SetMR(PDMSGREG_FUNC, PD_FUNC_SHARE_RES_TYPE_ACK);
-
-    return tag;
+    reply_msg->which_msg = PdReturnMessage_basic_tag;
+    reply_msg->errorCode = error;
 }
 
-static seL4_MessageInfo_t handle_get_work_req(seL4_Word sender_badge, seL4_MessageInfo_t old_tag)
+static void handle_get_work_req(seL4_Word sender_badge, PdGetWorkMessage *msg, PdReturnMessage *reply_msg)
 {
     int error = 0;
-    PdReturnMessage ret_msg = {
-        .which_msg = PdReturnMessage_work_tag};
-
     OSDB_PRINTF("Got request for work: ");
     BADGE_PRINT(sender_badge);
 
@@ -661,45 +660,41 @@ static seL4_MessageInfo_t handle_get_work_req(seL4_Word sender_badge, seL4_Messa
         // Prioritize model extraction before free
         // The model state may change during the extraction, bias towards including more information rather than less
         linked_list_pop_head(pd_data->pending_model_state, &work_res);
-        ret_msg.msg.work.action = PdWorkAction_EXTRACT;
-        ret_msg.msg.work.space_id = work_res->res_id.space_id;
-        ret_msg.msg.work.object_id = work_res->res_id.object_id;
-        ret_msg.msg.work.pd_id = work_res->client_pd_id;
+        reply_msg->msg.work.action = PdWorkAction_EXTRACT;
+        reply_msg->msg.work.space_id = work_res->res_id.space_id;
+        reply_msg->msg.work.object_id = work_res->res_id.object_id;
+        reply_msg->msg.work.pd_id = work_res->client_pd_id;
     }
     else if (pd_data->pending_frees->count > 0)
     {
         linked_list_pop_head(pd_data->pending_frees, &work_res);
-        ret_msg.msg.work.action = PdWorkAction_FREE;
-        ret_msg.msg.work.space_id = work_res->res_id.space_id;
-        ret_msg.msg.work.object_id = work_res->res_id.object_id;
-        ret_msg.msg.work.pd_id = work_res->client_pd_id;
+        reply_msg->msg.work.action = PdWorkAction_FREE;
+        reply_msg->msg.work.space_id = work_res->res_id.space_id;
+        reply_msg->msg.work.object_id = work_res->res_id.object_id;
+        reply_msg->msg.work.pd_id = work_res->client_pd_id;
     }
     else
     {
         // No work to be done
-        ret_msg.msg.work.action = PdWorkAction_NO_WORK;
+        reply_msg->msg.work.action = PdWorkAction_NO_WORK;
     }
 
     /* Free the node */
     free(work_res);
 
 err_goto:
-    seL4_MessageInfo_t tag;
-    ret_msg.errorCode = error;
-    sel4gpi_rpc_reply(&rpc_env, &ret_msg, &tag);
-    return tag;
+    reply_msg->which_msg = PdReturnMessage_work_tag;
+    reply_msg->errorCode = error;
 }
 
-static seL4_MessageInfo_t handle_send_subgraph_req(seL4_Word sender_badge, seL4_MessageInfo_t old_tag)
+static void handle_send_subgraph_req(seL4_Word sender_badge, PdSendSubgraphMessage *msg, PdReturnMessage *reply_msg)
 {
     int error = 0;
-    PdReturnMessage ret_msg = {
-        .which_msg = PdReturnMessage_work_tag};
 
     OSDB_PRINTF("Got a subgraph from: ");
     BADGE_PRINT(sender_badge);
 
-    bool has_data = seL4_GetMR(PDMSGREG_SEND_SUBGRAPH_REQ_HAS_DATA);
+    bool has_data = msg->has_data;
 
     // (XXX) Arya: doesn't do any authentication, or check if we actually needed this piece
     // For simplicity, just decrement the counter of "remaining pieces"
@@ -746,8 +741,14 @@ static seL4_MessageInfo_t handle_send_subgraph_req(seL4_Word sender_badge, seL4_
         get_gpi_server()->pending_extraction = false;
 
         // Reply to the PD that requested the extraction
-        seL4_SetMR(PDMSGREG_FUNC, PD_FUNC_DUMP_ACK);
-        seL4_Send(get_gpi_server()->model_extraction_reply, seL4_MessageInfo_new(0, 0, 0, 0));
+        PdReturnMessage dump_return_msg = {
+            .which_msg = PdReturnMessage_basic_tag,
+            .errorCode = PdComponentError_NONE
+        };
+
+        seL4_MessageInfo_t dump_return_tag;
+        sel4gpi_rpc_reply(&get_pd_component()->rpc_env, (void *) &dump_return_msg, &dump_return_tag);
+        seL4_Send(get_gpi_server()->model_extraction_reply, dump_return_tag);
 
         // Free the reply cap's slot
         vka_cspace_free(get_pd_component()->server_vka, get_gpi_server()->model_extraction_reply);
@@ -758,94 +759,96 @@ static seL4_MessageInfo_t handle_send_subgraph_req(seL4_Word sender_badge, seL4_
     }
 
 err_goto:
-    seL4_MessageInfo_t tag;
-    ret_msg.errorCode = error;
-    sel4gpi_rpc_reply(&rpc_env, &ret_msg, &tag);
-    return tag;
+    reply_msg->which_msg = PdReturnMessage_basic_tag;
+    reply_msg->errorCode = error;
 }
 
 static seL4_MessageInfo_t pd_component_handle(seL4_MessageInfo_t tag,
+                                              void *msg_p,
                                               seL4_Word sender_badge,
                                               seL4_CPtr received_cap,
+                                              void *reply_msg_p,
                                               bool *need_new_recv_cap,
                                               bool *should_reply)
 {
     int error = 0; // unused, to appease the error handling macros
-    enum pd_component_funcs func = seL4_GetMR(PDMSGREG_FUNC);
-    seL4_MessageInfo_t reply_tag;
+
+    PdMessage *msg = (PdMessage *)msg_p;
+    PdReturnMessage *reply_msg = (PdReturnMessage *)reply_msg_p;
 
     if (get_object_id_from_badge(sender_badge) == BADGE_OBJ_ID_NULL)
     {
-        SERVER_GOTO_IF_COND(func != PD_FUNC_CONNECT_REQ,
-                            "Received invalid request on the allocation endpoint: %d\n", func);
-        reply_tag = handle_pd_allocation(sender_badge);
+        SERVER_GOTO_IF_COND(msg->which_msg != PdMessage_alloc_tag,
+                            "Received invalid request on the allocation endpoint: %d\n", msg->which_msg);
+        handle_pd_allocation(sender_badge, reply_msg);
     }
     else
     {
-        switch (func)
+        switch (msg->which_msg)
         {
-        case PD_FUNC_DISCONNECT_REQ:
-            reply_tag = handle_disconnect_req(sender_badge, tag);
+        case PdMessage_disconnect_tag:
+            handle_disconnect_req(sender_badge, &msg->msg.disconnect, reply_msg);
             break;
-        case PD_FUNC_NEXT_SLOT_REQ:
-            reply_tag = handle_next_slot_req(sender_badge, tag);
+        case PdMessage_next_slot_tag:
+            handle_next_slot_req(sender_badge, &msg->msg.next_slot, reply_msg);
             break;
-        case PD_FUNC_FREE_SLOT_REQ:
-            reply_tag = handle_free_slot_req(sender_badge, tag);
+        case PdMessage_free_slot_tag:
+            handle_free_slot_req(sender_badge, &msg->msg.free_slot, reply_msg);
             break;
-        case PD_FUNC_CLEAR_SLOT_REQ:
-            reply_tag = handle_clear_slot_req(sender_badge, tag);
+        case PdMessage_clear_slot_tag:
+            handle_clear_slot_req(sender_badge, &msg->msg.clear_slot, reply_msg);
             break;
-        case PD_FUNC_SENDCAP_REQ:
-            reply_tag = handle_send_cap_req(sender_badge, tag, received_cap);
+        case PdMessage_send_cap_tag:
+            handle_send_cap_req(sender_badge, &msg->msg.send_cap, reply_msg, received_cap);
             *need_new_recv_cap = true;
             break;
-        case PD_FUNC_DUMP_REQ:
-            reply_tag = handle_dump_cap_req(sender_badge, tag, should_reply);
+        case PdMessage_dump_tag:
+            handle_dump_cap_req(sender_badge, &msg->msg.dump, reply_msg, should_reply);
             break;
-        case PD_FUNC_SHARE_RDE_REQ:
-            reply_tag = handle_share_rde_req(sender_badge, tag);
+        case PdMessage_share_rde_tag:
+            handle_share_rde_req(sender_badge, &msg->msg.share_rde, reply_msg);
             break;
-        case PD_FUNC_REMOVE_RDE_REQ:
-            reply_tag = handle_remove_rde_req(sender_badge, tag);
+        case PdMessage_remove_rde_tag:
+            handle_remove_rde_req(sender_badge, &msg->msg.remove_rde, reply_msg);
             break;
-        case PD_FUNC_GIVE_RES_REQ:
-            reply_tag = handle_give_resource_req(sender_badge, tag);
+        case PdMessage_give_resource_tag:
+            handle_give_resource_req(sender_badge, &msg->msg.give_resource, reply_msg);
             break;
 #if TRACK_MAP_RELATIONS
         case PD_FUNC_MAP_RES_REQ:
-            reply_tag = handle_map_resource_req(sender_badge, tag);
+            handle_map_resource_req(sender_badge, &msg->msg.disconnect, reply_msg);
             break;
 #endif
-        case PD_FUNC_EXIT_REQ:
-            reply_tag = handle_exit_req(sender_badge, tag);
+        case PdMessage_exit_tag:
+            handle_exit_req(sender_badge, &msg->msg.exit);
+            *should_reply = false;
             break;
-        case PD_FUNC_BENCH_IPC_REQ:
-            reply_tag = handle_ipc_bench_req();
+        case PdMessage_bench_ipc_tag:
+            handle_ipc_bench_req(&msg->msg.bench_ipc, reply_msg);
             break;
-        case PD_FUNC_SETUP_REQ:
-            reply_tag = handle_runtime_setup_req(sender_badge, tag);
+        case PdMessage_setup_tag:
+            handle_runtime_setup_req(sender_badge, &msg->msg.setup, reply_msg);
             break;
-        case PD_FUNC_SHARE_RES_TYPE_REQ:
-            reply_tag = handle_share_resource_type_req(sender_badge, tag);
+        case PdMessage_share_res_type_tag:
+            handle_share_resource_type_req(sender_badge, &msg->msg.share_res_type, reply_msg);
             break;
-        case PD_FUNC_GET_WORK_REQ:
-            reply_tag = handle_get_work_req(sender_badge, tag);
+        case PdMessage_get_work_tag:
+            handle_get_work_req(sender_badge, &msg->msg.get_work, reply_msg);
             break;
-        case PD_FUNC_SEND_SUBGRAPH_REQ:
-            reply_tag = handle_send_subgraph_req(sender_badge, tag);
+        case PdMessage_send_subgraph_tag:
+            handle_send_subgraph_req(sender_badge, &msg->msg.send_subgraph, reply_msg);
             break;
         default:
-            SERVER_GOTO_IF_COND(1, "Unknown request received: %d\n", func);
+            SERVER_GOTO_IF_COND(1, "Unknown request received: %d\n", msg->which_msg);
             break;
         }
     }
 
-    return reply_tag;
+    return seL4_MessageInfo_new(0, 0, 0, 0); // (XXX) Arya: Replace once conversion to protobuf is finished
 
 err_goto:
-    seL4_MessageInfo_t err_tag = seL4_MessageInfo_set_label(reply_tag, 1);
-    return err_tag;
+    reply_msg->errorCode = error;
+    return seL4_MessageInfo_new(0, 0, 0, 0);
 }
 
 /** --- Functions callable by root task --- **/
@@ -880,8 +883,8 @@ int pd_component_initialize(vka_t *server_vka,
                                   server_vka,
                                   server_vspace,
                                   server_ep_obj.cptr,
-                                  PdMessage_msg,
-                                  PdReturnMessage_msg);
+                                  &PdMessage_msg,
+                                  &PdReturnMessage_msg);
 }
 
 void forge_pd_for_root_task(uint64_t rt_id)

@@ -186,6 +186,22 @@ int resource_server_main(void *context_v)
         RESOURCE_SERVER_PRINTF("Ready to receive a message\n");
         tag = resource_server_recv(context, &sender_badge);
 
+#if RESOURCE_SERVER_DEBUG
+        char sender_badge_str[100];
+        badge_sprint(sender_badge_str, sender_badge);
+        char unwrapped_str[100];
+        badge_sprint(unwrapped_str, seL4_GetBadge(0));
+
+        RESOURCE_SERVER_PRINTF("Message on endpoint %p\n",  seL4_GetCapPaddr(context->server_ep.raw_endpoint));
+        RESOURCE_SERVER_PRINTF("- sender badge: %s\n", sender_badge_str);
+        RESOURCE_SERVER_PRINTF("- extracaps %d, capsunwrapped %d\n",
+                               seL4_MessageInfo_get_extraCaps(tag), seL4_MessageInfo_get_capsUnwrapped(tag));
+        RESOURCE_SERVER_PRINTF("- Received cap: type %d addr %p\n",
+                               seL4_DebugCapIdentify(received_cap_path.capPtr),
+                               seL4_GetCapPaddr(received_cap_path.capPtr));
+        RESOURCE_SERVER_PRINTF("- unwrapped badge: %s\n", unwrapped_str);
+#endif
+
         /* If the sender badge is NOTIF_BADGE, then we were woken up by the RT, and should check for work */
         if (sender_badge == NOTIF_BADGE)
         {
