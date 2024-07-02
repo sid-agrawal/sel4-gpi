@@ -54,13 +54,12 @@ static void on_cpu_registry_delete(resource_server_registry_node_t *node_gen, vo
     cpu_destroy(&node->cpu);
 }
 
-static seL4_MessageInfo_t handle_cpu_allocation(seL4_Word sender_badge)
+static void handle_cpu_allocation(seL4_Word sender_badge, CpuReturnMessage *reply_msg)
 {
     OSDB_PRINTF("Got CPU allocation request from %lx\n", sender_badge);
     BADGE_PRINT(sender_badge);
 
     int error = 0;
-    seL4_MessageInfo_t reply_tag;
     seL4_CPtr ret_cap;
     cpu_component_registry_entry_t *new_entry;
     uint32_t client_id = get_client_id_from_badge(sender_badge);
@@ -69,16 +68,15 @@ static seL4_MessageInfo_t handle_cpu_allocation(seL4_Word sender_badge)
                                         (resource_server_registry_node_t **)&new_entry, &ret_cap);
     SERVER_GOTO_IF_ERR(error, "Failed to allocate new CPU object\n");
 
-    OSDB_PRINTF("Allocated new CPU (%d)\n", new_entry->cpu.id);
-    seL4_SetMR(CPUMSGREG_CONNECT_ACK_SLOT, ret_cap);
+    reply_msg->msg.alloc.slot = ret_cap;
+    reply_msg->msg.alloc.id = new_entry->cpu.id;
 
 err_goto:
-    seL4_SetMR(CPUMSGREG_FUNC, CPU_FUNC_CONNECT_ACK);
-    reply_tag = seL4_MessageInfo_new(error, 0, 0, CPUMSGREG_CONNECT_ACK_END);
-    return reply_tag;
+    reply_msg->which_msg = CpuReturnMessage_alloc_tag;
+    reply_msg->errorCode = error;
 }
 
-static seL4_MessageInfo_t handle_start_req(seL4_Word sender_badge, seL4_MessageInfo_t old_tag)
+static void handle_start_req(seL4_Word sender_badge, CpuStartMessage *msg, CpuReturnMessage *reply_msg)
 {
     OSDB_PRINTF("Got CPU start req: ");
     BADGE_PRINT(sender_badge);
@@ -93,13 +91,12 @@ static seL4_MessageInfo_t handle_start_req(seL4_Word sender_badge, seL4_MessageI
     SERVER_GOTO_IF_ERR(error, "Failed to start CPU\n");
 
 err_goto:
-    seL4_SetMR(CPUMSGREG_FUNC, CPU_FUNC_START_ACK);
-    seL4_MessageInfo_t tag = seL4_MessageInfo_new(error, 0, 0, CPUMSGREG_START_ACK_END);
-    return tag;
+    reply_msg->which_msg = CpuReturnMessage_basic_tag;
+    reply_msg->errorCode = error;
 }
 
-static seL4_MessageInfo_t handle_config_req(seL4_Word sender_badge,
-                                            seL4_MessageInfo_t old_tag)
+static void handle_config_req(seL4_Word sender_badge,
+                              CpuConfigMessage *msg, CpuReturnMessage *reply_msg)
 {
     OSDB_PRINTF("Got CPU config request from client badge %lx\n", sender_badge);
 
@@ -114,13 +111,13 @@ static seL4_MessageInfo_t handle_config_req(seL4_Word sender_badge,
     SERVER_GOTO_IF_COND(pd_data == NULL, "Couldn't find PD (%ld)\n", get_object_id_from_badge(seL4_GetBadge(0)));
 
     /* Get Fault EP - we do not increase the refcount for it here, see note in cpu_client_config() */
-    seL4_CPtr fault_ep = seL4_GetMR(CPUMSGREG_CONFIG_FAULT_EP);
+    seL4_CPtr fault_ep = msg->fault_ep_cap;
 
     /* Get IPC buf addr */
-    seL4_Word ipc_buf_addr = seL4_GetMR(CPUMSGREG_CONFIG_IPC_BUF_ADDR);
+    seL4_Word ipc_buf_addr = msg->ipc_buf_addr;
 
     /* get cnode guard*/
-    seL4_Word cnode_guard = seL4_GetMR(CPUMSGREG_CONFIG_CNODE_GUARD);
+    seL4_Word cnode_guard = msg->cnode_guard;
 
     /* Get the vspace for the ads */
     seL4_Word ads_cap_badge = seL4_GetBadge(1);
@@ -160,14 +157,13 @@ static seL4_MessageInfo_t handle_config_req(seL4_Word sender_badge,
     OSDB_PRINTF("Finished configuring CPU\n");
 
 err_goto:
-    seL4_SetMR(CPUMSGREG_FUNC, CPU_FUNC_CONFIG_ACK);
-    seL4_MessageInfo_t tag = seL4_MessageInfo_new(error, 0, 0, CPUMSGREG_CONFIG_ACK_END);
-    return tag;
+    reply_msg->which_msg = CpuReturnMessage_basic_tag;
+    reply_msg->errorCode = error;
 }
 
-static seL4_MessageInfo_t handle_change_vspace_req(seL4_Word sender_badge,
-                                                   seL4_MessageInfo_t old_tag,
-                                                   seL4_CPtr received_cap)
+static void handle_change_vspace_req(seL4_Word sender_badge,
+                                     CpuChangeVspaceMessage *msg, CpuReturnMessage *reply_msg,
+                                     seL4_CPtr received_cap)
 {
     OSDB_PRINTF("Got change vspace from client badge %lx\n", sender_badge);
 
@@ -208,12 +204,11 @@ static seL4_MessageInfo_t handle_change_vspace_req(seL4_Word sender_badge,
     client_data->cpu.binded_ads_id = ads_data->ads.id;
 
 err_goto:
-    seL4_SetMR(CPUMSGREG_FUNC, CPU_FUNC_CONFIG_ACK);
-    seL4_MessageInfo_t tag = seL4_MessageInfo_new(error, 0, 0, CPUMSGREG_CHANGE_VSPACE_ACK_END);
-    return tag;
+    reply_msg->which_msg = CpuReturnMessage_basic_tag;
+    reply_msg->errorCode = error;
 }
 
-static seL4_MessageInfo_t handle_set_tls_req(seL4_Word sender_badge, seL4_MessageInfo_t old_tag)
+static void handle_set_tls_req(seL4_Word sender_badge, CpuTlsBaseMessage *msg, CpuReturnMessage *reply_msg)
 {
     int error = 0;
     OSDB_PRINTF("Got set TLS base request:");
@@ -222,18 +217,17 @@ static seL4_MessageInfo_t handle_set_tls_req(seL4_Word sender_badge, seL4_Messag
     cpu_component_registry_entry_t *cpu_data = (cpu_component_registry_entry_t *)
         resource_component_registry_get_by_badge(get_cpu_component(), sender_badge);
     SERVER_GOTO_IF_COND_BG(cpu_data == NULL, sender_badge, "Couldn't find CPU data\n");
-    void *tls_base = (void *)seL4_GetMR(CPUMSGREG_SET_TLS_REQ_BASE);
+    void *tls_base = (void *)msg->tls_base_addr;
 
     error = cpu_set_tls_base(&cpu_data->cpu, tls_base, false);
     SERVER_GOTO_IF_ERR(error, "Failed to set TLS \n");
 
 err_goto:
-    seL4_SetMR(CPUMSGREG_FUNC, CPU_FUNC_SET_TLS_ACK);
-    seL4_MessageInfo_t tag = seL4_MessageInfo_new(error, 0, 0, CPUMSGREG_SET_TLS_ACK_END);
-    return tag;
+    reply_msg->which_msg = CpuReturnMessage_basic_tag;
+    reply_msg->errorCode = error;
 }
 
-static seL4_MessageInfo_t handle_elevate_req(seL4_Word sender_badge)
+static void handle_elevate_req(seL4_Word sender_badge, CpuElevatePrivilegeMessage *msg, CpuReturnMessage *reply_msg)
 {
     int error = 0;
     OSDB_PRINTF("Got elevate CPU request:");
@@ -247,9 +241,8 @@ static seL4_MessageInfo_t handle_elevate_req(seL4_Word sender_badge)
     SERVER_GOTO_IF_ERR(error, "Failed to set TLS \n");
 
 err_goto:
-    seL4_SetMR(CPUMSGREG_FUNC, CPU_FUNC_ELEVATE_ACK);
-    seL4_MessageInfo_t tag = seL4_MessageInfo_new(error, 0, 0, CPUMSGREG_ELEVATE_ACK_END);
-    return tag;
+    reply_msg->which_msg = CpuReturnMessage_basic_tag;
+    reply_msg->errorCode = error;
 }
 
 static seL4_MessageInfo_t cpu_component_handle(seL4_MessageInfo_t tag,
@@ -261,47 +254,49 @@ static seL4_MessageInfo_t cpu_component_handle(seL4_MessageInfo_t tag,
                                                bool *should_reply)
 {
     int error = 0; // unused, to appease the error handling macros
-    enum cpu_component_funcs func = seL4_GetMR(CPUMSGREG_FUNC);
-    seL4_MessageInfo_t reply_tag;
+    CpuMessage *msg = (CpuMessage *)msg_p;
+    CpuReturnMessage *reply_msg = (CpuReturnMessage *)reply_msg_p;
 
     if (get_object_id_from_badge(sender_badge) == BADGE_OBJ_ID_NULL)
     {
-        SERVER_GOTO_IF_COND(func != CPU_FUNC_CONNECT_REQ,
+        SERVER_GOTO_IF_COND(msg->which_msg != CpuMessage_alloc_tag,
                             "Received invalid request on the allocation endpoint\n");
-        reply_tag = handle_cpu_allocation(sender_badge);
+        handle_cpu_allocation(sender_badge, reply_msg);
     }
     else
     {
-        switch (func)
+        switch (msg->which_msg)
         {
-        case CPU_FUNC_START_REQ:
-            reply_tag = handle_start_req(sender_badge, tag);
+        case CpuMessage_start_tag:
+            handle_start_req(sender_badge, &msg->msg.start, reply_msg);
             break;
 
-        case CPU_FUNC_CONFIG_REQ:
-            reply_tag = handle_config_req(sender_badge, tag);
+        case CpuMessage_config_tag:
+            handle_config_req(sender_badge, &msg->msg.config, reply_msg);
             break;
-        case CPU_FUNC_CHANGE_VSPACE_REQ:
-            reply_tag = handle_change_vspace_req(sender_badge, tag, received_cap);
+        case CpuMessage_change_vspace_tag:
+            handle_change_vspace_req(sender_badge, &msg->msg.change_vspace, reply_msg, received_cap);
             *need_new_recv_cap = true;
             break;
-        case CPU_FUNC_SET_TLS_REQ:
-            reply_tag = handle_set_tls_req(sender_badge, tag);
+        case CpuMessage_tls_base_tag:
+            handle_set_tls_req(sender_badge, &msg->msg.tls_base, reply_msg);
             break;
-        case CPU_FUNC_ELEVATE_REQ:
-            reply_tag = handle_elevate_req(sender_badge);
+        case CpuMessage_elevate_privilege_tag:
+            handle_elevate_req(sender_badge, &msg->msg.start, reply_msg);
             break;
         default:
-            SERVER_GOTO_IF_COND(1, "Unknown request received: %d\n", func);
+            SERVER_GOTO_IF_COND(1, "Unknown request received: %d\n", msg->which_msg);
             break;
         }
     }
 
-    return reply_tag;
+    OSDB_PRINTF("Returning from CPU component with error code %d\n", reply_msg->errorCode);
+    return seL4_MessageInfo_new(0, 0, 0, 0); // (XXX) Arya: Replace once conversion to protobuf is finished
 
 err_goto:
-    seL4_MessageInfo_t err_tag = seL4_MessageInfo_set_label(reply_tag, 1);
-    return err_tag;
+    OSDB_PRINTF("Returning from CPU component with error code %d\n", error);
+    reply_msg->errorCode = error;
+    return seL4_MessageInfo_new(0, 0, 0, 0);
 }
 
 int cpu_component_initialize(vka_t *server_vka,

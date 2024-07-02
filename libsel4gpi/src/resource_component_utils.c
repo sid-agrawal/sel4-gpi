@@ -64,7 +64,7 @@ void resource_component_handle(resource_component_context_t *component,
 
     // (XXX) Arya: Remove once all components are converted
     bool use_rpc = component->resource_type == GPICAP_TYPE_PD || component->resource_type == GPICAP_TYPE_ADS 
-        || component->resource_type == GPICAP_TYPE_MO;
+        || component->resource_type == GPICAP_TYPE_MO || component->resource_type == GPICAP_TYPE_CPU;
 
     if (use_rpc)
     {

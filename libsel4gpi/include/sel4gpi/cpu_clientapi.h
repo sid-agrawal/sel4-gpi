@@ -87,12 +87,12 @@ int cpu_client_change_vspace(cpu_client_context_t *conn,
                              ads_client_context_t *ads_conn);
 
 /**
- * @brief elevate priviledges of a CPU (e.g. for running a guest)
+ * @brief elevate privileges of a CPU (e.g. for running a guest)
  *
  * @param conn the CPU to elevate
  * @return int 0 on success, -1 on failure.
  */
-int cpu_client_elevate_priviledges(cpu_client_context_t *conn);
+int cpu_client_elevate_privileges(cpu_client_context_t *conn);
 
 /* ======================================= CONVENIENCE FUNCTIONS (NOT PART OF FRAMEWORK) ================================================= */
 /**

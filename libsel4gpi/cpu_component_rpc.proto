@@ -5,9 +5,51 @@ enum CpuComponentError {
     UNKNOWN = 11;       /* (XXX) manually set to seL4_NumErrors */
 }
 
-/* message type for all PD component request messages */
+message CpuAllocMessage {
+    /* No content */
+};
+
+message CpuConfigMessage {
+    uint64 ipc_buf_addr = 1;    /* vaddr of the IPC buffer in the bound ADS */
+    uint64 fault_ep_cap = 2;    /* cap ptr of the fault endpont in the bound cspace */
+    uint64 cnode_guard = 3;     /* cnode guard bits for the bound cspace */
+};
+
+message CpuChangeVspaceMessage {
+    /* No content */
+};
+
+message CpuStartMessage {
+    /* No content */
+};
+
+message CpuElevatePrivilegeMessage {
+    /* No content */
+};
+
+message CpuTlsBaseMessage {
+    uint64 tls_base_addr = 1;    /* vaddr of the TLS base in the bound ADS */
+};
+
+message CpuSuspendMessage {
+    /* No content */
+};
+
 message CpuMessage {
-    /* No content, WIP */
+    oneof msg {
+        CpuAllocMessage alloc = 1;
+        CpuChangeVspaceMessage change_vspace = 2;
+        CpuStartMessage start = 3;
+        CpuElevatePrivilegeMessage elevate_privilege = 4;
+        CpuTlsBaseMessage tls_base = 5;
+        CpuSuspendMessage suspend = 6;
+        CpuConfigMessage config = 7;
+    };
+};
+
+message CpuAllocReturnMessage {
+    uint64 slot = 1;        /* slot for the CPU cap */
+    uint32 id = 2;          /* ID of the allocated CPU */
 };
 
 /* return from a basic Cpu Component message */
@@ -20,5 +62,6 @@ message CpuReturnMessage {
     CpuComponentError errorCode = 1;
     oneof msg {
         CpuBasicReturnMessage basic = 2;
+        CpuAllocReturnMessage alloc = 3;
     };
 };
