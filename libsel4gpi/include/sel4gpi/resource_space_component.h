@@ -28,64 +28,6 @@
 // Null resource space ID
 #define RESSPC_ID_NULL 0xFF
 
-/* IPC values returned in the "label" message header. */
-enum res_space_component_errors
-{
-    RESSPC_SERVER_NOERROR = 0,
-    /* No future collisions with seL4_Error.*/
-    RESSPC_SERVER_ERROR_UNKNOWN = seL4_NumErrors,
-};
-
-/* IPC Message register values */
-enum res_space_component_funcs
-{
-    RESSPC_FUNC_CONNECT_REQ = 0,
-    RESSPC_FUNC_CONNECT_ACK,
-
-    RESSPC_FUNC_DISCONNECT_REQ,
-    RESSPC_FUNC_DISCONNECT_ACK,
-
-    RESSPC_FUNC_MAP_SPACE_REQ,
-    RESSPC_FUNC_MAP_SPACE_ACK,
-
-    RESSPC_FUNC_CREATE_RES_REQ,
-    RESSPC_FUNC_CREATE_RES_ACK,
-};
-
-/* Designated purposes of each message register in the mini-protocol. */
-enum res_space_component_msgregs
-{
-    /* These four are fixed headers in every serserv message. */
-    RESSPCMSGREG_FUNC = 0,
-    /* This is a convenience label for IPC MessageInfo length. */
-    RESSPCMSGREG_LABEL0,
-
-    /* Connect / New */
-    RESSPCMSGREG_CONNECT_REQ_CLIENT_ID = RESSPCMSGREG_LABEL0,
-    RESSPCMSGREG_CONNECT_REQ_END,
-
-    RESSPCMSGREG_CONNECT_ACK_ID = RESSPCMSGREG_LABEL0,
-    RESSPCMSGREG_CONNECT_ACK_TYPE,
-    RESSPCMSGREG_CONNECT_ACK_SLOT,
-    RESSPCMSGREG_CONNECT_ACK_END,
-
-    /* Map Space */
-    RESSPCMSGREG_MAP_SPACE_REQ_SPACE_ID = RESSPCMSGREG_LABEL0,
-    RESSPCMSGREG_MAP_SPACE_REQ_END,
-
-    RESSPCMSGREG_MAP_SPACE_ACK_END,
-
-    /* Create Resource */
-    RESSPCMSGREG_CREATE_RES_REQ_RES_ID = RESSPCMSGREG_LABEL0,
-    RESSPCMSGREG_CREATE_RES_REQ_END,
-
-    RESSPCMSGREG_CREATE_RES_ACK_END,
-
-    /* Disconnect / Delete*/
-    RESSPCMSGREG_DISCONNECT_REQ_END = RESSPCMSGREG_LABEL0,
-    RESSPCMSGREG_DISCONNECT_ACK_END = RESSPCMSGREG_LABEL0,
-};
-
 /* Per-space context maintained by the server. */
 typedef struct _resspc_component_registry_entry
 {

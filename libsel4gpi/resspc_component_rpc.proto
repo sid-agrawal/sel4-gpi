@@ -1,24 +1,46 @@
 syntax = "proto3";
+import 'nanopb.proto';
 
 enum ResSpcComponentError {
     NONE = 0;           /* no error */
     UNKNOWN = 11;       /* (XXX) manually set to seL4_NumErrors */
 }
 
-/* message type for all PD component request messages */
-message ResSpcMessage {
-    /* No content, WIP */
+message ResSpcAllocMessage {
+    string type_name = 1 [(nanopb).max_length = 40];    /* name of the resource type */
+    uint32 client_id = 2;                               /* ID of the PD that requested the namespace */
 };
 
-/* return from a basic ResSpc Component message */
+message ResSpcMapMessage {
+    uint32 space_id = 1;        /* resource space ID to map this space to */
+}
+
+message ResSpcCreateResourceMessage {
+    uint32 resource_id = 1;     /* resource ID to create */
+}
+
+message ResSpcMessage {
+    oneof msg {
+        ResSpcAllocMessage alloc = 1;
+        ResSpcMapMessage map = 2;
+        ResSpcCreateResourceMessage create_resource = 3;
+    }
+};
+
 message ResSpcBasicReturnMessage {
     /* No content */
 };
 
-/* message type for all ResSpc Component return messages */
+message ResSpcAllocReturnMessage {
+    uint64 slot = 1;        /* slot for the MO cap */
+    uint32 id = 2;          /* ID of the allocated MO */
+    uint32 type_code = 3;   /* gpi type code of the resource space's type */
+};
+
 message ResSpcReturnMessage {
     ResSpcComponentError errorCode = 1;
     oneof msg {
         ResSpcBasicReturnMessage basic = 2;
+        ResSpcAllocReturnMessage alloc = 3;
     };
 };

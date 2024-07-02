@@ -141,7 +141,7 @@ int resource_server_main(void *context_v)
     received_cap_path.capDepth = PD_CAP_DEPTH;
 
     // Create a default resource space
-    error = resource_server_new_res_space(context, context->parent_pd_id, &context->default_space);
+    error = resource_server_new_res_space(context, context->parent_pd_id, &context->default_space);    
     CHECK_ERROR_GOTO(error, "failed to create resource server's default space", exit_main);
     RESOURCE_SERVER_PRINTF("Resource server's default space ID is 0x%lx\n", context->default_space.id);
 

@@ -56,14 +56,13 @@ err_goto:
     OSDB_PRINTERR("Failed to delete resource space (%d)\n", node->space.id);
 }
 
-static seL4_MessageInfo_t handle_resspc_allocation_request(seL4_Word sender_badge)
+static void handle_resspc_allocation_request(seL4_Word sender_badge,
+                                             ResSpcAllocMessage *msg, ResSpcReturnMessage *reply_msg)
 {
     OSDB_PRINTF("Got resource space allocation request from client badge %lx.\n", sender_badge);
     int error = 0;
-    seL4_MessageInfo_t reply_tag;
-
     uint64_t caller_id = get_client_id_from_badge(sender_badge);
-    uint64_t client_id = seL4_GetMR(RESSPCMSGREG_CONNECT_REQ_CLIENT_ID);
+    uint64_t client_id = msg->client_id;
 
     // Find the resource server PD
     pd_component_registry_entry_t *server_pd = pd_component_registry_get_entry_by_id(caller_id);
@@ -77,17 +76,10 @@ static seL4_MessageInfo_t handle_resspc_allocation_request(seL4_Word sender_badg
         resource_component_registry_get_by_badge(get_ep_component(), seL4_GetBadge(0));
     SERVER_GOTO_IF_COND(ep_data == NULL, "Couldn't find resource server's tracked EP\n");
 
-    // Attach the MO containing resource type name
-    uint64_t mo_id = get_object_id_from_badge(seL4_GetBadge(1));
-
-    char *resource_type_name;
-    error = ads_component_attach_to_rt(mo_id, (void *)&resource_type_name);
-    SERVER_GOTO_IF_ERR(error, "Failed to attach MO from client to root task\n");
-
     // Get the resource type code
-    gpi_cap_t type = get_resource_type_code(resource_type_name);
+    gpi_cap_t type = get_resource_type_code(msg->type_name);
 
-    OSDB_PRINTF("Creating resource space for type (%s, %d).\n", resource_type_name, type);
+    OSDB_PRINTF("Creating resource space for type (%s, %d).\n", msg->type_name, type);
 
     // Allocate the resource space
     resspc_component_registry_entry_t *space_entry;
@@ -113,26 +105,19 @@ static seL4_MessageInfo_t handle_resspc_allocation_request(seL4_Word sender_badg
     rde_type_t rde_type = {
         .type = type,
     };
-    error = pd_add_rde(&client_pd->pd, rde_type, resource_type_name, space_id, ep_data->ep.endpoint_in_RT.cptr);
+    error = pd_add_rde(&client_pd->pd, rde_type, msg->type_name, space_id, ep_data->ep.endpoint_in_RT.cptr);
     SERVER_GOTO_IF_ERR(error, "Failed to add RDE to new resource space\n");
 
     // Add the type name to the server PD
-    pd_add_type_name(&server_pd->pd, rde_type, resource_type_name);
+    pd_add_type_name(&server_pd->pd, rde_type, msg->type_name);
 
-    // Remove the MO
-    error = ads_component_remove_from_rt((void *)resource_type_name);
-    SERVER_GOTO_IF_ERR(error, "Failed to remove MO from root task\n");
-
-    seL4_SetMR(RESSPCMSGREG_FUNC, RESSPC_FUNC_CONNECT_ACK);
-    seL4_SetMR(RESSPCMSGREG_CONNECT_ACK_ID, space_id);
-    seL4_SetMR(RESSPCMSGREG_CONNECT_ACK_TYPE, type);
-    seL4_SetMR(RESSPCMSGREG_CONNECT_ACK_SLOT, space_cap);
+    reply_msg->msg.alloc.id = space_id;
+    reply_msg->msg.alloc.type_code = type;
+    reply_msg->msg.alloc.slot = space_cap;
 
 err_goto:
-    seL4_SetMR(RESSPCMSGREG_FUNC, RESSPC_FUNC_CONNECT_ACK);
-    reply_tag = seL4_MessageInfo_new(error, 0, 0,
-                                     RESSPCMSGREG_CONNECT_ACK_END);
-    return reply_tag;
+    reply_msg->which_msg = ResSpcReturnMessage_alloc_tag;
+    reply_msg->errorCode = error;
 }
 
 int resspc_component_mark_delete(uint64_t space_id)
@@ -182,14 +167,15 @@ int resspc_component_sweep(void)
     }
 }
 
-static seL4_MessageInfo_t handle_create_resource_request(seL4_Word sender_badge)
+static void handle_create_resource_request(seL4_Word sender_badge,
+                                           ResSpcCreateResourceMessage *msg, ResSpcReturnMessage *reply_msg)
 {
     OSDB_PRINTF("Got create resource request from client badge %lx.\n", sender_badge);
     int error = 0;
 
     uint64_t client_id = get_client_id_from_badge(sender_badge);
     uint64_t space_id = get_object_id_from_badge(sender_badge);
-    uint64_t res_id = seL4_GetMR(RESSPCMSGREG_CREATE_RES_REQ_RES_ID);
+    uint64_t res_id = msg->resource_id;
 
     // Find the resource space
     resspc_component_registry_entry_t *space_entry = resource_space_get_entry_by_id(space_id);
@@ -209,10 +195,8 @@ static seL4_MessageInfo_t handle_create_resource_request(seL4_Word sender_badge)
                             seL4_CapNull, seL4_CapNull, seL4_CapNull);
 
 err_goto:
-    seL4_SetMR(RESSPCMSGREG_FUNC, RESSPC_FUNC_CREATE_RES_ACK);
-    seL4_MessageInfo_t tag = seL4_MessageInfo_new(error, 0, 0,
-                                                  RESSPCMSGREG_CREATE_RES_ACK_END);
-    return tag;
+    reply_msg->which_msg = ResSpcReturnMessage_basic_tag;
+    reply_msg->errorCode = error;
 }
 
 int resspc_component_map_space(uint64_t src_spc_id, uint64_t dest_spc_id)
@@ -236,21 +220,20 @@ err_goto:
     return error;
 }
 
-static seL4_MessageInfo_t handle_map_space_request(seL4_Word sender_badge)
+static void handle_map_space_request(seL4_Word sender_badge,
+                                     ResSpcMapMessage *msg, ResSpcReturnMessage *reply_msg)
 {
     OSDB_PRINTF("Got map space request from client badge %lx.\n", sender_badge);
     int error = 0;
 
     uint64_t src_spc_id = get_object_id_from_badge(sender_badge);
-    uint64_t dest_spc_id = seL4_GetMR(RESSPCMSGREG_MAP_SPACE_REQ_SPACE_ID);
+    uint64_t dest_spc_id = msg->space_id;
 
     error = resspc_component_map_space(src_spc_id, dest_spc_id);
 
 err_goto:
-    seL4_SetMR(RESSPCMSGREG_FUNC, RESSPC_FUNC_MAP_SPACE_ACK);
-    seL4_MessageInfo_t tag = seL4_MessageInfo_new(error, 0, 0,
-                                                  RESSPCMSGREG_MAP_SPACE_ACK_END);
-    return tag;
+    reply_msg->which_msg = ResSpcReturnMessage_basic_tag;
+    reply_msg->errorCode = error;
 }
 
 int resspc_check_map(uint64_t src_space_id, uint64_t dest_space_id)
@@ -278,40 +261,44 @@ static seL4_MessageInfo_t resspc_component_handle(seL4_MessageInfo_t tag,
                                                   void *msg_p,
                                                   seL4_Word sender_badge,
                                                   seL4_CPtr received_cap,
-                                                  void *msg_reply_p,
+                                                  void *reply_msg_p,
                                                   bool *need_new_recv_cap,
                                                   bool *should_reply)
 {
     int error = 0;
-    enum res_space_component_funcs func = seL4_GetMR(RESSPCMSGREG_FUNC);
-    seL4_MessageInfo_t reply_tag;
+    ResSpcMessage *msg = (ResSpcMessage *)msg_p;
+    ResSpcReturnMessage *reply_msg = (ResSpcReturnMessage *)reply_msg_p;
 
     if (get_object_id_from_badge(sender_badge) == BADGE_OBJ_ID_NULL)
     {
-        SERVER_GOTO_IF_COND(func != RESSPC_FUNC_CONNECT_REQ,
+        SERVER_GOTO_IF_COND(msg->which_msg != ResSpcMessage_alloc_tag,
                             "Received invalid request on the allocation endpoint\n");
-        reply_tag = handle_resspc_allocation_request(sender_badge);
+        handle_resspc_allocation_request(sender_badge, &msg->msg.alloc, reply_msg);
         *need_new_recv_cap = true;
     }
     else
     {
-        switch (func)
+        switch (msg->which_msg)
         {
-        case RESSPC_FUNC_CREATE_RES_REQ:
-            reply_tag = handle_create_resource_request(sender_badge);
+        case ResSpcMessage_create_resource_tag:
+            handle_create_resource_request(sender_badge, &msg->msg.create_resource, reply_msg);
             break;
-        case RESSPC_FUNC_MAP_SPACE_REQ:
-            reply_tag = handle_map_space_request(sender_badge);
+        case ResSpcMessage_map_tag:
+            handle_map_space_request(sender_badge, &msg->msg.map, reply_msg);
             break;
         default:
-            SERVER_GOTO_IF_COND(1, "Unknown request received: %d\n", func);
+            SERVER_GOTO_IF_COND(1, "Unknown request received: %d\n", msg->which_msg);
             break;
         }
     }
 
+    OSDB_PRINTF("Returning from ResSpc component with error code %d\n", reply_msg->errorCode);
+    return seL4_MessageInfo_new(0, 0, 0, 0); // (XXX) Arya: Replace once conversion to protobuf is finished
+
 err_goto:
-    reply_tag = seL4_MessageInfo_set_label(reply_tag, error);
-    return reply_tag;
+    OSDB_PRINTF("Returning from ResSpc component with error code %d\n", error);
+    reply_msg->errorCode = error;
+    return seL4_MessageInfo_new(0, 0, 0, 0);
 }
 
 // Keeping here instead of a separate resource space object file
