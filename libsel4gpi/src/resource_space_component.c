@@ -283,7 +283,7 @@ static seL4_MessageInfo_t resspc_component_handle(seL4_MessageInfo_t tag,
                                                   bool *should_reply)
 {
     int error = 0;
-    enum mo_component_funcs func = seL4_GetMR(RESSPCMSGREG_FUNC);
+    enum res_space_component_funcs func = seL4_GetMR(RESSPCMSGREG_FUNC);
     seL4_MessageInfo_t reply_tag;
 
     if (get_object_id_from_badge(sender_badge) == BADGE_OBJ_ID_NULL)

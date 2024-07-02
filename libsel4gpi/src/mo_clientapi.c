@@ -12,10 +12,17 @@
 #include <sel4gpi/mo_clientapi.h>
 #include <sel4gpi/badge_usage.h>
 #include <sel4gpi/debug.h>
+#include <sel4gpi/gpi_rpc.h>
+#include <mo_component_rpc.pb.h>
 
 // Defined for utility printing macros
 #define DEBUG_ID MO_DEBUG
 #define SERVER_ID MOSERVS
+
+static sel4gpi_rpc_env_t rpc_env = {
+    .request_desc = &MoMessage_msg,
+    .reply_desc = &MoReturnMessage_msg,
+};
 
 static int mo_connect(seL4_CPtr server_ep_cap,
                       seL4_Word num_pages,
@@ -23,18 +30,32 @@ static int mo_connect(seL4_CPtr server_ep_cap,
                       uintptr_t paddr,
                       mo_client_context_t *ret_conn)
 {
-    seL4_SetMR(MOMSGREG_FUNC, MO_FUNC_CONNECT_REQ);
-    seL4_SetMR(MOMSGREG_CONNECT_REQ_NUM_PAGES, num_pages);
-    seL4_SetMR(MOMSGREG_CONNECT_REQ_PADDR, paddr);
-    seL4_SetMR(MOMSGREG_CONNECT_REQ_PAGE_BITS, page_bits);
+    OSDB_PRINTF("Sending connect request to MO component\n");
 
-    seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0, MOMSGREG_CONNECT_REQ_END);
-    tag = seL4_Call(server_ep_cap, tag);
+    int error = 0;
 
-    ret_conn->badged_server_ep_cspath.capPtr = seL4_GetMR(MOMSGREG_CONNECT_ACK_SLOT);
-    ret_conn->id = seL4_GetMR(MOMSGREG_CONNECT_ACK_ID);
+    MoMessage msg = {
+        .which_msg = MoMessage_alloc_tag,
+        .msg.alloc = {
+            .num_pages = num_pages,
+            .page_bits = page_bits,
+            .phys_addr = paddr,
+        }
+    };
 
-    return seL4_MessageInfo_ptr_get_label(&tag);
+    MoReturnMessage ret_msg;
+
+    error = sel4gpi_rpc_call(&rpc_env, server_ep_cap, (void *)&msg,
+                             0, NULL, (void *)&ret_msg);
+    error |= ret_msg.errorCode;
+
+    if (!error)
+    {
+        ret_conn->badged_server_ep_cspath.capPtr = ret_msg.msg.alloc.slot;
+        ret_conn->id = ret_msg.msg.alloc.id;
+    }
+
+    return error;
 }
 
 int mo_component_client_connect(seL4_CPtr server_ep_cap,
@@ -56,10 +77,19 @@ int mo_component_client_connect_paddr(seL4_CPtr server_ep_cap,
 
 int mo_component_client_disconnect(mo_client_context_t *conn)
 {
-    seL4_SetMR(MOMSGREG_FUNC, MO_FUNC_DISCONNECT_REQ);
+    OSDB_PRINTF("Sending disconnect request to MO component\n");
 
-    seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0, MOMSGREG_CONNECT_REQ_END);
-    tag = seL4_Call(conn->badged_server_ep_cspath.capPtr, tag);
-    
-    return seL4_MessageInfo_ptr_get_label(&tag);
+    int error = 0;
+
+    MoMessage msg = {
+        .which_msg = MoMessage_disconnect_tag,
+    };
+
+    MoReturnMessage ret_msg;
+
+    error = sel4gpi_rpc_call(&rpc_env, conn->badged_server_ep_cspath.capPtr, (void *)&msg,
+                             0, NULL, (void *)&ret_msg);
+    error |= ret_msg.errorCode;
+
+    return error;
 }

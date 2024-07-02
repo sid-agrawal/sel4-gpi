@@ -79,19 +79,19 @@ err_goto:
     return error;
 }
 
-static seL4_MessageInfo_t handle_mo_allocation_request(seL4_Word sender_badge)
+static void handle_mo_allocation_request(seL4_Word sender_badge,
+                                         MoAllocMessage *msg, MoReturnMessage *reply_msg)
 {
     OSDB_PRINTF("Got MO allocation request from %lx\n", sender_badge);
     BADGE_PRINT(sender_badge);
 
     int error = 0;
-    seL4_MessageInfo_t reply_tag;
     seL4_CPtr ret_cap;
     mo_component_registry_entry_t *new_entry;
     uint32_t client_id = get_client_id_from_badge(sender_badge);
-    seL4_Word num_pages = seL4_GetMR(MOMSGREG_CONNECT_REQ_NUM_PAGES);
-    uintptr_t paddr = seL4_GetMR(MOMSGREG_CONNECT_REQ_PADDR);
-    size_t page_bits = seL4_GetMR(MOMSGREG_CONNECT_REQ_PAGE_BITS);
+    seL4_Word num_pages = msg->num_pages;
+    uintptr_t paddr = msg->phys_addr;
+    size_t page_bits = msg->page_bits;
 
     OSDB_PRINTF("Got connect request for %ld pages of size: %zu\n", num_pages, SIZE_BITS_TO_BYTES(page_bits));
 
@@ -110,16 +110,16 @@ static seL4_MessageInfo_t handle_mo_allocation_request(seL4_Word sender_badge)
                 new_entry->mo.id, new_entry->mo.num_pages);
 
     /* Return this badged end point in the return message. */
-    seL4_SetMR(MOMSGREG_CONNECT_ACK_ID, new_entry->mo.id);
-    seL4_SetMR(MOMSGREG_CONNECT_ACK_SLOT, ret_cap);
+    reply_msg->msg.alloc.id = new_entry->mo.id;
+    reply_msg->msg.alloc.slot = ret_cap;
 
 err_goto:
-    seL4_SetMR(MOMSGREG_FUNC, MO_FUNC_CONNECT_ACK);
-    reply_tag = seL4_MessageInfo_new(error, 0, 0, MOMSGREG_CONNECT_ACK_END);
-    return reply_tag;
+    reply_msg->which_msg = MoReturnMessage_alloc_tag;
+    reply_msg->errorCode = error;
 }
 
-static seL4_MessageInfo_t handle_mo_disconnect_request(seL4_Word sender_badge)
+static void handle_mo_disconnect_request(seL4_Word sender_badge,
+                                         MoDisconnectMessage *msg, MoReturnMessage *reply_msg)
 {
     int error = 0;
 
@@ -140,9 +140,8 @@ static seL4_MessageInfo_t handle_mo_disconnect_request(seL4_Word sender_badge)
     // This will reduce the refcount of the MO, and then it will be deleted if necessary
 
 err_goto:
-    seL4_SetMR(MOMSGREG_FUNC, MO_FUNC_DISCONNECT_ACK);
-    seL4_MessageInfo_t reply_tag = seL4_MessageInfo_new(error, 0, 0, MOMSGREG_DISCONNECT_ACK_END);
-    return reply_tag;
+    reply_msg->which_msg = MoReturnMessage_basic_tag;
+    reply_msg->errorCode = error;
 }
 
 static seL4_MessageInfo_t mo_component_handle(seL4_MessageInfo_t tag,
@@ -154,33 +153,35 @@ static seL4_MessageInfo_t mo_component_handle(seL4_MessageInfo_t tag,
                                               bool *should_reply)
 {
     int error = 0; // unused, to appease the error handling macros
-    enum mo_component_funcs func = seL4_GetMR(MOMSGREG_FUNC);
-    seL4_MessageInfo_t reply_tag;
+    MoMessage *msg = (MoMessage *)msg_p;
+    MoReturnMessage *reply_msg = (MoReturnMessage *)reply_msg_p;
 
     if (get_object_id_from_badge(sender_badge) == BADGE_OBJ_ID_NULL)
     {
-        SERVER_GOTO_IF_COND(func != MO_FUNC_CONNECT_REQ,
+        SERVER_GOTO_IF_COND(msg->which_msg != MoMessage_alloc_tag,
                             "Received invalid request on the allocation endpoint\n");
-        reply_tag = handle_mo_allocation_request(sender_badge);
+        handle_mo_allocation_request(sender_badge, &msg->msg.alloc, reply_msg);
     }
     else
     {
-        switch (func)
+        switch (msg->which_msg)
         {
-        case MO_FUNC_DISCONNECT_REQ:
-            reply_tag = handle_mo_disconnect_request(sender_badge);
+        case MoMessage_disconnect_tag:
+            handle_mo_disconnect_request(sender_badge, &msg->msg.disconnect, reply_msg);
             break;
         default:
-            SERVER_GOTO_IF_COND(1, "Unknown request received: %d\n", func);
+            SERVER_GOTO_IF_COND(1, "Unknown request received: %d\n", msg->which_msg);
             break;
         }
     }
 
-    return reply_tag;
+    OSDB_PRINTF("Returning from MO component with error code %d\n", reply_msg->errorCode);
+    return seL4_MessageInfo_new(0, 0, 0, 0); // (XXX) Arya: Replace once conversion to protobuf is finished
 
 err_goto:
-    seL4_MessageInfo_t err_tag = seL4_MessageInfo_set_label(reply_tag, 1);
-    return err_tag;
+    OSDB_PRINTF("Returning from MO component with error code %d\n", error);
+    reply_msg->errorCode = error;
+    return seL4_MessageInfo_new(0, 0, 0, 0);
 }
 
 int mo_component_initialize(vka_t *server_vka,

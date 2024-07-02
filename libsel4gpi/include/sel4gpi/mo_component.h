@@ -28,51 +28,6 @@
 #define MOSERVS "MOServ Component: "
 #define MOSERVC "MOServ Client   : "
 
-#define MO_SERVER_BADGE_VALUE_EMPTY (0)
-#define MO_SERVER_BADGE_PARENT_VALUE (0xDEADBEEF)
-
-/* IPC values returned in the "label" message header. */
-enum mo_component_errors
-{
-    MO_SERVER_NOERROR = 0,
-    /* No future collisions with seL4_Error.*/
-    MO_SERVER_ERROR_BIND_FAILED = seL4_NumErrors,
-    MO_SERVER_ERROR_UNKNOWN
-};
-
-/* IPC Message register values for SSMSGREG_FUNC */
-enum mo_component_funcs
-{
-    MO_FUNC_CONNECT_REQ,
-    MO_FUNC_CONNECT_ACK,
-
-    MO_FUNC_DISCONNECT_REQ,
-    MO_FUNC_DISCONNECT_ACK,
-};
-
-/* Designated purposes of each message register in the mini-protocol. */
-enum mo_component_msgregs
-{
-    /* These four are fixed headers in every serserv message. */
-    MOMSGREG_FUNC = 0,
-    /* This is a convenience label for IPC MessageInfo length. */
-    MOMSGREG_LABEL0,
-
-    /* Connect / New */
-    MOMSGREG_CONNECT_REQ_NUM_PAGES = MOMSGREG_LABEL0,
-    MOMSGREG_CONNECT_REQ_PADDR,
-    MOMSGREG_CONNECT_REQ_PAGE_BITS,
-    MOMSGREG_CONNECT_REQ_END,
-
-    MOMSGREG_CONNECT_ACK_ID = MOMSGREG_LABEL0,
-    MOMSGREG_CONNECT_ACK_SLOT,
-    MOMSGREG_CONNECT_ACK_END,
-
-    /* Disconnect / Delete*/
-    MOMSGREG_DISCONNECT_REQ_END = MOMSGREG_LABEL0,
-    MOMSGREG_DISCONNECT_ACK_END = MOMSGREG_LABEL0,
-};
-
 /* Per-client context maintained by the server. */
 typedef struct _mo_component_registry_entry
 {

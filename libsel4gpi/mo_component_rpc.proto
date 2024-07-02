@@ -5,20 +5,36 @@ enum MoComponentError {
     UNKNOWN = 11;       /* (XXX) manually set to seL4_NumErrors */
 }
 
-/* message type for all PD component request messages */
-message MoMessage {
-    /* No content, WIP */
+message MoAllocMessage {
+    uint32 num_pages = 1;       /* number of pages to allocate */
+    uint32 page_bits = 2;       /* size bits of a page */
+    uint64 phys_addr = 3;       /* requested physical address, optional */
 };
 
-/* return from a basic MO Component message */
+message MoDisconnectMessage {
+    /* No content */
+}
+
+message MoMessage {
+    oneof msg {
+        MoAllocMessage alloc = 1;
+        MoDisconnectMessage disconnect = 2;
+    }
+};
+
+message MoAllocReturnMessage {
+    uint64 slot = 1;        /* slot for the MO cap */
+    uint32 id = 2;          /* ID of the allocated MO */
+};
+
 message MoBasicReturnMessage {
     /* No content */
 };
 
-/* message type for all MO Component return messages */
 message MoReturnMessage {
     MoComponentError errorCode = 1;
     oneof msg {
         MoBasicReturnMessage basic = 2;
+        MoAllocReturnMessage alloc = 3;
     };
 };
