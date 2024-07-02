@@ -54,7 +54,7 @@ void resource_component_handle(resource_component_context_t *component,
                                cspacepath_t *received_cap)
 {
     OSDB_PRINTF("Resource component handle: %s\n", cap_type_to_str(component->resource_type));
-
+    
     int error = 0;
     bool needs_new_receive_slot = false;
     bool should_reply = true;
@@ -63,11 +63,12 @@ void resource_component_handle(resource_component_context_t *component,
     char rpc_reply_buf[RPC_MSG_MAX_SIZE];
 
     // (XXX) Arya: Remove once all components are converted
-    if (component->resource_type == GPICAP_TYPE_PD) {
+    bool use_rpc = component->resource_type == GPICAP_TYPE_PD || component->resource_type == GPICAP_TYPE_ADS;
+
+    if (use_rpc) {
         error = sel4gpi_rpc_recv(&component->rpc_env, (void *)rpc_msg_buf);
         assert(error == 0);
     }
-
     // Handle the message
     seL4_MessageInfo_t reply_tag = component->request_handler(
         tag,
@@ -79,7 +80,7 @@ void resource_component_handle(resource_component_context_t *component,
         &should_reply);
 
     // (XXX) Arya: Remove once all components are converted
-    if (component->resource_type == GPICAP_TYPE_PD) {
+    if (use_rpc) {
         error = sel4gpi_rpc_reply(&component->rpc_env, (void *)rpc_reply_buf, &reply_tag);
     }
 

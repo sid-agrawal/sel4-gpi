@@ -53,7 +53,6 @@ int ads_client_attach(ads_client_context_t *conn,
  * Reserve a VMR of an ADS
  *
  * @param conn client connection object to the ADS
- * @param free_slot a slot to receive a cap in
  * @param vaddr requested reservation address (or NULL)
  * @param size size in bytes of the region to reserve
  * @param page_bits size of an individual page
@@ -63,7 +62,6 @@ int ads_client_attach(ads_client_context_t *conn,
  * @return int 0 on success, 1 on failure
  */
 int ads_client_reserve(ads_client_context_t *conn,
-                       seL4_CPtr free_slot,
                        void *vaddr,
                        size_t size,
                        size_t page_bits,
@@ -102,27 +100,6 @@ int ads_client_rm(ads_client_context_t *conn, void *vaddr);
  * @return int 0 on success, 1 on failure.
  */
 int ads_client_bind_cpu(ads_client_context_t *conn, seL4_CPtr cpu_cap);
-
-/**
- * @brief Dump the resource relations of the ads.
- * @param conn ads connection object
- * @return int 0 on success, 1 on failure.
- */
-int ads_client_dump_rr(ads_client_context_t *conn, char *buf, size_t buf_size);
-
-/**
- * @brief Get the unique id of the ads.
- *
- * @param conn ads connection object
- * @param ret_id id of the ads as a return value
- * @return int 0 on success, 1 on failure.
- */
-int ads_client_getID(ads_client_context_t *conn, seL4_Word *ret_id);
-
-int ads_client_testing(ads_client_context_t *conn, vka_t *vka,
-                       ads_client_context_t *ads_conn_clone1,
-                       ads_client_context_t *ads_conn_clone2,
-                       ads_client_context_t *ads_conn_clone3);
 
 /**
  * @brief Given a VMR config that describes a virtual memory region, copies it from src_ads to dst_ads

@@ -30,7 +30,7 @@
 #define OSDB_ERROR 4
 
 /* Only messages of this level and higher will be printed */
-#define OSDB_LEVEL OSDB_WARN
+#define OSDB_LEVEL OSDB_VERBOSE
 
 /* Topic toggling condition for resource servers */
 #define OSDB_SERVER_PRINT_ALLOWED ((OSDB_TOPIC) & (DEBUG_ID))

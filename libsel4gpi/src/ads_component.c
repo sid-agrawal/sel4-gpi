@@ -96,13 +96,13 @@ err_goto:
     return error;
 }
 
-static seL4_MessageInfo_t handle_ads_allocation(seL4_Word sender_badge)
+static void handle_ads_allocation(seL4_Word sender_badge,
+                                  AdsReturnMessage *reply_msg)
 {
     OSDB_PRINTF("Got ADS allocation request from: ");
     BADGE_PRINT(sender_badge);
 
     int error = 0;
-    seL4_MessageInfo_t reply_tag;
     seL4_CPtr ret_cap;
     ads_component_registry_entry_t *new_entry;
     uint32_t client_id = get_client_id_from_badge(sender_badge);
@@ -120,26 +120,25 @@ static seL4_MessageInfo_t handle_ads_allocation(seL4_Word sender_badge)
     OSDB_PRINTF("Successfully allocated a new ADS (%d) with VMR Space (%d).\n", new_entry->ads.id, space_entry->space.id);
 
     /* Return this badged end point in the return message. */
-    seL4_SetMR(ADSMSGREG_CONNECT_ACK_VMR_SPACE_ID, space_entry->space.id);
-    seL4_SetMR(ADSMSGREG_CONNECT_ACK_SLOT, ret_cap);
+    reply_msg->msg.alloc.id = space_entry->space.id;
+    reply_msg->msg.alloc.slot = ret_cap;
 
 err_goto:
-    seL4_SetMR(ADSMSGREG_FUNC, ADS_FUNC_CONNECT_ACK);
-    reply_tag = seL4_MessageInfo_new(error, 0, 0, ADSMSGREG_CONNECT_ACK_END);
-    return reply_tag;
+    reply_msg->which_msg = AdsReturnMessage_alloc_tag;
+    reply_msg->errorCode = error;
 }
 
-static seL4_MessageInfo_t handle_reserve_req(seL4_Word sender_badge, seL4_MessageInfo_t old_tag)
+static void handle_reserve_req(seL4_Word sender_badge,
+                               AdsReserveMessage *msg, AdsReturnMessage *reply_msg)
 {
     OSDB_PRINTF("Got ADS reserve request from %lx\n", sender_badge);
     int error = 0;
-    seL4_MessageInfo_t reply_tag;
 
     uint32_t client_id = get_client_id_from_badge(sender_badge);
-    void *vaddr = (void *)seL4_GetMR(ADSMSGREG_RESERVE_REQ_VA);
-    size_t size = (size_t)seL4_GetMR(ADSMSGREG_RESERVE_REQ_SIZE);
-    size_t page_bits = (size_t)seL4_GetMR(ADSMSGREG_RESERVE_REQ_PAGE_BITS);
-    sel4utils_reservation_type_t vmr_type = (sel4utils_reservation_type_t)seL4_GetMR(ADSMSGREG_RESERVE_REQ_TYPE);
+    void *vaddr = (void *)msg->vaddr;
+    size_t size = (size_t)msg->size;
+    size_t page_bits = (size_t)msg->page_bits;
+    sel4utils_reservation_type_t vmr_type = (sel4utils_reservation_type_t)msg->type;
     uint32_t num_pages = DIV_ROUND_UP(size, SIZE_BITS_TO_BYTES(page_bits));
     seL4_CPtr ret_cap;
 
@@ -149,6 +148,10 @@ static seL4_MessageInfo_t handle_reserve_req(seL4_Word sender_badge, seL4_Messag
         resource_component_registry_get_by_id(get_ads_component(), ads_id);
     SERVER_GOTO_IF_COND(ads_entry == NULL, "Couldn't find ADS (%ld)\n", ads_id);
 
+    /* Find the PD */
+    pd_component_registry_entry_t *pd_data = pd_component_registry_get_entry_by_id(client_id);
+    SERVER_GOTO_IF_COND(pd_data == NULL, "Couldn't find PD (%ld)\n", client_id);
+
     // Make the reservation
     attach_node_t *reservation;
     error = ads_reserve(&ads_entry->ads, vaddr, num_pages, page_bits, vmr_type, &reservation);
@@ -156,57 +159,63 @@ static seL4_MessageInfo_t handle_reserve_req(seL4_Word sender_badge, seL4_Messag
 
     // Make a cap for the reservation
     // The object ID is the shorter map entry ID, not the full vaddr of the reservation
-    ret_cap = resource_server_make_badged_ep(get_ads_component()->server_vka, NULL, get_ads_component()->server_ep,
-                                             GPICAP_TYPE_VMR, ads_id, reservation->map_entry->gen.object_id, client_id);
+    ret_cap = resource_server_make_badged_ep(get_ads_component()->server_vka, pd_data->pd.pd_vka,
+                                             get_ads_component()->server_ep, GPICAP_TYPE_VMR, ads_id,
+                                             reservation->map_entry->gen.object_id, client_id);
     SERVER_GOTO_IF_COND(ret_cap == seL4_CapNull, "Failed to make badged ep for reservation\n");
 
-    OSDB_PRINTF("Successfully reserved an ads region at %p.\n", reservation->vaddr);
+    OSDB_PRINTF("Successfully reserved an ads region (%s) at %p.\n",
+                human_readable_va_res_type(vmr_type), reservation->vaddr);
 
     // Return the badged EP
-    seL4_SetMR(ADSMSGREG_RESERVE_ACK_VA, (seL4_Word)reservation->vaddr);
-    seL4_SetCap(0, ret_cap);
-
-    seL4_SetMR(ADSMSGREG_FUNC, ADS_FUNC_RESERVE_ACK);
-    reply_tag = seL4_MessageInfo_new(error, 0, 1, ADSMSGREG_CONNECT_ACK_END);
-    return reply_tag;
+    reply_msg->msg.reserve.vaddr = (uint64_t)reservation->vaddr;
+    reply_msg->msg.reserve.slot = (uint64_t)ret_cap;
 
 err_goto:
-    seL4_SetMR(ADSMSGREG_FUNC, ADS_FUNC_RESERVE_ACK);
-    reply_tag = seL4_MessageInfo_new(error, 0, 0, ADSMSGREG_RESERVE_ACK_END);
-    return reply_tag;
+    reply_msg->which_msg = AdsReturnMessage_reserve_tag;
+    reply_msg->errorCode = error;
 }
 
-static seL4_MessageInfo_t handle_attach_req(seL4_Word sender_badge, seL4_MessageInfo_t old_tag, seL4_CPtr mo_cap)
+static void handle_attach_req(seL4_Word sender_badge,
+                              AdsAttachMessage *msg, AdsReturnMessage *reply_msg,
+                              seL4_CPtr mo_cap)
 {
     OSDB_PRINTF("Got attach request from client badge: ", sender_badge);
     BADGE_PRINT(sender_badge);
 
     int error = 0;
 
-    sel4utils_reservation_type_t vmr_type = (sel4utils_reservation_type_t)seL4_GetMR(ADSMSGREG_ATTACH_REQ_TYPE);
-    void *vaddr = (void *)seL4_GetMR(ADSMSGREG_ATTACH_REQ_VA);
+    sel4utils_reservation_type_t vmr_type = (sel4utils_reservation_type_t)msg->type;
+    void *vaddr = (void *)msg->vaddr;
     seL4_Word mo_badge = seL4_GetBadge(0);
     uint64_t mo_id = get_object_id_from_badge(mo_badge);
     uint64_t ads_id = get_space_id_from_badge(sender_badge);
 
-    SERVER_GOTO_IF_COND(get_cap_type_from_badge(mo_badge) != GPICAP_TYPE_MO, "Bad attach request, expected MO but got %s instead: %lx\n", cap_type_to_str(get_cap_type_from_badge(mo_badge)), mo_badge);
+    SERVER_GOTO_IF_COND(get_cap_type_from_badge(mo_badge) != GPICAP_TYPE_MO,
+                        "Bad attach request, expected MO but got %s instead: %lx\n",
+                        cap_type_to_str(get_cap_type_from_badge(mo_badge)), mo_badge);
 
     error = ads_component_attach(ads_id, mo_id, vmr_type, vaddr, &vaddr);
 
+    OSDB_PRINTF("Successfully reserved an ads region (%s) at %p and attached MO (%d).\n",
+                human_readable_va_res_type(vmr_type), vaddr, mo_id);
+
+    reply_msg->msg.attach.vaddr = (uint64_t)vaddr;
+
 err_goto:
-    seL4_SetMR(ADSMSGREG_FUNC, ADS_FUNC_ATTACH_ACK);
-    seL4_SetMR(ADSMSGREG_ATTACH_ACK_VA, (seL4_Word)vaddr);
-    seL4_MessageInfo_t tag = seL4_MessageInfo_new(error, 0, 0, ADSMSGREG_ATTACH_ACK_END);
-    return tag;
+    reply_msg->which_msg = AdsReturnMessage_attach_tag;
+    reply_msg->errorCode = error;
 }
 
-static seL4_MessageInfo_t handle_attach_to_reserve_req(seL4_Word sender_badge, seL4_MessageInfo_t old_tag, seL4_CPtr mo_cap)
+static void handle_attach_to_reserve_req(seL4_Word sender_badge,
+                                         AdsAttachToReserveMessage *msg, AdsReturnMessage *reply_msg,
+                                         seL4_CPtr mo_cap)
 {
     OSDB_PRINTF("Got attach-to-reserve request from client badge %lx.\n", sender_badge);
 
     int error = 0;
 
-    size_t offset = seL4_GetMR(ADSMSGREG_ATTACH_RESERVE_REQ_OFFSET);
+    size_t offset = msg->offset;
     uint64_t reservation_id = get_object_id_from_badge(sender_badge);
     seL4_Word mo_badge = seL4_GetBadge(0);
     uint64_t mo_id = get_object_id_from_badge(mo_badge);
@@ -230,47 +239,33 @@ static seL4_MessageInfo_t handle_attach_to_reserve_req(seL4_Word sender_badge, s
 
     error = ads_attach_to_res(&ads_entry->ads, get_ads_component()->server_vka, reservation, offset, &mo_reg->mo);
 
+    OSDB_PRINTF("Successfully attached MO (%d) to ads region (%s, %p).\n",
+                mo_id, human_readable_va_res_type(reservation->type), reservation->vaddr);
+
 err_goto:
-    seL4_SetMR(ADSMSGREG_FUNC, ADS_FUNC_ATTACH_RESERVE_ACK);
-    seL4_MessageInfo_t tag = seL4_MessageInfo_new(error, 0, 0, ADSMSGREG_ATTACH_RESERVE_ACK_END);
-    return tag;
+    reply_msg->which_msg = AdsReturnMessage_basic_tag;
+    reply_msg->errorCode = error;
 }
 
-static seL4_MessageInfo_t handle_remove_req(seL4_Word sender_badge, seL4_MessageInfo_t old_tag)
+static void handle_remove_req(seL4_Word sender_badge,
+                              AdsRemoveMessage *msg, AdsReturnMessage *reply_msg)
 {
     OSDB_PRINTF("Got remove request from client badge %lx.\n", sender_badge);
 
     int error = 0;
     uint64_t ads_id = get_space_id_from_badge(sender_badge);
-    void *vaddr = (void *)seL4_GetMR(ADSMSGREG_RM_REQ_VA);
+    void *vaddr = (void *)msg->vaddr;
 
     /* Perform the removal */
     error = ads_component_rm_by_vaddr(ads_id, vaddr);
 
 err_goto:
-    seL4_SetMR(ADSMSGREG_FUNC, ADS_FUNC_RM_ACK);
-    seL4_MessageInfo_t tag = seL4_MessageInfo_new(error, 0, 0, ADSMSGREG_RM_ACK_END);
-    return tag;
+    reply_msg->which_msg = AdsReturnMessage_basic_tag;
+    reply_msg->errorCode = error;
 }
 
-static seL4_MessageInfo_t handle_testing_req(seL4_Word sender_badge, seL4_MessageInfo_t old_tag)
-{
-    OSDB_PRINTF("Got testing request from client badge %lx."
-                " extraCaps: %lu capsUnWrapped %lu\n",
-                sender_badge, seL4_MessageInfo_get_extraCaps(old_tag),
-                seL4_MessageInfo_get_capsUnwrapped(old_tag));
-
-    for (int i = 0; i < 5; i++)
-    {
-        OSDB_PRINTF("MR[%d] = %lx\n", i, seL4_GetBadge(i));
-    }
-
-    seL4_SetMR(ADSMSGREG_FUNC, ADS_FUNC_TESTING_ACK);
-    seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0, ADSMSGREG_TESTING_ACK_END);
-    return tag;
-}
-
-static seL4_MessageInfo_t handle_copy_req(seL4_Word sender_badge)
+static void handle_copy_req(seL4_Word sender_badge, AdsCopyMessage *msg,
+                            AdsReturnMessage *reply_msg, seL4_CPtr received_cap)
 {
     OSDB_PRINTF("Got copy request from client badge: ");
     BADGE_PRINT(sender_badge);
@@ -286,31 +281,43 @@ static seL4_MessageInfo_t handle_copy_req(seL4_Word sender_badge)
     SERVER_GOTO_IF_COND_BG(src_ads_data == NULL, sender_badge, "Couldn't find source ADS: ");
 
     seL4_Word dst_ads_badge = seL4_GetBadge(0);
+    assert(get_cap_type_from_badge(dst_ads_badge) == GPICAP_TYPE_ADS);
     ads_component_registry_entry_t *dst_ads_data = (ads_component_registry_entry_t *)
         resource_component_registry_get_by_badge(get_ads_component(), dst_ads_badge);
     SERVER_GOTO_IF_COND_BG(dst_ads_data == NULL, dst_ads_badge, "Couldn't find dst ADS: ");
 
-    vmr_config_t cfg = {.start = (void *)seL4_GetMR(ADSMSGREG_COPY_REQ_SRC_VA),
-                        .dest_start = (void *)seL4_GetMR(ADSMSGREG_COPY_REQ_DEST_VA),
-                        .region_pages = seL4_GetMR(ADSMSGREG_COPY_REQ_PAGES),
-                        .share_mode = (gpi_share_degree_t)seL4_GetMR(ADSMSGREG_COPY_REQ_MODE),
-                        .type = (sel4utils_reservation_type_t)seL4_GetMR(ADSMSGREG_COPY_REQ_TYPE)};
+    vmr_config_t cfg = {.start = (void *)msg->src_vaddr,
+                        .dest_start = (void *)msg->dest_vaddr,
+                        .region_pages = msg->pages,
+                        .share_mode = (gpi_share_degree_t)msg->share_degree,
+                        .type = (sel4utils_reservation_type_t)msg->type,
+                        .mo = NULL};
+
+    if (msg->provided_mo)
+    {
+        // (XXX) Arya: Check the cap is correct
+        seL4_Word mo_badge = seL4_GetBadge(1);
+        assert(get_cap_type_from_badge(mo_badge) == GPICAP_TYPE_MO);
+
+        // (XXX) Arya: what to do with MO? I think Linh's commits should implement that
+    }
 
     error = ads_copy(get_ads_component()->server_vspace, get_ads_component()->server_vka,
                      &src_ads_data->ads, &dst_ads_data->ads, &cfg);
+
 err_goto:
-    seL4_SetMR(ADSMSGREG_FUNC, ADS_FUNC_COPY_ACK);
-    reply_tag = seL4_MessageInfo_new(error, 0, 0, ADSMSGREG_COPY_ACK_END);
-    return reply_tag;
+    reply_msg->which_msg = AdsReturnMessage_basic_tag;
+    reply_msg->errorCode = error;
 }
 
-static seL4_MessageInfo_t handle_load_elf_request(seL4_Word sender_badge, seL4_MessageInfo_t old_tag)
+static void handle_load_elf_request(seL4_Word sender_badge,
+                                    AdsLoadElfMessage *msg, AdsReturnMessage *reply_msg)
 {
     OSDB_PRINTF("Got load elf request from client badge %lx.\n", sender_badge);
 
     int error = 0;
-    char *image_name;
     void *entry_point;
+    sel4utils_elf_region_t *elf_reservations = NULL;
 
     // Find target ADS
     ads_component_registry_entry_t *target_ads = (ads_component_registry_entry_t *)
@@ -324,17 +331,13 @@ static seL4_MessageInfo_t handle_load_elf_request(seL4_Word sender_badge, seL4_M
     SERVER_GOTO_IF_COND(target_pd == NULL, "Couldn't find target PD (%ld)\n",
                         get_object_id_from_badge(seL4_GetBadge(0)));
 
-    // Get the image name
-    error = ads_component_attach_to_rt(get_object_id_from_badge(seL4_GetBadge(1)), (void **)&image_name);
-    SERVER_GOTO_IF_ERR(error, "Failed to attach MO for image name to RT\n");
-
     // Load the ELF
-    OSDB_PRINTF("Loading %s's ELF into PD %d\n", image_name, target_pd->pd.id);
-    sel4utils_elf_region_t *elf_reservations;
+    OSDB_PRINTF("Loading %s's ELF into PD %d\n", msg->image_name, target_pd->pd.id);
     int elf_regions;
-    error = ads_load_elf(target_ads->ads.vspace, &target_pd->pd, image_name,
+    error = ads_load_elf(target_ads->ads.vspace, &target_pd->pd, msg->image_name,
                          &entry_point, &elf_reservations, &elf_regions);
     SERVER_GOTO_IF_ERR(error, "Load ELF failed\n");
+    reply_msg->msg.load_elf.entry_point = entry_point;
 
     // For now, we must fake the ADS attachments after loading elf
     for (int i = 0; i < elf_regions; i++)
@@ -345,26 +348,18 @@ static seL4_MessageInfo_t handle_load_elf_request(seL4_Word sender_badge, seL4_M
 
     OSDB_PRINTF("Successfully loaded ELF, entry point %p.\n", entry_point);
 
-    pd_set_image_name(&target_pd->pd, image_name);
+    pd_set_image_name(&target_pd->pd, msg->image_name);
 
     OSDB_PRINTF("Forged ADS attachments from ELF.\n");
 
 err_goto:
-    if (image_name != NULL)
+    if (elf_reservations)
     {
-        // Remove the MO for image name
-        error = ads_component_remove_from_rt((void *)image_name);
-        if (error)
-        {
-            OSDB_PRINTERR("Failed to remove MO for image name from RT\n");
-        }
+        free(elf_reservations);
     }
-    free(elf_reservations);
 
-    seL4_SetMR(ADSMSGREG_FUNC, ADS_FUNC_LOAD_ELF_ACK);
-    seL4_SetMR(ADSMSGREG_LOAD_ELF_ACK_ENTRY_PT, (seL4_Word)entry_point);
-    seL4_MessageInfo_t tag = seL4_MessageInfo_new(error, 0, 0, ADSMSGREG_LOAD_ELF_ACK_END);
-    return tag;
+    reply_msg->which_msg = AdsReturnMessage_load_elf_tag;
+    reply_msg->errorCode = error;
 }
 
 /**
@@ -463,63 +458,64 @@ err_goto:
  * @brief The starting point for the ads server's thread.
  *
  */
-static seL4_MessageInfo_t ads_component_handle(seL4_MessageInfo_t tag,
-                                               void *msg_p,
-                                               seL4_Word sender_badge,
-                                               seL4_CPtr received_cap,
-                                               void *reply_msg_p,
-                                               bool *need_new_recv_cap,
-                                               bool *should_reply)
+static void ads_component_handle(seL4_MessageInfo_t tag,
+                                 void *msg_p,
+                                 seL4_Word sender_badge,
+                                 seL4_CPtr received_cap,
+                                 void *reply_msg_p,
+                                 bool *need_new_recv_cap,
+                                 bool *should_reply)
 {
     int error = 0; // unused, to appease the error handling macros
-    enum ads_component_funcs func = seL4_GetMR(ADSMSGREG_FUNC);
-    seL4_MessageInfo_t reply_tag;
+
+    AdsMessage *msg = (AdsMessage *)msg_p;
+    AdsReturnMessage *reply_msg = (AdsReturnMessage *)reply_msg_p;
 
     if (get_object_id_from_badge(sender_badge) == BADGE_OBJ_ID_NULL &&
         get_space_id_from_badge(sender_badge) == get_ads_component()->space_id)
     {
-        SERVER_GOTO_IF_COND(func != ADS_FUNC_CONNECT_REQ,
+        SERVER_GOTO_IF_COND(msg->which_msg != AdsMessage_alloc_tag,
                             "Received invalid request on the allocation endpoint\n");
-        reply_tag = handle_ads_allocation(sender_badge);
+        handle_ads_allocation(sender_badge, reply_msg);
     }
     else
     {
-        switch (func)
+        switch (msg->which_msg)
         {
-        case ADS_FUNC_ATTACH_REQ:
-            reply_tag = handle_attach_req(sender_badge, tag, received_cap);
+        case AdsMessage_attach_tag:
+            handle_attach_req(sender_badge, &msg->msg.attach, reply_msg, received_cap);
             *need_new_recv_cap = true;
             break;
-        case ADS_FUNC_RM_REQ:
-            reply_tag = handle_remove_req(sender_badge, tag);
+        case AdsMessage_remove_tag:
+            handle_remove_req(sender_badge, &msg->msg.remove, reply_msg);
             break;
-        case ADS_FUNC_RESERVE_REQ:
-            reply_tag = handle_reserve_req(sender_badge, tag);
+        case AdsMessage_reserve_tag:
+            handle_reserve_req(sender_badge, &msg->msg.reserve, reply_msg);
             break;
-        case ADS_FUNC_COPY_REQ:
-            reply_tag = handle_copy_req(sender_badge);
+        case AdsMessage_copy_tag:
+            handle_copy_req(sender_badge, &msg->msg.copy, reply_msg, received_cap);
+            *need_new_recv_cap = msg->msg.copy.provided_mo;
             break;
-        case ADS_FUNC_TESTING_REQ:
-            reply_tag = handle_testing_req(sender_badge, tag);
+        case AdsMessage_load_elf_tag:
+            handle_load_elf_request(sender_badge, &msg->msg.load_elf, reply_msg);
             break;
-        case ADS_FUNC_LOAD_ELF_REQ:
-            reply_tag = handle_load_elf_request(sender_badge, tag);
-            break;
-        case ADS_FUNC_ATTACH_RESERVE_REQ:
-            reply_tag = handle_attach_to_reserve_req(sender_badge, tag, received_cap);
+        case AdsMessage_attach_reserve_tag:
+            handle_attach_to_reserve_req(sender_badge, &msg->msg.attach_reserve, reply_msg, received_cap);
             *need_new_recv_cap = true;
             break;
         default:
-            SERVER_GOTO_IF_COND(1, "Unknown request received: %d\n", func);
+            SERVER_GOTO_IF_COND(1, "Unknown request received: %d\n", msg->which_msg);
             break;
         }
     }
 
-    return reply_tag;
+    OSDB_PRINTF("Returning from ADS component with error code %d\n", reply_msg->errorCode);
+    return seL4_MessageInfo_new(0, 0, 0, 0); // (XXX) Arya: Replace once conversion to protobuf is finished
 
 err_goto:
-    seL4_MessageInfo_t err_tag = seL4_MessageInfo_set_label(reply_tag, 1);
-    return err_tag;
+    OSDB_PRINTF("Returning from ADS component with error code %d\n", error);
+    reply_msg->errorCode = error;
+    return seL4_MessageInfo_new(0, 0, 0, 0);
 }
 
 int ads_component_initialize(vka_t *server_vka,

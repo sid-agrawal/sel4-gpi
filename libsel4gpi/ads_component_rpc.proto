@@ -1,13 +1,65 @@
 syntax = "proto3";
+import 'nanopb.proto';
 
 enum AdsComponentError {
     NONE = 0;           /* no error */
     UNKNOWN = 11;       /* (XXX) manually set to seL4_NumErrors */
 }
 
-/* message type for all PD component request messages */
+message AdsAllocMessage {
+    /* No content */
+};
+
+message AdsAttachMessage {
+    uint64 vaddr = 1;       /* requested address to attach at */
+    uint64 type = 2;        /* type of VMR reservation */
+};
+
+message AdsReserveMessage {
+    uint64 vaddr = 1;       /* requested address to reserve at */
+    uint64 type = 2;        /* type of VMR reservation */
+    uint64 size = 3;        /* size in bytes of the region to reserve */
+    uint32 page_bits = 4;   /* size bits of the pages to reserve */
+};
+
+message AdsAttachToReserveMessage {
+    uint64 offset = 1;       /* offset into the reservation to attach at */
+};
+
+message AdsRemoveMessage {
+    uint64 vaddr = 1;        /* start vaddr of the region to remove */
+};
+
+message AdsBindCpuMessage {
+    /* No content */
+};
+
+message AdsCopyMessage {
+    uint32 pages = 1;           /* number of pages to copy */
+    uint32 type = 2;            /* type of VMR reservation */
+    uint64 src_vaddr = 3;       /* vaddr in the source ADS */
+    uint64 dest_vaddr = 4;      /* vaddr in the dest ADS */
+    uint32 share_degree = 5;    /* the GPI share degree for the VMR region */
+    bool provided_mo = 6;       /* true if the message includes an MO to use for deep-copied regions */
+};
+
+message AdsLoadElfMessage {
+    /* no content */
+    string image_name = 1 [(nanopb).max_length = 40];
+}
+
+/* message type for all ADS component request messages */
 message AdsMessage {
-    /* No content, WIP */
+    oneof msg {
+        AdsAllocMessage alloc = 1;
+        AdsAttachMessage attach = 2;
+        AdsReserveMessage reserve = 3;
+        AdsAttachToReserveMessage attach_reserve = 4;
+        AdsRemoveMessage remove = 5;
+        AdsBindCpuMessage bind_cpu = 6;
+        AdsCopyMessage copy = 7;
+        AdsLoadElfMessage load_elf = 8;
+    }
 };
 
 /* return from a basic ADS Component message */
@@ -15,10 +67,32 @@ message AdsBasicReturnMessage {
     /* No content */
 };
 
+message AdsAllocReturnMessage {
+    uint64 slot = 1;        /* slot where the ADS cap is placed */
+    uint32 id = 2;          /* ID of the new ADS */
+};
+
+message AdsAttachReturnMessage {
+    uint64 vaddr = 1;       /* address where memory was attached */
+};
+
+message AdsReserveReturnMessage {
+    uint64 vaddr = 1;       /* address where memory was attached */
+    uint64 slot = 2;        /* slot where the VMR cap was placed */
+};
+
+message AdsLoadElfReturnMessage {
+    uint64 entry_point = 1; /* vaddr of the ELF's entry point in the ADS */
+};
+
 /* message type for all ADS Component return messages */
 message AdsReturnMessage {
     AdsComponentError errorCode = 1;
     oneof msg {
         AdsBasicReturnMessage basic = 2;
+        AdsAllocReturnMessage alloc = 3;
+        AdsAttachReturnMessage attach = 4;
+        AdsReserveReturnMessage reserve = 5;
+        AdsLoadElfReturnMessage load_elf = 6;
     };
 };

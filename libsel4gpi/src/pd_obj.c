@@ -1043,7 +1043,7 @@ static int pd_dump_internal(pd_t *pd, model_state_t *ms)
 
                 /* Add the resource server PD node */
                 char resource_manager_pd_id[CSV_MAX_STRING_SIZE];
-                get_pd_id(rm->space.pd_id, &resource_manager_pd_id);
+                get_pd_id(rm->space.pd_id, resource_manager_pd_id);
                 add_request_edge_by_id(ms, pd_node->id, resource_manager_pd_id, rde.type.type);
 
                 /* Request info about the space */

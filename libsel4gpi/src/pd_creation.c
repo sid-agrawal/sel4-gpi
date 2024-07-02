@@ -12,7 +12,6 @@
 void *sel4gpi_new_sized_stack(ads_client_context_t *ads_rde, size_t n_pages)
 {
     int error = 0;
-    seL4_CPtr slot;
 
     pd_client_context_t self_pd = sel4gpi_get_pd_conn();
 
@@ -21,12 +20,9 @@ void *sel4gpi_new_sized_stack(ads_client_context_t *ads_rde, size_t n_pages)
 
     /* reserve one extra page for the guard */
     void *vaddr;
-    error = pd_client_next_slot(&self_pd, &slot);
-    GOTO_IF_ERR(error, "failed to allocate next slot\n");
-
     size_t res_size = (n_pages + 1) * (SIZE_BITS_TO_BYTES(MO_PAGE_BITS));
     ads_vmr_context_t reservation;
-    error = ads_client_reserve(ads_rde, slot, NULL, res_size, MO_PAGE_BITS,
+    error = ads_client_reserve(ads_rde, NULL, res_size, MO_PAGE_BITS,
                                SEL4UTILS_RES_TYPE_STACK, &reservation, &vaddr);
     GOTO_IF_ERR(error, "failed to reserve VMR for stack\n");
 

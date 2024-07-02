@@ -16,23 +16,42 @@
 #include <sel4gpi/badge_usage.h>
 #include <sel4gpi/debug.h>
 #include <sel4gpi/pd_utils.h>
+#include <sel4gpi/gpi_rpc.h>
+#include <ads_component_rpc.pb.h>
 
 // Defined for utility printing macros
 #define DEBUG_ID ADS_DEBUG
 #define SERVER_ID ADSSERVC
 
+static sel4gpi_rpc_env_t rpc_env = {
+    .request_desc = &AdsMessage_msg,
+    .reply_desc = &AdsReturnMessage_msg,
+};
+
 int ads_component_client_connect(seL4_CPtr server_ep_cap,
                                  ads_client_context_t *ret_conn)
 {
-    /* Set request type */
-    seL4_SetMR(ADSMSGREG_FUNC, ADS_FUNC_CONNECT_REQ);
-    seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0, ADSMSGREG_CONNECT_REQ_END);
-    tag = seL4_Call(server_ep_cap, tag);
+    OSDB_PRINTF("Sending connect request to ADS component\n");
 
-    ret_conn->badged_server_ep_cspath.capPtr = seL4_GetMR(ADSMSGREG_CONNECT_ACK_SLOT);
-    ret_conn->id = seL4_GetMR(ADSMSGREG_CONNECT_ACK_VMR_SPACE_ID);
+    int error = 0;
 
-    return seL4_MessageInfo_get_label(tag);
+    AdsMessage msg = {
+        .which_msg = AdsMessage_alloc_tag,
+    };
+
+    AdsReturnMessage ret_msg;
+
+    error = sel4gpi_rpc_call(&rpc_env, server_ep_cap, (void *)&msg,
+                             0, NULL, (void *)&ret_msg);
+    error |= ret_msg.errorCode;
+
+    if (!error)
+    {
+        ret_conn->badged_server_ep_cspath.capPtr = ret_msg.msg.alloc.slot;
+        ret_conn->id = ret_msg.msg.alloc.id;
+    }
+
+    return error;
 }
 
 int ads_client_attach(ads_client_context_t *conn,
@@ -41,24 +60,32 @@ int ads_client_attach(ads_client_context_t *conn,
                       sel4utils_reservation_type_t vmr_type,
                       void **ret_vaddr)
 {
-    seL4_SetMR(ADSMSGREG_FUNC, ADS_FUNC_ATTACH_REQ);
-    seL4_SetMR(ADSMSGREG_ATTACH_REQ_VA, (seL4_Word)vaddr);
-    seL4_SetMR(ADSMSGREG_ATTACH_REQ_TYPE, (seL4_Word)vmr_type);
-    seL4_SetCap(0, mo_cap->badged_server_ep_cspath.capPtr);
+    OSDB_PRINTF("Sending attach request to ADS component\n");
 
-    seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 1,
-                                                  ADSMSGREG_ATTACH_REQ_END);
+    int error = 0;
 
-    OSDB_PRINTF("Sending attach request to server via EP: %lu.\n",
-                conn->badged_server_ep_cspath.capPtr);
-    tag = seL4_Call(conn->badged_server_ep_cspath.capPtr, tag);
-    *ret_vaddr = (void *)seL4_GetMR(ADSMSGREG_ATTACH_ACK_VA);
+    AdsMessage msg = {
+        .which_msg = AdsMessage_attach_tag,
+        .msg.attach = {
+            .vaddr = vaddr,
+            .type = vmr_type,
+        }};
 
-    return seL4_MessageInfo_get_label(tag);
+    AdsReturnMessage ret_msg;
+
+    error = sel4gpi_rpc_call(&rpc_env, conn->badged_server_ep_cspath.capPtr, (void *)&msg,
+                             1, &mo_cap->badged_server_ep_cspath.capPtr, (void *)&ret_msg);
+    error |= ret_msg.errorCode;
+
+    if (!error)
+    {
+        *ret_vaddr = ret_msg.msg.attach.vaddr;
+    }
+
+    return error;
 }
 
 int ads_client_reserve(ads_client_context_t *conn,
-                       seL4_CPtr free_slot,
                        void *vaddr,
                        size_t size,
                        size_t page_bits,
@@ -66,67 +93,76 @@ int ads_client_reserve(ads_client_context_t *conn,
                        ads_vmr_context_t *ret_conn,
                        void **ret_vaddr)
 {
-    // Set the receive path for a new connection
-    seL4_SetCapReceivePath(SEL4UTILS_CNODE_SLOT,
-                           free_slot,
-                           seL4_WordBits);
+    OSDB_PRINTF("Sending reserve request to ADS component\n");
 
-    seL4_SetMR(ADSMSGREG_FUNC, ADS_FUNC_RESERVE_REQ);
-    seL4_SetMR(ADSMSGREG_RESERVE_REQ_VA, (seL4_Word)vaddr);
-    seL4_SetMR(ADSMSGREG_RESERVE_REQ_TYPE, (seL4_Word)vmr_type);
-    seL4_SetMR(ADSMSGREG_RESERVE_REQ_SIZE, (seL4_Word)size);
-    seL4_SetMR(ADSMSGREG_RESERVE_REQ_PAGE_BITS, (seL4_Word)page_bits);
+    int error = 0;
 
-    seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0,
-                                                  ADSMSGREG_RESERVE_REQ_END);
+    AdsMessage msg = {
+        .which_msg = AdsMessage_reserve_tag,
+        .msg.reserve = {
+            .vaddr = vaddr,
+            .type = vmr_type,
+            .size = size,
+            .page_bits = page_bits,
+        }};
 
-    OSDB_PRINTF("Sending reserve request to server via EP: %lu.\n",
-                conn->badged_server_ep_cspath.capPtr);
+    AdsReturnMessage ret_msg;
 
-    tag = seL4_Call(conn->badged_server_ep_cspath.capPtr, tag);
-    ret_conn->badged_server_ep_cspath.capPtr = free_slot;
+    error = sel4gpi_rpc_call(&rpc_env, conn->badged_server_ep_cspath.capPtr, (void *)&msg,
+                             0, NULL, (void *)&ret_msg);
+    error |= ret_msg.errorCode;
 
-    *ret_vaddr = (void *)seL4_GetMR(ADSMSGREG_RESERVE_ACK_VA);
+    if (!error)
+    {
+        *ret_vaddr = ret_msg.msg.reserve.vaddr;
+        ret_conn->badged_server_ep_cspath.capPtr = ret_msg.msg.reserve.slot;
+    }
 
-    OSDB_PRINTF("Finished reserve request, result in slot: %lu.\n",
-                free_slot);
-
-    return seL4_MessageInfo_get_label(tag) || (*ret_vaddr == NULL);
+    return error;
 }
 
 int ads_client_attach_to_reserve(ads_vmr_context_t *reservation,
                                  mo_client_context_t *mo,
                                  size_t offset)
 {
-    seL4_SetMR(ADSMSGREG_FUNC, ADS_FUNC_ATTACH_RESERVE_REQ);
-    seL4_SetMR(ADSMSGREG_ATTACH_RESERVE_REQ_OFFSET, (seL4_Word)offset);
+    OSDB_PRINTF("Sending attach-to-reserve request to ADS component\n");
 
-    seL4_SetCap(0, mo->badged_server_ep_cspath.capPtr);
+    int error = 0;
 
-    seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 1,
-                                                  ADSMSGREG_ATTACH_RESERVE_REQ_END);
+    AdsMessage msg = {
+        .which_msg = AdsMessage_attach_reserve_tag,
+        .msg.attach_reserve = {
+            .offset = offset,
+        }};
 
-    OSDB_PRINTF("Sending attach-to-reserve request to server via EP: %lu.\n",
-                reservation->badged_server_ep_cspath.capPtr);
+    AdsReturnMessage ret_msg;
 
-    tag = seL4_Call(reservation->badged_server_ep_cspath.capPtr, tag);
+    error = sel4gpi_rpc_call(&rpc_env, reservation->badged_server_ep_cspath.capPtr, (void *)&msg,
+                             1, &mo->badged_server_ep_cspath.capPtr, (void *)&ret_msg);
+    error |= ret_msg.errorCode;
 
-    return seL4_MessageInfo_get_label(tag);
+    return error;
 }
 
 int ads_client_rm(ads_client_context_t *conn, void *vaddr)
 {
-    seL4_SetMR(ADSMSGREG_FUNC, ADS_FUNC_RM_REQ);
-    seL4_SetMR(ADSMSGREG_RM_REQ_VA, (seL4_Word)vaddr);
+    OSDB_PRINTF("Sending remove request to ADS component\n");
 
-    seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0,
-                                                  ADSMSGREG_RM_REQ_END);
+    int error = 0;
 
-    OSDB_PRINTF("Sending remove request to server via EP: %lu.\n",
-                conn->badged_server_ep_cspath.capPtr);
-    tag = seL4_Call(conn->badged_server_ep_cspath.capPtr, tag);
+    AdsMessage msg = {
+        .which_msg = AdsMessage_remove_tag,
+        .msg.remove = {
+            .vaddr = vaddr,
+        }};
 
-    return seL4_MessageInfo_get_label(tag);
+    AdsReturnMessage ret_msg;
+
+    error = sel4gpi_rpc_call(&rpc_env, conn->badged_server_ep_cspath.capPtr, (void *)&msg,
+                             0, NULL, (void *)&ret_msg);
+    error |= ret_msg.errorCode;
+
+    return error;
 }
 
 int ads_client_bind_cpu(ads_client_context_t *conn, seL4_CPtr cpu_cap)
@@ -134,43 +170,39 @@ int ads_client_bind_cpu(ads_client_context_t *conn, seL4_CPtr cpu_cap)
     return 0;
 }
 
-int ads_client_testing(ads_client_context_t *conn, vka_t *vka,
-                       ads_client_context_t *clone1,
-                       ads_client_context_t *clone2,
-                       ads_client_context_t *clone3)
+int ads_client_copy(ads_client_context_t *src_ads, ads_client_context_t *dst_ads, vmr_config_t *vmr_cfg)
 {
+    OSDB_PRINTF("Sending copy request to ADS component\n");
 
     int error = 0;
 
-    seL4_SetMR(ADSMSGREG_FUNC, ADS_FUNC_TESTING_REQ);
-    seL4_SetCap(0, clone1->badged_server_ep_cspath.capPtr);
-    seL4_SetCap(1, clone2->badged_server_ep_cspath.capPtr);
+    AdsMessage msg = {
+        .which_msg = AdsMessage_copy_tag,
+        .msg.copy = {
+            .pages = vmr_cfg->region_pages,
+            .type = (uint32_t)vmr_cfg->type,
+            .src_vaddr = vmr_cfg->start,
+            .dest_vaddr = vmr_cfg->dest_start,
+            .share_degree = vmr_cfg->share_mode,
+            .provided_mo = vmr_cfg->mo != NULL,
+        }};
 
-    seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 2,
-                                                  ADSMSGREG_TESTING_REQ_END);
+    AdsReturnMessage ret_msg;
 
-    tag = seL4_Call(conn->badged_server_ep_cspath.capPtr, tag);
-    return seL4_MessageInfo_get_label(tag);
-}
+    if (vmr_cfg->mo)
+    {
+        seL4_CPtr caps[2] = {dst_ads->badged_server_ep_cspath.capPtr, vmr_cfg->mo->badged_server_ep_cspath.capPtr};
+        error = sel4gpi_rpc_call(&rpc_env, src_ads->badged_server_ep_cspath.capPtr, (void *)&msg,
+                                 2, caps, (void *)&ret_msg);
+    }
+    else
+    {
+        error = sel4gpi_rpc_call(&rpc_env, src_ads->badged_server_ep_cspath.capPtr, (void *)&msg,
+                                 1, &dst_ads->badged_server_ep_cspath.capPtr, (void *)&ret_msg);
+    }
+    error |= ret_msg.errorCode;
 
-int ads_client_copy(ads_client_context_t *src_ads, ads_client_context_t *dst_ads, vmr_config_t *vmr_cfg)
-{
-    OSDB_PRINTF("Sending %s request for VMR (%s)\n",
-                sel4gpi_share_degree_to_str(vmr_cfg->share_mode), human_readable_va_res_type(vmr_cfg->type));
-
-    seL4_SetMR(ADSMSGREG_FUNC, ADS_FUNC_COPY_REQ);
-    seL4_SetCap(0, dst_ads->badged_server_ep_cspath.capPtr);
-    seL4_SetMR(ADSMSGREG_COPY_REQ_PAGES, vmr_cfg->region_pages);
-    seL4_SetMR(ADSMSGREG_COPY_REQ_TYPE, (seL4_Word)vmr_cfg->type);
-    seL4_SetMR(ADSMSGREG_COPY_REQ_SRC_VA, (seL4_Word)vmr_cfg->start);
-    seL4_SetMR(ADSMSGREG_COPY_REQ_DEST_VA, (seL4_Word)vmr_cfg->dest_start);
-    seL4_SetMR(ADSMSGREG_COPY_REQ_MODE, (seL4_Word)vmr_cfg->share_mode);
-
-    seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 1,
-                                                  ADSMSGREG_COPY_REQ_END);
-
-    tag = seL4_Call(src_ads->badged_server_ep_cspath.capPtr, tag);
-    return seL4_MessageInfo_get_label(tag);
+    return error;
 }
 
 /* ======================================= CONVENIENCE FUNCTIONS (NOT PART OF FRAMEWORK) ================================================= */
@@ -187,35 +219,27 @@ int ads_client_load_elf(ads_client_context_t *loadee_ads,
                         const char *image_name,
                         void **ret_entry_point)
 {
+    OSDB_PRINTF("Sending 'load elf' request to ADS component\n");
+
     int error = 0;
 
-    // Allocate an MO to send the image name
-    ads_client_context_t ads_conn = {0};
-    ads_conn.badged_server_ep_cspath.capPtr = sel4gpi_get_rde_by_space_id(sel4gpi_get_binded_ads_id(), GPICAP_TYPE_VMR);
+    AdsMessage msg = {
+        .which_msg = AdsMessage_load_elf_tag,
+    };
 
-    mo_client_context_t mo_conn;
-    void *mo_vaddr = sel4gpi_get_vmr(&ads_conn, 1, NULL, SEL4UTILS_RES_TYPE_SHARED_FRAMES, &mo_conn);
+    assert(strlen(image_name) < sizeof(msg.msg.load_elf.image_name));
+    strncpy(msg.msg.load_elf.image_name, image_name, sizeof(msg.msg.load_elf.image_name));
 
-    if (mo_vaddr == NULL) {
-        return 1;
+    AdsReturnMessage ret_msg;
+
+    error = sel4gpi_rpc_call(&rpc_env, loadee_ads->badged_server_ep_cspath.capPtr, (void *)&msg,
+                             1, &loadee_pd->badged_server_ep_cspath.capPtr, (void *)&ret_msg);
+    error |= ret_msg.errorCode;
+
+    if (!error)
+    {
+        *ret_entry_point = ret_msg.msg.load_elf.entry_point;
     }
 
-    strcpy(mo_vaddr, image_name);
-
-    // Make the request
-    seL4_SetMR(ADSMSGREG_FUNC, ADS_FUNC_LOAD_ELF_REQ);
-    seL4_SetCap(0, loadee_pd->badged_server_ep_cspath.capPtr);
-    seL4_SetCap(1, mo_conn.badged_server_ep_cspath.capPtr);
-
-    seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 2,
-                                                  ADSMSGREG_LOAD_ELF_REQ_END);
-
-    tag = seL4_Call(loadee_ads->badged_server_ep_cspath.capPtr, tag);
-
-    *ret_entry_point = (void *)seL4_GetMR(ADSMSGREG_LOAD_ELF_ACK_ENTRY_PT);
-
-    // Free the MO
-    sel4gpi_destroy_vmr(&ads_conn, mo_vaddr, &mo_conn);
-
-    return seL4_MessageInfo_get_label(tag);
+    return error;
 }
