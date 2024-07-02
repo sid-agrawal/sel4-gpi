@@ -23,7 +23,7 @@ int resource_component_initialize(
     resource_component_context_t *component,
     gpi_cap_t resource_type,
     uint64_t space_id,
-    seL4_MessageInfo_t (*request_handler)(seL4_MessageInfo_t, void *, seL4_Word, seL4_CPtr, void *, bool *, bool *),
+    void (*request_handler)(void *, seL4_Word, seL4_CPtr, void *, bool *, bool *),
     int (*new_obj)(resource_component_object_t *, vka_t *, vspace_t *, void *),
     void (*on_registry_delete)(resource_server_registry_node_t *, void *),
     size_t reg_entry_size,
@@ -62,19 +62,11 @@ void resource_component_handle(resource_component_context_t *component,
     char rpc_msg_buf[RPC_MSG_MAX_SIZE];
     char rpc_reply_buf[RPC_MSG_MAX_SIZE];
 
-    // (XXX) Arya: Remove once all components are converted
-    bool use_rpc = component->resource_type == GPICAP_TYPE_PD || component->resource_type == GPICAP_TYPE_ADS 
-        || component->resource_type == GPICAP_TYPE_MO || component->resource_type == GPICAP_TYPE_CPU
-        || component->resource_type == GPICAP_TYPE_RESSPC;
+    error = sel4gpi_rpc_recv(&component->rpc_env, (void *)rpc_msg_buf);
+    assert(error == 0);
 
-    if (use_rpc)
-    {
-        error = sel4gpi_rpc_recv(&component->rpc_env, (void *)rpc_msg_buf);
-        assert(error == 0);
-    }
     // Handle the message
-    seL4_MessageInfo_t reply_tag = component->request_handler(
-        tag,
+    component->request_handler(
         (void *)rpc_msg_buf,
         sender_badge,
         received_cap->capPtr,
@@ -82,15 +74,12 @@ void resource_component_handle(resource_component_context_t *component,
         &needs_new_receive_slot,
         &should_reply);
 
-    // (XXX) Arya: Remove once all components are converted
-    if (use_rpc)
-    {
-        error = sel4gpi_rpc_reply(&component->rpc_env, (void *)rpc_reply_buf, &reply_tag);
-    }
-
     // Send the reply
     if (should_reply)
     {
+        seL4_MessageInfo_t reply_tag;
+        error = sel4gpi_rpc_reply(&component->rpc_env, (void *)rpc_reply_buf, &reply_tag);
+        assert(error == 0);
         resource_component_reply(component, reply_tag);
     }
 

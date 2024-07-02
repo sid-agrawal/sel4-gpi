@@ -144,13 +144,12 @@ err_goto:
     reply_msg->errorCode = error;
 }
 
-static seL4_MessageInfo_t mo_component_handle(seL4_MessageInfo_t tag,
-                                              void *msg_p,
-                                              seL4_Word sender_badge,
-                                              seL4_CPtr received_cap,
-                                              void *reply_msg_p,
-                                              bool *need_new_recv_cap,
-                                              bool *should_reply)
+static void mo_component_handle(void *msg_p,
+                                seL4_Word sender_badge,
+                                seL4_CPtr received_cap,
+                                void *reply_msg_p,
+                                bool *need_new_recv_cap,
+                                bool *should_reply)
 {
     int error = 0; // unused, to appease the error handling macros
     MoMessage *msg = (MoMessage *)msg_p;
@@ -176,12 +175,11 @@ static seL4_MessageInfo_t mo_component_handle(seL4_MessageInfo_t tag,
     }
 
     OSDB_PRINTF("Returning from MO component with error code %d\n", reply_msg->errorCode);
-    return seL4_MessageInfo_new(0, 0, 0, 0); // (XXX) Arya: Replace once conversion to protobuf is finished
+    return;
 
 err_goto:
     OSDB_PRINTF("Returning from MO component with error code %d\n", error);
     reply_msg->errorCode = error;
-    return seL4_MessageInfo_new(0, 0, 0, 0);
 }
 
 int mo_component_initialize(vka_t *server_vka,

@@ -104,13 +104,12 @@ err_goto:
     return error;
 }
 
-static seL4_MessageInfo_t handle_ep_allocation(seL4_Word sender_badge)
+static void handle_ep_allocation(seL4_Word sender_badge, EpAllocMessage *msg, EpReturnMessage *reply_msg)
 {
     OSDB_PRINTF("Got EP allocation request from: ");
     BADGE_PRINT(sender_badge);
 
     int error = 0;
-    seL4_MessageInfo_t reply_tag;
     ep_component_registry_entry_t *new_entry;
     seL4_CPtr badged_ep = 0;
     seL4_CPtr ep_in_PD = 0;
@@ -118,27 +117,23 @@ static seL4_MessageInfo_t handle_ep_allocation(seL4_Word sender_badge)
 
     error = ep_component_allocate(client_id, &ep_in_PD, &badged_ep, &new_entry);
 
-    seL4_SetMR(EPMSGREG_CONNECT_ACK_SLOT, badged_ep);
-    seL4_SetMR(EPMSGREG_CONNECT_ACK_RAW_EP, ep_in_PD);
+    reply_msg->msg.alloc.raw_ep_slot = ep_in_PD;
+    reply_msg->msg.alloc.slot = badged_ep;
 
 err_goto:
-    seL4_SetMR(EPMSGREG_FUNC, EP_FUNC_CONNECT_ACK);
-    reply_tag = seL4_MessageInfo_new(error, 0, 0, EPMSGREG_CONNECT_ACK_END);
-    return reply_tag;
+    reply_msg->which_msg = EpReturnMessage_alloc_tag;
+    reply_msg->errorCode = error;
 }
 
-static seL4_MessageInfo_t handle_get_raw_endpoint(seL4_MessageInfo_t old_tag, seL4_Word sender_badge)
+static void handle_get_raw_endpoint(seL4_Word sender_badge, EpGetMessage *msg, EpReturnMessage *reply_msg)
 {
     int error = 0;
     OSDB_PRINTF("Get Raw endpoint request from: ");
     BADGE_PRINT(sender_badge);
 
-    seL4_Uint64 extra_caps = seL4_MessageInfo_get_extraCaps(old_tag);
     pd_component_registry_entry_t *pd_data = NULL;
-    if (seL4_MessageInfo_get_capsUnwrapped(old_tag) > 0)
+    if (msg->for_other_PD)
     {
-        OSDB_PRINTF("Unwrapped caps detected, retrieving raw endpoint in target PD%d\n",
-                    get_object_id_from_badge(seL4_GetBadge(0)));
         pd_data = (pd_component_registry_entry_t *)
             resource_component_registry_get_by_badge(get_pd_component(), seL4_GetBadge(0));
     }
@@ -161,21 +156,21 @@ static seL4_MessageInfo_t handle_get_raw_endpoint(seL4_MessageInfo_t old_tag, se
                                          &dest, false, 0);
     SERVER_GOTO_IF_ERR(error, "Failed to copy raw endpoint cap to PD %d\n", pd_data->pd.id);
 
-    seL4_SetMR(EPMSGREG_GET_RAW_ENDPOINT_ACK_SLOT, dest.capPtr);
+    reply_msg->msg.get.slot = dest.capPtr;
+
 err_goto:
-    seL4_SetMR(EPMSGREG_FUNC, EP_FUNC_GET_RAW_ENDPOINT_ACK);
-    seL4_MessageInfo_t reply_tag = seL4_MessageInfo_new(error, 0, 0, EPMSGREG_GET_RAW_ENDPOINT_ACK_END);
-    return reply_tag;
+    reply_msg->which_msg = EpReturnMessage_get_tag;
+    reply_msg->errorCode = error;
 }
 
 /** this should only be called by the test PDs */
-static seL4_MessageInfo_t handle_forge_req(seL4_MessageInfo_t old_tag, seL4_Word sender_badge, seL4_CPtr received_cap)
+static void handle_forge_req(seL4_Word sender_badge, EpForgeMessage *msg,
+                             EpReturnMessage *reply_msg, seL4_CPtr received_cap)
 {
     OSDB_PRINTF("Got EP forge request from: ");
     BADGE_PRINT(sender_badge);
 
     int error = 0;
-    seL4_MessageInfo_t reply_tag;
     ep_component_registry_entry_t *new_entry;
     seL4_CPtr badged_ep = 0;
     uint32_t client_id = get_client_id_from_badge(sender_badge);
@@ -188,52 +183,53 @@ static seL4_MessageInfo_t handle_forge_req(seL4_MessageInfo_t old_tag, seL4_Word
                                         &new_entry,
                                         &badged_ep);
 
-    seL4_SetMR(EPMSGREG_FORGE_ACK_SLOT, badged_ep);
+    reply_msg->msg.alloc.slot = badged_ep;
 
 err_goto:
-    seL4_SetMR(EPMSGREG_FUNC, EP_FUNC_FORGE_ACK);
-    reply_tag = seL4_MessageInfo_new(error, 0, 0, EPMSGREG_FORGE_ACK_END);
-    return reply_tag;
+    reply_msg->which_msg = EpReturnMessage_alloc_tag;
+    reply_msg->errorCode = error;
 }
 
-static seL4_MessageInfo_t ep_component_handle(seL4_MessageInfo_t tag,
-                                              void *msg_p,
-                                              seL4_Word sender_badge,
-                                              seL4_CPtr received_cap,
-                                              void *reply_msg_p,
-                                              bool *need_new_recv_cap,
-                                              bool *should_reply)
+static void ep_component_handle(void *msg_p,
+                                seL4_Word sender_badge,
+                                seL4_CPtr received_cap,
+                                void *reply_msg_p,
+                                bool *need_new_recv_cap,
+                                bool *should_reply)
 {
     int error = 0; // unused, to appease the error handling macros
-    enum ep_component_funcs func = seL4_GetMR(EPMSGREG_FUNC);
-    seL4_MessageInfo_t reply_tag;
+    EpMessage *msg = (EpMessage *)msg_p;
+    EpReturnMessage *reply_msg = (EpReturnMessage *)reply_msg_p;
 
     SERVER_GOTO_IF_COND(get_object_id_from_badge(sender_badge) == BADGE_OBJ_ID_NULL &&
-                            func != EP_FUNC_CONNECT_REQ && func != EP_FUNC_FORGE_REQ,
+                            msg->which_msg != EpMessage_alloc_tag &&
+                            msg->which_msg != EpMessage_forge_tag,
                         "Received invalid request on the allocation endpoint\n");
 
-    switch (func)
+    switch (msg->which_msg)
     {
-    case EP_FUNC_CONNECT_REQ:
-        reply_tag = handle_ep_allocation(sender_badge);
+    case EpMessage_alloc_tag:
+        handle_ep_allocation(sender_badge, &msg->msg.alloc, reply_msg);
         break;
-    case EP_FUNC_GET_RAW_ENDPOINT_REQ:
-        reply_tag = handle_get_raw_endpoint(tag, sender_badge);
+    case EpMessage_get_tag:
+        handle_get_raw_endpoint(sender_badge, &msg->msg.get, reply_msg);
+        *need_new_recv_cap = msg->msg.get.for_other_PD;
         break;
-    case EP_FUNC_FORGE_REQ:
-        reply_tag = handle_forge_req(tag, sender_badge, received_cap);
+    case EpMessage_forge_tag:
+        handle_forge_req(sender_badge, &msg->msg.forge, reply_msg, received_cap);
         *need_new_recv_cap = true;
         break;
     default:
-        SERVER_GOTO_IF_COND(1, "Unknown request received: %d\n", func);
+        SERVER_GOTO_IF_COND(1, "Unknown request received: %d\n", msg->which_msg);
         break;
     }
 
-    return reply_tag;
+    OSDB_PRINTF("Returning from EP component with error code %d\n", reply_msg->errorCode);
+    return;
 
 err_goto:
-    seL4_MessageInfo_t err_tag = seL4_MessageInfo_set_label(reply_tag, 1);
-    return err_tag;
+    OSDB_PRINTF("Returning from EP component with error code %d\n", error);
+    reply_msg->errorCode = error;
 }
 
 int ep_component_initialize(vka_t *server_vka,

@@ -50,14 +50,13 @@ typedef struct _resource_component_context
 {
     gpi_cap_t resource_type; ///< The type of resoruce this component serves
 
-    seL4_MessageInfo_t (*request_handler)( ///< Callback to serve requests
-        seL4_MessageInfo_t tag,            ///< Message tag for incoming request
-        void *rpc_msg,                     ///< The incoming RPC message
-        seL4_Word badge,                   ///< Sender badge
-        seL4_CPtr cap,                     ///< Received cap
-        void *rpc_reply,                   ///< A buffer to fill with the reply RPC message
-        bool *need_new_recv_cap,           ///< Handler should set to true if it used the receive cap (default false)
-        bool *should_reply);               ///< Handler should set to false if no reply should be sent (default true)
+    void (*request_handler)(     ///< Callback to serve requests
+        void *rpc_msg,           ///< The incoming RPC message
+        seL4_Word badge,         ///< Sender badge
+        seL4_CPtr cap,           ///< Received cap
+        void *rpc_reply,         ///< A buffer to fill with the reply RPC message
+        bool *need_new_recv_cap, ///< Handler should set to true if it used the receive cap (default false)
+        bool *should_reply);     ///< Handler should set to false if no reply should be sent (default true)
 
     int (*new_obj)(                       ///< Callback to allocate a new obj
         resource_component_object_t *obj, ///< The new generic object
@@ -98,7 +97,7 @@ int resource_component_initialize(
     resource_component_context_t *component,
     gpi_cap_t resource_type,
     uint64_t space_id,
-    seL4_MessageInfo_t (*request_handler)(seL4_MessageInfo_t, void *, seL4_Word, seL4_CPtr, void *, bool *, bool *),
+    void (*request_handler)(void *, seL4_Word, seL4_CPtr, void *, bool *, bool *),
     int (*new_obj)(resource_component_object_t *, vka_t *, vspace_t *, void *),
     void (*on_registry_delete)(resource_server_registry_node_t *, void *),
     size_t reg_entry_size,

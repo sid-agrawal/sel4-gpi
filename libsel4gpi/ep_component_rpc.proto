@@ -5,20 +5,44 @@ enum EpComponentError {
     UNKNOWN = 11;       /* (XXX) manually set to seL4_NumErrors */
 }
 
-/* message type for all PD component request messages */
-message EpMessage {
-    /* No content, WIP */
+message EpAllocMessage {
+    /* No content */
 };
 
-/* return from a basic Ep Component message */
+message EpGetMessage {
+    bool for_other_PD = 1;      /* if true, the request gets the slot of the endpoint in another PD */
+};
+
+message EpForgeMessage {
+   /* No content */
+};
+
+message EpMessage {
+    oneof msg {
+        EpAllocMessage alloc = 1;
+        EpGetMessage get = 2;
+        EpForgeMessage forge = 3;
+    }
+};
+
 message EpBasicReturnMessage {
     /* No content */
 };
 
-/* message type for all Ep Component return messages */
+message EpAllocReturnMessage {
+    uint64 slot = 1;            /* slot containing the endpoint handle cap */
+    uint64 raw_ep_slot = 2;     /* slot containing the raw endpoint cap */
+};
+
+message EpGetReturnMessage {
+    uint64 slot = 1;            /* slot containing the raw endpoint cap */
+};
+
 message EpReturnMessage {
     EpComponentError errorCode = 1;
     oneof msg {
         EpBasicReturnMessage basic = 2;
+        EpAllocReturnMessage alloc = 3;
+        EpGetReturnMessage get = 4;
     };
 };

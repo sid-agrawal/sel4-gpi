@@ -763,8 +763,7 @@ err_goto:
     reply_msg->errorCode = error;
 }
 
-static seL4_MessageInfo_t pd_component_handle(seL4_MessageInfo_t tag,
-                                              void *msg_p,
+static void pd_component_handle(void *msg_p,
                                               seL4_Word sender_badge,
                                               seL4_CPtr received_cap,
                                               void *reply_msg_p,
@@ -772,7 +771,6 @@ static seL4_MessageInfo_t pd_component_handle(seL4_MessageInfo_t tag,
                                               bool *should_reply)
 {
     int error = 0; // unused, to appease the error handling macros
-
     PdMessage *msg = (PdMessage *)msg_p;
     PdReturnMessage *reply_msg = (PdReturnMessage *)reply_msg_p;
 
@@ -844,11 +842,10 @@ static seL4_MessageInfo_t pd_component_handle(seL4_MessageInfo_t tag,
         }
     }
 
-    return seL4_MessageInfo_new(0, 0, 0, 0); // (XXX) Arya: Replace once conversion to protobuf is finished
+    return;
 
 err_goto:
     reply_msg->errorCode = error;
-    return seL4_MessageInfo_new(0, 0, 0, 0);
 }
 
 /** --- Functions callable by root task --- **/

@@ -10,48 +10,101 @@
  */
 #include <sel4gpi/endpoint_clientapi.h>
 #include <sel4gpi/endpoint_component.h>
+#include <sel4gpi/gpi_rpc.h>
+#include <ep_component_rpc.pb.h>
 
 // Defined for utility printing macros
 #define DEBUG_ID EP_DEBUG
 #define SERVER_ID EPSERVC
 
+static sel4gpi_rpc_env_t rpc_env = {
+    .request_desc = &EpMessage_msg,
+    .reply_desc = &EpReturnMessage_msg,
+};
+
 int ep_component_client_connect(seL4_CPtr server_ep_cap, ep_client_context_t *ret_conn)
 {
-    seL4_SetMR(EPMSGREG_FUNC, EP_FUNC_CONNECT_REQ);
-    seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0, EPMSGREG_CONNECT_REQ_END);
-    tag = seL4_Call(server_ep_cap, tag);
+    OSDB_PRINTF("Sending connect request to endpoint component\n");
 
-    ret_conn->badged_server_ep_cspath.capPtr = seL4_GetMR(EPMSGREG_CONNECT_ACK_SLOT);
-    ret_conn->raw_endpoint = seL4_GetMR(EPMSGREG_CONNECT_ACK_RAW_EP);
+    int error = 0;
 
-    return seL4_MessageInfo_ptr_get_label(&tag);
+    EpMessage msg = {
+        .which_msg = EpMessage_alloc_tag,
+    };
+
+    EpReturnMessage ret_msg;
+
+    error = sel4gpi_rpc_call(&rpc_env, server_ep_cap, (void *)&msg,
+                             0, NULL, (void *)&ret_msg);
+    error |= ret_msg.errorCode;
+
+    if (!error)
+    {
+        ret_conn->badged_server_ep_cspath.capPtr = ret_msg.msg.alloc.slot;
+        ret_conn->raw_endpoint = ret_msg.msg.alloc.raw_ep_slot;
+    }
+
+    return error;
 }
 
-static int get_raw_endpoint(ep_client_context_t *ep_conn, int extraCaps)
+static int get_raw_endpoint(ep_client_context_t *ep_conn, pd_client_context_t *target_PD, seL4_CPtr *raw_endpoint)
 {
-    seL4_SetMR(EPMSGREG_FUNC, EP_FUNC_GET_RAW_ENDPOINT_REQ);
+    OSDB_PRINTF("Sending 'get raw endpoint' request to endpoint component\n");
 
-    seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, extraCaps, EPMSGREG_GET_RAW_ENDPOINT_REQ_END);
-    tag = seL4_Call(ep_conn->badged_server_ep_cspath.capPtr, tag);
+    int error = 0;
 
-    return seL4_MessageInfo_ptr_get_label(&tag);
+    EpMessage msg = {
+        .which_msg = EpMessage_get_tag,
+        .msg.get = {
+            .for_other_PD = target_PD != NULL,
+        }};
+
+    EpReturnMessage ret_msg;
+
+    if (target_PD)
+    {
+        error = sel4gpi_rpc_call(&rpc_env, ep_conn->badged_server_ep_cspath.capPtr, (void *)&msg,
+                                 1, &target_PD->badged_server_ep_cspath.capPtr, (void *)&ret_msg);
+    }
+    else
+    {
+        error = sel4gpi_rpc_call(&rpc_env, ep_conn->badged_server_ep_cspath.capPtr, (void *)&msg,
+                                 0, NULL, (void *)&ret_msg);
+    }
+
+    error |= ret_msg.errorCode;
+
+    if (!error)
+    {
+        *raw_endpoint = ret_msg.msg.get.slot;
+    }
+
+    return error;
 }
 
 int ep_client_get_raw_endpoint(ep_client_context_t *ep_conn)
 {
-    int error = get_raw_endpoint(ep_conn, 0);
-    ep_conn->raw_endpoint = seL4_GetMR(EPMSGREG_GET_RAW_ENDPOINT_ACK_SLOT);
+    seL4_CPtr raw_endpoint;
+    int error = get_raw_endpoint(ep_conn, NULL, &raw_endpoint);
+
+    if (!error)
+    {
+        ep_conn->raw_endpoint = raw_endpoint;
+    }
+
+err_goto:
     return error;
 }
 
 int ep_client_get_raw_endpoint_in_PD(pd_client_context_t *target_PD, ep_client_context_t *ep_conn, seL4_CPtr *ret_ep)
 {
     int error = 0;
-    seL4_SetCap(0, target_PD->badged_server_ep_cspath.capPtr);
-    error = get_raw_endpoint(ep_conn, 1);
-    if (ret_ep)
+    seL4_CPtr raw_endpoint;
+    error = get_raw_endpoint(ep_conn, target_PD, &raw_endpoint);
+
+    if (!error)
     {
-        *ret_ep = seL4_GetMR(EPMSGREG_GET_RAW_ENDPOINT_ACK_SLOT);
+        *ret_ep = raw_endpoint;
     }
 
     return error;
@@ -59,13 +112,26 @@ int ep_client_get_raw_endpoint_in_PD(pd_client_context_t *target_PD, ep_client_c
 
 int ep_client_forge(seL4_CPtr server_ep_cap, seL4_CPtr ep_to_forge, ep_client_context_t *ret_conn)
 {
-    seL4_SetMR(EPMSGREG_FUNC, EP_FUNC_FORGE_REQ);
-    seL4_SetCap(0, ep_to_forge);
-    seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 1, EPMSGREG_FORGE_REQ_END);
-    tag = seL4_Call(server_ep_cap, tag);
+    OSDB_PRINTF("Sending 'get raw endpoint' request to endpoint component\n");
 
-    ret_conn->badged_server_ep_cspath.capPtr = seL4_GetMR(EPMSGREG_FORGE_ACK_SLOT);
-    ret_conn->raw_endpoint = ep_to_forge;
+    int error = 0;
 
-    return seL4_MessageInfo_ptr_get_label(&tag);
+    EpMessage msg = {
+        .which_msg = EpMessage_forge_tag,
+    };
+
+    EpReturnMessage ret_msg;
+
+    error = sel4gpi_rpc_call(&rpc_env, server_ep_cap, (void *)&msg,
+                             1, &ep_to_forge, (void *)&ret_msg);
+
+    error |= ret_msg.errorCode;
+
+    if (!error)
+    {
+        ret_conn->badged_server_ep_cspath.capPtr = ret_msg.msg.alloc.slot;
+        ret_conn->raw_endpoint = ep_to_forge;
+    }
+
+    return error;
 }

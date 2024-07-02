@@ -257,13 +257,12 @@ err_goto:
     return 0;
 }
 
-static seL4_MessageInfo_t resspc_component_handle(seL4_MessageInfo_t tag,
-                                                  void *msg_p,
-                                                  seL4_Word sender_badge,
-                                                  seL4_CPtr received_cap,
-                                                  void *reply_msg_p,
-                                                  bool *need_new_recv_cap,
-                                                  bool *should_reply)
+static void resspc_component_handle(void *msg_p,
+                                    seL4_Word sender_badge,
+                                    seL4_CPtr received_cap,
+                                    void *reply_msg_p,
+                                    bool *need_new_recv_cap,
+                                    bool *should_reply)
 {
     int error = 0;
     ResSpcMessage *msg = (ResSpcMessage *)msg_p;
@@ -293,12 +292,11 @@ static seL4_MessageInfo_t resspc_component_handle(seL4_MessageInfo_t tag,
     }
 
     OSDB_PRINTF("Returning from ResSpc component with error code %d\n", reply_msg->errorCode);
-    return seL4_MessageInfo_new(0, 0, 0, 0); // (XXX) Arya: Replace once conversion to protobuf is finished
+    return;
 
 err_goto:
     OSDB_PRINTF("Returning from ResSpc component with error code %d\n", error);
     reply_msg->errorCode = error;
-    return seL4_MessageInfo_new(0, 0, 0, 0);
 }
 
 // Keeping here instead of a separate resource space object file

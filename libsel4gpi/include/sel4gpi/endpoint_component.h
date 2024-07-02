@@ -25,47 +25,6 @@
 #define EPSERVS "EPServ Component: "
 #define EPSERVC "EPServ Client   : "
 
-/* IPC Message register values for SSMSGREG_FUNC */
-enum ep_component_funcs
-{
-    EP_FUNC_CONNECT_REQ = 0,
-    EP_FUNC_CONNECT_ACK,
-
-    EP_FUNC_GET_RAW_ENDPOINT_REQ,
-    EP_FUNC_GET_RAW_ENDPOINT_ACK,
-
-    EP_FUNC_FORGE_REQ,
-    EP_FUNC_FORGE_ACK
-};
-
-/* Designated purposes of each message register in the mini-protocol. */
-enum ep_component_msgregs
-{
-    /* These four are fixed headers in every serserv message. */
-    EPMSGREG_FUNC = 0,
-    /* This is a convenience label for IPC MessageInfo length. */
-    EPMSGREG_LABEL0,
-
-    /* Connect / New */
-    EPMSGREG_CONNECT_REQ_END = EPMSGREG_LABEL0,
-
-    EPMSGREG_CONNECT_ACK_SLOT = EPMSGREG_LABEL0,
-    EPMSGREG_CONNECT_ACK_RAW_EP,
-    EPMSGREG_CONNECT_ACK_END,
-
-    /* Get Raw Endpoint */
-    EPMSGREG_GET_RAW_ENDPOINT_REQ_END = EPMSGREG_LABEL0,
-
-    EPMSGREG_GET_RAW_ENDPOINT_ACK_SLOT = EPMSGREG_LABEL0,
-    EPMSGREG_GET_RAW_ENDPOINT_ACK_END,
-
-    /* Forge an endpoint */
-    EPMSGREG_FORGE_REQ_END = EPMSGREG_LABEL0,
-
-    EPMSGREG_FORGE_ACK_SLOT = EPMSGREG_LABEL0,
-    EPMSGREG_FORGE_ACK_END
-};
-
 /**
  * @brief Component metadata for an endpoint, essential just a wrapper around the VKA object
  */
