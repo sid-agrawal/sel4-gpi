@@ -89,11 +89,11 @@ static void on_pd_registry_delete(resource_server_registry_node_t *node_gen, voi
 static void handle_pd_allocation(seL4_Word sender_badge, PdReturnMessage *reply_msg)
 {
     OSDB_PRINTF("Got connect request from badge %lx\n", sender_badge);
-
     int error = 0;
     seL4_CPtr ret_cap;
     pd_component_registry_entry_t *new_entry;
     uint32_t client_id = get_client_id_from_badge(sender_badge);
+    SERVER_GOTO_IF_COND(!sel4gpi_rpc_check_cap(GPICAP_TYPE_MO), "Did not receive MO cap\n");
 
     /* Find the MO to use for PD's OSmosis data */
     mo_component_registry_entry_t *osm_mo_entry =
@@ -514,6 +514,7 @@ static void handle_runtime_setup_req(seL4_Word sender_badge, PdSetupMessage *msg
     BADGE_PRINT(sender_badge);
 
     int error = 0;
+    SERVER_GOTO_IF_COND(!sel4gpi_rpc_check_caps_2(GPICAP_TYPE_ADS, GPICAP_TYPE_CPU), "Did not receive ADS & CPU cap\n");
 
     /* Find the target PD */
     pd_component_registry_entry_t *target_pd = pd_component_registry_get_entry_by_badge(sender_badge);
@@ -605,6 +606,8 @@ static void handle_share_resource_type_req(seL4_Word sender_badge,
     OSDB_PRINTF("Got Share Resource Type Request: ");
     BADGE_PRINT(sender_badge);
     gpi_cap_t res_type = (gpi_cap_t)msg->res_type;
+
+    SERVER_GOTO_IF_COND(!sel4gpi_rpc_check_cap(GPICAP_TYPE_PD), "Did not receive PD cap\n");
 
     /* Find the source PD */
     pd_component_registry_entry_t *src_pd_data = pd_component_registry_get_entry_by_badge(sender_badge);
@@ -708,6 +711,8 @@ static void handle_send_subgraph_req(seL4_Word sender_badge, PdSendSubgraphMessa
 
     if (has_data)
     {
+        SERVER_GOTO_IF_COND(!sel4gpi_rpc_check_cap(GPICAP_TYPE_MO), "Did not receive MO cap\n");
+
         /* Attach the included MO */
         seL4_Word mo_badge = seL4_GetBadge(0);
         SERVER_GOTO_IF_COND(get_cap_type_from_badge(mo_badge) != GPICAP_TYPE_MO, "Provided cap was not an MO\n");
@@ -768,11 +773,11 @@ err_goto:
 }
 
 static void pd_component_handle(void *msg_p,
-                                              seL4_Word sender_badge,
-                                              seL4_CPtr received_cap,
-                                              void *reply_msg_p,
-                                              bool *need_new_recv_cap,
-                                              bool *should_reply)
+                                seL4_Word sender_badge,
+                                seL4_CPtr received_cap,
+                                void *reply_msg_p,
+                                bool *need_new_recv_cap,
+                                bool *should_reply)
 {
     int error = 0; // unused, to appease the error handling macros
     PdMessage *msg = (PdMessage *)msg_p;

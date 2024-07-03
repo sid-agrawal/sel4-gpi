@@ -131,6 +131,8 @@ static void handle_get_raw_endpoint(seL4_Word sender_badge, EpGetMessage *msg, E
     OSDB_PRINTF("Get Raw endpoint request from: ");
     BADGE_PRINT(sender_badge);
 
+    SERVER_GOTO_IF_COND(!sel4gpi_rpc_check_cap(GPICAP_TYPE_NONE), "Did not receive cap\n");
+
     pd_component_registry_entry_t *pd_data = NULL;
     if (msg->for_other_PD)
     {

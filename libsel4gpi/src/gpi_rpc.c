@@ -5,6 +5,7 @@
 #include <utils/zf_log.h>
 
 #include <sel4gpi/gpi_rpc.h>
+#include <sel4gpi/badge_usage.h>
 
 /**
  * @file
@@ -48,7 +49,8 @@ int sel4gpi_rpc_call(sel4gpi_rpc_env_t *env, seL4_CPtr ep, void *msg,
     /* make the call */
     seL4_MessageInfo_t reply_tag = seL4_Call(ep, seL4_MessageInfo_new(0, 0, n_caps, stream_size));
 
-    if (seL4_MessageInfo_ptr_get_label(&reply_tag) != seL4_NoError) {
+    if (seL4_MessageInfo_ptr_get_label(&reply_tag) != seL4_NoError)
+    {
         return -1;
     }
 
@@ -67,19 +69,6 @@ int sel4gpi_rpc_recv(sel4gpi_rpc_env_t *env, void *res)
 {
     pb_istream_t stream = pb_istream_from_IPC(0);
     bool ret = pb_decode_delimited(&stream, env->request_desc, res);
-    if (!ret)
-    {
-        ZF_LOGE("Invalid protobuf stream (%s)", PB_GET_ERROR(&stream));
-        return -1;
-    }
-
-    return 0;
-}
-
-int sel4gpi_rpc_recv_reply(sel4gpi_rpc_env_t *env, void *res)
-{
-    pb_istream_t stream = pb_istream_from_IPC(0);
-    bool ret = pb_decode_delimited(&stream, env->reply_desc, res);
     if (!ret)
     {
         ZF_LOGE("Invalid protobuf stream (%s)", PB_GET_ERROR(&stream));
@@ -109,4 +98,26 @@ int sel4gpi_rpc_reply(sel4gpi_rpc_env_t *env, void *msg, seL4_MessageInfo_t *msg
     *msg_info = seL4_MessageInfo_new(0, 0, 0, size);
 
     return 0;
+}
+
+bool sel4gpi_rpc_check_cap(gpi_cap_t type)
+{
+    if (type == GPICAP_TYPE_NONE)
+    {
+        return seL4_GetCap(0) != 0;
+    }
+    else
+    {
+        return get_cap_type_from_badge(seL4_GetBadge(0)) == type;
+    }
+}
+
+bool sel4gpi_rpc_check_caps_2(gpi_cap_t type1, gpi_cap_t type2)
+{
+    return sel4gpi_rpc_check_cap(type1) && get_cap_type_from_badge(seL4_GetBadge(1)) == type2;
+}
+
+bool sel4gpi_rpc_check_caps_3(gpi_cap_t type1, gpi_cap_t type2, gpi_cap_t type3)
+{
+    return sel4gpi_rpc_check_caps_2(type1, type2) && get_cap_type_from_badge(seL4_GetBadge(2)) == type3;
 }

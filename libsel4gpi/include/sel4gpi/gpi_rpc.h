@@ -1,8 +1,8 @@
 #pragma once
 
 #include <sel4/sel4.h>
-
 #include <pb_common.h>
+#include <sel4gpi/resource_types.h>
 
 /**
  * @file
@@ -50,16 +50,6 @@ int sel4gpi_rpc_call(sel4gpi_rpc_env_t *client, seL4_CPtr ep, void *msg,
 int sel4gpi_rpc_recv(sel4gpi_rpc_env_t *env, void *res);
 
 /**
- * To be called by an RPC client, parse an RPC reply from the IPC buffer
- * Note: not to be used with sel4gpi_rpc_call, only to be used to individually parse a reply
- *
- * @param env the env structure, initialized by sel4gpi_rpc_env_init
- * @param res a message structure to be filled out, the type will correspond with the request_desc
- * @return 0 on success, -1 if there was an error decoding the message
- */
-int sel4gpi_rpc_recv_reply(sel4gpi_rpc_env_t *env, void *res);
-
-/**
  * To be called by an RPC server, write an RPC reply to the IPC buffer
  * Note: You will still need to call seL4_Send with the provided message tag after this
  *
@@ -69,3 +59,31 @@ int sel4gpi_rpc_recv_reply(sel4gpi_rpc_env_t *env, void *res);
  * @return 0 on success, -1 if there was an error decoding the message
  */
 int sel4gpi_rpc_reply(sel4gpi_rpc_env_t *env, void *msg, seL4_MessageInfo_t *msg_info);
+
+/**
+ * Check if the first received cap has the given GPI type
+ * 
+ * @param type the expected type of the first cap
+ * @return true if the received cap is the expected type, false otherwise
+ */
+bool sel4gpi_rpc_check_cap(gpi_cap_t type);
+
+/**
+ * Check if the first 2 received caps have the given GPI types
+ * 
+ * @param type1 the expected type of the first cap
+ * @param type2 the expected type of the second cap
+ * @return true if the received caps have the expected types, false otherwise
+ */
+bool sel4gpi_rpc_check_caps_2(gpi_cap_t type1, gpi_cap_t type2);
+
+/**
+ * Check if the first 2 received caps have the given GPI types
+ * 
+ * @param type1 the expected type of the first cap
+ * @param type2 the expected type of the second cap
+ * @param type2 the expected type of the third cap
+ * @return true if the received caps have the expected types, false otherwise
+ */
+bool sel4gpi_rpc_check_caps_3(gpi_cap_t type1, gpi_cap_t type2, gpi_cap_t type3);
+

@@ -357,12 +357,12 @@ void xv6fs_request_handler(void *msg_p,
       break;
     case FsMessage_link_tag:
       *need_new_recv_cap = true;
-
-      seL4_Word file_badge = seL4_GetBadge(1);
-      CHECK_ERROR_GOTO(get_cap_type_from_badge(file_badge) != get_xv6fs_server()->gen.resource_type,
-                       "Cap was not file",
+      CHECK_ERROR_GOTO(!sel4gpi_rpc_check_caps_2(GPICAP_TYPE_NONE, get_xv6fs_server()->gen.resource_type),
+                       "Did not receive MO/FILE caps\n",
                        FsError_BADGE,
                        done);
+
+      seL4_Word file_badge = seL4_GetBadge(1);
 
       /* Attach memory object to server ADS (contains pathname) */
       error = resource_server_attach_mo(&get_xv6fs_server()->gen, cap, &mo_vaddr);

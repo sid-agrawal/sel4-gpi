@@ -184,6 +184,7 @@ static void handle_attach_req(seL4_Word sender_badge,
     BADGE_PRINT(sender_badge);
 
     int error = 0;
+    SERVER_GOTO_IF_COND(!sel4gpi_rpc_check_cap(GPICAP_TYPE_MO), "Did not receive MO cap\n");
 
     sel4utils_reservation_type_t vmr_type = (sel4utils_reservation_type_t)msg->type;
     void *vaddr = (void *)msg->vaddr;
@@ -214,6 +215,7 @@ static void handle_attach_to_reserve_req(seL4_Word sender_badge,
     OSDB_PRINTF("Got attach-to-reserve request from client badge %lx.\n", sender_badge);
 
     int error = 0;
+    SERVER_GOTO_IF_COND(!sel4gpi_rpc_check_cap(GPICAP_TYPE_MO), "Did not receive MO cap\n");
 
     size_t offset = msg->offset;
     uint64_t reservation_id = get_object_id_from_badge(sender_badge);
@@ -269,11 +271,11 @@ static void handle_copy_req(seL4_Word sender_badge, AdsCopyMessage *msg,
 {
     OSDB_PRINTF("Got copy request from client badge: ");
     BADGE_PRINT(sender_badge);
-
     int error = 0;
     seL4_MessageInfo_t reply_tag;
     seL4_CPtr ret_cap;
     seL4_Word client_id = get_client_id_from_badge(sender_badge);
+    SERVER_GOTO_IF_COND(!sel4gpi_rpc_check_cap(GPICAP_TYPE_ADS), "Did not receive ADS cap\n");
 
     /* Find the client */
     ads_component_registry_entry_t *src_ads_data = (ads_component_registry_entry_t *)
@@ -295,7 +297,8 @@ static void handle_copy_req(seL4_Word sender_badge, AdsCopyMessage *msg,
 
     if (msg->provided_mo)
     {
-        // (XXX) Arya: Check the cap is correct
+        SERVER_GOTO_IF_COND(!sel4gpi_rpc_check_caps_2(GPICAP_TYPE_ADS, GPICAP_TYPE_MO), "Did not receive MO cap\n");
+
         seL4_Word mo_badge = seL4_GetBadge(1);
         assert(get_cap_type_from_badge(mo_badge) == GPICAP_TYPE_MO);
 
@@ -318,6 +321,7 @@ static void handle_load_elf_request(seL4_Word sender_badge,
     int error = 0;
     void *entry_point;
     sel4utils_elf_region_t *elf_reservations = NULL;
+    SERVER_GOTO_IF_COND(!sel4gpi_rpc_check_cap(GPICAP_TYPE_PD), "Did not receive PD cap\n");
 
     // Find target ADS
     ads_component_registry_entry_t *target_ads = (ads_component_registry_entry_t *)

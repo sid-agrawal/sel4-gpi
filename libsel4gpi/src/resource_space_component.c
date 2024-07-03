@@ -63,6 +63,7 @@ static void handle_resspc_allocation_request(seL4_Word sender_badge,
     int error = 0;
     uint64_t caller_id = get_client_id_from_badge(sender_badge);
     uint64_t client_id = msg->client_id;
+    SERVER_GOTO_IF_COND(!sel4gpi_rpc_check_cap(GPICAP_TYPE_EP), "Did not receive EP cap\n");
 
     // Find the resource server PD
     pd_component_registry_entry_t *server_pd = pd_component_registry_get_entry_by_id(caller_id);
