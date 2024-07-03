@@ -7,17 +7,6 @@
  * API for remote resource servers, which the RT or other PDs may use
  */
 
-// IPC values returned in the "label" message header.
-enum rs_errors
-{
-    RS_NOERROR = 0,
-    /* No future collisions with seL4_Error.*/
-    RS_ERROR_RR_SIZE = seL4_NumErrors, // RR request shared memory is too small
-    RS_ERROR_DNE,                      // Resource does not exist
-    RS_ERROR_NS,                       // Namespace does not exist
-    RS_NUM_ERRORS
-};
-
 /**
  * Starts a resource server in a new PD
  * @param rde_type cap type of RDE to add, optional

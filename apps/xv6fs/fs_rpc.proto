@@ -1,18 +1,21 @@
 syntax = "proto3";
+import 'nanopb.proto';
 
 enum FsError {
     NONE = 0;                    /* no error */
     UNKNOWN = 11;                /* (XXX) Arya: Manually set to the seL4_NumErrors */
     BADGE = 12;                  /* invalid badge provided */
     NO_FILE = 13;                /* the file does not exist */
+    NO_NS = 14;                  /* the namespace does not exist */
 };
 
 message FsCreateMessage {
     uint64 flags = 1;   /* file creation flags */
+    string path = 2 [(nanopb).max_length = 128];
 };
 
 message FsLinkMessage {
-    /* No content */
+    string path = 1 [(nanopb).max_length = 128];
 };
 
 message FsReadMessage {
@@ -30,7 +33,7 @@ message FsCloseMessage {
 };
 
 message FsUnlinkMessage {
-    /* No content */
+    string path = 1 [(nanopb).max_length = 128];
 };
 
 message FsStatMessage {

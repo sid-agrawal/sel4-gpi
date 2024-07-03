@@ -212,24 +212,23 @@ int xv6fs_client_get_file(int fd, seL4_CPtr *file_ep)
 }
 
 // Not used for libc
-int xv6fs_client_link_file(seL4_CPtr file, const char *path)
+int xv6fs_client_link_file(seL4_CPtr file, const char *pathname)
 {
   XV6FS_PRINTF("fs_link_file file cptr %d, path %s\n", (int)file, path);
 
-  int error;
-
-  // Copy pathname from buf to shared mem
-  strcpy(get_xv6fs_client()->shared_mem_vaddr, path);
+  int error = 0;
+  assert(strlen(pathname) <= MAXPATH);
 
   // Send IPC to fs server
-  seL4_CPtr caps[2] = {get_xv6fs_client()->shared_mem->badged_server_ep_cspath.capPtr, file};
+  seL4_CPtr caps[1] = {file};
 
   FsMessage msg = {
       .which_msg = FsMessage_link_tag};
- 
+  strncpy(msg.msg.link.path, pathname, MAXPATH);
+
   FsReturnMessage ret_msg;
 
-  error = sel4gpi_rpc_call(&rpc_client, get_xv6fs_client()->server_ep, &msg, 2, caps, &ret_msg);
+  error = sel4gpi_rpc_call(&rpc_client, get_xv6fs_client()->server_ep, &msg, 1, caps, &ret_msg);
 
   return error || ret_msg.errorCode;
 }
@@ -240,6 +239,7 @@ static int xv6fs_libc_open(const char *pathname, int flags, int modes)
   XV6FS_PRINTF("xv6fs_libc_open pathname %s, flags 0x%x\n", pathname, flags);
 
   int error;
+  assert(strlen(pathname) <= MAXPATH);
 
   // Check for /dev/null
   if (strcmp(pathname, DEV_NULL_PATH) == 0)
@@ -247,22 +247,18 @@ static int xv6fs_libc_open(const char *pathname, int flags, int modes)
     return dev_null_fd;
   }
 
-  // Copy pathname from buf to shared mem
-  strcpy(get_xv6fs_client()->shared_mem_vaddr, pathname);
-
   // Send IPC to fs server
-  seL4_CPtr caps[1] = {get_xv6fs_client()->shared_mem->badged_server_ep_cspath.capPtr};
-
   FsMessage msg = {
       .which_msg = FsMessage_create_tag,
       .msg.create = {
           .flags = flags,
           // (XXX) Currently ignore modes
       }};
+  strncpy(msg.msg.create.path, pathname, MAXPATH);
 
   FsReturnMessage ret_msg;
 
-  error = sel4gpi_rpc_call(&rpc_client, get_xv6fs_client()->server_ep, &msg, 1, caps, &ret_msg);
+  error = sel4gpi_rpc_call(&rpc_client, get_xv6fs_client()->server_ep, &msg, 0, NULL, &ret_msg);
 
   if (error || ret_msg.errorCode)
   {
@@ -632,20 +628,20 @@ static int xv6fs_libc_unlink(const char *pathname)
   XV6FS_PRINTF("xv6fs_libc_unlink pathname %s\n", pathname);
 
   int error = 0;
+  assert(strlen(pathname) <= MAXPATH);
 
   // Copy pathname from buf to shared mem
   strcpy(get_xv6fs_client()->shared_mem_vaddr, pathname);
 
   // Send IPC to fs server
-  seL4_CPtr caps[1] = {get_xv6fs_client()->shared_mem->badged_server_ep_cspath.capPtr};
-
   FsMessage msg = {
       .which_msg = FsMessage_unlink_tag,
   };
+  strncpy(msg.msg.unlink.path, pathname, MAXPATH);
 
   FsReturnMessage ret_msg;
 
-  error = sel4gpi_rpc_call(&rpc_client, get_xv6fs_client()->server_ep, &msg, 1, caps, &ret_msg);
+  error = sel4gpi_rpc_call(&rpc_client, get_xv6fs_client()->server_ep, &msg, 0, NULL, &ret_msg);
 
   if (error || ret_msg.errorCode)
   {
@@ -725,7 +721,8 @@ int xv6fs_client_new_ns(uint64_t *ns_id)
   int error = sel4gpi_rpc_call(&rpc_client, get_xv6fs_client()->server_ep, (void *)&msg, 0, NULL, (void *)&ret_msg);
   error |= ret_msg.errorCode;
 
-  if (!error) {
+  if (!error)
+  {
     *ns_id = ret_msg.msg.ns.space_id;
   }
 

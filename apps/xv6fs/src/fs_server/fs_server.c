@@ -264,14 +264,8 @@ void xv6fs_request_handler(void *msg_p,
       reply_msg->msg.ns.space_id = ns_id;
       break;
     case FsMessage_create_tag:
-      *need_new_recv_cap = true;
-
       int open_flags = msg->msg.create.flags;
-
-      /* Attach memory object to server ADS (contains pathname) */
-      error = resource_server_attach_mo(&get_xv6fs_server()->gen, cap, &mo_vaddr);
-      CHECK_ERROR_GOTO(error, "Failed to attach MO", error, done);
-      pathname = (char *)mo_vaddr;
+      pathname = msg->msg.create.path;
 
       /* Update pathname if within a namespace */
       ns_id = get_space_id_from_badge(sender_badge);
@@ -281,7 +275,7 @@ void xv6fs_request_handler(void *msg_p,
         if (ns == NULL)
         {
           XV6FS_PRINTF("Namespace did not exist\n");
-          error = RS_ERROR_NS;
+          error = FsError_NO_NS;
           goto done;
         }
 
@@ -347,27 +341,18 @@ void xv6fs_request_handler(void *msg_p,
                                             &dest);
       CHECK_ERROR_GOTO(error, "Failed to give the resource", error, done);
 
-      // Unattach the MO
-      error = resource_server_unattach(&get_xv6fs_server()->gen, mo_vaddr);
-      CHECK_ERROR_GOTO(error, "Failed to unattach MO", error, done);
-
       // Set the reply
       reply_msg->which_msg = FsReturnMessage_create_tag;
       reply_msg->msg.create.slot = dest;
       break;
     case FsMessage_link_tag:
-      *need_new_recv_cap = true;
-      CHECK_ERROR_GOTO(!sel4gpi_rpc_check_caps_2(GPICAP_TYPE_NONE, get_xv6fs_server()->gen.resource_type),
-                       "Did not receive MO/FILE caps\n",
+      CHECK_ERROR_GOTO(!sel4gpi_rpc_check_cap(get_xv6fs_server()->gen.resource_type),
+                       "Did not receive FILE cap\n",
                        FsError_BADGE,
                        done);
 
-      seL4_Word file_badge = seL4_GetBadge(1);
-
-      /* Attach memory object to server ADS (contains pathname) */
-      error = resource_server_attach_mo(&get_xv6fs_server()->gen, cap, &mo_vaddr);
-      CHECK_ERROR_GOTO(error, "Failed to attach MO", error, done);
-      pathname = (char *)mo_vaddr;
+      seL4_Word file_badge = seL4_GetBadge(0);
+      pathname = msg->msg.link.path;
 
       /* Update pathname if within a namespace */
       ns_id = get_space_id_from_badge(sender_badge);
@@ -377,7 +362,7 @@ void xv6fs_request_handler(void *msg_p,
         if (ns == NULL)
         {
           XV6FS_PRINTF("Namespace did not exist\n");
-          error = RS_ERROR_NS;
+          error = FsError_NO_NS;
           goto done;
         }
 
@@ -400,18 +385,9 @@ void xv6fs_request_handler(void *msg_p,
       error = xv6fs_sys_dolink2(reg_entry->file, pathname);
       CHECK_ERROR_GOTO(error, "Failed to link", FsError_UNKNOWN, done);
 
-      // Unattach the MO
-      error = resource_server_unattach(&get_xv6fs_server()->gen, mo_vaddr);
-      CHECK_ERROR_GOTO(error, "Failed to unattach MO", error, done);
-
       break;
     case FsMessage_unlink_tag:
-      *need_new_recv_cap = true;
-
-      /* Attach memory object to server ADS (contains pathname) */
-      error = resource_server_attach_mo(&get_xv6fs_server()->gen, cap, &mo_vaddr);
-      CHECK_ERROR_GOTO(error, "Failed to attach MO", error, done);
-      pathname = (char *)mo_vaddr;
+      pathname = msg->msg.unlink.path;
 
       /* Update pathname if within a namespace */
       ns_id = get_space_id_from_badge(sender_badge);
@@ -421,7 +397,7 @@ void xv6fs_request_handler(void *msg_p,
         if (ns == NULL)
         {
           XV6FS_PRINTF("Namespace did not exist\n");
-          error = RS_ERROR_NS;
+          error = FsError_NO_NS;
           goto done;
         }
 
@@ -431,10 +407,6 @@ void xv6fs_request_handler(void *msg_p,
       XV6FS_PRINTF("Unlink pathname %s\n", pathname);
       error = xv6fs_sys_unlink(pathname);
       CHECK_ERROR_GOTO(error, "Failed to unlink", FsError_UNKNOWN, done);
-
-      // Unattach the MO
-      error = resource_server_unattach(&get_xv6fs_server()->gen, mo_vaddr);
-      CHECK_ERROR_GOTO(error, "Failed to unattach MO", error, done);
 
       break;
     default:
@@ -651,7 +623,7 @@ int xv6fs_work_handler(PdWorkReturnMessage *work)
       if (ns == NULL)
       {
         XV6FS_PRINTF("Namespace did not exist for dumprr\n");
-        error = RS_ERROR_NS;
+        error = FsError_NO_NS;
         goto err_goto;
       }
 
