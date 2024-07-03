@@ -310,6 +310,9 @@ static gpi_model_node_t *add_node(model_state_t *model_state, gpi_node_type_t no
         strncpy(node->data, data, CSV_MAX_STRING_SIZE);
     }
 
+    // by default the node is considered dumped when it has been added, unless explicitly toggled
+    node->dumped = true;
+
     // HASH_ADD_KEYPTR(hh, model_state->nodes, &node->id, CSV_MAX_STRING_SIZE, node);
     HASH_ADD_STR(model_state->nodes, id, node);
 

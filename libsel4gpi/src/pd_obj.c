@@ -885,7 +885,7 @@ static int res_dump(pd_t *pd, model_state_t *ms, pd_hold_node_t *current_cap, gp
     case GPICAP_TYPE_NONE:
         break;
     case GPICAP_TYPE_ADS:
-        if (!res_node)
+        if (!res_node || !res_node->dumped)
         {
             /* Add the resource node */
             res_node = add_resource_node(ms, current_cap->type, current_cap->space_id, current_cap->res_id);
@@ -902,7 +902,7 @@ static int res_dump(pd_t *pd, model_state_t *ms, pd_hold_node_t *current_cap, gp
 
         break;
     case GPICAP_TYPE_MO:
-        if (!res_node)
+        if (!res_node || !res_node->dumped)
         {
             /* Add the resource node */
             res_node = add_resource_node(ms, current_cap->type, current_cap->space_id, current_cap->res_id);
@@ -918,7 +918,7 @@ static int res_dump(pd_t *pd, model_state_t *ms, pd_hold_node_t *current_cap, gp
         add_edge(ms, GPI_EDGE_TYPE_HOLD, pd_node, res_node);
         break;
     case GPICAP_TYPE_CPU:
-        if (!res_node)
+        if (!res_node || !res_node->dumped)
         {
             /* Add the resource node */
             res_node = add_resource_node(ms, current_cap->type, current_cap->space_id, current_cap->res_id);
@@ -937,7 +937,7 @@ static int res_dump(pd_t *pd, model_state_t *ms, pd_hold_node_t *current_cap, gp
         // Use some other method to get the cap details
         break;
     case GPICAP_TYPE_PD:
-        if (!res_node && current_cap->res_id != pd->id)
+        if ((!res_node || !res_node->dumped) && current_cap->res_id != pd->id)
         {
             /* Add the PD Node */
             pd_component_registry_entry_t *pd_data = pd_component_registry_get_entry_by_id(current_cap->res_id);
@@ -953,7 +953,7 @@ static int res_dump(pd_t *pd, model_state_t *ms, pd_hold_node_t *current_cap, gp
             SERVER_GOTO_IF_COND(space_data == NULL, "Failed to find resource space data\n");
         res_node = get_resource_space_node(ms, space_data->space.resource_type, space_data->space.id);
 
-        if (!res_node)
+        if (!res_node || !res_node->dumped)
         {
             /* Add the resource space node */
             res_node = add_resource_space_node(ms, space_data->space.resource_type, space_data->space.id);
@@ -970,7 +970,7 @@ static int res_dump(pd_t *pd, model_state_t *ms, pd_hold_node_t *current_cap, gp
         // Don't dump endpoints, as they aren't part of the model, and tracked only for cleanup purposes
         break;
     default:
-        if (!res_node)
+        if (!res_node || !res_node->dumped)
         {
             /* Add the resource node */
             res_node = add_resource_node(ms, current_cap->type, current_cap->space_id, current_cap->res_id);

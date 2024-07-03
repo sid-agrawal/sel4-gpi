@@ -13,6 +13,7 @@
 #include <sel4utils/vspace.h>
 #include <sel4utils/util.h>
 #include <sel4utils/helpers.h>
+#include <vka/object.h>
 
 #include <sel4gpi/mo_component.h>
 #include <sel4gpi/mo_obj.h>
@@ -105,9 +106,10 @@ void mo_dump_rr(mo_t *mo, model_state_t *ms, gpi_model_node_t *pd_node)
 
     // Add the MO resource space
     gpi_model_node_t *mo_space_node = add_resource_space_node(ms, GPICAP_TYPE_MO, get_mo_component()->space_id);
+    add_edge(ms, GPI_EDGE_TYPE_HOLD, root_node, mo_space_node); // the RT holds this resource space
 
     /* Add the MO node */
-    gpi_model_node_t *mo_node = add_resource_node(ms, GPICAP_TYPE_MO, 1, mo->id);
+    gpi_model_node_t *mo_node = add_resource_node(ms, GPICAP_TYPE_MO, get_mo_component()->space_id, mo->id);
     add_edge(ms, GPI_EDGE_TYPE_HOLD, pd_node, mo_node);
     add_edge(ms, GPI_EDGE_TYPE_SUBSET, mo_node, mo_space_node);
 
@@ -130,9 +132,9 @@ void mo_dump_rr(mo_t *mo, model_state_t *ms, gpi_model_node_t *pd_node)
         num_pages++;
     }
 
-    // Set the number of pages and starting phys addr as extra data on the MO
+    // Set the number of pages, page size and starting phys addr as extra data on the MO
     char extra_str[CSV_MAX_STRING_SIZE];
-    snprintf(extra_str, CSV_MAX_STRING_SIZE, "0x%lx,%d", mo->frame_paddrs[0], num_pages);
+    snprintf(extra_str, CSV_MAX_STRING_SIZE, "0x%lx_%d_%zu", mo->frame_paddrs[0], num_pages, mo->page_bits);
     set_node_extra(mo_node, extra_str);
 }
 

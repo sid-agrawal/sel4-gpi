@@ -187,10 +187,10 @@ int new_guest(void)
     cfg->ads_cfg.entry_point = (void *)kernel_pc_vm_vspace;
 
 #ifdef BOARD_qemu_arm_virt
-    mo_client_context_t serial_dev_mo = {0};
-    error = mo_component_client_connect_paddr(mo_rde, 1, MO_PAGE_BITS, SERIAL_PADDR, &serial_dev_mo);
-    sel4gpi_add_vmr_config(&cfg->ads_cfg, GPI_DISJOINT, SEL4UTILS_RES_TYPE_DEVICE, (void *)SERIAL_PADDR,
-                           NULL, 1, MO_PAGE_BITS, &serial_dev_mo);
+    // mo_client_context_t serial_dev_mo = {0};
+    // error = mo_component_client_connect_paddr(mo_rde, 1, MO_PAGE_BITS, SERIAL_PADDR, &serial_dev_mo);
+    // sel4gpi_add_vmr_config(&cfg->ads_cfg, GPI_DISJOINT, SEL4UTILS_RES_TYPE_DEVICE, (void *)SERIAL_PADDR,
+    //                        NULL, 1, MO_PAGE_BITS, &serial_dev_mo);
 #elif BOARD_odroidc4
     mo_client_context_t bus1_mo = {0};
     error = mo_component_client_connect_paddr(mo_rde, 1, MO_LARGE_PAGE_BITS, ODROID_BUS1, &bus1_mo);
@@ -222,6 +222,8 @@ int new_guest(void)
     GOTO_IF_ERR(error, "Failed to setup VM-PD\n");
 
     error = sel4gpi_start_pd(&runnable);
+
+    pd_client_dump(&runnable.pd, NULL, 0);
 
     while (1)
     {

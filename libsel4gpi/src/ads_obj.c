@@ -176,7 +176,6 @@ int ads_reserve(ads_t *ads,
 {
     int error = 0;
     int cacheable = vmr_type == SEL4UTILS_RES_TYPE_DEVICE ? 0 : 1;
-    CPRINTF("vaddr: %p, reserving as cacheable? %d\n", vaddr, cacheable);
     vspace_t *target = ads->vspace;
 
     /* Reserve the range in the vspace */
@@ -475,9 +474,10 @@ void ads_dump_rr(ads_t *ads, model_state_t *ms, gpi_model_node_t *pd_node)
 {
     // Add the ADS resource space
     gpi_model_node_t *ads_space_node = add_resource_space_node(ms, GPICAP_TYPE_ADS, get_ads_component()->space_id);
+    add_edge(ms, GPI_EDGE_TYPE_HOLD, get_root_node(ms), ads_space_node); // the RT holds this resource space
 
     // Add the ADS node
-    gpi_model_node_t *ads_node = add_resource_node(ms, GPICAP_TYPE_ADS, 1, ads->id);
+    gpi_model_node_t *ads_node = add_resource_node(ms, GPICAP_TYPE_ADS, get_ads_component()->space_id, ads->id);
     add_edge(ms, GPI_EDGE_TYPE_SUBSET, ads_node, ads_space_node);
 
     // (XXX) Arya: Do we want to only include the currently active ADS? Reintroduce the 'mapped' property?
@@ -490,95 +490,29 @@ void ads_dump_rr(ads_t *ads, model_state_t *ms, gpi_model_node_t *pd_node)
         gpi_model_node_t *vmr_node = add_resource_node(ms, GPICAP_TYPE_VMR, ads->id, (uint64_t)res->vaddr);
         add_edge(ms, GPI_EDGE_TYPE_SUBSET, vmr_node, ads_node);
         add_edge(ms, GPI_EDGE_TYPE_HOLD, pd_node, vmr_node);
+        // set the VMR type, number of pages, and page size as extra data on the node
+        char extra[CSV_MAX_STRING_SIZE] = {0};
+        snprintf(extra, CSV_MAX_STRING_SIZE, "%s_%d_%zu",
+                 human_readable_va_res_type(res->type),
+                 res->n_pages, res->page_bits);
+        set_node_extra(vmr_node, extra);
 
         /* Add the relation from VMR to MO node, if there is one */
         if (res->mo_attached)
         {
-            gpi_model_node_t *mo_node = add_resource_node(ms, GPICAP_TYPE_MO, 1, res->mo_id);
+            gpi_model_node_t *mo_node = get_resource_node(ms, GPICAP_TYPE_MO,
+                                                          get_mo_component()->space_id, res->mo_id);
+
+            if (!mo_node)
+            {
+                mo_node = add_resource_node(ms, GPICAP_TYPE_MO, get_mo_component()->space_id, res->mo_id);
+                // mark the node to be dumped later on, since we've only added it here for the MAP edge
+                mo_node->dumped = false;
+            }
+
             add_edge(ms, GPI_EDGE_TYPE_MAP, vmr_node, mo_node);
         }
     }
-
-#if 0
-    vspace_t *ads_vspace = ads->vspace;
-
-    /* Dump the info */
-    sel4utils_res_t *from_sel4_res = get_alloc_data(ads_vspace)->reservation_head;
-    assert(from_sel4_res != NULL);
-
-    vka_t *vka = get_alloc_data(ads_vspace)->vka;
-
-    assert(vka != NULL);
-    OSDB_PRINTF("vka address: %p\n", vka);
-
-    while (from_sel4_res != NULL)
-    {
-        char res_type[CSV_MAX_STRING_SIZE];
-        char res_id[CSV_MAX_STRING_SIZE];
-        snprintf(res_type, CSV_MAX_STRING_SIZE, "%s", human_readable_va_res_type(from_sel4_res->type));
-        snprintf(res_id, CSV_MAX_STRING_SIZE, "%u_%lx_%lx",
-                 ads->id, from_sel4_res->start,
-                 from_sel4_res->end);
-        add_resource(ms, res_type, res_id);
-        add_resource_depends_on(ms, ads_res_id, res_id);
-
-        /* Print all the caps of this reservation */
-        void *va = (void *)from_sel4_res->start;
-        for (void *start = (void *)from_sel4_res->start;
-             start < (void *)from_sel4_res->end;
-             start += PAGE_SIZE_4K)
-        {
-            seL4_CPtr cap = vspace_get_cap(ads_vspace, start);
-            if (cap == 0)
-            {
-                OSDB_PRINTF("No cap for %p\n", start);
-            }
-            else
-            {
-                /*
-                    From the cap we want
-                    1. Type
-                    2. PA (if frame cap)
-                    3. Size (if frame cap)
-                    4. Rights
-                    5. Endpoint badge (if endpoint cap)
-                    6. Endpoint badge (PD responsible for this EP)
-                    */
-
-                void *paddr = (void *)0;
-                seL4_CPtr page_frame_cap = vspace_get_cap(ads_vspace, start);
-                assert(page_frame_cap != RESERVED && page_frame_cap != EMPTY);
-                osmosis_cap_t cap_info;
-                if (gpi_retrieve_cap_data(page_frame_cap, &cap_info) == 0)
-                {
-                    paddr = (void *)cap_info.paddr;
-                }
-
-                while (cap_info.isMinted)
-                {
-                    if (gpi_retrieve_cap_data(cap_info.minted_from, &cap_info) == 0)
-                    {
-                        paddr = (void *)cap_info.paddr;
-                    }
-                    else
-                    {
-                        break;
-                    }
-                }
-
-                char page_res_type[CSV_MAX_STRING_SIZE];
-                char page_res_id[CSV_MAX_STRING_SIZE];
-                snprintf(page_res_type, CSV_MAX_STRING_SIZE, "PhysicalPage");
-                snprintf(page_res_id, CSV_MAX_STRING_SIZE, "%p", paddr);
-                add_resource(ms, page_res_type, page_res_id);
-
-                add_resource_depends_on(ms, res_id, page_res_id);
-            }
-        }
-
-        from_sel4_res = from_sel4_res->next;
-    }
-#endif
 }
 
 /**

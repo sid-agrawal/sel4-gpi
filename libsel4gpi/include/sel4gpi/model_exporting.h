@@ -41,7 +41,8 @@ typedef struct _gpi_model_node
     char data[CSV_MAX_STRING_SIZE];  ///< Stores any additional data in the node
                                      ///< Eg. the name of a PD node, or the type of a resource node
     char data2[CSV_MAX_STRING_SIZE]; ///< Stores extra data for the node
-
+    bool dumped;                     ///< whether or not the resource relations have been extracted
+                                     ///< Used when backing resource for a MAP relation hasn't been dumped yet
     UT_hash_handle hh;
 } gpi_model_node_t;
 
