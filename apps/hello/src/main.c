@@ -45,11 +45,11 @@ int main(int argc, char **argv)
     int error;
 
     ads_client_context_t ads_conn;
-    ads_conn.badged_server_ep_cspath.capPtr = sel4gpi_get_rde_by_space_id(sel4gpi_get_binded_ads_id(), GPICAP_TYPE_VMR);
+    ads_conn.ep = sel4gpi_get_rde_by_space_id(sel4gpi_get_binded_ads_id(), GPICAP_TYPE_VMR);
     pd_client_context_t pd_conn = sel4gpi_get_pd_conn();
 
-    printf("Hello: ADS_CAP: %ld\n", (seL4_Word)ads_conn.badged_server_ep_cspath.capPtr);
-    printf("Hello: PD_CAP: %ld\n", (seL4_Word)pd_conn.badged_server_ep_cspath.capPtr);
+    printf("Hello: ADS_CAP: %ld\n", (seL4_Word)ads_conn.ep);
+    printf("Hello: PD_CAP: %ld\n", (seL4_Word)pd_conn.ep);
     // printf(COLORIZE("osm data: %p\n", CYAN), __sel4gpi_osm_data);
 
     seL4_CPtr mo_server_ep = sel4gpi_get_rde(GPICAP_TYPE_MO);
@@ -85,7 +85,7 @@ int main(int argc, char **argv)
         seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0, 0);
         printf("argc: %d cap_arg: %lx\n", argc, cap_arg);
 
-        ep_client_context_t parent_ep = {.badged_server_ep_cspath.capPtr = cap_arg};
+        ep_client_context_t parent_ep = {.ep = cap_arg};
         error = ep_client_get_raw_endpoint(&parent_ep);
         assert(error == 0 && parent_ep.raw_endpoint != seL4_CapNull);
 
@@ -93,7 +93,7 @@ int main(int argc, char **argv)
 
         seL4_Word slot = seL4_GetMR(0);
 
-        mo_conn.badged_server_ep_cspath.capPtr = (seL4_CPtr)slot;
+        mo_conn.ep = (seL4_CPtr)slot;
         error = ads_client_attach(&ads_conn,
                                   0,
                                   &mo_conn,

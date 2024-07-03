@@ -30,6 +30,9 @@ pd_client_context_t sel4gpi_get_pd_conn(void);
 
 /*
  * Get the current PD's bound ADS connection object from the env
+ * 
+ * This connection is used to send the ADS as a resource to another PD
+ * It cannot be used to request VMR regions
  */
 ads_client_context_t sel4gpi_get_ads_conn(void);
 
@@ -71,6 +74,13 @@ char *sel4gpi_get_resource_type_name(gpi_cap_t type);
  * @return the cptr to the RDE endpoint
  */
 seL4_CPtr sel4gpi_get_rde(int type);
+
+/**
+ * Get the VMR RDE for this PD's currently-bound ADS
+ * 
+ * Use this connection to request new VMR regions from the ADS
+ */
+ads_client_context_t sel4gpi_get_bound_vmr_rde();
 
 /**
  * Get the resource space ID of the default RDE for the given type

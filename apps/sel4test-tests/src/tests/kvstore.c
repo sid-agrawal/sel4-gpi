@@ -54,19 +54,17 @@ static int setup(env_t env)
     int error;
 
     /* Initialize the ADS */
-    vka_cspace_make_path(&env->vka,
-                         sel4gpi_get_rde_by_space_id(sel4gpi_get_binded_ads_id(), GPICAP_TYPE_VMR),
-                         &ads_conn.badged_server_ep_cspath);
+    ads_conn.ep = sel4gpi_get_rde_by_space_id(sel4gpi_get_binded_ads_id(), GPICAP_TYPE_VMR);
 
     /* Initialize the PD */
     pd_conn = sel4gpi_get_pd_conn();
 
     /* Start ramdisk server process */
-    error = start_ramdisk_pd(&ramdisk_pd.badged_server_ep_cspath.capPtr, &ramdisk_id);
+    error = start_ramdisk_pd(&ramdisk_pd.ep, &ramdisk_id);
     test_assert(error == 0);
 
     /* Start FS server process */
-    error = start_xv6fs_pd(ramdisk_id, &fs_pd.badged_server_ep_cspath.capPtr, &fs_id);
+    error = start_xv6fs_pd(ramdisk_id, &fs_pd.ep, &fs_id);
     test_assert(error == 0);
 
     error = xv6fs_client_init();
@@ -105,7 +103,7 @@ static int start_kvstore_server(seL4_CPtr *kvstore_ep, uint64_t fs_nsid, pd_clie
     seL4_Word args[argc];
 
     // Copy the parent ep
-    error = pd_client_send_cap(kvstore_pd, self_ep.badged_server_ep_cspath.capPtr, &args[0]);
+    error = pd_client_send_cap(kvstore_pd, self_ep.ep, &args[0]);
     test_assert(error == 0);
 
     // Share an FS and EP RDE
@@ -165,7 +163,7 @@ static int start_hello_kvstore(kvstore_mode_t kvstore_mode,
     *hello_pd = runnable.pd;
 
     // Copy the parent ep
-    error = pd_client_send_cap(hello_pd, self_ep.badged_server_ep_cspath.capPtr, &args[0]);
+    error = pd_client_send_cap(hello_pd, self_ep.ep, &args[0]);
     test_assert(error == 0);
 
     args[2] = kvstore_mode;
@@ -349,7 +347,7 @@ int test_kvstore_diff_fs(env_t env)
     test_assert(error == 0);
 
     /* Start second fs server process */
-    error = start_xv6fs_pd(ramdisk_id, &fs_2_pd.badged_server_ep_cspath.capPtr, &fs_2_id);
+    error = start_xv6fs_pd(ramdisk_id, &fs_2_pd.ep, &fs_2_id);
     test_assert(error == 0);
 
     /* Start the kvstore PD */

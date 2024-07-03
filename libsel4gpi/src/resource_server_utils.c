@@ -69,19 +69,19 @@ int resource_server_start(resource_server_context_t *context,
     context->work_handler = work_handler;
     context->mo_ep = sel4gpi_get_rde(GPICAP_TYPE_MO);
     context->resspc_ep = sel4gpi_get_rde(GPICAP_TYPE_RESSPC);
-    context->ads_conn.badged_server_ep_cspath.capPtr = sel4gpi_get_rde_by_space_id(sel4gpi_get_binded_ads_id(), GPICAP_TYPE_VMR);
+    context->ads_conn.ep = sel4gpi_get_rde_by_space_id(sel4gpi_get_binded_ads_id(), GPICAP_TYPE_VMR);
     context->pd_conn = sel4gpi_get_pd_conn();
     context->parent_pd_id = parent_pd_id;
     context->init_fn = init_fn;
     context->debug_print = debug_print;
     sel4gpi_rpc_env_init(&context->rpc_env, request_desc, reply_desc);
 
-    context->parent_ep.badged_server_ep_cspath.capPtr = parent_ep;
+    context->parent_ep.ep = parent_ep;
     error = ep_client_get_raw_endpoint(&context->parent_ep);
     CHECK_ERROR(error, "Failed to retrieve parent EP\n");
 
-    printf("Resource server ADS_CAP: %ld\n", (seL4_Word)context->ads_conn.badged_server_ep_cspath.capPtr);
-    printf("Resource server PD_CAP: %ld\n", (seL4_Word)context->pd_conn.badged_server_ep_cspath.capPtr);
+    printf("Resource server ADS_CAP: %ld\n", (seL4_Word)context->ads_conn.ep);
+    printf("Resource server PD_CAP: %ld\n", (seL4_Word)context->pd_conn.ep);
     printf("Resource server MO ep: %ld\n", (seL4_Word)context->mo_ep);
     printf("Resource server RESSPC ep: %ld\n", (seL4_Word)context->resspc_ep);
 
@@ -303,7 +303,7 @@ int resource_server_attach_mo(resource_server_context_t *context,
 
     CHECK_ERROR(mo_cap == 0, "client did not attach MO for read/write op");
 
-    mo_conn.badged_server_ep_cspath.capPtr = mo_cap;
+    mo_conn.ep = mo_cap;
     error = ads_client_attach(&context->ads_conn,
                               NULL,
                               &mo_conn,
@@ -405,7 +405,7 @@ int resource_server_extraction_setup(resource_server_context_t *context,
 
     void *mem_vaddr;
     error = resource_server_attach_mo(context,
-                                      mo->badged_server_ep_cspath.capPtr,
+                                      mo->ep,
                                       &mem_vaddr);
     CHECK_ERROR_GOTO(error, "failed to attach MO for model extraction", err_goto);
 

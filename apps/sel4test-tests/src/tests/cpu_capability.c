@@ -64,7 +64,7 @@ int test_osm_threads(env_t env)
     printf("------------------STARTING: %s------------------\n", __func__);
     ep_client_context_t fault_ep = {0};
     error = ep_client_forge(sel4gpi_get_rde(GPICAP_TYPE_EP), env->endpoint, &fault_ep);
-    test_assert(!error && fault_ep.badged_server_ep_cspath.capPtr != seL4_CapNull);
+    test_assert(!error && fault_ep.ep != seL4_CapNull);
 
     sel4gpi_runnable_t runnable = {0};
     pd_config_t *cfg = sel4gpi_configure_thread(test_thread, &fault_ep, &runnable);

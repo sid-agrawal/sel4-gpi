@@ -8,7 +8,7 @@
 
 typedef struct _resspc_client_context
 {
-   cspacepath_t badged_server_ep_cspath;
+   seL4_CPtr ep;
    uint64_t id;             ///< Resource space ID
    gpi_cap_t resource_type; ///< The type of resource that this resource space contains
 } resspc_client_context_t;

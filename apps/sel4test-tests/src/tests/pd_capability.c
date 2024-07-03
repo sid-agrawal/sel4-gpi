@@ -46,7 +46,7 @@ int test_new_process_osmosis_shmem(env_t env)
     test_assert(ep_conn.raw_endpoint != seL4_CapNull);
 
     seL4_CPtr slot;
-    error = pd_client_send_cap(&runnable.pd, ep_conn.badged_server_ep_cspath.capPtr, &slot);
+    error = pd_client_send_cap(&runnable.pd, ep_conn.ep, &slot);
     test_error_eq(error, 0);
 
     error = sel4gpi_prepare_pd(proc_cfg, &runnable, 1, &slot);
@@ -69,7 +69,7 @@ int test_new_process_osmosis_shmem(env_t env)
     error = mo_component_client_connect(sel4gpi_get_rde(GPICAP_TYPE_MO), 1, MO_PAGE_BITS, &shared_mo);
     test_error_eq(error, 0);
 
-    error = pd_client_send_cap(&runnable.pd, shared_mo.badged_server_ep_cspath.capPtr, &slot);
+    error = pd_client_send_cap(&runnable.pd, shared_mo.ep, &slot);
     test_error_eq(error, 0);
 
     seL4_SetMR(0, slot);

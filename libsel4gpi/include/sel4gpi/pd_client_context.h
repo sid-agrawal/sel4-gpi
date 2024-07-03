@@ -8,6 +8,6 @@
 
 typedef struct _pd_client_context
 {
-   cspacepath_t badged_server_ep_cspath;
+   seL4_CPtr ep;
    uint64_t id;
 } pd_client_context_t;

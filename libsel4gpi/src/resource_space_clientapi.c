@@ -50,12 +50,12 @@ int resspc_client_connect(seL4_CPtr server_ep,
     ResSpcReturnMessage ret_msg;
 
     error = sel4gpi_rpc_call(&rpc_env, server_ep, (void *)&msg,
-                             1, &resource_server_ep->badged_server_ep_cspath.capPtr, (void *)&ret_msg);
+                             1, &resource_server_ep->ep, (void *)&ret_msg);
     error |= ret_msg.errorCode;
 
     if (!error)
     {
-        ret_conn->badged_server_ep_cspath.capPtr = ret_msg.msg.alloc.slot;
+        ret_conn->ep = ret_msg.msg.alloc.slot;
         ret_conn->id = ret_msg.msg.alloc.id;
         ret_conn->resource_type = ret_msg.msg.alloc.type_code;
     }
@@ -79,7 +79,7 @@ int resspc_client_map_space(resspc_client_context_t *conn,
 
     ResSpcReturnMessage ret_msg;
 
-    error = sel4gpi_rpc_call(&rpc_env, conn->badged_server_ep_cspath.capPtr, (void *)&msg,
+    error = sel4gpi_rpc_call(&rpc_env, conn->ep, (void *)&msg,
                              0, NULL, (void *)&ret_msg);
     error |= ret_msg.errorCode;
 
@@ -102,7 +102,7 @@ int resspc_client_create_resource(resspc_client_context_t *conn,
 
     ResSpcReturnMessage ret_msg;
 
-    error = sel4gpi_rpc_call(&rpc_env, conn->badged_server_ep_cspath.capPtr, (void *)&msg,
+    error = sel4gpi_rpc_call(&rpc_env, conn->ep, (void *)&msg,
                              0, NULL, (void *)&ret_msg);
     error |= ret_msg.errorCode;
 

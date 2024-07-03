@@ -8,12 +8,12 @@
 
 typedef struct _ads_client_context
 {
-   cspacepath_t badged_server_ep_cspath;
+   seL4_CPtr ep;
    uint64_t id;
 } ads_client_context_t;
 
 typedef struct _ads_vmr_context
 {
-   cspacepath_t badged_server_ep_cspath;
+   seL4_CPtr ep;
 } ads_vmr_context_t;
 

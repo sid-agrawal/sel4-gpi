@@ -24,8 +24,7 @@
 int test_ads_attach(env_t env)
 {
     // Initialize the ADS
-    ads_client_context_t ads_conn;
-    vka_cspace_make_path(&env->vka, sel4gpi_get_rde_by_space_id(sel4gpi_get_binded_ads_id(), GPICAP_TYPE_VMR), &ads_conn.badged_server_ep_cspath);
+    ads_client_context_t ads_conn = sel4gpi_get_bound_vmr_rde();
 
     // allocate a new MO
     int n_pages = 5;
@@ -60,8 +59,7 @@ DEFINE_TEST(GPIADS010, "Ensure the ads attach works", test_ads_attach, true)
 int test_ads_rm(env_t env)
 {
     // Initialize the ADS
-    ads_client_context_t ads_conn;
-    vka_cspace_make_path(&env->vka, sel4gpi_get_rde_by_space_id(sel4gpi_get_binded_ads_id(), GPICAP_TYPE_VMR), &ads_conn.badged_server_ep_cspath);
+    ads_client_context_t ads_conn = sel4gpi_get_bound_vmr_rde();
 
     // allocate a new MO
     int n_pages = 5;
@@ -103,8 +101,7 @@ int test_ads_dump_rr(env_t env)
     int error;
     cspacepath_t path;
     vka_cspace_make_path(&env->vka, env->self_ads_cptr, &path);
-    ads_client_context_t conn;
-    conn.badged_server_ep_cspath = path;
+    ads_client_context_t conn = sel4gpi_get_bound_vmr_rde();
 
     // Using a known EP, get a new ads CAP.
     ads_client_context_t shallow_copy_conn;
@@ -140,8 +137,7 @@ int test_ads_shallow_copy(env_t env)
     int error;
     cspacepath_t path;
     vka_cspace_make_path(&env->vka, env->self_ads_cptr, &path);
-    ads_client_context_t conn;
-    conn.badged_server_ep_cspath = path;
+    ads_client_context_t conn = sel4gpi_get_bound_vmr_rde();
 
     // arm_init_ccnt();
     sel4bench_init();
@@ -239,8 +235,7 @@ int test_ads_stack_isolated_stack_die(env_t env)
     int error;
     cspacepath_t path;
     vka_cspace_make_path(&env->vka, env->self_ads_cptr, &path);
-    ads_client_context_t conn;
-    conn.badged_server_ep_cspath = path;
+    ads_client_context_t conn = sel4gpi_get_bound_vmr_rde();
 
     sel4bench_init();
     // Make new PD i.e. CSspace

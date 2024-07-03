@@ -19,7 +19,7 @@ Context of the client
 */
 typedef struct _ramdisk_client_context
 {
-    cspacepath_t badged_server_ep_cspath;
+    seL4_CPtr ep;
 
     // Needed only for RR dump
     uint64_t space_id;

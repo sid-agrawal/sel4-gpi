@@ -16,7 +16,7 @@
 #include <sel4gpi/pd_client_context.h>
 
 /** The client context for an endpoint - this is a bit weird, since there's 2 endpoints wrapped in this:
- *  1) badged_server_ep_cspath: the endpoint to the EP component, which allocates new **tracked** endpoints
+ *  1) ep: the endpoint to the EP component, which allocates new **tracked** endpoints
  *     This is the endpoint to supply to `pd_client_send` when the raw endpoint should be sent to other PDs
  *  2) raw_endpoint: the actual endpoint that can be listened on
  *
@@ -28,11 +28,11 @@
  */
 typedef struct _ep_client_context
 {
-    cspacepath_t badged_server_ep_cspath; ///< badged endpoint to the EP component in the RT,
-                                          ///< allows for resource operations on the tracked endpoint
-    seL4_CPtr raw_endpoint;               ///< the underlying endpoint, it may not always be filled in (e.g. in the case
-                                          ///< that this was received from another PD), and may need to be retrieved via
-                                          ///< ep_client_get_raw_endpoint)
+    seL4_CPtr ep;           ///< badged endpoint to the EP component in the RT,
+                            ///< allows for resource operations on the tracked endpoint
+    seL4_CPtr raw_endpoint; ///< the underlying endpoint, it may not always be filled in (e.g. in the case
+                            ///< that this was received from another PD), and may need to be retrieved via
+                            ///< ep_client_get_raw_endpoint)
 } ep_client_context_t;
 
 /**

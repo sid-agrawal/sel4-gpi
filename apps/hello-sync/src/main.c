@@ -132,7 +132,7 @@ int main(int argc, char **argv)
             mode_to_str(mode),
             shared_vaddr);
 
-    ep_client_context_t parent_ep = {.badged_server_ep_cspath.capPtr = parent_ep_resource};
+    ep_client_context_t parent_ep = {.ep = parent_ep_resource};
     error = ep_client_get_raw_endpoint(&parent_ep);
     if (error)
     {

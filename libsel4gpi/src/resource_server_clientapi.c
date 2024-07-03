@@ -61,12 +61,12 @@ int start_resource_server_pd_args(gpi_cap_t rde_type,
 
     if (server_pd_cap)
     {
-        *server_pd_cap = runnable.pd.badged_server_ep_cspath.capPtr;
+        *server_pd_cap = runnable.pd.ep;
     }
 
     // Copy the parent ep to the new PD
     seL4_Word parent_ep_slot;
-    error = pd_client_send_cap(&runnable.pd, ep_conn.badged_server_ep_cspath.capPtr, &parent_ep_slot);
+    error = pd_client_send_cap(&runnable.pd, ep_conn.ep, &parent_ep_slot);
     CHECK_ERROR(error, "failed to send parent's ep cap to pd");
 
     // Copy the RDE to the new PD

@@ -188,14 +188,14 @@ int sel4gpi_ads_configure(ads_config_t *cfg,
                           mo_client_context_t *ret_ipc_buf_mo)
 {
     int error = 0;
-    ads_client_context_t vmr_rde = {.badged_server_ep_cspath.capPtr =
+    ads_client_context_t vmr_rde = {.ep =
                                         sel4gpi_get_rde_by_space_id(runnable->ads.id, GPICAP_TYPE_VMR)};
                                         
     uint64_t current_ads_id = sel4gpi_get_binded_ads_id();
     ads_client_context_t self_ads_conn = sel4gpi_get_ads_conn();
 
     /* attach OSmosis data MO to the ADS*/
-    if (osm_data_mo && osm_data_mo->badged_server_ep_cspath.capPtr != seL4_CapNull)
+    if (osm_data_mo && osm_data_mo->ep != seL4_CapNull)
     {
         void *pd_osm_data;
         error = ads_client_attach(&vmr_rde, NULL, osm_data_mo, SEL4UTILS_RES_TYPE_GENERIC, &pd_osm_data);
@@ -366,15 +366,15 @@ int sel4gpi_prepare_pd(pd_config_t *cfg, sel4gpi_runnable_t *runnable, int argc,
     GOTO_IF_ERR(error, "Failed to configure RDEs\n");
 
     // give the PD its CPU cap
-    error = pd_client_send_core_cap(&runnable->pd, runnable->cpu.badged_server_ep_cspath.capPtr, NULL);
+    error = pd_client_send_core_cap(&runnable->pd, runnable->cpu.ep, NULL);
     GOTO_IF_ERR(error, "Failed to send CPU cap to PD\n");
 
     // give the PD its ADS cap
-    error = pd_client_send_core_cap(&runnable->pd, runnable->ads.badged_server_ep_cspath.capPtr, NULL);
+    error = pd_client_send_core_cap(&runnable->pd, runnable->ads.ep, NULL);
     GOTO_IF_ERR(error, "Failed to send ADS cap to PD\n");
 
     // give the PD its PD cap
-    error = pd_client_send_core_cap(&runnable->pd, runnable->pd.badged_server_ep_cspath.capPtr, NULL);
+    error = pd_client_send_core_cap(&runnable->pd, runnable->pd.ep, NULL);
     GOTO_IF_ERR(error, "Failed to send PD cap to PD\n");
 
     if (cfg->gpi_res_type_cfg)
@@ -388,18 +388,18 @@ int sel4gpi_prepare_pd(pd_config_t *cfg, sel4gpi_runnable_t *runnable, int argc,
         }
     }
 
-    if (cfg->fault_ep.badged_server_ep_cspath.capPtr == seL4_CapNull)
+    if (cfg->fault_ep.ep == seL4_CapNull)
     {
         error = sel4gpi_alloc_endpoint(&cfg->fault_ep);
-        GOTO_IF_COND(error || cfg->fault_ep.badged_server_ep_cspath.capPtr == seL4_CapNull,
+        GOTO_IF_COND(error || cfg->fault_ep.ep == seL4_CapNull,
                      "Couldn't allocate fault EP for PD\n");
         PD_CREATION_PRINT("Allocated new fault EP \n");
     }
 
     ep_client_context_t fault_ep_in_PD = {0};
     error = pd_client_send_cap(&runnable->pd,
-                               cfg->fault_ep.badged_server_ep_cspath.capPtr,
-                               &fault_ep_in_PD.badged_server_ep_cspath.capPtr);
+                               cfg->fault_ep.ep,
+                               &fault_ep_in_PD.ep);
     GOTO_IF_ERR(error, "Failed to send fault EP to PD\n");
 
     error = ep_client_get_raw_endpoint_in_PD(&runnable->pd, &cfg->fault_ep, &fault_ep_in_PD.raw_endpoint);

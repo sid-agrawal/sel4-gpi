@@ -45,9 +45,7 @@ static int setup(env_t env)
     int error;
 
     /* Initialize the ADS */
-    vka_cspace_make_path(&env->vka,
-                         sel4gpi_get_rde_by_space_id(sel4gpi_get_binded_ads_id(), GPICAP_TYPE_VMR),
-                         &ads_conn.badged_server_ep_cspath);
+    ads_conn = sel4gpi_get_bound_vmr_rde();
 
     /* Initialize the PD */
     pd_conn = sel4gpi_get_pd_conn();
@@ -96,13 +94,13 @@ static int initialize_hello(hello_mode_t mode, seL4_CPtr notif, mo_client_contex
 
     // Send the parent ep
     seL4_CPtr parent_ep_slot;
-    error = pd_client_send_cap(hello_pd, self_ep.badged_server_ep_cspath.capPtr, &parent_ep_slot);
+    error = pd_client_send_cap(hello_pd, self_ep.ep, &parent_ep_slot);
     test_assert(error == 0);
 
     // Attach the MO
     void *mo_vaddr;
     ads_client_context_t vmr_rde = {
-        .badged_server_ep_cspath.capPtr = sel4gpi_get_rde_by_space_id(context->runnable.ads.id, GPICAP_TYPE_VMR)};
+        .ep = sel4gpi_get_rde_by_space_id(context->runnable.ads.id, GPICAP_TYPE_VMR)};
     error = ads_client_attach(&vmr_rde, NULL, mo, SEL4UTILS_RES_TYPE_SHARED_FRAMES, &mo_vaddr);
     test_assert(error == 0);
 

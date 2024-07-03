@@ -123,8 +123,8 @@ int new_guest(void)
     seL4_CPtr mo_rde = sel4gpi_get_rde(GPICAP_TYPE_MO);
     GOTO_IF_COND(mo_rde == seL4_CapNull, "No MO RDE\n");
 
-    ads_client_context_t vmr_rde = {.badged_server_ep_cspath.capPtr = sel4gpi_get_rde(GPICAP_TYPE_VMR)};
-    GOTO_IF_COND(vmr_rde.badged_server_ep_cspath.capPtr == seL4_CapNull, "No VMR RDE\n");
+    ads_client_context_t vmr_rde = {.ep = sel4gpi_get_rde(GPICAP_TYPE_VMR)};
+    GOTO_IF_COND(vmr_rde.ep == seL4_CapNull, "No VMR RDE\n");
 
     pd_client_context_t self_pd_conn = sel4gpi_get_pd_conn();
 

@@ -257,7 +257,7 @@ static int benchmark_give_resource(env_t env, bool native)
 
         SEL4BENCH_READ_CCNT(give_res_start);
         seL4_CPtr slot;
-        pd_client_send_cap(&osm_pd, bench_mo.badged_server_ep_cspath.capPtr, &slot);
+        pd_client_send_cap(&osm_pd, bench_mo.ep, &slot);
         SEL4BENCH_READ_CCNT(give_res_end);
     }
     printf("%ld,", give_res_end - give_res_start);
@@ -336,7 +336,7 @@ static int benchmark_ads_attach(env_t env, bool native)
     }
     else
     {
-        ads_client_context_t osm_pd_ads_rde = {.badged_server_ep_cspath.capPtr = sel4gpi_get_rde_by_space_id(osm_pd_ads_ns_id, GPICAP_TYPE_VMR)};
+        ads_client_context_t osm_pd_ads_rde = {.ep = sel4gpi_get_rde_by_space_id(osm_pd_ads_ns_id, GPICAP_TYPE_VMR)};
         error = ads_client_attach(&osm_pd_ads_rde, NULL, &bench_mo, SEL4UTILS_RES_TYPE_GENERIC, &mapped_vaddr);
         test_error_eq(error, 0);
     }

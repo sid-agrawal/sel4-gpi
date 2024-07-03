@@ -87,9 +87,9 @@ static void fd_init(void)
 int fd_bind(seL4_CPtr file_cap)
 {
   for (int i = 5; i < FD_TABLE_SIZE; i++)
-    if (fd_table[i].badged_server_ep_cspath.capPtr == 0)
+    if (fd_table[i].ep == 0)
     {
-      fd_table[i].badged_server_ep_cspath.capPtr = file_cap;
+      fd_table[i].ep = file_cap;
       fd_table[i].offset = 0;
       // printf("%s: new fd %d\n", __func__, i);
       return i;
@@ -102,7 +102,7 @@ xv6fs_client_context_t *fd_get(int fd)
 {
   if (fd >= 0 && fd < FD_TABLE_SIZE)
   {
-    if (fd_table[fd].badged_server_ep_cspath.capPtr == 0)
+    if (fd_table[fd].ep == 0)
     {
       return NULL;
     }
@@ -115,7 +115,7 @@ void fd_close(int fd)
 {
   if (fd >= 0 && fd < FD_TABLE_SIZE)
   {
-    // (XXX) Arya: free the badged_server_ep_cspath.capPtr
+    // (XXX) Arya: free the ep
     fd_table[fd] = xv6fs_null_client_context;
   }
 }
@@ -167,7 +167,7 @@ xv6fs_client_init(void)
                                       get_xv6fs_client()->shared_mem);
   CHECK_ERROR(error, "failed to allocate shared mem page");
 
-  ads_client_context_t vmr_rde = {.badged_server_ep_cspath.capPtr = sel4gpi_get_rde_by_space_id(sel4gpi_get_binded_ads_id(), GPICAP_TYPE_VMR)};
+  ads_client_context_t vmr_rde = {.ep = sel4gpi_get_rde_by_space_id(sel4gpi_get_binded_ads_id(), GPICAP_TYPE_VMR)};
   error = ads_client_attach(&vmr_rde,
                             NULL,
                             get_xv6fs_client()->shared_mem,
@@ -207,7 +207,7 @@ int xv6fs_client_get_file(int fd, seL4_CPtr *file_ep)
     return -1;
   }
 
-  *file_ep = file->badged_server_ep_cspath.capPtr;
+  *file_ep = file->ep;
   return 0;
 }
 
@@ -308,7 +308,7 @@ static int xv6fs_libc_pread(int fd, void *buf, int count, int offset)
   }
 
   // Send IPC to fs server
-  seL4_CPtr caps[1] = {get_xv6fs_client()->shared_mem->badged_server_ep_cspath.capPtr};
+  seL4_CPtr caps[1] = {get_xv6fs_client()->shared_mem->ep};
 
   FsMessage msg = {
       .which_msg = FsMessage_read_tag,
@@ -319,7 +319,7 @@ static int xv6fs_libc_pread(int fd, void *buf, int count, int offset)
 
   FsReturnMessage ret_msg;
 
-  error = sel4gpi_rpc_call(&rpc_client, file->badged_server_ep_cspath.capPtr,
+  error = sel4gpi_rpc_call(&rpc_client, file->ep,
                            &msg, 1, caps, &ret_msg);
 
   if (error || ret_msg.errorCode)
@@ -392,7 +392,7 @@ static int xv6fs_libc_write(int fd, const void *buf, int count)
   }
 
   // Send IPC to fs server
-  seL4_CPtr caps[1] = {get_xv6fs_client()->shared_mem->badged_server_ep_cspath.capPtr};
+  seL4_CPtr caps[1] = {get_xv6fs_client()->shared_mem->ep};
 
   FsMessage msg = {
       .which_msg = FsMessage_write_tag,
@@ -403,7 +403,7 @@ static int xv6fs_libc_write(int fd, const void *buf, int count)
 
   FsReturnMessage ret_msg;
 
-  error = sel4gpi_rpc_call(&rpc_client, file->badged_server_ep_cspath.capPtr,
+  error = sel4gpi_rpc_call(&rpc_client, file->ep,
                            &msg, 1, caps, &ret_msg);
 
   if (error || ret_msg.errorCode)
@@ -448,7 +448,7 @@ static int xv6fs_libc_close(int fd)
 
   FsReturnMessage ret_msg;
 
-  error = sel4gpi_rpc_call(&rpc_client, file->badged_server_ep_cspath.capPtr,
+  error = sel4gpi_rpc_call(&rpc_client, file->ep,
                            &msg, 0, NULL, &ret_msg);
 
   if (error || ret_msg.errorCode)
@@ -517,7 +517,7 @@ int xv6fs_libc_fstat(int fd, struct stat *buf)
   }
 
   // Send IPC to fs server
-  seL4_CPtr caps[1] = {get_xv6fs_client()->shared_mem->badged_server_ep_cspath.capPtr};
+  seL4_CPtr caps[1] = {get_xv6fs_client()->shared_mem->ep};
 
   FsMessage msg = {
       .which_msg = FsMessage_stat_tag,
@@ -525,7 +525,7 @@ int xv6fs_libc_fstat(int fd, struct stat *buf)
 
   FsReturnMessage ret_msg;
 
-  error = sel4gpi_rpc_call(&rpc_client, file->badged_server_ep_cspath.capPtr,
+  error = sel4gpi_rpc_call(&rpc_client, file->ep,
                            &msg, 1, caps, &ret_msg);
 
   if (error || ret_msg.errorCode)

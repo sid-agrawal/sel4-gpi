@@ -1185,16 +1185,16 @@ int pd_set_core_cap(pd_t *pd, seL4_Word core_cap_badge, seL4_CPtr core_cap)
     case GPICAP_TYPE_ADS:
         resource_component_inc(get_ads_component(), cap_id);
         pd->shared_data->ads_conn.id = cap_id;
-        pd->shared_data->ads_conn.badged_server_ep_cspath.capPtr = core_cap;
+        pd->shared_data->ads_conn.ep = core_cap;
         break;
     case GPICAP_TYPE_PD:
         pd->shared_data->pd_conn.id = cap_id;
-        pd->shared_data->pd_conn.badged_server_ep_cspath.capPtr = core_cap;
+        pd->shared_data->pd_conn.ep = core_cap;
         break;
     case GPICAP_TYPE_CPU:
         resource_component_inc(get_cpu_component(), cap_id);
         pd->shared_data->cpu_conn.id = cap_id;
-        pd->shared_data->cpu_conn.badged_server_ep_cspath.capPtr = core_cap;
+        pd->shared_data->cpu_conn.ep = core_cap;
         break;
     default:
         SERVER_GOTO_IF_COND(1, "Trying to set PD OSmosis data with invalid cap\n");

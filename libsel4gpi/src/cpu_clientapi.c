@@ -43,7 +43,7 @@ int cpu_component_client_connect(seL4_CPtr server_ep_cap,
 
     if (!error)
     {
-        ret_conn->badged_server_ep_cspath.capPtr = ret_msg.msg.alloc.slot;
+        ret_conn->ep = ret_msg.msg.alloc.slot;
         ret_conn->id = ret_msg.msg.alloc.id;
     }
 
@@ -72,19 +72,19 @@ int cpu_client_config(cpu_client_context_t *cpu,
 
     CpuReturnMessage ret_msg;
 
-    if (ipc_buf_mo && ipc_buf_mo->badged_server_ep_cspath.capPtr != 0)
+    if (ipc_buf_mo && ipc_buf_mo->ep != 0)
     {
         seL4_CPtr caps[3] = {
-            pd->badged_server_ep_cspath.capPtr,
-            ads->badged_server_ep_cspath.capPtr,
-            ipc_buf_mo->badged_server_ep_cspath.capPtr};
-        error = sel4gpi_rpc_call(&rpc_env, cpu->badged_server_ep_cspath.capPtr, (void *)&msg,
+            pd->ep,
+            ads->ep,
+            ipc_buf_mo->ep};
+        error = sel4gpi_rpc_call(&rpc_env, cpu->ep, (void *)&msg,
                                  3, caps, (void *)&ret_msg);
     }
     else
     {
-        seL4_CPtr caps[2] = {pd->badged_server_ep_cspath.capPtr, ads->badged_server_ep_cspath.capPtr};
-        error = sel4gpi_rpc_call(&rpc_env, cpu->badged_server_ep_cspath.capPtr, (void *)&msg,
+        seL4_CPtr caps[2] = {pd->ep, ads->ep};
+        error = sel4gpi_rpc_call(&rpc_env, cpu->ep, (void *)&msg,
                                  2, caps, (void *)&ret_msg);
     }
 
@@ -106,8 +106,8 @@ int cpu_client_change_vspace(cpu_client_context_t *conn,
 
     CpuReturnMessage ret_msg;
 
-    error = sel4gpi_rpc_call(&rpc_env, conn->badged_server_ep_cspath.capPtr, (void *)&msg,
-                             1, &ads_conn->badged_server_ep_cspath.capPtr, (void *)&ret_msg);
+    error = sel4gpi_rpc_call(&rpc_env, conn->ep, (void *)&msg,
+                             1, &ads_conn->ep, (void *)&ret_msg);
     error |= ret_msg.errorCode;
 
     return error;
@@ -125,7 +125,7 @@ int cpu_client_start(cpu_client_context_t *conn)
 
     CpuReturnMessage ret_msg;
 
-    error = sel4gpi_rpc_call(&rpc_env, conn->badged_server_ep_cspath.capPtr, (void *)&msg,
+    error = sel4gpi_rpc_call(&rpc_env, conn->ep, (void *)&msg,
                              0, NULL, (void *)&ret_msg);
     error |= ret_msg.errorCode;
 
@@ -144,7 +144,7 @@ int cpu_client_elevate_privileges(cpu_client_context_t *conn)
 
     CpuReturnMessage ret_msg;
 
-    error = sel4gpi_rpc_call(&rpc_env, conn->badged_server_ep_cspath.capPtr, (void *)&msg,
+    error = sel4gpi_rpc_call(&rpc_env, conn->ep, (void *)&msg,
                              0, NULL, (void *)&ret_msg);
     error |= ret_msg.errorCode;
 
@@ -165,7 +165,7 @@ int cpu_client_set_tls_base(cpu_client_context_t *cpu, void *tls_base)
 
     CpuReturnMessage ret_msg;
 
-    error = sel4gpi_rpc_call(&rpc_env, cpu->badged_server_ep_cspath.capPtr, (void *)&msg,
+    error = sel4gpi_rpc_call(&rpc_env, cpu->ep, (void *)&msg,
                              0, NULL, (void *)&ret_msg);
     error |= ret_msg.errorCode;
 
@@ -184,7 +184,7 @@ int cpu_client_suspend(cpu_client_context_t *cpu)
 
     CpuReturnMessage ret_msg;
 
-    error = sel4gpi_rpc_call(&rpc_env, cpu->badged_server_ep_cspath.capPtr, (void *)&msg,
+    error = sel4gpi_rpc_call(&rpc_env, cpu->ep, (void *)&msg,
                              0, NULL, (void *)&ret_msg);
     error |= ret_msg.errorCode;
 

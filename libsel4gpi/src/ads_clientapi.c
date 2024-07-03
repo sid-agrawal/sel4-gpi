@@ -47,7 +47,7 @@ int ads_component_client_connect(seL4_CPtr server_ep_cap,
 
     if (!error)
     {
-        ret_conn->badged_server_ep_cspath.capPtr = ret_msg.msg.alloc.slot;
+        ret_conn->ep = ret_msg.msg.alloc.slot;
         ret_conn->id = ret_msg.msg.alloc.id;
     }
 
@@ -73,8 +73,8 @@ int ads_client_attach(ads_client_context_t *conn,
 
     AdsReturnMessage ret_msg;
 
-    error = sel4gpi_rpc_call(&rpc_env, conn->badged_server_ep_cspath.capPtr, (void *)&msg,
-                             1, &mo_cap->badged_server_ep_cspath.capPtr, (void *)&ret_msg);
+    error = sel4gpi_rpc_call(&rpc_env, conn->ep, (void *)&msg,
+                             1, &mo_cap->ep, (void *)&ret_msg);
     error |= ret_msg.errorCode;
 
     if (!error)
@@ -108,14 +108,14 @@ int ads_client_reserve(ads_client_context_t *conn,
 
     AdsReturnMessage ret_msg;
 
-    error = sel4gpi_rpc_call(&rpc_env, conn->badged_server_ep_cspath.capPtr, (void *)&msg,
+    error = sel4gpi_rpc_call(&rpc_env, conn->ep, (void *)&msg,
                              0, NULL, (void *)&ret_msg);
     error |= ret_msg.errorCode;
 
     if (!error)
     {
         *ret_vaddr = ret_msg.msg.reserve.vaddr;
-        ret_conn->badged_server_ep_cspath.capPtr = ret_msg.msg.reserve.slot;
+        ret_conn->ep = ret_msg.msg.reserve.slot;
     }
 
     return error;
@@ -137,8 +137,8 @@ int ads_client_attach_to_reserve(ads_vmr_context_t *reservation,
 
     AdsReturnMessage ret_msg;
 
-    error = sel4gpi_rpc_call(&rpc_env, reservation->badged_server_ep_cspath.capPtr, (void *)&msg,
-                             1, &mo->badged_server_ep_cspath.capPtr, (void *)&ret_msg);
+    error = sel4gpi_rpc_call(&rpc_env, reservation->ep, (void *)&msg,
+                             1, &mo->ep, (void *)&ret_msg);
     error |= ret_msg.errorCode;
 
     return error;
@@ -158,7 +158,7 @@ int ads_client_rm(ads_client_context_t *conn, void *vaddr)
 
     AdsReturnMessage ret_msg;
 
-    error = sel4gpi_rpc_call(&rpc_env, conn->badged_server_ep_cspath.capPtr, (void *)&msg,
+    error = sel4gpi_rpc_call(&rpc_env, conn->ep, (void *)&msg,
                              0, NULL, (void *)&ret_msg);
     error |= ret_msg.errorCode;
 
@@ -191,14 +191,14 @@ int ads_client_copy(ads_client_context_t *src_ads, ads_client_context_t *dst_ads
 
     if (vmr_cfg->mo)
     {
-        seL4_CPtr caps[2] = {dst_ads->badged_server_ep_cspath.capPtr, vmr_cfg->mo->badged_server_ep_cspath.capPtr};
-        error = sel4gpi_rpc_call(&rpc_env, src_ads->badged_server_ep_cspath.capPtr, (void *)&msg,
+        seL4_CPtr caps[2] = {dst_ads->ep, vmr_cfg->mo->ep};
+        error = sel4gpi_rpc_call(&rpc_env, src_ads->ep, (void *)&msg,
                                  2, caps, (void *)&ret_msg);
     }
     else
     {
-        error = sel4gpi_rpc_call(&rpc_env, src_ads->badged_server_ep_cspath.capPtr, (void *)&msg,
-                                 1, &dst_ads->badged_server_ep_cspath.capPtr, (void *)&ret_msg);
+        error = sel4gpi_rpc_call(&rpc_env, src_ads->ep, (void *)&msg,
+                                 1, &dst_ads->ep, (void *)&ret_msg);
     }
     error |= ret_msg.errorCode;
 
@@ -232,8 +232,8 @@ int ads_client_load_elf(ads_client_context_t *loadee_ads,
 
     AdsReturnMessage ret_msg;
 
-    error = sel4gpi_rpc_call(&rpc_env, loadee_ads->badged_server_ep_cspath.capPtr, (void *)&msg,
-                             1, &loadee_pd->badged_server_ep_cspath.capPtr, (void *)&ret_msg);
+    error = sel4gpi_rpc_call(&rpc_env, loadee_ads->ep, (void *)&msg,
+                             1, &loadee_pd->ep, (void *)&ret_msg);
     error |= ret_msg.errorCode;
 
     if (!error)

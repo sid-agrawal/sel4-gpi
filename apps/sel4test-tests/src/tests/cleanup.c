@@ -62,9 +62,7 @@ static int setup(env_t env)
     int error;
 
     /* Initialize the ADS */
-    vka_cspace_make_path(&env->vka,
-                         sel4gpi_get_rde_by_space_id(sel4gpi_get_binded_ads_id(), GPICAP_TYPE_VMR),
-                         &ads_conn.badged_server_ep_cspath);
+    ads_conn.ep = sel4gpi_get_rde_by_space_id(sel4gpi_get_binded_ads_id(), GPICAP_TYPE_VMR);
 
     /* Initialize the PD */
     pd_conn = sel4gpi_get_pd_conn();
@@ -91,17 +89,18 @@ static int start_hello(hello_mode_t mode, pd_client_context_t *hello_pd)
     {
         // Start the server with the resource server utility function
         error = start_resource_server_pd_args(0, 0, HELLO_CLEANUP_APP, &mode, 1,
-                                         &hello_pd->badged_server_ep_cspath.capPtr, &pokemart_space_id);
+                                              &hello_pd->ep, &pokemart_space_id);
 
         test_assert(error == 0);
 
         pokemart_type = sel4gpi_get_resource_type_code(POKEMART_RESOURCE_TYPE);
         return 0;
-    } else if (mode == HELLO_CLEANUP_SERVER_DAYCARE_MODE)
+    }
+    else if (mode == HELLO_CLEANUP_SERVER_DAYCARE_MODE)
     {
         // Start the server with the resource server utility function
         error = start_resource_server_pd_args(pokemart_type, pokemart_space_id, HELLO_CLEANUP_APP, &mode, 1,
-                                         &hello_pd->badged_server_ep_cspath.capPtr, &daycare_space_id);
+                                              &hello_pd->ep, &daycare_space_id);
 
         test_assert(error == 0);
 
@@ -123,14 +122,15 @@ static int start_hello(hello_mode_t mode, pd_client_context_t *hello_pd)
     args[2] = mode;
 
     // Copy the parent ep
-    error = pd_client_send_cap(hello_pd, self_ep.badged_server_ep_cspath.capPtr, &args[0]);
+    error = pd_client_send_cap(hello_pd, self_ep.ep, &args[0]);
     test_assert(error == 0);
 
     // Share an RDE for client
     if (mode == HELLO_CLEANUP_CLIENT_POKEMART_MODE)
     {
         sel4gpi_add_rde_config(cfg, pokemart_type, pokemart_space_id);
-    } else if (mode == HELLO_CLEANUP_CLIENT_DAYCARE_MODE)
+    }
+    else if (mode == HELLO_CLEANUP_CLIENT_DAYCARE_MODE)
     {
         sel4gpi_add_rde_config(cfg, daycare_type, daycare_space_id);
     }

@@ -2,6 +2,7 @@
 #include <sel4test/macros.h>
 #include <sel4gpi/pd_obj.h>
 #include <sel4gpi/debug.h>
+#include <sel4gpi/pd_utils.h>
 
 #include <sel4utils/thread.h>
 #include <sel4gpi/debug.h>
@@ -75,10 +76,7 @@ int lwcCreate(env_t env, char key[])
         /* Create a copy of the AS and send this cap to the new PD */
         // AS to PD
         int error;
-        cspacepath_t path;
-        vka_cspace_make_path(&env->vka, env->self_ads_cptr, &path);
-        ads_client_context_t conn;
-        conn.badged_server_ep_cspath = path;
+        ads_client_context_t conn = sel4gpi_get_bound_vmr_rde();
 
         // Using a known EP, get a new ads CAP.
         ads_client_context_t lwc_ads_conn;
@@ -151,14 +149,8 @@ int test_lwc(env_t env)
     /* create LWC the LWC has access to the key*/
     // int lwc_id = lwcCreate(env, key); /* copy the entire AS, say which func to run*/
 
-    cspacepath_t path;
-    vka_cspace_make_path(&env->vka, env->self_ads_cptr, &path);
-    ads_client_context_t conn;
-    conn.badged_server_ep_cspath = path;
-
-    vka_cspace_make_path(&env->vka, env->self_cpu_cptr, &path);
-    cpu_client_context_t cpu_conn;
-    cpu_conn.badged_server_ep_cspath = path;
+    ads_client_context_t conn = sel4gpi_get_bound_vmr_rde();
+    cpu_client_context_t cpu_conn = sel4gpi_get_cpu_conn();
 
     printf("Change to new VSpace \n");
     // Using a known EP, get a new ads CAP.

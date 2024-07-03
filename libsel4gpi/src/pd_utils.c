@@ -70,6 +70,13 @@ seL4_CPtr sel4gpi_get_rde(int type)
     return slot;
 }
 
+ads_client_context_t sel4gpi_get_bound_vmr_rde()
+{
+    ads_client_context_t ads_conn = sel4gpi_get_bound_vmr_rde();
+
+    return ads_conn;
+}
+
 uint64_t sel4gpi_get_default_space_id(int type)
 {
     uint64_t space_id = ((osm_pd_shared_data_t *)sel4runtime_get_osm_shared_data())->rde[type][0].space_id;

@@ -986,7 +986,7 @@ void forge_pd_cap_from_init_data(test_init_data_t *init_data, sel4utils_process_
     SERVER_GOTO_IF_ERR(error, "Failed to forge child's as cap");
 
     pd->shared_data->ads_conn.id = ads_id;
-    pd->shared_data->ads_conn.badged_server_ep_cspath.capPtr = child_as_cap;
+    pd->shared_data->ads_conn.ep = child_as_cap;
     resource_component_inc(get_ads_component(), ads_id); // Increase the refcount since the ADS is attached to PD
 
     // Forge CPU cap
@@ -1003,10 +1003,10 @@ void forge_pd_cap_from_init_data(test_init_data_t *init_data, sel4utils_process_
     error = resource_component_transfer_cap(get_pd_component()->server_vka, pd->pd_vka,
                                             pd_cap_in_rt, &pd_cap_in_PD, false, 0);
     SERVER_GOTO_IF_ERR(error, "Failed to copy cap to PD\n");
-    pd->shared_data->pd_conn.badged_server_ep_cspath = pd_cap_in_PD;
+    pd->shared_data->pd_conn.ep = pd_cap_in_PD.capPtr;
 
     pd_add_resource(pd, make_res_id(GPICAP_TYPE_PD, get_pd_component()->space_id, pd->id),
-                    seL4_CapNull, pd->shared_data->pd_conn.badged_server_ep_cspath.capPtr, seL4_CapNull);
+                    seL4_CapNull, pd->shared_data->pd_conn.ep, seL4_CapNull);
 
     // Cleanup the PD cap in RT
     cspacepath_t path;

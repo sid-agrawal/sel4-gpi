@@ -51,7 +51,7 @@ static int mo_connect(seL4_CPtr server_ep_cap,
 
     if (!error)
     {
-        ret_conn->badged_server_ep_cspath.capPtr = ret_msg.msg.alloc.slot;
+        ret_conn->ep = ret_msg.msg.alloc.slot;
         ret_conn->id = ret_msg.msg.alloc.id;
     }
 
@@ -87,7 +87,7 @@ int mo_component_client_disconnect(mo_client_context_t *conn)
 
     MoReturnMessage ret_msg;
 
-    error = sel4gpi_rpc_call(&rpc_env, conn->badged_server_ep_cspath.capPtr, (void *)&msg,
+    error = sel4gpi_rpc_call(&rpc_env, conn->ep, (void *)&msg,
                              0, NULL, (void *)&ret_msg);
     error |= ret_msg.errorCode;
 

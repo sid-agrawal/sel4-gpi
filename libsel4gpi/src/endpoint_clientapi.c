@@ -40,7 +40,7 @@ int ep_component_client_connect(seL4_CPtr server_ep_cap, ep_client_context_t *re
 
     if (!error)
     {
-        ret_conn->badged_server_ep_cspath.capPtr = ret_msg.msg.alloc.slot;
+        ret_conn->ep = ret_msg.msg.alloc.slot;
         ret_conn->raw_endpoint = ret_msg.msg.alloc.raw_ep_slot;
     }
 
@@ -63,12 +63,12 @@ static int get_raw_endpoint(ep_client_context_t *ep_conn, pd_client_context_t *t
 
     if (target_PD)
     {
-        error = sel4gpi_rpc_call(&rpc_env, ep_conn->badged_server_ep_cspath.capPtr, (void *)&msg,
-                                 1, &target_PD->badged_server_ep_cspath.capPtr, (void *)&ret_msg);
+        error = sel4gpi_rpc_call(&rpc_env, ep_conn->ep, (void *)&msg,
+                                 1, &target_PD->ep, (void *)&ret_msg);
     }
     else
     {
-        error = sel4gpi_rpc_call(&rpc_env, ep_conn->badged_server_ep_cspath.capPtr, (void *)&msg,
+        error = sel4gpi_rpc_call(&rpc_env, ep_conn->ep, (void *)&msg,
                                  0, NULL, (void *)&ret_msg);
     }
 
@@ -129,7 +129,7 @@ int ep_client_forge(seL4_CPtr server_ep_cap, seL4_CPtr ep_to_forge, ep_client_co
 
     if (!error)
     {
-        ret_conn->badged_server_ep_cspath.capPtr = ret_msg.msg.alloc.slot;
+        ret_conn->ep = ret_msg.msg.alloc.slot;
         ret_conn->raw_endpoint = ep_to_forge;
     }
 

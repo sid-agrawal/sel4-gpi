@@ -75,14 +75,14 @@ int ramdisk_client_bind(seL4_CPtr server_ep_cap,
 
     RamdiskReturnMessage reply;
 
-    error = sel4gpi_rpc_call(&rpc_client, server_ep_cap, &request, 1, &mo->badged_server_ep_cspath.capPtr, &reply);
+    error = sel4gpi_rpc_call(&rpc_client, server_ep_cap, &request, 1, &mo->ep, &reply);
 
     return error || reply.errorCode;
 
 #else
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 1, 1);
     seL4_SetMR(RDMSGREG_FUNC, RD_FUNC_BIND_REQ);
-    seL4_SetCap(0, mo->badged_server_ep_cspath.capPtr);
+    seL4_SetCap(0, mo->ep);
     tag = seL4_Call(server_ep_cap, tag);
 
     int error = seL4_MessageInfo_get_label(tag);
@@ -134,7 +134,7 @@ int ramdisk_client_alloc_block(seL4_CPtr server_ep_cap,
         return 1;
     }
 
-    ret_conn->badged_server_ep_cspath.capPtr = reply.msg.alloc.slot;
+    ret_conn->ep = reply.msg.alloc.slot;
     ret_conn->space_id = reply.msg.alloc.space_id;
     ret_conn->res_id = reply.msg.alloc.block_id;
 
@@ -148,7 +148,7 @@ int ramdisk_client_alloc_block(seL4_CPtr server_ep_cap,
     int error = seL4_MessageInfo_get_label(tag);
     CHECK_ERROR(error, "failed to get block from ramdisk server\n");
 
-    ret_conn->badged_server_ep_cspath.capPtr = seL4_GetMR(RDMSGREG_CREATE_ACK_DEST);
+    ret_conn->ep = seL4_GetMR(RDMSGREG_CREATE_ACK_DEST);
     ret_conn->space_id = seL4_GetMR(RDMSGREG_CREATE_ACK_SPACE_ID);
     ret_conn->res_id = seL4_GetMR(RDMSGREG_CREATE_ACK_RES_ID);
 
@@ -166,7 +166,7 @@ int ramdisk_client_read(ramdisk_client_context_t *conn)
 
     RamdiskReturnMessage reply;
 
-    error = sel4gpi_rpc_call(&rpc_client, conn->badged_server_ep_cspath.capPtr, &request, 0, NULL, &reply);
+    error = sel4gpi_rpc_call(&rpc_client, conn->ep, &request, 0, NULL, &reply);
 
     return error || reply.errorCode;
 
@@ -176,7 +176,7 @@ int ramdisk_client_read(ramdisk_client_context_t *conn)
     /* Send IPC to ramdisk server */
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0, 1);
     seL4_SetMR(RDMSGREG_FUNC, RD_FUNC_READ_REQ);
-    tag = seL4_Call(conn->badged_server_ep_cspath.capPtr, tag);
+    tag = seL4_Call(conn->ep, tag);
     error = seL4_MessageInfo_get_label(tag);
 
     return error;
@@ -193,7 +193,7 @@ int ramdisk_client_write(ramdisk_client_context_t *conn)
 
     RamdiskReturnMessage reply;
 
-    error = sel4gpi_rpc_call(&rpc_client, conn->badged_server_ep_cspath.capPtr, &request, 0, NULL, &reply);
+    error = sel4gpi_rpc_call(&rpc_client, conn->ep, &request, 0, NULL, &reply);
 
     return error || reply.errorCode;
 
@@ -203,7 +203,7 @@ int ramdisk_client_write(ramdisk_client_context_t *conn)
     /* Send IPC to ramdisk server */
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0, 1);
     seL4_SetMR(RDMSGREG_FUNC, RD_FUNC_WRITE_REQ);
-    tag = seL4_Call(conn->badged_server_ep_cspath.capPtr, tag);
+    tag = seL4_Call(conn->ep, tag);
     error = seL4_MessageInfo_get_label(tag);
 
     return error;

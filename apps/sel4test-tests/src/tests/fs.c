@@ -31,8 +31,7 @@ int test_fs(env_t env)
     printf("------------------STARTING SETUP: %s------------------\n", __func__);
 
     /* Initialize the ADS */
-    ads_client_context_t ads_conn;
-    vka_cspace_make_path(&env->vka, sel4gpi_get_rde_by_space_id(sel4gpi_get_binded_ads_id(), GPICAP_TYPE_VMR), &ads_conn.badged_server_ep_cspath);
+    ads_client_context_t ads_conn = sel4gpi_get_bound_vmr_rde();
 
     /* Initialize the PD */
     pd_client_context_t pd_conn = sel4gpi_get_pd_conn();
@@ -260,12 +259,12 @@ int test_fs(env_t env)
 
     // Cleanup servers
     pd_client_context_t fs_pd_conn;
-    fs_pd_conn.badged_server_ep_cspath.capPtr = fs_pd_cap;
+    fs_pd_conn.ep = fs_pd_cap;
     error = pd_client_disconnect(&fs_pd_conn);
     test_assert(error == 0);
 
     pd_client_context_t ramdisk_pd_conn;
-    ramdisk_pd_conn.badged_server_ep_cspath.capPtr = ramdisk_pd_cap;
+    ramdisk_pd_conn.ep = ramdisk_pd_cap;
     error = pd_client_disconnect(&ramdisk_pd_conn);
     test_assert(error == 0);
 
@@ -316,8 +315,7 @@ int test_multiple_fs(env_t env)
     printf("------------------STARTING SETUP: %s------------------\n", __func__);
 
     /* Initialize the ADS */
-    ads_client_context_t ads_conn;
-    vka_cspace_make_path(&env->vka, sel4gpi_get_rde_by_space_id(sel4gpi_get_binded_ads_id(), GPICAP_TYPE_VMR), &ads_conn.badged_server_ep_cspath);
+    ads_client_context_t ads_conn = sel4gpi_get_bound_vmr_rde();
 
     /* Initialize the PD */
     pd_client_context_t pd_conn = sel4gpi_get_pd_conn();
@@ -382,7 +380,7 @@ int test_multiple_fs(env_t env)
     // If the FS is configured to use half of the ramdisk, this test checks that blocks are being
     // reclaimed from the destroyed FS
     pd_client_context_t fs_1_pd_conn;
-    fs_1_pd_conn.badged_server_ep_cspath.capPtr = fs_1_pd_cap;
+    fs_1_pd_conn.ep = fs_1_pd_cap;
     error = pd_client_disconnect(&fs_1_pd_conn);
     test_assert(error == 0);
 
@@ -405,17 +403,17 @@ int test_multiple_fs(env_t env)
 
     // Cleanup other servers
     pd_client_context_t fs_2_pd_conn;
-    fs_2_pd_conn.badged_server_ep_cspath.capPtr = fs_2_pd_cap;
+    fs_2_pd_conn.ep = fs_2_pd_cap;
     error = pd_client_disconnect(&fs_2_pd_conn);
     test_assert(error == 0);
 
     pd_client_context_t fs_3_pd_conn;
-    fs_3_pd_conn.badged_server_ep_cspath.capPtr = fs_3_pd_cap;
+    fs_3_pd_conn.ep = fs_3_pd_cap;
     error = pd_client_disconnect(&fs_3_pd_conn);
     test_assert(error == 0);
 
     pd_client_context_t ramdisk_pd_conn;
-    ramdisk_pd_conn.badged_server_ep_cspath.capPtr = ramdisk_pd_cap;
+    ramdisk_pd_conn.ep = ramdisk_pd_cap;
     error = pd_client_disconnect(&ramdisk_pd_conn);
     test_assert(error == 0);
 

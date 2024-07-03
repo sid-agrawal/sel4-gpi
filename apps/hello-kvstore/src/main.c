@@ -99,7 +99,7 @@ int main(int argc, char **argv)
     seL4_MessageInfo_t tag;
 
     /* parse args */
-    ep_client_context_t parent_ep = {.badged_server_ep_cspath.capPtr = (seL4_CPtr)atol(argv[0])};
+    ep_client_context_t parent_ep = {.ep = (seL4_CPtr)atol(argv[0])};
     error = ep_client_get_raw_endpoint(&parent_ep);
     CHECK_ERROR(error, "Failed to retrieve parent EP\n");
 

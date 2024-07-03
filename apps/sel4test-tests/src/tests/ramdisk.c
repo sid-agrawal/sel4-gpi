@@ -29,8 +29,7 @@ int test_ramdisk(env_t env)
     printf("------------------STARTING SETUP: %s------------------\n", __func__);
 
     /* Initialize the ADS */
-    ads_client_context_t ads_conn;
-    vka_cspace_make_path(&env->vka, sel4gpi_get_rde_by_space_id(sel4gpi_get_binded_ads_id(), GPICAP_TYPE_VMR), &ads_conn.badged_server_ep_cspath);
+    ads_client_context_t ads_conn = sel4gpi_get_bound_vmr_rde();
     test_assert(error == 0);
 
     /* Initialize the PD */
@@ -70,7 +69,7 @@ int test_ramdisk(env_t env)
                               (void **)&buf);
     test_assert(error == 0);
 
-    // Set up shared memory 
+    // Set up shared memory
     error = ramdisk_client_bind(ramdisk_client_ep, &mo_conn);
     test_assert(error == seL4_NoError);
 

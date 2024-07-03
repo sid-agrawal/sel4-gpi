@@ -144,7 +144,7 @@ int kvstore_server_main(seL4_CPtr parent_ep)
     seL4_CPtr badge;
 
     seL4_CPtr fs_ep = sel4gpi_get_rde(sel4gpi_get_resource_type_code(FILE_RESOURCE_TYPE_NAME));
-    ep_client_context_t parent_ep_conn = {.badged_server_ep_cspath.capPtr = parent_ep};
+    ep_client_context_t parent_ep_conn = {.ep = parent_ep};
     error = ep_client_get_raw_endpoint(&parent_ep_conn);
     CHECK_ERROR(error, "Failed to retrieve parent EP\n", KVSTORE_ERROR_UNKNOWN);
 
@@ -248,7 +248,7 @@ int kvstore_server_start_thread(seL4_CPtr *kvstore_ep)
     GOTO_IF_ERR(error, "failed to allocate ep\n");
 
     seL4_CPtr temp_ep_in_PD;
-    pd_client_send_cap(&runnable.pd, ep_conn.badged_server_ep_cspath.capPtr, &temp_ep_in_PD);
+    pd_client_send_cap(&runnable.pd, ep_conn.ep, &temp_ep_in_PD);
 
     error = sel4gpi_prepare_pd(cfg, &runnable, 1, (seL4_Word *)&temp_ep_in_PD);
     GOTO_IF_ERR(error, "Failed to prepare PD\n");
