@@ -9,7 +9,7 @@
 #include <sel4rpc/client.h>
 
 #include <sel4gpi/pd_clientapi.h>
-#include <sel4gpi/resource_server_remote_utils.h>
+#include <sel4gpi/resource_server_utils.h>
 #include <sel4gpi/gpi_rpc.h>
 #include <ramdisk_rpc.pb.h>
 

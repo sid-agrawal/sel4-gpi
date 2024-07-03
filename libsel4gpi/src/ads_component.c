@@ -46,7 +46,7 @@ resource_component_context_t *get_ads_component(void)
 }
 
 // Called when an item from the ADS registry is deleted
-static void on_ads_registry_delete(resource_server_registry_node_t *node_gen, void *arg)
+static void on_ads_registry_delete(resource_registry_node_t *node_gen, void *arg)
 {
     ads_component_registry_entry_t *node = (ads_component_registry_entry_t *)node_gen;
 
@@ -71,7 +71,7 @@ static int create_vmr_space(uint32_t client_id, resspc_component_registry_entry_
     };
 
     error = resource_component_allocate(get_resspc_component(), get_gpi_server()->rt_pd_id, BADGE_OBJ_ID_NULL, false,
-                                        (void *)&resspc_config, (resource_server_registry_node_t **)&space_entry, NULL);
+                                        (void *)&resspc_config, (resource_registry_node_t **)&space_entry, NULL);
     SERVER_GOTO_IF_ERR(error, "Failed to allocate new VMR resource space\n");
     *ret_space = space_entry;
 
@@ -114,7 +114,7 @@ static void handle_ads_allocation(seL4_Word sender_badge,
 
     /* Create the ADS object, the ADS ID is the same as the VMR space */
     error = resource_component_allocate(get_ads_component(), client_id, space_entry->space.id, false, NULL,
-                                        (resource_server_registry_node_t **)&new_entry, &ret_cap);
+                                        (resource_registry_node_t **)&new_entry, &ret_cap);
     SERVER_GOTO_IF_ERR(error, "Failed to allocate new ADS\n");
 
     OSDB_PRINTF("Successfully allocated a new ADS (%d) with VMR Space (%d).\n", new_entry->ads.id, space_entry->space.id);
@@ -159,7 +159,7 @@ static void handle_reserve_req(seL4_Word sender_badge,
 
     // Make a cap for the reservation
     // The object ID is the shorter map entry ID, not the full vaddr of the reservation
-    ret_cap = resource_server_make_badged_ep(get_ads_component()->server_vka, pd_data->pd.pd_vka,
+    ret_cap = resource_component_make_badged_ep(get_ads_component()->server_vka, pd_data->pd.pd_vka,
                                              get_ads_component()->server_ep, GPICAP_TYPE_VMR, ads_id,
                                              reservation->map_entry->gen.object_id, client_id);
     SERVER_GOTO_IF_COND(ret_cap == seL4_CapNull, "Failed to make badged ep for reservation\n");
@@ -535,7 +535,7 @@ int ads_component_initialize(vka_t *server_vka,
     };
 
     error = resource_component_allocate(get_resspc_component(), get_gpi_server()->rt_pd_id, BADGE_OBJ_ID_NULL, false,
-                                        (void *)&resspc_config, (resource_server_registry_node_t **)&space_entry, NULL);
+                                        (void *)&resspc_config, (resource_registry_node_t **)&space_entry, NULL);
     assert(error == 0);
 
     // Initialize the component
@@ -570,7 +570,7 @@ int forge_ads_cap_from_vspace(vspace_t *vspace, vka_t *vka, uint32_t client_pd_i
 
     /* Allocate the ADS */
     error = resource_component_allocate(get_ads_component(), client_pd_id, space_entry->space.id, false, NULL,
-                                        (resource_server_registry_node_t **)&new_entry, &ret_cap);
+                                        (resource_registry_node_t **)&new_entry, &ret_cap);
     SERVER_GOTO_IF_ERR(error, "Failed to allocate ADS for forging\n");
 
     /* Perform any initialization of the forged ADS object */

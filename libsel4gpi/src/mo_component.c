@@ -44,7 +44,7 @@ resource_component_context_t *get_mo_component(void)
 }
 
 // Called when an item from the MO registry is deleted
-static void on_mo_registry_delete(resource_server_registry_node_t *node_gen, void *arg)
+static void on_mo_registry_delete(resource_registry_node_t *node_gen, void *arg)
 {
     mo_component_registry_entry_t *node = (mo_component_registry_entry_t *)node_gen;
 
@@ -67,7 +67,7 @@ int mo_component_allocate_rt(int num_pages, mo_t **ret_mo)
         BADGE_OBJ_ID_NULL,
         false,
         (void *)&alloc_args,
-        (resource_server_registry_node_t **)&new_entry, NULL);
+        (resource_registry_node_t **)&new_entry, NULL);
     SERVER_GOTO_IF_ERR(error, "Failed to allocate new MO object for RT\n");
 
     OSDB_PRINTF("Root task allocated a new MO (%d) with %d pages.\n",
@@ -103,7 +103,7 @@ static void handle_mo_allocation_request(seL4_Word sender_badge,
     mo_new_args_t alloc_args = {.num_pages = num_pages, .paddr = paddr, .page_bits = page_bits};
 
     error = resource_component_allocate(get_mo_component(), client_id, BADGE_OBJ_ID_NULL, false, (void *)&alloc_args,
-                                        (resource_server_registry_node_t **)&new_entry, &ret_cap);
+                                        (resource_registry_node_t **)&new_entry, &ret_cap);
     SERVER_GOTO_IF_ERR(error, "Failed to allocate new MO object\n");
 
     OSDB_PRINTF("Allocated a new MO (%d) with %d pages.\n",
@@ -198,7 +198,7 @@ int mo_component_initialize(vka_t *server_vka,
     };
 
     error = resource_component_allocate(get_resspc_component(), get_gpi_server()->rt_pd_id, BADGE_OBJ_ID_NULL, false,
-                                        (void *)&resspc_config, (resource_server_registry_node_t **)&space_entry, NULL);
+                                        (void *)&resspc_config, (resource_registry_node_t **)&space_entry, NULL);
     assert(error == 0);
 
     // Initialize the component
@@ -233,7 +233,7 @@ int forge_mo_cap_from_frames(seL4_CPtr *frame_caps,
 
     /* Allocate the MO object */
     error = resource_component_allocate(get_mo_component(), client_pd_id, BADGE_OBJ_ID_NULL, true, NULL,
-                                        (resource_server_registry_node_t **)&new_entry, cap_ret);
+                                        (resource_registry_node_t **)&new_entry, cap_ret);
     SERVER_GOTO_IF_ERR(error, "Failed to allocate new MO object for forge\n");
     mo_t *mo = &new_entry->mo;
 

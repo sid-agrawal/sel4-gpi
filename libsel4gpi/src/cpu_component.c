@@ -45,7 +45,7 @@ resource_component_context_t *get_cpu_component(void)
 }
 
 // Called when an item from the CPU registry is deleted
-static void on_cpu_registry_delete(resource_server_registry_node_t *node_gen, void *arg)
+static void on_cpu_registry_delete(resource_registry_node_t *node_gen, void *arg)
 {
     cpu_component_registry_entry_t *node = (cpu_component_registry_entry_t *)node_gen;
 
@@ -65,7 +65,7 @@ static void handle_cpu_allocation(seL4_Word sender_badge, CpuReturnMessage *repl
     uint32_t client_id = get_client_id_from_badge(sender_badge);
 
     error = resource_component_allocate(get_cpu_component(), client_id, BADGE_OBJ_ID_NULL, false, NULL,
-                                        (resource_server_registry_node_t **)&new_entry, &ret_cap);
+                                        (resource_registry_node_t **)&new_entry, &ret_cap);
     SERVER_GOTO_IF_ERR(error, "Failed to allocate new CPU object\n");
 
     reply_msg->msg.alloc.slot = ret_cap;
@@ -316,7 +316,7 @@ int cpu_component_initialize(vka_t *server_vka,
     };
 
     error = resource_component_allocate(get_resspc_component(), get_gpi_server()->rt_pd_id, BADGE_OBJ_ID_NULL,
-                                        false, (void *)&resspc_config, (resource_server_registry_node_t **)&space_entry,
+                                        false, (void *)&resspc_config, (resource_registry_node_t **)&space_entry,
                                         NULL);
     assert(error == 0);
 
@@ -351,7 +351,7 @@ int forge_cpu_cap_from_tcb(sel4utils_process_t *process, // Change this to the s
 
     /* Allocate the CPU object */
     error = resource_component_allocate(get_cpu_component(), client_id, BADGE_OBJ_ID_NULL, false, NULL,
-                                        (resource_server_registry_node_t **)&new_entry, &ret_cap);
+                                        (resource_registry_node_t **)&new_entry, &ret_cap);
     SERVER_GOTO_IF_ERR(error, "Failed to allocate new CPU object for forge\n");
 
     new_entry->cpu.cspace = process->cspace.cptr;

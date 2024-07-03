@@ -9,7 +9,7 @@
 #include <sel4/sel4.h>
 #include <sel4/types.h>
 
-#include <sel4gpi/resource_server_remote_utils.h>
+#include <sel4gpi/resource_server_utils.h>
 
 #include <pokemart_server.h>
 

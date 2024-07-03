@@ -1,15 +1,15 @@
 
 #include <sel4gpi/gpi_server.h>
-#include <sel4gpi/resource_server_utils.h>
+#include <sel4gpi/resource_registry.h>
 #include <sel4gpi/resource_types.h>
 #include <sel4gpi/pd_utils.h>
 
-static resource_server_registry_t *registry;
+static resource_registry_t *registry;
 
 // Registry entry of a resource type
 typedef struct _resource_type_registry_entry
 {
-    resource_server_registry_node_t gen;
+    resource_registry_node_t gen;
     char name[RESOURCE_TYPE_MAX_STRING_SIZE];
 } resource_type_registry_entry_t;
 
@@ -20,14 +20,14 @@ static void insert_resource_type(gpi_cap_t id, char *name)
     entry->gen.object_id = id;
     strncpy(entry->name, name, RESOURCE_TYPE_MAX_STRING_SIZE);
 
-    resource_server_registry_insert(registry, (resource_server_registry_node_t *)entry);
+    resource_registry_insert(registry, (resource_registry_node_t *)entry);
 }
 
 void resource_types_initialize(void)
 {
     registry = &get_gpi_server()->resource_types;
 
-    resource_server_initialize_registry(registry, NULL, NULL);
+    resource_registry_initialize(registry, NULL, NULL);
 
     // Insert the core cap types to the registry with their names
     insert_resource_type(GPICAP_TYPE_NONE, "NONE");
@@ -48,7 +48,7 @@ static gpi_cap_t alloc_new_resource_type(char *name)
     resource_type_registry_entry_t *entry = malloc(sizeof(resource_type_registry_entry_t));
     strncpy(entry->name, name, RESOURCE_TYPE_MAX_STRING_SIZE);
 
-    resource_server_registry_insert_new_id(registry, (resource_server_registry_node_t *)entry);
+    resource_registry_insert_new_id(registry, (resource_registry_node_t *)entry);
 
     return entry->gen.object_id;
 }
@@ -80,7 +80,7 @@ char *cap_type_to_str(gpi_cap_t cap_type)
 
         // Root task finds name from resource type definitions
         resource_type_registry_entry_t *reg_entry = (resource_type_registry_entry_t *)
-            resource_server_registry_get_by_id(registry, (uint64_t)cap_type);
+            resource_registry_get_by_id(registry, (uint64_t)cap_type);
 
         if (reg_entry == NULL)
         {

@@ -40,7 +40,7 @@ typedef struct _pd_work_entry
 // Registry of PDs maintained by the server
 typedef struct _pd_component_registry_entry
 {
-    resource_server_registry_node_t gen;
+    resource_registry_node_t gen;
     pd_t pd;
 
     /* Pending Work */

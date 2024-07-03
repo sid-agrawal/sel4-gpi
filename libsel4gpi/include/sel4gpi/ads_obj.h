@@ -13,7 +13,7 @@
 #include <sel4utils/vspace_internal.h>
 #include <sel4utils/process.h>
 #include <sel4gpi/model_exporting.h>
-#include <sel4gpi/resource_server_utils.h>
+#include <sel4gpi/resource_registry.h>
 #include <sel4gpi/pd_creation.h>
 
 typedef struct _pd pd_t;
@@ -25,7 +25,7 @@ typedef struct _cpu cpu_t;
  */
 typedef struct _attach_node_map
 {
-    resource_server_registry_node_t gen;
+    resource_registry_node_t gen;
     void *vaddr; ///< Key for the attach registry
 } attach_node_map_t;
 
@@ -37,7 +37,7 @@ typedef struct _attach_node_map
  * */
 typedef struct _attach_node
 {
-    resource_server_registry_node_t gen;
+    resource_registry_node_t gen;
 
     void *vaddr;                       ///< Attach vaddr, key for the UTHash
     attach_node_map_t *map_entry;      ///< the attach node map entry for this node
@@ -62,8 +62,8 @@ typedef struct _ads
     vka_object_t *root_page_dir;
     sel4utils_process_t *process_for_cookies;
 
-    resource_server_registry_t attach_registry;
-    resource_server_registry_t attach_id_to_vaddr_map;
+    resource_registry_t attach_registry;
+    resource_registry_t attach_id_to_vaddr_map;
 } ads_t;
 
 /**

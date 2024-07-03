@@ -31,7 +31,7 @@
 #include <sel4gpi/ads_obj.h>
 #include <sel4gpi/cpu_obj.h>
 #include <sel4gpi/debug.h>
-#include <sel4gpi/resource_server_utils.h>
+#include <sel4gpi/resource_registry.h>
 #include <sel4gpi/resource_server_clientapi.h>
 #include <sel4gpi/pd_utils.h>
 #include <sel4gpi/resource_space_component.h>
@@ -59,7 +59,7 @@ int pd_add_resource(pd_t *pd, gpi_cap_t type, uint32_t space_id, uint32_t res_id
 {
     // Unique resource ID is the badge with the following fields: type, space_id, res_id
     uint64_t res_node_id = universal_res_id(type, space_id, res_id);
-    pd_hold_node_t *node = (pd_hold_node_t *)resource_server_registry_get_by_id(&pd->hold_registry, res_node_id);
+    pd_hold_node_t *node = (pd_hold_node_t *)resource_registry_get_by_id(&pd->hold_registry, res_node_id);
 
     if (node != NULL)
     {
@@ -77,7 +77,7 @@ int pd_add_resource(pd_t *pd, gpi_cap_t type, uint32_t space_id, uint32_t res_id
         node->slot_in_ServerPD_Debug = slot_in_serverPD;
         node->gen.object_id = res_node_id;
 
-        resource_server_registry_insert(&pd->hold_registry, (resource_server_registry_node_t *)node);
+        resource_registry_insert(&pd->hold_registry, (resource_registry_node_t *)node);
     }
 
     return 0;
@@ -86,7 +86,7 @@ int pd_add_resource(pd_t *pd, gpi_cap_t type, uint32_t space_id, uint32_t res_id
 /**
  * Internal function to revoke a resource from a PD and remove the metadata
  */
-static void pd_remove_resource_internal(pd_t *pd, resource_server_registry_node_t *hold_node)
+static void pd_remove_resource_internal(pd_t *pd, resource_registry_node_t *hold_node)
 {
     int error = 0;
 
@@ -128,14 +128,14 @@ static void pd_remove_resource_internal(pd_t *pd, resource_server_registry_node_
     }
 
     // Remove the node
-    resource_server_registry_delete(&pd->hold_registry, hold_node);
+    resource_registry_delete(&pd->hold_registry, hold_node);
 }
 
 int pd_remove_resource(pd_t *pd, gpi_cap_t type, uint32_t space_id, uint32_t res_id)
 {
     // See if the resource exists, remove it if so
     uint64_t res_node_id = universal_res_id(type, space_id, res_id);
-    resource_server_registry_node_t *node = resource_server_registry_get_by_id(&pd->hold_registry, res_node_id);
+    resource_registry_node_t *node = resource_registry_get_by_id(&pd->hold_registry, res_node_id);
 
     if (node != NULL)
     {
@@ -148,7 +148,7 @@ int pd_remove_resource(pd_t *pd, gpi_cap_t type, uint32_t space_id, uint32_t res
 bool pd_has_resources_in_space(pd_t *pd, uint32_t space_id)
 {
     // Search through the held resources, check if any belong to the given space ID
-    resource_server_registry_node_t *curr, *tmp;
+    resource_registry_node_t *curr, *tmp;
     HASH_ITER(hh, pd->hold_registry.head, curr, tmp)
     {
         if (((pd_hold_node_t *)curr)->space_id == space_id)
@@ -163,7 +163,7 @@ bool pd_has_resources_in_space(pd_t *pd, uint32_t space_id)
 int pd_remove_resources_in_space(pd_t *pd, uint32_t space_id)
 {
     // Search through the held resources, remove any belonging to the given space ID
-    resource_server_registry_node_t *curr, *tmp;
+    resource_registry_node_t *curr, *tmp;
     HASH_ITER(hh, pd->hold_registry.head, curr, tmp)
     {
         if (((pd_hold_node_t *)curr)->space_id == space_id)
@@ -398,7 +398,7 @@ int pd_bulk_add_resource(pd_t *pd, linked_list_t *resources)
     {
         res = (pd_hold_node_t *)curr->data;
         resspc_component_registry_entry_t *resource_space_data = resource_space_get_entry_by_id(res->space_id);
-        seL4_CPtr copied_res = resource_server_make_badged_ep(get_pd_component()->server_vka, pd->pd_vka,
+        seL4_CPtr copied_res = resource_component_make_badged_ep(get_pd_component()->server_vka, pd->pd_vka,
                                                               resource_space_data->space.server_ep, resource_space_data->space.resource_type,
                                                               res->space_id, res->res_id, pd->id);
 
@@ -417,7 +417,7 @@ int pd_bulk_add_resource(pd_t *pd, linked_list_t *resources)
 }
 
 static void
-pd_held_resource_on_delete(resource_server_registry_node_t *node_gen, void *pd_v)
+pd_held_resource_on_delete(resource_registry_node_t *node_gen, void *pd_v)
 {
     int error = 0;
     pd_hold_node_t *node = (pd_hold_node_t *)node_gen;
@@ -498,7 +498,7 @@ err_goto:
 
 void pd_initialize_hold_registry(pd_t *pd)
 {
-    resource_server_initialize_registry(&pd->hold_registry, pd_held_resource_on_delete, (void *)pd);
+    resource_registry_initialize(&pd->hold_registry, pd_held_resource_on_delete, (void *)pd);
 }
 
 int pd_new(pd_t *pd,
@@ -612,10 +612,10 @@ void pd_destroy(pd_t *pd, vka_t *server_vka, vspace_t *server_vspace)
     // Hash table of holding resources
     // (XXX) Arya: This can trigger sys_munmap which is not supported
     // This also triggers resource deletion, if this PD held the last copy
-    resource_server_registry_node_t *current, *tmp;
+    resource_registry_node_t *current, *tmp;
     HASH_ITER(hh, pd->hold_registry.head, current, tmp)
     {
-        resource_server_registry_delete(&pd->hold_registry, current);
+        resource_registry_delete(&pd->hold_registry, current);
     }
 
     // free the MO for init data
@@ -829,7 +829,7 @@ int pd_send_cap(pd_t *to_pd,
 
     if (should_mint)
     {
-        seL4_CPtr new_cap = resource_server_make_badged_ep(server_vka,
+        seL4_CPtr new_cap = resource_component_make_badged_ep(server_vka,
                                                            to_pd->pd_vka,
                                                            server_src_cap,
                                                            cap_type,
@@ -860,7 +860,7 @@ int pd_send_cap(pd_t *to_pd,
     {
         OSDB_PRINTF("[Warning]: Untracked cap being sent to PD\n");
         cspacepath_t dest = {0};
-        error = resource_server_transfer_cap(get_pd_component()->server_vka, to_pd->pd_vka, cap, &dest, false, 0);
+        error = resource_component_transfer_cap(get_pd_component()->server_vka, to_pd->pd_vka, cap, &dest, false, 0);
         SERVER_GOTO_IF_ERR(error, "Failed to copy cap to PD\n");
 
         *slot = dest.capPtr;

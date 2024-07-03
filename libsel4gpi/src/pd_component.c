@@ -66,7 +66,7 @@ pd_component_registry_entry_t *pd_component_registry_get_entry_by_badge(seL4_Wor
 }
 
 // Called when an item from the PD registry is deleted
-static void on_pd_registry_delete(resource_server_registry_node_t *node_gen, void *arg)
+static void on_pd_registry_delete(resource_registry_node_t *node_gen, void *arg)
 {
     pd_component_registry_entry_t *node = (pd_component_registry_entry_t *)node_gen;
 
@@ -102,7 +102,7 @@ static void handle_pd_allocation(seL4_Word sender_badge, PdReturnMessage *reply_
 
     /* Allocate a new PD */
     error = resource_component_allocate(get_pd_component(), client_id, BADGE_OBJ_ID_NULL, false, &osm_mo_entry->mo,
-                                        (resource_server_registry_node_t **)&new_entry, &ret_cap);
+                                        (resource_registry_node_t **)&new_entry, &ret_cap);
     SERVER_GOTO_IF_ERR(error, "failed to allocat a PD\n");
 
     OSDB_PRINTF("Successfully allocated a new PD %d.\n", new_entry->pd.id);
@@ -133,7 +133,7 @@ static void handle_disconnect_req(seL4_Word sender_badge, PdDisconnectMessage *m
 
     /* Remove the PD from registry, this will also destroy the PD */
     client_data->pd.deletion_depth = 0; // This PD is the root of a deletion tree
-    resource_server_registry_delete(&get_pd_component()->registry, (resource_server_registry_node_t *)client_data);
+    resource_registry_delete(&get_pd_component()->registry, (resource_registry_node_t *)client_data);
 
     // (XXX) Arya: Should we be deleting from registry or just decrementing?
 
@@ -382,14 +382,14 @@ static void handle_give_resource_req(seL4_Word sender_badge, PdGiveResourceMessa
     /* Find the resource */
     uint64_t res_node_id = universal_res_id(resource_space_data->space.resource_type, space_id, resource_id);
     pd_hold_node_t *resource_data = (pd_hold_node_t *)
-        resource_server_registry_get_by_id(&server_data->pd.hold_registry, res_node_id);
+        resource_registry_get_by_id(&server_data->pd.hold_registry, res_node_id);
     SERVER_GOTO_IF_COND(resource_data == NULL, "Couldn't find resource (%lx)\n", res_node_id);
 
     OSDB_PRINT_VERBOSE("resource server %ld gives resource in space %ld with ID %ld to client %ld\n",
                        server_id, space_id, resource_id, recipient_id);
 
     /* Create a new badged EP for the resource */
-    seL4_CPtr dest = resource_server_make_badged_ep(get_pd_component()->server_vka, recipient_data->pd.pd_vka,
+    seL4_CPtr dest = resource_component_make_badged_ep(get_pd_component()->server_vka, recipient_data->pd.pd_vka,
                                                     resource_space_data->space.server_ep,
                                                     resource_space_data->space.resource_type,
                                                     space_id, resource_id, recipient_id);
@@ -417,10 +417,10 @@ int pd_component_map_resources(uint32_t client_pd_id, uint64_t src_res_id, uint6
     SERVER_GOTO_IF_COND(server_data == NULL, "Couldn't find server PD (%ld)\n", client_pd_id);
 
     // Find the resources
-    pd_hold_node_t *src_res = (pd_hold_node_t *)resource_server_registry_get_by_id(&server_data->pd.hold_registry,
+    pd_hold_node_t *src_res = (pd_hold_node_t *)resource_registry_get_by_id(&server_data->pd.hold_registry,
                                                                                    src_res_id);
     SERVER_GOTO_IF_COND(src_res == NULL, "Couldn't find resource (%lx)\n", src_res_id);
-    pd_hold_node_t *dest_res = (pd_hold_node_t *)resource_server_registry_get_by_id(&server_data->pd.hold_registry,
+    pd_hold_node_t *dest_res = (pd_hold_node_t *)resource_registry_get_by_id(&server_data->pd.hold_registry,
                                                                                     dest_res_id);
     SERVER_GOTO_IF_COND(dest_res == NULL, "Couldn't find resource (%lx)\n", dest_res_id);
 
@@ -477,7 +477,7 @@ static void handle_exit_req(seL4_Word sender_badge, PdExitMessage *msg)
 
     /* Remove the PD from registry, this will also destroy the PD */
     client_data->pd.deletion_depth = 0; // This PD is the root of a deletion tree
-    resource_server_registry_delete(&get_pd_component()->registry, (resource_server_registry_node_t *)client_data);
+    resource_registry_delete(&get_pd_component()->registry, (resource_registry_node_t *)client_data);
 
     OSDB_PRINTF("Cleaned up exited PD (%d)\n", pd_id);
 
@@ -877,7 +877,7 @@ int pd_component_initialize(vka_t *server_vka,
     };
 
     error = resource_component_allocate(get_resspc_component(), get_gpi_server()->rt_pd_id, BADGE_OBJ_ID_NULL, false, (void *)&resspc_config,
-                                        (resource_server_registry_node_t **)&space_entry, NULL);
+                                        (resource_registry_node_t **)&space_entry, NULL);
     assert(error == 0);
 
     // Initialize the component
@@ -901,7 +901,7 @@ void forge_pd_for_root_task(uint64_t rt_id)
     rt_entry->gen.object_id = rt_id;
     rt_entry->pd.id = rt_id;
     rt_entry->pd.pd_vka = get_gpi_server()->server_vka;
-    resource_server_registry_insert(&get_pd_component()->registry, (resource_server_registry_node_t *)rt_entry);
+    resource_registry_insert(&get_pd_component()->registry, (resource_registry_node_t *)rt_entry);
 }
 
 // (XXX) Arya: hack to store the test PD ID for destroying it later
@@ -923,7 +923,7 @@ void forge_pd_cap_from_init_data(test_init_data_t *init_data, sel4utils_process_
     pd_component_registry_entry_t *new_entry;
     error = resource_component_allocate(get_pd_component(), get_gpi_server()->rt_pd_id,
                                         BADGE_OBJ_ID_NULL, true, NULL,
-                                        (resource_server_registry_node_t **)&new_entry, &pd_cap_in_rt);
+                                        (resource_registry_node_t **)&new_entry, &pd_cap_in_rt);
     SERVER_GOTO_IF_ERR(error, "Failed to allocate PD for forging");
 
     pd_t *pd = &new_entry->pd;
@@ -999,7 +999,7 @@ void forge_pd_cap_from_init_data(test_init_data_t *init_data, sel4utils_process_
 
     // Copy the PD cap to the test process
     cspacepath_t pd_cap_in_PD = {0};
-    error = resource_server_transfer_cap(get_pd_component()->server_vka, pd->pd_vka,
+    error = resource_component_transfer_cap(get_pd_component()->server_vka, pd->pd_vka,
                                          pd_cap_in_rt, &pd_cap_in_PD, false, 0);
     SERVER_GOTO_IF_ERR(error, "Failed to copy cap to PD\n");
     pd->shared_data->pd_conn.badged_server_ep_cspath = pd_cap_in_PD;
@@ -1037,7 +1037,7 @@ void destroy_test_pd(void)
     SERVER_GOTO_IF_COND(client_pd_data == NULL, "Couldn't find test PD (%ld) to destroy it\n", test_pd_id);
 
     /* Remove the PD from registry, this will also destroy the PD */
-    resource_server_registry_delete(&get_pd_component()->registry, (resource_server_registry_node_t *)client_pd_data);
+    resource_registry_delete(&get_pd_component()->registry, (resource_registry_node_t *)client_pd_data);
 
     return;
 
@@ -1086,7 +1086,7 @@ int pd_component_resource_cleanup(gpi_cap_t resource_type, uint32_t space_id, ui
     int error = 0;
 
     // Iterate over all live PDs
-    resource_server_registry_node_t *curr, *tmp;
+    resource_registry_node_t *curr, *tmp;
     HASH_ITER(hh, get_pd_component()->registry.head, curr, tmp)
     {
         pd_component_registry_entry_t *pd_entry = (pd_component_registry_entry_t *)curr;
@@ -1121,7 +1121,7 @@ int pd_component_space_cleanup(uint32_t pd_id, gpi_cap_t space_type, uint32_t sp
     int depth = manager_data->pd.deletion_depth;
 
     // Iterate over all live PDs to check if they should be deleted
-    resource_server_registry_node_t *curr, *tmp;
+    resource_registry_node_t *curr, *tmp;
     HASH_ITER(hh, get_pd_component()->registry.head, curr, tmp)
     {
         pd_component_registry_entry_t *pd_entry = (pd_component_registry_entry_t *)curr;
@@ -1147,7 +1147,7 @@ int pd_component_space_cleanup(uint32_t pd_id, gpi_cap_t space_type, uint32_t sp
                 pd->deletion_depth = depth + 1;
 
                 // Remove the PD from registry, this will also destroy the PD
-                resource_server_registry_delete(&get_pd_component()->registry, curr);
+                resource_registry_delete(&get_pd_component()->registry, curr);
 
                 continue;
             }

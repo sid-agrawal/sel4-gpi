@@ -11,7 +11,7 @@
 #include <sel4/sel4.h>
 #include <sel4/types.h>
 
-#include <sel4gpi/resource_server_remote_utils.h>
+#include <sel4gpi/resource_server_utils.h>
 #include <sel4gpi/resource_space_clientapi.h>
 
 #include <ramdisk_client.h>
@@ -29,14 +29,14 @@ typedef struct _pd_client_context pd_client_context_t;
 // Registry of open files
 typedef struct _file_registry_entry
 {
-    resource_server_registry_node_t gen;
+    resource_registry_node_t gen;
     struct file *file; // handle of the open file
 } file_registry_entry_t;
 
 // Registry of namespaces
 typedef struct _fs_namespace_entry
 {
-    resource_server_registry_node_t gen;
+    resource_registry_node_t gen;
     resspc_client_context_t res_space_conn;
     char ns_prefix[MAXPATH]; // prefix of this namespace in the default ns
 } fs_namespace_entry_t;
@@ -53,8 +53,8 @@ typedef struct _xv6fs_server_context
     seL4_CPtr rd_ep;
 
     // Internal data
-    resource_server_registry_t file_registry;
-    resource_server_registry_t ns_registry;
+    resource_registry_t file_registry;
+    resource_registry_t ns_registry;
 
     // Fields for naive block implementation
     mo_client_context_t *shared_mem;

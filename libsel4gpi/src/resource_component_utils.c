@@ -1,5 +1,8 @@
 #pragma once
 
+#include <vka/object.h>
+#include <vka/capops.h>
+
 #include <sel4gpi/gpi_server.h>
 #include <sel4gpi/resource_component_utils.h>
 #include <sel4gpi/error_handle.h>
@@ -25,7 +28,7 @@ int resource_component_initialize(
     uint64_t space_id,
     void (*request_handler)(void *, seL4_Word, seL4_CPtr, void *, bool *, bool *),
     int (*new_obj)(resource_component_object_t *, vka_t *, vspace_t *, void *),
-    void (*on_registry_delete)(resource_server_registry_node_t *, void *),
+    void (*on_registry_delete)(resource_registry_node_t *, void *),
     size_t reg_entry_size,
     vka_t *server_vka,
     vspace_t *server_vspace,
@@ -43,7 +46,7 @@ int resource_component_initialize(
     component->server_ep = server_ep;
     sel4gpi_rpc_env_init(&component->rpc_env, request_msgdesc, reply_msgdesc);
 
-    resource_server_initialize_registry(&component->registry, on_registry_delete, NULL);
+    resource_registry_initialize(&component->registry, on_registry_delete, NULL);
 
     OSDB_PRINTF("Initialized resource component %s\n", cap_type_to_str(resource_type));
 }
@@ -96,7 +99,7 @@ int resource_component_allocate(resource_component_context_t *component,
                                 uint64_t object_id,
                                 bool forge,
                                 void *arg0,
-                                resource_server_registry_node_t **ret_entry,
+                                resource_registry_node_t **ret_entry,
                                 seL4_CPtr *ret_cap)
 {
     int error = 0;
@@ -108,15 +111,15 @@ int resource_component_allocate(resource_component_context_t *component,
     uint64_t resource_id;
     if (object_id == BADGE_OBJ_ID_NULL)
     {
-        resource_id = resource_server_registry_insert_new_id(&component->registry, (resource_server_registry_node_t *)reg_entry);
+        resource_id = resource_registry_insert_new_id(&component->registry, (resource_registry_node_t *)reg_entry);
     }
     else
     {
         resource_id = object_id;
         reg_entry->gen.object_id = object_id;
-        resource_server_registry_insert(&component->registry, (resource_server_registry_node_t *)reg_entry);
+        resource_registry_insert(&component->registry, (resource_registry_node_t *)reg_entry);
     }
-    *ret_entry = (resource_server_registry_node_t *)reg_entry;
+    *ret_entry = (resource_registry_node_t *)reg_entry;
     reg_entry->object.id = resource_id;
 
     /* Create the object */
@@ -135,9 +138,9 @@ int resource_component_allocate(resource_component_context_t *component,
         vka_t *client_vka = pd_data->pd.pd_vka;
 
         /* Create the badged endpoint */
-        *ret_cap = resource_server_make_badged_ep(component->server_vka, client_vka, component->server_ep,
-                                                  component->resource_type, component->space_id,
-                                                  resource_id, client_id);
+        *ret_cap = resource_component_make_badged_ep(component->server_vka, client_vka, component->server_ep,
+                                                     component->resource_type, component->space_id,
+                                                     resource_id, client_id);
         GOTO_IF_COND(ret_cap == seL4_CapNull, "Failed to make badged ep for new %s\n",
                      cap_type_to_str(component->resource_type));
         OSDB_PRINTF("Made badged EP for resource space\n");
@@ -164,13 +167,13 @@ err_goto:
 resource_component_registry_entry_t *resource_component_registry_get_by_badge(resource_component_context_t *component,
                                                                               seL4_Word badge)
 {
-    return (resource_component_registry_entry_t *)resource_server_registry_get_by_badge(&component->registry, badge);
+    return (resource_component_registry_entry_t *)resource_registry_get_by_badge(&component->registry, badge);
 }
 
 resource_component_registry_entry_t *resource_component_registry_get_by_id(resource_component_context_t *component,
                                                                            seL4_Word object_id)
 {
-    return (resource_component_registry_entry_t *)resource_server_registry_get_by_id(&component->registry, object_id);
+    return (resource_component_registry_entry_t *)resource_registry_get_by_id(&component->registry, object_id);
 }
 
 int resource_component_inc(resource_component_context_t *component,
@@ -184,7 +187,7 @@ int resource_component_inc(resource_component_context_t *component,
     OSDB_PRINTF("inc refcount %s (%d), new count %d\n",
                 cap_type_to_str(component->resource_type), object_id, reg_entry->gen.count + 1);
 
-    resource_server_registry_inc(&component->registry, (resource_server_registry_node_t *)reg_entry);
+    resource_registry_inc(&component->registry, (resource_registry_node_t *)reg_entry);
 
 err_goto:
     return error;
@@ -201,7 +204,7 @@ int resource_component_dec(resource_component_context_t *component,
     OSDB_PRINTF("dec refcount %s (%d), new count %d\n",
                 cap_type_to_str(component->resource_type), object_id, reg_entry->gen.count - 1);
 
-    resource_server_registry_dec(&component->registry, (resource_server_registry_node_t *)reg_entry);
+    resource_registry_dec(&component->registry, (resource_registry_node_t *)reg_entry);
 
 err_goto:
     return error;
@@ -209,9 +212,83 @@ err_goto:
 
 void resource_component_debug_print(resource_component_context_t *component)
 {
-    resource_server_registry_node_t *curr;
+    resource_registry_node_t *curr;
     for (curr = component->registry.head; curr != NULL; curr = curr->hh.next)
     {
         printf(" - %s (%d), refcount %d\n", cap_type_to_str(component->resource_type), curr->object_id, curr->count);
     }
+}
+
+int resource_component_transfer_cap(vka_t *src_vka,
+                                    vka_t *dst_vka,
+                                    seL4_CPtr src_ep,
+                                    cspacepath_t *dest,
+                                    bool mint,
+                                    seL4_Word badge)
+{
+    int error = 0;
+    cspacepath_t src;
+    vka_cspace_make_path(src_vka, src_ep, &src);
+
+    if (dst_vka)
+    {
+        error = vka_cspace_alloc_path(dst_vka, dest);
+    }
+    else
+    {
+        error = vka_cspace_alloc_path(src_vka, dest);
+    }
+
+    GOTO_IF_ERR(error, "Failed to allocate slot\n");
+
+    if (mint)
+    {
+        return vka_cnode_mint(dest,
+                              &src,
+                              seL4_NoRead, // So that recipients of resources cannot receive endpoint messages
+                              badge);
+    }
+    else
+    {
+        return vka_cnode_copy(dest, &src, seL4_AllRights);
+    }
+
+err_goto:
+    return error;
+}
+
+seL4_CPtr resource_component_make_badged_ep_custom(vka_t *src_vka,
+                                                   vka_t *dst_vka,
+                                                   seL4_CPtr src_ep,
+                                                   seL4_Word custom_badge)
+{
+    cspacepath_t dest = {0};
+    int error = resource_component_transfer_cap(src_vka, dst_vka, src_ep, &dest, true, custom_badge);
+    WARN_IF_COND(error, "Could not make custom badged endpoint\n");
+
+    return dest.capPtr;
+}
+
+seL4_CPtr resource_component_make_badged_ep(vka_t *src_vka, vka_t *dst_vka, seL4_CPtr src_ep,
+                                            gpi_cap_t resource_type, uint64_t space_id, uint64_t res_id, uint64_t client_id)
+{
+    int error = 0;
+
+    /* Make the badge */
+    seL4_Word badge = gpi_new_badge(resource_type,
+                                    0x00,
+                                    client_id,
+                                    space_id,
+                                    res_id);
+
+    GOTO_IF_COND(badge == 0, "Failed to make badge\n");
+
+    /* Mint the cap */
+    cspacepath_t dest = {0};
+    error = resource_component_transfer_cap(src_vka, dst_vka, src_ep, &dest, true, badge);
+
+    return dest.capPtr;
+
+err_goto:
+    return seL4_CapNull;
 }

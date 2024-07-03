@@ -10,7 +10,7 @@
 
 #include <sel4gpi/badge_usage.h>
 #include <sel4gpi/debug.h>
-#include <sel4gpi/resource_server_utils.h>
+#include <sel4gpi/resource_registry.h>
 #include <sel4gpi/gpi_rpc.h>
 
 /** @file
@@ -38,7 +38,7 @@ typedef struct _resource_component_object
  */
 typedef struct _resource_component_registry_entry
 {
-    resource_server_registry_node_t gen;
+    resource_registry_node_t gen;
     resource_component_object_t object;
 } resource_component_registry_entry_t;
 
@@ -65,7 +65,7 @@ typedef struct _resource_component_context
         void *arg0);                      ///< Optional argument
 
     uint64_t space_id;                   //< Component's default resource space ID
-    resource_server_registry_t registry; ///< Registry of the component's resources
+    resource_registry_t registry; ///< Registry of the component's resources
     size_t reg_entry_size;               ///< Size in bits of a registry entry
 
     vka_t *server_vka;
@@ -99,7 +99,7 @@ int resource_component_initialize(
     uint64_t space_id,
     void (*request_handler)(void *, seL4_Word, seL4_CPtr, void *, bool *, bool *),
     int (*new_obj)(resource_component_object_t *, vka_t *, vspace_t *, void *),
-    void (*on_registry_delete)(resource_server_registry_node_t *, void *),
+    void (*on_registry_delete)(resource_registry_node_t *, void *),
     size_t reg_entry_size,
     vka_t *server_vka,
     vspace_t *server_vspace,
@@ -139,7 +139,7 @@ int resource_component_allocate(resource_component_context_t *component,
                                 uint64_t object_id,
                                 bool forge,
                                 void *arg0,
-                                resource_server_registry_node_t **ret_entry,
+                                resource_registry_node_t **ret_entry,
                                 seL4_CPtr *ret_cap);
 
 /**
@@ -186,3 +186,48 @@ int resource_component_dec(resource_component_context_t *component,
  * Debug function to print the existing resources in a resource component
  */
 void resource_component_debug_print(resource_component_context_t *component);
+
+/**
+ * @brief Transfers a cap between the CSpaces in src_vka and dst_vka
+ *
+ * @param src_vka vka for the source endpoint
+ * @param dst_vka vka for the destination (or NULL, to use src vka for destination)
+ * @param src_ep source endpoint to badge
+ * @param dest empty cspacepath_t to fill in with destination slot
+ * @param mint if true, the cap being transfered is an endpoint cap, and will be minted rather than copied
+ * @param badge OPTIONAL a badge to mint onto the endpoint cap - only applies if mint = true,
+ * @return int
+ */
+int resource_component_transfer_cap(vka_t *src_vka,
+                                    vka_t *dst_vka,
+                                    seL4_CPtr src_ep,
+                                    cspacepath_t *dest,
+                                    bool mint,
+                                    seL4_Word badge);
+
+/**
+ * Creates a badged version of an endpoint with a custom badge given
+ * Used for an arbitrary non-OSmosis endpoint
+ *
+ * @param src_vka vka for the source endpoint
+ * @param dst_vka vka for the destination (or NULL, to use src vka for destination)
+ * @param src_ep source endpoint to badge
+ * @param custom_badge a custom given badge
+ * @return the new resource's EP cap, null cap if failed
+ */
+seL4_CPtr resource_component_make_badged_ep_custom(vka_t *src_vka, vka_t *dst_vka, seL4_CPtr src_ep, seL4_Word custom_badge);
+
+/**
+ * Creates a badged version of an endpoint for a particular resource
+ *
+ * @param src_vka vka for the source endpoint
+ * @param dst_vka vka for the destination (or NULL, to use src vka for destination)
+ * @param src_ep source endpoint to badge
+ * @param resource_type type of resource
+ * @param space_id ID of the resource space
+ * @param res_id ID of the resource, unique to the resource space
+ * @param client_id client the badge is meant for
+ * @return the new resource's EP cap in the CSpace managed by dst_vka (or src_vka if dst_vka is NULL)
+ */
+seL4_CPtr resource_component_make_badged_ep(vka_t *src_vka, vka_t *dst_vka, seL4_CPtr src_ep,
+                                            gpi_cap_t resource_type, uint64_t space_id, uint64_t res_id, uint64_t client_id);

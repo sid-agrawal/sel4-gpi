@@ -30,7 +30,7 @@
 /* Per-client context maintained by the server. */
 typedef struct _cpu_component_registry_entry
 {
-    resource_server_registry_node_t gen;
+    resource_registry_node_t gen;
     cpu_t cpu;
 } cpu_component_registry_entry_t;
 

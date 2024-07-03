@@ -44,7 +44,7 @@ typedef struct _cpu cpu_t;
  * Callback when an attach node is deleted
  * Perform cleanup here
  */
-static void on_attach_registry_delete(resource_server_registry_node_t *node_gen, void *ads_v)
+static void on_attach_registry_delete(resource_registry_node_t *node_gen, void *ads_v)
 {
     attach_node_t *node = (attach_node_t *)node_gen;
     ads_t *ads = (ads_t *)ads_v;
@@ -90,8 +90,8 @@ int ads_initialize(ads_t *ads)
     int error = 0;
 
     // Initialize VMR registry
-    resource_server_initialize_registry(&ads->attach_registry, on_attach_registry_delete, (void *)ads);
-    resource_server_initialize_registry(&ads->attach_id_to_vaddr_map, NULL, NULL);
+    resource_registry_initialize(&ads->attach_registry, on_attach_registry_delete, (void *)ads);
+    resource_registry_initialize(&ads->attach_id_to_vaddr_map, NULL, NULL);
 
     /* The root task holds the ADS by default */
     error = pd_add_resource_by_id(get_gpi_server()->rt_pd_id, GPICAP_TYPE_ADS, get_ads_component()->space_id, ads->id,
@@ -213,7 +213,7 @@ int ads_reserve(ads_t *ads,
 
     // Map a shorter attach node ID to vaddr
     attach_node_map_entry->vaddr = vaddr;
-    resource_server_registry_insert_new_id(&ads->attach_id_to_vaddr_map, (resource_server_registry_node_t *)attach_node_map_entry);
+    resource_registry_insert_new_id(&ads->attach_id_to_vaddr_map, (resource_registry_node_t *)attach_node_map_entry);
 
     // The attach node is keyed by vaddr
     memset((void *)attach_node, 0, sizeof(attach_node_t));
@@ -224,7 +224,7 @@ int ads_reserve(ads_t *ads,
     attach_node->n_pages = num_pages;
     attach_node->gen.object_id = (uint64_t)vaddr;
     attach_node->page_bits = size_bits;
-    resource_server_registry_insert(&ads->attach_registry, (resource_server_registry_node_t *)attach_node);
+    resource_registry_insert(&ads->attach_registry, (resource_registry_node_t *)attach_node);
 
     // The root task holds the VMR by default
     uint64_t vmr_id = attach_node_map_entry->gen.object_id;
@@ -240,7 +240,7 @@ err_goto:
 
 attach_node_t *ads_get_res_by_id(ads_t *ads, uint64_t res_id)
 {
-    attach_node_map_t *map_entry = (attach_node_map_t *)resource_server_registry_get_by_id(&ads->attach_id_to_vaddr_map, res_id);
+    attach_node_map_t *map_entry = (attach_node_map_t *)resource_registry_get_by_id(&ads->attach_id_to_vaddr_map, res_id);
     if (map_entry == NULL)
     {
         return NULL;
@@ -250,7 +250,7 @@ attach_node_t *ads_get_res_by_id(ads_t *ads, uint64_t res_id)
 
 attach_node_t *ads_get_res_by_vaddr(ads_t *ads, void *vaddr)
 {
-    return (attach_node_t *)resource_server_registry_get_by_id(&ads->attach_registry, (uint64_t)vaddr);
+    return (attach_node_t *)resource_registry_get_by_id(&ads->attach_registry, (uint64_t)vaddr);
 }
 
 /**
@@ -416,7 +416,7 @@ int ads_forge_attach(ads_t *ads, sel4utils_res_t *res, mo_t *mo)
 
     // Map a shorter attach node ID to vaddr
     attach_node_map_entry->vaddr = (void *)res->start;
-    resource_server_registry_insert_new_id(&ads->attach_id_to_vaddr_map, (resource_server_registry_node_t *)attach_node_map_entry);
+    resource_registry_insert_new_id(&ads->attach_id_to_vaddr_map, (resource_registry_node_t *)attach_node_map_entry);
 
     // The attach node is keyed by vaddr
     memset((void *)attach_node, 0, sizeof(attach_node_t));
@@ -431,7 +431,7 @@ int ads_forge_attach(ads_t *ads, sel4utils_res_t *res, mo_t *mo)
     attach_node->mo_offset = 0;
     attach_node->page_bits = mo->page_bits;
 
-    resource_server_registry_insert(&ads->attach_registry, (resource_server_registry_node_t *)attach_node);
+    resource_registry_insert(&ads->attach_registry, (resource_registry_node_t *)attach_node);
 
     // Track this attachment as a refcount to the MO
     error = resource_component_inc(get_mo_component(), mo->id);
@@ -458,8 +458,8 @@ int ads_rm(ads_t *ads, vka_t *vka, void *vaddr)
     }
 
     // Remove the attach node
-    resource_server_registry_delete(&ads->attach_id_to_vaddr_map, (resource_server_registry_node_t *)node->map_entry);
-    resource_server_registry_delete(&ads->attach_registry, (resource_server_registry_node_t *)node);
+    resource_registry_delete(&ads->attach_id_to_vaddr_map, (resource_registry_node_t *)node->map_entry);
+    resource_registry_delete(&ads->attach_registry, (resource_registry_node_t *)node);
 
 err_goto:
     return error;
@@ -658,12 +658,12 @@ void ads_destroy(ads_t *ads)
 {
     /* Destroy the hash tables of attach nodes */
     // (XXX) Arya: This can trigger sys_munmap which is not supported
-    resource_server_registry_node_t *current, *tmp;
+    resource_registry_node_t *current, *tmp;
     HASH_ITER(hh, ads->attach_registry.head, current, tmp)
     {
         attach_node_t *node = (attach_node_t *)current;
-        resource_server_registry_delete(&ads->attach_id_to_vaddr_map, (resource_server_registry_node_t *)node->map_entry);
-        resource_server_registry_delete(&ads->attach_registry, current);
+        resource_registry_delete(&ads->attach_id_to_vaddr_map, (resource_registry_node_t *)node->map_entry);
+        resource_registry_delete(&ads->attach_registry, current);
     }
 
     /* tear down the vspace */

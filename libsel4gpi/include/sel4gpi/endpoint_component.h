@@ -40,7 +40,7 @@ typedef struct _ep
  */
 typedef struct _ep_component_registry_entry
 {
-    resource_server_registry_node_t gen;
+    resource_registry_node_t gen;
     ep_t ep;
 } ep_component_registry_entry_t;
 

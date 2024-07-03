@@ -27,7 +27,7 @@
 #include <sel4gpi/cap_tracking.h>
 #include <sel4gpi/ads_clientapi.h>
 #include <sel4gpi/cpu_obj.h>
-#include <sel4gpi/resource_server_utils.h>
+#include <sel4gpi/resource_registry.h>
 #include <sel4gpi/linked_list.h>
 
 #define TEST_NAME_MAX (64 - 4 * sizeof(seL4_Word))
@@ -83,7 +83,7 @@ typedef struct osmosis_rde
 typedef struct _pd_hold_node
 {
     // UTHash key is a badge constructed from type, space_id, and res_id
-    resource_server_registry_node_t gen;
+    resource_registry_node_t gen;
 
     // The slot of the cap as per seL4
     // do not rely on these, as this info is sometimes difficult to find
@@ -143,7 +143,7 @@ typedef struct _pd
     seL4_Word cnode_guard;                                  ///< cnode guard for this PD's cspace
     vka_t *pd_vka;                                          ///< Allocator for the PD's cspace
     char allocator_mem_pool[PD_ALLOCATOR_STATIC_POOL_SIZE]; ///< Memory pool to bootstrap the PD's VKA
-    resource_server_registry_t hold_registry;               ///< Registry of PD's resources
+    resource_registry_t hold_registry;               ///< Registry of PD's resources
 
     uint64_t shared_data_mo_id;              ///< Shared data is mapped to PD and includes RDE, etc.
     osm_pd_shared_data_t *shared_data;       ///< RT vaddr of the shared data

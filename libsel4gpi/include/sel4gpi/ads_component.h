@@ -29,7 +29,7 @@
 /* Per-client context maintained by the server. */
 typedef struct _ads_component_registry_entry
 {
-    resource_server_registry_node_t gen;
+    resource_registry_node_t gen;
     ads_t ads;
 } ads_component_registry_entry_t;
 

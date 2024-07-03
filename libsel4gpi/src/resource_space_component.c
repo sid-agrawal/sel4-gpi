@@ -37,7 +37,7 @@ resource_component_context_t *get_resspc_component(void)
 }
 
 // Called when an item from the MO registry is deleted
-static void on_resspc_registry_delete(resource_server_registry_node_t *node_gen, void *arg)
+static void on_resspc_registry_delete(resource_registry_node_t *node_gen, void *arg)
 {
     int error = 0;
 
@@ -94,7 +94,7 @@ static void handle_resspc_allocation_request(seL4_Word sender_badge,
 
     error = resource_component_allocate(get_resspc_component(), server_pd->pd.id, BADGE_OBJ_ID_NULL,
                                         false, (void *)&resspc_config,
-                                        (resource_server_registry_node_t **)&space_entry, &space_cap);
+                                        (resource_registry_node_t **)&space_entry, &space_cap);
     SERVER_GOTO_IF_ERR(error, "Failed to allocate a new resource space\n");
 
     OSDB_PRINTF("Registered resource space, server cap is at %ld, ID: %ld.\n",
@@ -157,13 +157,13 @@ err_goto:
 int resspc_component_sweep(void)
 {
     // Find any spaces marked for deletion, then delete them
-    resource_server_registry_node_t *curr, *tmp;
+    resource_registry_node_t *curr, *tmp;
     HASH_ITER(hh, get_resspc_component()->registry.head, curr, tmp)
     {
         resspc_component_registry_entry_t *entry = (resspc_component_registry_entry_t *)curr;
         if (entry->space.deleted && !entry->space.deleting)
         {
-            resource_server_registry_delete(&get_resspc_component()->registry, curr);
+            resource_registry_delete(&get_resspc_component()->registry, curr);
         }
     }
 }
@@ -345,7 +345,7 @@ int resspc_component_initialize(vka_t *server_vka,
     reg_entry->gen.object_id = RESSPC_SPACE_ID;
     reg_entry->space.id = RESSPC_SPACE_ID;
     reg_entry->space.server_ep = server_ep_obj.cptr;
-    resource_server_registry_insert(&get_resspc_component()->registry, (resource_server_registry_node_t *)reg_entry);
+    resource_registry_insert(&get_resspc_component()->registry, (resource_registry_node_t *)reg_entry);
 }
 
 resspc_component_registry_entry_t *resource_space_get_entry_by_id(seL4_Word space_id)

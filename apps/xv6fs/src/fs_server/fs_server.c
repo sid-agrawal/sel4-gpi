@@ -16,7 +16,7 @@
 #include <sel4gpi/pd_utils.h>
 #include <sel4gpi/ads_clientapi.h>
 #include <sel4gpi/pd_clientapi.h>
-#include <sel4gpi/resource_server_remote_utils.h>
+#include <sel4gpi/resource_server_utils.h>
 #include <sel4gpi/resource_space_clientapi.h>
 #include <sel4gpi/error_handle.h>
 #include <sel4gpi/gpi_rpc.h>
@@ -110,14 +110,14 @@ static void apply_prefix(char *prefix, char *path)
   strcpy(path, temp);
 }
 
-static void ns_registry_entry_on_delete(resource_server_registry_node_t *node_gen, void *arg)
+static void ns_registry_entry_on_delete(resource_registry_node_t *node_gen, void *arg)
 {
   fs_namespace_entry_t *node = (fs_namespace_entry_t *)node_gen;
 
   // (XXX) Any cleanup necessary for NS
 }
 
-static void file_registry_entry_on_delete(resource_server_registry_node_t *node_gen, void *arg)
+static void file_registry_entry_on_delete(resource_registry_node_t *node_gen, void *arg)
 {
   file_registry_entry_t *node = (file_registry_entry_t *)node_gen;
 
@@ -196,8 +196,8 @@ int xv6fs_init()
   fsinit(ROOTDEV);
 
   /* Initialize the registries */
-  resource_server_initialize_registry(&get_xv6fs_server()->file_registry, file_registry_entry_on_delete, NULL);
-  resource_server_initialize_registry(&get_xv6fs_server()->ns_registry, ns_registry_entry_on_delete, NULL);
+  resource_registry_initialize(&get_xv6fs_server()->file_registry, file_registry_entry_on_delete, NULL);
+  resource_registry_initialize(&get_xv6fs_server()->ns_registry, ns_registry_entry_on_delete, NULL);
 
   XV6FS_PRINTF("Initialized file system\n");
 
@@ -253,7 +253,7 @@ void xv6fs_request_handler(void *msg_p,
       ns_entry->gen.object_id = ns_id;
       ns_entry->res_space_conn = resspc_conn;
       make_ns_prefix(ns_entry->ns_prefix, resspc_conn.id);
-      resource_server_registry_insert(&get_xv6fs_server()->ns_registry, (resource_server_registry_node_t *)ns_entry);
+      resource_registry_insert(&get_xv6fs_server()->ns_registry, (resource_registry_node_t *)ns_entry);
 
       // Create directory in global FS
       error = xv6fs_sys_mkdir(ns_entry->ns_prefix);
@@ -277,7 +277,7 @@ void xv6fs_request_handler(void *msg_p,
       ns_id = get_space_id_from_badge(sender_badge);
       if (ns_id != get_xv6fs_server()->gen.default_space.id)
       {
-        fs_namespace_entry_t *ns = (fs_namespace_entry_t *)resource_server_registry_get_by_id(&get_xv6fs_server()->ns_registry, ns_id);
+        fs_namespace_entry_t *ns = (fs_namespace_entry_t *)resource_registry_get_by_id(&get_xv6fs_server()->ns_registry, ns_id);
         if (ns == NULL)
         {
           XV6FS_PRINTF("Namespace did not exist\n");
@@ -302,7 +302,7 @@ void xv6fs_request_handler(void *msg_p,
       }
 
       // Add to registry if not already present
-      file_registry_entry_t *reg_entry = (file_registry_entry_t *)resource_server_registry_get_by_id(&get_xv6fs_server()->file_registry, file->id);
+      file_registry_entry_t *reg_entry = (file_registry_entry_t *)resource_registry_get_by_id(&get_xv6fs_server()->file_registry, file->id);
 
       if (reg_entry == NULL)
       {
@@ -310,7 +310,7 @@ void xv6fs_request_handler(void *msg_p,
         reg_entry = malloc(sizeof(file_registry_entry_t));
         reg_entry->gen.object_id = file->id;
         reg_entry->file = file;
-        resource_server_registry_insert(&get_xv6fs_server()->file_registry, (resource_server_registry_node_t *)reg_entry);
+        resource_registry_insert(&get_xv6fs_server()->file_registry, (resource_registry_node_t *)reg_entry);
 
         // Notify the PD component about the new reousrce
         error = resource_server_create_resource(&get_xv6fs_server()->gen, NULL, file->id);
@@ -319,7 +319,7 @@ void xv6fs_request_handler(void *msg_p,
       else
       {
         XV6FS_PRINTF("File was already open, use previous registry entry\n");
-        resource_server_registry_inc(&get_xv6fs_server()->file_registry, (resource_server_registry_node_t *)reg_entry);
+        resource_registry_inc(&get_xv6fs_server()->file_registry, (resource_registry_node_t *)reg_entry);
 
         xv6fs_sys_fileclose(file); // We don't need another copy of the structure
         file = reg_entry->file;
@@ -373,7 +373,7 @@ void xv6fs_request_handler(void *msg_p,
       ns_id = get_space_id_from_badge(sender_badge);
       if (ns_id != get_xv6fs_server()->gen.default_space.id)
       {
-        fs_namespace_entry_t *ns = (fs_namespace_entry_t *)resource_server_registry_get_by_id(&get_xv6fs_server()->ns_registry, ns_id);
+        fs_namespace_entry_t *ns = (fs_namespace_entry_t *)resource_registry_get_by_id(&get_xv6fs_server()->ns_registry, ns_id);
         if (ns == NULL)
         {
           XV6FS_PRINTF("Namespace did not exist\n");
@@ -385,7 +385,7 @@ void xv6fs_request_handler(void *msg_p,
       }
 
       /* Find the file to link */
-      reg_entry = (file_registry_entry_t *)resource_server_registry_get_by_badge(&get_xv6fs_server()->file_registry, file_badge);
+      reg_entry = (file_registry_entry_t *)resource_registry_get_by_badge(&get_xv6fs_server()->file_registry, file_badge);
 
       if (reg_entry == NULL)
       {
@@ -417,7 +417,7 @@ void xv6fs_request_handler(void *msg_p,
       ns_id = get_space_id_from_badge(sender_badge);
       if (ns_id != get_xv6fs_server()->gen.default_space.id)
       {
-        fs_namespace_entry_t *ns = (fs_namespace_entry_t *)resource_server_registry_get_by_id(&get_xv6fs_server()->ns_registry, ns_id);
+        fs_namespace_entry_t *ns = (fs_namespace_entry_t *)resource_registry_get_by_id(&get_xv6fs_server()->ns_registry, ns_id);
         if (ns == NULL)
         {
           XV6FS_PRINTF("Namespace did not exist\n");
@@ -448,7 +448,7 @@ void xv6fs_request_handler(void *msg_p,
 
     // Find the file in the registry
     file_registry_entry_t *reg_entry =
-        (file_registry_entry_t *)resource_server_registry_get_by_badge(
+        (file_registry_entry_t *)resource_registry_get_by_badge(
             &get_xv6fs_server()->file_registry,
             sender_badge);
     CHECK_ERROR_GOTO(reg_entry == NULL, "Received invalid badge\n", FsError_BADGE, done);
@@ -502,7 +502,7 @@ void xv6fs_request_handler(void *msg_p,
       XV6FS_PRINTF("Close file (%d)\n", reg_entry->file->id);
 
       /* Remove the ref in the registry entry */
-      resource_server_registry_dec(&get_xv6fs_server()->file_registry, (resource_server_registry_node_t *)reg_entry);
+      resource_registry_dec(&get_xv6fs_server()->file_registry, (resource_registry_node_t *)reg_entry);
       break;
     case FsMessage_stat_tag:
       *need_new_recv_cap = true;
@@ -588,7 +588,7 @@ void map_file_to_block(uint64_t file_id, uint32_t blockno)
   int error = 0;
 
   file_registry_entry_t *reg_entry = (file_registry_entry_t *)
-      resource_server_registry_get_by_id(&get_xv6fs_server()->file_registry, file_id);
+      resource_registry_get_by_id(&get_xv6fs_server()->file_registry, file_id);
 
   if (reg_entry == NULL)
   {
@@ -644,7 +644,7 @@ int xv6fs_work_handler(PdWorkReturnMessage *work)
 
     if (space_id != get_xv6fs_server()->gen.default_space.id)
     {
-      fs_namespace_entry_t *ns = (fs_namespace_entry_t *)resource_server_registry_get_by_id(
+      fs_namespace_entry_t *ns = (fs_namespace_entry_t *)resource_registry_get_by_id(
           &get_xv6fs_server()->ns_registry,
           space_id);
 
@@ -723,7 +723,7 @@ int xv6fs_work_handler(PdWorkReturnMessage *work)
     uint64_t file_id = work->object_id;
 
     // Find the registry entry
-    file_registry_entry_t *reg_entry = (file_registry_entry_t *)resource_server_registry_get_by_id(
+    file_registry_entry_t *reg_entry = (file_registry_entry_t *)resource_registry_get_by_id(
         &get_xv6fs_server()->file_registry,
         file_id);
 
@@ -735,7 +735,7 @@ int xv6fs_work_handler(PdWorkReturnMessage *work)
     else
     {
       // Decrement the refcount
-      resource_server_registry_dec(&get_xv6fs_server()->file_registry, (resource_server_registry_node_t *)reg_entry);
+      resource_registry_dec(&get_xv6fs_server()->file_registry, (resource_registry_node_t *)reg_entry);
     }
   }
   else

@@ -9,164 +9,445 @@
 #include <vka/object.h>
 #include <vka/capops.h>
 
-#include <sel4gpi/gpi_server.h>
 #include <sel4gpi/pd_utils.h>
+#include <sel4gpi/gpi_rpc.h>
+#include <sel4gpi/resource_registry.h>
 #include <sel4gpi/resource_server_utils.h>
-#include <sel4gpi/error_handle.h>
 
-/* --- Functions for managing a registry --- */
+/** @file
+ * Utility functions for non-RT PDs that serve GPI resources
+ */
 
-void resource_server_initialize_registry(resource_server_registry_t *registry,
-                                         void (*on_delete)(resource_server_registry_node_t *, void *),
-                                         void *on_delete_arg)
+
+// Generic buffer size for RPC messages, in bytes
+// Must be larger than any RPC message in the system
+// We could use the generated Message_size constants instead, if we wanted to be more precise
+#define RPC_MSG_MAX_SIZE 256
+
+#define CHECK_ERROR(error, msg)    \
+    do                             \
+    {                              \
+        if (error != seL4_NoError) \
+        {                          \
+            ZF_LOGE("%s"           \
+                    ", %d.",       \
+                    msg,           \
+                    error);        \
+            return error;          \
+        }                          \
+    } while (0);
+
+#define CHECK_ERROR_GOTO(check, msg, loc) \
+    do                                    \
+    {                                     \
+        if ((check) != seL4_NoError)      \
+        {                                 \
+            ZF_LOGE(SERVER_UTILS ": %s"   \
+                                 ", %d.", \
+                    msg,                  \
+                    check);               \
+            error = -1;                   \
+            goto loc;                     \
+        }                                 \
+    } while (0);
+
+int resource_server_start(resource_server_context_t *context,
+                          char *server_type,
+                          void (*request_handler)(void *, void *, seL4_Word, seL4_CPtr, bool *),
+                          int (*work_handler)(PdWorkReturnMessage *),
+                          seL4_CPtr parent_ep,
+                          uint64_t parent_pd_id,
+                          int (*init_fn)(),
+                          bool debug_print,
+                          pb_msgdesc_t *request_desc,
+                          pb_msgdesc_t *reply_desc)
 {
-    registry->head = NULL;
-    registry->on_delete = on_delete;
-    registry->on_delete_arg = on_delete_arg;
-    registry->id_counter = 1;
+    seL4_Error error;
+
+    strncpy(context->resource_type_name, server_type, RESOURCE_TYPE_MAX_STRING_SIZE);
+    context->request_handler = request_handler;
+    context->work_handler = work_handler;
+    context->mo_ep = sel4gpi_get_rde(GPICAP_TYPE_MO);
+    context->resspc_ep = sel4gpi_get_rde(GPICAP_TYPE_RESSPC);
+    context->ads_conn.badged_server_ep_cspath.capPtr = sel4gpi_get_rde_by_space_id(sel4gpi_get_binded_ads_id(), GPICAP_TYPE_VMR);
+    context->pd_conn = sel4gpi_get_pd_conn();
+    context->parent_pd_id = parent_pd_id;
+    context->init_fn = init_fn;
+    context->debug_print = debug_print;
+    sel4gpi_rpc_env_init(&context->rpc_env, request_desc, reply_desc);
+
+    context->parent_ep.badged_server_ep_cspath.capPtr = parent_ep;
+    error = ep_client_get_raw_endpoint(&context->parent_ep);
+    CHECK_ERROR(error, "Failed to retrieve parent EP\n");
+
+    printf("Resource server ADS_CAP: %ld\n", (seL4_Word)context->ads_conn.badged_server_ep_cspath.capPtr);
+    printf("Resource server PD_CAP: %ld\n", (seL4_Word)context->pd_conn.badged_server_ep_cspath.capPtr);
+    printf("Resource server MO ep: %ld\n", (seL4_Word)context->mo_ep);
+    printf("Resource server RESSPC ep: %ld\n", (seL4_Word)context->resspc_ep);
+
+    /* Allocate the Endpoint that the server will be listening on. */
+    error = sel4gpi_alloc_endpoint(&context->server_ep);
+    CHECK_ERROR(error, "Failed to allocate endpoint for resource server");
+    RESOURCE_SERVER_PRINTF("Allocated server ep at %d\n", (int)context->server_ep.raw_endpoint);
+
+    RESOURCE_SERVER_PRINTF("Going to main function\n");
+    return resource_server_main((void *)context);
 }
 
-void resource_server_registry_insert(resource_server_registry_t *registry, resource_server_registry_node_t *node)
+/**
+ * Recv function for MCS or non-MCS kernel
+ */
+static seL4_MessageInfo_t resource_server_recv(resource_server_context_t *context,
+                                               seL4_Word *sender_badge_ptr)
 {
-    node->count = 1;
-    HASH_ADD(hh, registry->head, object_id, sizeof(node->object_id), node);
+    /** NOTE:
+
+     * the reply param of api_recv(third param) is only used in the MCS kernel.
+     **/
+
+    return api_recv(context->server_ep.raw_endpoint,
+                    sender_badge_ptr,
+                    context->mcs_reply);
 }
 
-resource_server_registry_node_t *resource_server_registry_get_by_id(resource_server_registry_t *registry, uint64_t object_id)
+/**
+ * Reply function for MCS or non-MCS kernel
+ */
+static void resource_server_reply(resource_server_context_t *context,
+                                  seL4_MessageInfo_t tag)
 {
-    resource_server_registry_node_t *node;
-    HASH_FIND(hh, registry->head, &object_id, sizeof(object_id), node);
-    return node;
+#if STORE_REPLY_CAP
+    seL4_Send(sel4gpi_get_reply_cap(), tag);
+#else
+    api_reply(context->mcs_reply, tag);
+#endif
 }
 
-resource_server_registry_node_t *resource_server_registry_get_by_badge(resource_server_registry_t *registry, seL4_Word badge)
+static int resource_server_next_slot(resource_server_context_t *context,
+                                     seL4_CPtr *slot)
 {
-    resource_server_registry_get_by_id(registry, get_object_id_from_badge(badge));
+    return pd_client_next_slot(&context->pd_conn, slot);
 }
 
-void resource_server_registry_delete(resource_server_registry_t *registry, resource_server_registry_node_t *node)
+static int resource_server_free_slot(resource_server_context_t *context,
+                                     seL4_CPtr slot)
 {
-    if (registry->on_delete)
+    return pd_client_free_slot(&context->pd_conn, slot);
+}
+
+static int resource_server_clear_slot(resource_server_context_t *context,
+                                      seL4_CPtr slot)
+{
+    return pd_client_clear_slot(&context->pd_conn, slot);
+}
+
+int resource_server_main(void *context_v)
+{
+    resource_server_context_t *context = (resource_server_context_t *)context_v;
+    seL4_MessageInfo_t tag;
+    seL4_Error error = 0;
+    seL4_Word sender_badge;
+    cspacepath_t received_cap_path;
+    bool need_new_receive_slot;
+    received_cap_path.root = PD_CAP_ROOT;
+    received_cap_path.capDepth = PD_CAP_DEPTH;
+
+    // Create a default resource space
+    error = resource_server_new_res_space(context, context->parent_pd_id, &context->default_space);
+    CHECK_ERROR_GOTO(error, "failed to create resource server's default space", exit_main);
+    RESOURCE_SERVER_PRINTF("Resource server's default space ID is 0x%lx\n", context->default_space.id);
+
+    // Perform any server-specific initialization
+    if (context->init_fn != NULL)
     {
-        registry->on_delete(node, registry->on_delete_arg);
+        RESOURCE_SERVER_PRINTF("Calling server's init function\n");
+
+        error = context->init_fn();
+        CHECK_ERROR_GOTO(error, "failed to initialize resource server", exit_main);
     }
 
-    HASH_DEL(registry->head, node);
-    free(node);
-}
+    // Allocate the cap receive slot
+    error = resource_server_next_slot(context, &received_cap_path.capPtr);
+    CHECK_ERROR_GOTO(error, "failed to alloc cap receive slot", exit_main);
 
-void resource_server_registry_inc(resource_server_registry_t *registry, resource_server_registry_node_t *node)
-{
-    node->count++;
-}
+    seL4_SetCapReceivePath(
+        received_cap_path.root,
+        received_cap_path.capPtr,
+        received_cap_path.capDepth);
 
-void resource_server_registry_dec(resource_server_registry_t *registry, resource_server_registry_node_t *node)
-{
-    node->count--;
+    // Send our space ID to the parent process
+    RESOURCE_SERVER_PRINTF("Messaging parent process at slot %d, sending space ID %d\n", (int)context->parent_ep.raw_endpoint, context->default_space.id);
+    tag = seL4_MessageInfo_new(0, 0, 0, 1);
+    seL4_SetMR(0, context->default_space.id);
+    seL4_Send(context->parent_ep.raw_endpoint, tag);
 
-    if (node->count == 0)
+#if STORE_REPLY_CAP
+    // Initialize the reply cap
+    sel4gpi_clear_reply_cap();
+#endif
+
+    while (1)
     {
-        resource_server_registry_delete(registry, node);
-    }
-}
+        /* Reset the cap receive path */
+        seL4_SetCapReceivePath(
+            received_cap_path.root,
+            received_cap_path.capPtr,
+            received_cap_path.capDepth);
 
-uint64_t resource_server_registry_insert_new_id(resource_server_registry_t *registry, resource_server_registry_node_t *node)
-{
-    // Find a free ID
-    uint64_t new_id = registry->id_counter++;
+        /* Receive a message */
+        RESOURCE_SERVER_PRINTF("Ready to receive a message\n");
+        tag = resource_server_recv(context, &sender_badge);
+        RESOURCE_SERVER_PRINTF("Received a message\n");
 
-    resource_server_registry_node_t *test_node;
-    HASH_FIND(hh, registry->head, &new_id, sizeof(new_id), test_node);
+#if RESOURCE_SERVER_DEBUG
+        char sender_badge_str[200];
+        badge_sprint(sender_badge_str, sender_badge);
+        char unwrapped_str[100];
+        badge_sprint(unwrapped_str, seL4_GetBadge(0));
 
-    // While a node exists with this ID, try another
-    while (test_node != NULL)
-    {
-        new_id = registry->id_counter++;
+        RESOURCE_SERVER_PRINTF("Message on endpoint %p\n", seL4_GetCapPaddr(context->server_ep.raw_endpoint));
+        RESOURCE_SERVER_PRINTF("- sender badge: %s\n", sender_badge_str);
+        RESOURCE_SERVER_PRINTF("- extracaps %d, capsunwrapped %d\n",
+                               seL4_MessageInfo_get_extraCaps(tag), seL4_MessageInfo_get_capsUnwrapped(tag));
+        RESOURCE_SERVER_PRINTF("- Received cap: type %d addr %p\n",
+                               seL4_DebugCapIdentify(received_cap_path.capPtr),
+                               seL4_GetCapPaddr(received_cap_path.capPtr));
+        RESOURCE_SERVER_PRINTF("- unwrapped badge: %s\n", unwrapped_str);
+#endif
 
-        if (new_id == 0)
+        /* If the sender badge is NOTIF_BADGE, then we were woken up by the RT, and should check for work */
+        if (sender_badge == NOTIF_BADGE)
         {
-            // If ID is zero, we have checked every possible ID
-            gpi_panic("Out of IDs for resource server registry", 1);
+            /* Perform any pending work the RT requested */
+            while (1)
+            {
+                RESOURCE_SERVER_PRINTF("Requesting work from root task\n");
+
+                PdWorkReturnMessage work;
+                error = pd_client_get_work(&context->pd_conn, &work);
+                CHECK_ERROR_GOTO(error, "failed to get work from RT", exit_main);
+
+                if (work.action != PdWorkAction_NO_WORK)
+                {
+                    RESOURCE_SERVER_PRINTF("Got some work from RT (action: %d, space id: %d, object id: %d)\n",
+                                           work.action,
+                                           work.space_id,
+                                           work.object_id);
+
+                    context->work_handler(&work);
+                }
+                else
+                {
+                    RESOURCE_SERVER_PRINTF("No more work to be done\n");
+                    break;
+                }
+            }
+
+            continue;
         }
 
-        HASH_FIND(hh, registry->head, &new_id, sizeof(new_id), test_node);
+#if STORE_REPLY_CAP
+        sel4gpi_store_reply_cap();
+#endif
+
+        /* Decode the message */
+        char rpc_msg_buf[RPC_MSG_MAX_SIZE];
+        char rpc_reply_buf[RPC_MSG_MAX_SIZE];
+
+        error = sel4gpi_rpc_recv(&context->rpc_env, (void *)rpc_msg_buf);
+        assert(error == 0);
+
+        /* Handle the message */
+        context->request_handler(rpc_msg_buf,
+                                 rpc_reply_buf,
+                                 sender_badge,
+                                 received_cap_path.capPtr,
+                                 &need_new_receive_slot);
+
+        /* Reply to message */
+        seL4_MessageInfo_t reply_tag;
+        error = sel4gpi_rpc_reply(&context->rpc_env, (void *)rpc_reply_buf, &reply_tag);
+        assert(error == 0);
+        resource_server_reply(context, reply_tag);
+
+#if STORE_REPLY_CAP
+        /* Clear the reply cap */
+        sel4gpi_clear_reply_cap();
+#endif
+
+        /* Clear receive slot only if it was used */
+        if (need_new_receive_slot)
+        {
+            RESOURCE_SERVER_PRINTF("Clearing cap receive slot\n");
+            error = resource_server_clear_slot(context, received_cap_path.capPtr);
+            CHECK_ERROR_GOTO(error, "failed to clear cap receive slot", exit_main);
+        }
     }
 
-    node->object_id = new_id;
-    resource_server_registry_insert(registry, node);
-    return new_id;
+exit_main:
+    RESOURCE_SERVER_PRINTF("Suspending resource server");
+    return -1;
 }
 
-int resource_server_transfer_cap(vka_t *src_vka,
-                                 vka_t *dst_vka,
-                                 seL4_CPtr src_ep,
-                                 cspacepath_t *dest,
-                                 bool mint,
-                                 seL4_Word badge)
+/**
+ * Attach a MO from a client request to the server's ADS
+ * @param mo_cap The MO cap to attach
+ * @param vaddr Returns the vaddr where MO was attached
+ */
+int resource_server_attach_mo(resource_server_context_t *context,
+                              seL4_CPtr mo_cap,
+                              void **vaddr)
 {
     int error = 0;
-    cspacepath_t src;
-    vka_cspace_make_path(src_vka, src_ep, &src);
+    mo_client_context_t mo_conn;
 
-    if (dst_vka)
+    CHECK_ERROR(mo_cap == 0, "client did not attach MO for read/write op");
+
+    mo_conn.badged_server_ep_cspath.capPtr = mo_cap;
+    error = ads_client_attach(&context->ads_conn,
+                              NULL,
+                              &mo_conn,
+                              SEL4UTILS_RES_TYPE_GENERIC,
+                              vaddr);
+    CHECK_ERROR(error, "failed to attach client's MO to ADS");
+
+    return error;
+}
+
+/**
+ * Remove a previously attached MO from the server's ADS
+ * @param vaddr The vaddr where MO was attached
+ */
+int resource_server_unattach(resource_server_context_t *context,
+                             void *vaddr)
+{
+    int error = 0;
+
+    CHECK_ERROR(vaddr == NULL, "cannot unattach a NULL vaddr");
+
+    error = ads_client_rm(&context->ads_conn,
+                          vaddr);
+    CHECK_ERROR(error, "failed to unattach from ADS");
+
+    return error;
+}
+
+int resource_server_create_resource(resource_server_context_t *context,
+                                    resspc_client_context_t *space_conn,
+                                    uint64_t resource_id)
+{
+    int error;
+
+    RESOURCE_SERVER_PRINTF("Creating resource with ID 0x%lx\n", resource_id);
+
+    if (space_conn == NULL)
     {
-        error = vka_cspace_alloc_path(dst_vka, dest);
-    }
-    else
-    {
-        error = vka_cspace_alloc_path(src_vka, dest);
+        space_conn = &context->default_space;
     }
 
-    GOTO_IF_ERR(error, "Failed to allocate slot\n");
+    error = resspc_client_create_resource(space_conn, resource_id);
 
-    if (mint)
-    {
-        return vka_cnode_mint(dest,
-                              &src,
-                              seL4_NoRead, // So that recipients of resources cannot receive endpoint messages
-                              badge);
-    }
-    else
-    {
-        return vka_cnode_copy(dest, &src, seL4_AllRights);
-    }
+    return error;
+}
+
+int resource_server_give_resource(resource_server_context_t *context,
+                                  uint64_t space_id,
+                                  uint64_t resource_id,
+                                  uint64_t client_id,
+                                  seL4_CPtr *dest)
+{
+    int error;
+
+    RESOURCE_SERVER_PRINTF("Giving resource to client, resource ID 0x%lx, client ID 0x%lx\n", resource_id, client_id);
+
+    error = pd_client_give_resource(&context->pd_conn,
+                                    space_id,
+                                    client_id,
+                                    resource_id,
+                                    dest);
+
+    return error;
+}
+
+int resource_server_new_res_space(resource_server_context_t *context,
+                                  uint64_t client_id,
+                                  resspc_client_context_t *ret_conn)
+{
+    int error;
+
+    RESOURCE_SERVER_PRINTF("Creating new NS\n");
+
+    resspc_client_context_t space_conn;
+    error = resspc_client_connect(context->resspc_ep, context->resource_type_name,
+                                  &context->server_ep, client_id, &space_conn);
+    CHECK_ERROR_GOTO(error, "failed to register resource space for server", err_goto);
+
+    context->resource_type = space_conn.resource_type;
+    *ret_conn = space_conn;
+
+    RESOURCE_SERVER_PRINTF("Registered resource server, space ID is 0x%lx\n", space_conn.id);
 
 err_goto:
     return error;
 }
 
-seL4_CPtr resource_server_make_badged_ep_custom(vka_t *src_vka,
-                                                vka_t *dst_vka,
-                                                seL4_CPtr src_ep,
-                                                seL4_Word custom_badge)
-{
-    cspacepath_t dest = {0};
-    int error = resource_server_transfer_cap(src_vka, dst_vka, src_ep, &dest, true, custom_badge);
-    WARN_IF_COND(error, "Could not make custom badged endpoint\n");
-
-    return dest.capPtr;
-}
-
-seL4_CPtr resource_server_make_badged_ep(vka_t *src_vka, vka_t *dst_vka, seL4_CPtr src_ep,
-                                         gpi_cap_t resource_type, uint64_t space_id, uint64_t res_id, uint64_t client_id)
+int resource_server_extraction_setup(resource_server_context_t *context,
+                                     int n_pages,
+                                     mo_client_context_t *mo,
+                                     model_state_t **ms)
 {
     int error = 0;
 
-    /* Make the badge */
-    seL4_Word badge = gpi_new_badge(resource_type,
-                                    0x00,
-                                    client_id,
-                                    space_id,
-                                    res_id);
+    // Allocate an MO for the extraction
+    size_t mem_size = SIZE_BITS_TO_BYTES(MO_PAGE_BITS) * n_pages;
+    error = mo_component_client_connect(sel4gpi_get_rde(GPICAP_TYPE_MO), n_pages, MO_PAGE_BITS, mo);
+    CHECK_ERROR_GOTO(error, "failed to allocate MO for model extraction", err_goto);
 
-    GOTO_IF_COND(badge == 0, "Failed to make badge\n");
+    void *mem_vaddr;
+    error = resource_server_attach_mo(context,
+                                      mo->badged_server_ep_cspath.capPtr,
+                                      &mem_vaddr);
+    CHECK_ERROR_GOTO(error, "failed to attach MO for model extraction", err_goto);
 
-    /* Mint the cap */
-    cspacepath_t dest = {0};
-    error = resource_server_transfer_cap(src_vka, dst_vka, src_ep, &dest, true, badge);
-
-    return dest.capPtr;
+    // Initialize model state
+    *ms = (model_state_t *)mem_vaddr;
+    void *free_mem = mem_vaddr + sizeof(model_state_t);
+    size_t free_size = mem_size - sizeof(model_state_t);
+    init_model_state(*ms, free_mem, free_size);
 
 err_goto:
-    return seL4_CapNull;
+    return error;
+}
+
+int resource_server_extraction_finish(resource_server_context_t *context, mo_client_context_t *mo, model_state_t *ms)
+{
+    int error = 0;
+
+    clean_model_state(ms);
+
+    /* Send the state to the RT */
+    pd_client_context_t pd_conn = sel4gpi_get_pd_conn();
+    error = pd_client_send_subgraph(&pd_conn, mo, true);
+    CHECK_ERROR_GOTO(error, "Failed to send subgraph\n", err_goto);
+
+    /* Remove & destroy the MO */
+    error = resource_server_unattach(context, (void *)ms);
+    CHECK_ERROR_GOTO(error, "Failed to unattach MO for model extraction\n", err_goto);
+    error = mo_component_client_disconnect(mo);
+    CHECK_ERROR_GOTO(error, "Failed to delete MO for model extraction\n", err_goto);
+
+err_goto:
+    return error;
+}
+
+int resource_server_extraction_no_data(resource_server_context_t *context)
+{
+    int error = 0;
+
+    /* Send the state to the RT */
+    pd_client_context_t pd_conn = sel4gpi_get_pd_conn();
+    error = pd_client_send_subgraph(&pd_conn, NULL, false);
+
+err_goto:
+    return error;
 }

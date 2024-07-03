@@ -67,7 +67,7 @@ static void ep_destroy(ep_t *ep, vka_t *server_vka)
 }
 
 /* callback when an EP is deleted */
-static void on_ep_registry_delete(resource_server_registry_node_t *node_gen, void *arg)
+static void on_ep_registry_delete(resource_registry_node_t *node_gen, void *arg)
 {
     ep_component_registry_entry_t *node = (ep_component_registry_entry_t *)node_gen;
 
@@ -86,13 +86,13 @@ static int ep_component_allocate(uint32_t client_pd,
     SERVER_GOTO_IF_COND(pd_data == NULL, "Couldn't find PD (%ld)\n", client_pd);
 
     error = resource_component_allocate(get_ep_component(), client_pd, BADGE_OBJ_ID_NULL, false, NULL,
-                                        (resource_server_registry_node_t **)ret_ep_reg_entry, ret_badged_ep);
+                                        (resource_registry_node_t **)ret_ep_reg_entry, ret_badged_ep);
     SERVER_GOTO_IF_COND(error || *ret_badged_ep == seL4_CapNull, "Failed to allocate new EP object\n");
 
     OSDB_PRINTF("Allocated new EP (%d)\n", (*ret_ep_reg_entry)->ep.id);
 
     cspacepath_t ep_in_pd;
-    error = resource_server_transfer_cap(get_ep_component()->server_vka,
+    error = resource_component_transfer_cap(get_ep_component()->server_vka,
                                          pd_data->pd.pd_vka,
                                          (*ret_ep_reg_entry)->ep.endpoint_in_RT.cptr,
                                          &ep_in_pd,
@@ -152,7 +152,7 @@ static void handle_get_raw_endpoint(seL4_Word sender_badge, EpGetMessage *msg, E
     SERVER_GOTO_IF_COND(ep_data == NULL, "Cannot find EP data\n");
 
     cspacepath_t dest;
-    error = resource_server_transfer_cap(get_ep_component()->server_vka,
+    error = resource_component_transfer_cap(get_ep_component()->server_vka,
                                          pd_data->pd.pd_vka,
                                          ep_data->ep.endpoint_in_RT.cptr,
                                          &dest, false, 0);
@@ -251,7 +251,7 @@ int ep_component_initialize(vka_t *server_vka,
 
     error = resource_component_allocate(get_resspc_component(), get_gpi_server()->rt_pd_id,
                                         BADGE_OBJ_ID_NULL, false, (void *)&resspc_config,
-                                        (resource_server_registry_node_t **)&space_entry, NULL);
+                                        (resource_registry_node_t **)&space_entry, NULL);
     assert(error == 0);
 
     // Initialize the component

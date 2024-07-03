@@ -31,7 +31,7 @@
 /* Per-space context maintained by the server. */
 typedef struct _resspc_component_registry_entry
 {
-    resource_server_registry_node_t gen; ///< Generic registry entry data
+    resource_registry_node_t gen; ///< Generic registry entry data
     res_space_t space;                   ///< Resource space data
 } resspc_component_registry_entry_t;
 

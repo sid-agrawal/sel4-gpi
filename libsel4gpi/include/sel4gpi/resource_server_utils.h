@@ -3,159 +3,197 @@
 #include <stdint.h>
 
 #include <utils/uthash.h>
+
 #include <sel4/sel4.h>
+#include <sel4test/test.h>
+
+#include <sel4gpi/ads_clientapi.h>
+#include <sel4gpi/mo_clientapi.h>
+#include <sel4gpi/pd_clientapi.h>
+#include <sel4gpi/endpoint_clientapi.h>
+#include <sel4gpi/resource_types.h>
+#include <sel4gpi/resource_registry.h>
+#include <sel4gpi/resource_server_clientapi.h>
+#include <sel4gpi/gpi_rpc.h>
 
 /** @file
- * Utility functions for all servers of GPI resources, both in RT and other PDs
+ * Utility functions for non-RT PDs that serve GPI resources
  */
+#define RESOURCE_SERVER_DEBUG 1
+#define SERVER_UTILS "Server Utils"
 
+// Could use the server's debug function instead
+#if RESOURCE_SERVER_DEBUG
+#define RESOURCE_SERVER_PRINTF(...)                                      \
+    do                                                                   \
+    {                                                                    \
+        if (context->debug_print)                                        \
+        {                                                                \
+            printf("%s %s: ", context->resource_type_name, SERVER_UTILS); \
+            printf(__VA_ARGS__);                                         \
+        }                                                                \
+    } while (0);
+#else
+#define RESOURCE_SERVER_PRINTF(...)
+#endif
 
 /**
- * Generic resource server registry
- * Maintains per-resource metadata
- * Resource servers should 'subclass' the node type
- * by creating a struct:
- *
- * struct my_resource_server_registry_node {
- *  resource_server_registry_node_t gen;
- *  <...server specific data here...>
- * }
+ * Generic resource server context
  */
-typedef struct _resource_server_registry_node
+typedef struct _resource_server_context
 {
-    uint64_t object_id; ///< Unique ID within the registry
-    uint32_t count;     ///< Reference count to this node
+    char resource_type_name[RESOURCE_TYPE_MAX_STRING_SIZE]; ///< Text name of the resource served by the component
+    gpi_cap_t resource_type;                                ///< Code of the resource type served by the component
+    sel4gpi_rpc_env_t rpc_env;                              //< RPC server context
+    resspc_client_context_t default_space;                  ///< Connection to the default resource space
 
-    UT_hash_handle hh;
-} resource_server_registry_node_t;
+    void (*request_handler)( ///< Callback called when the server receives a client request
+        void *msg_p,         ///< Contains the client message, type is the server's protobuf request structure
+        void *msg_reply_p,   ///< To fill with the reply message, type is the server's protobuf reply structure
+        seL4_Word sender_badge,
+        seL4_CPtr received_cap,
+        bool *need_new_reply_cap);
 
-typedef struct _resource_server_registry
-{
-    resource_server_registry_node_t *head; ///< Hash table of registry nodes
-    uint32_t id_counter;                   ///< Next ID to assign for an object in the registry
+    int (*work_handler)( ///< Callback called when the RT needs the server to do some work
+        PdWorkReturnMessage *work);
 
-    void (*on_delete)(resource_server_registry_node_t *, void *); ///< Function to be called before a node is deleted
-                                                                  ///< or NULL
-                                                                  ///< Args: node, optional arg
-    void *on_delete_arg;                                          ///< Passed as the second argument to on_delete
+    int (*init_fn)(); ///< Run once when the server is started
 
-} resource_server_registry_t;
+    uint64_t parent_pd_id; ///< Client ID of the parent PD
 
-/* --- Functions for managing a registry --- */
+    bool debug_print; ///< True if the resource server should output debug prints
 
-/**
- * Initialize a registry
- *
- * @param registry the registry to initialize
- * @param on_delete (optional) function to be called before a node is deleted
- * @param on_delete_arg (optional) to pass as the second argument to on_delete
- */
-void resource_server_initialize_registry(resource_server_registry_t *registry,
-                                         void (*on_delete)(resource_server_registry_node_t *, void *),
-                                         void *on_delete_arg);
+    // RDEs and other EPs
+    seL4_CPtr mo_ep;               ///< MO request ep
+    seL4_CPtr resspc_ep;           ///< Resource space request ep
+    ep_client_context_t parent_ep; ///< Parent's EP, used to notify once started
+    ads_client_context_t ads_conn; ///< This PD's current ADS object
+    pd_client_context_t pd_conn;   ///< This PD's PD object
+    ep_client_context_t server_ep; ///< The server's own endpoint that it listens for requests on
 
-/**
- * Insert a new node to the registry
- *
- * @param registry
- * @param node the node to insert
- */
-void resource_server_registry_insert(resource_server_registry_t *registry, resource_server_registry_node_t *node);
+    seL4_CPtr mcs_reply; ///< Unused
+} resource_server_context_t;
 
 /**
- * Get a node from the registry by the resource ID
+ * Starts the resource server in the current
+ * thread of the current PD
  *
- * @param registry
- * @param object_id id of the resource to find the corresponding node
- * @return The corresponding node, or NULL if not found
+ * @param server_type string name of the resource type this server will provide
+ * @param request_handler Function to handle client requests
+ *                  param: msg_p, the client message
+ *                  param: msg_reply_p, to fill with the reply message
+ *                  param: seL4_Word badge, the request's badge
+ *                  param: seL4_CPtr cap, the received cap
+ *                  return: seL4_MessageInfo_t reply info
+ * @param work_handler Function to handle work requests from the RT
+ *                  param: PdWorkReturnMessage *work, the work details
+ *                  return: 0 on success, error otherwise
+ * @param parent_ep Endpoint of the parent process
+ * @param parent_pd_id the PD ID of the parent, so we can create an RDE
+ * @param init_fn To run at the beginning of main thread execution
+ * @param debug_print If true, outputs debug print
+ * @param request_desc protobuf structure for requests to this server
+ * @param reply_desc protobuf structure for replies from this server
+ * @return 0 on successful exit, nonzero otherwise
  */
-resource_server_registry_node_t *resource_server_registry_get_by_id(resource_server_registry_t *registry, uint64_t object_id);
+int resource_server_start(resource_server_context_t *context,
+                          char *server_type,
+                          void (*request_handler)(void *, void *, seL4_Word, seL4_CPtr, bool *),
+                          int (*work_handler)(PdWorkReturnMessage *),
+                          seL4_CPtr parent_ep,
+                          uint64_t parent_pd_id,
+                          int (*init_fn)(),
+                          bool debug_print,
+                          pb_msgdesc_t *request_desc,
+                          pb_msgdesc_t *reply_desc);
 
 /**
- * Get a node from the registry by the gpi badge
- *
- * @param registry
- * @param badge badge of the resource to find the corresponding node
- * @return The corresponding node, or NULL if not found
+ * Main function for a resource server, receives requests
  */
-resource_server_registry_node_t *resource_server_registry_get_by_badge(resource_server_registry_t *registry, seL4_Word badge);
+int resource_server_main(void *context_v);
 
 /**
- * Delete a node from the registry
- * Regardless of reference count, the node will be deleted
- *
- * @param registry
- * @param node node to delete
+ * Attach a MO from a client request to the server's ADS
+ * @param mo_cap The MO cap to attach
+ * @param vaddr Returns the vaddr where MO was attached
  */
-void resource_server_registry_delete(resource_server_registry_t *registry, resource_server_registry_node_t *node);
+int resource_server_attach_mo(resource_server_context_t *context,
+                              seL4_CPtr mo_cap,
+                              void **vaddr);
 
 /**
- * Increment the reference count of a node in the registry
- *
- * @param registry
- * @param node the node to increment
+ * Remove a previously attached MO from the server's ADS
+ * @param vaddr The vaddr where MO was attached
  */
-void resource_server_registry_inc(resource_server_registry_t *registry, resource_server_registry_node_t *node);
+int resource_server_unattach(resource_server_context_t *context,
+                             void *vaddr);
 
 /**
- * Decrement the reference count of a node in the registry
- * If this reduces reference count to 0, the node will be deleted
+ * Notifies the PD component of a resource that is created, but not yet
+ * given to a client PD
  *
- * @param registry
- * @param node the node to decrement
+ * @param resource_id ID of the resource, needs to be unique within this server
+ * @param space_conn Connection to the resource space, or NULL to use the server default
+ * @param dest Returns the slot of the badged copy in the recipient's cspace
  */
-void resource_server_registry_dec(resource_server_registry_t *registry, resource_server_registry_node_t *node);
+int resource_server_create_resource(resource_server_context_t *context,
+                                    resspc_client_context_t *space_conn,
+                                    uint64_t resource_id);
 
 /**
- * Assign an object id for a new registry entry before inserting
+ * Notifies the PD component to create a badged copy of the server's endpoint
+ * as a new resource in the recipient's cspace
  *
- * @param registry
- * @param node new node to insert and assign an ID to
- * @return the assigned object id of the node
+ * @param space_id ID of the resource space being allocated from
+ * @param resource_id ID of the resource, needs to be unique within this server
+ * @param client_id ID of the client PD
+ * @param dest Returns the slot of the badged copy in the recipient's cspace
  */
-uint64_t resource_server_registry_insert_new_id(resource_server_registry_t *registry, resource_server_registry_node_t *node);
+int resource_server_give_resource(resource_server_context_t *context,
+                                  uint64_t space_id,
+                                  uint64_t resource_id,
+                                  uint64_t client_id,
+                                  seL4_CPtr *dest);
 
 /**
- * @brief Transfers a cap between the CSpaces in src_vka and dst_vka
+ * Creates a new namespace resource space for this resource server
  *
- * @param src_vka vka for the source endpoint
- * @param dst_vka vka for the destination (or NULL, to use src vka for destination)
- * @param src_ep source endpoint to badge
- * @param dest empty cspacepath_t to fill in with destination slot
- * @param mint if true, the cap being transfered is an endpoint cap, and will be minted rather than copied
- * @param badge OPTIONAL a badge to mint onto the endpoint cap - only applies if mint = true,
- * @return int
+ * @param context
+ * @param client_id ID of the client PD that should get an RDE to the resource space
+ * @param ret_conn returns the newly allocated resource space
  */
-int resource_server_transfer_cap(vka_t *src_vka,
-                                 vka_t *dst_vka,
-                                 seL4_CPtr src_ep,
-                                 cspacepath_t *dest,
-                                 bool mint,
-                                 seL4_Word badge);
+int resource_server_new_res_space(resource_server_context_t *context,
+                                  uint64_t client_id,
+                                  resspc_client_context_t *ret_conn);
 
 /**
- * Creates a badged version of an endpoint with a custom badge given
- * Used for an arbitrary non-OSmosis endpoint
+ * Setup for the resource server to begin model extraction
  *
- * @param src_vka vka for the source endpoint
- * @param dst_vka vka for the destination (or NULL, to use src vka for destination)
- * @param src_ep source endpoint to badge
- * @param custom_badge a custom given badge
- * @return the new resource's EP cap, null cap if failed
+ * @param context
+ * @param n_pages number of pages to allocate for the MO
+ * @param mo this structure will be filled out with the MO allocated for model extraction
+ * @param ms returns the location of the model state
+ * @return 0 on success, error otherwise
  */
-seL4_CPtr resource_server_make_badged_ep_custom(vka_t *src_vka, vka_t *dst_vka, seL4_CPtr src_ep, seL4_Word custom_badge);
+int resource_server_extraction_setup(resource_server_context_t *context,
+                                     int n_pages,
+                                     mo_client_context_t *mo,
+                                     model_state_t **ms);
 
 /**
- * Creates a badged version of an endpoint for a particular resource
+ * Finish model extraction by sending the result to the RT and destroying the allocated MO
  *
- * @param src_vka vka for the source endpoint
- * @param dst_vka vka for the destination (or NULL, to use src vka for destination)
- * @param src_ep source endpoint to badge
- * @param resource_type type of resource
- * @param space_id ID of the resource space
- * @param res_id ID of the resource, unique to the resource space
- * @param client_id client the badge is meant for
- * @return the new resource's EP cap in the CSpace managed by dst_vka (or src_vka if dst_vka is NULL)
+ * @param context
+ * @param mo the MO allocated for model extraction
+ * @param ms returns the location of the model state
+ * @return 0 on success, error otherwise
  */
-seL4_CPtr resource_server_make_badged_ep(vka_t *src_vka, vka_t *dst_vka, seL4_CPtr src_ep,
-                                         gpi_cap_t resource_type, uint64_t space_id, uint64_t res_id, uint64_t client_id);
+int resource_server_extraction_finish(resource_server_context_t *context, mo_client_context_t *mo, model_state_t *ms);
+
+/**
+ * Finish a model extraction if there is no data to send
+ * 
+ * @param context
+ * @return 0 on success, error otherwise
+ */
+int resource_server_extraction_no_data(resource_server_context_t *context);
