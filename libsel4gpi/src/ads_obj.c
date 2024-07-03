@@ -94,7 +94,8 @@ int ads_initialize(ads_t *ads)
     resource_registry_initialize(&ads->attach_id_to_vaddr_map, NULL, NULL);
 
     /* The root task holds the ADS by default */
-    error = pd_add_resource_by_id(get_gpi_server()->rt_pd_id, GPICAP_TYPE_ADS, get_ads_component()->space_id, ads->id,
+    error = pd_add_resource_by_id(get_gpi_server()->rt_pd_id,
+                                  make_res_id(GPICAP_TYPE_ADS, get_ads_component()->space_id, ads->id),
                                   seL4_CapNull, seL4_CapNull, seL4_CapNull);
     SERVER_GOTO_IF_ERR(error, "Failed to add new ADS to root task\n");
 
@@ -228,7 +229,8 @@ int ads_reserve(ads_t *ads,
 
     // The root task holds the VMR by default
     uint64_t vmr_id = attach_node_map_entry->gen.object_id;
-    error = pd_add_resource_by_id(get_gpi_server()->rt_pd_id, GPICAP_TYPE_VMR, ads->id, vmr_id,
+    error = pd_add_resource_by_id(get_gpi_server()->rt_pd_id,
+                                  make_res_id(GPICAP_TYPE_VMR, ads->id, vmr_id),
                                   seL4_CapNull, seL4_CapNull, seL4_CapNull);
     SERVER_GOTO_IF_ERR(error, "Failed to add new VMR to root task\n");
 
@@ -352,8 +354,8 @@ int ads_attach_to_res(ads_t *ads,
 
 #if TRACK_MAP_RELATIONS
     /* Map the VMR to the MO */
-    uint64_t vmr_universal_id = universal_res_id(GPICAP_TYPE_VMR, ads->id, reservation->map_entry->gen.object_id);
-    uint64_t mo_id = universal_res_id(GPICAP_TYPE_MO, get_mo_component()->space_id, mo->id);
+    uint64_t vmr_universal_id = compact_res_id(GPICAP_TYPE_VMR, ads->id, reservation->map_entry->gen.object_id);
+    uint64_t mo_id = compact_res_id(GPICAP_TYPE_MO, get_mo_component()->space_id, mo->id);
     error = pd_component_map_resources(get_gpi_server()->rt_pd_id, vmr_universal_id, mo_id);
     SERVER_GOTO_IF_ERR(error, "Failed to map VMR to MO\n");
 #endif
@@ -477,7 +479,8 @@ void ads_dump_rr(ads_t *ads, model_state_t *ms, gpi_model_node_t *pd_node)
     add_edge(ms, GPI_EDGE_TYPE_HOLD, get_root_node(ms), ads_space_node); // the RT holds this resource space
 
     // Add the ADS node
-    gpi_model_node_t *ads_node = add_resource_node(ms, GPICAP_TYPE_ADS, get_ads_component()->space_id, ads->id);
+    gpi_model_node_t *ads_node = add_resource_node(
+        ms, make_res_id(GPICAP_TYPE_ADS, get_ads_component()->space_id, ads->id));
     add_edge(ms, GPI_EDGE_TYPE_SUBSET, ads_node, ads_space_node);
 
     // (XXX) Arya: Do we want to only include the currently active ADS? Reintroduce the 'mapped' property?
@@ -487,7 +490,7 @@ void ads_dump_rr(ads_t *ads, model_state_t *ms, gpi_model_node_t *pd_node)
     {
         /* Add the VMR node */
         // VMR is sometimes an implicit resource (eg. MO attached without reservation)
-        gpi_model_node_t *vmr_node = add_resource_node(ms, GPICAP_TYPE_VMR, ads->id, (uint64_t)res->vaddr);
+        gpi_model_node_t *vmr_node = add_resource_node(ms, make_res_id(GPICAP_TYPE_VMR, ads->id, (uint64_t)res->vaddr));
         add_edge(ms, GPI_EDGE_TYPE_SUBSET, vmr_node, ads_node);
         add_edge(ms, GPI_EDGE_TYPE_HOLD, pd_node, vmr_node);
         // set the VMR type, number of pages, and page size as extra data on the node
@@ -500,12 +503,12 @@ void ads_dump_rr(ads_t *ads, model_state_t *ms, gpi_model_node_t *pd_node)
         /* Add the relation from VMR to MO node, if there is one */
         if (res->mo_attached)
         {
-            gpi_model_node_t *mo_node = get_resource_node(ms, GPICAP_TYPE_MO,
-                                                          get_mo_component()->space_id, res->mo_id);
+            gpi_model_node_t *mo_node = get_resource_node(ms, make_res_id(GPICAP_TYPE_MO,
+                                                                          get_mo_component()->space_id, res->mo_id));
 
             if (!mo_node)
             {
-                mo_node = add_resource_node(ms, GPICAP_TYPE_MO, get_mo_component()->space_id, res->mo_id);
+                mo_node = add_resource_node(ms, make_res_id(GPICAP_TYPE_MO, get_mo_component()->space_id, res->mo_id));
                 // mark the node to be dumped later on, since we've only added it here for the MAP edge
                 mo_node->dumped = false;
             }

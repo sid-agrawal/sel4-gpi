@@ -380,7 +380,7 @@ static void handle_give_resource_req(seL4_Word sender_badge, PdGiveResourceMessa
     SERVER_GOTO_IF_COND(resource_space_data == NULL, "Couldn't find resource space (%ld)\n", space_id);
 
     /* Find the resource */
-    uint64_t res_node_id = universal_res_id(resource_space_data->space.resource_type, space_id, resource_id);
+    uint64_t res_node_id = compact_res_id(resource_space_data->space.resource_type, space_id, resource_id);
     pd_hold_node_t *resource_data = (pd_hold_node_t *)
         resource_registry_get_by_id(&server_data->pd.hold_registry, res_node_id);
     SERVER_GOTO_IF_COND(resource_data == NULL, "Couldn't find resource (%lx)\n", res_node_id);
@@ -390,15 +390,16 @@ static void handle_give_resource_req(seL4_Word sender_badge, PdGiveResourceMessa
 
     /* Create a new badged EP for the resource */
     seL4_CPtr dest = resource_component_make_badged_ep(get_pd_component()->server_vka, recipient_data->pd.pd_vka,
-                                                    resource_space_data->space.server_ep,
-                                                    resource_space_data->space.resource_type,
-                                                    space_id, resource_id, recipient_id);
+                                                       resource_space_data->space.server_ep,
+                                                       resource_space_data->space.resource_type,
+                                                       space_id, resource_id, recipient_id);
     reply_msg->msg.give_resource.slot = dest;
 
     // Add the resource to the PD object
     // (XXX) Arya: How to handle duplicate entries to the same resource?
     // The hash table is keyed by resource ID
-    error = pd_add_resource(&recipient_data->pd, resource_space_data->space.resource_type, space_id, resource_id,
+    error = pd_add_resource(&recipient_data->pd,
+                            make_res_id(resource_space_data->space.resource_type, space_id, resource_id),
                             seL4_CapNull, dest, seL4_CapNull);
     SERVER_GOTO_IF_ERR(error, "Failed to add resource to PD (%ld)\n", recipient_id);
 
@@ -418,10 +419,10 @@ int pd_component_map_resources(uint32_t client_pd_id, uint64_t src_res_id, uint6
 
     // Find the resources
     pd_hold_node_t *src_res = (pd_hold_node_t *)resource_registry_get_by_id(&server_data->pd.hold_registry,
-                                                                                   src_res_id);
+                                                                            src_res_id);
     SERVER_GOTO_IF_COND(src_res == NULL, "Couldn't find resource (%lx)\n", src_res_id);
     pd_hold_node_t *dest_res = (pd_hold_node_t *)resource_registry_get_by_id(&server_data->pd.hold_registry,
-                                                                                    dest_res_id);
+                                                                             dest_res_id);
     SERVER_GOTO_IF_COND(dest_res == NULL, "Couldn't find resource (%lx)\n", dest_res_id);
 
     // Find the source space
@@ -1000,11 +1001,11 @@ void forge_pd_cap_from_init_data(test_init_data_t *init_data, sel4utils_process_
     // Copy the PD cap to the test process
     cspacepath_t pd_cap_in_PD = {0};
     error = resource_component_transfer_cap(get_pd_component()->server_vka, pd->pd_vka,
-                                         pd_cap_in_rt, &pd_cap_in_PD, false, 0);
+                                            pd_cap_in_rt, &pd_cap_in_PD, false, 0);
     SERVER_GOTO_IF_ERR(error, "Failed to copy cap to PD\n");
     pd->shared_data->pd_conn.badged_server_ep_cspath = pd_cap_in_PD;
 
-    pd_add_resource(pd, GPICAP_TYPE_PD, get_pd_component()->space_id, pd->id,
+    pd_add_resource(pd, make_res_id(GPICAP_TYPE_PD, get_pd_component()->space_id, pd->id),
                     seL4_CapNull, pd->shared_data->pd_conn.badged_server_ep_cspath.capPtr, seL4_CapNull);
 
     // Cleanup the PD cap in RT
@@ -1046,9 +1047,7 @@ err_goto:
 }
 
 int pd_add_resource_by_id(uint32_t pd_id,
-                          gpi_cap_t cap_type,
-                          uint32_t space_id,
-                          uint32_t res_id,
+                          gpi_res_id_t res_id,
                           seL4_CPtr slot_in_RT,
                           seL4_CPtr slot_in_PD,
                           seL4_CPtr slot_in_serverPD)
@@ -1058,13 +1057,13 @@ int pd_add_resource_by_id(uint32_t pd_id,
     pd_component_registry_entry_t *client_pd_data = pd_component_registry_get_entry_by_id(pd_id);
     SERVER_GOTO_IF_COND(client_pd_data == NULL, "Couldn't find PD (%d) to add resource \n", pd_id);
 
-    error = pd_add_resource(&client_pd_data->pd, cap_type, space_id, res_id, slot_in_RT, slot_in_PD, slot_in_serverPD);
+    error = pd_add_resource(&client_pd_data->pd, res_id, slot_in_RT, slot_in_PD, slot_in_serverPD);
 
 err_goto:
     return error;
 }
 
-int pd_component_remove_resource_from_rt(gpi_cap_t resource_type, uint32_t space_id, uint32_t obj_id)
+int pd_component_remove_resource_from_rt(gpi_res_id_t res_id)
 {
     int error = 0;
 
@@ -1075,13 +1074,13 @@ int pd_component_remove_resource_from_rt(gpi_cap_t resource_type, uint32_t space
                         get_gpi_server()->rt_pd_id);
 
     // Remove the resource from it
-    error = pd_remove_resource(&pd_entry->pd, resource_type, space_id, obj_id);
+    error = pd_remove_resource(&pd_entry->pd, res_id);
 
 err_goto:
     return error;
 }
 
-int pd_component_resource_cleanup(gpi_cap_t resource_type, uint32_t space_id, uint32_t obj_id)
+int pd_component_resource_cleanup(gpi_res_id_t res_id)
 {
     int error = 0;
 
@@ -1097,13 +1096,13 @@ int pd_component_resource_cleanup(gpi_cap_t resource_type, uint32_t space_id, ui
             continue;
         }
 
-        OSDB_PRINTF("Remove resource %s_%d_%d from PD(%d)\n", cap_type_to_str(resource_type),
-                    space_id, obj_id, pd_entry->pd.id);
+        OSDB_PRINTF("Remove resource %s_%d_%d from PD(%d)\n", cap_type_to_str(res_id.type),
+                    res_id.space_id, res_id.object_id, pd_entry->pd.id);
 
-        error = pd_remove_resource(&pd_entry->pd, resource_type, space_id, obj_id);
+        error = pd_remove_resource(&pd_entry->pd, res_id);
         SERVER_GOTO_IF_ERR(error, "failed to remove resource %s_%d_%d from PD (%d)\n",
-                           cap_type_to_str(resource_type),
-                           space_id, obj_id, pd_entry->pd.id);
+                           cap_type_to_str(res_id.type),
+                           res_id.space_id, res_id.object_id, pd_entry->pd.id);
     }
 
 err_goto:

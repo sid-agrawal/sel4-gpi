@@ -108,7 +108,7 @@ uint64_t gpi_new_badge(gpi_cap_t cap_type,
     return badge_value;
 }
 
-uint64_t universal_res_id(gpi_cap_t type, uint64_t space_id, uint64_t object_id)
+uint64_t compact_res_id(gpi_cap_t type, uint64_t space_id, uint64_t object_id)
 {
     return gpi_new_badge(type, 0, 0, space_id, object_id);
 }

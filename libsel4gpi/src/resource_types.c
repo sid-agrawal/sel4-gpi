@@ -87,8 +87,21 @@ char *cap_type_to_str(gpi_cap_t cap_type)
             gpi_panic("Cap type not found in registry: ", cap_type);
         }
         return reg_entry->name;
-    } else {
+    }
+    else
+    {
         // Other PDs find the name from their init data
         return sel4gpi_get_resource_type_name(cap_type);
     }
+}
+
+gpi_res_id_t make_res_id(gpi_cap_t type, uint32_t space_id, uint32_t object_id)
+{
+    gpi_res_id_t res_id = {
+        .type = type,
+        .space_id = space_id,
+        .object_id = object_id,
+    };
+
+    return res_id;
 }

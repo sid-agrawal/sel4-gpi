@@ -53,10 +53,10 @@ int test_model_state_export(env_t env)
     // Add resource nodes
     int mo_space_id = 1;
     int pmr_space_id = 1;
-    gpi_model_node_t *mo1 = add_resource_node(model_state, GPICAP_TYPE_MO, mo_space_id, 1);
-    gpi_model_node_t *mo2 = add_resource_node(model_state, GPICAP_TYPE_MO, mo_space_id, 2);
-    gpi_model_node_t *page1 = add_resource_node(model_state, GPICAP_TYPE_VMR, pmr_space_id, 1);
-    gpi_model_node_t *page2 = add_resource_node(model_state, GPICAP_TYPE_VMR, pmr_space_id, 2);
+    gpi_model_node_t *mo1 = add_resource_node(model_state, make_res_id(GPICAP_TYPE_MO, mo_space_id, 1));
+    gpi_model_node_t *mo2 = add_resource_node(model_state, make_res_id(GPICAP_TYPE_MO, mo_space_id, 2));
+    gpi_model_node_t *page1 = add_resource_node(model_state, make_res_id(GPICAP_TYPE_VMR, pmr_space_id, 1));
+    gpi_model_node_t *page2 = add_resource_node(model_state, make_res_id(GPICAP_TYPE_VMR, pmr_space_id, 2));
 
     // Add hold edges
     add_edge(model_state, GPI_EDGE_TYPE_HOLD, pd1, mo1);

@@ -91,14 +91,7 @@ typedef struct _pd_hold_node
     seL4_Word slot_in_RT_Debug;
     seL4_Word slot_in_ServerPD_Debug; // For instance in case of file.
 
-    /*
-        I think that type+space_id+res_id should be all we need
-        to find out when OSM resources are shared.
-        But let's keep track of slot_in* (above) for now.
-    */
-    gpi_cap_t type;
-    uint32_t space_id;
-    uint32_t res_id;
+    gpi_res_id_t res_id;
 
 } pd_hold_node_t;
 
@@ -251,18 +244,15 @@ void print_pd_osm_rde_info(osmosis_rde_t *o);
  * Add a resource that the PD holds in metadata only, the resource isn't actually minted into the PD's cspace
  * Does not insert if the resource ID is a duplicate
  *
- * @param type the resource type
- * @param space_id the resource space ID
- * @param res_id the resource ID (unique within the space)
+ * @param pd
+ * @param res_id the resource to add
  * @param slot_in_RT for debugging purposes, may be removed
  * @param slot_in_PD for debugging purposes, may be removed
  * @param slot_in_serverPD for debugging purposes, may be removed
  * @return 0 on success, 1 otherwise
  */
 int pd_add_resource(pd_t *pd,
-                    gpi_cap_t type,
-                    uint32_t space_id,
-                    uint32_t res_id,
+                    gpi_res_id_t res_id,
                     seL4_CPtr slot_in_RT,
                     seL4_CPtr slot_in_PD,
                     seL4_CPtr slot_in_serverPD);
@@ -271,15 +261,13 @@ int pd_add_resource(pd_t *pd,
  * Remove a resource that the PD holds, also revoke / delete the cap in the PD's cspace
  * Does nothing if the PD does not hold the resource
  *
+ * @param pd
  * @param type the resource type
- * @param space_id the resource space ID
- * @param res_id the resource ID (unique within the space)
+ * @param res_id the resource to remove
  * @return 0 on success, 1 otherwise
  */
 int pd_remove_resource(pd_t *pd,
-                       gpi_cap_t type,
-                       uint32_t space_id,
-                       uint32_t res_id);
+                       gpi_res_id_t res_id);
 /**
  * @brief Adds all resources specified in the given list to a PD
  *

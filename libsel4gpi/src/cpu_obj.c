@@ -132,7 +132,9 @@ void cpu_dump_rr(cpu_t *cpu, model_state_t *ms, gpi_model_node_t *pd_node)
     gpi_model_node_t *vcpu_space_node = add_resource_space_node(ms, GPICAP_TYPE_CPU, get_cpu_component()->space_id);
 
     /* Add the Virtual CPU node */
-    gpi_model_node_t *cpu_node = add_resource_node(ms, GPICAP_TYPE_CPU, get_cpu_component()->space_id, cpu->id);
+    gpi_model_node_t *cpu_node = add_resource_node(
+        ms,
+        make_res_id(GPICAP_TYPE_CPU, get_cpu_component()->space_id, cpu->id));
     if (cpu->vcpu.cptr != seL4_CapNull)
     {
         set_node_extra(cpu_node, "elevated");
@@ -147,7 +149,7 @@ void cpu_dump_rr(cpu_t *cpu, model_state_t *ms, gpi_model_node_t *pd_node)
 #endif
 
     /* Add the Physical CPU (core) node */
-    gpi_model_node_t *cpu_core_node = add_resource_node(ms, GPICAP_TYPE_PCPU, 1, affinity);
+    gpi_model_node_t *cpu_core_node = add_resource_node(ms, make_res_id(GPICAP_TYPE_PCPU, 1, affinity));
     add_edge(ms, GPI_EDGE_TYPE_MAP, cpu_node, cpu_core_node);
     add_edge(ms, GPI_EDGE_TYPE_HOLD, root_node, cpu_core_node);
     add_edge(ms, GPI_EDGE_TYPE_HOLD, root_node, vcpu_space_node); // the RT holds this resource space

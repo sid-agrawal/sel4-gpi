@@ -91,7 +91,8 @@ int mo_new(mo_t *mo,
     SERVER_GOTO_IF_ERR(error, "Failed to allocate MO frames\n");
 
     /* The root task holds the MO by default */
-    error = pd_add_resource_by_id(get_gpi_server()->rt_pd_id, GPICAP_TYPE_MO, get_mo_component()->space_id, mo->id,
+    error = pd_add_resource_by_id(get_gpi_server()->rt_pd_id,
+                                  make_res_id(GPICAP_TYPE_MO, get_mo_component()->space_id, mo->id),
                                   seL4_CapNull, seL4_CapNull, seL4_CapNull);
 
     SERVER_GOTO_IF_ERR(error, "Failed to add new MO to root task\n");
@@ -109,7 +110,9 @@ void mo_dump_rr(mo_t *mo, model_state_t *ms, gpi_model_node_t *pd_node)
     add_edge(ms, GPI_EDGE_TYPE_HOLD, root_node, mo_space_node); // the RT holds this resource space
 
     /* Add the MO node */
-    gpi_model_node_t *mo_node = add_resource_node(ms, GPICAP_TYPE_MO, get_mo_component()->space_id, mo->id);
+    gpi_model_node_t *mo_node = add_resource_node(
+        ms,
+        make_res_id(GPICAP_TYPE_MO, get_mo_component()->space_id, mo->id));
     add_edge(ms, GPI_EDGE_TYPE_HOLD, pd_node, mo_node);
     add_edge(ms, GPI_EDGE_TYPE_SUBSET, mo_node, mo_space_node);
 

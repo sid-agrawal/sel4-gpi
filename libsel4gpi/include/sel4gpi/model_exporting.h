@@ -138,12 +138,10 @@ void combine_model_states(model_state_t *dest, model_state_t *src);
  * Add a resource to the model state
  *
  * @param model_state
- * @param res_type type of the resource
- * @param res_space_id resource space the resource is from
- * @param res_id unique ID of the resource (unique given the resource type)
+ * @param res_id unique ID of the resource
  * @return The model node for the resource
  */
-gpi_model_node_t *add_resource_node(model_state_t *model_state, gpi_cap_t res_type, uint64_t res_space_id, uint64_t res_id);
+gpi_model_node_t *add_resource_node(model_state_t *model_state, gpi_res_id_t res_id);
 
 /**
  * Get a resource from the model state
@@ -154,7 +152,7 @@ gpi_model_node_t *add_resource_node(model_state_t *model_state, gpi_cap_t res_ty
  * @param res_id unique ID of the resource (unique given the resource type)
  * @return The model node for the resource, or NULL if it does not exist
  */
-gpi_model_node_t *get_resource_node(model_state_t *model_state, gpi_cap_t res_type, uint64_t res_space_id, uint64_t res_id);
+gpi_model_node_t *get_resource_node(model_state_t *model_state, gpi_res_id_t res_id);
 
 /**
  * Add extra data to a node
@@ -219,12 +217,10 @@ void get_resource_space_id(gpi_cap_t resource_type, uint64_t res_space_id, char 
 
 /**
  * Generate the string ID for a resource node
- * @param res_type type of the resource
- * @param res_space_id resource space the resource is from (XXX to be removed)
- * @param res_id unique ID of the resource (unique given the resource type)
+ * @param res_id unique ID of the resource
  * @param str_id returns the string ID, must be a buffer of length CSV_MAX_STRING_SIZE
  */
-void get_resource_id(gpi_cap_t res_type, uint64_t res_space_id, uint64_t res_id, char *str_id);
+void get_resource_id(gpi_res_id_t res_id, char *str_id);
 
 /**
  * Generate the string ID for a PD node from its numeric ID

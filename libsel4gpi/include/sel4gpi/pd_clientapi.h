@@ -167,7 +167,7 @@ int pd_client_clear_slot(pd_client_context_t *conn,
  * To be called by a resource server when it allocates
  * a resource to another PD
  *
- * (XXX) Arya: Replace space/resource id with universal_res_id
+ * (XXX) Arya: Replace space/resource id with compact_res_id
  * @param conn the resource server's pd connection
  * @param res_space_id the resource space ID
  * @param recipient_id the recipient PD's ID
@@ -188,8 +188,8 @@ int pd_client_give_resource(pd_client_context_t *conn,
  * (XXX) Arya: WIP
  *
  * @param conn the resource server's pd connection
- * @param src_res_id the universal ID of the source resource (universal_res_id)
- * @param dest_res_id the universal ID of the destination resource (universal_res_id)
+ * @param src_res_id the universal ID of the source resource (compact_res_id)
+ * @param dest_res_id the universal ID of the destination resource (compact_res_id)
  */
 int pd_client_map_resource(pd_client_context_t *conn,
                            seL4_Word src_res_id,

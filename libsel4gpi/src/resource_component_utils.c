@@ -155,7 +155,8 @@ int resource_component_allocate(resource_component_context_t *component,
         seL4_CPtr slot_in_rt = ret_cap && client_id == get_gpi_server()->rt_pd_id ? *ret_cap : seL4_CapNull;
         seL4_CPtr slot_in_pd = ret_cap && client_id != get_gpi_server()->rt_pd_id ? *ret_cap : seL4_CapNull;
 
-        error = pd_add_resource_by_id(client_id, component->resource_type, component->space_id, resource_id,
+        error = pd_add_resource_by_id(client_id,
+                                      make_res_id(component->resource_type, component->space_id, resource_id),
                                       slot_in_rt, slot_in_pd, slot_in_rt);
         GOTO_IF_ERR(error, "Failed to add %s  esource to PD\n", cap_type_to_str(component->resource_type));
     }

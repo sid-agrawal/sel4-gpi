@@ -7,7 +7,7 @@
     {                                \
         if ((check) != seL4_NoError) \
         {                            \
-            DAYCARE_PRINTF(msg);             \
+            DAYCARE_PRINTF(msg);     \
             error = 1;               \
             goto done;               \
         }                            \
@@ -127,14 +127,14 @@ int daycare_work_handler(
         char pokemon_id_str[CSV_MAX_STRING_SIZE];
         char pokeball_id_str[CSV_MAX_STRING_SIZE];
 
-        get_resource_id(get_daycare_server()->gen.resource_type,
-                        get_daycare_server()->gen.default_space.id,
-                        pokemon_id,
+        get_resource_id(make_res_id(get_daycare_server()->gen.resource_type,
+                                    get_daycare_server()->gen.default_space.id,
+                                    pokemon_id),
                         pokemon_id_str);
 
-        get_resource_id(sel4gpi_get_resource_type_code(POKEBALL_RESOURCE_TYPE_NAME),
-                        get_daycare_server()->pokeballs[pokemon_id].space_id,
-                        get_daycare_server()->pokeballs[pokemon_id].id,
+        get_resource_id(make_res_id(sel4gpi_get_resource_type_code(POKEBALL_RESOURCE_TYPE_NAME),
+                                    get_daycare_server()->pokeballs[pokemon_id].space_id,
+                                    get_daycare_server()->pokeballs[pokemon_id].id),
                         pokeball_id_str);
 
         add_edge_by_id(model_state, GPI_EDGE_TYPE_MAP, pokemon_id_str, pokeball_id_str);

@@ -134,7 +134,7 @@ static void handle_mo_disconnect_request(seL4_Word sender_badge,
     SERVER_GOTO_IF_COND(pd_data == NULL, "Couldn't find PD (%ld)\n", get_client_id_from_badge(sender_badge));
 
     /* Remove the MO from the client PD */
-    error = pd_remove_resource(&pd_data->pd, GPICAP_TYPE_MO, get_mo_component()->space_id, mo_id);
+    error = pd_remove_resource(&pd_data->pd, make_res_id(GPICAP_TYPE_MO, get_mo_component()->space_id, mo_id));
     SERVER_GOTO_IF_ERR(error, "Failed to remove MO from PD\n");
 
     // This will reduce the refcount of the MO, and then it will be deleted if necessary
@@ -259,7 +259,8 @@ int forge_mo_cap_from_frames(seL4_CPtr *frame_caps,
     SERVER_GOTO_IF_ERR(error, "Failed to initialize new MO object for forge\n");
 
     /* The root task holds the MO by default */
-    error = pd_add_resource_by_id(get_gpi_server()->rt_pd_id, GPICAP_TYPE_MO, get_mo_component()->space_id, mo->id,
+    error = pd_add_resource_by_id(get_gpi_server()->rt_pd_id,
+                                  make_res_id(GPICAP_TYPE_MO, get_mo_component()->space_id, mo->id),
                                   seL4_CapNull, seL4_CapNull, seL4_CapNull);
 
     SERVER_GOTO_IF_ERR(error, "Failed to add new MO to root task\n");

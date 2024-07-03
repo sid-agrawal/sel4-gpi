@@ -192,7 +192,8 @@ static void handle_create_resource_request(seL4_Word sender_badge,
                 server_pd->pd.id, space_entry->space.id, res_id);
 
     // Resource does not exist as a cap anywhere yet
-    error = pd_add_resource(&server_pd->pd, resource_type, space_entry->space.id, res_id,
+    error = pd_add_resource(&server_pd->pd,
+                            make_res_id(resource_type, space_entry->space.id, res_id),
                             seL4_CapNull, seL4_CapNull, seL4_CapNull);
 
 err_goto:

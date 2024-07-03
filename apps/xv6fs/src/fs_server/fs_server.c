@@ -87,7 +87,7 @@ __attribute__((noreturn)) void xv6fs_panic(char *s)
  */
 static void make_ns_prefix(char *prefix, uint64_t nsid)
 {
-  snprintf(prefix, PATH_MAX, "/ns%ld", nsid);
+  snprintf(prefix, MAXPATH, "/ns%ld", nsid);
 }
 
 /**
@@ -95,16 +95,16 @@ static void make_ns_prefix(char *prefix, uint64_t nsid)
  */
 static void apply_prefix(char *prefix, char *path)
 {
-  char temp[PATH_MAX];
+  char temp[MAXPATH];
 
   if (strlen(path) > 0 && path[0] == '/')
   {
     // Don't need to add path separator
-    snprintf(temp, PATH_MAX, "%s%s", prefix, path);
+    snprintf(temp, MAXPATH, "%s%s", prefix, path);
   }
   else
   {
-    snprintf(temp, PATH_MAX, "%s/%s", prefix, path);
+    snprintf(temp, MAXPATH, "%s/%s", prefix, path);
   }
 
   strcpy(path, temp);
@@ -568,11 +568,11 @@ void map_file_to_block(uint64_t file_id, uint32_t blockno)
     return;
   }
 
-  seL4_Word file_universal_id = universal_res_id(get_xv6fs_server()->gen.resource_type,
-                                                 get_xv6fs_server()->gen.default_space.id, file_id);
-  seL4_Word block_universal_id = universal_res_id(sel4gpi_get_resource_type_code(BLOCK_RESOURCE_TYPE_NAME),
-                                                  get_xv6fs_server()->naive_blocks[blockno].space_id,
-                                                  get_xv6fs_server()->naive_blocks[blockno].res_id);
+  seL4_Word file_universal_id = compact_res_id(get_xv6fs_server()->gen.resource_type,
+                                               get_xv6fs_server()->gen.default_space.id, file_id);
+  seL4_Word block_universal_id = compact_res_id(sel4gpi_get_resource_type_code(BLOCK_RESOURCE_TYPE_NAME),
+                                                get_xv6fs_server()->naive_blocks[blockno].space_id,
+                                                get_xv6fs_server()->naive_blocks[blockno].res_id);
 
   error = pd_client_map_resource(&get_xv6fs_server()->gen.pd_conn, file_universal_id, block_universal_id);
   SERVER_GOTO_IF_ERR(error, "Failed to map file (%lx) to block (%lx)\n", file_universal_id, block_universal_id);
@@ -660,9 +660,9 @@ int xv6fs_work_handler(PdWorkReturnMessage *work)
 
       /* Add the file resource node */
       char file_id[CSV_MAX_STRING_SIZE];
-      get_resource_id(get_xv6fs_server()->gen.resource_type,
-                      get_xv6fs_server()->gen.default_space.id,
-                      inums[i],
+      get_resource_id(make_res_id(get_xv6fs_server()->gen.resource_type,
+                                  get_xv6fs_server()->gen.default_space.id,
+                                  inums[i]),
                       file_id);
       add_edge_by_id(model_state, GPI_EDGE_TYPE_HOLD, client_pd_id_str, file_id);
 
@@ -677,7 +677,7 @@ int xv6fs_work_handler(PdWorkReturnMessage *work)
         block_id = get_xv6fs_server()->naive_blocks[blocknos[j]].res_id;
 
         char block_id_str[CSV_MAX_STRING_SIZE];
-        get_resource_id(block_cap_type, block_space_id, block_id, block_id_str);
+        get_resource_id(make_res_id(block_cap_type, block_space_id, block_id), block_id_str);
         add_edge_by_id(model_state, GPI_EDGE_TYPE_MAP, file_id, block_id_str);
       }
     }

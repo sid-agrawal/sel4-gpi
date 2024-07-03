@@ -82,13 +82,17 @@ void forge_pd_cap_from_init_data(test_init_data_t *init_data,
 void destroy_test_pd(void);
 
 /**
- * Add a resource to a PD
- * (XXX) Arya: Exposed for the cpu and mo components. Is there a better way?
+ * Add a resource that the PD holds in metadata only, the resource isn't actually minted into the PD's cspace
+ *
+ * @param pd_id the ID of the PD to add a resource to
+ * @param res_id the resource to add
+ * @param slot_in_RT for debugging purposes, may be removed
+ * @param slot_in_PD for debugging purposes, may be removed
+ * @param slot_in_serverPD for debugging purposes, may be removed
+ * @return 0 on success, 1 otherwise
  */
 int pd_add_resource_by_id(uint32_t pd_id,
-                          gpi_cap_t cap_type,
-                          uint32_t space_id,
-                          uint32_t res_id,
+                          gpi_res_id_t res_id,
                           seL4_CPtr slot_in_RT,
                           seL4_CPtr slot_in_PD,
                           seL4_CPtr slot_in_serverPD);
@@ -110,23 +114,19 @@ int pd_component_map_resources(uint32_t client_pd_id, uint64_t src_res_id, uint6
  * To be called after a core resource is destroyed, since the root task does not count as a refcount
  * Remove it from the root task's metadata
  *
- * @param resource_type type of the deleted resource
- * @param space_id ID of the deleted resource
- * @param obj_id ID of the deleted resource
+ * @param res_id ID of the deleted resource
  * @return 0 on success, error otherwise
  */
-int pd_component_remove_resource_from_rt(gpi_cap_t resource_type, uint32_t space_id, uint32_t obj_id);
+int pd_component_remove_resource_from_rt(gpi_res_id_t res_i);
 
 /**
  * To be called when a resource is destroyed
  * Remove the resource from any PDs that may hold it
  *
- * @param resource_type type of the deleted resource
- * @param space_id ID of the deleted resource
- * @param obj_id ID of the deleted resource
+ * @param res_id ID of the deleted resource
  * @return 0 on success, error otherwise
  */
-int pd_component_resource_cleanup(gpi_cap_t resource_type, uint32_t space_id, uint32_t obj_id);
+int pd_component_resource_cleanup(gpi_res_id_t res_id);
 
 /**
  * To be called when a resource space is destroyed

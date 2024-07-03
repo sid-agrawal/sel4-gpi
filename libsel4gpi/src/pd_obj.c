@@ -54,28 +54,26 @@ extern char _cpio_archive_end[];
 static int pd_setup_cspace(pd_t *pd, vka_t *vka);
 static int pd_dump_internal(pd_t *pd, model_state_t *ms);
 
-int pd_add_resource(pd_t *pd, gpi_cap_t type, uint32_t space_id, uint32_t res_id,
+int pd_add_resource(pd_t *pd, gpi_res_id_t res_id,
                     seL4_CPtr slot_in_RT, seL4_CPtr slot_in_PD, seL4_CPtr slot_in_serverPD)
 {
     // Unique resource ID is the badge with the following fields: type, space_id, res_id
-    uint64_t res_node_id = universal_res_id(type, space_id, res_id);
-    pd_hold_node_t *node = (pd_hold_node_t *)resource_registry_get_by_id(&pd->hold_registry, res_node_id);
+    uint64_t compact_id = compact_res_id(res_id.type, res_id.space_id, res_id.object_id);
+    pd_hold_node_t *node = (pd_hold_node_t *)resource_registry_get_by_id(&pd->hold_registry, compact_id);
 
     if (node != NULL)
     {
-        OSDB_PRINT_VERBOSE("Warning: adding resource with existing ID (%lx), do not insert again\n", res_node_id);
+        OSDB_PRINT_VERBOSE("Warning: adding resource with existing ID (%lx), do not insert again\n", compact_id);
         // BADGE_PRINT(res_node_id);
     }
     else
     {
         node = calloc(1, sizeof(pd_hold_node_t));
-        node->type = type;
         node->res_id = res_id;
-        node->space_id = space_id;
         node->slot_in_RT_Debug = slot_in_RT;
         node->slot_in_PD_Debug = slot_in_PD;
         node->slot_in_ServerPD_Debug = slot_in_serverPD;
-        node->gen.object_id = res_node_id;
+        node->gen.object_id = compact_id;
 
         resource_registry_insert(&pd->hold_registry, (resource_registry_node_t *)node);
     }
@@ -99,7 +97,7 @@ static void pd_remove_resource_internal(pd_t *pd, resource_registry_node_t *hold
         {
             pd_hold_node_t *node = (pd_hold_node_t *)hold_node;
             OSDB_PRINTERR("Warning: remove resource %s_%d_%d from PD, slot_in_PD is null!\n",
-                          cap_type_to_str(node->type), node->space_id, node->res_id);
+                          cap_type_to_str(node->res_id.type), node->res_id.space_id, node->res_id.object_id);
         }
     }
     else
@@ -131,10 +129,10 @@ static void pd_remove_resource_internal(pd_t *pd, resource_registry_node_t *hold
     resource_registry_delete(&pd->hold_registry, hold_node);
 }
 
-int pd_remove_resource(pd_t *pd, gpi_cap_t type, uint32_t space_id, uint32_t res_id)
+int pd_remove_resource(pd_t *pd, gpi_res_id_t res_id)
 {
     // See if the resource exists, remove it if so
-    uint64_t res_node_id = universal_res_id(type, space_id, res_id);
+    uint64_t res_node_id = compact_res_id(res_id.type, res_id.space_id, res_id.object_id);
     resource_registry_node_t *node = resource_registry_get_by_id(&pd->hold_registry, res_node_id);
 
     if (node != NULL)
@@ -151,7 +149,7 @@ bool pd_has_resources_in_space(pd_t *pd, uint32_t space_id)
     resource_registry_node_t *curr, *tmp;
     HASH_ITER(hh, pd->hold_registry.head, curr, tmp)
     {
-        if (((pd_hold_node_t *)curr)->space_id == space_id)
+        if (((pd_hold_node_t *)curr)->res_id.space_id == space_id)
         {
             return true;
         }
@@ -166,7 +164,7 @@ int pd_remove_resources_in_space(pd_t *pd, uint32_t space_id)
     resource_registry_node_t *curr, *tmp;
     HASH_ITER(hh, pd->hold_registry.head, curr, tmp)
     {
-        if (((pd_hold_node_t *)curr)->space_id == space_id)
+        if (((pd_hold_node_t *)curr)->res_id.space_id == space_id)
         {
             pd_remove_resource_internal(pd, curr);
         }
@@ -380,7 +378,7 @@ linked_list_t *pd_get_resources_of_type(pd_t *pd, gpi_cap_t type)
 
     for (pd_hold_node_t *current_cap = (pd_hold_node_t *)pd->hold_registry.head; current_cap != NULL; current_cap = (pd_hold_node_t *)current_cap->gen.hh.next)
     {
-        if (current_cap->type == type)
+        if (current_cap->res_id.type == type)
         {
             linked_list_insert(found, current_cap);
         }
@@ -397,18 +395,21 @@ int pd_bulk_add_resource(pd_t *pd, linked_list_t *resources)
     for (linked_list_node_t *curr = resources->head; curr != NULL; curr = curr->next)
     {
         res = (pd_hold_node_t *)curr->data;
-        resspc_component_registry_entry_t *resource_space_data = resource_space_get_entry_by_id(res->space_id);
-        seL4_CPtr copied_res = resource_component_make_badged_ep(get_pd_component()->server_vka, pd->pd_vka,
-                                                              resource_space_data->space.server_ep, resource_space_data->space.resource_type,
-                                                              res->space_id, res->res_id, pd->id);
+        resspc_component_registry_entry_t *resource_space_data = resource_space_get_entry_by_id(res->res_id.space_id);
+        seL4_CPtr copied_res = resource_component_make_badged_ep(
+            get_pd_component()->server_vka, pd->pd_vka,
+            resource_space_data->space.server_ep, resource_space_data->space.resource_type,
+            res->res_id.space_id, res->res_id.object_id, pd->id);
 
         WARN_IF_COND(in_error, "Could not mint resource endpoint\n");
         error = error || in_error;
 
         if (!in_error)
         {
-            in_error = pd_add_resource(pd, res->type, res->space_id, res->res_id, res->slot_in_RT_Debug, copied_res, res->slot_in_ServerPD_Debug);
-            WARN_IF_COND(in_error, "failed to add resource (type: %s, space_id: %d) to PD %d\n", cap_type_to_str(res->type), res->space_id, pd->id);
+            in_error = pd_add_resource(pd, res->res_id, res->slot_in_RT_Debug,
+                                       copied_res, res->slot_in_ServerPD_Debug);
+            WARN_IF_COND(in_error, "failed to add resource (type: %s, space_id: %d) to PD %d\n",
+                         cap_type_to_str(res->res_id.type), res->res_id.space_id, pd->id);
             error = error || in_error;
         }
     }
@@ -424,27 +425,27 @@ pd_held_resource_on_delete(resource_registry_node_t *node_gen, void *pd_v)
     pd_t *pd = (pd_t *)pd_v;
 
     OSDB_PRINTF("Freeing resource %s_%d_%d from PD (%d)\n",
-                cap_type_to_str(node->type), node->space_id, node->res_id,
+                cap_type_to_str(node->res_id.type), node->res_id.space_id, node->res_id.object_id,
                 pd->id);
 
     // If the resource is a core resource, free it directly
     // Decrement the registry entry's count, and if it reaches zero, the resource will be freed
-    switch (node->type)
+    switch (node->res_id.type)
     {
     case GPICAP_TYPE_ADS:
-        error = resource_component_dec(get_ads_component(), node->res_id);
+        error = resource_component_dec(get_ads_component(), node->res_id.object_id);
         SERVER_GOTO_IF_ERR(error, "failed to decrement ADS resource\n");
-        error = pd_component_remove_resource_from_rt(node->type, node->space_id, node->res_id);
+        error = pd_component_remove_resource_from_rt(node->res_id);
         break;
     case GPICAP_TYPE_CPU:
-        error = resource_component_dec(get_cpu_component(), node->res_id);
+        error = resource_component_dec(get_cpu_component(), node->res_id.object_id);
         SERVER_GOTO_IF_ERR(error, "failed to decrement CPU resource\n");
-        error = pd_component_remove_resource_from_rt(node->type, node->space_id, node->res_id);
+        error = pd_component_remove_resource_from_rt(node->res_id);
         break;
     case GPICAP_TYPE_MO:
-        error = resource_component_dec(get_mo_component(), node->res_id);
+        error = resource_component_dec(get_mo_component(), node->res_id.object_id);
         SERVER_GOTO_IF_ERR(error, "failed to decrement MO resource\n");
-        error = pd_component_remove_resource_from_rt(node->type, node->space_id, node->res_id);
+        error = pd_component_remove_resource_from_rt(node->res_id);
         break;
     case GPICAP_TYPE_PD:
         // (XXX) Arya: I think we do not want to destroy a PD when the refcount reaches zero
@@ -452,21 +453,21 @@ pd_held_resource_on_delete(resource_registry_node_t *node_gen, void *pd_v)
         break;
     case GPICAP_TYPE_VMR:
         // NS ID is the ADS, res ID is the VMR
-        error = ads_component_rm_by_id(node->space_id, node->res_id);
+        error = ads_component_rm_by_id(node->res_id.space_id, node->res_id.object_id);
         break;
     case GPICAP_TYPE_RESSPC:
         // Wait to clean up resource spaces until later
-        error = resspc_component_mark_delete(node->res_id);
+        error = resspc_component_mark_delete(node->res_id.object_id);
         break;
     case GPICAP_TYPE_EP:
-        error = resource_component_dec(get_ep_component(), node->res_id);
+        error = resource_component_dec(get_ep_component(), node->res_id.object_id);
         SERVER_GOTO_IF_ERR(error, "failed to decrement EP resource\n");
-        error = pd_component_remove_resource_from_rt(node->type, node->space_id, node->res_id);
+        error = pd_component_remove_resource_from_rt(node->res_id);
         break;
     default:
         // Otherwise, call the manager PD
-        resspc_component_registry_entry_t *space_data = resource_space_get_entry_by_id(node->space_id);
-        SERVER_GOTO_IF_COND(space_data == NULL, "couldn't find resource space (%d)\n", node->space_id);
+        resspc_component_registry_entry_t *space_data = resource_space_get_entry_by_id(node->res_id.space_id);
+        SERVER_GOTO_IF_COND(space_data == NULL, "couldn't find resource space (%d)\n", node->res_id.space_id);
 
         // If the space is deleted,
         // or the manager PD is this PD itself,
@@ -481,9 +482,7 @@ pd_held_resource_on_delete(resource_registry_node_t *node_gen, void *pd_v)
 
         // Queue the "free" operation for the resource manager
         pd_work_entry_t *work_entry = calloc(1, sizeof(pd_work_entry_t));
-        work_entry->res_id.type = node->type;
-        work_entry->res_id.space_id = node->space_id;
-        work_entry->res_id.object_id = node->res_id;
+        work_entry->res_id = node->res_id;
 
         pd_component_queue_free_work(manager_pd_data, work_entry);
         break;
@@ -492,7 +491,8 @@ pd_held_resource_on_delete(resource_registry_node_t *node_gen, void *pd_v)
 err_goto:
     if (error)
     {
-        OSDB_PRINTERR("Warning: Could not free PD's held resource %s-%d\n", cap_type_to_str(node->type), node->res_id);
+        OSDB_PRINTERR("Warning: Could not free PD's held resource %s-%d\n",
+                      cap_type_to_str(node->res_id.type), node->res_id.object_id);
     }
 }
 
@@ -630,7 +630,7 @@ void pd_destroy(pd_t *pd, vka_t *server_vka, vspace_t *server_vspace)
     SERVER_GOTO_IF_ERR(error, "Failed to sweep resource spaces after PD destroy\n");
 
     // Remove this PD from any other PDs that hold it
-    error = pd_component_resource_cleanup(GPICAP_TYPE_PD, get_pd_component()->space_id, pd_id);
+    error = pd_component_resource_cleanup(make_res_id(GPICAP_TYPE_PD, get_pd_component()->space_id, pd_id));
     SERVER_GOTO_IF_ERR(error, "Failed to remove destroyed PD resource from other PDs\n");
 
     return;
@@ -830,12 +830,12 @@ int pd_send_cap(pd_t *to_pd,
     if (should_mint)
     {
         seL4_CPtr new_cap = resource_component_make_badged_ep(server_vka,
-                                                           to_pd->pd_vka,
-                                                           server_src_cap,
-                                                           cap_type,
-                                                           get_space_id_from_badge(badge),
-                                                           get_object_id_from_badge(badge),
-                                                           to_pd->id);
+                                                              to_pd->pd_vka,
+                                                              server_src_cap,
+                                                              cap_type,
+                                                              get_space_id_from_badge(badge),
+                                                              get_object_id_from_badge(badge),
+                                                              to_pd->id);
 
         SERVER_GOTO_IF_COND(new_cap == seL4_CapNull, "Failed to mint a new cap\n");
 
@@ -845,10 +845,14 @@ int pd_send_cap(pd_t *to_pd,
             SERVER_WARN_IF_COND(error, "Warning: failed to set the cap in PD's OSmosis data\n");
         }
 
+        gpi_res_id_t res_id = {
+            .type = cap_type,
+            .space_id = get_space_id_from_badge(badge),
+            .object_id = get_object_id_from_badge(badge),
+        };
+
         error = pd_add_resource(to_pd,
-                                cap_type,
-                                get_space_id_from_badge(badge),
-                                get_object_id_from_badge(badge),
+                                res_id,
                                 server_src_cap,
                                 new_cap,
                                 server_src_cap);
@@ -878,9 +882,9 @@ static int res_dump(pd_t *pd, model_state_t *ms, pd_hold_node_t *current_cap, gp
     int error = 0;
 
     /* Check if the resource is already dumped */
-    gpi_model_node_t *res_node = get_resource_node(ms, current_cap->type, current_cap->space_id, current_cap->res_id);
+    gpi_model_node_t *res_node = get_resource_node(ms, current_cap->res_id);
 
-    switch (current_cap->type)
+    switch (current_cap->res_id.type)
     {
     case GPICAP_TYPE_NONE:
         break;
@@ -888,10 +892,10 @@ static int res_dump(pd_t *pd, model_state_t *ms, pd_hold_node_t *current_cap, gp
         if (!res_node || !res_node->dumped)
         {
             /* Add the resource node */
-            res_node = add_resource_node(ms, current_cap->type, current_cap->space_id, current_cap->res_id);
+            res_node = add_resource_node(ms, current_cap->res_id);
 
             ads_component_registry_entry_t *ads_data = (ads_component_registry_entry_t *)
-                resource_component_registry_get_by_id(get_ads_component(), current_cap->res_id);
+                resource_component_registry_get_by_id(get_ads_component(), current_cap->res_id.object_id);
             SERVER_GOTO_IF_COND(ads_data == NULL, "Failed to find ADS data\n");
 
             ads_dump_rr(&ads_data->ads, ms, pd_node);
@@ -905,10 +909,10 @@ static int res_dump(pd_t *pd, model_state_t *ms, pd_hold_node_t *current_cap, gp
         if (!res_node || !res_node->dumped)
         {
             /* Add the resource node */
-            res_node = add_resource_node(ms, current_cap->type, current_cap->space_id, current_cap->res_id);
+            res_node = add_resource_node(ms, current_cap->res_id);
 
             mo_component_registry_entry_t *mo_data = (mo_component_registry_entry_t *)
-                resource_component_registry_get_by_id(get_mo_component(), current_cap->res_id);
+                resource_component_registry_get_by_id(get_mo_component(), current_cap->res_id.object_id);
             SERVER_GOTO_IF_COND(mo_data == NULL, "Failed to find MO data\n");
 
             mo_dump_rr(&mo_data->mo, ms, pd_node);
@@ -921,10 +925,10 @@ static int res_dump(pd_t *pd, model_state_t *ms, pd_hold_node_t *current_cap, gp
         if (!res_node || !res_node->dumped)
         {
             /* Add the resource node */
-            res_node = add_resource_node(ms, current_cap->type, current_cap->space_id, current_cap->res_id);
+            res_node = add_resource_node(ms, current_cap->res_id);
 
             cpu_component_registry_entry_t *cpu_data = (cpu_component_registry_entry_t *)
-                resource_component_registry_get_by_id(get_cpu_component(), current_cap->res_id);
+                resource_component_registry_get_by_id(get_cpu_component(), current_cap->res_id.object_id);
             SERVER_GOTO_IF_COND(cpu_data == NULL, "Failed to find CPU data\n");
 
             cpu_dump_rr(&cpu_data->cpu, ms, pd_node);
@@ -937,10 +941,10 @@ static int res_dump(pd_t *pd, model_state_t *ms, pd_hold_node_t *current_cap, gp
         // Use some other method to get the cap details
         break;
     case GPICAP_TYPE_PD:
-        if ((!res_node || !res_node->dumped) && current_cap->res_id != pd->id)
+        if ((!res_node || !res_node->dumped) && current_cap->res_id.object_id != pd->id)
         {
             /* Add the PD Node */
-            pd_component_registry_entry_t *pd_data = pd_component_registry_get_entry_by_id(current_cap->res_id);
+            pd_component_registry_entry_t *pd_data = pd_component_registry_get_entry_by_id(current_cap->res_id.object_id);
             SERVER_GOTO_IF_COND(pd_data == NULL, "Failed to find PD%d's data\n", current_cap->res_id);
 
             pd_dump_internal(&pd_data->pd, ms);
@@ -949,8 +953,8 @@ static int res_dump(pd_t *pd, model_state_t *ms, pd_hold_node_t *current_cap, gp
         // Don't add a hold edge for PDs
         break;
     case GPICAP_TYPE_RESSPC:
-        resspc_component_registry_entry_t *space_data = resource_space_get_entry_by_id(current_cap->res_id);
-            SERVER_GOTO_IF_COND(space_data == NULL, "Failed to find resource space data\n");
+        resspc_component_registry_entry_t *space_data = resource_space_get_entry_by_id(current_cap->res_id.object_id);
+        SERVER_GOTO_IF_COND(space_data == NULL, "Failed to find resource space data\n");
         res_node = get_resource_space_node(ms, space_data->space.resource_type, space_data->space.id);
 
         if (!res_node || !res_node->dumped)
@@ -973,11 +977,12 @@ static int res_dump(pd_t *pd, model_state_t *ms, pd_hold_node_t *current_cap, gp
         if (!res_node || !res_node->dumped)
         {
             /* Add the resource node */
-            res_node = add_resource_node(ms, current_cap->type, current_cap->space_id, current_cap->res_id);
+            res_node = add_resource_node(ms, current_cap->res_id);
 
             /* Find the resource space */
-            resspc_component_registry_entry_t *space_entry = resource_space_get_entry_by_id(current_cap->space_id);
-            SERVER_GOTO_IF_COND(space_entry == NULL, "Failed to find resource space (%d)\n", current_cap->space_id);
+            resspc_component_registry_entry_t *space_entry = resource_space_get_entry_by_id(current_cap->res_id.space_id);
+            SERVER_GOTO_IF_COND(space_entry == NULL, "Failed to find resource space (%d)\n", 
+            current_cap->res_id.space_id);
 
             /* Add the subset edge */
             char space_id[CSV_MAX_STRING_SIZE];
@@ -991,9 +996,7 @@ static int res_dump(pd_t *pd, model_state_t *ms, pd_hold_node_t *current_cap, gp
 
             /* Request additional relations for the resource */
             pd_work_entry_t *work_node = calloc(1, sizeof(gpi_res_id_t));
-            work_node->res_id.type = current_cap->type;
-            work_node->res_id.space_id = current_cap->space_id;
-            work_node->res_id.object_id = current_cap->res_id;
+            work_node->res_id = current_cap->res_id;
             work_node->client_pd_id = pd->id;
 
             pd_component_queue_model_extraction_work(manager_pd_entry, work_node);
@@ -1137,11 +1140,11 @@ err_goto:
 inline void print_pd_osm_cap_info(pd_hold_node_t *o)
 {
     printf("Resource_ID: %d Slot_RT:%lx\t Slot_PD: %lx\t Slot_ServerPD: %lx\t T: %s\n",
-           o->res_id,
+           o->res_id.object_id,
            o->slot_in_RT_Debug,
            o->slot_in_PD_Debug,
            o->slot_in_ServerPD_Debug,
-           cap_type_to_str(o->type));
+           cap_type_to_str(o->res_id.type));
 }
 
 inline void print_pd_osm_rde_info(osmosis_rde_t *o)
