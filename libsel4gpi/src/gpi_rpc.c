@@ -46,7 +46,11 @@ int sel4gpi_rpc_call(sel4gpi_rpc_env_t *env, seL4_CPtr ep, void *msg,
     }
 
     /* make the call */
-    seL4_Call(ep, seL4_MessageInfo_new(0, 0, n_caps, stream_size));
+    seL4_MessageInfo_t reply_tag = seL4_Call(ep, seL4_MessageInfo_new(0, 0, n_caps, stream_size));
+
+    if (seL4_MessageInfo_ptr_get_label(&reply_tag) != seL4_NoError) {
+        return -1;
+    }
 
     pb_istream_t istream = pb_istream_from_IPC(0);
     ret = pb_decode_delimited(&istream, env->reply_desc, reply);

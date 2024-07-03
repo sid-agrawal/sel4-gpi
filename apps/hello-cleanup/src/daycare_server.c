@@ -1,24 +1,24 @@
 #include <daycare_server.h>
 #include <sel4gpi/pd_utils.h>
-
-#define PRINTF(...)                                           \
-    do                                                        \
-    {                                                         \
-        printf("hello-cleanup daycare-server: " __VA_ARGS__); \
-    } while (0);
+#include <basic_rpc.pb.h>
 
 #define CHECK_ERROR_GOTO(check, msg) \
     do                               \
     {                                \
         if ((check) != seL4_NoError) \
         {                            \
-            PRINTF(msg);             \
+            DAYCARE_PRINTF(msg);             \
             error = 1;               \
             goto done;               \
         }                            \
     } while (0);
 
 static daycare_server_context_t daycare_server;
+
+static sel4gpi_rpc_env_t rpc_env = {
+    .request_desc = &BasicMessage_msg,
+    .reply_desc = &BasicReturnMessage_msg,
+};
 
 daycare_server_context_t *get_daycare_server(void)
 {
@@ -27,7 +27,7 @@ daycare_server_context_t *get_daycare_server(void)
 
 int daycare_server_init(void)
 {
-    PRINTF("~~ GRAND OPENING OF THE DAYCARE ~~\n");
+    DAYCARE_PRINTF("~~ GRAND OPENING OF THE DAYCARE ~~\n");
 
     get_daycare_server()->count = 0;
 
@@ -37,17 +37,18 @@ int daycare_server_init(void)
 /**
  * Called when the daycare receives a request
  */
-seL4_MessageInfo_t daycare_request_handler(
-    seL4_MessageInfo_t tag,
+void daycare_request_handler(
+    void *msg_p,
+    void *msg_reply_p,
     seL4_Word sender_badge,
     seL4_CPtr cap,
     bool *need_new_recv_cap)
 {
     int error = 0;
-    seL4_MessageInfo_t reply_tag = seL4_MessageInfo_new(0, 0, 0, 0);
+    BasicReturnMessage *reply_msg = (BasicReturnMessage *)msg_reply_p;
 
     // daycare does only one thing right now
-    PRINTF("Give me a minute...\n");
+    DAYCARE_PRINTF("Give me a minute...\n");
 
     // Create a pokemon
     get_daycare_server()->count++;
@@ -59,12 +60,12 @@ seL4_MessageInfo_t daycare_request_handler(
     CHECK_ERROR_GOTO(error, "Failed to give the resource");
 
     // Get a pokeball
-    PRINTF("I need to fetch a pokeball first.\n");
+    DAYCARE_PRINTF("I need to fetch a pokeball first.\n");
     seL4_CPtr pokemart_server_ep = sel4gpi_get_rde(sel4gpi_get_resource_type_code(POKEBALL_RESOURCE_TYPE_NAME));
 
     error = pokemart_client_get_pokeball(pokemart_server_ep, &get_daycare_server()->pokeballs[pokemon_id]);
     CHECK_ERROR_GOTO(error, "Failed to get a pokeball\n");
-    PRINTF("Ok, I've got the pokeball #%d.\n", get_daycare_server()->pokeballs[pokemon_id].id);
+    DAYCARE_PRINTF("Ok, I've got the pokeball #%d.\n", get_daycare_server()->pokeballs[pokemon_id].id);
 
     // Give the pokemon
     seL4_CPtr dest;
@@ -75,22 +76,20 @@ seL4_MessageInfo_t daycare_request_handler(
                                           &dest);
     CHECK_ERROR_GOTO(error, "Failed to give the resource");
 
-    PRINTF("I've got the perfect pokemon for you, it's #%d!\n", pokemon_id);
+    DAYCARE_PRINTF("I've got the perfect pokemon for you, it's #%d!\n", pokemon_id);
 
-    seL4_MessageInfo_ptr_set_length(&reply_tag, 2);
-    seL4_SetMR(0, dest);
-    seL4_SetMR(1, pokemon_id);
+    reply_msg->slot = dest;
+    reply_msg->object_id = pokemon_id;
 
 done:
-    seL4_MessageInfo_ptr_set_label(&reply_tag, error);
-    return reply_tag;
+    DAYCARE_PRINTF("Returning from request handler\n");
+    reply_msg->errorCode = error;
 }
 
 int daycare_work_handler(
     PdWorkReturnMessage *work)
 {
     int error = 0;
-    seL4_MessageInfo_t reply_tag = seL4_MessageInfo_new(0, 0, 0, 0);
 
     int op = work->action;
     if (op == PdWorkAction_EXTRACT)
@@ -98,7 +97,7 @@ int daycare_work_handler(
         uint64_t pokemon_id = work->object_id;
         uint64_t daycare_pd_id = sel4gpi_get_pd_conn().id;
 
-        PRINTF("Get rr for pokemon #%ld\n", pokemon_id);
+        DAYCARE_PRINTF("Get rr for pokemon #%ld\n", pokemon_id);
 
         if (pokemon_id == BADGE_OBJ_ID_NULL)
         {
@@ -107,9 +106,11 @@ int daycare_work_handler(
 
             if (error)
             {
-                PRINTF("Failed to send no-data model extraction\n");
-                return error;
+                DAYCARE_PRINTF("Failed to send no-data model extraction\n");
             }
+
+            DAYCARE_PRINTF("Returning from work handler\n");
+            return error;
         }
 
         /* Initialize the model state */
@@ -118,7 +119,7 @@ int daycare_work_handler(
         error = resource_server_extraction_setup(&get_daycare_server()->gen, 1, &mo, &model_state);
         if (error)
         {
-            PRINTF("Failed to setup model extraction\n");
+            DAYCARE_PRINTF("Failed to setup model extraction\n");
             return error;
         }
 
@@ -142,29 +143,35 @@ int daycare_work_handler(
         error = resource_server_extraction_finish(&get_daycare_server()->gen, &mo, model_state);
         if (error)
         {
-            PRINTF("Failed to finish model extraction\n");
+            DAYCARE_PRINTF("Failed to finish model extraction\n");
             return error;
         }
     }
     else
     {
-        PRINTF("Unknown work action\n");
+        DAYCARE_PRINTF("Unknown work action\n");
         error = 1;
     }
 
 done:
+    DAYCARE_PRINTF("Returning from work handler\n");
     return error;
 }
 
 int daycare_client_get_pokemon(seL4_CPtr server_ep, pokemon_client_context_t *result)
 {
-    seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0, 0);
 
-    tag = seL4_Call(server_ep, tag);
+    BasicMessage msg;
+    BasicReturnMessage reply_msg;
 
-    int error = seL4_MessageInfo_get_label(tag);
-    result->ep.capPtr = seL4_GetMR(0);
-    result->id = seL4_GetMR(1);
+    int error = sel4gpi_rpc_call(&rpc_env, server_ep, (void *)&msg, 0, NULL, (void *)&reply_msg);
+    error |= reply_msg.errorCode;
+
+    if (!error)
+    {
+        result->ep.capPtr = reply_msg.slot;
+        result->id = reply_msg.object_id;
+    }
 
     return error;
 }

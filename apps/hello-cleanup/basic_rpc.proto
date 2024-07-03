@@ -1,0 +1,12 @@
+syntax = "proto3";
+
+message BasicMessage {
+    uint64 arg = 1;
+};
+
+message BasicReturnMessage {
+    uint32 errorCode = 1;
+    uint64 slot = 2;
+    uint32 space_id = 3;
+    uint32 object_id = 4;
+};

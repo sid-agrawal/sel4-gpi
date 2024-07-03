@@ -19,6 +19,23 @@
 /** @file
  * Utility functions for non-RT PDs that serve GPI resources
  */
+#define RESOURCE_SERVER_DEBUG 1
+#define SERVER_UTILS "Server Utils"
+
+// Could use the server's debug function instead
+#if RESOURCE_SERVER_DEBUG
+#define RESOURCE_SERVER_PRINTF(...)                                      \
+    do                                                                   \
+    {                                                                    \
+        if (context->debug_print)                                        \
+        {                                                                \
+            printf("%s %s: ", context->resource_type_name, SERVER_UTILS); \
+            printf(__VA_ARGS__);                                         \
+        }                                                                \
+    } while (0);
+#else
+#define RESOURCE_SERVER_PRINTF(...)
+#endif
 
 /**
  * Generic resource server context
@@ -30,8 +47,9 @@ typedef struct _resource_server_context
     sel4gpi_rpc_env_t rpc_env;                              //< RPC server context
     resspc_client_context_t default_space;                  ///< Connection to the default resource space
 
-    seL4_MessageInfo_t (*request_handler)( ///< Callback called when the server receives a client request
-        seL4_MessageInfo_t tag,
+    void (*request_handler)( ///< Callback called when the server receives a client request
+        void *msg_p,         ///< Contains the client message, type is the server's protobuf request structure
+        void *msg_reply_p,   ///< To fill with the reply message, type is the server's protobuf reply structure
         seL4_Word sender_badge,
         seL4_CPtr received_cap,
         bool *need_new_reply_cap);
@@ -42,6 +60,8 @@ typedef struct _resource_server_context
     int (*init_fn)(); ///< Run once when the server is started
 
     uint64_t parent_pd_id; ///< Client ID of the parent PD
+
+    bool debug_print; ///< True if the resource server should output debug prints
 
     // RDEs and other EPs
     seL4_CPtr mo_ep;               ///< MO request ep
@@ -60,7 +80,8 @@ typedef struct _resource_server_context
  *
  * @param server_type string name of the resource type this server will provide
  * @param request_handler Function to handle client requests
- *                  param: seL4_MessageInfo_t tag, the request tag
+ *                  param: msg_p, the client message
+ *                  param: msg_reply_p, to fill with the reply message
  *                  param: seL4_Word badge, the request's badge
  *                  param: seL4_CPtr cap, the received cap
  *                  return: seL4_MessageInfo_t reply info
@@ -70,15 +91,21 @@ typedef struct _resource_server_context
  * @param parent_ep Endpoint of the parent process
  * @param parent_pd_id the PD ID of the parent, so we can create an RDE
  * @param init_fn To run at the beginning of main thread execution
+ * @param debug_print If true, outputs debug print
+ * @param request_desc protobuf structure for requests to this server
+ * @param reply_desc protobuf structure for replies from this server
  * @return 0 on successful exit, nonzero otherwise
  */
 int resource_server_start(resource_server_context_t *context,
                           char *server_type,
-                          seL4_MessageInfo_t (*request_handler)(seL4_MessageInfo_t, seL4_Word, seL4_CPtr, bool *),
+                          void (*request_handler)(void *, void *, seL4_Word, seL4_CPtr, bool *),
                           int (*work_handler)(PdWorkReturnMessage *),
                           seL4_CPtr parent_ep,
                           uint64_t parent_pd_id,
-                          int (*init_fn)());
+                          int (*init_fn)(),
+                          bool debug_print,
+                          pb_msgdesc_t *request_desc,
+                          pb_msgdesc_t *reply_desc);
 
 /**
  * Main function for a resource server, receives requests

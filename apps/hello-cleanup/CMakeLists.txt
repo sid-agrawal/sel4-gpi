@@ -8,6 +8,8 @@ cmake_minimum_required(VERSION 3.7.2)
 
 project(hello_cleanup C CXX)
 
+include(nanopb)
+
 # Use arm arch source files on RISCV
 set(arch ${KernelArch})
 if(KernelArchRiscV)
@@ -20,11 +22,15 @@ file(
         src/*.c
 )
 
-add_executable(hello_cleanup EXCLUDE_FROM_ALL ${deps})
+SEL4_GENERATE_PROTOBUF(proto_srcs proto_hdrs ${CMAKE_CURRENT_SOURCE_DIR}/basic_rpc.proto)
+
+add_executable(hello_cleanup EXCLUDE_FROM_ALL ${deps} ${proto_srcs})
 
 target_include_directories(
     hello_cleanup
-    PRIVATE include 
+    PRIVATE
+        ${CMAKE_CURRENT_BINARY_DIR}
+        include 
 )
 
 # (XXX) Arya: probably not all of these are needed
@@ -39,13 +45,8 @@ target_link_libraries(
         sel4allocman
         sel4vka
         sel4utils
-        sel4rpc
-        sel4test
-        sel4sync
         sel4muslcsys
-        sel4testsupport
         sel4gpi
-        sel4serialserver_tests
-        kvstore_client
+        sel4nanopb
     PRIVATE sel4test-driver_Config
 )

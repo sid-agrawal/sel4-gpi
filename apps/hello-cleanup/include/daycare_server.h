@@ -21,6 +21,12 @@
 #define POKEMON_RESOURCE_TYPE_NAME "POKEMON"
 #define MAX_POKEMON 16
 
+#define DAYCARE_PRINTF(...)                                   \
+    do                                                        \
+    {                                                         \
+        printf("hello-cleanup daycare-server: " __VA_ARGS__); \
+    } while (0);
+
 typedef struct _daycare_server_context
 {
     // Generic resource server context
@@ -46,8 +52,9 @@ int daycare_server_init(void);
 /**
  * Called when the daycare receives a request
  */
-seL4_MessageInfo_t daycare_request_handler(
-    seL4_MessageInfo_t tag,
+void daycare_request_handler(
+    void *msg_p,
+    void *msg_reply_p,
     seL4_Word sender_badge,
     seL4_CPtr cap,
     bool *need_new_recv_cap);

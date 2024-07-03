@@ -10,12 +10,19 @@
 #include <vka/capops.h>
 
 #include <sel4gpi/pd_utils.h>
+#include <sel4gpi/gpi_rpc.h>
 #include <sel4gpi/resource_server_utils.h>
 #include <sel4gpi/resource_server_remote_utils.h>
 
 /** @file
  * Utility functions for non-RT PDs that serve GPI resources
  */
+
+
+// Generic buffer size for RPC messages, in bytes
+// Must be larger than any RPC message in the system
+// We could use the generated Message_size constants instead, if we wanted to be more precise
+#define RPC_MSG_MAX_SIZE 256
 
 #define CHECK_ERROR(error, msg)    \
     do                             \
@@ -46,11 +53,14 @@
 
 int resource_server_start(resource_server_context_t *context,
                           char *server_type,
-                          seL4_MessageInfo_t (*request_handler)(seL4_MessageInfo_t, seL4_Word, seL4_CPtr, bool *),
+                          void (*request_handler)(void *, void *, seL4_Word, seL4_CPtr, bool *),
                           int (*work_handler)(PdWorkReturnMessage *),
                           seL4_CPtr parent_ep,
                           uint64_t parent_pd_id,
-                          int (*init_fn)())
+                          int (*init_fn)(),
+                          bool debug_print,
+                          pb_msgdesc_t *request_desc,
+                          pb_msgdesc_t *reply_desc)
 {
     seL4_Error error;
 
@@ -63,6 +73,8 @@ int resource_server_start(resource_server_context_t *context,
     context->pd_conn = sel4gpi_get_pd_conn();
     context->parent_pd_id = parent_pd_id;
     context->init_fn = init_fn;
+    context->debug_print = debug_print;
+    sel4gpi_rpc_env_init(&context->rpc_env, request_desc, reply_desc);
 
     context->parent_ep.badged_server_ep_cspath.capPtr = parent_ep;
     error = ep_client_get_raw_endpoint(&context->parent_ep);
@@ -141,7 +153,7 @@ int resource_server_main(void *context_v)
     received_cap_path.capDepth = PD_CAP_DEPTH;
 
     // Create a default resource space
-    error = resource_server_new_res_space(context, context->parent_pd_id, &context->default_space);    
+    error = resource_server_new_res_space(context, context->parent_pd_id, &context->default_space);
     CHECK_ERROR_GOTO(error, "failed to create resource server's default space", exit_main);
     RESOURCE_SERVER_PRINTF("Resource server's default space ID is 0x%lx\n", context->default_space.id);
 
@@ -185,14 +197,15 @@ int resource_server_main(void *context_v)
         /* Receive a message */
         RESOURCE_SERVER_PRINTF("Ready to receive a message\n");
         tag = resource_server_recv(context, &sender_badge);
+        RESOURCE_SERVER_PRINTF("Received a message\n");
 
 #if RESOURCE_SERVER_DEBUG
-        char sender_badge_str[100];
+        char sender_badge_str[200];
         badge_sprint(sender_badge_str, sender_badge);
         char unwrapped_str[100];
         badge_sprint(unwrapped_str, seL4_GetBadge(0));
 
-        RESOURCE_SERVER_PRINTF("Message on endpoint %p\n",  seL4_GetCapPaddr(context->server_ep.raw_endpoint));
+        RESOURCE_SERVER_PRINTF("Message on endpoint %p\n", seL4_GetCapPaddr(context->server_ep.raw_endpoint));
         RESOURCE_SERVER_PRINTF("- sender badge: %s\n", sender_badge_str);
         RESOURCE_SERVER_PRINTF("- extracaps %d, capsunwrapped %d\n",
                                seL4_MessageInfo_get_extraCaps(tag), seL4_MessageInfo_get_capsUnwrapped(tag));
@@ -208,6 +221,8 @@ int resource_server_main(void *context_v)
             /* Perform any pending work the RT requested */
             while (1)
             {
+                RESOURCE_SERVER_PRINTF("Requesting work from root task\n");
+
                 PdWorkReturnMessage work;
                 error = pd_client_get_work(&context->pd_conn, &work);
                 CHECK_ERROR_GOTO(error, "failed to get work from RT", exit_main);
@@ -223,7 +238,7 @@ int resource_server_main(void *context_v)
                 }
                 else
                 {
-                    // There is no more work to be done for now
+                    RESOURCE_SERVER_PRINTF("No more work to be done\n");
                     break;
                 }
             }
@@ -235,13 +250,24 @@ int resource_server_main(void *context_v)
         sel4gpi_store_reply_cap();
 #endif
 
+        /* Decode the message */
+        char rpc_msg_buf[RPC_MSG_MAX_SIZE];
+        char rpc_reply_buf[RPC_MSG_MAX_SIZE];
+
+        error = sel4gpi_rpc_recv(&context->rpc_env, (void *)rpc_msg_buf);
+        assert(error == 0);
+
         /* Handle the message */
-        seL4_MessageInfo_t reply_tag = context->request_handler(tag,
-                                                                sender_badge,
-                                                                received_cap_path.capPtr,
-                                                                &need_new_receive_slot);
+        context->request_handler(rpc_msg_buf,
+                                 rpc_reply_buf,
+                                 sender_badge,
+                                 received_cap_path.capPtr,
+                                 &need_new_receive_slot);
 
         /* Reply to message */
+        seL4_MessageInfo_t reply_tag;
+        error = sel4gpi_rpc_reply(&context->rpc_env, (void *)rpc_reply_buf, &reply_tag);
+        assert(error == 0);
         resource_server_reply(context, reply_tag);
 
 #if STORE_REPLY_CAP

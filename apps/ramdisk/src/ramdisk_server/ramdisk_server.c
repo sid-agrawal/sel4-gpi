@@ -228,21 +228,22 @@ int ramdisk_init()
         resource_server_create_resource(&server->gen, NULL, i);
     }
 
-    /* Initialize RPC server */
-    sel4gpi_rpc_env_init(&get_ramdisk_server()->gen.rpc_env, &RamdiskMessage_msg, &RamdiskReturnMessage_msg);
-
     return error;
 }
 
-seL4_MessageInfo_t ramdisk_request_handler(
-    seL4_MessageInfo_t tag,
+void ramdisk_request_handler(
+    void *msg_p,
+    void *msg_reply_p,
     seL4_Word sender_badge,
     seL4_CPtr cap,
     bool *need_new_recv_cap)
 {
-    int error;
+    int error = 0;
     void *mo_vaddr;
     *need_new_recv_cap = false;
+    RamdiskMessage *msg = (RamdiskMessage *)msg_p;
+    RamdiskReturnMessage *reply_msg = (RamdiskReturnMessage *)msg_reply_p;
+    reply_msg->which_msg = RamdiskReturnMessage_basic_tag;
 
     // Get info from badge
     uint64_t client_id = get_client_id_from_badge(sender_badge);
@@ -253,21 +254,11 @@ seL4_MessageInfo_t ramdisk_request_handler(
     CHECK_ERROR_GOTO(cap_type != get_ramdisk_server()->gen.resource_type, "Got invalid captype",
                      RamdiskError_UNKNOWN, done);
 
-    // Decode the RPC message
-    RamdiskMessage msg;
-    RamdiskReturnMessage reply_msg = {
-        .which_msg = RamdiskReturnMessage_basic_tag};
-
-    error = sel4gpi_rpc_recv(&get_ramdisk_server()->gen.rpc_env, (void *)&msg);
-    CHECK_ERROR_GOTO(error, "Failed to decode RPC message", error, done);
-
-    // Handle the message
-    seL4_MessageInfo_t reply_tag = seL4_MessageInfo_new(0, 0, 0, 0);
     if (obj_id == BADGE_OBJ_ID_NULL)
     {
         RAMDISK_PRINTF("Got message on badged EP with no object id\n");
 
-        switch (msg.op)
+        switch (msg->op)
         {
         case RamdiskAction_BIND:
             *need_new_recv_cap = true;
@@ -310,15 +301,15 @@ seL4_MessageInfo_t ramdisk_request_handler(
             CHECK_ERROR_GOTO(error, "Failed to give the resource", error, done);
 
             // Send the reply
-            reply_msg.which_msg = RamdiskReturnMessage_alloc_tag;
-            reply_msg.msg.alloc.block_id = blockno;
-            reply_msg.msg.alloc.space_id = get_ramdisk_server()->gen.default_space.id;
-            reply_msg.msg.alloc.slot = dest;
+            reply_msg->which_msg = RamdiskReturnMessage_alloc_tag;
+            reply_msg->msg.alloc.block_id = blockno;
+            reply_msg->msg.alloc.space_id = get_ramdisk_server()->gen.default_space.id;
+            reply_msg->msg.alloc.slot = dest;
 
             RAMDISK_PRINTF("Resource is in dest slot %d\n", (int)dest);
             break;
         default:
-            RAMDISK_PRINTF("Op is %d\n", op);
+            RAMDISK_PRINTF("Op is %d\n", msg->op);
             CHECK_ERROR_GOTO(1, "got invalid op on badged ep without obj id", RamdiskError_UNKNOWN, done);
         }
     }
@@ -326,7 +317,7 @@ seL4_MessageInfo_t ramdisk_request_handler(
     {
         RAMDISK_PRINTF("Got message on EP with badge: %lx\n", sender_badge);
 
-        switch (msg.op)
+        switch (msg->op)
         {
         case RamdiskAction_READ:
             RAMDISK_PRINTF("Op is read\n");
@@ -361,15 +352,13 @@ seL4_MessageInfo_t ramdisk_request_handler(
             // ARYA-TODO what if the MO is not of RAMDISK_BLOCK_SIZE?
             break;
         default:
-            RAMDISK_PRINTF("Op is %d\n", op);
+            RAMDISK_PRINTF("Op is %d\n", msg->op);
             CHECK_ERROR_GOTO(1, "got invalid op on badged ep with obj id", RamdiskError_UNKNOWN, done);
         }
     }
 
 done:
-    reply_msg.errorCode = error;
-    sel4gpi_rpc_reply(&get_ramdisk_server()->gen.rpc_env, (void *)&reply_msg, &reply_tag);
-    return reply_tag;
+    reply_msg->errorCode = error;
 }
 
 int ramdisk_work_handler(PdWorkReturnMessage *work)

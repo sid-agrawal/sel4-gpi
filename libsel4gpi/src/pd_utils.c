@@ -54,6 +54,11 @@ gpi_cap_t sel4gpi_get_resource_type_code(char *type_name)
 char *sel4gpi_get_resource_type_name(gpi_cap_t type)
 {
     osm_pd_shared_data_t *shared_data = (osm_pd_shared_data_t *)sel4runtime_get_osm_shared_data();
+
+    if (type < 0 || type  > GPICAP_TYPE_MAX) {
+        return "NONE";
+    }
+
     return shared_data->type_names[type];
 }
 

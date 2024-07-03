@@ -199,8 +199,7 @@ int pd_client_clear_slot(pd_client_context_t *conn,
         .which_msg = PdMessage_clear_slot_tag,
         .msg.clear_slot = {
             .slot = slot,
-        }
-    };
+        }};
 
     PdReturnMessage ret_msg;
 
@@ -260,7 +259,8 @@ int pd_client_give_resource(pd_client_context_t *conn,
                              0, NULL, (void *)&ret_msg);
     error |= ret_msg.errorCode;
 
-    if (!error) {
+    if (!error)
+    {
         *dest = ret_msg.msg.give_resource.slot;
     }
 
@@ -331,8 +331,17 @@ int pd_client_send_subgraph(pd_client_context_t *conn, mo_client_context_t *mo_c
 
     PdReturnMessage ret_msg;
 
-    error = sel4gpi_rpc_call(&rpc_env, conn->badged_server_ep_cspath.capPtr, (void *)&msg,
-                             1, &mo_conn->badged_server_ep_cspath.capPtr, (void *)&ret_msg);
+    if (has_data)
+    {
+        error = sel4gpi_rpc_call(&rpc_env, conn->badged_server_ep_cspath.capPtr, (void *)&msg,
+                                 1, &mo_conn->badged_server_ep_cspath.capPtr, (void *)&ret_msg);
+    }
+    else
+    {
+        error = sel4gpi_rpc_call(&rpc_env, conn->badged_server_ep_cspath.capPtr, (void *)&msg,
+                                 0, NULL, (void *)&ret_msg);
+    }
+
     error |= ret_msg.errorCode;
 
     return error;

@@ -21,10 +21,12 @@ void linked_list_insert(linked_list_t *list, void *data)
     {
         linked_list_node_t *new_node = calloc(1, sizeof(linked_list_node_t));
         new_node->data = data;
+        new_node->next = NULL;
 
         if (!list->head)
         {
             list->head = new_node;
+            new_node->prev = NULL;
         }
 
         if (list->tail)

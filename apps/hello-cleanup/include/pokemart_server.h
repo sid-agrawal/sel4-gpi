@@ -17,6 +17,12 @@
 
 #define POKEBALL_RESOURCE_TYPE_NAME "POKEBALL"
 
+#define POKEMART_PRINTF(...)                                   \
+    do                                                         \
+    {                                                          \
+        printf("hello-cleanup pokemart-server: " __VA_ARGS__); \
+    } while (0);
+
 typedef struct _pokemart_server_context
 {
     // Generic resource server context
@@ -42,8 +48,9 @@ int pokemart_server_init(void);
 /**
  * Called when the pokemart receives a request
  */
-seL4_MessageInfo_t pokemart_request_handler(
-    seL4_MessageInfo_t tag,
+void pokemart_request_handler(
+    void *msg_p,
+    void *msg_reply_p,
     seL4_Word sender_badge,
     seL4_CPtr cap,
     bool *need_new_recv_cap);

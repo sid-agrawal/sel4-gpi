@@ -17,6 +17,7 @@
 #include <sel4gpi/pd_utils.h>
 #include <pokemart_server.h>
 #include <daycare_server.h>
+#include <basic_rpc.pb.h>
 
 /* dummy global for libsel4muslcsys */
 char _cpio_archive[1];
@@ -155,7 +156,10 @@ int main(int argc, char **argv)
             pokemart_work_handler,
             parent_ep,
             parent_pd_id,
-            pokemart_server_init);
+            pokemart_server_init,
+            true,
+            &BasicMessage_msg,
+            &BasicReturnMessage_msg);
         break;
     case HELLO_CLEANUP_SERVER_DAYCARE_MODE:
         error = resource_server_start(
@@ -165,7 +169,10 @@ int main(int argc, char **argv)
             daycare_work_handler,
             parent_ep,
             parent_pd_id,
-            daycare_server_init);
+            daycare_server_init,
+            true,
+            &BasicMessage_msg,
+            &BasicReturnMessage_msg);
         break;
     case HELLO_CLEANUP_CLIENT_POKEMART_MODE:
         seL4_CPtr server_ep = sel4gpi_get_rde(sel4gpi_get_resource_type_code(POKEBALL_RESOURCE_TYPE_NAME));

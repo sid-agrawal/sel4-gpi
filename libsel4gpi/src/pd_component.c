@@ -660,27 +660,28 @@ static void handle_get_work_req(seL4_Word sender_badge, PdGetWorkMessage *msg, P
         // Prioritize model extraction before free
         // The model state may change during the extraction, bias towards including more information rather than less
         linked_list_pop_head(pd_data->pending_model_state, &work_res);
+        assert(work_res != NULL);
         reply_msg->msg.work.action = PdWorkAction_EXTRACT;
         reply_msg->msg.work.space_id = work_res->res_id.space_id;
         reply_msg->msg.work.object_id = work_res->res_id.object_id;
         reply_msg->msg.work.pd_id = work_res->client_pd_id;
+        free(work_res);
     }
     else if (pd_data->pending_frees->count > 0)
     {
         linked_list_pop_head(pd_data->pending_frees, &work_res);
+        assert(work_res != NULL);
         reply_msg->msg.work.action = PdWorkAction_FREE;
         reply_msg->msg.work.space_id = work_res->res_id.space_id;
         reply_msg->msg.work.object_id = work_res->res_id.object_id;
         reply_msg->msg.work.pd_id = work_res->client_pd_id;
+        free(work_res);
     }
     else
     {
         // No work to be done
         reply_msg->msg.work.action = PdWorkAction_NO_WORK;
     }
-
-    /* Free the node */
-    free(work_res);
 
 err_goto:
     reply_msg->which_msg = PdReturnMessage_work_tag;
@@ -842,9 +843,11 @@ static void pd_component_handle(void *msg_p,
         }
     }
 
+    OSDB_PRINTF("Returning from PD component with error code %d\n", reply_msg->errorCode);
     return;
 
 err_goto:
+    OSDB_PRINTF("Returning from PD component with error code %d\n", error);
     reply_msg->errorCode = error;
 }
 
@@ -1176,6 +1179,8 @@ err_goto:
 
 void pd_component_queue_model_extraction_work(pd_component_registry_entry_t *pd_entry, pd_work_entry_t *work)
 {
+    OSDB_PRINTF("Requesting model subgraph from PD (%d)\n", pd_entry->pd.id);
+
     // Add to the list
     linked_list_insert(pd_entry->pending_model_state, (void *)work);
     get_gpi_server()->model_extraction_n_missing++;

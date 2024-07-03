@@ -25,7 +25,7 @@ uintptr_t morecore_top = (uintptr_t) (PD_HEAP_LOC + APP_MALLOC_SIZE);
 #include <sel4gpi/ads_clientapi.h>
 #include <sel4gpi/pd_clientapi.h>
 #include <sel4gpi/resource_server_remote_utils.h>
-
+#include <ramdisk_rpc.pb.h>
 #include <ramdisk_server.h>
 
 int main(int argc, char **argv)
@@ -44,5 +44,8 @@ int main(int argc, char **argv)
         ramdisk_work_handler,
         parent_ep,
         parent_pd_id,
-        ramdisk_init);
+        ramdisk_init,
+        RAMDISK_DEBUG,
+        &RamdiskMessage_msg,
+        &RamdiskReturnMessage_msg);
 }

@@ -26,7 +26,7 @@ uintptr_t morecore_top = (uintptr_t) (PD_HEAP_LOC + APP_MALLOC_SIZE);
 #include <sel4gpi/ads_clientapi.h>
 #include <sel4gpi/pd_clientapi.h>
 #include <sel4gpi/resource_server_remote_utils.h>
-
+#include <fs_rpc.pb.h>
 #include <fs_server.h>
 
 int main(int argc, char **argv)
@@ -53,5 +53,8 @@ int main(int argc, char **argv)
         xv6fs_work_handler,
         parent_ep,
         parent_pd_id,
-        xv6fs_init);
+        xv6fs_init,
+        FS_DEBUG_ENABLED,
+        &FsMessage_msg,
+        &FsReturnMessage_msg);
 }

@@ -1,24 +1,24 @@
 #include <pokemart_server.h>
 #include <sel4gpi/pd_utils.h>
-
-#define PRINTF(...)                                            \
-    do                                                         \
-    {                                                          \
-        printf("hello-cleanup pokemart-server: " __VA_ARGS__); \
-    } while (0);
+#include <basic_rpc.pb.h>
 
 #define CHECK_ERROR_GOTO(check, msg) \
     do                               \
     {                                \
         if ((check) != seL4_NoError) \
         {                            \
-            PRINTF(msg);             \
+            POKEMART_PRINTF(msg);             \
             error = 1;               \
             goto done;               \
         }                            \
     } while (0);
 
 static pokemart_server_context_t pokemart_server;
+
+static sel4gpi_rpc_env_t rpc_env = {
+    .request_desc = &BasicMessage_msg,
+    .reply_desc = &BasicReturnMessage_msg,
+};
 
 pokemart_server_context_t *get_pokemart_server(void)
 {
@@ -27,7 +27,7 @@ pokemart_server_context_t *get_pokemart_server(void)
 
 int pokemart_server_init(void)
 {
-    PRINTF("~~ GRAND OPENING OF THE POKEMART ~~\n");
+    POKEMART_PRINTF("~~ GRAND OPENING OF THE POKEMART ~~\n");
 
     get_pokemart_server()->count = 0;
 
@@ -37,17 +37,18 @@ int pokemart_server_init(void)
 /**
  * Called when the pokemart receives a request
  */
-seL4_MessageInfo_t pokemart_request_handler(
-    seL4_MessageInfo_t tag,
+void pokemart_request_handler(
+    void *msg_p,
+    void *msg_reply_p,
     seL4_Word sender_badge,
     seL4_CPtr cap,
     bool *need_new_recv_cap)
 {
     int error = 0;
-    seL4_MessageInfo_t reply_tag = seL4_MessageInfo_new(0, 0, 0, 0);
+    BasicReturnMessage *msg_reply = (BasicReturnMessage *)msg_reply_p;
 
     // Pokemart does only one thing right now
-    PRINTF("Let me look here...\n");
+    POKEMART_PRINTF("Let me look here...\n");
 
     // Create a pokeball
     get_pokemart_server()->count++;
@@ -67,16 +68,14 @@ seL4_MessageInfo_t pokemart_request_handler(
                                           &dest);
     CHECK_ERROR_GOTO(error, "Failed to give the resource");
 
-    PRINTF("... ah, how about this one? Here you go, it's pokeball #%d\n", pokeball_id);
+    POKEMART_PRINTF("... ah, how about this one? Here you go, it's pokeball #%d\n", pokeball_id);
 
-    seL4_MessageInfo_ptr_set_length(&reply_tag, 3);
-    seL4_SetMR(0, dest);
-    seL4_SetMR(1, get_pokemart_server()->gen.default_space.id);
-    seL4_SetMR(2, pokeball_id);
+    msg_reply->slot = dest;
+    msg_reply->object_id = pokeball_id;
+    msg_reply->space_id = get_pokemart_server()->gen.default_space.id;
 
 done:
-    seL4_MessageInfo_ptr_set_label(&reply_tag, error);
-    return reply_tag;
+    msg_reply->errorCode = error;
 }
 
 int pokemart_work_handler(
@@ -91,7 +90,7 @@ int pokemart_work_handler(
         uint64_t pokeball_id = work->object_id;
         uint64_t pokemart_pd_id = sel4gpi_get_pd_conn().id;
 
-        PRINTF("Get rr for pokeball #%ld\n", pokeball_id);
+        POKEMART_PRINTF("Get rr for pokeball #%ld\n", pokeball_id);
 
         /* Pokeballs never have any resource relations */
 
@@ -100,7 +99,7 @@ int pokemart_work_handler(
     }
     else
     {
-        PRINTF("Unknown work action\n");
+        POKEMART_PRINTF("Unknown work action\n");
         error = 1;
     }
 
@@ -110,14 +109,18 @@ done:
 
 int pokemart_client_get_pokeball(seL4_CPtr server_ep, pokeball_client_context_t *result)
 {
-    seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0, 0);
+    BasicMessage msg;
+    BasicReturnMessage reply_msg;
 
-    tag = seL4_Call(server_ep, tag);
+    int error = sel4gpi_rpc_call(&rpc_env, server_ep, (void *)&msg, 0, NULL, (void *)&reply_msg);
+    error |= reply_msg.errorCode;
 
-    int error = seL4_MessageInfo_get_label(tag);
-    result->ep.capPtr = seL4_GetMR(0);
-    result->space_id = seL4_GetMR(1);
-    result->id = seL4_GetMR(2);
+    if (!error)
+    {
+        result->ep.capPtr = reply_msg.slot;
+        result->space_id = reply_msg.space_id;
+        result->id = reply_msg.object_id;
+    }
 
     return error;
 }

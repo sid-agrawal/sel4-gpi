@@ -275,7 +275,7 @@ static int xv6fs_libc_open(const char *pathname, int flags, int modes)
 
   if (fd == -1)
   {
-    XV6FS_PRINTF("Ran out of slots in the FD table");
+    XV6FS_PRINTF("Ran out of slots in the FD table\n");
     return -1;
   }
 

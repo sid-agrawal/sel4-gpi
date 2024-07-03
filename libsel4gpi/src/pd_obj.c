@@ -1015,14 +1015,14 @@ static int pd_dump_internal(pd_t *pd, model_state_t *ms)
 {
     int error;
 
-    OSDB_PRINTF("Extracting state of PD (%d)\n", pd->id);
-
     /* Check if the PD is already dumped */
     gpi_model_node_t *pd_node = get_pd_node(ms, pd->id);
     if (pd_node)
     {
         return 0; // This PD is already dumped
     }
+
+    OSDB_PRINTF("Extracting state of PD (%d)\n", pd->id);
 
     // Don't add the PD resource space, it is just an implementation detail but not part of the model
 

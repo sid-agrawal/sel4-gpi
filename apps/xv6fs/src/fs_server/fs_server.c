@@ -199,20 +199,22 @@ int xv6fs_init()
   resource_server_initialize_registry(&get_xv6fs_server()->file_registry, file_registry_entry_on_delete, NULL);
   resource_server_initialize_registry(&get_xv6fs_server()->ns_registry, ns_registry_entry_on_delete, NULL);
 
-  /* Initialize RPC server */
-  sel4gpi_rpc_env_init(&get_xv6fs_server()->gen.rpc_env, &FsMessage_msg, &FsReturnMessage_msg);
-
   XV6FS_PRINTF("Initialized file system\n");
 
   return error;
 }
 
-seL4_MessageInfo_t xv6fs_request_handler(seL4_MessageInfo_t tag, seL4_Word sender_badge,
-                                         seL4_CPtr cap, bool *need_new_recv_cap)
+void xv6fs_request_handler(void *msg_p,
+                           void *msg_reply_p,
+                           seL4_Word sender_badge,
+                           seL4_CPtr cap, bool *need_new_recv_cap)
 {
-  int error;
+  int error = 0;
   void *mo_vaddr;
   *need_new_recv_cap = false;
+  FsMessage *msg = (FsMessage *)msg_p;
+  FsReturnMessage *reply_msg = (FsReturnMessage *)msg_reply_p;
+  reply_msg->which_msg = FsReturnMessage_basic_tag;
 
   // Get info from badge
   uint64_t client_id = get_client_id_from_badge(sender_badge);
@@ -224,23 +226,14 @@ seL4_MessageInfo_t xv6fs_request_handler(seL4_MessageInfo_t tag, seL4_Word sende
   CHECK_ERROR_GOTO(cap_type != get_xv6fs_server()->gen.resource_type, "Got invalid captype",
                    FsError_UNKNOWN, done);
 
-  // Decode the RPC message
-  FsMessage msg;
-  FsReturnMessage reply_msg = {
-      .which_msg = FsReturnMessage_basic_tag};
-
-  error = sel4gpi_rpc_recv(&get_xv6fs_server()->gen.rpc_env, (void *)&msg);
-  CHECK_ERROR_GOTO(error, "Failed to decode RPC message", error, done);
-
   // Handle the message
-  seL4_MessageInfo_t reply_tag = seL4_MessageInfo_new(0, 0, 0, 0);
   if (obj_id == BADGE_OBJ_ID_NULL)
   { /* Handle Request Not Associated to Object */
     XV6FS_PRINTF("Received badged request with no object id\n");
 
     char *pathname;
 
-    switch (msg.which_msg)
+    switch (msg->which_msg)
     {
     case FsMessage_ns_tag:
       XV6FS_PRINTF("Got request for new namespace\n");
@@ -267,13 +260,13 @@ seL4_MessageInfo_t xv6fs_request_handler(seL4_MessageInfo_t tag, seL4_Word sende
       CHECK_ERROR_GOTO(error, "Failed to make new directory for namespace\n", FsError_UNKNOWN, done);
 
       // Set the reply
-      reply_msg.which_msg = FsReturnMessage_ns_tag;
-      reply_msg.msg.ns.space_id = ns_id;
+      reply_msg->which_msg = FsReturnMessage_ns_tag;
+      reply_msg->msg.ns.space_id = ns_id;
       break;
     case FsMessage_create_tag:
       *need_new_recv_cap = true;
 
-      int open_flags = msg.msg.create.flags;
+      int open_flags = msg->msg.create.flags;
 
       /* Attach memory object to server ADS (contains pathname) */
       error = resource_server_attach_mo(&get_xv6fs_server()->gen, cap, &mo_vaddr);
@@ -359,8 +352,8 @@ seL4_MessageInfo_t xv6fs_request_handler(seL4_MessageInfo_t tag, seL4_Word sende
       CHECK_ERROR_GOTO(error, "Failed to unattach MO", error, done);
 
       // Set the reply
-      reply_msg.which_msg = FsReturnMessage_create_tag;
-      reply_msg.msg.create.slot = dest;
+      reply_msg->which_msg = FsReturnMessage_create_tag;
+      reply_msg->msg.create.slot = dest;
       break;
     case FsMessage_link_tag:
       *need_new_recv_cap = true;
@@ -461,13 +454,13 @@ seL4_MessageInfo_t xv6fs_request_handler(seL4_MessageInfo_t tag, seL4_Word sende
     CHECK_ERROR_GOTO(reg_entry == NULL, "Received invalid badge\n", FsError_BADGE, done);
 
     XV6FS_PRINTF("Got request for file with id %ld\n", reg_entry->file->id);
-    switch (msg.which_msg)
+    switch (msg->which_msg)
     {
     case FsMessage_read_tag:
       *need_new_recv_cap = true;
 
-      int n_bytes_to_read = msg.msg.read.n;
-      int offset = msg.msg.read.offset;
+      int n_bytes_to_read = msg->msg.read.n;
+      int offset = msg->msg.read.offset;
 
       /* Attach memory object to server ADS */
       error = resource_server_attach_mo(&get_xv6fs_server()->gen, cap, &mo_vaddr);
@@ -481,14 +474,14 @@ seL4_MessageInfo_t xv6fs_request_handler(seL4_MessageInfo_t tag, seL4_Word sende
       error = resource_server_unattach(&get_xv6fs_server()->gen, mo_vaddr);
       CHECK_ERROR_GOTO(error, "Failed to unattach MO", error, done);
 
-      reply_msg.which_msg = FsReturnMessage_read_tag;
-      reply_msg.msg.read.n = n_bytes_ret;
+      reply_msg->which_msg = FsReturnMessage_read_tag;
+      reply_msg->msg.read.n = n_bytes_ret;
       break;
     case FsMessage_write_tag:
       *need_new_recv_cap = true;
 
-      n_bytes_to_read = msg.msg.write.n;
-      offset = msg.msg.write.offset;
+      n_bytes_to_read = msg->msg.write.n;
+      offset = msg->msg.write.offset;
 
       /* Attach memory object to server ADS */
       error = resource_server_attach_mo(&get_xv6fs_server()->gen, cap, &mo_vaddr);
@@ -502,8 +495,8 @@ seL4_MessageInfo_t xv6fs_request_handler(seL4_MessageInfo_t tag, seL4_Word sende
       error = resource_server_unattach(&get_xv6fs_server()->gen, mo_vaddr);
       CHECK_ERROR_GOTO(error, "Failed to unattach MO", error, done);
 
-      reply_msg.which_msg = FsReturnMessage_write_tag;
-      reply_msg.msg.write.n = n_bytes_ret;
+      reply_msg->which_msg = FsReturnMessage_write_tag;
+      reply_msg->msg.write.n = n_bytes_ret;
       break;
     case FsMessage_close_tag:
       XV6FS_PRINTF("Close file (%d)\n", reg_entry->file->id);
@@ -531,9 +524,7 @@ seL4_MessageInfo_t xv6fs_request_handler(seL4_MessageInfo_t tag, seL4_Word sende
   }
 
 done:
-  reply_msg.errorCode = error;
-  sel4gpi_rpc_reply(&get_xv6fs_server()->gen.rpc_env, (void *)&reply_msg, &reply_tag);
-  return reply_tag;
+  reply_msg->errorCode = error;
 }
 
 static int block_read(uint32_t blockno, void *buf)
@@ -559,12 +550,22 @@ static int block_write(uint32_t blockno, void *buf)
 /* Override xv6 block read/write functions */
 void xv6fs_bread(uint32_t blockno, void *buf)
 {
-  block_read(blockno, buf);
+  int error = block_read(blockno, buf);
+
+  if (error)
+  {
+    XV6FS_PRINTF("Warning: Failed block read\n");
+  }
 }
 
 void xv6fs_bwrite(uint32_t blockno, void *buf)
 {
-  block_write(blockno, buf);
+  int error = block_write(blockno, buf);
+
+  if (error)
+  {
+    XV6FS_PRINTF("Warning: Failed block write\n");
+  }
 }
 
 void disk_rw(struct buf *b, int write)
