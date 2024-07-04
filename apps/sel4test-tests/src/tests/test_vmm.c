@@ -21,16 +21,16 @@
 #include <sel4bench/arch/sel4bench.h>
 #include <sel4/sel4.h>
 #include <vka/capops.h>
-// #include <sel4test-vmm/vmm.h>
+#include <sel4test-vmm/vmm.h>
 #include <osm-vmm/vmm.h>
 
 int test_new_vmm_native(env_t env)
 {
     int error;
     printf("------------------STARTING: %s------------------\n", __func__);
-    // vm_context_t *vm;
-    // error = vm_native_setup(env->irq_handler, &env->vka, &env->vspace, env->page_directory, env->asid_pool, &env->simple, &vm);
-    // test_error_eq(error, 0);
+    vm_context_t *vm;
+    error = vm_native_setup(env->irq_handler, &env->vka, &env->vspace, env->page_directory, env->asid_pool, &env->simple, &vm);
+    test_error_eq(error, 0);
 
 #ifdef CONFIG_DEBUG_BUILD
     seL4_DebugDumpScheduler();
