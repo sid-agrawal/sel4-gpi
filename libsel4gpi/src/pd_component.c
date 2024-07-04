@@ -663,27 +663,45 @@ static void handle_get_work_req(seL4_Word sender_badge, PdGetWorkMessage *msg, P
 
     /* Return the next piece of work, if there is any */
     pd_work_entry_t *work_res;
+    int n_object_ids = sizeof(reply_msg->msg.work.object_ids) / sizeof(reply_msg->msg.work.object_ids[0]);
+
     if (pd_data->pending_model_state->count > 0)
     {
         // Prioritize model extraction before free
         // The model state may change during the extraction, bias towards including more information rather than less
-        linked_list_pop_head(pd_data->pending_model_state, &work_res);
-        assert(work_res != NULL);
         reply_msg->msg.work.action = PdWorkAction_EXTRACT;
-        reply_msg->msg.work.space_id = work_res->res_id.space_id;
-        reply_msg->msg.work.object_id = work_res->res_id.object_id;
-        reply_msg->msg.work.pd_id = work_res->client_pd_id;
-        free(work_res);
+        int n_work = MIN(n_object_ids, pd_data->pending_model_state->count);
+        reply_msg->msg.work.object_ids_count = n_work;
+        reply_msg->msg.work.pd_ids_count = n_work;
+        reply_msg->msg.work.space_ids_count = n_work;
+
+        for (int i = 0; i < n_work; i++)
+        {
+            linked_list_pop_head(pd_data->pending_model_state, &work_res);
+            assert(work_res != NULL);
+            reply_msg->msg.work.space_ids[i] = work_res->res_id.space_id;
+            reply_msg->msg.work.object_ids[i] = work_res->res_id.object_id;
+            reply_msg->msg.work.pd_ids[i] = work_res->client_pd_id;
+            free(work_res);
+        }
     }
     else if (pd_data->pending_frees->count > 0)
     {
-        linked_list_pop_head(pd_data->pending_frees, &work_res);
-        assert(work_res != NULL);
         reply_msg->msg.work.action = PdWorkAction_FREE;
-        reply_msg->msg.work.space_id = work_res->res_id.space_id;
-        reply_msg->msg.work.object_id = work_res->res_id.object_id;
-        reply_msg->msg.work.pd_id = work_res->client_pd_id;
-        free(work_res);
+        int n_work = MIN(n_object_ids, pd_data->pending_frees->count);
+        reply_msg->msg.work.object_ids_count = n_work;
+        reply_msg->msg.work.pd_ids_count = n_work;
+        reply_msg->msg.work.space_ids_count = n_work;
+
+        for (int i = 0; i < n_work; i++)
+        {
+            linked_list_pop_head(pd_data->pending_frees, &work_res);
+            assert(work_res != NULL);
+            reply_msg->msg.work.space_ids[i] = work_res->res_id.space_id;
+            reply_msg->msg.work.object_ids[i] = work_res->res_id.object_id;
+            reply_msg->msg.work.pd_ids[i] = work_res->client_pd_id;
+            free(work_res);
+        }
     }
     else
     {
@@ -708,7 +726,7 @@ static void handle_send_subgraph_req(seL4_Word sender_badge, PdSendSubgraphMessa
     // (XXX) Arya: doesn't do any authentication, or check if we actually needed this piece
     // For simplicity, just decrement the counter of "remaining pieces"
     SERVER_GOTO_IF_COND(!get_gpi_server()->pending_extraction,
-                        "Got subgraph but when there is no pending model extraction\n");
+                        "Got subgraph when there is no pending model extraction\n");
 
     if (has_data)
     {
@@ -737,7 +755,7 @@ static void handle_send_subgraph_req(seL4_Word sender_badge, PdSendSubgraphMessa
     }
 
     // Update the pending model counter
-    get_gpi_server()->model_extraction_n_missing--;
+    get_gpi_server()->model_extraction_n_missing -= msg->n_requests;
 
     /* Check if the extraction is finished */
     if (get_gpi_server()->model_extraction_n_missing == 0)

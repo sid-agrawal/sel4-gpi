@@ -1,5 +1,6 @@
 #include <pb_encode.h>
 #include <pb_decode.h>
+#include <pb_print.h>
 #include <sel4nanopb/sel4nanopb.h>
 
 #include <utils/zf_log.h>
@@ -120,4 +121,9 @@ bool sel4gpi_rpc_check_caps_2(gpi_cap_t type1, gpi_cap_t type2)
 bool sel4gpi_rpc_check_caps_3(gpi_cap_t type1, gpi_cap_t type2, gpi_cap_t type3)
 {
     return sel4gpi_rpc_check_caps_2(type1, type2) && get_cap_type_from_badge(seL4_GetBadge(2)) == type3;
+}
+
+void sel4gpi_rpc_print_request(sel4gpi_rpc_env_t *env, void *msg)
+{
+    pb_pretty_print(env->request_desc, msg);
 }

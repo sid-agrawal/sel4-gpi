@@ -19,6 +19,7 @@
 #define FS_DEBUG 0x40 // (XXX) Arya: WIP to move remote resource server debug controls to this
 #define EP_DEBUG 0x80
 #define ALL_DEBUG 0xff
+#define MESSAGE_DEBUG_ENABLED 0 // Separate toggle, prints all RPC messages to root task
 
 // selectively enable component debug e.g. (PD_DEBUG | ADS_DEBUG)
 #define OSDB_TOPIC (NO_DEBUG)

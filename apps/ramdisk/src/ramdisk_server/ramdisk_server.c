@@ -369,28 +369,27 @@ int ramdisk_work_handler(PdWorkReturnMessage *work)
     int op = work->action;
     if (op == PdWorkAction_EXTRACT)
     {
-        uint64_t space_id = work->space_id;
-        uint64_t blockno = work->object_id;
         uint64_t ramdisk_pd_id = sel4gpi_get_pd_conn().id;
-
-        assert(space_id == get_ramdisk_server()->gen.default_space.id);
-        assert(blockno == BADGE_OBJ_ID_NULL || (blockno >= 0 && blockno < (RAMDISK_SIZE_BYTES / RAMDISK_BLOCK_SIZE)));
 
         /* Blocks never have any resource relations */
 
         /* Send the result */
-        error = resource_server_extraction_no_data(&get_ramdisk_server()->gen);
+        error = resource_server_extraction_no_data(&get_ramdisk_server()->gen, work->object_ids_count);
         CHECK_ERROR_GOTO(error, "Failed to finish model extraction\n", RamdiskError_UNKNOWN, err_goto);
     }
     else if (op == PdWorkAction_FREE)
     {
-        uint64_t space_id = work->space_id;
-        uint64_t blockno = work->object_id;
+        for (int i = 0; i < work->object_ids_count; i++)
+        {
+            uint64_t space_id = work->space_ids[i];
+            uint64_t blockno = work->object_ids[i];
 
-        assert(space_id == get_ramdisk_server()->gen.default_space.id);
+            assert(space_id == get_ramdisk_server()->gen.default_space.id);
+            assert(blockno >= 0 && blockno < (RAMDISK_SIZE_BYTES / RAMDISK_BLOCK_SIZE));
 
-        RAMDISK_PRINTF("Free blockno %d\n", blockno);
-        free_block(blockno);
+            RAMDISK_PRINTF("Free blockno %d\n", blockno);
+            free_block(blockno);
+        }
     }
     else
     {

@@ -981,8 +981,8 @@ static int res_dump(pd_t *pd, model_state_t *ms, pd_hold_node_t *current_cap, gp
 
             /* Find the resource space */
             resspc_component_registry_entry_t *space_entry = resource_space_get_entry_by_id(current_cap->res_id.space_id);
-            SERVER_GOTO_IF_COND(space_entry == NULL, "Failed to find resource space (%d)\n", 
-            current_cap->res_id.space_id);
+            SERVER_GOTO_IF_COND(space_entry == NULL, "Failed to find resource space (%d)\n",
+                                current_cap->res_id.space_id);
 
             /* Add the subset edge */
             char space_id[CSV_MAX_STRING_SIZE];
@@ -995,11 +995,15 @@ static int res_dump(pd_t *pd, model_state_t *ms, pd_hold_node_t *current_cap, gp
             SERVER_GOTO_IF_COND(manager_pd_entry == NULL, "Failed to find PD (%d)\n", space_entry->space.pd_id);
 
             /* Request additional relations for the resource */
-            pd_work_entry_t *work_node = calloc(1, sizeof(gpi_res_id_t));
-            work_node->res_id = current_cap->res_id;
-            work_node->client_pd_id = pd->id;
+            if (space_entry->space.map_spaces->count > 0)
+            {
+                // Only need to request resource relations if the resources can map to anything
+                pd_work_entry_t *work_node = calloc(1, sizeof(gpi_res_id_t));
+                work_node->res_id = current_cap->res_id;
+                work_node->client_pd_id = pd->id;
 
-            pd_component_queue_model_extraction_work(manager_pd_entry, work_node);
+                pd_component_queue_model_extraction_work(manager_pd_entry, work_node);
+            }
         }
 
         /* Add the hold edge */

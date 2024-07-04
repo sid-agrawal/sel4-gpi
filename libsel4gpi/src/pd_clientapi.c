@@ -317,7 +317,7 @@ int pd_client_get_work(pd_client_context_t *conn, PdWorkReturnMessage *work)
     return error;
 }
 
-int pd_client_send_subgraph(pd_client_context_t *conn, mo_client_context_t *mo_conn, bool has_data)
+int pd_client_send_subgraph(pd_client_context_t *conn, mo_client_context_t *mo_conn, bool has_data, int n_requests)
 {
     OSDB_PRINTF("Sending 'send subgraph' request to PD component\n");
 
@@ -327,6 +327,7 @@ int pd_client_send_subgraph(pd_client_context_t *conn, mo_client_context_t *mo_c
         .which_msg = PdMessage_send_subgraph_tag,
         .msg.send_subgraph = {
             .has_data = has_data,
+            .n_requests = n_requests,
         }};
 
     PdReturnMessage ret_msg;

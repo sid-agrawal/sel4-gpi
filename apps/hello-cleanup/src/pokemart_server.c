@@ -87,15 +87,14 @@ int pokemart_work_handler(
     int op = work->action;
     if (op == PdWorkAction_EXTRACT)
     {
-        uint64_t pokeball_id = work->object_id;
         uint64_t pokemart_pd_id = sel4gpi_get_pd_conn().id;
 
-        POKEMART_PRINTF("Get rr for pokeball #%ld\n", pokeball_id);
+        POKEMART_PRINTF("Get rr for pokeballs\n");
 
         /* Pokeballs never have any resource relations */
 
         /* Send the result */
-        error = resource_server_extraction_no_data(&get_pokemart_server()->gen);
+        error = resource_server_extraction_no_data(&get_pokemart_server()->gen, work->object_ids_count);
     }
     else
     {

@@ -62,11 +62,16 @@ void resource_component_handle(resource_component_context_t *component,
     bool needs_new_receive_slot = false;
     bool should_reply = true;
 
-    char rpc_msg_buf[RPC_MSG_MAX_SIZE];
-    char rpc_reply_buf[RPC_MSG_MAX_SIZE];
+    char rpc_msg_buf[RPC_MSG_MAX_SIZE] = {0};
+    char rpc_reply_buf[RPC_MSG_MAX_SIZE] = {0};
 
     error = sel4gpi_rpc_recv(&component->rpc_env, (void *)rpc_msg_buf);
     assert(error == 0);
+
+    if (MESSAGE_DEBUG_ENABLED) {
+        printf("Message to %s component: \n", cap_type_to_str(component->resource_type));
+        sel4gpi_rpc_print_request(&component->rpc_env, (void *)rpc_msg_buf);
+    }
 
     // Handle the message
     component->request_handler(

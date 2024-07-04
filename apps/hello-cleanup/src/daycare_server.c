@@ -94,24 +94,7 @@ int daycare_work_handler(
     int op = work->action;
     if (op == PdWorkAction_EXTRACT)
     {
-        uint64_t pokemon_id = work->object_id;
         uint64_t daycare_pd_id = sel4gpi_get_pd_conn().id;
-
-        DAYCARE_PRINTF("Get rr for pokemon #%ld\n", pokemon_id);
-
-        if (pokemon_id == BADGE_OBJ_ID_NULL)
-        {
-            /* Daycare only does extraction at a pokemon-level, not at a space-level */
-            error = resource_server_extraction_no_data(&get_daycare_server()->gen);
-
-            if (error)
-            {
-                DAYCARE_PRINTF("Failed to send no-data model extraction\n");
-            }
-
-            DAYCARE_PRINTF("Returning from work handler\n");
-            return error;
-        }
 
         /* Initialize the model state */
         mo_client_context_t mo;
@@ -123,24 +106,35 @@ int daycare_work_handler(
             return error;
         }
 
-        /* Add the pokemon -> pokeball map edge*/
-        char pokemon_id_str[CSV_MAX_STRING_SIZE];
-        char pokeball_id_str[CSV_MAX_STRING_SIZE];
+        for (int i = 0; i < work->object_ids_count; i++)
+        {
+            uint32_t pokemon_id = work->object_ids[i];
+            DAYCARE_PRINTF("Get rr for pokemon #%ld\n", pokemon_id);
 
-        get_resource_id(make_res_id(get_daycare_server()->gen.resource_type,
-                                    get_daycare_server()->gen.default_space.id,
-                                    pokemon_id),
-                        pokemon_id_str);
+            if (pokemon_id == BADGE_OBJ_ID_NULL)
+            {
+                continue;
+            }
 
-        get_resource_id(make_res_id(sel4gpi_get_resource_type_code(POKEBALL_RESOURCE_TYPE_NAME),
-                                    get_daycare_server()->pokeballs[pokemon_id].space_id,
-                                    get_daycare_server()->pokeballs[pokemon_id].id),
-                        pokeball_id_str);
+            /* Add the pokemon -> pokeball map edge*/
+            char pokemon_id_str[CSV_MAX_STRING_SIZE];
+            char pokeball_id_str[CSV_MAX_STRING_SIZE];
 
-        add_edge_by_id(model_state, GPI_EDGE_TYPE_MAP, pokemon_id_str, pokeball_id_str);
+            get_resource_id(make_res_id(get_daycare_server()->gen.resource_type,
+                                        get_daycare_server()->gen.default_space.id,
+                                        pokemon_id),
+                            pokemon_id_str);
+
+            get_resource_id(make_res_id(sel4gpi_get_resource_type_code(POKEBALL_RESOURCE_TYPE_NAME),
+                                        get_daycare_server()->pokeballs[pokemon_id].space_id,
+                                        get_daycare_server()->pokeballs[pokemon_id].id),
+                            pokeball_id_str);
+
+            add_edge_by_id(model_state, GPI_EDGE_TYPE_MAP, pokemon_id_str, pokeball_id_str);
+        }
 
         /* Send the result */
-        error = resource_server_extraction_finish(&get_daycare_server()->gen, &mo, model_state);
+        error = resource_server_extraction_finish(&get_daycare_server()->gen, &mo, model_state, work->object_ids_count);
         if (error)
         {
             DAYCARE_PRINTF("Failed to finish model extraction\n");

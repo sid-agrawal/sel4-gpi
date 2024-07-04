@@ -89,6 +89,7 @@ message PdGetWorkMessage {
 
 message PdSendSubgraphMessage {
     bool has_data = 1;            /* true if this message contains data */
+    uint32 n_requests = 2;        /* the number of requests fulfilled by this subgraph */
 };
 
 message PdMapResourceMessage {
@@ -124,10 +125,10 @@ message PdBasicReturnMessage {
 };
 
 message PdWorkReturnMessage {
-    PdWorkAction action = 1;         /* which work action to perform */
-    uint32 space_id = 2;             /* space ID for the work */
-    uint32 object_id = 3;            /* object ID for the work */
-    uint32 pd_id = 4;                /* client PD ID for the work */
+    PdWorkAction action = 1;                                            /* which work action to perform */
+    repeated uint32 space_ids = 2 [(nanopb).max_count = 16];            /* space ID for the work */
+    repeated uint32 object_ids = 3 [(nanopb).max_count = 16];           /* object IDs for the work */
+    repeated uint32 pd_ids = 4 [(nanopb).max_count = 16];               /* client PD ID for the work */
 }
 
 message PdAllocReturnMessage {

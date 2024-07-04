@@ -13,11 +13,11 @@
 #include <sel4gpi/gpi_rpc.h>
 #include <sel4gpi/resource_registry.h>
 #include <sel4gpi/resource_server_utils.h>
+#include <pb_print.h>
 
 /** @file
  * Utility functions for non-RT PDs that serve GPI resources
  */
-
 
 // Generic buffer size for RPC messages, in bytes
 // Must be larger than any RPC message in the system
@@ -227,13 +227,14 @@ int resource_server_main(void *context_v)
                 error = pd_client_get_work(&context->pd_conn, &work);
                 CHECK_ERROR_GOTO(error, "failed to get work from RT", exit_main);
 
+                RESOURCE_SERVER_PRINTF("Got some work from RT\n");
+                if (context->debug_print)
+                {
+                    pb_pretty_print(&PdWorkReturnMessage_msg, (void *) &work);
+                }
+
                 if (work.action != PdWorkAction_NO_WORK)
                 {
-                    RESOURCE_SERVER_PRINTF("Got some work from RT (action: %d, space id: %d, object id: %d)\n",
-                                           work.action,
-                                           work.space_id,
-                                           work.object_id);
-
                     context->work_handler(&work);
                 }
                 else
@@ -256,6 +257,11 @@ int resource_server_main(void *context_v)
 
         error = sel4gpi_rpc_recv(&context->rpc_env, (void *)rpc_msg_buf);
         assert(error == 0);
+
+        if (context->debug_print)
+        {
+            sel4gpi_rpc_print_request(&context->rpc_env, (void *)rpc_msg_buf);
+        }
 
         /* Handle the message */
         context->request_handler(rpc_msg_buf,
@@ -419,7 +425,8 @@ err_goto:
     return error;
 }
 
-int resource_server_extraction_finish(resource_server_context_t *context, mo_client_context_t *mo, model_state_t *ms)
+int resource_server_extraction_finish(resource_server_context_t *context, mo_client_context_t *mo,
+                                      model_state_t *ms, int n_requests)
 {
     int error = 0;
 
@@ -427,7 +434,7 @@ int resource_server_extraction_finish(resource_server_context_t *context, mo_cli
 
     /* Send the state to the RT */
     pd_client_context_t pd_conn = sel4gpi_get_pd_conn();
-    error = pd_client_send_subgraph(&pd_conn, mo, true);
+    error = pd_client_send_subgraph(&pd_conn, mo, true, n_requests);
     CHECK_ERROR_GOTO(error, "Failed to send subgraph\n", err_goto);
 
     /* Remove & destroy the MO */
@@ -440,13 +447,13 @@ err_goto:
     return error;
 }
 
-int resource_server_extraction_no_data(resource_server_context_t *context)
+int resource_server_extraction_no_data(resource_server_context_t *context, int n_requests)
 {
     int error = 0;
 
     /* Send the state to the RT */
     pd_client_context_t pd_conn = sel4gpi_get_pd_conn();
-    error = pd_client_send_subgraph(&pd_conn, NULL, false);
+    error = pd_client_send_subgraph(&pd_conn, NULL, false, n_requests);
 
 err_goto:
     return error;

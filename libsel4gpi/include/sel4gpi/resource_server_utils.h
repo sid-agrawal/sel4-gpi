@@ -24,14 +24,14 @@
 
 // Could use the server's debug function instead
 #if RESOURCE_SERVER_DEBUG
-#define RESOURCE_SERVER_PRINTF(...)                                      \
-    do                                                                   \
-    {                                                                    \
-        if (context->debug_print)                                        \
-        {                                                                \
+#define RESOURCE_SERVER_PRINTF(...)                                       \
+    do                                                                    \
+    {                                                                     \
+        if (context->debug_print)                                         \
+        {                                                                 \
             printf("%s %s: ", context->resource_type_name, SERVER_UTILS); \
-            printf(__VA_ARGS__);                                         \
-        }                                                                \
+            printf(__VA_ARGS__);                                          \
+        }                                                                 \
     } while (0);
 #else
 #define RESOURCE_SERVER_PRINTF(...)
@@ -186,14 +186,17 @@ int resource_server_extraction_setup(resource_server_context_t *context,
  * @param context
  * @param mo the MO allocated for model extraction
  * @param ms returns the location of the model state
+ * @param n_work the number of work requests being fulfilled
  * @return 0 on success, error otherwise
  */
-int resource_server_extraction_finish(resource_server_context_t *context, mo_client_context_t *mo, model_state_t *ms);
+int resource_server_extraction_finish(resource_server_context_t *context, mo_client_context_t *mo,
+                                      model_state_t *ms, int n_requests);
 
 /**
  * Finish a model extraction if there is no data to send
- * 
+ *
  * @param context
+ * @param n_requests the number of requests being fulfilled
  * @return 0 on success, error otherwise
  */
-int resource_server_extraction_no_data(resource_server_context_t *context);
+int resource_server_extraction_no_data(resource_server_context_t *context, int n_requests);

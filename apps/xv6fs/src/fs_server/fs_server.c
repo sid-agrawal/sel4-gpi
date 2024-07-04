@@ -589,125 +589,130 @@ int xv6fs_work_handler(PdWorkReturnMessage *work)
 {
   int error = 0;
   seL4_MessageInfo_t reply_tag = seL4_MessageInfo_new(0, 0, 0, 0);
-
+  
   int op = work->action;
   if (op == PdWorkAction_EXTRACT)
   {
-    uint64_t space_id = work->space_id;
-    uint64_t fileno = work->object_id;
-    uint64_t client_pd_id = work->pd_id;
-
-    if (fileno != BADGE_OBJ_ID_NULL)
-    {
-      /* File system only does extraction at a space-level, not at a file-level */
-      error = resource_server_extraction_no_data(&get_xv6fs_server()->gen);
-      CHECK_ERROR_GOTO(error, "Failed to finish model extraction\n", FsError_UNKNOWN, err_goto);
-    }
-
     /* Initialize the model state */
     mo_client_context_t mo;
     model_state_t *model_state;
     error = resource_server_extraction_setup(&get_xv6fs_server()->gen, 4, &mo, &model_state);
     CHECK_ERROR_GOTO(error, "Failed to setup model extraction\n", FsError_UNKNOWN, err_goto);
 
-    /* Update pathname for namespace */
-    char path[MAXPATH];
-    strcpy(path, ROOT_DIR);
-
-    if (space_id != get_xv6fs_server()->gen.default_space.id)
+    for (int i = 0; i < work->object_ids_count; i++)
     {
-      fs_namespace_entry_t *ns = (fs_namespace_entry_t *)resource_registry_get_by_id(
-          &get_xv6fs_server()->ns_registry,
-          space_id);
+      uint64_t space_id = work->space_ids[i];
+      uint64_t fileno = work->object_ids[i];
+      uint64_t client_pd_id = work->pd_ids[i];
 
-      if (ns == NULL)
+      if (fileno != BADGE_OBJ_ID_NULL)
       {
-        XV6FS_PRINTF("Namespace did not exist for dumprr\n");
-        error = FsError_NO_NS;
-        goto err_goto;
+        /* File system only does extraction at a space-level, not at a file-level */
+        continue;
       }
 
-      apply_prefix(ns->ns_prefix, path);
-    }
+      /* Update pathname for namespace */
+      char path[MAXPATH];
+      strcpy(path, ROOT_DIR);
 
-    /* List all the files in the NS */
-    int n_files;
-    uint32_t inums[16];
-
-    error = xv6fs_sys_walk(path, false, inums, &n_files);
-    CHECK_ERROR_GOTO(error, "Failed to walk FS", FsError_UNKNOWN, err_goto);
-
-    // (XXX) Arya: A lot of this should be moved to PD component once we have resource spaces implemented
-
-    /* Add the PD nodes */
-    char client_pd_id_str[CSV_MAX_STRING_SIZE];
-    get_pd_id(client_pd_id, client_pd_id_str);
-
-    /* Add the file resource space node */
-    char file_space_id[CSV_MAX_STRING_SIZE];
-    get_resource_space_id(get_xv6fs_server()->gen.resource_type,
-                          get_xv6fs_server()->gen.default_space.id,
-                          file_space_id);
-
-    /* Add nodes for all files and blocks */
-    gpi_cap_t block_cap_type = sel4gpi_get_resource_type_code(BLOCK_RESOURCE_TYPE_NAME);
-    uint32_t block_space_id = get_xv6fs_server()->naive_blocks[0].space_id; // (XXX) Arya: Assume only one block space
-    int n_blocknos = 100;                                                   // (XXX) Arya: assumes there are no more than 100 blocks per file
-    int *blocknos = malloc(sizeof(int) * n_blocknos);
-    for (int i = 0; i < n_files; i++)
-    {
-      XV6FS_PRINTF("Get RR for fileno %ld\n", inums[i]);
-
-      /* Add the file resource node */
-      char file_id[CSV_MAX_STRING_SIZE];
-      get_resource_id(make_res_id(get_xv6fs_server()->gen.resource_type,
-                                  get_xv6fs_server()->gen.default_space.id,
-                                  inums[i]),
-                      file_id);
-      add_edge_by_id(model_state, GPI_EDGE_TYPE_HOLD, client_pd_id_str, file_id);
-
-      /* Add relations for blocks */
-      error = xv6fs_sys_inode_blocknos(inums[i], blocknos, n_blocknos, &n_blocknos);
-      CHECK_ERROR_GOTO(error, "Failed to get blocknos for file", FsError_UNKNOWN, err_goto);
-      XV6FS_PRINTF("File has %d blocks\n", n_blocknos);
-
-      uint64_t block_id;
-      for (int j = 0; j < n_blocknos; j++)
+      if (space_id != get_xv6fs_server()->gen.default_space.id)
       {
-        block_id = get_xv6fs_server()->naive_blocks[blocknos[j]].res_id;
+        fs_namespace_entry_t *ns = (fs_namespace_entry_t *)resource_registry_get_by_id(
+            &get_xv6fs_server()->ns_registry,
+            space_id);
 
-        char block_id_str[CSV_MAX_STRING_SIZE];
-        get_resource_id(make_res_id(block_cap_type, block_space_id, block_id), block_id_str);
-        add_edge_by_id(model_state, GPI_EDGE_TYPE_MAP, file_id, block_id_str);
+        if (ns == NULL)
+        {
+          XV6FS_PRINTF("Namespace did not exist for dumprr\n");
+          error = FsError_NO_NS;
+          goto err_goto;
+        }
+
+        apply_prefix(ns->ns_prefix, path);
       }
-    }
 
-    free(blocknos);
+      /* List all the files in the NS */
+      int n_files;
+      uint32_t inums[16];
+
+      error = xv6fs_sys_walk(path, false, inums, &n_files);
+      CHECK_ERROR_GOTO(error, "Failed to walk FS", FsError_UNKNOWN, err_goto);
+
+      // (XXX) Arya: A lot of this should be moved to PD component once we have resource spaces implemented
+
+      /* Add the PD nodes */
+      char client_pd_id_str[CSV_MAX_STRING_SIZE];
+      get_pd_id(client_pd_id, client_pd_id_str);
+
+      /* Add the file resource space node */
+      char file_space_id[CSV_MAX_STRING_SIZE];
+      get_resource_space_id(get_xv6fs_server()->gen.resource_type,
+                            get_xv6fs_server()->gen.default_space.id,
+                            file_space_id);
+
+      /* Add nodes for all files and blocks */
+      gpi_cap_t block_cap_type = sel4gpi_get_resource_type_code(BLOCK_RESOURCE_TYPE_NAME);
+      uint32_t block_space_id = get_xv6fs_server()->naive_blocks[0].space_id; // (XXX) Arya: Assume only one block space
+      int n_blocknos = 100;                                                   // (XXX) Arya: assumes there are no more than 100 blocks per file
+      int *blocknos = malloc(sizeof(int) * n_blocknos);
+      for (int i = 0; i < n_files; i++)
+      {
+        XV6FS_PRINTF("Get RR for fileno %ld\n", inums[i]);
+
+        /* Add the file resource node */
+        char file_id[CSV_MAX_STRING_SIZE];
+        get_resource_id(make_res_id(get_xv6fs_server()->gen.resource_type,
+                                    get_xv6fs_server()->gen.default_space.id,
+                                    inums[i]),
+                        file_id);
+        add_edge_by_id(model_state, GPI_EDGE_TYPE_HOLD, client_pd_id_str, file_id);
+
+        /* Add relations for blocks */
+        error = xv6fs_sys_inode_blocknos(inums[i], blocknos, n_blocknos, &n_blocknos);
+        CHECK_ERROR_GOTO(error, "Failed to get blocknos for file", FsError_UNKNOWN, err_goto);
+        XV6FS_PRINTF("File has %d blocks\n", n_blocknos);
+
+        uint64_t block_id;
+        for (int j = 0; j < n_blocknos; j++)
+        {
+          block_id = get_xv6fs_server()->naive_blocks[blocknos[j]].res_id;
+
+          char block_id_str[CSV_MAX_STRING_SIZE];
+          get_resource_id(make_res_id(block_cap_type, block_space_id, block_id), block_id_str);
+          add_edge_by_id(model_state, GPI_EDGE_TYPE_MAP, file_id, block_id_str);
+        }
+      }
+
+      free(blocknos);
+    }
 
     /* Send the result */
-    error = resource_server_extraction_finish(&get_xv6fs_server()->gen, &mo, model_state);
+    error = resource_server_extraction_finish(&get_xv6fs_server()->gen, &mo, model_state, work->object_ids_count);
     CHECK_ERROR_GOTO(error, "Failed to finish model extraction\n", FsError_UNKNOWN, err_goto);
   }
   else if (op == PdWorkAction_FREE)
   {
-    // Actually don't do much when a file is freed, it's the same as file close
-    // We still want to keep it in the file system, but we can reduce the refcount
-    uint64_t file_id = work->object_id;
-
-    // Find the registry entry
-    file_registry_entry_t *reg_entry = (file_registry_entry_t *)resource_registry_get_by_id(
-        &get_xv6fs_server()->file_registry,
-        file_id);
-
-    if (reg_entry == NULL)
+    for (int i = 0; i < work->object_ids_count; i++)
     {
-      // No-op if the file doesn't exist / isn't open
-      XV6FS_PRINTF("Received file (%d) to free, file isn't open\n");
-    }
-    else
-    {
-      // Decrement the refcount
-      resource_registry_dec(&get_xv6fs_server()->file_registry, (resource_registry_node_t *)reg_entry);
+      // Actually don't do much when a file is freed, it's the same as file close
+      // We still want to keep it in the file system, but we can reduce the refcount
+      uint64_t file_id = work->object_ids[i];
+
+      // Find the registry entry
+      file_registry_entry_t *reg_entry = (file_registry_entry_t *)resource_registry_get_by_id(
+          &get_xv6fs_server()->file_registry,
+          file_id);
+
+      if (reg_entry == NULL)
+      {
+        // No-op if the file doesn't exist / isn't open
+        XV6FS_PRINTF("Received file (%d) to free, file isn't open\n");
+      }
+      else
+      {
+        // Decrement the refcount
+        resource_registry_dec(&get_xv6fs_server()->file_registry, (resource_registry_node_t *)reg_entry);
+      }
     }
   }
   else
