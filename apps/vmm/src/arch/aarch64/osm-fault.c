@@ -8,7 +8,8 @@
 #include "hsr.h"
 #include "smc.h"
 #include "vgic/vgic.h"
-#include "fault.h"
+#include <vmm-common/vmm_common.h>
+#include "sel4test-fault.h"
 #include <sel4test-vmm/vmm.h>
 #include <sel4test-vmm/vcpu.h>
 
@@ -21,27 +22,6 @@ bool fault_advance_vcpu(size_t vcpu_id, seL4_UserContext *regs)
     assert(err == seL4_NoError);
 
     return (err == seL4_NoError);
-}
-
-char *fault_to_string(seL4_Word fault_label)
-{
-    switch (fault_label)
-    {
-    case seL4_Fault_VMFault:
-        return "virtual memory";
-    case seL4_Fault_UnknownSyscall:
-        return "unknown syscall";
-    case seL4_Fault_UserException:
-        return "user exception";
-    case seL4_Fault_VGICMaintenance:
-        return "VGIC maintenance";
-    case seL4_Fault_VCPUFault:
-        return "VCPU";
-    case seL4_Fault_VPPIEvent:
-        return "VPPI event";
-    default:
-        return "unknown fault";
-    }
 }
 
 enum fault_width

@@ -46,8 +46,10 @@
 #include "vgic/vgic_v2.h"
 #include "vgic/virq.h"
 #include "vgic/vdist.h"
-#include "fault.h"
+#include <utils/arith.h>
+#include "sel4test-fault.h"
 #include <sel4test-vmm/virq.h>
+#include <vmm-common/vmm_common.h>
 
 vgic_t vgic;
 struct gic_dist_map dist;

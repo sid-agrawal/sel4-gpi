@@ -8,8 +8,8 @@
 #include <stdbool.h>
 #include "psci.h"
 #include "smc.h"
-#include "fault.h"
-#include "sel4test-vmm/guest.h"
+#include "sel4test-fault.h"
+#include <sel4test-vmm/guest.h>
 #include <assert.h>
 #include <utils/zf_log.h>
 #include <sel4gpi/debug.h>

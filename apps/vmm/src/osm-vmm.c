@@ -89,22 +89,19 @@ extern char _guest_dtb_image_end[];
 extern char _guest_initrd_image[];
 extern char _guest_initrd_image_end[];
 
-// int start_thread_handling_pd(void)
-// {
-//     sel4gpi_configure_thread()
-// }
-
 // static void handle_fault(void *arg0, void *arg1, void *arg2)
 // {
 //     VMM_PRINT("in handle_fault\n");
-//     vm_context_t *vm = (vm_context_t *)arg0;
+//     sel4gpi_runnable_t *vm_context = (sel4gpi_runnable_t *)arg0;
 //     seL4_CPtr fault_ep = (seL4_CPtr)arg1;
 //     while (1)
 //     {
 //         seL4_MessageInfo_t info = seL4_Recv(fault_ep, NULL);
 //         VMM_PRINT("fault: %s\n", fault_to_string(seL4_MessageInfo_get_label(info)));
-//         fault_handle_vcpu_exception(vm);
-//         vcpu_print_regs(vm->vcpu.cptr);
+//         // fault_handle_vcpu_exception(vm);
+//         // vcpu_print_regs(vm->vcpu.cptr);
+//         fault_handle(vm, &info);
+//         sel4debug_dump_registers(vm->tcb.cptr);
 //     }
 // }
 
@@ -159,7 +156,7 @@ int new_guest(void)
     void *guest_ram_curr_vspace = sel4gpi_get_vmr_at_paddr(&vmr_rde, guest_ram_pages, NULL, SEL4UTILS_RES_TYPE_GENERIC,
                                                            MO_LARGE_PAGE_BITS, GUEST_RAM_VADDR, &guest_ram_mo);
 #elif BOARD_odroidc4
-    void *guest_ram_curr_vspace = sel4gpi_get_vmr(&vmr_rde, guest_ram_pages, (void *)0x40000000, SEL4UTILS_RES_TYPE_GENERIC,
+    void *guest_ram_curr_vspace = sel4gpi_get_vmr(&vmr_rde, guest_ram_pages, (void *)GUEST_RAM_VADDR, SEL4UTILS_RES_TYPE_GENERIC,
                                                   MO_LARGE_PAGE_BITS, &guest_ram_mo);
 #endif // BOARD_qemu_arm_virt
     GOTO_IF_COND(guest_ram_curr_vspace == NULL, "Failed to reserve region for guest RAM in current ADS\n");
@@ -260,6 +257,8 @@ int new_guest(void)
     } */
 
     error = sel4gpi_start_pd(&runnable);
+
+    // sel4gpi_configure_thread()
 
     // pd_client_dump(&runnable.pd, NULL, 0);
 

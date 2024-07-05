@@ -3,7 +3,7 @@
  *
  * SPDX-License-Identifier: BSD-2-Clause
  */
-#include "fault.h"
+#include "sel4test-fault.h"
 #include "util/util.h"
 #include "virtio/console.h"
 #include "virtio/virtio.h"

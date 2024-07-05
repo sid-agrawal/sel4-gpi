@@ -5,7 +5,7 @@
  */
 #include <microkit.h>
 #include "util/util.h"
-#include "fault.h"
+#include "sel4test-fault.h"
 #include "virtio/config.h"
 #include "virtio/mmio.h"
 #include "virtio/virtq.h"

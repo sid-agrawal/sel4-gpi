@@ -7,7 +7,6 @@
 #include <sel4utils/vspace.h>
 #include <simple/simple.h>
 #include <sel4gpi/linked_list.h>
-#include <vmm-common/vmm-common.h>
 
 /**
  * @brief Holds information about a VM for a

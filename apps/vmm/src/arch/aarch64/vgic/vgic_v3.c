@@ -40,7 +40,7 @@
 #include <stdint.h>
 #include <stdlib.h>
 
-#include "fault.h"
+#include "sel4test-fault.h"
 #include "vgic/virq.h"
 #include "vgic/vgic_v3.h"
 #include "vgic/vdist.h"

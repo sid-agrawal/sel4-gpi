@@ -8,7 +8,7 @@
 #include "smc.h"
 #include "psci.h"
 #include <assert.h>
-#include <sel4test-vmm/vmm.h>
+#include <vmm-common/vmm_common.h>
 
 // Values in this file are taken from:
 // SMC CALLING CONVENTION

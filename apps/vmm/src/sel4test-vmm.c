@@ -6,10 +6,6 @@
 #include <stddef.h>
 #include <stdint.h>
 #include "vgic/vgic.h"
-#include <vmm-common/linux.h>
-#include <sel4test-vmm/guest.h>
-#include <sel4test-vmm/virq.h>
-#include <sel4test-vmm/vmm.h>
 #include <vka/vka.h>
 #include <sel4/sel4.h>
 #include <vka/object.h>
@@ -24,7 +20,13 @@
 #include <sel4debug/register_dump.h>
 #include <sel4utils/thread.h>
 #include <sel4utils/process.h>
+#include <vmm-common/vmm_common.h>
+#include <vmm-common/linux.h>
+#include <sel4test-vmm/guest.h>
+#include <sel4test-vmm/virq.h>
+#include <sel4test-vmm/vmm.h>
 #include <sel4test-vmm/vcpu.h>
+#include "sel4test-fault.h"
 
 // @ivanv: ideally we would have none of these hardcoded values
 // initrd, ram size come from the DTB

@@ -8,7 +8,7 @@
 #pragma once
 
 #include <stdint.h>
-#include <sel4test-vmm/vmm.h>
+#include <vmm-common/vmm_common.h>
 
 #define GIC_ENABLED 1
 
