@@ -61,7 +61,7 @@
 // prints without pre-pending SERVER_ID
 #define OSDB_PRINTF_2(msg, ...) OSDB_LVL_PRINT(OSDB_INFO, OSDB_SERVER_PRINT_ALLOWED, msg, ##__VA_ARGS__)
 
-/* For highlighting a certain print so that it's easier to see during debugging - should not remain in committed code */
+/* For highlighting a certain print so that it's easier to see during debugging - should not remain in non-WIP code */
 #define CPRINTF(msg, ...)                                               \
     do                                                                  \
     {                                                                   \

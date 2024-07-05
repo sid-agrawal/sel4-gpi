@@ -72,7 +72,7 @@ seL4_CPtr sel4gpi_get_rde(int type)
 
 ads_client_context_t sel4gpi_get_bound_vmr_rde()
 {
-    ads_client_context_t ads_conn = sel4gpi_get_bound_vmr_rde();
+    ads_client_context_t ads_conn = {.ep = sel4gpi_get_rde_by_space_id(sel4gpi_get_binded_ads_id(), GPICAP_TYPE_VMR)};
 
     return ads_conn;
 }
@@ -268,6 +268,25 @@ int sel4gpi_alloc_endpoint(ep_client_context_t *ret_ep_conn)
 
     error = ep_component_client_connect(ep_rde, ret_ep_conn);
 
+err_goto:
+    return error;
+}
+
+int sel4gpi_copy_data_to_mo(void *vaddr, size_t size_bytes, mo_client_context_t *dest_mo)
+{
+    int error = 0;
+    ads_client_context_t vmr_rde = sel4gpi_get_bound_vmr_rde();
+    void *dest_vaddr = NULL;
+    error = ads_client_attach(&vmr_rde, NULL, dest_mo, SEL4UTILS_RES_TYPE_GENERIC, &dest_vaddr);
+    GOTO_IF_COND(dest_vaddr == NULL || error, "Failed to attach dest MO to current ADS\n");
+
+    CPRINTF("size bytes: %zu, dest_vaddr: %p\n", size_bytes, dest_vaddr);
+    memcpy(dest_vaddr, vaddr, size_bytes);
+
+    error = ads_client_rm(&vmr_rde, dest_vaddr);
+    WARN_IF_COND(error, "Failed to detach VMR\n");
+
+    return 0;
 err_goto:
     return error;
 }

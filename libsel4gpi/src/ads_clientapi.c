@@ -205,6 +205,46 @@ int ads_client_copy(ads_client_context_t *src_ads, ads_client_context_t *dst_ads
     return error;
 }
 
+int ads_client_get_reservation(ads_client_context_t *ads, sel4utils_reservation_type_t res_type,
+                               void **ret_vaddr, size_t *ret_num_pages, size_t *ret_page_bits)
+{
+    OSDB_PRINTF("Sending get reservation request to ADS component\n");
+
+    int error = 0;
+
+    AdsMessage msg = {
+        .which_msg = AdsMessage_get_res_tag,
+        .msg.get_res = {
+            .type = res_type,
+        }};
+
+    AdsReturnMessage ret_msg;
+
+    error = sel4gpi_rpc_call(&rpc_env, ads->ep, (void *)&msg,
+                             0, NULL, (void *)&ret_msg);
+    error |= ret_msg.errorCode;
+
+    if (!error)
+    {
+        if (ret_vaddr)
+        {
+            *ret_vaddr = ret_msg.msg.get_res.vaddr;
+        }
+
+        if (ret_num_pages)
+        {
+            *ret_num_pages = ret_msg.msg.get_res.num_pages;
+        }
+
+        if (ret_page_bits)
+        {
+            *ret_page_bits = ret_msg.msg.get_res.page_bits;
+        }
+    }
+
+    return error;
+}
+
 /* ======================================= CONVENIENCE FUNCTIONS (NOT PART OF FRAMEWORK) ================================================= */
 
 /**

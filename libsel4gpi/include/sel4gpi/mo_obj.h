@@ -14,9 +14,6 @@
 #include <sel4utils/process.h>
 #include <sel4gpi/model_exporting.h>
 
-#define MO_PAGE_BITS seL4_PageBits
-#define MO_LARGE_PAGE_BITS seL4_LargePageBits
-
 typedef struct _mo
 {
     uint32_t id;

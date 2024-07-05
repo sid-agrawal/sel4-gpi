@@ -51,6 +51,15 @@ void linked_list_insert(linked_list_t *list, void *data);
 void linked_list_pop_head(linked_list_t *list, void **data);
 
 /**
+ * @brief retrieves the data of an element at the given index in the list.
+ *
+ * @param list an existing list
+ * @param idx the index of the item, returns NULL if idx is out of bounds
+ * @return returns the element at the specified index, NULL if it doesn't exist
+ */
+void *linked_list_get_at_idx(linked_list_t *list, size_t idx);
+
+/**
  * @brief destroys all nodes in the list and the list itself
  *
  * @param list an existing list

@@ -103,16 +103,36 @@ int ads_client_bind_cpu(ads_client_context_t *conn, seL4_CPtr cpu_cap);
 
 /**
  * @brief Given a VMR config that describes a virtual memory region, copies it from src_ads to dst_ads
- * Copying method will depend on what's provided in the config. Currently, only shallow and deep copying are supported.
+ *
+ * Copying method will depend on whether an MO is supplied in the config.
+ * If provided, the region will be deep copied, if not, it will be shallow copied.
+ * NOTE: if this function is being called, share_mode is assumed to be GPI_SHARED, and thus ignored
+ *
  * For regions with type other than SEL4UTILS_RES_TYPE_GENERIC and SEL4UTILS_RES_TYPE_SHARED_FRAMES,
- * the config can omit a start address and region size, and the server will attempt to look for the special-typed VMR
+ * the config can omit all fields EXCEPT `type`, and the server will attempt to look for the typed VMR.
  *
  * @param src_ads the ADS to copy from
  * @param dst_ads the ADS to copy to
  * @param vmr_vfg the config describing one VMR
  * @return int 0 on success
  */
-int ads_client_copy(ads_client_context_t *src_ads, ads_client_context_t *dst_ads, vmr_config_t *vmr_cfg);
+int ads_client_copy(ads_client_context_t *src_ads,
+                    ads_client_context_t *dst_ads,
+                    vmr_config_t *vmr_cfg);
+
+/**
+ * @brief Obtains info about an ADS reservation for a given VMR type. If multiple reservations of
+ * the same type exist, info about the first one found is returned.
+ *
+ * @param ads the ADS to search in
+ * @param res_type the type of VMR to find the reservation for
+ * @param[out] ret_vaddr the starting virtual address of the reservation, NULL if it wasn't found
+ * @param[out] ret_num_pages OPTIONAL: the number of pages in the reservation, 0 if it wasn't found
+ * @param[out] ret_page_bits OPTIONAL: the size bits of an individual page, 0 if it wasn't found
+ * @return int 0 on success, other on error
+ */
+int ads_client_get_reservation(ads_client_context_t *ads, sel4utils_reservation_type_t res_type,
+                               void **ret_vaddr, size_t *ret_num_pages, size_t *ret_page_bits);
 
 /* ======================================= CONVENIENCE FUNCTIONS (NOT PART OF FRAMEWORK) ================================================= */
 

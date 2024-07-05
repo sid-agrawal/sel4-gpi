@@ -43,6 +43,10 @@ message AdsCopyMessage {
     bool provided_mo = 6;       /* true if the message includes an MO to use for deep-copied regions */
 };
 
+message AdsGetReservationMessage {
+    uint32 type = 1;             /* the type of VMR to retrieve reservation info about */
+}
+
 message AdsLoadElfMessage {
     /* no content */
     string image_name = 1 [(nanopb).max_length = 40];
@@ -58,7 +62,8 @@ message AdsMessage {
         AdsRemoveMessage remove = 5;
         AdsBindCpuMessage bind_cpu = 6;
         AdsCopyMessage copy = 7;
-        AdsLoadElfMessage load_elf = 8;
+        AdsGetReservationMessage get_res = 8;
+        AdsLoadElfMessage load_elf = 9;
     }
 };
 
@@ -81,6 +86,12 @@ message AdsReserveReturnMessage {
     uint64 slot = 2;        /* slot where the VMR cap was placed */
 };
 
+message AdsGetReservationReturnMessage {
+    uint64 vaddr = 1;       /* virtual address of the found reservation */
+    uint32 num_pages = 2;   /* number of pages in the reservation */
+    uint32 page_bits = 3;   /* the size bits of an individual page */
+}
+
 message AdsLoadElfReturnMessage {
     uint64 entry_point = 1; /* vaddr of the ELF's entry point in the ADS */
 };
@@ -93,6 +104,7 @@ message AdsReturnMessage {
         AdsAllocReturnMessage alloc = 3;
         AdsAttachReturnMessage attach = 4;
         AdsReserveReturnMessage reserve = 5;
-        AdsLoadElfReturnMessage load_elf = 6;
+        AdsGetReservationReturnMessage get_res = 6;
+        AdsLoadElfReturnMessage load_elf = 7;
     };
 };

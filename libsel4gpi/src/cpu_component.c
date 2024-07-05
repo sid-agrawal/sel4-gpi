@@ -101,8 +101,8 @@ static void handle_config_req(seL4_Word sender_badge,
     OSDB_PRINTF("Got CPU config request from client badge %lx\n", sender_badge);
 
     int error = 0;
-    SERVER_GOTO_IF_COND(!sel4gpi_rpc_check_caps_3(GPICAP_TYPE_PD, GPICAP_TYPE_ADS, GPICAP_TYPE_MO),
-                        "Did not receive PD/ADS/MO caps\n");
+    SERVER_GOTO_IF_COND(!sel4gpi_rpc_check_caps_2(GPICAP_TYPE_PD, GPICAP_TYPE_ADS),
+                        "Did not receive PD/ADS caps\n");
 
     /* Find the client */
     cpu_component_registry_entry_t *cpu_data = (cpu_component_registry_entry_t *)

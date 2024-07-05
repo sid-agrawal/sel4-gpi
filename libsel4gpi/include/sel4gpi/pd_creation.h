@@ -72,7 +72,10 @@ typedef struct _vmr_config
                              ///< can be NULL to use `start`, only takes effect if share_mode != GPI_DISJOINT
     uint64_t region_pages;   ///< number of pages in this VMR, ignored if an MO is provided
     size_t page_bits;        ///< OPTIONAL size of an individual page in this VMR, 4K pages by default
-    mo_client_context_t *mo; ///< OPTIONAL an MO to use to map the VMR, only takes effect if share_mode != GPI_SHARED
+    mo_client_context_t *mo; ///< OPTIONAL an MO to use to map the VMR,
+                             ///< if share_mode = GPI_DISJOINT, a new MO will be allocated if this is omitted
+                             ///< if share_mode = GPI_SHARED, omitting this will result in shallow copying of
+                             ///< the VMR, and providing will result in a deep copy
 } vmr_config_t;
 
 /**
@@ -257,3 +260,12 @@ void sel4gpi_add_vmr_config(ads_config_t *cfg,
                             uint64_t region_pages,
                             size_t page_bits,
                             mo_client_context_t *mo);
+
+/**
+ * @brief creates a new stack with num_pages in the given ADS, it will NOT be mapped to the current one.
+ *        NOTE: no guard page is created
+ * @param ads the ADS in which to create the stack
+ * @param n_pages number of pages for the stack
+ * @return the top of the stack in the given ADS (NOT the current one)
+ */
+void *sel4gpi_new_sized_stack(ads_client_context_t *ads, size_t n_pages);

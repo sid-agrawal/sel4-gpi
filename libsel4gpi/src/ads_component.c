@@ -366,6 +366,40 @@ err_goto:
     reply_msg->errorCode = error;
 }
 
+static void handle_get_res_request(seL4_Word sender_badge,
+                                   AdsGetReservationMessage *msg,
+                                   AdsReturnMessage *reply_msg)
+{
+    OSDB_PRINTF("Got Get Reservation Request from Client: ");
+    BADGE_PRINT(sender_badge);
+
+    int error = 0;
+    linked_list_t *found_res = NULL;
+
+    // Find target ADS
+    ads_component_registry_entry_t *target_ads = (ads_component_registry_entry_t *)
+        resource_component_registry_get_by_badge(get_ads_component(), sender_badge);
+    SERVER_GOTO_IF_COND(target_ads == NULL, "Couldn't find target ADS (%ld)\n",
+                        get_object_id_from_badge(sender_badge));
+
+    found_res = ads_get_res_by_type(&target_ads->ads, msg->type);
+    attach_node_t *res = (attach_node_t *)linked_list_get_at_idx(found_res, 0);
+    if (res)
+    {
+        reply_msg->msg.get_res.vaddr = res->vaddr;
+        reply_msg->msg.get_res.num_pages = res->n_pages;
+        reply_msg->msg.get_res.page_bits = res->page_bits;
+    }
+
+err_goto:
+    if (found_res)
+    {
+        linked_list_destroy(found_res, false);
+    }
+    reply_msg->which_msg = AdsReturnMessage_get_res_tag;
+    reply_msg->errorCode = error;
+}
+
 /**
  * @brief forges an ADS attachment (and MO) from a given reservation.
  * Since this is currently only used for forging ELF regions, assume that page sizes are 4KB
@@ -504,6 +538,9 @@ static void ads_component_handle(void *msg_p,
         case AdsMessage_attach_reserve_tag:
             handle_attach_to_reserve_req(sender_badge, &msg->msg.attach_reserve, reply_msg, received_cap);
             *need_new_recv_cap = true;
+            break;
+        case AdsMessage_get_res_tag:
+            handle_get_res_request(sender_badge, &msg->msg.get_res, reply_msg);
             break;
         default:
             SERVER_GOTO_IF_COND(1, "Unknown request received: %d\n", msg->which_msg);

@@ -126,6 +126,15 @@ attach_node_t *ads_get_res_by_id(ads_t *ads, uint64_t res_id);
 attach_node_t *ads_get_res_by_vaddr(ads_t *ads, void *vaddr);
 
 /**
+ * @brief finds the reservations for a VMR by the type (Multiple reservations of the type may exist)
+ *
+ * @param src_ads ADS to find the reservation in
+ * @param vmr_type the type of VMR to look for
+ * @return returns a list of found attach nodes
+ */
+linked_list_t *ads_get_res_by_type(ads_t *src_ads, sel4utils_reservation_type_t vmr_type);
+
+/**
  * Attach an MO to an existing ADS reservation
  *
  * @param ads ads object

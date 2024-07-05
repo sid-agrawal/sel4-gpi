@@ -80,7 +80,7 @@ seL4_CPtr sel4gpi_get_rde(int type);
  * 
  * Use this connection to request new VMR regions from the ADS
  */
-ads_client_context_t sel4gpi_get_bound_vmr_rde();
+ads_client_context_t sel4gpi_get_bound_vmr_rde(void);
 
 /**
  * Get the resource space ID of the default RDE for the given type
@@ -185,18 +185,20 @@ void *sel4gpi_get_vmr_at_paddr(ads_client_context_t *vmr_rde,
 int sel4gpi_destroy_vmr(ads_client_context_t *vmr_rde, void *vaddr, mo_client_context_t *mo);
 
 /**
- * @brief creates a new stack with num_pages in the given ADS, it will NOT be mapped to the current one.
- *        NOTE: no guard page is created
- * @param ads the ADS in which to create the stack
- * @param n_pages number of pages for the stack
- * @return the top of the stack in the given ADS (NOT the current one)
- */
-void *sel4gpi_new_sized_stack(ads_client_context_t *ads, size_t n_pages);
-
-/**
  * @brief allocates a new tracked endpoint using the default EP RDE
  *
  * @param[out] ret_ep_conn empty connection context to fill in
  * @return int 0 on success, 1 on failure
  */
 int sel4gpi_alloc_endpoint(ep_client_context_t *ret_ep_conn);
+
+/**
+ * @brief copies size_bytes at the given vaddr to a destination MO by attaching it to the current ADS,
+ * then detaching the MO after copying has completed
+ *
+ * @param vaddr address of region to copy
+ * @param size_bytes total size of region to copy in bytes
+ * @param dest_mo the MO to copy data into
+ * @return int 0 on success, 1 on failure
+ */
+int sel4gpi_copy_data_to_mo(void *vaddr, size_t size_bytes, mo_client_context_t *dest_mo);

@@ -255,33 +255,16 @@ attach_node_t *ads_get_res_by_vaddr(ads_t *ads, void *vaddr)
     return (attach_node_t *)resource_registry_get_by_id(&ads->attach_registry, (uint64_t)vaddr);
 }
 
-/**
- * @brief finds the reservations for a VMR by the type (Multiple reservations of the type may exist)
- *
- * @param src_ads ADS to find the reservation in
- * @param vmr_type the type of VMR to look for
- * @return returns a list of found attach nodes
- */
-static linked_list_t *ads_get_res_by_type(ads_t *src_ads, sel4utils_reservation_type_t vmr_type)
+linked_list_t *ads_get_res_by_type(ads_t *src_ads, sel4utils_reservation_type_t vmr_type)
 {
-    // sel4utils_alloc_data_t *vmr_data = get_alloc_data(src_ads->vspace);
-    // sel4utils_res_t *curr_res = vmr_data->reservation_head;
-
-    // while (curr_res != NULL)
-    // {
-    //     if (curr_res->type == vmr_type)
-    //     {
-    //         return curr_res;
-    //     }
-
-    //     curr_res = curr_res->next;
-    // }
     linked_list_t *found_nodes = linked_list_new();
-    for (attach_node_t *curr = (attach_node_t *)src_ads->attach_registry.head; curr != NULL; curr = curr->gen.hh.next)
+    resource_registry_node_t *current, *tmp;
+    HASH_ITER(hh, src_ads->attach_registry.head, current, tmp)
     {
-        if (curr->type == vmr_type)
+        attach_node_t *node = (attach_node_t *)current;
+        if (node->type == vmr_type)
         {
-            linked_list_insert(found_nodes, curr);
+            linked_list_insert(found_nodes, node);
         }
     }
 

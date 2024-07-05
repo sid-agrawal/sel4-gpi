@@ -61,6 +61,28 @@ void linked_list_pop_head(linked_list_t *list, void **data)
     }
 }
 
+void *linked_list_get_at_idx(linked_list_t *list, size_t idx)
+{
+    void *ret = NULL;
+    if (list && list->head && idx < list->count)
+    {
+        size_t curr_idx = 0;
+        linked_list_node_t *curr = list->head;
+        while (curr_idx < idx && curr != NULL)
+        {
+            curr_idx++;
+            curr = curr->next;
+        }
+
+        if (curr)
+        {
+            ret = curr->data;
+        }
+    }
+
+    return ret;
+}
+
 linked_list_t *linked_list_new(void)
 {
     return calloc(1, sizeof(linked_list_t));
