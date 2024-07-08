@@ -7,11 +7,18 @@ if(KernelArchRiscV)
     set(arch arm)
 endif()
 
-if(KernelPlatform STREQUAL "qemu-arm-virt")
-    set(KernelPlatVMM "qemu_arm_virt")
+set(VMMImplementation "sel4test-vmm" CACHE STRING "The VMM implemenation to use: either sel4test-vmm or osm-vmm")
+
+if (VMMImplementation STREQUAL "sel4test-vmm")
+    set(VMMImplDef "SEL4TEST_VMM")
+elseif(VMMImplementation STREQUAL "osm-vmm")
+    set(VMMImplDef "OSM_VMM")
 endif()
 
-if(KernelPlatform STREQUAL "odroidc4")
+
+if(KernelPlatform STREQUAL "qemu-arm-virt")
+    set(KernelPlatVMM "qemu_arm_virt")
+elseif(KernelPlatform STREQUAL "odroidc4")
     set(KernelPlatVMM "${KernelPlatform}")
 endif()
 
@@ -47,7 +54,9 @@ file(
     GLOB
         deps
         src/*.c
+        src/${VMMImplementation}/*.c
         src/arch/${KernelSel4Arch}/*.c
+        src/arch/${KernelSel4Arch}/${VMMImplementation}/*.c
         src/arch/${KernelSel4Arch}/vgic/*.c
 )
 
@@ -84,7 +93,9 @@ add_library(vmm STATIC EXCLUDE_FROM_ALL ${deps})
 
 target_include_directories(
     vmm
-    PUBLIC include arch/${KernelSel4Arch}
+    PUBLIC 
+        include
+        arch/${KernelSel4Arch}
 )
 
 target_link_libraries(
@@ -99,4 +110,7 @@ target_link_libraries(
         sel4muslcsys
 )
 
-target_compile_options(vmm PUBLIC  "-DBOARD_${KernelPlatVMM}")
+target_compile_options(vmm PUBLIC  
+    "-DBOARD_${KernelPlatVMM}" 
+    "-DSMOLDTB_STATIC_BUFFER_SIZE=92160" 
+    "-D${VMMImplDef}")

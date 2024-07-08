@@ -26,7 +26,7 @@
 #include <sel4test-vmm/virq.h>
 #include <sel4test-vmm/vmm.h>
 #include <sel4test-vmm/vcpu.h>
-#include "sel4test-fault.h"
+#include <sel4test-vmm/fault.h>
 
 // @ivanv: ideally we would have none of these hardcoded values
 // initrd, ram size come from the DTB

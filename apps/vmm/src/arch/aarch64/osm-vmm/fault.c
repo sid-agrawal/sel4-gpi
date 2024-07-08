@@ -9,9 +9,7 @@
 #include "smc.h"
 #include "vgic/vgic.h"
 #include <vmm-common/vmm_common.h>
-#include "sel4test-fault.h"
-#include <sel4test-vmm/vmm.h>
-#include <sel4test-vmm/vcpu.h>
+#include "osm-fault.h"
 
 bool fault_advance_vcpu(size_t vcpu_id, seL4_UserContext *regs)
 {
@@ -248,14 +246,19 @@ bool fault_advance(size_t vcpu_id, seL4_UserContext *regs, uint64_t addr, uint64
     return fault_advance_vcpu(vcpu_id, regs);
 }
 
-bool fault_handle_vcpu_exception(vm_context_t *vm)
+bool fault_handle_vcpu_exception(cpu_client_context_t *vm_cpu)
 {
+    printf("a\n");
     uint32_t hsr = seL4_GetMR(seL4_VCPUFault_HSR);
     uint64_t hsr_ec_class = HSR_EXCEPTION_CLASS(hsr);
+
+    // TODO: read registers
+
     switch (hsr_ec_class)
     {
     case HSR_SMC_64_EXCEPTION:
-        return handle_smc(vm, hsr);
+        // return handle_smc(vm, hsr);
+        return false;
     case HSR_WFx_EXCEPTION:
         // If we get a WFI exception, we just do nothing in the VMM.
         return true;
@@ -445,7 +448,7 @@ bool fault_handle_vm_exception(size_t vcpu_id)
     }
 }
 
-bool fault_handle(vm_context_t *vm, seL4_MessageInfo_t *msg)
+bool fault_handle(cpu_client_context_t *vm_cpu, seL4_MessageInfo_t *msg)
 {
     bool success = false;
     size_t label = seL4_MessageInfo_ptr_get_label(msg);
@@ -469,7 +472,7 @@ bool fault_handle(vm_context_t *vm, seL4_MessageInfo_t *msg)
         break;
     case seL4_Fault_VCPUFault:
         printf("fault_handle_vcpu_exception\n");
-        success = fault_handle_vcpu_exception(vm);
+        success = fault_handle_vcpu_exception(vm_cpu);
         break;
     case seL4_Fault_VPPIEvent:
         printf("fault_handle_vppi_event\n");
@@ -477,7 +480,7 @@ bool fault_handle(vm_context_t *vm, seL4_MessageInfo_t *msg)
         break;
     default:
         /* We have reached a genuinely unexpected case, stop the guest. */
-        printf("unknown fault label 0x%lx, stopping guest with ID 0x%lx\n", label, vm->vcpu.cptr);
+        printf("unknown fault label 0x%lx, stopping guest\n", label);
         // microkit_vm_stop(vcpu); // XXX
         /* Dump the TCB and vCPU registers to hopefully get information as
          * to what has gone wrong. */
@@ -488,7 +491,7 @@ bool fault_handle(vm_context_t *vm, seL4_MessageInfo_t *msg)
     if (!success)
     {
         printf("Failed to handle %s fault\n", fault_to_string(label));
-        vcpu_print_regs(vm->vcpu.cptr);
+        // vcpu_print_regs(vm->vcpu.cptr);
     }
 
     return success;

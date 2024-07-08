@@ -8,7 +8,7 @@
 #include <stdbool.h>
 #include "psci.h"
 #include "smc.h"
-#include "sel4test-fault.h"
+#include <sel4test-vmm/fault.h>
 #include <sel4test-vmm/guest.h>
 #include <assert.h>
 #include <utils/zf_log.h>
@@ -50,6 +50,7 @@ bool handle_psci(size_t vcpu_id, seL4_UserContext *regs, uint64_t fn_number, uin
     }
     case PSCI_CPU_ON:
     {
+        CPRINTF("PSCI CPU ON\n");
         uintptr_t target_cpu = smc_get_arg(regs, 1);
         // Right now we only have one vCPU and so any fault for a target vCPU
         // that isn't the one that's already on we consider an error on the
@@ -74,6 +75,7 @@ bool handle_psci(size_t vcpu_id, seL4_UserContext *regs, uint64_t fn_number, uin
          * system that does not use a "Trusted OS" as the PSCI
          * specification says.
          */
+        CPRINTF("PSCI MIGRATE INFO TYPE\n");
         smc_set_return_value(regs, 2);
         break;
     case PSCI_FEATURES:

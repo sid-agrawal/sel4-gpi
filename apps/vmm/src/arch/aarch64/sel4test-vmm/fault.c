@@ -8,8 +8,10 @@
 #include "hsr.h"
 #include "smc.h"
 #include "vgic/vgic.h"
+#include <sel4gpi/debug.h>
+#include <vmm-common/fault_common.h>
 #include <vmm-common/vmm_common.h>
-#include "sel4test-fault.h"
+#include <sel4test-vmm/fault.h>
 #include <sel4test-vmm/vmm.h>
 #include <sel4test-vmm/vcpu.h>
 
@@ -252,12 +254,17 @@ bool fault_handle_vcpu_exception(vm_context_t *vm)
 {
     uint32_t hsr = seL4_GetMR(seL4_VCPUFault_HSR);
     uint64_t hsr_ec_class = HSR_EXCEPTION_CLASS(hsr);
+
+    seL4_UserContext regs;
+    int err = seL4_TCB_ReadRegisters(vm->tcb.cptr, false, 0, SEL4_USER_CONTEXT_SIZE, &regs);
+    assert(err == seL4_NoError);
     switch (hsr_ec_class)
     {
     case HSR_SMC_64_EXCEPTION:
-        return handle_smc(vm, hsr);
+        return handle_smc(&regs, hsr);
     case HSR_WFx_EXCEPTION:
         // If we get a WFI exception, we just do nothing in the VMM.
+        CPRINTF("WFI exception\n");
         return true;
     default:
         ZF_LOGE("unknown SMC exception, EC class: 0x%lx, HSR: 0x%x\n", hsr_ec_class, hsr);

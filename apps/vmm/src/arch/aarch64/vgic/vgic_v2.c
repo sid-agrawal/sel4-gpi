@@ -47,7 +47,7 @@
 #include "vgic/virq.h"
 #include "vgic/vdist.h"
 #include <utils/arith.h>
-#include "sel4test-fault.h"
+#include <sel4test-vmm/fault.h>
 #include <sel4test-vmm/virq.h>
 #include <vmm-common/vmm_common.h>
 

@@ -225,7 +225,7 @@ int new_guest(void)
     GOTO_IF_ERR(error, "Failed to setup VM-PD\n");
 
     // WIP DTB parsing
-    /* dtb_ops no_malloc_ops = {.on_error = dtb_on_error};
+    dtb_ops no_malloc_ops = {.on_error = dtb_on_error};
 
     dtb_init((uintptr_t)guest_dtb_curr_vspace, no_malloc_ops);
 
@@ -254,7 +254,7 @@ int new_guest(void)
                 printf("vals: %zX\n", reg_vals[i]);
             }
         }
-    } */
+    }
 
     error = sel4gpi_start_pd(&runnable);
 

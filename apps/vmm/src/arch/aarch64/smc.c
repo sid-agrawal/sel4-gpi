@@ -122,23 +122,18 @@ static void smc_set_arg(seL4_UserContext *u, size_t arg, size_t val)
 }
 
 // @ivanv: print out which SMC call as a string we can't handle.
-bool handle_smc(vm_context_t *vm, uint32_t hsr)
+bool handle_smc(seL4_UserContext *regs, uint32_t hsr)
 {
-    // @ivanv: An optimisation to be made is to store the TCB registers so we don't
-    // end up reading them multiple times
-    seL4_UserContext regs;
-    int err = seL4_TCB_ReadRegisters(vm->tcb.cptr, false, 0, SEL4_USER_CONTEXT_SIZE, &regs);
-    assert(err == seL4_NoError);
-
-    size_t fn_number = smc_get_function_number(&regs);
-    smc_call_id_t service = smc_get_call(regs.x0);
+    printf("handle_smc\n");
+    size_t fn_number = smc_get_function_number(regs);
+    smc_call_id_t service = smc_get_call(regs->x0);
 
     switch (service)
     {
     case SMC_CALL_STD_SERVICE:
         if (fn_number < PSCI_MAX)
         {
-            return handle_psci(0, &regs, fn_number, hsr);
+            return handle_psci(0, regs, fn_number, hsr);
         }
         ZF_LOGE("Unhandled SMC: standard service call %lu\n", fn_number);
         break;

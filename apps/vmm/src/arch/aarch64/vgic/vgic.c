@@ -7,7 +7,7 @@
 #include "vgic/vgic.h"
 #include "vgic/virq.h"
 #include <utils/arith.h>
-#include "sel4test-fault.h"
+#include <sel4test-vmm/fault.h>
 
 #if defined(GIC_V2)
 #include "vgic/vgic_v2.h"

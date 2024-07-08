@@ -5,7 +5,7 @@
  * SPDX-License-Identifier: BSD-2-Clause
  */
 
-#include "sel4test-fault.h"
+#include <sel4test-vmm/fault.h>
 
 /* GIC Distributor register access utilities */
 #define GIC_DIST_REGN(offset, reg) ((offset - reg) / sizeof(uint32_t))
