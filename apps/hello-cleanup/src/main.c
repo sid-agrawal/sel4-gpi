@@ -15,8 +15,8 @@
 #include <sel4utils/process.h>
 
 #include <sel4gpi/pd_utils.h>
-#include <pokemart_server.h>
-#include <daycare_server.h>
+#include <toy_block_server.h>
+#include <toy_file_server.h>
 #include <basic_rpc.pb.h>
 
 /* dummy global for libsel4muslcsys */
@@ -34,10 +34,10 @@ uintptr_t morecore_top = (uintptr_t)(PD_HEAP_LOC + APP_MALLOC_SIZE);
 
 typedef enum _hello_mode
 {
-    HELLO_CLEANUP_SERVER_POKEMART_MODE, ///< Process will serve pokeballs
-    HELLO_CLEANUP_SERVER_DAYCARE_MODE,  ///< Process will serve pokemon
-    HELLO_CLEANUP_CLIENT_POKEMART_MODE, ///< Process will request pokeballs
-    HELLO_CLEANUP_CLIENT_DAYCARE_MODE,  ///< Process will request pokemon
+    HELLO_CLEANUP_TOY_BLOCK_SERVER_MODE, ///< Process will serve toy_blocks
+    HELLO_CLEANUP_TOY_FILE_SERVER_MODE,  ///< Process will serve toy_file
+    HELLO_CLEANUP_TOY_BLOCK_CLIENT_MODE, ///< Process will request toy_blocks
+    HELLO_CLEANUP_TOY_FILE_CLIENT_MODE,  ///< Process will request toy_file
     HELLO_CLEANUP_NOTHING_MODE,         ///< Process will do nothing
 } hello_mode_t;
 
@@ -47,14 +47,14 @@ static char *mode_to_str(hello_mode_t mode)
 {
     switch (mode)
     {
-    case HELLO_CLEANUP_SERVER_POKEMART_MODE:
-        return "pokemart server";
-    case HELLO_CLEANUP_CLIENT_POKEMART_MODE:
-        return "pokemart client";
-    case HELLO_CLEANUP_SERVER_DAYCARE_MODE:
-        return "daycare server";
-    case HELLO_CLEANUP_CLIENT_DAYCARE_MODE:
-        return "daycare client";
+    case HELLO_CLEANUP_TOY_BLOCK_SERVER_MODE:
+        return "toy_block server";
+    case HELLO_CLEANUP_TOY_BLOCK_CLIENT_MODE:
+        return "toy_block client";
+    case HELLO_CLEANUP_TOY_FILE_SERVER_MODE:
+        return "toy_file server";
+    case HELLO_CLEANUP_TOY_FILE_CLIENT_MODE:
+        return "toy_file client";
     case HELLO_CLEANUP_NOTHING_MODE:
         return "nothing";
     default:
@@ -74,16 +74,16 @@ static char *mode_to_str(hello_mode_t mode)
         printf("hello-cleanup %s: " msg, mode_to_str(mode), __VA_ARGS__); \
     } while (0);
 
-int pokemart_client(seL4_CPtr server_ep)
+int toy_block_client(seL4_CPtr server_ep)
 {
     int error = 0;
 
     for (int i = 0; i < N_CLIENT_REQUESTS; i++)
     {
-        PRINTF("I want to purchase one pokeball.\n");
+        PRINTF("I want to purchase one toy_block.\n");
 
-        pokeball_client_context_t result;
-        error = pokemart_client_get_pokeball(server_ep, &result);
+        toy_block_client_context_t result;
+        error = toy_block_client_get_toy_block(server_ep, &result);
 
         if (error == 0)
         {
@@ -91,7 +91,7 @@ int pokemart_client(seL4_CPtr server_ep)
         }
         else
         {
-            PRINTF("Wait, what? This isn't a pokeball.\n");
+            PRINTF("Wait, what? This isn't a toy_block.\n");
             return error;
         }
     }
@@ -99,16 +99,16 @@ int pokemart_client(seL4_CPtr server_ep)
     return error;
 }
 
-int daycare_client(seL4_CPtr server_ep)
+int toy_file_client(seL4_CPtr server_ep)
 {
     int error = 0;
 
     for (int i = 0; i < N_CLIENT_REQUESTS; i++)
     {
-        PRINTF("I want to adopt a pokemon.\n");
+        PRINTF("I want to adopt a toy_file.\n");
 
-        pokemon_client_context_t result;
-        error = daycare_client_get_pokemon(server_ep, &result);
+        toy_file_client_context_t result;
+        error = toy_file_client_get_toy_file(server_ep, &result);
 
         if (error == 0)
         {
@@ -116,7 +116,7 @@ int daycare_client(seL4_CPtr server_ep)
         }
         else
         {
-            PRINTF("Wait, what? This isn't a pokemon.\n");
+            PRINTF("Wait, what? This isn't a toy_file.\n");
             return error;
         }
     }
@@ -148,39 +148,39 @@ int main(int argc, char **argv)
 
     switch (mode)
     {
-    case HELLO_CLEANUP_SERVER_POKEMART_MODE:
+    case HELLO_CLEANUP_TOY_BLOCK_SERVER_MODE:
         error = resource_server_start(
-            &get_pokemart_server()->gen,
-            POKEBALL_RESOURCE_TYPE_NAME,
-            pokemart_request_handler,
-            pokemart_work_handler,
+            &get_toy_block_server()->gen,
+            TOY_BLOCK_RESOURCE_TYPE_NAME,
+            toy_block_request_handler,
+            toy_block_work_handler,
             parent_ep,
             parent_pd_id,
-            pokemart_server_init,
+            toy_block_server_init,
             true,
             &BasicMessage_msg,
             &BasicReturnMessage_msg);
         break;
-    case HELLO_CLEANUP_SERVER_DAYCARE_MODE:
+    case HELLO_CLEANUP_TOY_FILE_SERVER_MODE:
         error = resource_server_start(
-            &get_daycare_server()->gen,
-            POKEMON_RESOURCE_TYPE_NAME,
-            daycare_request_handler,
-            daycare_work_handler,
+            &get_toy_file_server()->gen,
+            TOY_FILE_RESOURCE_TYPE_NAME,
+            toy_file_request_handler,
+            toy_file_work_handler,
             parent_ep,
             parent_pd_id,
-            daycare_server_init,
+            toy_file_server_init,
             true,
             &BasicMessage_msg,
             &BasicReturnMessage_msg);
         break;
-    case HELLO_CLEANUP_CLIENT_POKEMART_MODE:
-        seL4_CPtr server_ep = sel4gpi_get_rde(sel4gpi_get_resource_type_code(POKEBALL_RESOURCE_TYPE_NAME));
-        error = pokemart_client(server_ep);
+    case HELLO_CLEANUP_TOY_BLOCK_CLIENT_MODE:
+        seL4_CPtr server_ep = sel4gpi_get_rde(sel4gpi_get_resource_type_code(TOY_BLOCK_RESOURCE_TYPE_NAME));
+        error = toy_block_client(server_ep);
         break;
-    case HELLO_CLEANUP_CLIENT_DAYCARE_MODE:
-        server_ep = sel4gpi_get_rde(sel4gpi_get_resource_type_code(POKEMON_RESOURCE_TYPE_NAME));
-        error = daycare_client(server_ep);
+    case HELLO_CLEANUP_TOY_FILE_CLIENT_MODE:
+        server_ep = sel4gpi_get_rde(sel4gpi_get_resource_type_code(TOY_FILE_RESOURCE_TYPE_NAME));
+        error = toy_file_client(server_ep);
         break;
     case HELLO_CLEANUP_NOTHING_MODE:
         error = do_nothing();
@@ -194,7 +194,7 @@ main_exit:
 
     if (error)
     {
-        PRINTF("Something is wrong in pokeworld\n");
+        PRINTF("Something is wrong in toy world\n");
     }
 
     while (1)

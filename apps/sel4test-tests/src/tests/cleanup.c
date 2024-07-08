@@ -31,28 +31,28 @@
  */
 
 #define HELLO_CLEANUP_APP "hello_cleanup"
-#define POKEMART_RESOURCE_TYPE "POKEBALL"
-#define DAYCARE_RESOURCE_TYPE "POKEMON"
+#define TOY_BLOCK_SERVER_RESOURCE_TYPE "TOY_BLOCK"
+#define TOY_FILE_SERVER_RESOURCE_TYPE "TOY_FILE"
 
 static ads_client_context_t ads_conn;
 static pd_client_context_t pd_conn;
 static ep_client_context_t self_ep;
 
-// Track the type/space ID of the pokemart server
-static gpi_cap_t pokemart_type;
-static uint64_t pokemart_space_id;
+// Track the type/space ID of the toy_block server
+static gpi_cap_t toy_block_type;
+static uint64_t toy_block_space_id;
 
-// Track the type/space ID of the daycare server
-static gpi_cap_t daycare_type;
-static uint64_t daycare_space_id;
+// Track the type/space ID of the toy_file server
+static gpi_cap_t toy_file_type;
+static uint64_t toy_file_space_id;
 
 // This needs to be the same as the definition in hello-cleanup/main.c
 typedef enum _hello_mode
 {
-    HELLO_CLEANUP_SERVER_POKEMART_MODE, ///< Process will serve pokeballs
-    HELLO_CLEANUP_SERVER_DAYCARE_MODE,  ///< Process will serve pokemon
-    HELLO_CLEANUP_CLIENT_POKEMART_MODE, ///< Process will request pokeballs
-    HELLO_CLEANUP_CLIENT_DAYCARE_MODE,  ///< Process will request pokemon
+    HELLO_CLEANUP_TOY_BLOCK_SERVER_MODE, ///< Process will serve toy_blocks
+    HELLO_CLEANUP_TOY_FILE_SERVER_MODE,  ///< Process will serve toy_file
+    HELLO_CLEANUP_TOY_BLOCK_CLIENT_MODE, ///< Process will request toy_blocks
+    HELLO_CLEANUP_TOY_FILE_CLIENT_MODE,  ///< Process will request toy_file
     HELLO_CLEANUP_NOTHING_MODE,         ///< Process will do nothing
 } hello_mode_t;
 
@@ -85,26 +85,26 @@ static int start_hello(hello_mode_t mode, pd_client_context_t *hello_pd)
 {
     int error;
 
-    if (mode == HELLO_CLEANUP_SERVER_POKEMART_MODE)
+    if (mode == HELLO_CLEANUP_TOY_BLOCK_SERVER_MODE)
     {
         // Start the server with the resource server utility function
         error = start_resource_server_pd_args(0, 0, HELLO_CLEANUP_APP, &mode, 1,
-                                              &hello_pd->ep, &pokemart_space_id);
+                                              &hello_pd->ep, &toy_block_space_id);
 
         test_assert(error == 0);
 
-        pokemart_type = sel4gpi_get_resource_type_code(POKEMART_RESOURCE_TYPE);
+        toy_block_type = sel4gpi_get_resource_type_code(TOY_BLOCK_SERVER_RESOURCE_TYPE);
         return 0;
     }
-    else if (mode == HELLO_CLEANUP_SERVER_DAYCARE_MODE)
+    else if (mode == HELLO_CLEANUP_TOY_FILE_SERVER_MODE)
     {
         // Start the server with the resource server utility function
-        error = start_resource_server_pd_args(pokemart_type, pokemart_space_id, HELLO_CLEANUP_APP, &mode, 1,
-                                              &hello_pd->ep, &daycare_space_id);
+        error = start_resource_server_pd_args(toy_block_type, toy_block_space_id, HELLO_CLEANUP_APP, &mode, 1,
+                                              &hello_pd->ep, &toy_file_space_id);
 
         test_assert(error == 0);
 
-        daycare_type = sel4gpi_get_resource_type_code(DAYCARE_RESOURCE_TYPE);
+        toy_file_type = sel4gpi_get_resource_type_code(TOY_FILE_SERVER_RESOURCE_TYPE);
         return 0;
     }
 
@@ -126,13 +126,13 @@ static int start_hello(hello_mode_t mode, pd_client_context_t *hello_pd)
     test_assert(error == 0);
 
     // Share an RDE for client
-    if (mode == HELLO_CLEANUP_CLIENT_POKEMART_MODE)
+    if (mode == HELLO_CLEANUP_TOY_BLOCK_CLIENT_MODE)
     {
-        sel4gpi_add_rde_config(cfg, pokemart_type, pokemart_space_id);
+        sel4gpi_add_rde_config(cfg, toy_block_type, toy_block_space_id);
     }
-    else if (mode == HELLO_CLEANUP_CLIENT_DAYCARE_MODE)
+    else if (mode == HELLO_CLEANUP_TOY_FILE_CLIENT_MODE)
     {
-        sel4gpi_add_rde_config(cfg, daycare_type, daycare_space_id);
+        sel4gpi_add_rde_config(cfg, toy_file_type, toy_file_space_id);
     }
 
     // Start it
@@ -152,16 +152,16 @@ static int start_hello(hello_mode_t mode, pd_client_context_t *hello_pd)
  * Simple test scenario for cleanup policies with one server/client and one resource type
  *
  * Scenario:
- * - Server PD serves pokeballs
- * - Client PD requests pokeballs from server
+ * - Server PD serves toy_blocks
+ * - Client PD requests toy_blocks from server
  * - Dummy PD does nothing
  *
  * Crash the server PD
  *
  * Expected outcome of PD_CLEANUP_RESOURCES_DIRECT or PD_CLEANUP_RESOURCES_RECURSIVE:
  * - Dummy PD is unaffected
- * - Client PD remains running, but no longer holds any pokeball resource
- *   - It also loses the pokeball RDE
+ * - Client PD remains running, but no longer holds any toy_block resource
+ *   - It also loses the toy_block RDE
  *
  * Expected outcome of PD_CLEANUP_DEPENDENTS_DIRECT or PD_CLEANUP_DEPENDENTS_RECURSIVE:
  * - Dummy PD is unaffected
@@ -177,11 +177,11 @@ int test_cleanup_policy_1(env_t env)
 
     /* Start the PDs */
     pd_client_context_t hello_server_pd;
-    error = start_hello(HELLO_CLEANUP_SERVER_POKEMART_MODE, &hello_server_pd);
+    error = start_hello(HELLO_CLEANUP_TOY_BLOCK_SERVER_MODE, &hello_server_pd);
     test_assert(error == 0);
 
     pd_client_context_t hello_client_pd;
-    error = start_hello(HELLO_CLEANUP_CLIENT_POKEMART_MODE, &hello_client_pd);
+    error = start_hello(HELLO_CLEANUP_TOY_BLOCK_CLIENT_MODE, &hello_client_pd);
     test_assert(error == 0);
 
     pd_client_context_t hello_dummy_pd;
@@ -190,16 +190,16 @@ int test_cleanup_policy_1(env_t env)
 
 #ifdef CONFIG_DEBUG_BUILD
     // Name the PDs for model extraction
-    error = pd_client_set_name(&hello_server_pd, "pokemart_server");
+    error = pd_client_set_name(&hello_server_pd, "toy_block_server");
     test_assert(error == 0);
-    error = pd_client_set_name(&hello_client_pd, "pokemart_client");
+    error = pd_client_set_name(&hello_client_pd, "toy_block_client");
     test_assert(error == 0);
     error = pd_client_set_name(&hello_dummy_pd, "dummy_pd");
     test_assert(error == 0);
 #endif
 
     /* Remove RDE from test process so that it won't be cleaned up by recursive cleanup */
-    error = pd_client_remove_rde(&pd_conn, pokemart_type, pokemart_space_id);
+    error = pd_client_remove_rde(&pd_conn, toy_block_type, toy_block_space_id);
     test_assert(error == 0);
 
     /* Print model state before crash */
@@ -239,36 +239,36 @@ DEFINE_TEST(GPICL001, "Test the PD cleanup policy 1", test_cleanup_policy_1, tru
  * More complicated test scenario for cleanup policies with two servers/clients and two resource types
  *
  * Scenario:
- * - Pokemart server PD serves pokeballs
- * - Pokemon daycare server PD
- *     - Requests pokeballs from pokemart server
- *     - Serves pokemon resources
- *     - Pokemon map to pokeballs
- * - Client PD 1 requests pokeballs from pokemart server
- * - Client PD 2 requests pokemon from pokemon daycare server
+ * - Toy block server server PD serves toy_blocks
+ * - Toy file server PD
+ *     - Requests toy_blocks from toy_block server
+ *     - Serves toy_file resources
+ *     - Toy file map to toy_blocks
+ * - Client PD 1 requests toy_blocks from toy_block server
+ * - Client PD 2 requests toy_file from toy_file toy_file server
  * - Dummy PD does nothing
  *
- * Crash the pokemart server PD
+ * Crash the toy_block server PD
  *
  * Expected outcome of PD_CLEANUP_RESOURCES_RECURSIVE:
  * - Dummy PD is unaffected
- * - Pokemon daycare server remains running, but it may no longer be operational
- *   - It loses the pokeball RDE
- * - Client PD 1 remains running, but no longer holds any pokeball resource
- *   - It also loses the pokeball RDE
- * - Client PD 2 remains running, but no longer holds any pokemon resource
- *   - It also loses the pokemon RDE
+ * - Toy file server remains running, but it may no longer be operational
+ *   - It loses the toy_block RDE
+ * - Client PD 1 remains running, but no longer holds any toy_block resource
+ *   - It also loses the toy_block RDE
+ * - Client PD 2 remains running, but no longer holds any toy_file resource
+ *   - It also loses the toy_file RDE
  *
  * Expected outcome of PD_CLEANUP_DEPENDENTS_DIRECT:
  * - Dummy PD is unaffected
- * - Pokemon daycare server is killed
+ * - Toy file server is killed
  * - Client PD 1 is killed
- * - Client PD 2 remains running, but no longer holds any pokemon resource
- *   - It also loses the pokemon RDE
+ * - Client PD 2 remains running, but no longer holds any toy_file resource
+ *   - It also loses the toy_file RDE
  *
  * Expected outcome of PD_CLEANUP_DEPENDENTS_RECURSIVE:
  * - Dummy PD is unaffected
- * - Pokemon daycare server is killed
+ * - Toy file server is killed
  * - Client PD 1 is killed
  * - Client PD 2 is killed
  */
@@ -281,20 +281,20 @@ int test_cleanup_policy_2(env_t env)
     printf("------------------STARTING TEST: %s------------------\n", __func__);
 
     /* Start the PDs */
-    pd_client_context_t hello_server_pokemart_pd;
-    error = start_hello(HELLO_CLEANUP_SERVER_POKEMART_MODE, &hello_server_pokemart_pd);
+    pd_client_context_t hello_server_toy_block_pd;
+    error = start_hello(HELLO_CLEANUP_TOY_BLOCK_SERVER_MODE, &hello_server_toy_block_pd);
     test_assert(error == 0);
 
-    pd_client_context_t hello_server_daycare_pd;
-    error = start_hello(HELLO_CLEANUP_SERVER_DAYCARE_MODE, &hello_server_daycare_pd);
+    pd_client_context_t hello_server_toy_file_pd;
+    error = start_hello(HELLO_CLEANUP_TOY_FILE_SERVER_MODE, &hello_server_toy_file_pd);
     test_assert(error == 0);
 
-    pd_client_context_t hello_client_pokemart_pd;
-    error = start_hello(HELLO_CLEANUP_CLIENT_POKEMART_MODE, &hello_client_pokemart_pd);
+    pd_client_context_t hello_client_toy_block_pd;
+    error = start_hello(HELLO_CLEANUP_TOY_BLOCK_CLIENT_MODE, &hello_client_toy_block_pd);
     test_assert(error == 0);
 
-    pd_client_context_t hello_client_daycare_pd;
-    error = start_hello(HELLO_CLEANUP_CLIENT_DAYCARE_MODE, &hello_client_daycare_pd);
+    pd_client_context_t hello_client_toy_file_pd;
+    error = start_hello(HELLO_CLEANUP_TOY_FILE_CLIENT_MODE, &hello_client_toy_file_pd);
     test_assert(error == 0);
 
     pd_client_context_t hello_dummy_pd;
@@ -303,23 +303,23 @@ int test_cleanup_policy_2(env_t env)
 
 #ifdef CONFIG_DEBUG_BUILD
     // Name the PDs for model extraction
-    error = pd_client_set_name(&hello_server_pokemart_pd, "pokemart_server");
+    error = pd_client_set_name(&hello_server_toy_block_pd, "toy_block_server");
     test_assert(error == 0);
-    error = pd_client_set_name(&hello_client_pokemart_pd, "pokemart_client");
+    error = pd_client_set_name(&hello_client_toy_block_pd, "toy_block_client");
     test_assert(error == 0);
-    error = pd_client_set_name(&hello_server_daycare_pd, "daycare_server");
+    error = pd_client_set_name(&hello_server_toy_file_pd, "toy_file_server");
     test_assert(error == 0);
-    error = pd_client_set_name(&hello_client_daycare_pd, "daycare_client");
+    error = pd_client_set_name(&hello_client_toy_file_pd, "toy_file_client");
     test_assert(error == 0);
     error = pd_client_set_name(&hello_dummy_pd, "dummy_pd");
     test_assert(error == 0);
 #endif
 
     /* Remove RDEs from test process so that it won't be cleaned up by recursive cleanup */
-    error = pd_client_remove_rde(&pd_conn, pokemart_type, pokemart_space_id);
+    error = pd_client_remove_rde(&pd_conn, toy_block_type, toy_block_space_id);
     test_assert(error == 0);
 
-    error = pd_client_remove_rde(&pd_conn, daycare_type, daycare_space_id);
+    error = pd_client_remove_rde(&pd_conn, toy_file_type, toy_file_space_id);
     test_assert(error == 0);
 
     /* Print model state before crash */
@@ -328,8 +328,8 @@ int test_cleanup_policy_2(env_t env)
     test_assert(error == 0);
 
     /* Crash a PD */
-    printf("Crashing pokemart server PD\n");
-    error = pd_client_terminate(&hello_server_pokemart_pd);
+    printf("Crashing toy_block server PD\n");
+    error = pd_client_terminate(&hello_server_toy_block_pd);
     test_assert(error == 0);
 
     /* Print model state after crash */
@@ -338,31 +338,31 @@ int test_cleanup_policy_2(env_t env)
     test_assert(error == 0);
 
     /* Cleanup PDs */
-    error = pd_client_terminate(&hello_server_daycare_pd);
+    error = pd_client_terminate(&hello_server_toy_file_pd);
 
     if (error != seL4_NoError)
     {
-        printf("WARNING: Failed to cleanup hello-server-daycare PD (%d), "
+        printf("WARNING: Failed to cleanup hello-server-toy_file PD (%d), "
                "this may be expected if the cleanup policy already destroyed it. \n",
-               hello_server_daycare_pd.id);
+               hello_server_toy_file_pd.id);
     }
 
-    error = pd_client_terminate(&hello_client_pokemart_pd);
+    error = pd_client_terminate(&hello_client_toy_block_pd);
 
     if (error != seL4_NoError)
     {
-        printf("WARNING: Failed to cleanup hello-client-pokemart PD (%d), "
+        printf("WARNING: Failed to cleanup hello-client-toy_block PD (%d), "
                "this may be expected if the cleanup policy already destroyed it. \n",
-               hello_client_pokemart_pd.id);
+               hello_client_toy_block_pd.id);
     }
 
-    error = pd_client_terminate(&hello_client_daycare_pd);
+    error = pd_client_terminate(&hello_client_toy_file_pd);
 
     if (error != seL4_NoError)
     {
-        printf("WARNING: Failed to cleanup hello-client-daycare PD (%d), "
+        printf("WARNING: Failed to cleanup hello-client-toy_file PD (%d), "
                "this may be expected if the cleanup policy already destroyed it. \n",
-               hello_client_daycare_pd.id);
+               hello_client_toy_file_pd.id);
     }
 
     error = pd_client_terminate(&hello_dummy_pd);
