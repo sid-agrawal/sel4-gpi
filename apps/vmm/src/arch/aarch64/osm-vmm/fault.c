@@ -8,8 +8,9 @@
 #include "hsr.h"
 #include "smc.h"
 #include "vgic/vgic.h"
+#include <sel4gpi/error_handle.h>
 #include <vmm-common/vmm_common.h>
-#include "osm-fault.h"
+#include <osm-vmm/fault.h>
 
 bool fault_advance_vcpu(size_t vcpu_id, seL4_UserContext *regs)
 {
@@ -248,16 +249,19 @@ bool fault_advance(size_t vcpu_id, seL4_UserContext *regs, uint64_t addr, uint64
 
 bool fault_handle_vcpu_exception(cpu_client_context_t *vm_cpu)
 {
-    printf("a\n");
+    int error = 0;
     uint32_t hsr = seL4_GetMR(seL4_VCPUFault_HSR);
     uint64_t hsr_ec_class = HSR_EXCEPTION_CLASS(hsr);
 
-    // TODO: read registers
+    printf("a\n");
+    seL4_UserContext regs = {0};
+    error = cpu_client_read_registers(vm_cpu, &regs);
+    GOTO_IF_ERR(error, "Failed to read CPU registers\n");
 
     switch (hsr_ec_class)
     {
     case HSR_SMC_64_EXCEPTION:
-        // return handle_smc(vm, hsr);
+        return handle_smc(&regs, hsr);
         return false;
     case HSR_WFx_EXCEPTION:
         // If we get a WFI exception, we just do nothing in the VMM.
@@ -266,6 +270,9 @@ bool fault_handle_vcpu_exception(cpu_client_context_t *vm_cpu)
         ZF_LOGE("unknown SMC exception, EC class: 0x%lx, HSR: 0x%x\n", hsr_ec_class, hsr);
         return false;
     }
+
+err_goto:
+    return false;
 }
 
 bool fault_handle_vppi_event(size_t vcpu_id)

@@ -89,21 +89,17 @@ extern char _guest_dtb_image_end[];
 extern char _guest_initrd_image[];
 extern char _guest_initrd_image_end[];
 
-// static void handle_fault(void *arg0, void *arg1, void *arg2)
-// {
-//     VMM_PRINT("in handle_fault\n");
-//     sel4gpi_runnable_t *vm_context = (sel4gpi_runnable_t *)arg0;
-//     seL4_CPtr fault_ep = (seL4_CPtr)arg1;
-//     while (1)
-//     {
-//         seL4_MessageInfo_t info = seL4_Recv(fault_ep, NULL);
-//         VMM_PRINT("fault: %s\n", fault_to_string(seL4_MessageInfo_get_label(info)));
-//         // fault_handle_vcpu_exception(vm);
-//         // vcpu_print_regs(vm->vcpu.cptr);
-//         fault_handle(vm, &info);
-//         sel4debug_dump_registers(vm->tcb.cptr);
-//     }
-// }
+static void handle_fault(sel4gpi_runnable_t *vm, ep_client_context_t *fault_ep)
+{
+    VMM_PRINT("in handle_fault\n");
+    while (1)
+    {
+        seL4_MessageInfo_t info = seL4_Recv(fault_ep->raw_endpoint, NULL);
+        VMM_PRINT("fault: %s\n", fault_to_string(seL4_MessageInfo_get_label(info)));
+        fault_handle(&vm->cpu, &info);
+        // sel4debug_dump_registers(vm->tcb.cptr);
+    }
+}
 
 static void dtb_on_error(const char *why)
 {
@@ -113,7 +109,7 @@ static void dtb_on_error(const char *why)
 int new_guest(void)
 {
     int error = 0;
-    pd_config_t *cfg = calloc(1, sizeof(pd_config_t));
+    pd_config_t *vm_cfg = calloc(1, sizeof(pd_config_t));
 
     seL4_CPtr pd_rde = sel4gpi_get_rde(GPICAP_TYPE_PD);
     GOTO_IF_COND(pd_rde == seL4_CapNull, "No PD RDE\n");
@@ -127,12 +123,12 @@ int new_guest(void)
     pd_client_context_t self_pd_conn = sel4gpi_get_pd_conn();
 
     /* allocate MO for PD's OSmosis data */
-    error = mo_component_client_connect(mo_rde, 1, MO_PAGE_BITS, &cfg->osm_data_mo);
+    error = mo_component_client_connect(mo_rde, 1, MO_PAGE_BITS, &vm_cfg->osm_data_mo);
     GOTO_IF_ERR(error, "Failed to allocat OSmosis data MO\n");
 
     sel4gpi_runnable_t runnable = {0};
     /* new PD */
-    error = pd_component_client_connect(pd_rde, &cfg->osm_data_mo, &runnable.pd);
+    error = pd_component_client_connect(pd_rde, &vm_cfg->osm_data_mo, &runnable.pd);
     GOTO_IF_ERR(error, "Failed to create new PD\n");
 
     /* new ADS*/
@@ -181,13 +177,13 @@ int new_guest(void)
 
     uintptr_t kernel_pc_vm_vspace = (uintptr_t)GUEST_RAM_VADDR + (kernel_pc_curr_vspace - (uintptr_t)guest_ram_curr_vspace);
 
-    cfg->elevated_cpu = true;
-    cfg->ads_cfg.entry_point = (void *)kernel_pc_vm_vspace;
+    vm_cfg->elevated_cpu = true;
+    vm_cfg->ads_cfg.entry_point = (void *)kernel_pc_vm_vspace;
 
 #ifdef BOARD_qemu_arm_virt
     mo_client_context_t serial_dev_mo = {0};
     error = mo_component_client_connect_paddr(mo_rde, 1, MO_PAGE_BITS, SERIAL_PADDR, &serial_dev_mo);
-    sel4gpi_add_vmr_config(&cfg->ads_cfg, GPI_DISJOINT, SEL4UTILS_RES_TYPE_GENERIC, (void *)SERIAL_PADDR,
+    sel4gpi_add_vmr_config(&vm_cfg->ads_cfg, GPI_DISJOINT, SEL4UTILS_RES_TYPE_GENERIC, (void *)SERIAL_PADDR,
                            NULL, 1, MO_PAGE_BITS, &serial_dev_mo);
 #elif BOARD_odroidc4
     size_t two_mb_pages = BYTES_TO_SIZE_BITS_PAGES(MiB_TO_BYTES(2), MO_PAGE_BITS);
@@ -195,37 +191,43 @@ int new_guest(void)
     mo_client_context_t bus1_mo = {0};
     error = mo_component_client_connect_paddr(mo_rde, 1, MO_PAGE_BITS, ODROID_BUS1, &bus1_mo);
     GOTO_IF_ERR(error, "Failed to allocate MO for bus 1\n");
-    sel4gpi_add_vmr_config(&cfg->ads_cfg, GPI_DISJOINT, SEL4UTILS_RES_TYPE_DEVICE, (void *)ODROID_BUS1,
+    sel4gpi_add_vmr_config(&vm_cfg->ads_cfg, GPI_DISJOINT, SEL4UTILS_RES_TYPE_DEVICE, (void *)ODROID_BUS1,
                            NULL, two_mb_pages, MO_PAGE_BITS, &bus1_mo);
 
     mo_client_context_t bus2_mo = {0};
     error = mo_component_client_connect_paddr(mo_rde, 1, MO_PAGE_BITS, ODROID_BUS2, &bus2_mo);
     GOTO_IF_ERR(error, "Failed to allocate MO for bus 2\n");
-    sel4gpi_add_vmr_config(&cfg->ads_cfg, GPI_DISJOINT, SEL4UTILS_RES_TYPE_DEVICE, (void *)ODROID_BUS2,
+    sel4gpi_add_vmr_config(&vm_cfg->ads_cfg, GPI_DISJOINT, SEL4UTILS_RES_TYPE_DEVICE, (void *)ODROID_BUS2,
                            NULL, two_mb_pages, MO_PAGE_BITS, &bus2_mo);
 
     mo_client_context_t bus3_mo = {0};
     error = mo_component_client_connect_paddr(mo_rde, 1, MO_PAGE_BITS, ODROID_BUS3, &bus3_mo);
     GOTO_IF_ERR(error, "Failed to allocate MO for bus 3\n");
-    sel4gpi_add_vmr_config(&cfg->ads_cfg, GPI_DISJOINT, SEL4UTILS_RES_TYPE_DEVICE, (void *)ODROID_BUS3, NULL,
+    sel4gpi_add_vmr_config(&vm_cfg->ads_cfg, GPI_DISJOINT, SEL4UTILS_RES_TYPE_DEVICE, (void *)ODROID_BUS3, NULL,
                            BYTES_TO_SIZE_BITS_PAGES(MiB_TO_BYTES(1), MO_PAGE_BITS), MO_PAGE_BITS, &bus3_mo);
 #endif // BOARD_qemu_arm_virt
 
     mo_client_context_t gic_mo = {0};
     error = mo_component_client_connect_paddr(mo_rde, 1, MO_PAGE_BITS, GIC_PADDR, &gic_mo);
     GOTO_IF_ERR(error, "Could not allocate MO for GIC dev region\n");
-    sel4gpi_add_vmr_config(&cfg->ads_cfg, GPI_DISJOINT, SEL4UTILS_RES_TYPE_DEVICE, (void *)LINUX_GIC_PADDR,
+    sel4gpi_add_vmr_config(&vm_cfg->ads_cfg, GPI_DISJOINT, SEL4UTILS_RES_TYPE_DEVICE, (void *)LINUX_GIC_PADDR,
                            NULL, 1, MO_PAGE_BITS, &gic_mo);
 
-    sel4gpi_add_vmr_config(&cfg->ads_cfg, GPI_DISJOINT, SEL4UTILS_RES_TYPE_GENERIC, (void *)GUEST_RAM_VADDR,
+    sel4gpi_add_vmr_config(&vm_cfg->ads_cfg, GPI_DISJOINT, SEL4UTILS_RES_TYPE_GENERIC, (void *)GUEST_RAM_VADDR,
                            NULL, guest_ram_pages, MO_LARGE_PAGE_BITS, &guest_ram_mo);
 
+    ep_client_context_t fault_ep = {0};
+    error = ep_component_client_connect(sel4gpi_get_rde(GPICAP_TYPE_EP), &fault_ep);
+    GOTO_IF_ERR(error, "Failed to allocated fault EP\n");
+
+    vm_cfg->fault_ep = fault_ep;
+
     seL4_Word arg = GUEST_DTB_VADDR;
-    error = sel4gpi_prepare_pd(cfg, &runnable, 1, &arg);
+    error = sel4gpi_prepare_pd(vm_cfg, &runnable, 1, &arg);
     GOTO_IF_ERR(error, "Failed to setup VM-PD\n");
 
     // WIP DTB parsing
-    dtb_ops no_malloc_ops = {.on_error = dtb_on_error};
+    /* dtb_ops no_malloc_ops = {.on_error = dtb_on_error};
 
     dtb_init((uintptr_t)guest_dtb_curr_vspace, no_malloc_ops);
 
@@ -254,21 +256,16 @@ int new_guest(void)
                 printf("vals: %zX\n", reg_vals[i]);
             }
         }
-    }
+    } */
 
     error = sel4gpi_start_pd(&runnable);
 
-    // sel4gpi_configure_thread()
-
     // pd_client_dump(&runnable.pd, NULL, 0);
 
-    while (1)
-    {
-        seL4_Yield();
-    }
+    handle_fault(&runnable, &fault_ep);
 
 err_goto:
-    sel4gpi_config_destroy(cfg);
+    sel4gpi_config_destroy(vm_cfg);
 
     return error;
 }

@@ -9,7 +9,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include <stddef.h>
-#include <sel4gpi/cpu_client_context.h>
+#include <sel4gpi/cpu_clientapi.h>
 #include <sel4gpi/pd_creation.h>
 #include <osm-vmm/vmm.h>
 

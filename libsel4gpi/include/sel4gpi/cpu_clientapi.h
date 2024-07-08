@@ -94,6 +94,15 @@ int cpu_client_change_vspace(cpu_client_context_t *conn,
  */
 int cpu_client_elevate_privileges(cpu_client_context_t *conn);
 
+/**
+ * @brief read the registers of a CPU
+ *
+ * @param conn the CPU context
+ * @param[out] regs returns the register contents
+ * @return int 0 on success, other on failure
+ */
+int cpu_client_read_registers(cpu_client_context_t *cpu, seL4_UserContext *regs);
+
 /* ======================================= CONVENIENCE FUNCTIONS (NOT PART OF FRAMEWORK) ================================================= */
 /**
  * @brief sets the TLS base for a CPU obj. The given address should be w.r.t the CPU's ADS

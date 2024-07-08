@@ -13,6 +13,8 @@
 #include <sel4gpi/badge_usage.h>
 #include <sel4gpi/debug.h>
 #include <sel4gpi/gpi_rpc.h>
+#include <sel4gpi/pd_utils.h>
+#include <sel4gpi/error_handle.h>
 #include <cpu_component_rpc.pb.h>
 
 // Defined for utility printing macros
@@ -187,6 +189,39 @@ int cpu_client_suspend(cpu_client_context_t *cpu)
     error = sel4gpi_rpc_call(&rpc_env, cpu->ep, (void *)&msg,
                              0, NULL, (void *)&ret_msg);
     error |= ret_msg.errorCode;
+
+    return error;
+}
+
+int cpu_client_read_registers(cpu_client_context_t *cpu, seL4_UserContext *regs)
+{
+    ads_client_context_t vmr_rde = sel4gpi_get_bound_vmr_rde();
+    mo_client_context_t msg_mo = {0};
+    void *shared_msg_vaddr = sel4gpi_get_vmr(&vmr_rde, 1, NULL, SEL4UTILS_RES_TYPE_SHARED_FRAMES, MO_PAGE_BITS, &msg_mo);
+    OSDB_PRINTF("Sending read registers request to CPU component\n");
+
+    int error = 0;
+
+    CpuMessage msg = {
+        .which_msg = CpuMessage_read_reg_tag,
+    };
+
+    CpuReturnMessage ret_msg;
+
+    seL4_CPtr caps[1] = {msg_mo.ep};
+
+    printf("a\n");
+    error = sel4gpi_rpc_call(&rpc_env, cpu->ep, (void *)&msg,
+                             1, caps, (void *)&ret_msg);
+    error |= ret_msg.errorCode;
+    printf("b\n");
+    if (!error)
+    {
+        memcpy(regs, shared_msg_vaddr, sizeof(seL4_UserContext));
+    }
+
+    int unmap_error = sel4gpi_destroy_vmr(&vmr_rde, shared_msg_vaddr, &msg_mo);
+    SERVER_WARN_IF_COND(unmap_error, "Failed to destroy VMR and MO for message buffer\n");
 
     return error;
 }

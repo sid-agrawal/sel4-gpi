@@ -256,3 +256,8 @@ int cpu_elevate(cpu_t *cpu)
 err_goto:
     return error;
 }
+
+int cpu_read_registers(cpu_t *cpu, seL4_UserContext *regs)
+{
+    return seL4_TCB_ReadRegisters(cpu->tcb.cptr, seL4_False, 0, sizeof(seL4_UserContext) / sizeof(seL4_Word), regs);
+}

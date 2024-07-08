@@ -190,3 +190,12 @@ int cpu_set_guest_context(cpu_t *cpu, uintptr_t kernel_entry, uintptr_t kernel_d
  * @return int returns 0 on success, 1 on failure
  */
 int cpu_elevate(cpu_t *cpu);
+
+/**
+ * @brief Reads the registers of a CPU. Does not store these values in the CPU object
+ *
+ * @param cpu the CPU object
+ * @param[out] reg returns the contents of the registers
+ * @return int 0 on success, other on failure
+ */
+int cpu_read_registers(cpu_t *cpu, seL4_UserContext *regs);

@@ -94,8 +94,8 @@ uintptr_t linux_setup_images(uintptr_t ram_start,
         ZF_LOGE("Linux expects DTB address to be on an 8-byte boundary, DTB address is 0x%lx\n", dtb_dest);
         return 0;
     }
-    ZF_LOGI("Copying guest DTB to 0x%lx (0x%lx bytes)\n", dtb_dest, dtb_size);
-    memcpy((char *)dtb_dest, (char *)dtb_src, dtb_size);
+    // ZF_LOGI("Copying guest DTB to 0x%lx (0x%lx bytes)\n", dtb_dest, dtb_size);
+    // memcpy((char *)dtb_dest, (char *)dtb_src, dtb_size);
     // Copy the initial RAM disk into the right location
     // @ivanv: add checks for initrd according to Linux docs
     ZF_LOGI("Copying guest initial RAM disk to 0x%lx (0x%lx bytes)\n", initrd_dest, initrd_size);

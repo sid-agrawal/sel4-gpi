@@ -260,7 +260,7 @@ err_goto:
 static void handle_elevate_req(seL4_Word sender_badge, CpuElevatePrivilegeMessage *msg, CpuReturnMessage *reply_msg)
 {
     int error = 0;
-    OSDB_PRINTF("Got elevate CPU request:");
+    OSDB_PRINTF("Got elevate CPU request: ");
     BADGE_PRINT(sender_badge);
 
     cpu_component_registry_entry_t *cpu_data = (cpu_component_registry_entry_t *)
@@ -269,6 +269,34 @@ static void handle_elevate_req(seL4_Word sender_badge, CpuElevatePrivilegeMessag
 
     error = cpu_elevate(&cpu_data->cpu);
     SERVER_GOTO_IF_ERR(error, "Failed to set TLS \n");
+
+err_goto:
+    reply_msg->which_msg = CpuReturnMessage_basic_tag;
+    reply_msg->errorCode = error;
+}
+
+static void handle_read_registers_req(seL4_Word sender_badge, CpuReadRegistersMessage *msg, CpuReturnMessage *reply_msg)
+{
+    int error = 0;
+    OSDB_PRINTF("Got read registers request: ");
+    BADGE_PRINT(sender_badge);
+
+    cpu_component_registry_entry_t *cpu_data = (cpu_component_registry_entry_t *)
+        resource_component_registry_get_by_badge(get_cpu_component(), sender_badge);
+    SERVER_GOTO_IF_COND_BG(cpu_data == NULL, sender_badge, "Couldn't find CPU data\n");
+
+    mo_component_registry_entry_t *mo_data = (mo_component_registry_entry_t *)
+        resource_component_registry_get_by_badge(get_mo_component(), seL4_GetBadge(0));
+    SERVER_GOTO_IF_COND(mo_data == NULL, "Couldn't find MO data for shared buffer\n");
+
+    void *shared_mo_vaddr = NULL;
+    error = ads_component_attach_to_rt(mo_data->mo.id, &shared_mo_vaddr);
+    SERVER_GOTO_IF_COND(error || shared_mo_vaddr == NULL, "Failed to attach shared MO\n");
+
+    error = cpu_read_registers(&cpu_data->cpu, (seL4_UserContext *)shared_mo_vaddr);
+
+    int unmap_error = ads_component_remove_from_rt(shared_mo_vaddr);
+    SERVER_WARN_IF_COND(unmap_error, "Failed to unmap shared MO buffer from RT\n");
 
 err_goto:
     reply_msg->which_msg = CpuReturnMessage_basic_tag;
@@ -312,6 +340,9 @@ static void cpu_component_handle(void *msg_p,
             break;
         case CpuMessage_elevate_privilege_tag:
             handle_elevate_req(sender_badge, &msg->msg.start, reply_msg);
+            break;
+        case CpuMessage_read_reg_tag:
+            handle_read_registers_req(sender_badge, &msg->msg.read_reg, reply_msg);
             break;
         default:
             SERVER_GOTO_IF_COND(1, "Unknown request received: %d\n", msg->which_msg);

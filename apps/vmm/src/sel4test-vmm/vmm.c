@@ -123,8 +123,6 @@ static void handle_fault(void *arg0, void *arg1, void *arg2)
     {
         seL4_MessageInfo_t info = seL4_Recv(fault_ep, NULL);
         VMM_PRINT("fault: %s\n", fault_to_string(seL4_MessageInfo_get_label(info)));
-        // fault_handle_vcpu_exception(vm);
-        // vcpu_print_regs(vm->vcpu.cptr);
         fault_handle(vm, &info);
         sel4debug_dump_registers(vm->tcb.cptr);
     }
@@ -372,7 +370,7 @@ int vm_native_setup(seL4_IRQHandler irq_handler,
     uintptr_t kernel_pc_vm_vspace = (uintptr_t)GUEST_RAM_VADDR + (kernel_pc_curr_vspace - (uintptr_t)guest_ram_curr_vspace);
     VMM_PRINT("kernel_pc_vm_vspace %lx\n", kernel_pc_vm_vspace);
 
-    // bool success = virq_controller_init(GUEST_VCPU_ID);
+    bool success = virq_controller_init(GUEST_VCPU_ID);
     // if (!success)
     // {
     //     ZF_LOGE("Failed to initialise emulated interrupt controller\n");

@@ -35,6 +35,10 @@ message CpuSuspendMessage {
     /* No content */
 };
 
+message CpuReadRegistersMessage {
+    /* No content */
+}
+
 message CpuMessage {
     oneof msg {
         CpuAllocMessage alloc = 1;
@@ -44,6 +48,7 @@ message CpuMessage {
         CpuTlsBaseMessage tls_base = 5;
         CpuSuspendMessage suspend = 6;
         CpuConfigMessage config = 7;
+        CpuReadRegistersMessage read_reg = 8;
     };
 };
 
