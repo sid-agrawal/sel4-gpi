@@ -97,6 +97,10 @@ message PdMapResourceMessage {
     uint64 dest_resource = 2;     /* global ID of the dest resource */
 }
 
+message PdSetNameMessage {
+    string pd_name = 1 [(nanopb).max_length = 40];
+}
+
 /* message type for all PD component request messages */
 message PdMessage {
     oneof msg {
@@ -117,6 +121,7 @@ message PdMessage {
         PdSendSubgraphMessage send_subgraph = 15;
         PdFreeSlotMessage free_slot = 16;
         PdMapResourceMessage map_resource = 17;
+        PdSetNameMessage set_name = 18;
     }
 };
 

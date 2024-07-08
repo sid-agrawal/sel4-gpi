@@ -527,7 +527,7 @@ int pd_new(pd_t *pd,
     error = pd_setup_cspace(pd, get_pd_component()->server_vka);
     SERVER_GOTO_IF_ERR(error, "Failed to setup PD's CSpace\n");
 
-    pd->image_name = "PD"; // default name, since if a PD isn't a process, this never gets set
+    pd_set_image_name(pd, "PD"); // default name, since if a PD isn't a process, this never gets set
 
     // Allocate and badge the RT->PD notification
     error = vka_alloc_notification(server_vka, &pd->notification);
@@ -579,17 +579,13 @@ void pd_destroy(pd_t *pd, vka_t *server_vka, vspace_t *server_vspace)
     }
 
     /* decrement the refcount of the PD's binded ADS and CPU */
+    // This should destroy the CPU, if this is the only PD using it
+    // Then the TCB is destroyed, including the internal copies of IPC frame cap and fault endpoint cap
     resource_component_dec(get_cpu_component(), pd->shared_data->cpu_conn.id);
     resource_component_dec(get_ads_component(), pd->shared_data->ads_conn.id);
 
-    // This should destroy the CPU, if this is the only PD using it
-    // Then the TCB is destroyed, including the internal copies of IPC frame cap and fault endpoint cap
-
-    /* below is copied from sel4utils_destroy_process */
-    /* (XXX) Arya: eventually should be repartitioned to other components */
-    vka_t *vka = server_vka;
-
     /* destroy the cnode */
+    vka_t *vka = server_vka;
     cspacepath_t path;
     vka_cspace_make_path(vka, pd->cspace.cptr, &path);
     /* need to revoke the cnode to remove any self references that would keep the object
@@ -608,6 +604,9 @@ void pd_destroy(pd_t *pd, vka_t *server_vka, vspace_t *server_vspace)
     {
         free(pd->elf_phdrs);
     }
+
+    /* Free image name */
+    free(pd->image_name);
 
     // Hash table of holding resources
     // (XXX) Arya: This can trigger sys_munmap which is not supported
@@ -1173,6 +1172,9 @@ void pd_debug_print_held(pd_t *pd)
 
 inline void pd_set_image_name(pd_t *pd, const char *image_name)
 {
+    if (pd->image_name) {
+        free(pd->image_name);
+    }
     pd->image_name = malloc(strlen(image_name) + 1);
     strcpy(pd->image_name, image_name);
 }

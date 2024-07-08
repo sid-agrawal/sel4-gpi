@@ -252,6 +252,17 @@ int pd_client_remove_rde(pd_client_context_t *conn, gpi_cap_t type, uint64_t spa
 int pd_client_dump(pd_client_context_t *conn,
                    char *buf, size_t size);
 
+#ifdef CONFIG_DEBUG_BUILD
+/**
+ * @brief Assign a human-readable name to a PD, for debug / model extraction
+ * 
+ * @param conn the target PD's connection object
+ * @param name the name to assign
+ * @return 0 on success, error otherwise
+ */
+int pd_client_set_name(pd_client_context_t *conn, char *name);
+#endif
+
 void pd_client_bench_ipc(pd_client_context_t *conn,
                          seL4_CPtr dummy_send_cap,
                          seL4_CPtr dummy_recv_cap,

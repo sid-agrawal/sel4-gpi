@@ -188,6 +188,16 @@ int test_cleanup_policy_1(env_t env)
     error = start_hello(HELLO_CLEANUP_NOTHING_MODE, &hello_dummy_pd);
     test_assert(error == 0);
 
+#ifdef CONFIG_DEBUG_BUILD
+    // Name the PDs for model extraction
+    error = pd_client_set_name(&hello_server_pd, "pokemart_server");
+    test_assert(error == 0);
+    error = pd_client_set_name(&hello_client_pd, "pokemart_client");
+    test_assert(error == 0);
+    error = pd_client_set_name(&hello_dummy_pd, "dummy_pd");
+    test_assert(error == 0);
+#endif
+
     /* Remove RDE from test process so that it won't be cleaned up by recursive cleanup */
     error = pd_client_remove_rde(&pd_conn, pokemart_type, pokemart_space_id);
     test_assert(error == 0);
@@ -290,6 +300,20 @@ int test_cleanup_policy_2(env_t env)
     pd_client_context_t hello_dummy_pd;
     error = start_hello(HELLO_CLEANUP_NOTHING_MODE, &hello_dummy_pd);
     test_assert(error == 0);
+
+#ifdef CONFIG_DEBUG_BUILD
+    // Name the PDs for model extraction
+    error = pd_client_set_name(&hello_server_pokemart_pd, "pokemart_server");
+    test_assert(error == 0);
+    error = pd_client_set_name(&hello_client_pokemart_pd, "pokemart_client");
+    test_assert(error == 0);
+    error = pd_client_set_name(&hello_server_daycare_pd, "daycare_server");
+    test_assert(error == 0);
+    error = pd_client_set_name(&hello_client_daycare_pd, "daycare_client");
+    test_assert(error == 0);
+    error = pd_client_set_name(&hello_dummy_pd, "dummy_pd");
+    test_assert(error == 0);
+#endif
 
     /* Remove RDEs from test process so that it won't be cleaned up by recursive cleanup */
     error = pd_client_remove_rde(&pd_conn, pokemart_type, pokemart_space_id);

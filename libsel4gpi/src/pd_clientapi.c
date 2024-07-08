@@ -487,3 +487,27 @@ int pd_client_share_resource_by_type(pd_client_context_t *src_pd, pd_client_cont
 
     return error;
 }
+
+#ifdef CONFIG_DEBUG_BUILD
+int pd_client_set_name(pd_client_context_t *conn, char *name)
+{
+    OSDB_PRINTF("Sending 'set name' request to PD component\n");
+
+    int error = 0;
+
+    PdMessage msg = {
+        .which_msg = PdMessage_set_name_tag,
+    };
+
+    assert(strlen(name) < sizeof(msg.msg.set_name.pd_name));
+    strncpy(msg.msg.set_name.pd_name, name, sizeof(msg.msg.set_name.pd_name));
+
+    PdReturnMessage ret_msg;
+
+    error = sel4gpi_rpc_call(&rpc_env, conn->ep, (void *)&msg,
+                             0, NULL, (void *)&ret_msg);
+    error |= ret_msg.errorCode;
+
+    return error;
+}
+#endif

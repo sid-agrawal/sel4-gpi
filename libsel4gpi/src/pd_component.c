@@ -791,6 +791,27 @@ err_goto:
     reply_msg->errorCode = error;
 }
 
+#ifdef CONFIG_DEBUG_BUILD
+static void handle_set_name_req(seL4_Word sender_badge, PdSetNameMessage *msg, PdReturnMessage *reply_msg)
+{
+    int error = 0;
+
+    OSDB_PRINTF("Got a 'set name' request from: ");
+    BADGE_PRINT(sender_badge);
+
+    /* Find the target PD */
+    pd_component_registry_entry_t *pd_data = pd_component_registry_get_entry_by_badge(sender_badge);
+    SERVER_GOTO_IF_COND(pd_data == NULL, "Failed to find PD (%d)\n", get_object_id_from_badge(sender_badge));
+
+    /* Set the image name */
+    pd_set_image_name(&pd_data->pd, msg->pd_name);
+
+err_goto:
+    reply_msg->which_msg = PdReturnMessage_basic_tag;
+    reply_msg->errorCode = error;
+}
+#endif
+
 static void pd_component_handle(void *msg_p,
                                 seL4_Word sender_badge,
                                 seL4_CPtr received_cap,
@@ -864,6 +885,11 @@ static void pd_component_handle(void *msg_p,
         case PdMessage_send_subgraph_tag:
             handle_send_subgraph_req(sender_badge, &msg->msg.send_subgraph, reply_msg);
             break;
+#ifdef CONFIG_DEBUG_BUILD
+        case PdMessage_set_name_tag:
+            handle_set_name_req(sender_badge, &msg->msg.set_name, reply_msg);
+            break;
+#endif
         default:
             SERVER_GOTO_IF_COND(1, "Unknown request received: %d\n", msg->which_msg);
             break;
@@ -1043,7 +1069,8 @@ void forge_pd_cap_from_init_data(test_init_data_t *init_data, sel4utils_process_
     pd->shared_data_in_PD = shared_data_vaddr;
     OSDB_PRINT_VERBOSE("Test process init data is at %p\n", pd->shared_data_in_PD);
 
-    pd->image_name = test_name;
+    pd_set_image_name(pd, test_name);
+
 err_goto:
     return error;
 }
