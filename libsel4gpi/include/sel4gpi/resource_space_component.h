@@ -88,16 +88,14 @@ int resspc_check_map(uint64_t src_space_id, uint64_t dest_space_id);
  * This is used while destroying a PD that manages the resource space
  * The spaces marked for deletion will be swept later with resspc_component_sweep()
  *
- * @param spc_id
+ * @param spc_id the space to mark for deletion
+ * @param execute_cleanup_policy if true, execute a cleanup policy starting from this space
  * @return 0 on success, error otherwise
  */
-int resspc_component_mark_delete(uint64_t spc_id);
+int resspc_component_mark_delete(uint64_t spc_id, bool execute_cleanup_policy);
 
 /**
  * Sweep any resource spaces marked for deletion
- *
- * This executes the cleanup policy for resource spaces
- * (XXX) Arya: Todo, specify the cleanup policies
  *
  * @return 0 on success, error otherwise
  */

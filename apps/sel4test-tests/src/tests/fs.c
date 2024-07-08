@@ -260,12 +260,12 @@ int test_fs(env_t env)
     // Cleanup servers
     pd_client_context_t fs_pd_conn;
     fs_pd_conn.ep = fs_pd_cap;
-    error = pd_client_disconnect(&fs_pd_conn);
+    error = pd_client_terminate(&fs_pd_conn);
     test_assert(error == 0);
 
     pd_client_context_t ramdisk_pd_conn;
     ramdisk_pd_conn.ep = ramdisk_pd_cap;
-    error = pd_client_disconnect(&ramdisk_pd_conn);
+    error = pd_client_terminate(&ramdisk_pd_conn);
     test_assert(error == 0);
 
     printf("------------------ENDING: %s------------------\n", __func__);
@@ -381,7 +381,7 @@ int test_multiple_fs(env_t env)
     // reclaimed from the destroyed FS
     pd_client_context_t fs_1_pd_conn;
     fs_1_pd_conn.ep = fs_1_pd_cap;
-    error = pd_client_disconnect(&fs_1_pd_conn);
+    error = pd_client_terminate(&fs_1_pd_conn);
     test_assert(error == 0);
 
     /* Start FS 3 */
@@ -404,17 +404,17 @@ int test_multiple_fs(env_t env)
     // Cleanup other servers
     pd_client_context_t fs_2_pd_conn;
     fs_2_pd_conn.ep = fs_2_pd_cap;
-    error = pd_client_disconnect(&fs_2_pd_conn);
+    error = pd_client_terminate(&fs_2_pd_conn);
     test_assert(error == 0);
 
     pd_client_context_t fs_3_pd_conn;
     fs_3_pd_conn.ep = fs_3_pd_cap;
-    error = pd_client_disconnect(&fs_3_pd_conn);
+    error = pd_client_terminate(&fs_3_pd_conn);
     test_assert(error == 0);
 
     pd_client_context_t ramdisk_pd_conn;
     ramdisk_pd_conn.ep = ramdisk_pd_cap;
-    error = pd_client_disconnect(&ramdisk_pd_conn);
+    error = pd_client_terminate(&ramdisk_pd_conn);
     test_assert(error == 0);
 
     // Print whole-pd model state

@@ -45,7 +45,7 @@ int pd_component_client_connect(seL4_CPtr server_ep_cap,
  * @param conn
  * @return int 0 on success, -1 on failure.
  */
-int pd_client_disconnect(pd_client_context_t *conn);
+int pd_client_terminate(pd_client_context_t *conn);
 
 /**
  * @brief Send a cap to PD and gets the slot number in the PD.

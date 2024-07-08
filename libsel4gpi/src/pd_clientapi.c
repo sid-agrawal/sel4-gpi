@@ -60,14 +60,14 @@ int pd_component_client_connect(seL4_CPtr server_ep,
     return error;
 }
 
-int pd_client_disconnect(pd_client_context_t *conn)
+int pd_client_terminate(pd_client_context_t *conn)
 {
-    OSDB_PRINTF("Sending disconnect request to PD component\n");
+    OSDB_PRINTF("Sending terminate request to PD component\n");
 
     int error = 0;
 
     PdMessage msg = {
-        .which_msg = PdMessage_disconnect_tag,
+        .which_msg = PdMessage_terminate_tag,
     };
 
     PdReturnMessage ret_msg;

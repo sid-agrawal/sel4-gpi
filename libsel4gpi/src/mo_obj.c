@@ -161,6 +161,7 @@ void mo_destroy(mo_t *mo, vka_t *server_vka)
                           mo->frame_paddrs[i], mo->id, mo->vka_objects[i].cptr);
         }
 #endif
+
         vka_free_object(server_vka, &mo->vka_objects[i]);
     }
 

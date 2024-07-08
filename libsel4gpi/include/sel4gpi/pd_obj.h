@@ -136,14 +136,15 @@ typedef struct _pd
     seL4_Word cnode_guard;                                  ///< cnode guard for this PD's cspace
     vka_t *pd_vka;                                          ///< Allocator for the PD's cspace
     char allocator_mem_pool[PD_ALLOCATOR_STATIC_POOL_SIZE]; ///< Memory pool to bootstrap the PD's VKA
-    resource_registry_t hold_registry;               ///< Registry of PD's resources
+    resource_registry_t hold_registry;                      ///< Registry of PD's resources
 
     uint64_t shared_data_mo_id;              ///< Shared data is mapped to PD and includes RDE, etc.
     osm_pd_shared_data_t *shared_data;       ///< RT vaddr of the shared data
     osm_pd_shared_data_t *shared_data_in_PD; ///< PD's vaddr of the shared
 
     /* other general PD metadata */
-    bool deleted;       ///< Set to true while the PD is being deleted
+    int exit_code;      ///< Value of PD's exit code
+    bool deleting;      ///< Set to true while the PD is being deleted
     int deletion_depth; ///< If the PD is being deleted as a result of another PD, this is the recursive depth
 } pd_t;
 

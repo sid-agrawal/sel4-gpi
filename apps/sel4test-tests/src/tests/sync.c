@@ -197,8 +197,8 @@ int test_mutex(env_t env)
     int error2 = seL4_MessageInfo_get_label(tag);
 
     // Cleanup both, ignore errors
-    pd_client_disconnect(&sync_pd_1.runnable.pd);
-    pd_client_disconnect(&sync_pd_2.runnable.pd);
+    pd_client_terminate(&sync_pd_1.runnable.pd);
+    pd_client_terminate(&sync_pd_2.runnable.pd);
 
     test_assert(error1 == 0);
     test_assert(error2 == 0);

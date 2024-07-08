@@ -230,11 +230,11 @@ int test_kvstore_lib_in_same_pd(env_t env)
     dump_model();
 
     /* Cleanup servers */
-    error = pd_client_disconnect(&hello_pd);
+    error = pd_client_terminate(&hello_pd);
     test_assert(error == 0);
-    error = pd_client_disconnect(&fs_pd);
+    error = pd_client_terminate(&fs_pd);
     test_assert(error == 0);
-    error = pd_client_disconnect(&ramdisk_pd);
+    error = pd_client_terminate(&ramdisk_pd);
     test_assert(error == 0);
 
     printf("------------------ENDING: %s------------------\n", __func__);
@@ -270,13 +270,13 @@ int test_kvstore_lib_in_diff_pd(env_t env)
     dump_model();
 
     /* Cleanup servers */
-    error = pd_client_disconnect(&hello_pd);
+    error = pd_client_terminate(&hello_pd);
     test_assert(error == 0);
-    error = pd_client_disconnect(&kvstore_pd);
+    error = pd_client_terminate(&kvstore_pd);
     test_assert(error == 0);
-    error = pd_client_disconnect(&fs_pd);
+    error = pd_client_terminate(&fs_pd);
     test_assert(error == 0);
-    error = pd_client_disconnect(&ramdisk_pd);
+    error = pd_client_terminate(&ramdisk_pd);
     test_assert(error == 0);
 
     printf("------------------ENDING: %s------------------\n", __func__);
@@ -323,13 +323,13 @@ int test_kvstore_diff_namespace(env_t env)
     dump_model();
 
     /* Cleanup PDs */
-    error = pd_client_disconnect(&hello_pd);
+    error = pd_client_terminate(&hello_pd);
     test_assert(error == 0);
-    error = pd_client_disconnect(&kvstore_pd);
+    error = pd_client_terminate(&kvstore_pd);
     test_assert(error == 0);
-    error = pd_client_disconnect(&fs_pd);
+    error = pd_client_terminate(&fs_pd);
     test_assert(error == 0);
-    error = pd_client_disconnect(&ramdisk_pd);
+    error = pd_client_terminate(&ramdisk_pd);
     test_assert(error == 0);
 
     printf("------------------ENDING: %s------------------\n", __func__);
@@ -370,15 +370,15 @@ int test_kvstore_diff_fs(env_t env)
     dump_model();
 
     /* Cleanup PDs */
-    error = pd_client_disconnect(&hello_pd);
+    error = pd_client_terminate(&hello_pd);
     test_assert(error == 0);
-    error = pd_client_disconnect(&kvstore_pd);
+    error = pd_client_terminate(&kvstore_pd);
     test_assert(error == 0);
-    error = pd_client_disconnect(&fs_pd);
+    error = pd_client_terminate(&fs_pd);
     test_assert(error == 0);
-    error = pd_client_disconnect(&fs_2_pd);
+    error = pd_client_terminate(&fs_2_pd);
     test_assert(error == 0);
-    error = pd_client_disconnect(&ramdisk_pd);
+    error = pd_client_terminate(&ramdisk_pd);
     test_assert(error == 0);
 
     printf("------------------ENDING: %s------------------\n", __func__);
@@ -408,11 +408,11 @@ int test_kvstore_lib_same_pd_diff_ads(env_t env)
     dump_model();
 
     /* Cleanup PDs */
-    error = pd_client_disconnect(&hello_pd);
+    error = pd_client_terminate(&hello_pd);
     test_assert(error == 0);
-    error = pd_client_disconnect(&fs_pd);
+    error = pd_client_terminate(&fs_pd);
     test_assert(error == 0);
-    error = pd_client_disconnect(&ramdisk_pd);
+    error = pd_client_terminate(&ramdisk_pd);
     test_assert(error == 0);
 
     printf("------------------ENDING: %s------------------\n", __func__);
@@ -448,11 +448,11 @@ int test_kvstore_diff_threads(env_t env)
     dump_model();
 
     /* Cleanup PDs */
-    error = pd_client_disconnect(&hello_pd);
+    error = pd_client_terminate(&hello_pd);
     test_assert(error == 0);
-    error = pd_client_disconnect(&fs_pd);
+    error = pd_client_terminate(&fs_pd);
     test_assert(error == 0);
-    error = pd_client_disconnect(&ramdisk_pd);
+    error = pd_client_terminate(&ramdisk_pd);
     test_assert(error == 0);
 
     printf("------------------ENDING: %s------------------\n", __func__);
@@ -503,17 +503,17 @@ int test_kvstore_two_sets(env_t env)
     dump_model();
 
     /* Cleanup PDs */
-    error = pd_client_disconnect(&hello_pd_1);
+    error = pd_client_terminate(&hello_pd_1);
     test_assert(error == 0);
-    error = pd_client_disconnect(&hello_pd_2);
+    error = pd_client_terminate(&hello_pd_2);
     test_assert(error == 0);
-    error = pd_client_disconnect(&kvstore_pd_1);
+    error = pd_client_terminate(&kvstore_pd_1);
     test_assert(error == 0);
-    error = pd_client_disconnect(&kvstore_pd_2);
+    error = pd_client_terminate(&kvstore_pd_2);
     test_assert(error == 0);
-    error = pd_client_disconnect(&fs_pd);
+    error = pd_client_terminate(&fs_pd);
     test_assert(error == 0);
-    error = pd_client_disconnect(&ramdisk_pd);
+    error = pd_client_terminate(&ramdisk_pd);
     test_assert(error == 0);
 
     printf("------------------ENDING: %s------------------\n", __func__);

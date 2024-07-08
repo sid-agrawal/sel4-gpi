@@ -28,6 +28,8 @@
 #define PDSERVS "PDServ Component: "
 #define PDSERVC "PDServ Client   : "
 
+#define PD_TERMINATED_CODE 127
+
 // Data to send when a PD requests work
 typedef struct _pd_work_entry
 {
@@ -130,14 +132,14 @@ int pd_component_resource_cleanup(gpi_res_id_t res_id);
 
 /**
  * To be called when a resource space is destroyed
- * Execute the cleanup policy for any PDs that still depend on the resource space
  *
  * @param pd_id ID of the PD that manages this space
  * @param space_type type of the deleted resource space
  * @param space_id ID of the deleted resource space
+ * @param execute_cleanup_policy if true, execute a cleanup policy for any PDs that still depend on the resource space
  * @return 0 on success, error otherwise
  */
-int pd_component_space_cleanup(uint32_t pd_id, gpi_cap_t space_type, uint32_t space_id);
+int pd_component_space_cleanup(uint32_t pd_id, gpi_cap_t space_type, uint32_t space_id, bool execute_cleanup_policy);
 
 /**
  * Get a PD from the registry by ID

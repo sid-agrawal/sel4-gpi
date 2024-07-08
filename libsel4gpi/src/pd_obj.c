@@ -457,7 +457,7 @@ pd_held_resource_on_delete(resource_registry_node_t *node_gen, void *pd_v)
         break;
     case GPICAP_TYPE_RESSPC:
         // Wait to clean up resource spaces until later
-        error = resspc_component_mark_delete(node->res_id.object_id);
+        error = resspc_component_mark_delete(node->res_id.object_id, pd->deletion_depth == 0);
         break;
     case GPICAP_TYPE_EP:
         error = resource_component_dec(get_ep_component(), node->res_id.object_id);
@@ -472,7 +472,7 @@ pd_held_resource_on_delete(resource_registry_node_t *node_gen, void *pd_v)
         // If the space is deleted,
         // or the manager PD is this PD itself,
         // then there's no point in notifying the manager
-        if (space_data->space.deleted || space_data->space.pd_id == pd->id)
+        if (space_data->space.to_delete || space_data->space.pd_id == pd->id)
         {
             break;
         }
@@ -552,7 +552,7 @@ void pd_destroy(pd_t *pd, vka_t *server_vka, vspace_t *server_vspace)
     int pd_id = pd->id;
 
     OSDB_PRINTF("Destroying PD (%d, %s)\n", pd_id, pd->image_name);
-    pd->deleted = true;
+    pd->deleting = true;
 
     /* stop the PD's CPU, if not already stopped */
     error = cpu_component_stop(pd->shared_data->cpu_conn.id);
@@ -625,7 +625,7 @@ void pd_destroy(pd_t *pd, vka_t *server_vka, vspace_t *server_vspace)
 
     // The PD's VKA/allocator are destroyed with allocator_mem_pool
 
-    // Cleanup any resource space(s) this PD held
+    // Initialize a resource space sweep
     error = resspc_component_sweep();
     SERVER_GOTO_IF_ERR(error, "Failed to sweep resource spaces after PD destroy\n");
 
@@ -995,7 +995,7 @@ static int res_dump(pd_t *pd, model_state_t *ms, pd_hold_node_t *current_cap, gp
             SERVER_GOTO_IF_COND(manager_pd_entry == NULL, "Failed to find PD (%d)\n", space_entry->space.pd_id);
 
             /* Request additional relations for the resource */
-            if (space_entry->space.map_spaces->count > 0)
+            if (space_entry->space.map_spaces.count > 0)
             {
                 // Only need to request resource relations if the resources can map to anything
                 pd_work_entry_t *work_node = calloc(1, sizeof(gpi_res_id_t));

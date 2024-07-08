@@ -120,9 +120,9 @@ err_goto:
     reply_msg->errorCode = error;
 }
 
-static void handle_disconnect_req(seL4_Word sender_badge, PdDisconnectMessage *msg, PdReturnMessage *reply_msg)
+static void handle_terminate_req(seL4_Word sender_badge, PdTerminateMessage *msg, PdReturnMessage *reply_msg)
 {
-    OSDB_PRINTF("Got disconnect request from client badge %lx.\n", sender_badge);
+    OSDB_PRINTF("Got terminate request from client badge %lx.\n", sender_badge);
     int error = 0;
 
     /* Find the target PD */
@@ -132,10 +132,9 @@ static void handle_disconnect_req(seL4_Word sender_badge, PdDisconnectMessage *m
     uint32_t pd_id = client_data->pd.id;
 
     /* Remove the PD from registry, this will also destroy the PD */
+    client_data->pd.exit_code = PD_TERMINATED_CODE;
     client_data->pd.deletion_depth = 0; // This PD is the root of a deletion tree
     resource_registry_delete(&get_pd_component()->registry, (resource_registry_node_t *)client_data);
-
-    // (XXX) Arya: Should we be deleting from registry or just decrementing?
 
     OSDB_PRINTF("Cleaned up PD %d.\n", pd_id);
 
@@ -477,6 +476,7 @@ static void handle_exit_req(seL4_Word sender_badge, PdExitMessage *msg)
     uint32_t pd_id = client_data->pd.id;
 
     /* Remove the PD from registry, this will also destroy the PD */
+    client_data->pd.exit_code = msg->exit_code;
     client_data->pd.deletion_depth = 0; // This PD is the root of a deletion tree
     resource_registry_delete(&get_pd_component()->registry, (resource_registry_node_t *)client_data);
 
@@ -812,8 +812,8 @@ static void pd_component_handle(void *msg_p,
     {
         switch (msg->which_msg)
         {
-        case PdMessage_disconnect_tag:
-            handle_disconnect_req(sender_badge, &msg->msg.disconnect, reply_msg);
+        case PdMessage_terminate_tag:
+            handle_terminate_req(sender_badge, &msg->msg.terminate, reply_msg);
             break;
         case PdMessage_next_slot_tag:
             handle_next_slot_req(sender_badge, &msg->msg.next_slot, reply_msg);
@@ -1108,7 +1108,7 @@ int pd_component_resource_cleanup(gpi_res_id_t res_id)
     {
         pd_component_registry_entry_t *pd_entry = (pd_component_registry_entry_t *)curr;
 
-        if (pd_entry->pd.id == get_gpi_server()->rt_pd_id || pd_entry->pd.deleted)
+        if (pd_entry->pd.id == get_gpi_server()->rt_pd_id || pd_entry->pd.deleting)
         {
             // Skip a PD currently being deleted
             continue;
@@ -1127,7 +1127,7 @@ err_goto:
     return error;
 }
 
-int pd_component_space_cleanup(uint32_t pd_id, gpi_cap_t space_type, uint32_t space_id)
+int pd_component_space_cleanup(uint32_t pd_id, gpi_cap_t space_type, uint32_t space_id, bool execute_cleanup_policy)
 {
     int error = 0;
 
@@ -1135,7 +1135,14 @@ int pd_component_space_cleanup(uint32_t pd_id, gpi_cap_t space_type, uint32_t sp
 
     // Find the manager PD of this resource space
     pd_component_registry_entry_t *manager_data = pd_component_registry_get_entry_by_id(pd_id);
+    SERVER_GOTO_IF_COND(manager_data == NULL, "couldn't find PD (%d) managing resource space (%d)", pd_id, space_id);
     int depth = manager_data->pd.deletion_depth;
+
+    // Remove the space resource from the manager, if still live
+    gpi_res_id_t space_res_id = make_res_id(GPICAP_TYPE_RESSPC, get_resspc_component()->space_id, space_id);
+    error = pd_remove_resource(&manager_data->pd, space_res_id);
+    SERVER_GOTO_IF_ERR(error, "failed to remove resource space (%d) resource from PD (%d)\n",
+                       space_id, pd_id);
 
     // Iterate over all live PDs to check if they should be deleted
     resource_registry_node_t *curr, *tmp;
@@ -1144,7 +1151,7 @@ int pd_component_space_cleanup(uint32_t pd_id, gpi_cap_t space_type, uint32_t sp
         pd_component_registry_entry_t *pd_entry = (pd_component_registry_entry_t *)curr;
         pd_t *pd = &pd_entry->pd;
 
-        if (pd->id == get_gpi_server()->rt_pd_id || pd->deleted)
+        if (pd->id == get_gpi_server()->rt_pd_id || pd->deleting)
         {
             // Skip the root task, or a PD currently being deleted
             continue;
@@ -1157,7 +1164,7 @@ int pd_component_space_cleanup(uint32_t pd_id, gpi_cap_t space_type, uint32_t sp
             // Check if the PD has a request edge for the deleted space, or holds any resource from the space
             if (pd_rde_get(pd, space_type, space_id) || pd_has_resources_in_space(pd, space_id))
             {
-                OSDB_PRINTF("Delete PD (%d) depending on %s_%d at depth\n", pd->id, cap_type_to_str(space_type),
+                OSDB_PRINTF("Delete PD (%d) depending on %s_%d at depth %d\n", pd->id, cap_type_to_str(space_type),
                             space_id, depth + 1);
 
                 // Set the deletion depth
@@ -1177,7 +1184,7 @@ int pd_component_space_cleanup(uint32_t pd_id, gpi_cap_t space_type, uint32_t sp
         pd_component_registry_entry_t *pd_entry = (pd_component_registry_entry_t *)curr;
         pd_t *pd = &pd_entry->pd;
 
-        if (pd->id == get_gpi_server()->rt_pd_id || pd->deleted)
+        if (pd->id == get_gpi_server()->rt_pd_id || pd->deleting)
         {
             // Skip the root task, or a PD currently being deleted
             continue;

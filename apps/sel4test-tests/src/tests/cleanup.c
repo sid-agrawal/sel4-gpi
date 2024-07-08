@@ -199,7 +199,7 @@ int test_cleanup_policy_1(env_t env)
 
     /* Crash a PD */
     printf("Crashing server PD\n");
-    error = pd_client_disconnect(&hello_server_pd);
+    error = pd_client_terminate(&hello_server_pd);
     test_assert(error == 0);
 
     /* Print model state after crash */
@@ -208,7 +208,7 @@ int test_cleanup_policy_1(env_t env)
     test_assert(error == 0);
 
     /* Cleanup PDs */
-    error = pd_client_disconnect(&hello_client_pd);
+    error = pd_client_terminate(&hello_client_pd);
 
     if (error != seL4_NoError)
     {
@@ -217,7 +217,7 @@ int test_cleanup_policy_1(env_t env)
                hello_client_pd.id);
     }
 
-    error = pd_client_disconnect(&hello_dummy_pd);
+    error = pd_client_terminate(&hello_dummy_pd);
     test_assert(error == 0);
 
     printf("------------------ENDING: %s------------------\n", __func__);
@@ -305,7 +305,7 @@ int test_cleanup_policy_2(env_t env)
 
     /* Crash a PD */
     printf("Crashing pokemart server PD\n");
-    error = pd_client_disconnect(&hello_server_pokemart_pd);
+    error = pd_client_terminate(&hello_server_pokemart_pd);
     test_assert(error == 0);
 
     /* Print model state after crash */
@@ -314,7 +314,7 @@ int test_cleanup_policy_2(env_t env)
     test_assert(error == 0);
 
     /* Cleanup PDs */
-    error = pd_client_disconnect(&hello_server_daycare_pd);
+    error = pd_client_terminate(&hello_server_daycare_pd);
 
     if (error != seL4_NoError)
     {
@@ -323,7 +323,7 @@ int test_cleanup_policy_2(env_t env)
                hello_server_daycare_pd.id);
     }
 
-    error = pd_client_disconnect(&hello_client_pokemart_pd);
+    error = pd_client_terminate(&hello_client_pokemart_pd);
 
     if (error != seL4_NoError)
     {
@@ -332,7 +332,7 @@ int test_cleanup_policy_2(env_t env)
                hello_client_pokemart_pd.id);
     }
 
-    error = pd_client_disconnect(&hello_client_daycare_pd);
+    error = pd_client_terminate(&hello_client_daycare_pd);
 
     if (error != seL4_NoError)
     {
@@ -341,7 +341,7 @@ int test_cleanup_policy_2(env_t env)
                hello_client_daycare_pd.id);
     }
 
-    error = pd_client_disconnect(&hello_dummy_pd);
+    error = pd_client_terminate(&hello_dummy_pd);
     test_assert(error == 0);
 
     printf("------------------ENDING: %s------------------\n", __func__);

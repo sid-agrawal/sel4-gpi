@@ -88,7 +88,8 @@ static int create_vmr_space(uint32_t client_id, resspc_component_registry_entry_
 
     /* Map the VMR space to the default MO space */
     error = resspc_component_map_space(space_entry->space.id, get_mo_component()->space_id);
-    SERVER_GOTO_IF_ERR(error, "Failed to map new VMR space to MO space\n");
+    SERVER_GOTO_IF_ERR(error, "Failed to map new VMR space (%d) to MO space (%d)\n",
+                       space_entry->space.id, get_mo_component()->space_id);
 
     OSDB_PRINTF("Added new VMR (%d) RDE to PD (%d)\n", space_entry->space.id, client_id);
 
@@ -160,8 +161,8 @@ static void handle_reserve_req(seL4_Word sender_badge,
     // Make a cap for the reservation
     // The object ID is the shorter map entry ID, not the full vaddr of the reservation
     ret_cap = resource_component_make_badged_ep(get_ads_component()->server_vka, pd_data->pd.pd_vka,
-                                             get_ads_component()->server_ep, GPICAP_TYPE_VMR, ads_id,
-                                             reservation->map_entry->gen.object_id, client_id);
+                                                get_ads_component()->server_ep, GPICAP_TYPE_VMR, ads_id,
+                                                reservation->map_entry->gen.object_id, client_id);
     SERVER_GOTO_IF_COND(ret_cap == seL4_CapNull, "Failed to make badged ep for reservation\n");
 
     OSDB_PRINTF("Successfully reserved an ads region (%s) at %p.\n",

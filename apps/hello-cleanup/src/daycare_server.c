@@ -31,7 +31,12 @@ int daycare_server_init(void)
 
     get_daycare_server()->count = 0;
 
-    return 0;
+    /* Map the pokemon space to the pokeball space */
+    gpi_cap_t pokeball_cap_type = sel4gpi_get_resource_type_code(POKEBALL_RESOURCE_TYPE_NAME);
+    int error = resspc_client_map_space(&get_daycare_server()->gen.default_space,
+                                        sel4gpi_get_default_space_id(pokeball_cap_type));
+
+    return error;
 }
 
 /**

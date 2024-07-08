@@ -22,7 +22,7 @@ message PdAllocMessage {
     /* No content */
 };
 
-message PdDisconnectMessage {
+message PdTerminateMessage {
     /* No content */
 };
 
@@ -101,7 +101,7 @@ message PdMapResourceMessage {
 message PdMessage {
     oneof msg {
         PdAllocMessage alloc = 1;
-        PdDisconnectMessage disconnect = 2;
+        PdTerminateMessage terminate = 2;
         PdNextSlotMessage next_slot = 3;
         PdClearSlotMessage clear_slot = 4;
         PdSendCapMessage send_cap = 5;

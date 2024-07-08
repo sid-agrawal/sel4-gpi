@@ -36,24 +36,77 @@ resource_component_context_t *get_resspc_component(void)
     return &get_gpi_server()->resspc_component;
 }
 
+static int resspc_component_space_cleanup(resspc_component_registry_entry_t *node)
+{
+    int error = 0;
+    int depth = node->space.deletion_depth;
+
+    OSDB_PRINTF("Execute resource space cleanup policy for space (%d), depth %d\n", node->space.id, depth);
+
+    if (GPI_CLEANUP_RESOURCE_SPACE_DEPTH != -1 & depth >= GPI_CLEANUP_RESOURCE_SPACE_DEPTH)
+    {
+        // Past the maximum depth
+        return 0;
+    }
+
+    // Iterate over all live resource spaces to check if they should be deleted
+    resource_registry_node_t *curr, *tmp;
+    HASH_ITER(hh, get_resspc_component()->registry.head, curr, tmp)
+    {
+        resspc_component_registry_entry_t *space_entry = (resspc_component_registry_entry_t *)curr;
+
+        if (space_entry->space.map_spaces.count == 0 || space_entry->space.to_delete)
+        {
+            // Skip a space with no map edges, or a space currently being deleted
+            continue;
+        }
+
+        // Check if we should delete this PD
+        if (GPI_CLEANUP_RESOURCE_SPACE_DEPTH == -1 || depth + 1 <= GPI_CLEANUP_RESOURCE_SPACE_DEPTH)
+        {
+            // Within resource space deletion depth
+            // Check if the PD has a map edge for the deleted space
+            if (resspc_check_map(space_entry->space.id, node->space.id))
+            {
+                OSDB_PRINTF("Mark resource space (%d) for deletion due to policy, depth %d\n",
+                            space_entry->space.id, depth + 1);
+                space_entry->space.deletion_depth = depth + 1;
+                space_entry->space.to_delete = true;
+                space_entry->space.cleanup_policy = true;
+            }
+        }
+    }
+
+err_goto:
+    return error;
+}
+
 // Called when an item from the MO registry is deleted
 static void on_resspc_registry_delete(resource_registry_node_t *node_gen, void *arg)
 {
     int error = 0;
 
+    // Find the resource space
     resspc_component_registry_entry_t *node = (resspc_component_registry_entry_t *)node_gen;
-
-    OSDB_PRINTF("Destroying resource space (%d)\n", node->space.id);
+    OSDB_PRINTF("Deleting resource space (%d)\n", node->space.id);
     node->space.deleting = true;
 
-    // Cleanup PDs according to cleanup policy
-    error = pd_component_space_cleanup(node->space.pd_id, node->space.resource_type, node->space.id);
+    // We could define a custom cleanup policy here
+    if (node->space.cleanup_policy)
+    {
+        error = resspc_component_space_cleanup(node);
+        SERVER_GOTO_IF_ERR(error, "Failed to execute cleanup policy on resource space %d\n", node->space.id);
+    }
+
+    // Cleanup the resource space from PDs
+    error = pd_component_space_cleanup(node->space.pd_id, node->space.resource_type,
+                                       node->space.id, node->space.cleanup_policy || false);
     SERVER_GOTO_IF_ERR(error, "failed to cleanup PDs for deleted resource space (%d)\n", node->space.id);
 
     return;
 
 err_goto:
-    OSDB_PRINTERR("Failed to delete resource space (%d)\n", node->space.id);
+    OSDB_PRINTERR("Error while deleting resource space %d\n", node->space.id);
 }
 
 static void handle_resspc_allocation_request(seL4_Word sender_badge,
@@ -121,9 +174,12 @@ err_goto:
     reply_msg->errorCode = error;
 }
 
-int resspc_component_mark_delete(uint64_t space_id)
+int resspc_component_mark_delete(uint64_t space_id, bool execute_cleanup_policy)
 {
     int error = 0;
+
+    OSDB_PRINTF("Mark resource space (%ld) for deletion, execute_cleanup_policy (%d) \n",
+                space_id, execute_cleanup_policy);
 
     // Find the resource space
     resspc_component_registry_entry_t *space_entry = resource_space_get_entry_by_id(space_id);
@@ -148,7 +204,8 @@ int resspc_component_mark_delete(uint64_t space_id)
 #endif
 
     // Mark it for deletion
-    space_entry->space.deleted = true;
+    space_entry->space.to_delete = true;
+    space_entry->space.cleanup_policy = execute_cleanup_policy;
 
 err_goto:
     return error;
@@ -161,7 +218,7 @@ int resspc_component_sweep(void)
     HASH_ITER(hh, get_resspc_component()->registry.head, curr, tmp)
     {
         resspc_component_registry_entry_t *entry = (resspc_component_registry_entry_t *)curr;
-        if (entry->space.deleted && !entry->space.deleting)
+        if (entry->space.to_delete && !entry->space.deleting)
         {
             resource_registry_delete(&get_resspc_component()->registry, curr);
         }
@@ -216,7 +273,7 @@ int resspc_component_map_space(uint64_t src_spc_id, uint64_t dest_spc_id)
     SERVER_GOTO_IF_COND(dst_space_entry == NULL, "Couldn't find resource space (%ld)\n", dest_spc_id);
 
     // Track the mapping
-    linked_list_insert(src_space_entry->space.map_spaces, (void *)&dst_space_entry->space);
+    linked_list_insert(&src_space_entry->space.map_spaces, (void *)&dst_space_entry->space);
 
 err_goto:
     return error;
@@ -247,7 +304,7 @@ int resspc_check_map(uint64_t src_space_id, uint64_t dest_space_id)
     SERVER_GOTO_IF_COND(src_space_entry == NULL, "Couldn't find resource space (%ld)\n", src_space_id);
 
     // Check the mappings
-    for (linked_list_node_t *curr = src_space_entry->space.map_spaces->head; curr != NULL; curr = curr->next)
+    for (linked_list_node_t *curr = src_space_entry->space.map_spaces.head; curr != NULL; curr = curr->next)
     {
         if (((res_space_t *)curr->data)->id == dest_space_id)
         {
@@ -310,13 +367,14 @@ static int resspc_new(res_space_t *res_space,
 {
     int error = 0;
 
+    memset(&res_space->map_spaces, 0, sizeof(linked_list_t));
     res_space->resource_type = config->type;
     res_space->server_ep = config->ep;
     res_space->pd_id = config->pd_id;
     res_space->data = config->data;
-    res_space->map_spaces = linked_list_new();
-    res_space->deleted = false;
+    res_space->to_delete = false;
     res_space->deleting = false;
+    res_space->deletion_depth = 0;
 
     return error;
 }
@@ -364,7 +422,7 @@ void resspc_dump_rr(res_space_t *space, model_state_t *ms, gpi_model_node_t *pd_
     // Add any map edges
     res_space_t *maps_to;
     char maps_to_id[CSV_MAX_STRING_SIZE];
-    for (linked_list_node_t *curr = space->map_spaces->head; curr != NULL; curr = curr->next)
+    for (linked_list_node_t *curr = space->map_spaces.head; curr != NULL; curr = curr->next)
     {
         maps_to = (res_space_t *)curr->data;
 
