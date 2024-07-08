@@ -124,7 +124,6 @@ static void smc_set_arg(seL4_UserContext *u, size_t arg, size_t val)
 // @ivanv: print out which SMC call as a string we can't handle.
 bool handle_smc(seL4_UserContext *regs, uint32_t hsr)
 {
-    printf("handle_smc\n");
     size_t fn_number = smc_get_function_number(regs);
     smc_call_id_t service = smc_get_call(regs->x0);
 

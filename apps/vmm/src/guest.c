@@ -6,7 +6,7 @@
 #include <utils/zf_log.h>
 #include <vka/object.h>
 
-bool guest_start(seL4_CPtr tcb, size_t boot_vcpu_id, uintptr_t kernel_pc, uintptr_t dtb, uintptr_t initrd)
+bool guest_start(seL4_CPtr tcb, uintptr_t kernel_pc, uintptr_t dtb, uintptr_t initrd)
 {
     /*
      * Set the TCB registers to what the virtual machine expects to be started with.
@@ -28,24 +28,22 @@ bool guest_start(seL4_CPtr tcb, size_t boot_vcpu_id, uintptr_t kernel_pc, uintpt
     assert(err == seL4_NoError);
     if (err != seL4_NoError)
     {
-        ZF_LOGE("Failed to write registers to boot vCPU's TCB (id is 0x%lx), error is: 0x%d\n", boot_vcpu_id, err);
+        ZF_LOGE("Failed to write registers to boot vCPU's TCB, error is: 0x%d\n", err);
         return false;
     }
     printf("starting guest at 0x%lx, DTB at 0x%lx, initial RAM disk at 0x%lx\n",
            regs.pc, regs.x0, initrd);
     /* Restart the boot vCPU to the program counter of the TCB associated with it */
-    printf("writing registers 2\n");
 
     // err = seL4_TCB_Resume(tcb);
     seL4_UserContext ctxt = {0};
     ctxt.pc = regs.pc;
     err = seL4_TCB_WriteRegisters(
-        tcb, // XXX + boot_vcpu_id?
+        tcb,
         true,
         0, /* No flags */
         1, /* writing 1 register */
         &ctxt);
-    printf("writing registers done\n");
 
     ZF_LOGF_IFERR(err, "Failed to write TCB registers");
 

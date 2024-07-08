@@ -280,7 +280,6 @@ int sel4gpi_copy_data_to_mo(void *vaddr, size_t size_bytes, mo_client_context_t 
     error = ads_client_attach(&vmr_rde, NULL, dest_mo, SEL4UTILS_RES_TYPE_GENERIC, &dest_vaddr);
     GOTO_IF_COND(dest_vaddr == NULL || error, "Failed to attach dest MO to current ADS\n");
 
-    CPRINTF("size bytes: %zu, dest_vaddr: %p\n", size_bytes, dest_vaddr);
     memcpy(dest_vaddr, vaddr, size_bytes);
 
     error = ads_client_rm(&vmr_rde, dest_vaddr);

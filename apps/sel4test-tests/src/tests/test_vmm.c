@@ -29,22 +29,22 @@ int test_vmm(env_t env)
     int error;
     printf("------------------STARTING: %s------------------\n", __func__);
 #if SEL4TEST_VMM
-    vm_context_t *vm;
-    error = vm_native_setup(env->irq_handler, &env->vka, &env->vspace, env->page_directory, env->asid_pool, &env->simple, &vm);
+    // test process will act as the VMM
+    error = sel4test_vmm_init(env->irq_handler, &env->vka, &env->vspace,
+                              env->asid_pool, &env->simple, env->tcb, env->endpoint);
     test_error_eq(error, 0);
-
-    /* temporary indefinite yield */
-    while (1)
-    {
-        seL4_Yield();
-    }
-
-    // TODO destroy function that frees all the objects inside the vm context as well
-    // free(vm);
+    uint32_t guest_id = sel4test_new_guest();
+    CPRINTF("here\n");
+    test_assert(guest_id != 0);
 #elif OSM_VMM
     error = new_guest();
     test_error_eq(error, 0);
 #endif
+
+    while (1)
+    {
+        seL4_Yield();
+    }
 
 #ifdef CONFIG_DEBUG_BUILD
     seL4_DebugDumpScheduler();

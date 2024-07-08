@@ -42,8 +42,6 @@
  */
 #define GUEST_RAM_SIZE 0x10000000
 
-#define BUILD 0
-
 #if defined(BOARD_qemu_arm_virt)
 #define GUEST_RAM_PADDR 0x40000000
 #define GUEST_RAM_VADDR 0x40000000
@@ -74,10 +72,6 @@
 #error Need to define guest kernel image address and DTB address
 #endif
 
-/* For simplicity we just enforce the serial IRQ channel number to be the same
- * across platforms. */
-#define SERIAL_IRQ_CH 1
-
 #if defined(BOARD_qemu_arm_virt)
 #define SERIAL_IRQ 33
 #elif defined(BOARD_odroidc2_hyp) || defined(BOARD_odroidc4)
@@ -90,8 +84,6 @@
 #error Need to define serial interrupt
 #endif
 
-#define VM_CNODE_BITS 17
-
 /* Data for the guest's kernel image. */
 extern char _guest_kernel_image[];
 extern char _guest_kernel_image_end[];
@@ -102,27 +94,59 @@ extern char _guest_dtb_image_end[];
 extern char _guest_initrd_image[];
 extern char _guest_initrd_image_end[];
 
-// static void serial_ack(size_t vcpu_id, int irq, void *cookie)
-// {
-//     /*
-//      * For now we by default simply ack the serial IRQ, we have not
-//      * come across a case yet where more than this needs to be done.
-//      */
-//     ZF_LOGI("serial IRQ received\n");
-//     vmm_env_t *vmm_e = (vmm_env_t *)cookie;
-//     seL4_Error error = seL4_IRQHandler_Ack(vmm_env.serial_irq_handler); // XXX + serial channel
-//     ZF_LOGE_IFERR(error, "Failed to ACK serial interrupt");
-// }
+static vmon_context_t vmon_ctxt;
 
-static void handle_fault(void *arg0, void *arg1, void *arg2)
+static void serial_ack(size_t vcpu_id, int irq, void *cookie)
 {
-    VMM_PRINT("in handle_fault\n");
-    vm_context_t *vm = (vm_context_t *)arg0;
-    seL4_CPtr fault_ep = (seL4_CPtr)arg1;
+    /*
+     * For now we by default simply ack the serial IRQ, we have not
+     * come across a case yet where more than this needs to be done.
+     */
+    VMM_PRINT("Acking serial interrupt\n");
+    vm_context_t *vm_ctxt = (vm_context_t *)cookie;
+    seL4_Error error = seL4_IRQHandler_Ack(vmon_ctxt.serial_irq_handler);
+    WARN_IF_COND(error, "Failed to ACK serial interrupt, seL4_Error: %d\n", error);
+}
+
+static void handle_interrupt(void)
+{
+    seL4_Word badge = 0;
+    seL4_MessageInfo_t info = {0};
     while (1)
     {
-        seL4_MessageInfo_t info = seL4_Recv(fault_ep, NULL);
-        VMM_PRINT("fault: %s\n", fault_to_string(seL4_MessageInfo_get_label(info)));
+        seL4_Wait(vmon_ctxt.irq_ntfn.cptr, &badge);
+        if (badge & SERIAL_IRQ)
+        {
+            VMM_PRINT("Serial interrupt received\n");
+        }
+        else
+        {
+            VMM_PRINT("Unhandled interrupt received\n");
+        }
+    }
+}
+
+static void handle_fault(void)
+{
+    vm_context_t *vm = NULL;
+    seL4_Word badge = 0;
+    seL4_MessageInfo_t info = {0};
+    uint32_t vm_id = 0;
+    while (1)
+    {
+        info = seL4_Recv(vmon_ctxt.vm_fault_ep.cptr, &badge);
+        vm_id = (uint32_t)badge;
+
+        if (vm_id == 0 || vm_id >= GUEST_NUM_VCPUS)
+        {
+            VMM_PRINT("Fault received from invalid VM: %u\n", vm_id);
+            continue;
+        }
+
+        VMM_PRINT("VM %u fault: %s\n", vm_id, fault_to_string(seL4_MessageInfo_get_label(info)));
+
+        vm = vmon_ctxt.guests[vm_id];
+        assert(vm != NULL);
         fault_handle(vm, &info);
         sel4debug_dump_registers(vm->tcb.cptr);
     }
@@ -160,22 +184,97 @@ err_goto:
     return error;
 }
 
-int vm_native_setup(seL4_IRQHandler irq_handler,
-                    vka_t *vka,
-                    vspace_t *vspace,
-                    seL4_CPtr vspace_root,
-                    seL4_CPtr asid_pool,
-                    simple_t *simple,
-                    vm_context_t **ret_vm)
+static int start_handler_threads(vka_t *vka, vspace_t *vspace, simple_t *simple, seL4_CPtr fault_ep)
 {
-    int error;
+    int error = 0;
+    // assumming that the the root CNode for this process is in the default slot
+    sel4utils_thread_config_t t_cfg = thread_config_default(simple,
+                                                            SEL4UTILS_CNODE_SLOT,
+                                                            api_make_guard_skip_word(seL4_WordBits - VMON_CNODE_BITS),
+                                                            fault_ep,
+                                                            seL4_MaxPrio - 1);
+
+    sel4utils_thread_t fault_thread;
+    error = sel4utils_configure_thread_config(vka, vspace, vspace, t_cfg, &fault_thread);
+    GOTO_IF_ERR(error, "Failed to configure thread\n");
+
+    error = sel4utils_start_thread(&fault_thread, handle_fault, NULL, NULL, 1);
+    GOTO_IF_ERR(error, "Failed to start thread\n");
+
+    sel4utils_thread_t interrupt_thread;
+    error = sel4utils_configure_thread_config(vka, vspace, vspace, t_cfg, &interrupt_thread);
+    GOTO_IF_ERR(error, "Failed to configure thread\n");
+
+    error = seL4_TCB_BindNotification(interrupt_thread.tcb.cptr, vmon_ctxt.irq_ntfn.cptr);
+    GOTO_IF_ERR(error, "seL4_Error: %d, Failed to bind IRQ handling notification to interrupt handling thread\n", error);
+
+    error = sel4utils_start_thread(&interrupt_thread, handle_interrupt, NULL, NULL, 1);
+err_goto:
+    return error;
+}
+
+int sel4test_vmm_init(seL4_IRQHandler irq_handler,
+                      vka_t *vka,
+                      vspace_t *vspace,
+                      seL4_CPtr asid_pool,
+                      simple_t *simple,
+                      seL4_CPtr tcb,
+                      seL4_CPtr fault_ep)
+{
+    int error = 0;
+    memset(&vmon_ctxt, 0, sizeof(vmon_context_t));
+    vmon_ctxt.serial_irq_handler = irq_handler;
+    vmon_ctxt.vka = vka;
+    vmon_ctxt.vspace = vspace;
+    vmon_ctxt.asid_pool = asid_pool;
+    vmon_ctxt.simple = simple;
+    vmon_ctxt.tcb = tcb;
+    vmon_ctxt.guest_id_counter = 1;
+
+    /* fault endpoint */
+    error = vka_alloc_endpoint(vka, &vmon_ctxt.vm_fault_ep);
+    GOTO_IF_ERR(error, "Failed to allocate a fault endpoint to listen for VM faults\n");
+
+    /* interrupt notification */
+    error = vka_alloc_notification(vka, &vmon_ctxt.irq_ntfn);
+    GOTO_IF_ERR(error, "Failed to allocate notification");
+
+    /* make a badge for the serial device interrupt */
+    cspacepath_t src, dest;
+    error = vka_cspace_alloc_path(vka, &dest);
+    GOTO_IF_ERR(error, "Failed to allocate slot for the badged notification");
+
+    vka_cspace_make_path(vka, vmon_ctxt.irq_ntfn.cptr, &src);
+
+    error = vka_cnode_mint(&dest, &src, seL4_AllRights, SERIAL_IRQ);
+    GOTO_IF_ERR(error, "Failed to mint notification badge for serial interrupts");
+
+    error = seL4_IRQHandler_SetNotification(vmon_ctxt.serial_irq_handler, dest.capPtr);
+    GOTO_IF_ERR(error, "Failed to set serial IRQ notification");
+
+    vmon_ctxt.serial_irq_ntfn = dest.capPtr;
+
+    error = start_handler_threads(vka, vspace, simple, fault_ep);
+
+err_goto:
+    return error;
+}
+
+uint32_t sel4test_new_guest(void)
+{
+    int error = 0;
+    uint32_t guest_id = vmon_ctxt.guest_id_counter;
+    GOTO_IF_COND(vmon_ctxt.guest_id_counter >= GUEST_NUM_VCPUS, "Maximum number of guests started\n");
     vm_context_t *vm = calloc(1, sizeof(vm_context_t));
+
+    vka_t *vka = vmon_ctxt.vka;
+    vspace_t *vspace = vmon_ctxt.vspace;
 
     /* vm's vspace */
     error = vka_alloc_vspace_root(vka, &vm->vspace_root);
     GOTO_IF_ERR(error, "Failed to allocate vm's page directory");
 
-    error = seL4_ARCH_ASIDPool_Assign(asid_pool, vm->vspace_root.cptr);
+    error = seL4_ARCH_ASIDPool_Assign(vmon_ctxt.asid_pool, vm->vspace_root.cptr);
     GOTO_IF_ERR(error, "Failed to assign vm's vspace to an asid pool");
 
     error = sel4utils_get_empty_vspace(vspace, &vm->vspace, &vm->vspace_data, vka, vm->vspace_root.cptr, NULL, NULL);
@@ -195,18 +294,15 @@ int vm_native_setup(seL4_IRQHandler irq_handler,
 
     seL4_Word cnode_guard = api_make_guard_skip_word(seL4_WordBits - VM_CNODE_BITS);
     error = vka_cnode_mint(&next_slot, &src, seL4_AllRights, cnode_guard);
+    next_slot.capPtr++;
     GOTO_IF_ERR(error, "Failed to mint vm's cnode to its cspace");
 
-    /* fault endpoint */
-    vka_object_t fault_ep = {0};
-    error = vka_alloc_endpoint(vka, &fault_ep);
-    GOTO_IF_ERR(error, "Failed to allocate vm's fault endpoint");
-
-    vka_cspace_make_path(vka, fault_ep.cptr, &src);
-    next_slot.capPtr++;
-    error = vka_cnode_copy(&next_slot, &src, seL4_AllRights);
-    GOTO_IF_ERR(error, "Failed to copy vm's fault endpoint into its cspace\n");
+    /* make a badged fault EP */
+    vka_cspace_make_path(vka, vmon_ctxt.vm_fault_ep.cptr, &src);
+    error = vka_cnode_mint(&next_slot, &src, seL4_AllRights, guest_id);
+    GOTO_IF_ERR(error, "Failed to mint vm's fault endpoint into its cspace\n");
     vm->fault_ep = next_slot.capPtr;
+    next_slot.capPtr++;
 
     /* vcpu */
     error = vka_alloc_vcpu(vka, &vm->vcpu);
@@ -227,31 +323,12 @@ int vm_native_setup(seL4_IRQHandler irq_handler,
                                0, (seL4_Word)ipc_buf, ipc_buf_frame);
     GOTO_IF_ERR(error, "Failed to configure TCB, seL4_Error: %ld\n", error);
 
-    error = seL4_TCB_SetSchedParams(vm->tcb.cptr, simple_get_tcb(simple), seL4_MaxPrio, seL4_MaxPrio);
+    error = seL4_TCB_SetSchedParams(vm->tcb.cptr, simple_get_tcb(vmon_ctxt.simple), seL4_MaxPrio - 1, seL4_MaxPrio - 1);
     GOTO_IF_ERR(error, "Failed to set TCB priority, seL4_Error: %ld\n", error);
 
 #ifdef CONFIG_DEBUG_BUILD
     seL4_DebugNameThread(vm->tcb.cptr, "vcpu");
 #endif
-
-    /* setup serial IRQ and notification */
-    vka_object_t ntfn;
-    error = vka_alloc_notification(vka, &ntfn);
-    GOTO_IF_ERR(error, "Failed to allocate notification");
-
-    cspacepath_t path;
-    error = vka_cspace_alloc_path(vka, &path);
-    GOTO_IF_ERR(error, "Failed to allocate path for the badged notification");
-
-    cspacepath_t ntfn_path;
-    vka_cspace_make_path(vka, ntfn.cptr, &ntfn_path);
-
-    error = vka_cnode_mint(&path, &ntfn_path, seL4_AllRights, 0);
-    GOTO_IF_ERR(error, "Failed to mint notification badge");
-
-    error = seL4_IRQHandler_SetNotification(irq_handler, path.capPtr);
-    GOTO_IF_ERR(error, "Failed to set IRQ notification");
-    // TODO handle IRQ notifications
 
     reservation_t res;
 
@@ -370,45 +447,24 @@ int vm_native_setup(seL4_IRQHandler irq_handler,
     uintptr_t kernel_pc_vm_vspace = (uintptr_t)GUEST_RAM_VADDR + (kernel_pc_curr_vspace - (uintptr_t)guest_ram_curr_vspace);
     VMM_PRINT("kernel_pc_vm_vspace %lx\n", kernel_pc_vm_vspace);
 
-    bool success = virq_controller_init(GUEST_VCPU_ID);
-    // if (!success)
-    // {
-    //     ZF_LOGE("Failed to initialise emulated interrupt controller\n");
-    //     return;
-    // }
+    bool success = virq_controller_init(guest_id);
+    GOTO_IF_COND(!success, "Failed to initialise emulated interrupt controller\n");
 
-    // // @ivanv: Note that remove this line causes the VMM to fault if we
-    // // actually get the interrupt. This should be avoided by making the VGIC driver more stable.
-    // success = virq_register(GUEST_VCPU_ID, SERIAL_IRQ, &serial_ack, (void *)&vmm_env);
-    // // /* Just in case there is already an interrupt available to handle, we ack it here. */
-    // error = seL4_IRQHandler_Ack(vmm_env.serial_irq_handler); // XXX + serial channel num
-    // ZF_LOGE_IFERR(error, "Failed to ACK interrupt");
+    // @ivanv: Note that remove this line causes the VMM to fault if we
+    // actually get the interrupt. This should be avoided by making the VGIC driver more stable.
+    success = virq_register(guest_id, SERIAL_IRQ, &serial_ack, (void *)vm);
+    WARN_IF_COND(!success, "Failed to register VIRQ handler\n");
+    /* Just in case there is already an interrupt available to handle, we ack it here. */
+    serial_ack(guest_id, SERIAL_IRQ, (void *)vm);
 
-    // /* Finally start the guest */
-    sel4utils_thread_t thread;
+    success = guest_start(vm->tcb.cptr, (uintptr_t)kernel_pc_vm_vspace,
+                          (uintptr_t)GUEST_DTB_VADDR, (uintptr_t)GUEST_INIT_RAM_DISK_VADDR);
+    GOTO_IF_COND(!success, "Failed to start guest\n");
 
-    sel4utils_thread_config_t t_cfg = thread_config_default(simple,
-                                                            SEL4UTILS_CNODE_SLOT,
-                                                            api_make_guard_skip_word(seL4_WordBits - 17),
-                                                            seL4_CapNull,
-                                                            seL4_MaxPrio);
-
-    error = sel4utils_configure_thread_config(vka, vspace, vspace, t_cfg, &thread);
-    GOTO_IF_ERR(error, "Failed to configure fault handling thread\n");
-
-    VMM_PRINT("starting thread\n");
-    error = sel4utils_start_thread(&thread, handle_fault, (void *)vm, fault_ep.cptr, 1);
-    GOTO_IF_ERR(error, "Failed to start fault handling thread\n");
-
-    guest_start(vm->tcb.cptr, GUEST_VCPU_ID, kernel_pc_vm_vspace,
-                (uintptr_t)GUEST_DTB_VADDR, (uintptr_t)GUEST_INIT_RAM_DISK_VADDR);
+    vmon_ctxt.guests[guest_id] = vm;
+    vmon_ctxt.guest_id_counter++;
 
 err_goto:
-    if (ret_vm)
-    {
-        *ret_vm = vm;
-    }
-
     if (ram_frames_in_guest)
     {
         free(ram_frames_in_guest);
@@ -425,34 +481,5 @@ err_goto:
         vspace_unmap_pages(vspace, guest_ram_curr_vspace, guest_ram_pages, seL4_LargePageBits, vka);
     }
 
-    return error;
+    return error ? 0 : guest_id;
 }
-
-// void notified(microkit_channel ch) {
-//     switch (ch) {
-//         case SERIAL_IRQ_CH: {
-//             bool success = virq_inject(GUEST_VCPU_ID, SERIAL_IRQ);
-//             if (!success) {
-//                 LOG_VMM_ERR("IRQ %d dropped on vCPU %d\n", SERIAL_IRQ, GUEST_VCPU_ID);
-//             }
-//             break;
-//         }
-//         default:
-//             VMM_PRINT("Unexpected channel, ch: 0x%lx\n", ch);
-//     }
-// }
-
-/*
- * The primary purpose of the VMM after initialisation is to act as a fault-handler,
- * whenever our guest causes an exception, it gets delivered to this entry point for
- * the VMM to handle.
- */
-// void fault(microkit_id id, microkit_msginfo msginfo)
-// {
-//     bool success = fault_handle(id, msginfo);
-//     if (success) {
-//         /* Now that we have handled the fault successfully, we reply to it so
-//          * that the guest can resume execution. */
-//         microkit_fault_reply(microkit_msginfo_new(0, 0));
-//     }
-// }
