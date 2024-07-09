@@ -148,7 +148,7 @@ static void handle_fault(void)
         vm = vmon_ctxt.guests[vm_id];
         assert(vm != NULL);
         fault_handle(vm, &info);
-        sel4debug_dump_registers(vm->tcb.cptr);
+        // sel4debug_dump_registers(vm->tcb.cptr);
     }
 }
 
@@ -463,6 +463,7 @@ uint32_t sel4test_new_guest(void)
 
     vmon_ctxt.guests[guest_id] = vm;
     vmon_ctxt.guest_id_counter++;
+    vm->id = guest_id;
 
 err_goto:
     if (ram_frames_in_guest)

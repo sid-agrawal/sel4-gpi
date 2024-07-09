@@ -47,7 +47,7 @@
 
 vgic_t vgic;
 
-static bool handle_vgic_redist_read_fault(size_t vcpu_id, vgic_t *vgic, uint64_t offset, uint64_t fsr, seL4_UserContext *regs)
+static bool handle_vgic_redist_read_fault(seL4_CPtr tcb, size_t vcpu_id, vgic_t *vgic, uint64_t offset, uint64_t fsr, seL4_UserContext *regs)
 {
     int err = 0;
     struct gic_dist_map *gic_dist = vgic_get_dist(vgic->registers);
@@ -87,19 +87,19 @@ static bool handle_vgic_redist_read_fault(size_t vcpu_id, vgic_t *vgic, uint64_t
     default:
         LOG_VMM_ERR("Unknown register offset 0x%x\n", offset);
         // @ivanv: used to be ignore_fault, double check this is right
-        success = fault_advance_vcpu(regs);
+        success = fault_advance_vcpu(tcb, regs);
         goto fault_return;
     }
 
     uintptr_t fault_addr = GIC_REDIST_PADDR + offset;
     uint32_t mask = fault_get_data_mask(fault_addr, fsr);
-    success = fault_advance(regs, fault_addr, fsr, reg & mask);
+    success = fault_advance(tcb, regs, fault_addr, fsr, reg & mask);
 
 fault_return:
     return success;
 }
 
-static bool handle_vgic_redist_write_fault(size_t vcpu_id, vgic_t *vgic, uint64_t offset, uint64_t fsr, seL4_UserContext *regs)
+static bool handle_vgic_redist_write_fault(seL4_CPtr tcb, size_t vcpu_id, vgic_t *vgic, uint64_t offset, uint64_t fsr, seL4_UserContext *regs)
 {
     // @ivanv: why is this not reading from the redist?
     uintptr_t fault_addr = GIC_REDIST_PADDR + offset;
@@ -149,7 +149,7 @@ static bool handle_vgic_redist_write_fault(size_t vcpu_id, vgic_t *vgic, uint64_
         LOG_VMM_ERR("Unknown register offset 0x%x, value: 0x%x\n", offset, fault_get_data(regs, fsr));
     }
 
-    int err = fault_advance_vcpu(regs);
+    int err = fault_advance_vcpu(tcb, regs);
     assert(!err);
     if (err)
     {
@@ -159,7 +159,7 @@ static bool handle_vgic_redist_write_fault(size_t vcpu_id, vgic_t *vgic, uint64_
     return true;
 }
 
-bool handle_vgic_redist_fault(size_t vcpu_id, uint64_t fault_addr, uint64_t fsr, seL4_UserContext *regs)
+bool handle_vgic_redist_fault(seL4_CPtr tcb, size_t vcpu_id, uint64_t fault_addr, uint64_t fsr, seL4_UserContext *regs)
 {
     assert(fault_addr >= GIC_REDIST_PADDR);
     uint64_t offset = fault_addr - GIC_REDIST_PADDR;
@@ -167,11 +167,11 @@ bool handle_vgic_redist_fault(size_t vcpu_id, uint64_t fault_addr, uint64_t fsr,
 
     if (fault_is_read(fsr))
     {
-        return handle_vgic_redist_read_fault(vcpu_id, &vgic, offset, fsr, regs);
+        return handle_vgic_redist_read_fault(tcb, vcpu_id, &vgic, offset, fsr, regs);
     }
     else
     {
-        return handle_vgic_redist_write_fault(vcpu_id, &vgic, offset, fsr, regs);
+        return handle_vgic_redist_write_fault(tcb, vcpu_id, &vgic, offset, fsr, regs);
     }
 }
 

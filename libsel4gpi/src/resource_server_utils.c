@@ -209,9 +209,11 @@ int resource_server_main(void *context_v)
         RESOURCE_SERVER_PRINTF("- sender badge: %s\n", sender_badge_str);
         RESOURCE_SERVER_PRINTF("- extracaps %d, capsunwrapped %d\n",
                                seL4_MessageInfo_get_extraCaps(tag), seL4_MessageInfo_get_capsUnwrapped(tag));
+#if CONFIG_DEBUG_BUILD
         RESOURCE_SERVER_PRINTF("- Received cap: type %d addr %p\n",
                                seL4_DebugCapIdentify(received_cap_path.capPtr),
                                seL4_GetCapPaddr(received_cap_path.capPtr));
+#endif
         RESOURCE_SERVER_PRINTF("- unwrapped badge: %s\n", unwrapped_str);
 #endif
 

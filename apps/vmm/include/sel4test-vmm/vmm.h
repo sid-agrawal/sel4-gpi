@@ -15,6 +15,7 @@
  */
 typedef struct _vm_context
 {
+    uint32_t id;
     vka_object_t vcpu;
     vka_object_t vspace_root;
     vspace_t vspace;

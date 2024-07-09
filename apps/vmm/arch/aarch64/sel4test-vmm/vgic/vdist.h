@@ -281,7 +281,7 @@ static void vgic_dist_clr_pending_irq(struct gic_dist_map *dist, size_t vcpu_id,
     // @ivanv
 }
 
-static bool vgic_dist_reg_read(size_t vcpu_id, vgic_t *vgic, uint64_t offset, uint64_t fsr, seL4_UserContext *regs)
+static bool vgic_dist_reg_read(size_t vcpu_id, seL4_CPtr tcb, vgic_t *vgic, uint64_t offset, uint64_t fsr, seL4_UserContext *regs)
 {
     bool success = false;
     struct gic_dist_map *gic_dist = vgic_get_dist(vgic->registers);
@@ -438,14 +438,14 @@ static bool vgic_dist_reg_read(size_t vcpu_id, vgic_t *vgic, uint64_t offset, ui
     default:
         ZF_LOGE("Unknown register offset 0x%lx", offset);
         // err = ignore_fault(fault);
-        success = fault_advance_vcpu(vcpu_id, regs);
+        success = fault_advance_vcpu(tcb, regs);
         assert(success);
         goto fault_return;
     }
     uint32_t mask = fault_get_data_mask(GIC_DIST_PADDR + offset, fsr);
     // fault_set_data(fault, reg & mask);
     // @ivanv: interesting, when we don't call fault_Set_data in the CAmkES VMM, everything works fine?...
-    success = fault_advance(vcpu_id, regs, GIC_DIST_PADDR + offset, fsr, reg & mask);
+    success = fault_advance(tcb, regs, GIC_DIST_PADDR + offset, fsr, reg & mask);
     assert(success);
 
 fault_return:
@@ -462,7 +462,7 @@ static inline void emulate_reg_write_access(seL4_UserContext *regs, uint64_t add
     *reg = fault_emulate(regs, *reg, addr, fsr, fault_get_data(regs, fsr));
 }
 
-static bool vgic_dist_reg_write(size_t vcpu_id, vgic_t *vgic, uint64_t offset, uint64_t fsr, seL4_UserContext *regs)
+static bool vgic_dist_reg_write(seL4_CPtr tcb, size_t vcpu_id, vgic_t *vgic, uint64_t offset, uint64_t fsr, seL4_UserContext *regs)
 {
     bool success = true;
     struct gic_dist_map *gic_dist = vgic_get_dist(vgic->registers);
@@ -670,7 +670,7 @@ ignore_fault:
         return false;
     }
 
-    success = fault_advance_vcpu(vcpu_id, regs);
+    success = fault_advance_vcpu(tcb, regs);
     assert(success);
 
     return success;

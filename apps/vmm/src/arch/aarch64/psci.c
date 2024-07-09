@@ -38,19 +38,18 @@ bool handle_psci(size_t vcpu_id, seL4_UserContext *regs, uint64_t fn_number, uin
 {
     // @ivanv: write a note about what convention we assume, should we be checking
     // the convention?
+    bool success = true;
     switch (fn_number)
     {
     case PSCI_VERSION:
     {
         /* We support PSCI version 1.2 */
-        CPRINTF("PSCI version\n");
         uint32_t version = PSCI_MAJOR_VERSION(1) | PSCI_MINOR_VERSION(2);
-        // smc_set_return_value(regs, version);
+        smc_set_return_value(regs, version);
         break;
     }
     case PSCI_CPU_ON:
     {
-        CPRINTF("PSCI CPU ON\n");
         uintptr_t target_cpu = smc_get_arg(regs, 1);
         // Right now we only have one vCPU and so any fault for a target vCPU
         // that isn't the one that's already on we consider an error on the
@@ -75,7 +74,6 @@ bool handle_psci(size_t vcpu_id, seL4_UserContext *regs, uint64_t fn_number, uin
          * system that does not use a "Trusted OS" as the PSCI
          * specification says.
          */
-        CPRINTF("PSCI MIGRATE INFO TYPE\n");
         smc_set_return_value(regs, 2);
         break;
     case PSCI_FEATURES:
@@ -111,10 +109,6 @@ bool handle_psci(size_t vcpu_id, seL4_UserContext *regs, uint64_t fn_number, uin
         ZF_LOGE("Unhandled PSCI function ID 0x%lx\n", fn_number);
         return false;
     }
-
-    bool success = false;
-    // bool success = fault_advance_vcpu(vcpu_id, regs);
-    // assert(success);
 
     return success;
 }

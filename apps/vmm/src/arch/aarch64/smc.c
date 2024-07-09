@@ -122,7 +122,7 @@ static void smc_set_arg(seL4_UserContext *u, size_t arg, size_t val)
 }
 
 // @ivanv: print out which SMC call as a string we can't handle.
-bool handle_smc(seL4_UserContext *regs, uint32_t hsr)
+bool handle_smc(uint32_t vcpu_id, seL4_UserContext *regs, uint32_t hsr)
 {
     size_t fn_number = smc_get_function_number(regs);
     smc_call_id_t service = smc_get_call(regs->x0);
@@ -132,7 +132,7 @@ bool handle_smc(seL4_UserContext *regs, uint32_t hsr)
     case SMC_CALL_STD_SERVICE:
         if (fn_number < PSCI_MAX)
         {
-            return handle_psci(0, regs, fn_number, hsr);
+            return handle_psci(vcpu_id, regs, fn_number, hsr);
         }
         ZF_LOGE("Unhandled SMC: standard service call %lu\n", fn_number);
         break;

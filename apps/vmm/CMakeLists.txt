@@ -57,6 +57,7 @@ file(
         src/${VMMImplementation}/*.c
         src/arch/${KernelSel4Arch}/*.c
         src/arch/${KernelSel4Arch}/${VMMImplementation}/*.c
+        src/arch/${KernelSel4Arch}/${VMMImplementation}/vgic/*.c
         src/arch/${KernelSel4Arch}/vgic/*.c
 )
 
@@ -96,6 +97,7 @@ target_include_directories(
     PUBLIC 
         include
         arch/${KernelSel4Arch}
+        arch/${KernelSel4Arch}/${VMMImplementation}
 )
 
 target_link_libraries(

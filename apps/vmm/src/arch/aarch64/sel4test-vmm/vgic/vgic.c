@@ -99,7 +99,7 @@ bool vgic_inject_irq(size_t vcpu_id, int irq)
 }
 
 // @ivanv: revisit this whole function
-bool handle_vgic_dist_fault(size_t vcpu_id, uint64_t fault_addr, uint64_t fsr, seL4_UserContext *regs)
+bool handle_vgic_dist_fault(seL4_CPtr tcb, size_t vcpu_id, uint64_t fault_addr, uint64_t fsr, seL4_UserContext *regs)
 {
     /* Make sure that the fault address actually lies within the GIC distributor region. */
     assert(fault_addr >= GIC_DIST_PADDR);
@@ -110,13 +110,13 @@ bool handle_vgic_dist_fault(size_t vcpu_id, uint64_t fault_addr, uint64_t fsr, s
     if (fault_is_read(fsr))
     {
         // printf("VGIC|INFO: Read dist\n");
-        success = vgic_dist_reg_read(vcpu_id, &vgic, offset, fsr, regs);
+        success = vgic_dist_reg_read(tcb, vcpu_id, &vgic, offset, fsr, regs);
         assert(success);
     }
     else
     {
         // printf("VGIC|INFO: Write dist\n");
-        success = vgic_dist_reg_write(vcpu_id, &vgic, offset, fsr, regs);
+        success = vgic_dist_reg_write(tcb, vcpu_id, &vgic, offset, fsr, regs);
         assert(success);
     }
 

@@ -14,7 +14,7 @@
 #include <sel4test-vmm/vmm.h>
 
 /* SMC vCPU fault handler */
-bool handle_smc(seL4_UserContext *regs, uint32_t hsr);
+bool handle_smc(uint32_t vcpu_id, seL4_UserContext *regs, uint32_t hsr);
 
 /* Helper functions */
 void smc_set_return_value(seL4_UserContext *u, uint64_t val);

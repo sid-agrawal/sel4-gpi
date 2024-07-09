@@ -15,12 +15,12 @@
 #include <sel4test-vmm/vmm.h>
 #include <sel4test-vmm/vcpu.h>
 
-bool fault_advance_vcpu(size_t vcpu_id, seL4_UserContext *regs)
+bool fault_advance_vcpu(seL4_CPtr tcb, seL4_UserContext *regs)
 {
     // For now we just ignore it and continue
     // Assume 64-bit instruction
     regs->pc += 4;
-    int err = seL4_TCB_WriteRegisters(vcpu_id, true, 0, SEL4_USER_CONTEXT_SIZE, regs);
+    int err = seL4_TCB_WriteRegisters(tcb, true, 0, SEL4_USER_CONTEXT_SIZE, regs);
     assert(err == seL4_NoError);
 
     return (err == seL4_NoError);
@@ -237,7 +237,7 @@ void fault_emulate_write(seL4_UserContext *regs, size_t addr, size_t fsr, size_t
     *reg_ctx = fault_emulate(regs, *reg_ctx, addr, fsr, reg_val);
 }
 
-bool fault_advance(size_t vcpu_id, seL4_UserContext *regs, uint64_t addr, uint64_t fsr, uint64_t reg_val)
+bool fault_advance(seL4_CPtr tcb, seL4_UserContext *regs, uint64_t addr, uint64_t fsr, uint64_t reg_val)
 {
     /* Get register opearand */
     int rt = get_rt(fsr);
@@ -247,7 +247,7 @@ bool fault_advance(size_t vcpu_id, seL4_UserContext *regs, uint64_t addr, uint64
     // DFAULT("%s: Emulate fault @ 0x%x from PC 0x%x\n",
     //        fault->vcpu->vm->vm_name, fault->addr, fault->ip);
 
-    return fault_advance_vcpu(vcpu_id, regs);
+    return fault_advance_vcpu(tcb, regs);
 }
 
 bool fault_handle_vcpu_exception(vm_context_t *vm)
@@ -261,10 +261,13 @@ bool fault_handle_vcpu_exception(vm_context_t *vm)
     switch (hsr_ec_class)
     {
     case HSR_SMC_64_EXCEPTION:
-        return handle_smc(&regs, hsr);
+        if (handle_smc(vm->id, &regs, hsr))
+        {
+            return fault_advance_vcpu(vm->tcb.cptr, &regs);
+        }
+        return false;
     case HSR_WFx_EXCEPTION:
         // If we get a WFI exception, we just do nothing in the VMM.
-        CPRINTF("WFI exception\n");
         return true;
     default:
         ZF_LOGE("unknown SMC exception, EC class: 0x%lx, HSR: 0x%x\n", hsr_ec_class, hsr);
@@ -305,12 +308,12 @@ bool fault_handle_user_exception(size_t vcpu_id)
 #define SYSCALL_PA_TO_IPA 65
 #define SYSCALL_NOP 67
 
-bool fault_handle_unknown_syscall(size_t vcpu_id)
+bool fault_handle_unknown_syscall(vm_context_t *vm)
 {
     // @ivanv: should print out the name of the VM the fault came from.
     size_t syscall = seL4_GetMR(seL4_UnknownSyscall_Syscall);
     size_t fault_ip = seL4_GetMR(seL4_UnknownSyscall_FaultIP);
-    ZF_LOGI("Received syscall 0x%lx\n", syscall);
+    ZF_LOGI("Received syscall 0x%lx from VM %d\n", syscall, vm->id);
     switch (syscall)
     {
     case SYSCALL_PA_TO_IPA:
@@ -327,7 +330,7 @@ bool fault_handle_unknown_syscall(size_t vcpu_id)
     }
 
     seL4_UserContext regs;
-    seL4_Error err = seL4_TCB_ReadRegisters(vcpu_id, false, 0, SEL4_USER_CONTEXT_SIZE, &regs);
+    seL4_Error err = seL4_TCB_ReadRegisters(vm->tcb.cptr, false, 0, SEL4_USER_CONTEXT_SIZE, &regs);
     assert(err == seL4_NoError);
     if (err != seL4_NoError)
     {
@@ -335,7 +338,7 @@ bool fault_handle_unknown_syscall(size_t vcpu_id)
         return false;
     }
 
-    return fault_advance_vcpu(vcpu_id, &regs);
+    return fault_advance_vcpu(vm->tcb.cptr, &regs);
 }
 
 struct vm_exception_handler
@@ -403,28 +406,28 @@ static bool fault_handle_registered_vm_exceptions(size_t vcpu_id, uintptr_t addr
     return false;
 }
 
-bool fault_handle_vm_exception(size_t vcpu_id)
+bool fault_handle_vm_exception(vm_context_t *vm)
 {
     uintptr_t addr = seL4_GetMR(seL4_VMFault_Addr);
     size_t fsr = seL4_GetMR(seL4_VMFault_FSR);
 
     seL4_UserContext regs;
-    int err = seL4_TCB_ReadRegisters(vcpu_id, false, 0, SEL4_USER_CONTEXT_SIZE, &regs);
+    int err = seL4_TCB_ReadRegisters(vm->tcb.cptr, false, 0, SEL4_USER_CONTEXT_SIZE, &regs);
     // assert(err == seL4_NoError);
     printf("addr: %lx\n", addr);
     return false;
     switch (addr)
     {
     case GIC_DIST_PADDR ... GIC_DIST_PADDR + GIC_DIST_SIZE:
-        return handle_vgic_dist_fault(vcpu_id, addr, fsr, &regs);
+        return handle_vgic_dist_fault(vm->tcb.cptr, vm->id, addr, fsr, &regs);
 #if defined(GIC_V3)
     /* Need to handle redistributor faults for GICv3 platforms. */
     case GIC_REDIST_PADDR ... GIC_REDIST_PADDR + GIC_REDIST_SIZE:
-        return handle_vgic_redist_fault(vcpu_id, addr, fsr, &regs);
+        return handle_vgic_redist_fault(vm->tcb.cptr, vm->id, addr, fsr, &regs);
 #endif
     default:
     {
-        bool success = fault_handle_registered_vm_exceptions(vcpu_id, addr, fsr, &regs);
+        bool success = fault_handle_registered_vm_exceptions(vm->id, addr, fsr, &regs);
         if (!success)
         {
             /*
@@ -438,13 +441,13 @@ bool fault_handle_vm_exception(size_t vcpu_id)
             bool is_write = fault_is_write(fsr);
             ZF_LOGE("unexpected memory fault on address: 0x%lx, FSR: 0x%lx, IP: 0x%lx, is_prefetch: %s, is_write: %s\n",
                     addr, fsr, ip, is_prefetch ? "true" : "false", is_write ? "true" : "false");
-            // tcb_print_regs(vcpu_id);
-            // vcpu_print_regs(vcpu_id); // XXX
+            // tcb_print_regs(vm->id);
+            // vcpu_print_regs(vm->id); // XXX
         }
         else
         {
             /* @ivanv, is it correct to unconditionally advance the CPU here? */
-            fault_advance_vcpu(vcpu_id, &regs);
+            fault_advance_vcpu(vm->tcb.cptr, &regs);
         }
 
         return success;

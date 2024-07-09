@@ -34,21 +34,20 @@ int test_vmm(env_t env)
                               env->asid_pool, &env->simple, env->tcb, env->endpoint);
     test_error_eq(error, 0);
     uint32_t guest_id = sel4test_new_guest();
-    CPRINTF("here\n");
     test_assert(guest_id != 0);
 #elif OSM_VMM
     error = new_guest();
     test_error_eq(error, 0);
 #endif
 
+    // #ifdef CONFIG_DEBUG_BUILD
+    //     seL4_DebugDumpScheduler();
+    // #endif
+
     while (1)
     {
         seL4_Yield();
     }
-
-#ifdef CONFIG_DEBUG_BUILD
-    seL4_DebugDumpScheduler();
-#endif
 
     return sel4test_get_result();
 }
