@@ -329,5 +329,15 @@ void gpi_debug_print_resources(void)
     printf("Expected resources to remain:\n");
     printf(" - RT PD (%d)\n", get_gpi_server()->rt_pd_id);
     printf(" - RT ADS (%d)\n", get_gpi_server()->rt_ads_id);
+
+
+    ads_component_registry_entry_t *ads_entry = (ads_component_registry_entry_t *)
+        resource_component_registry_get_by_id(get_ads_component(), get_gpi_server()->rt_ads_id);
+
+    for (resource_registry_node_t *node = ads_entry->ads.attach_registry.head; node != NULL; node = node->hh.next)
+    {
+        attach_node_t *attach_node = (attach_node_t *)node;
+        printf(" - RT MO (%d)\n", (int) attach_node->mo_id);
+    }
     printf("\n\n");
 }

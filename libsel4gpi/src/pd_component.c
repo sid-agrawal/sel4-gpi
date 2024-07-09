@@ -979,6 +979,8 @@ void forge_pd_cap_from_init_data(test_init_data_t *init_data, sel4utils_process_
     pd->shared_data_mo_id = shared_data_mo->id;
     error = ads_component_attach_to_rt(shared_data_mo->id, (void **)&pd->shared_data);
     SERVER_GOTO_IF_ERR(error, "Failed to attach init data MO to RT\n");
+    error = resource_component_dec(get_mo_component(), pd->shared_data_mo_id); // Decrement MO created by RT
+    SERVER_GOTO_IF_ERR(error, "Failed to decrement refcount of init data MO\n");
 
     pd->shared_data->rde_count = 0;
     memset(pd->shared_data->rde, 0, sizeof(osmosis_rde_t) * MAX_PD_OSM_RDE);

@@ -262,6 +262,14 @@ static int load_segments(ads_t *loadee_ads, ads_t *loader_ads,
             ZF_LOGE("Error, failed to remove MO from loader for elf segment");
             return error;
         }
+
+        // Decrement refcount of MO created by RT, not held by PD
+        error = resource_component_dec(get_mo_component(), mo->id);
+        if (error)
+        {
+            ZF_LOGE("Error, failed to decrement refcount of MO for elf");
+            return error;
+        }
     }
 
     return 0;
