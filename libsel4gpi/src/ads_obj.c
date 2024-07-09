@@ -25,6 +25,7 @@
 #include <sel4gpi/model_exporting.h>
 #include <sel4gpi/error_handle.h>
 #include <sel4gpi/pd_component.h>
+#include <sel4gpi/gpi_elf.h>
 
 #define MAX_MO_RR 10000
 
@@ -173,14 +174,17 @@ int ads_reserve(ads_t *ads,
                 uint32_t num_pages,
                 size_t size_bits,
                 sel4utils_reservation_type_t vmr_type,
+                bool cacheable,
+                seL4_CapRights_t rights,
                 attach_node_t **ret_node)
 {
     int error = 0;
-    int cacheable = vmr_type == SEL4UTILS_RES_TYPE_DEVICE ? 0 : 1;
+
+    // (XXX) Arya: should shift this option to client api
+    cacheable = vmr_type == SEL4UTILS_RES_TYPE_DEVICE ? false : cacheable;
     vspace_t *target = ads->vspace;
 
     /* Reserve the range in the vspace */
-    seL4_CapRights_t rights = seL4_AllRights;
     reservation_t res;
     if (vaddr == NULL)
     {
@@ -225,6 +229,8 @@ int ads_reserve(ads_t *ads,
     attach_node->n_pages = num_pages;
     attach_node->gen.object_id = (uint64_t)vaddr;
     attach_node->page_bits = size_bits;
+    attach_node->cacheable = cacheable;
+    attach_node->rights = rights;
     resource_registry_insert(&ads->attach_registry, (resource_registry_node_t *)attach_node);
 
     // The root task holds the VMR by default
@@ -355,6 +361,8 @@ int ads_attach(ads_t *ads,
                vka_t *vka,
                void *vaddr,
                mo_t *mo,
+               bool cacheable,
+               seL4_CapRights_t rights,
                void **ret_vaddr,
                sel4utils_reservation_type_t vmr_type)
 {
@@ -362,7 +370,7 @@ int ads_attach(ads_t *ads,
 
     /* Reserve the VMR */
     attach_node_t *attach_node;
-    error = ads_reserve(ads, vaddr, mo->num_pages, mo->page_bits, vmr_type, &attach_node);
+    error = ads_reserve(ads, vaddr, mo->num_pages, mo->page_bits, vmr_type, cacheable, rights, &attach_node);
 
     if (error)
     {
@@ -604,7 +612,9 @@ int ads_copy(vspace_t *loader,
                                  ? cfg->dest_start
                                  : (void *)src_attach_node->vaddr;
         error = ads_reserve(dst_ads, attach_vaddr, src_attach_node->n_pages,
-                            src_attach_node->page_bits, src_attach_node->type, &new_attach_node);
+                            src_attach_node->page_bits, src_attach_node->type,
+                            src_attach_node->cacheable, src_attach_node->rights,
+                            &new_attach_node);
         SERVER_GOTO_IF_ERR(error, "Failed to reserve region\n");
 
         // Find the original MO
@@ -673,16 +683,14 @@ void ads_destroy(ads_t *ads)
 
 /* ======================================= CONVENIENCE FUNCTIONS (NOT PART OF FRAMEWORK) ================================================= */
 
-int ads_load_elf(vspace_t *loadee_vspace,
+int ads_load_elf(ads_t *loadee,
+                 ads_t *loader,
                  pd_t *pd,
                  const char *image_name,
-                 void **ret_entry_point,
-                 sel4utils_elf_region_t **ret_elf_reservations,
-                 int *ret_num_elf_regions)
+                 void **ret_entry_point)
 {
     int error;
     seL4_CPtr slot;
-    vspace_t *server_vspace = get_ads_component()->server_vspace;
     vka_t *server_vka = get_ads_component()->server_vka;
 
     unsigned long size;
@@ -691,18 +699,17 @@ int ads_load_elf(vspace_t *loadee_vspace,
     elf_t elf;
     elf_newFile(file, size, &elf);
 
-    *ret_entry_point = sel4utils_elf_load2(loadee_vspace, server_vspace, server_vka, server_vka,
-                                           &elf, ret_elf_reservations, ret_num_elf_regions);
+    *ret_entry_point = sel4gpi_elf_load(loadee, loader, server_vka, server_vka, &elf);
     SERVER_GOTO_IF_COND(*ret_entry_point == NULL, "Failed to load elf file\n");
 
-    pd->sysinfo = sel4utils_elf_get_vsyscall(&elf);
+    pd->sysinfo = sel4gpi_elf_get_vsyscall(&elf);
 
     /* Retrieve the ELF phdrs */
-    pd->num_elf_phdrs = sel4utils_elf_num_phdrs(&elf);
+    pd->num_elf_phdrs = sel4gpi_elf_num_phdrs(&elf);
     pd->elf_phdrs = calloc(pd->num_elf_phdrs, sizeof(Elf_Phdr));
     SERVER_GOTO_IF_COND(!pd->elf_phdrs, "Failed to allocate memory for elf phdr information\n");
 
-    sel4utils_elf_read_phdrs(&elf, pd->num_elf_phdrs, pd->elf_phdrs);
+    sel4gpi_elf_read_phdrs(&elf, pd->num_elf_phdrs, pd->elf_phdrs);
     pd->pagesz = PAGE_SIZE_4K;
 
     return 0;

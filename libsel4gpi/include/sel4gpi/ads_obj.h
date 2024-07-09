@@ -45,6 +45,8 @@ typedef struct _attach_node
     sel4utils_reservation_type_t type; ///< Reservation type
     uint32_t n_pages;                  ///< Number of pages
     size_t page_bits;                  ///< size bits of an individual page
+    bool cacheable;                    ///< True if the pages are cacheable
+    seL4_CapRights_t rights;           ///< Rights to the pages
 
     // (XXX) Arya: Assumes we only need to attach one MO to a reservation
     bool mo_attached;      ///< True if an MO is attached (next fields are valid only if true)
@@ -83,10 +85,10 @@ int ads_new(ads_t *ads,
 /**
  * @brief Initialize an ads object
  * This is exposed just to initialize a forged ADS object
- * 
+ *
  * @param ads the ADS to initialize
  * @return int 0 on success, 1 on failure.
-*/
+ */
 int ads_initialize(ads_t *ads);
 
 /**
@@ -97,6 +99,8 @@ int ads_initialize(ads_t *ads);
  * @param num_pages num of pages to reserve
  * @param size_bits size of the pages
  * @param vmr_type the type of VMR, e.g. heap, stack, IPC buffer, etc.
+ * @param cacheable if true, the pages are cacheable
+ * @param rights rights for the pages
  * @param ret_node returns the created reservation node
  * @return int 0 on success, 1 on failure.
  */
@@ -105,6 +109,8 @@ int ads_reserve(ads_t *ads,
                 uint32_t num_pages,
                 size_t size_bits,
                 sel4utils_reservation_type_t vmr_type,
+                bool cacheable,
+                seL4_CapRights_t rights,
                 attach_node_t **ret_node);
 
 /**
@@ -158,6 +164,8 @@ int ads_attach_to_res(ads_t *ads,
  * @param vka vka object to allocate cspace slots and PT from
  * @param vaddr virtual address to attach the frame to
  * @param mo MO to attach
+ * @param cacheable if true, the pages are cacheable
+ * @param rights rights for the pages
  * @param ret_vaddr returns vaddr attached at
  * @return int 0 on success, 1 on failure.
  */
@@ -165,6 +173,8 @@ int ads_attach(ads_t *ads,
                vka_t *vka,
                void *vaddr,
                mo_t *mo,
+               bool cacheable,
+               seL4_CapRights_t rights,
                void **ret_vaddr,
                sel4utils_reservation_type_t vmr_type);
 
@@ -259,22 +269,20 @@ static seL4_CPtr assign_asid_pool(seL4_CPtr asid_pool, seL4_CPtr pd)
 /* ======================================= CONVENIENCE FUNCTIONS (NOT PART OF FRAMEWORK) ================================================= */
 
 /**
- * @brief loads an ELF with image_name into the given vspace
+ * @brief loads an ELF with image_name into the given ads
  *
- * @param loadee_vspace
- * @param proc the process struct that belongs to the PD obj
+ * @param loadee the target ADS
+ * @param loader the root task ADS
+ * @param pd the PD for which the elf is being loaded
  * @param image_name name of the ELF image to load
  * @param ret_entry_point the entry point found after loading the ELF
- * @param ret_elf_reservations returns the vspace reservations made during loading, for OSmosis tracking purposes
- * @param ret_num_elf_regions returns the number of loadable regions found
  * @return 0 on success, 1 on failure
  */
-int ads_load_elf(vspace_t *loadee_vspace,
+int ads_load_elf(ads_t *loadee,
+                 ads_t *loader,
                  pd_t *pd,
                  const char *image_name,
-                 void **ret_entry_point,
-                 sel4utils_elf_region_t **ret_elf_reservations,
-                 int *ret_num_elf_regions);
+                 void **ret_entry_point);
 
 /**
  * @brief slightly modified version of the sel4utils process spawn function

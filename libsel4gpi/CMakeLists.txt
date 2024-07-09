@@ -35,4 +35,5 @@ target_link_libraries(sel4gpi
         sel4allocman
         sel4bench
         sel4nanopb
+        elf
 )

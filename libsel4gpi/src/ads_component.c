@@ -31,6 +31,7 @@
 #include <sel4gpi/debug.h>
 #include <sel4gpi/error_handle.h>
 #include <sel4gpi/gpi_rpc.h>
+#include <sel4gpi/gpi_elf.h>
 #include <ads_component_rpc.pb.h>
 
 // Defined for utility printing macros
@@ -154,8 +155,9 @@ static void handle_reserve_req(seL4_Word sender_badge,
     SERVER_GOTO_IF_COND(pd_data == NULL, "Couldn't find PD (%ld)\n", client_id);
 
     // Make the reservation
+    // (XXX) Arya: add cacheable / rights to client api
     attach_node_t *reservation;
-    error = ads_reserve(&ads_entry->ads, vaddr, num_pages, page_bits, vmr_type, &reservation);
+    error = ads_reserve(&ads_entry->ads, vaddr, num_pages, page_bits, vmr_type, 1, seL4_AllRights, &reservation);
     SERVER_GOTO_IF_ERR(error, "Failed to make reservation (%p)\n", vaddr);
 
     // Make a cap for the reservation
@@ -321,7 +323,6 @@ static void handle_load_elf_request(seL4_Word sender_badge,
 
     int error = 0;
     void *entry_point;
-    sel4utils_elf_region_t *elf_reservations = NULL;
     SERVER_GOTO_IF_COND(!sel4gpi_rpc_check_cap(GPICAP_TYPE_PD), "Did not receive PD cap\n");
 
     // Find target ADS
@@ -329,6 +330,12 @@ static void handle_load_elf_request(seL4_Word sender_badge,
         resource_component_registry_get_by_badge(get_ads_component(), sender_badge);
     SERVER_GOTO_IF_COND(target_ads == NULL, "Couldn't find target ADS (%ld)\n",
                         get_object_id_from_badge(sender_badge));
+
+    // Find root task's ADS
+    ads_component_registry_entry_t *root_ads = (ads_component_registry_entry_t *)
+        resource_component_registry_get_by_id(get_ads_component(), get_gpi_server()->rt_ads_id);
+    SERVER_GOTO_IF_COND(root_ads == NULL, "Couldn't find root task ADS (%ld)\n",
+                        get_gpi_server()->rt_ads_id);
 
     // Find target PD
     pd_component_registry_entry_t *target_pd =
@@ -338,18 +345,10 @@ static void handle_load_elf_request(seL4_Word sender_badge,
 
     // Load the ELF
     OSDB_PRINTF("Loading %s's ELF into PD %d\n", msg->image_name, target_pd->pd.id);
-    int elf_regions;
-    error = ads_load_elf(target_ads->ads.vspace, &target_pd->pd, msg->image_name,
-                         &entry_point, &elf_reservations, &elf_regions);
+    error = ads_load_elf(&target_ads->ads, &root_ads->ads, &target_pd->pd, msg->image_name,
+                         &entry_point);
     SERVER_GOTO_IF_ERR(error, "Load ELF failed\n");
     reply_msg->msg.load_elf.entry_point = entry_point;
-
-    // For now, we must fake the ADS attachments after loading elf
-    for (int i = 0; i < elf_regions; i++)
-    {
-        sel4utils_res_t *res = reservation_to_res(elf_reservations[i].reservation);
-        forge_ads_attachment_from_res(&target_ads->ads, res, get_gpi_server()->rt_pd_id);
-    }
 
     OSDB_PRINTF("Successfully loaded ELF, entry point %p.\n", entry_point);
 
@@ -358,11 +357,6 @@ static void handle_load_elf_request(seL4_Word sender_badge,
     OSDB_PRINTF("Forged ADS attachments from ELF.\n");
 
 err_goto:
-    if (elf_reservations)
-    {
-        free(elf_reservations);
-    }
-
     reply_msg->which_msg = AdsReturnMessage_load_elf_tag;
     reply_msg->errorCode = error;
 }
@@ -634,7 +628,8 @@ err_goto:
     return error;
 }
 
-int ads_component_attach(uint64_t ads_id, uint64_t mo_id, sel4utils_reservation_type_t vmr_type, void *vaddr, void **ret_vaddr)
+int ads_component_attach(uint64_t ads_id, uint64_t mo_id, sel4utils_reservation_type_t vmr_type,
+                         void *vaddr, void **ret_vaddr)
 {
     int error = 0;
 
@@ -653,10 +648,14 @@ int ads_component_attach(uint64_t ads_id, uint64_t mo_id, sel4utils_reservation_
     {
         vmr_type = SEL4UTILS_RES_TYPE_GENERIC;
     }
+
+    // (XXX) Arya: Move cacheable/rights to parameters
     error = ads_attach(&ads_entry->ads,
                        get_ads_component()->server_vka,
                        vaddr,
                        &mo_reg->mo,
+                       1,
+                       seL4_AllRights,
                        ret_vaddr,
                        vmr_type);
 
