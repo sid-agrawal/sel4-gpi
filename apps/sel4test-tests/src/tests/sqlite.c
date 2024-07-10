@@ -274,7 +274,18 @@ int test_sqlite(env_t env)
     error = sqlite3_shutdown();
     test_assert(error == SQLITE_OK);
 
+    // Cleanup servers
+    pd_client_context_t fs_pd_conn;
+    fs_pd_conn.ep = fs_pd_cap;
+    error = pd_client_terminate(&fs_pd_conn);
+    test_assert(error == 0);
+
+    pd_client_context_t ramdisk_pd_conn;
+    ramdisk_pd_conn.ep = ramdisk_pd_cap;
+    error = pd_client_terminate(&ramdisk_pd_conn);
+    test_assert(error == 0);
+
     printf("------------------ENDING: %s------------------\n", __func__);
     return sel4test_get_result();
 }
-DEFINE_TEST(GPISQ001, "Ensure that sqlite can run", test_sqlite, true)
+DEFINE_TEST_OSM(GPISQ001, "Ensure that sqlite can run", test_sqlite, true)

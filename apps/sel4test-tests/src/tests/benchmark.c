@@ -551,7 +551,7 @@ DEFINE_TEST(GPIBM001,
             bench_native,
             true)
 
-DEFINE_TEST(GPIBM002,
-            "CellulOS Benchmarks",
-            bench_osm,
-            true)
+DEFINE_TEST_OSM(GPIBM002,
+                "CellulOS Benchmarks",
+                bench_osm,
+                true)

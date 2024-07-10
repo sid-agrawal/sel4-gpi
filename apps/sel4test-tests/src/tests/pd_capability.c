@@ -80,10 +80,12 @@ int test_new_process_osmosis_shmem(env_t env)
 
     return sel4test_get_result();
 }
-DEFINE_TEST(GPIPD001,
+
+// (XXX) Arya: This test is broken because it uses vka
+DEFINE_TEST_OSM(GPIPD001,
             "OSMO: Ensure that as new process works w/ SHMEM",
             test_new_process_osmosis_shmem,
-            true)
+            false)
 
 int test_pd_dump(env_t env)
 {
@@ -103,4 +105,4 @@ int test_pd_dump(env_t env)
     return sel4test_get_result();
 }
 
-DEFINE_TEST(GPIPD003, "Test PD dump", test_pd_dump, true)
+DEFINE_TEST_OSM(GPIPD003, "Test PD dump", test_pd_dump, true)

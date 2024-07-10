@@ -3,7 +3,6 @@
 #include <unistd.h>
 #include <sys/stat.h>
 
-#include <vka/capops.h>
 #include <sel4test/test.h>
 #include <sel4test/macros.h>
 #include "../test.h"
@@ -240,7 +239,7 @@ int test_kvstore_lib_in_same_pd(env_t env)
     printf("------------------ENDING: %s------------------\n", __func__);
     return sel4test_get_result();
 }
-DEFINE_TEST(GPIKV001, "Test kvstore with app and lib in the same PD, same ADS", test_kvstore_lib_in_same_pd, true)
+DEFINE_TEST_OSM(GPIKV001, "Test kvstore with app and lib in the same PD, same ADS", test_kvstore_lib_in_same_pd, true)
 
 int test_kvstore_lib_in_diff_pd(env_t env)
 {
@@ -282,7 +281,7 @@ int test_kvstore_lib_in_diff_pd(env_t env)
     printf("------------------ENDING: %s------------------\n", __func__);
     return sel4test_get_result();
 }
-DEFINE_TEST(GPIKV002, "Test kvstore with app and lib in different PDs, same FS, same NS", test_kvstore_lib_in_diff_pd, true)
+DEFINE_TEST_OSM(GPIKV002, "Test kvstore with app and lib in different PDs, same FS, same NS", test_kvstore_lib_in_diff_pd, true)
 
 int test_kvstore_diff_namespace(env_t env)
 {
@@ -335,7 +334,7 @@ int test_kvstore_diff_namespace(env_t env)
     printf("------------------ENDING: %s------------------\n", __func__);
     return sel4test_get_result();
 }
-DEFINE_TEST(GPIKV003, "Test app and lib with same FS, different namespace", test_kvstore_diff_namespace, true)
+DEFINE_TEST_OSM(GPIKV003, "Test app and lib with same FS, different namespace", test_kvstore_diff_namespace, true)
 
 int test_kvstore_diff_fs(env_t env)
 {
@@ -384,7 +383,7 @@ int test_kvstore_diff_fs(env_t env)
     printf("------------------ENDING: %s------------------\n", __func__);
     return sel4test_get_result();
 }
-DEFINE_TEST(GPIKV004, "Test app and lib with different", test_kvstore_diff_fs, true)
+DEFINE_TEST_OSM(GPIKV004, "Test app and lib with different", test_kvstore_diff_fs, true)
 
 int test_kvstore_lib_same_pd_diff_ads(env_t env)
 {
@@ -418,7 +417,7 @@ int test_kvstore_lib_same_pd_diff_ads(env_t env)
     printf("------------------ENDING: %s------------------\n", __func__);
     return sel4test_get_result();
 }
-DEFINE_TEST(GPIKV005, "Test kvstore with app and lib in the same PD, different ADS", test_kvstore_lib_same_pd_diff_ads, true)
+DEFINE_TEST_OSM(GPIKV005, "Test kvstore with app and lib in the same PD, different ADS", test_kvstore_lib_same_pd_diff_ads, true)
 
 int test_kvstore_diff_threads(env_t env)
 {
@@ -458,7 +457,7 @@ int test_kvstore_diff_threads(env_t env)
     printf("------------------ENDING: %s------------------\n", __func__);
     return sel4test_get_result();
 }
-DEFINE_TEST(GPIKV006, "Test kvstore with app and lib in the same PD, different threads", test_kvstore_diff_threads, true)
+DEFINE_TEST_OSM(GPIKV006, "Test kvstore with app and lib in the same PD, different threads", test_kvstore_diff_threads, true)
 
 int test_kvstore_two_sets(env_t env)
 {
@@ -519,4 +518,4 @@ int test_kvstore_two_sets(env_t env)
     printf("------------------ENDING: %s------------------\n", __func__);
     return sel4test_get_result();
 }
-DEFINE_TEST(GPIKV007, "Test kvstore with app and lib in different PDs, 2 sets of each", test_kvstore_two_sets, true)
+DEFINE_TEST_OSM(GPIKV007, "Test kvstore with app and lib in different PDs, 2 sets of each", test_kvstore_two_sets, true)

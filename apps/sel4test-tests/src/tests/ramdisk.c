@@ -23,15 +23,14 @@
 
 int test_ramdisk(env_t env)
 {
-    seL4_Error error;
+    seL4_Error error = 0;
     char *buf;
 
     printf("------------------STARTING SETUP: %s------------------\n", __func__);
 
     /* Initialize the ADS */
     ads_client_context_t ads_conn = sel4gpi_get_bound_vmr_rde();
-    test_assert(error == 0);
-
+    
     /* Initialize the PD */
     pd_client_context_t pd_conn = sel4gpi_get_pd_conn();
 
@@ -141,7 +140,13 @@ int test_ramdisk(env_t env)
     // Print whole-pd model state
     // error = pd_client_dump(&pd_conn, NULL, 0);
 
+    // Cleanup server
+    pd_client_context_t ramdisk_pd_conn;
+    ramdisk_pd_conn.ep = ramdisk_pd_cap;
+    error = pd_client_terminate(&ramdisk_pd_conn);
+    test_assert(error == 0);
+
     printf("------------------ENDING: %s------------------\n", __func__);
     return sel4test_get_result();
 }
-DEFINE_TEST(GPIRD001, "Ensure that the ramdisk is functioning", test_ramdisk, true)
+DEFINE_TEST_OSM(GPIRD001, "Ensure that the ramdisk is functioning", test_ramdisk, true)

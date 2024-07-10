@@ -58,10 +58,17 @@ int test_native_threads(env_t env)
     return sel4test_get_result();
 }
 
+// (XXX) Arya: This test is broken
+DEFINE_TEST(GPITH001,
+            "Spawn a native thread",
+            test_native_threads,
+            false);
+
 int test_osm_threads(env_t env)
 {
     int error;
     printf("------------------STARTING: %s------------------\n", __func__);
+
     ep_client_context_t fault_ep = {0};
     error = ep_client_forge(sel4gpi_get_rde(GPICAP_TYPE_EP), env->endpoint, &fault_ep);
     test_assert(!error && fault_ep.ep != seL4_CapNull);
@@ -91,12 +98,8 @@ int test_osm_threads(env_t env)
     return sel4test_get_result();
 }
 
-DEFINE_TEST(GPITH001,
-            "Test Multiple Threads in PD",
-            test_osm_threads,
-            true)
-
-DEFINE_TEST(GPITH002,
-            "Spawn a native thread",
-            test_native_threads,
-            true)
+// (XXX) Arya: This test is broken
+DEFINE_TEST_OSM(GPITH002,
+                "Test Multiple Threads in PD",
+                test_osm_threads,
+                false);

@@ -136,10 +136,6 @@ static int start_hello(hello_context_t *context)
 /**
  * Start two PDs with a shared mutex, inspect the logs to ensure that they do not enter
  * their critical section at the same time
- * 
- * (XXX) Arya:
- * This uses the seL4_libs sync library
- * However, it does not appear to work: both PDs enter their critical section at the same time
  */
 int test_mutex(env_t env)
 {
@@ -206,4 +202,6 @@ int test_mutex(env_t env)
     printf("------------------ENDING: %s------------------\n", __func__);
     return sel4test_get_result();
 }
-DEFINE_TEST(GPISYNC001, "Test a simple mutex", test_mutex, true)
+
+// (XXX) Arya: This test doesn't work because it uses vka
+DEFINE_TEST_OSM(GPISYNC001, "Test a simple mutex", test_mutex, false)

@@ -229,7 +229,7 @@ int main(int argc, char **argv)
     /* parse args */
     assert(argc == 3);
     test_type = (enum test_type_name)atoi(argv[0]);
-    env.endpoint = (seL4_CPtr)atoi(argv[1]);
+    endpoint = env.endpoint = (seL4_CPtr)atoi(argv[1]);
     // Third arg is for BASIC test types only
 
     char *test_name;

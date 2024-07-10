@@ -17,22 +17,22 @@
 #include <sel4bench/arch/sel4bench.h>
 
 char *csv_buffer =
-    "NODE_TYPE,NODE_ID,DATA,EDGE_TYPE,EDGE_FROM,EDGE_TO\n"
-    "PD,PD_0,ROOT_TASK,,,\n"
-    "PD,PD_1,Proc1,,,\n"
-    "PD,PD_2,Proc2,,,\n"
-    "RESOURCE,MO_1_1,MO,,,\n"
-    "RESOURCE,MO_1_2,MO,,,\n"
-    "RESOURCE,VMR_1_1,VMR,,,\n"
-    "RESOURCE,VMR_1_2,VMR,,,\n"
-    ",,NONE,HOLD,PD_1,MO_1_1\n"
-    ",,NONE,HOLD,PD_2,MO_1_2\n"
-    ",,NONE,HOLD,PD_0,VMR_1_1\n"
-    ",,NONE,HOLD,PD_0,VMR_1_2\n"
-    ",,NONE,MAP,VMR_1_1,MO_1_1,\n"
-    ",,NONE,MAP,VMR_1_2,MO_1_2\n"
-    ",,MO,REQUEST,PD_1,PD_0\n"
-    ",,MO,REQUEST,PD_2,PD_0\n";
+    "NODE_TYPE,NODE_ID,DATA,EDGE_TYPE,EDGE_FROM,EDGE_TO,EXTRA\n"
+    "PD,PD_0,ROOT_TASK,,,,\n"
+    "PD,PD_1,Proc1,,,,\n"
+    "PD,PD_2,Proc2,,,,\n"
+    "RESOURCE,MO_1_1,MO,,,,\n"
+    "RESOURCE,MO_1_2,MO,,,,\n"
+    "RESOURCE,VMR_1_1,VMR,,,,\n"
+    "RESOURCE,VMR_1_2,VMR,,,,\n"
+    ",,,HOLD,PD_1,MO_1_1,\n"
+    ",,,HOLD,PD_2,MO_1_2,\n"
+    ",,,HOLD,PD_0,VMR_1_1,\n"
+    ",,,HOLD,PD_0,VMR_1_2,\n"
+    ",,,MAP,VMR_1_1,MO_1_1,\n"
+    ",,,MAP,VMR_1_2,MO_1_2,\n"
+    ",,MO,REQUEST,PD_1,PD_0,\n"
+    ",,MO,REQUEST,PD_2,PD_0,\n";
 
 int test_model_state_export(env_t env)
 {
@@ -88,4 +88,4 @@ int test_model_state_export(env_t env)
 
     return sel4test_get_result();
 }
-DEFINE_TEST(GPIMS001, "Test construction and exporting of model state", test_model_state_export, true)
+DEFINE_TEST_OSM(GPIMS001, "Test construction and exporting of model state", test_model_state_export, true)

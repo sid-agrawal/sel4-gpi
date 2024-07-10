@@ -271,7 +271,7 @@ int test_fs(env_t env)
     printf("------------------ENDING: %s------------------\n", __func__);
     return sel4test_get_result();
 }
-DEFINE_TEST(GPIFS001, "Ensure that the file system is functioning", test_fs, true)
+DEFINE_TEST_OSM(GPIFS001, "Ensure that the file system is functioning", test_fs, true)
 
 /**
  * Tests that the currently connected FS is sufficiently functional to
@@ -423,4 +423,4 @@ int test_multiple_fs(env_t env)
     printf("------------------ENDING: %s------------------\n", __func__);
     return sel4test_get_result();
 }
-DEFINE_TEST(GPIFS002, "Start multiple file systems", test_multiple_fs, true)
+DEFINE_TEST_OSM(GPIFS002, "Start multiple file systems", test_multiple_fs, true)
