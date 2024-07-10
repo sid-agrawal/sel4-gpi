@@ -28,7 +28,6 @@ file(
 )
 
 # not compiling out-of-date tests that either need to just be removed or updated
-list(REMOVE_ITEM deps "${CMAKE_CURRENT_SOURCE_DIR}/src/tests/ads_capability.c")
 list(REMOVE_ITEM deps "${CMAKE_CURRENT_SOURCE_DIR}/src/tests/lwc.c")
 list(REMOVE_ITEM deps "${CMAKE_CURRENT_SOURCE_DIR}/src/tests/benchmark.c")
 

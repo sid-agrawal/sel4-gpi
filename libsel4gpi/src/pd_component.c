@@ -504,6 +504,7 @@ static void handle_exit_req(seL4_Word sender_badge, PdExitMessage *msg)
     resource_registry_delete(&get_pd_component()->registry, (resource_registry_node_t *)client_data);
 
     OSDB_PRINTF("Cleaned up exited PD (%d)\n", pd_id);
+    return;
 
 err_goto:
     OSDB_PRINTERR("Error while cleaning up exited PD (%d)\n", pd_id);

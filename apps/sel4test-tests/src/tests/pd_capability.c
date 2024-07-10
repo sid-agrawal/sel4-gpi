@@ -56,11 +56,11 @@ int test_new_process_osmosis_shmem(env_t env)
     test_error_eq(error, 0);
 
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0, 0);
-    cspacepath_t ipc_cap;
-    error = vka_cspace_alloc_path(&env->vka, &ipc_cap);
-    test_error_eq(error, 0);
+    //cspacepath_t ipc_cap;
+    //error = vka_cspace_alloc_path(&env->vka, &ipc_cap);
+    //test_error_eq(error, 0);
 
-    seL4_SetCapReceivePath(ipc_cap.root, ipc_cap.capPtr, ipc_cap.capDepth);
+    //seL4_SetCapReceivePath(ipc_cap.root, ipc_cap.capPtr, ipc_cap.capDepth);
     seL4_Recv(ep_conn.raw_endpoint, NULL);
 
     pd_client_context_t self_pd = sel4gpi_get_pd_conn();
@@ -78,14 +78,18 @@ int test_new_process_osmosis_shmem(env_t env)
 
     sel4gpi_config_destroy(proc_cfg);
 
+    // Cleanup the PD
+    printf("Attempting to clean up PD, ignore error since the PD may have exited already\n");
+    error = pd_client_terminate(&runnable.pd);
+    // Ignore error, PD may have exited before we terminate it
+
     return sel4test_get_result();
 }
 
-// (XXX) Arya: This test is broken because it uses vka
 DEFINE_TEST_OSM(GPIPD001,
             "OSMO: Ensure that as new process works w/ SHMEM",
             test_new_process_osmosis_shmem,
-            false)
+            true)
 
 int test_pd_dump(env_t env)
 {

@@ -19,8 +19,6 @@
 #include <sel4gpi/debug.h>
 #include <sel4gpi/pd_utils.h>
 
-#include <sel4bench/arch/sel4bench.h>
-
 int test_ads_attach(env_t env)
 {
     // Initialize the ADS
@@ -29,16 +27,18 @@ int test_ads_attach(env_t env)
     // allocate a new MO
     int n_pages = 5;
     mo_client_context_t mo_conn;
-    int error = mo_component_client_connect(env->gpi_endpoint,
+    int error = mo_component_client_connect(sel4gpi_get_rde(GPICAP_TYPE_MO),
                                             n_pages,
+                                            MO_PAGE_BITS,
                                             &mo_conn);
     test_error_eq(error, 0);
 
-    // attacht the MO
+    // attach the MO
     void *ret_vaddr;
     error = ads_client_attach(&ads_conn,
-                              0, /*vaddr*/
+                              NULL,
                               &mo_conn,
+                              SEL4UTILS_RES_TYPE_GENERIC,
                               &ret_vaddr);
     assert(error == 0);
     assert(ret_vaddr != NULL);
@@ -54,7 +54,7 @@ int test_ads_attach(env_t env)
 
     return sel4test_get_result();
 }
-DEFINE_TEST(GPIADS010, "Ensure the ads attach works", test_ads_attach, true)
+DEFINE_TEST_OSM(GPIADS001, "Ensure the ads attach works", test_ads_attach, true)
 
 int test_ads_rm(env_t env)
 {
@@ -64,18 +64,19 @@ int test_ads_rm(env_t env)
     // allocate a new MO
     int n_pages = 5;
     mo_client_context_t mo_conn;
-    int error = mo_component_client_connect(env->gpi_endpoint,
+    int error = mo_component_client_connect(sel4gpi_get_rde(GPICAP_TYPE_MO),
                                             n_pages,
+                                            MO_PAGE_BITS,
                                             &mo_conn);
     test_error_eq(error, 0);
 
     // attach the MO
     void *ret_vaddr;
     error = ads_client_attach(&ads_conn,
-                              0, /*vaddr*/
+                              NULL,
                               &mo_conn,
+                              SEL4UTILS_RES_TYPE_GENERIC,
                               &ret_vaddr);
-
     assert(error == 0);
     assert(ret_vaddr != NULL);
 
@@ -92,46 +93,10 @@ int test_ads_rm(env_t env)
 
     return sel4test_get_result();
 }
-DEFINE_TEST(GPIADS011, "Ensure the ads remove works", test_ads_rm, true)
+DEFINE_TEST_OSM(GPIADS002, "Ensure the ads remove works", test_ads_rm, true)
 
-// (XXX) Arya: Pending update to new APIs
+// (XXX) Arya: These are very old, we should write some new tests
 #if 0
-int test_ads_dump_rr(env_t env)
-{
-    int error;
-    cspacepath_t path;
-    vka_cspace_make_path(&env->vka, env->self_ads_cptr, &path);
-    ads_client_context_t conn = sel4gpi_get_bound_vmr_rde();
-
-    // Using a known EP, get a new ads CAP.
-    ads_client_context_t shallow_copy_conn;
-    error = ads_client_shallow_copy(&conn, &env->vka, (void *)0x10001000, &shallow_copy_conn);
-    test_error_eq(error, 0);
-
-    cpu_client_context_t cpu_conn;
-    error = cpu_component_client_connect(env->gpi_endpoint,
-                                         &cpu_conn);
-    test_error_eq(error, 0);
-
-    // Config its ads and cspace
-    error = cpu_client_config(&cpu_conn,
-                              &shallow_copy_conn,
-                              env->cspace_root,
-                              env->endpoint);
-    test_error_eq(error, 0);
-
-    // Dump the ads rr
-    size_t buf_num_pages = 15;
-    char *ads_rr = malloc(buf_num_pages * 4096);
-    assert(ads_rr != NULL);
-
-    ads_client_dump_rr(&conn, ads_rr, buf_num_pages * 4096);
-    printf("ADS RR: \n%s\n", ads_rr);
-
-    return sel4test_get_result();
-}
-DEFINE_TEST(GPIADS006, "Dump the RR of the ads", test_ads_dump_rr, true)
-
 int test_ads_shallow_copy(env_t env)
 {
     int error;
@@ -376,7 +341,7 @@ static inline timestamp_t timestamp_sid(void)
 }
 #endif
 
-#ifdef WQEAREREADY
+#if 0
 int test_ads_bind_cpu(env_t env)
 {
     ads_client_context_t conn;
@@ -395,47 +360,6 @@ int test_ads_bind_cpu(env_t env)
     return sel4test_get_result();
 }
 DEFINE_TEST(GPIADS003, "Ensure the ads bind to cpu works", test_ads_bind_cpu, true)
-
-int test_ads_shallow_copy(env_t env)
-{
-    ads_client_context_t conn;
-
-    // Using a known EP, get a new ads CAP.
-    int error = ads_component_client_connect(env->gpi_endpoint, &conn);
-    test_error_eq(error, 0);
-
-    // Increment the ads cap.
-    error = 0; // Call shallow_copy
-    test_error_eq(error, 0);
-
-    // Decrement the cap. TODO(siagraw)
-    // Delete the ads cap. TODO(siagraw)
-    return sel4test_get_result();
-}
-DEFINE_TEST(GPIADS004, "Ensure the ads shallow_copy works", test_ads_shallow_copy, true)
-
-int test_ads_stack_isolated(env_t env)
-{
-    ads_client_context_t conn;
-    
-    // Using a known EP, get a new ads CAP.
-    int error = ads_component_client_connect(env->gpi_endpoint, &conn);
-    test_error_eq(error, 0);
-
-    // shallow_copy the ads,
-    // ads_client_shallow_copy(&conn, 0, 0, 0);
-    // Attach a new stack
-    // stack_cap
-    // ads_client_shallow_copy(&conn, 0, 0, 0);
-    // Attach a new stack
-    // Allocate a new PD i.e. cspace.
-    // Allocate a new TCB and attach this ADS to it.
-
-    // Decrement the cap. TODO(siagraw)
-    // Delete the ads cap. TODO(siagraw)
-    return sel4test_get_result();
-}
-DEFINE_TEST(GPIADS005, "Ensure the threads with isolated stack works", test_ads_stack_isolated, true)
 #endif
 
 /*
