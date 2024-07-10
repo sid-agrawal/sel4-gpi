@@ -50,6 +50,8 @@ static void on_cpu_registry_delete(resource_registry_node_t *node_gen, void *arg
 
     OSDB_PRINTF("Destroying CPU (%d)\n", node->cpu.id);
 
+    resource_component_remove_from_rt(get_cpu_component(), node->cpu.id);
+
     cpu_destroy(&node->cpu);
 }
 

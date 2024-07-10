@@ -53,7 +53,16 @@ static void on_ads_registry_delete(resource_registry_node_t *node_gen, void *arg
 
     OSDB_PRINTF("Destroying ADS (%d)\n", node->ads.id);
 
-    // (XXX) Arya: Todo, Destroy the VMR space
+    resource_component_remove_from_rt(get_ads_component(), node->ads.id);
+
+    // Destroy the VMR space with the ADS object
+    int error = resource_component_dec(get_resspc_component(), node->ads.id);
+
+    if (error) {
+        OSDB_PRINTWARN("Failed to destroy VMR space while destroying ADS (%d)\n", node->ads.id);
+    }
+
+    // Finally destroy the ADS object
     ads_destroy(&node->ads);
 }
 
@@ -433,7 +442,7 @@ static int forge_ads_attachment_from_res(ads_t *ads, sel4utils_res_t *res, uint3
     int error = 0;
     /* Get the caps in the reservation */
     uint32_t num_frames = (res->end - res->start) / PAGE_SIZE_4K;
-    seL4_CPtr *frame_caps = malloc(sizeof(seL4_CPtr) * num_frames);
+    seL4_CPtr *frame_caps = calloc(num_frames, sizeof(seL4_CPtr));
     assert(frame_caps != NULL);
 
     int i = 0;

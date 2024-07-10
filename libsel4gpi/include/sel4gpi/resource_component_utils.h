@@ -230,4 +230,15 @@ seL4_CPtr resource_component_make_badged_ep_custom(vka_t *src_vka, vka_t *dst_vk
  * @return the new resource's EP cap in the CSpace managed by dst_vka (or src_vka if dst_vka is NULL)
  */
 seL4_CPtr resource_component_make_badged_ep(vka_t *src_vka, vka_t *dst_vka, seL4_CPtr src_ep,
-                                            gpi_cap_t resource_type, uint64_t space_id, uint64_t res_id, uint64_t client_id);
+                                            gpi_cap_t resource_type, uint64_t space_id, 
+                                            uint64_t res_id, uint64_t client_id);
+
+/**
+ * Utility function for a resource component
+ * @brief To be used when a resource from a component is deleted, remove it so the root task no longer holds 
+ * the resource in metadata
+ * 
+ * @param context the resource component
+ * @param obj_id ID of the resource in the component to remove from the root task
+ */
+void resource_component_remove_from_rt(resource_component_context_t *context, uint32_t obj_id);

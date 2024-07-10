@@ -16,7 +16,7 @@ typedef struct _resource_type_registry_entry
 // Insert a resource type with an existing ID
 static void insert_resource_type(gpi_cap_t id, char *name)
 {
-    resource_type_registry_entry_t *entry = malloc(sizeof(resource_type_registry_entry_t));
+    resource_type_registry_entry_t *entry = calloc(1, sizeof(resource_type_registry_entry_t));
     entry->gen.object_id = id;
     strncpy(entry->name, name, RESOURCE_TYPE_MAX_STRING_SIZE);
 
@@ -45,7 +45,7 @@ void resource_types_initialize(void)
 // Insert a resource type and allocate a new ID
 static gpi_cap_t alloc_new_resource_type(char *name)
 {
-    resource_type_registry_entry_t *entry = malloc(sizeof(resource_type_registry_entry_t));
+    resource_type_registry_entry_t *entry = calloc(1, sizeof(resource_type_registry_entry_t));
     strncpy(entry->name, name, RESOURCE_TYPE_MAX_STRING_SIZE);
 
     resource_registry_insert_new_id(registry, (resource_registry_node_t *)entry);

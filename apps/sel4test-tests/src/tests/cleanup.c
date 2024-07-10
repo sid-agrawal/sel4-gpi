@@ -371,4 +371,4 @@ int test_cleanup_policy_2(env_t env)
     printf("------------------ENDING: %s------------------\n", __func__);
     return sel4test_get_result();
 }
-DEFINE_TEST(GPICL002, "Test the PD cleanup policy 2", test_cleanup_policy_2, true)
+DEFINE_TEST_OSM(GPICL002, "Test the PD cleanup policy 2", test_cleanup_policy_2, true)

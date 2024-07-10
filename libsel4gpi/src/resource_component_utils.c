@@ -298,3 +298,13 @@ seL4_CPtr resource_component_make_badged_ep(vka_t *src_vka, vka_t *dst_vka, seL4
 err_goto:
     return seL4_CapNull;
 }
+
+void resource_component_remove_from_rt(resource_component_context_t *context, uint32_t obj_id)
+{
+    // Remove from RT, if held
+    int error = pd_component_remove_resource_from_rt(make_res_id(context->resource_type, context->space_id, obj_id));
+
+    if (error) {
+        OSDB_PRINTWARN("Failed to remove %s (%d) from rt\n", cap_type_to_str(context->resource_type), obj_id);
+    }
+}

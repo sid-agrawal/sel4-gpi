@@ -50,6 +50,8 @@ static void on_mo_registry_delete(resource_registry_node_t *node_gen, void *arg)
 
     OSDB_PRINTF("Destroying MO (%d)\n", node->mo.id);
 
+    resource_component_remove_from_rt(get_mo_component(), node->mo.id);
+    
     // Destroy the MO
     mo_destroy(&node->mo, get_mo_component()->server_vka);
 }
@@ -239,8 +241,8 @@ int forge_mo_cap_from_frames(seL4_CPtr *frame_caps,
 
     /* Update the MO object from frames */
     // Without the VKA objects, we won't be able to free these frames
-    mo->frame_caps_in_root_task = malloc(num_pages * sizeof(seL4_CPtr));
-    mo->frame_paddrs = malloc(num_pages * sizeof(uintptr_t));
+    mo->frame_caps_in_root_task = calloc(num_pages, sizeof(seL4_CPtr));
+    mo->frame_paddrs = calloc(num_pages, sizeof(uintptr_t));
     assert(mo->frame_caps_in_root_task != NULL);
     assert(mo->frame_paddrs != NULL);
 

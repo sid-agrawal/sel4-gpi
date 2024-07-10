@@ -112,25 +112,25 @@ int ads_new(ads_t *ads,
     int error = 0;
 
     // Allocate a vspace
-    ads->vspace = malloc(sizeof(vspace_t));
+    ads->vspace = calloc(1, sizeof(vspace_t));
     SERVER_GOTO_IF_COND(ads->vspace == NULL, "Failed to allocate vspace\n");
 
     vspace_t *new_vspace = ads->vspace;
     assert(new_vspace != NULL);
 
     // Allocate process structure for cookies
-    ads->process_for_cookies = malloc(sizeof(sel4utils_process_t));
+    ads->process_for_cookies = calloc(1, sizeof(sel4utils_process_t));
     SERVER_GOTO_IF_COND(ads->process_for_cookies == NULL, "Failed to allocate process struct for cookies in ads_new\n");
 
     // Give vspace root
-    vka_object_t *vspace_root_object = malloc(sizeof(vka_object_t));
+    vka_object_t *vspace_root_object = calloc(1, sizeof(vka_object_t));
     assert(vspace_root_object != NULL);
 
     error = vka_alloc_vspace_root(vka, vspace_root_object);
     SERVER_GOTO_IF_ERR(error, "Failed to allocate page directory for new process\n");
 
     // Allocate alloc data
-    sel4utils_alloc_data_t *alloc_data = malloc(sizeof(sel4utils_alloc_data_t));
+    sel4utils_alloc_data_t *alloc_data = calloc(1, sizeof(sel4utils_alloc_data_t));
     SERVER_GOTO_IF_COND(alloc_data == NULL, "Failed to allocate memory for alloc data\n");
 
     // Assign an asid pool
@@ -210,8 +210,8 @@ int ads_reserve(ads_t *ads,
     sel4utils_res->type = vmr_type;
 
     /* Track the VMR in registry */
-    attach_node_t *attach_node = malloc(sizeof(attach_node_t));
-    attach_node_map_t *attach_node_map_entry = malloc(sizeof(attach_node_map_t));
+    attach_node_t *attach_node = calloc(1, sizeof(attach_node_t));
+    attach_node_map_t *attach_node_map_entry = calloc(1, sizeof(attach_node_map_t));
 
     SERVER_GOTO_IF_COND(attach_node == NULL || attach_node_map_entry == NULL,
                         "Failed to allocate registry entry for ADS reservation.\n");
@@ -319,7 +319,7 @@ int ads_attach_to_res(ads_t *ads,
                 reservation->n_pages,
                 offset);
 
-    reservation->frame_caps = malloc(sizeof(seL4_CPtr) * mo->num_pages);
+    reservation->frame_caps = calloc(mo->num_pages, sizeof(seL4_CPtr));
 
     error = copy_frame_caps_for_mapping(mo->frame_caps_in_root_task, reservation->frame_caps, mo->num_pages);
     SERVER_GOTO_IF_ERR(error, "Failed to copy frame caps for attachment\n");
@@ -402,8 +402,8 @@ int ads_forge_attach(ads_t *ads, sel4utils_res_t *res, mo_t *mo)
     int error = 0;
 
     // Add the attach node for this region
-    attach_node_t *attach_node = malloc(sizeof(attach_node_t));
-    attach_node_map_t *attach_node_map_entry = malloc(sizeof(attach_node_map_t));
+    attach_node_t *attach_node = calloc(1, sizeof(attach_node_t));
+    attach_node_map_t *attach_node_map_entry = calloc(1, sizeof(attach_node_map_t));
     SERVER_GOTO_IF_COND(attach_node == NULL || attach_node_map_entry == NULL,
                         "Failed to allocate attach node for forged attach\n");
 

@@ -74,6 +74,8 @@ static void on_ep_registry_delete(resource_registry_node_t *node_gen, void *arg)
 
     OSDB_PRINTF("Destroying EP (%d)\n", node->ep.id);
 
+    resource_component_remove_from_rt(get_ep_component(), node->ep.id);
+
     ep_destroy(&node->ep, get_ep_component()->server_vka);
 }
 

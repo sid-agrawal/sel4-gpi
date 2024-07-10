@@ -59,6 +59,9 @@ int pd_add_resource(pd_t *pd, gpi_res_id_t res_id,
     uint64_t compact_id = compact_res_id(res_id.type, res_id.space_id, res_id.object_id);
     pd_hold_node_t *node = (pd_hold_node_t *)resource_registry_get_by_id(&pd->hold_registry, compact_id);
 
+    OSDB_PRINT_VERBOSE("Adding resource %s_%d_%d to PD (%d)\n",
+                       cap_type_to_str(res_id.type), res_id.space_id, res_id.object_id, pd->id);
+
     if (node != NULL)
     {
         OSDB_PRINT_VERBOSE("Warning: adding resource with existing ID (%lx), do not insert again\n", compact_id);
@@ -433,17 +436,14 @@ pd_held_resource_on_delete(resource_registry_node_t *node_gen, void *pd_v)
     case GPICAP_TYPE_ADS:
         error = resource_component_dec(get_ads_component(), node->res_id.object_id);
         SERVER_GOTO_IF_ERR(error, "failed to decrement ADS resource\n");
-        error = pd_component_remove_resource_from_rt(node->res_id);
         break;
     case GPICAP_TYPE_CPU:
         error = resource_component_dec(get_cpu_component(), node->res_id.object_id);
         SERVER_GOTO_IF_ERR(error, "failed to decrement CPU resource\n");
-        error = pd_component_remove_resource_from_rt(node->res_id);
         break;
     case GPICAP_TYPE_MO:
         error = resource_component_dec(get_mo_component(), node->res_id.object_id);
         SERVER_GOTO_IF_ERR(error, "failed to decrement MO resource\n");
-        error = pd_component_remove_resource_from_rt(node->res_id);
         break;
     case GPICAP_TYPE_PD:
         // (XXX) Arya: I think we do not want to destroy a PD when the refcount reaches zero
@@ -460,7 +460,6 @@ pd_held_resource_on_delete(resource_registry_node_t *node_gen, void *pd_v)
     case GPICAP_TYPE_EP:
         error = resource_component_dec(get_ep_component(), node->res_id.object_id);
         SERVER_GOTO_IF_ERR(error, "failed to decrement EP resource\n");
-        error = pd_component_remove_resource_from_rt(node->res_id);
         break;
     default:
         // Otherwise, call the manager PD
@@ -702,7 +701,7 @@ int pd_bootstrap_allocator(pd_t *pd,
         return -1;
     }
 
-    pd->pd_vka = malloc(sizeof(vka_t));
+    pd->pd_vka = calloc(1, sizeof(vka_t));
     assert(pd->pd_vka != NULL);
 
     allocman_make_vka(pd->pd_vka, allocator);
@@ -914,12 +913,14 @@ static int res_dump(pd_t *pd, model_state_t *ms, pd_hold_node_t *current_cap, gp
     case GPICAP_TYPE_MO:
         if (!res_node || !res_node->dumped)
         {
+            assert(current_cap->res_id.space_id == get_mo_component()->space_id);
+
             /* Add the resource node */
             res_node = add_resource_node(ms, current_cap->res_id);
 
             mo_component_registry_entry_t *mo_data = (mo_component_registry_entry_t *)
                 resource_component_registry_get_by_id(get_mo_component(), current_cap->res_id.object_id);
-            SERVER_GOTO_IF_COND(mo_data == NULL, "Failed to find MO data\n");
+            SERVER_GOTO_IF_COND(mo_data == NULL, "Failed to find MO (%d) data\n", current_cap->res_id.object_id);
 
             mo_dump_rr(&mo_data->mo, ms, pd_node);
         }
@@ -951,7 +952,7 @@ static int res_dump(pd_t *pd, model_state_t *ms, pd_hold_node_t *current_cap, gp
         {
             /* Add the PD Node */
             pd_component_registry_entry_t *pd_data = pd_component_registry_get_entry_by_id(current_cap->res_id.object_id);
-            SERVER_GOTO_IF_COND(pd_data == NULL, "Failed to find PD%d's data\n", current_cap->res_id);
+            SERVER_GOTO_IF_COND(pd_data == NULL, "Failed to find PD (%d) data\n", current_cap->res_id);
 
             pd_dump_internal(&pd_data->pd, ms);
         }

@@ -32,6 +32,8 @@ uintptr_t morecore_top = (uintptr_t)(PD_HEAP_LOC + APP_MALLOC_SIZE);
 
 #define N_CLIENT_REQUESTS 10 // Number of requests clients will make from servers
 
+static const char* abc_test_str = "this has some data in it, I swear\n";
+
 typedef enum _hello_mode
 {
     HELLO_CLEANUP_TOY_BLOCK_SERVER_MODE, ///< Process will serve toy_blocks

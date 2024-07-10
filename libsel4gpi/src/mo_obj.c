@@ -73,9 +73,9 @@ int mo_new(mo_t *mo,
 
     mo->num_pages = alloc_args->num_pages;
     mo->page_bits = alloc_args->page_bits;
-    mo->frame_caps_in_root_task = malloc(alloc_args->num_pages * sizeof(seL4_CPtr));
-    mo->frame_paddrs = malloc(alloc_args->num_pages * sizeof(uintptr_t));
-    mo->vka_objects = malloc(alloc_args->num_pages * sizeof(vka_object_t));
+    mo->frame_caps_in_root_task = calloc(alloc_args->num_pages, sizeof(seL4_CPtr));
+    mo->frame_paddrs = calloc(alloc_args->num_pages, sizeof(uintptr_t));
+    mo->vka_objects = calloc(alloc_args->num_pages, sizeof(vka_object_t));
     SERVER_GOTO_IF_COND(mo->frame_caps_in_root_task == NULL || mo->frame_paddrs == NULL || mo->vka_objects == NULL,
                         "malloc ran out of memory to allocate MO with %d frames\n", alloc_args->num_pages);
 

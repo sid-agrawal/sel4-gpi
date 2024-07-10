@@ -91,6 +91,8 @@ static void on_resspc_registry_delete(resource_registry_node_t *node_gen, void *
     OSDB_PRINTF("Deleting resource space (%d)\n", node->space.id);
     node->space.deleting = true;
 
+    resource_component_remove_from_rt(get_resspc_component(), node->space.id);
+
     // We could define a custom cleanup policy here
     if (node->space.cleanup_policy)
     {

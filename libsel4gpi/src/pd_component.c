@@ -72,16 +72,13 @@ static void on_pd_registry_delete(resource_registry_node_t *node_gen, void *arg)
 
     OSDB_PRINTF("Destroying PD(%d, %s)\n", node->pd.id, node->pd.name);
 
+    resource_component_remove_from_rt(get_pd_component(), node->pd.id);
+
     // Destroy PD
     pd_destroy(&node->pd, get_pd_component()->server_vka, get_pd_component()->server_vspace);
 
-    // Reduce the model state counter, if we were waiting on this PD
-    if (get_gpi_server()->pending_extraction)
-    {
-        get_gpi_server()->model_extraction_n_missing -= node->pending_model_state->count;
-    }
-
-    // Destroy pending work lists
+    // Clear any pending work
+    get_gpi_server()->model_extraction_n_missing -= node->pending_model_state->count;
     linked_list_destroy(node->pending_frees, true);
     linked_list_destroy(node->pending_model_state, true);
 }
@@ -276,6 +273,7 @@ static void handle_dump_cap_req(seL4_Word sender_badge, PdDumpMessage *msg,
 
     /* Start the extraction */
     error = pd_dump(&client_data->pd, ms);
+    SERVER_GOTO_IF_ERR(error, "PD dump failed\n");
 
     /* If we are waiting on missing pieces, bookkeep the state and don't reply yet */
     if (get_gpi_server()->model_extraction_n_missing > 0)
@@ -986,7 +984,7 @@ int pd_component_initialize(vka_t *server_vka,
 
 void forge_pd_for_root_task(uint64_t rt_id)
 {
-    pd_component_registry_entry_t *rt_entry = malloc(sizeof(pd_component_registry_entry_t));
+    pd_component_registry_entry_t *rt_entry = calloc(1, sizeof(pd_component_registry_entry_t));
     rt_entry->gen.object_id = rt_id;
     rt_entry->pd.id = rt_id;
     rt_entry->pd.pd_vka = get_gpi_server()->server_vka;
