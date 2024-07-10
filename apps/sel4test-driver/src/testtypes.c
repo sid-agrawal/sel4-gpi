@@ -20,6 +20,7 @@
 #include <sel4gpi/mo_component.h>
 #include <sel4gpi/cpu_component.h>
 #include <sel4gpi/pd_component.h>
+#include <sel4gpi/endpoint_component.h>
 #include <sel4gpi/error_handle.h>
 #include <sel4testsupport/testreporter.h>
 
@@ -141,7 +142,7 @@ static int sel4test_driver_wait(driver_env_t env, struct testcase *test)
     while (1)
     {
         /* wait for tests to finish or fault, receive test request or report result */
-        info = api_recv(env->test_process.fault_endpoint.cptr, &badge, env->reply.cptr);
+        info = api_recv(env->endpoint_in_driver, &badge, env->reply.cptr);
         test_output = seL4_GetMR(0);
 
         /* FIXME: Assumptions made at the time of writing this code:
@@ -195,8 +196,14 @@ static int sel4test_driver_wait(driver_env_t env, struct testcase *test)
         if (seL4_MessageInfo_get_label(info))
         {
             sel4utils_print_fault_message(info, test->name);
-            printf("Register of root thread in test (may not be the thread that faulted)\n");
-            sel4debug_dump_registers(env->test_process.thread.tcb.cptr);
+
+            if (test->test_type == BASIC)
+            {
+                printf("Register of root thread in test (may not be the thread that faulted)\n");
+                sel4debug_dump_registers(env->test_process.thread.tcb.cptr);
+            }
+            // (XXX) Arya: Can add a call to dump registers from the osm process as well
+
             result = FAILURE;
         }
 
@@ -263,13 +270,15 @@ void basic_set_up(uintptr_t e)
                                                    env->untypeds,
                                                    env->num_untypeds,
                                                    env);
+
     /* copy the fault endpoint - we wait on the endpoint for a message
      * or a fault to see when the test finishes */
-    env->endpoint = sel4utils_copy_cap_to_process(&(env->test_process), &env->vka, env->test_process.fault_endpoint.cptr);
+    env->endpoint_in_driver = env->test_process.fault_endpoint.cptr;
+    env->endpoint_in_test = sel4utils_copy_cap_to_process(&(env->test_process), &env->vka, env->test_process.fault_endpoint.cptr);
 
     // Keep this one as the last COPY, so that  init->free_slot.start a few lines below stays valid.
     // See at label "Warning"
-    seL4_CPtr free_slot_start = env->endpoint + 1;
+    seL4_CPtr free_slot_start = env->endpoint_in_test + 1;
 
     /* copy the device frame, if any */
     if (env->init->device_frame_cap)
@@ -315,7 +324,7 @@ test_result_t basic_run_test(struct testcase *test, uintptr_t e)
     char *argv[argc];
     sel4utils_create_word_args(string_args, argv, argc,
                                BASIC,
-                               env->endpoint,
+                               env->endpoint_in_test,
                                env->init_vaddr);
 
     int num_res;
@@ -423,13 +432,31 @@ void osm_set_up(uintptr_t e)
     env->test_pd = pd;
 
     ads_t *ads;
-    error = ads_component_allocate(get_gpi_server()->rt_pd_id, &ads, NULL);
+    seL4_CPtr ads_slot_in_test;
+    error = ads_component_allocate(pd->id, &ads, &ads_slot_in_test);
     assert(error == 0);
 
     cpu_t *cpu;
-    error = cpu_component_allocate(get_gpi_server()->rt_pd_id, &cpu, NULL);
+    seL4_CPtr cpu_slot_in_test;
+    error = cpu_component_allocate(pd->id, &cpu, NULL);
     assert(error == 0);
     env->test_cpu = cpu;
+
+    // Set the PD's core caps
+    error = pd_send_cap(pd, 0,
+                        gpi_new_badge(GPICAP_TYPE_PD, 0, pd->id, get_pd_component()->space_id, pd->id),
+                        NULL, false, true);
+    assert(error == 0);
+
+    error = pd_set_core_cap(pd,
+                            gpi_new_badge(GPICAP_TYPE_ADS, 0, pd->id, get_ads_component()->space_id, ads->id),
+                            ads_slot_in_test);
+    assert(error == 0);
+
+    error = pd_set_core_cap(pd,
+                            gpi_new_badge(GPICAP_TYPE_CPU, 0, pd->id, get_cpu_component()->space_id, cpu->id),
+                            cpu_slot_in_test);
+    assert(error == 0);
 
     // Load the test image in the ADS
     void *entry_pt;
@@ -442,14 +469,23 @@ void osm_set_up(uintptr_t e)
                        &osm_init_vaddr, SEL4UTILS_RES_TYPE_SHARED_FRAMES);
     assert(error == 0);
 
+    // Decrement init data refcount since it was allocated by RT
+    error = resource_component_dec(get_mo_component(), osm_init_mo->id);
+    assert(error == 0);
+
     // Create the IPC buffer
     mo_t *ipc_buf_mo;
     void *ipc_buf_vaddr;
     error = mo_component_allocate_rt(1, &ipc_buf_mo);
     assert(error == 0);
 
+    // Attach the IPC buffer
     error = ads_attach(ads, pd->pd_vka, NULL, ipc_buf_mo, 1, seL4_ReadWrite,
                        &ipc_buf_vaddr, SEL4UTILS_RES_TYPE_IPC_BUF);
+    assert(error == 0);
+
+    // Decrement IPC buf refcount since it was allocated by RT
+    error = resource_component_dec(get_mo_component(), ipc_buf_mo->id);
     assert(error == 0);
 
     // Create the stack
@@ -471,6 +507,17 @@ void osm_set_up(uintptr_t e)
 
     stack_top = stack_attach_node->vaddr + CONFIG_SEL4UTILS_STACK_SIZE;
 
+    // Decrement stack refcount since it was allocate by RT
+    error = resource_component_dec(get_mo_component(), stack_mo->id);
+    assert(error == 0);
+
+    // Create the fault endpoint
+    ep_t *ep;
+    seL4_CPtr fault_ep_resource_in_test;
+    error = ep_component_allocate(pd->id, &env->endpoint_in_test, &fault_ep_resource_in_test, &ep);
+    assert(error == 0);
+    env->endpoint_in_driver = ep->endpoint_in_RT.cptr;
+
     // Configure the CPU
     error = cpu_component_configure(cpu, ads, pd,
                                     api_make_guard_skip_word(seL4_WordBits - PD_CSPACE_SIZE_BITS), 0,
@@ -478,7 +525,7 @@ void osm_set_up(uintptr_t e)
     assert(error == 0);
 
     // Configure the PD runtime
-    seL4_Word args[3] = {OSM, env->endpoint, 0};
+    seL4_Word args[3] = {OSM, env->endpoint_in_test, 0};
     error = pd_component_runtime_setup(pd, ads, cpu,
                                        PdSetupType_PD_RUNTIME_SETUP,
                                        3, args,
@@ -490,22 +537,27 @@ void osm_set_up(uintptr_t e)
 
     // Add the basic RDEs
     rde_type_t resspc_type = {.type = GPICAP_TYPE_RESSPC};
-    pd_add_rde(pd, resspc_type, "RESSPC", RESSPC_SPACE_ID, get_gpi_server()->server_ep_obj.cptr);
+    error = pd_add_rde(pd, resspc_type, "RESSPC", RESSPC_SPACE_ID, get_gpi_server()->server_ep_obj.cptr);
+    assert(error == 0);
 
     rde_type_t ads_type = {.type = GPICAP_TYPE_ADS};
-    pd_add_rde(pd, ads_type, "ADS", get_ads_component()->space_id, get_gpi_server()->server_ep_obj.cptr);
+    error = pd_add_rde(pd, ads_type, "ADS", get_ads_component()->space_id, get_gpi_server()->server_ep_obj.cptr);
+    assert(error == 0);
 
     rde_type_t cpu_type = {.type = GPICAP_TYPE_CPU};
-    pd_add_rde(pd, cpu_type, "CPU", get_cpu_component()->space_id, get_gpi_server()->server_ep_obj.cptr);
+    error = pd_add_rde(pd, cpu_type, "CPU", get_cpu_component()->space_id, get_gpi_server()->server_ep_obj.cptr);
+    assert(error == 0);
 
     rde_type_t mo_type = {.type = GPICAP_TYPE_MO};
-    pd_add_rde(pd, mo_type, "MO", get_mo_component()->space_id, get_gpi_server()->server_ep_obj.cptr);
+    error = pd_add_rde(pd, mo_type, "MO", get_mo_component()->space_id, get_gpi_server()->server_ep_obj.cptr);
+    assert(error == 0);
 
     rde_type_t pd_type = {.type = GPICAP_TYPE_PD};
-    pd_add_rde(pd, pd_type, "PD", get_pd_component()->space_id, get_gpi_server()->server_ep_obj.cptr);
+    error = pd_add_rde(pd, pd_type, "PD", get_pd_component()->space_id, get_gpi_server()->server_ep_obj.cptr);
+    assert(error == 0);
 
     rde_type_t ep_type = {.type = GPICAP_TYPE_EP};
-    pd_add_rde(pd, ep_type, "EP", get_ep_component()->space_id, get_gpi_server()->server_ep_obj.cptr);
+    error = pd_add_rde(pd, ep_type, "EP", get_ep_component()->space_id, get_gpi_server()->server_ep_obj.cptr);
 }
 
 test_result_t osm_run_test(struct testcase *test, uintptr_t e)
@@ -527,23 +579,21 @@ test_result_t osm_run_test(struct testcase *test, uintptr_t e)
 
     ZF_LOGF_IF(error != 0, "Failed to start test process!");
 
-    seL4_Yield();
-    int result = 0;
-#if 0
     /* wait on it to finish or fault, report result */
     int result = sel4test_driver_wait(env, test);
 
     test_assert(result == SUCCESS);
-#else
-    printf("WIP, driver does not wait on osmosis process\n");
-#endif
 
     return result;
 }
 
 void osm_tear_down(uintptr_t e)
 {
-    printf("WIP, driver does not tear down osmosis process\n");
+    int error;
+    driver_env_t env = (driver_env_t)e;
+
+    error = pd_component_terminate(env->test_pd->id);
+    assert(error == 0);
 }
 
 DEFINE_TEST_TYPE(OSM, OSM, NULL, NULL, osm_set_up, osm_tear_down, osm_run_test);

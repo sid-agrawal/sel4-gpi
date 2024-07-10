@@ -54,3 +54,15 @@ int ep_component_initialize(vka_t *server_vka,
                             vspace_t *server_vspace,
                             vka_object_t server_ep_obj);
 
+/**
+ * Allocate an endpoint resource from the root task
+ * 
+ * @param client_pd ID of the client PD to allocate the endpoint for
+ * @param ret_ep_in_PD returns the slot of the raw endpoint in the client PD's cspace
+ * @param ret_badged_ep returns the slot of the badged endpoint resource in the client PD's cspace
+ * @param ret_ep returns the allocated endpoint object
+ */
+int ep_component_allocate(uint32_t client_pd,
+                          seL4_CPtr *ret_ep_in_PD,
+                          seL4_CPtr *ret_badged_ep,
+                          ep_t **ret_ep);

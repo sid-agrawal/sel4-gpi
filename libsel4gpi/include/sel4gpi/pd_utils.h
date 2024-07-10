@@ -23,6 +23,11 @@ extern __thread void *__sel4gpi_osm_data;
 
 /** FUNCTIONS TO INTERACT WITH OSMOSIS SHARED DATA **/
 
+/**
+ * Get the location of this PD's shared data frame
+ */
+osm_pd_shared_data_t *sel4gpi_get_shared_data(void);
+
 /*
  * Get the current PD's connection object from the env
  */

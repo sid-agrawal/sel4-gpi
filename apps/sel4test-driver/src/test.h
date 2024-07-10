@@ -79,6 +79,12 @@ struct driver_env
     /* irq handler for serial driver */
     seL4_CPtr serial_irq_handler;
 
+    /* slot of the fault endpoint in the test driver */
+    seL4_CPtr endpoint_in_driver;
+
+    /* slot of the fault endpoint in the test process*/
+    seL4_CPtr endpoint_in_test;
+
     /** FIELDS FOR NON-OSMOSIS TEST **/
 
     /* init data frame vaddr */
@@ -98,9 +104,6 @@ struct driver_env
     vspace_t vspace;
     /* abtracts over kernel version and boot environment */
     simple_t simple;
-
-    /* slot of the fault endpoint in the test process*/
-    seL4_CPtr endpoint;
 
     /* test process */
     sel4utils_process_t test_process;

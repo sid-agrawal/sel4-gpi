@@ -6,6 +6,11 @@
 
 static seL4_CPtr reply_cap_slot = seL4_CapNull;
 
+osm_pd_shared_data_t *sel4gpi_get_shared_data(void)
+{
+    return (osm_pd_shared_data_t *)sel4runtime_get_osm_shared_data();
+}
+
 pd_client_context_t sel4gpi_get_pd_conn(void)
 {
     pd_client_context_t conn = ((osm_pd_shared_data_t *)sel4runtime_get_osm_shared_data())->pd_conn;

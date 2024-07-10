@@ -124,6 +124,18 @@ int cpu_component_configure(cpu_t *cpu,
     /* Get the frame from the IPC buf MO */
     seL4_CPtr ipc_buf_frame = ipc_buf_mo == NULL ? seL4_CapNull : ipc_buf_mo->frame_caps_in_root_task[0];
 
+    /* Update the IPC buf refcount */
+    if (cpu->ipc_buf_mo)
+    {
+        error = resource_component_dec(get_mo_component(), cpu->ipc_buf_mo);
+        SERVER_GOTO_IF_ERR(error, "Failed to decrement refcount of old IPC buf mo (%d)\n", cpu->ipc_buf_mo);
+        cpu->ipc_buf_mo = 0;
+    }
+
+    error = resource_component_inc(get_mo_component(), ipc_buf_mo->id);
+    SERVER_GOTO_IF_ERR(error, "Failed to increment refcount of IPC buf mo (%d)\n", ipc_buf_mo->id);
+    cpu->ipc_buf_mo = ipc_buf_mo->id;
+
     /* Configure the vspace */
     error = cpu_config_vspace(cpu,
                               get_cpu_component()->server_vka,
@@ -182,8 +194,7 @@ static void handle_config_req(seL4_Word sender_badge,
         msg->cnode_guard,
         msg->fault_ep_cap,
         &ipc_mo_data->mo,
-        msg->ipc_buf_addr
-    );
+        msg->ipc_buf_addr);
 
 err_goto:
     reply_msg->which_msg = CpuReturnMessage_basic_tag;

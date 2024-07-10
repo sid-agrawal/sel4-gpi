@@ -27,9 +27,10 @@ typedef struct _cpu
 {
     uint32_t id;
 
-    vka_object_t tcb;        ///< the TCB object
-    seL4_Word ipc_buf_addr;  ///< address of the IPC buffer in the TCB's binded ADS
-    seL4_CPtr ipc_frame_cap; ///< the frame cap for the IPC buffer
+    vka_object_t tcb;          ///< the TCB object
+    seL4_Word ipc_buf_addr;    ///< address of the IPC buffer in the TCB's binded ADS
+    uint32_t ipc_buf_mo;       ///< ID of the IPC buffer's MO
+    seL4_CPtr ipc_frame_cap;   ///< the frame cap for the IPC buffer
     uint64_t binded_ads_id;    ///< ID of the ADS that is binded to the TCB
     void *tls_base;            ///< address of the TLS base (currently unused)
     seL4_CPtr cspace;          ///< cap to the currently binded cspace
@@ -90,7 +91,7 @@ int cpu_change_vspace(cpu_t *cpu,
  * @brief Bind a notification object to a CPU
  * (XXX) Arya: I find it strange to do this operation on a CPU
  * I only added it here since it is a TCB operation
- * 
+ *
  * @param cpu cpu object
  * @param notif the notification
  * @return itn 0 on success, error otherwise
@@ -102,7 +103,7 @@ int cpu_bind_notif(cpu_t *cpu, seL4_CPtr notif);
  *
  * @param cpu cpu object
  * @param vka server VKA, used to allocate tcb
- * @param vspace not used 
+ * @param vspace not used
  * @param arg0 unused
  * @return int 0 on success, 1 on failure.
  */

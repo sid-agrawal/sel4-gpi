@@ -32,6 +32,8 @@
 #include "init.h"
 #include <rpc.pb.h>
 
+#include <sel4gpi/pd_utils.h>
+
 #define TP_MALLOC_SIZE 2 * 1024 * 1024
 char __attribute__((aligned(PAGE_SIZE_4K))) morecore_arr[TP_MALLOC_SIZE];
 size_t morecore_size = 2 * 1024 * 1024;
@@ -222,63 +224,67 @@ int main(int argc, char **argv)
 {
     sel4muslcsys_register_stdio_write_fn(write_buf);
 
-    test_init_data_t *init_data;
     struct env env;
-    
+
     /* parse args */
     assert(argc == 3);
     test_type = (enum test_type_name)atoi(argv[0]);
-    endpoint = (seL4_CPtr)atoi(argv[1]);
-    init_data = (void *)atol(argv[2]);
+    env.endpoint = (seL4_CPtr)atoi(argv[1]);
+    // Third arg is for BASIC test types only
 
-    if (test_type == OSM) {
-        printf("WIP, test process does not support OSM test type\n");
-        return 1;
+    char *test_name;
+    if (test_type == OSM)
+    {
+        test_name = sel4gpi_get_shared_data()->test_name;
     }
+    else
+    {
+        test_init_data_t *init_data = (void *)atol(argv[2]);;
+        test_name = init_data->name;
 
-    /* configure env */
-    env.cspace_root = init_data->root_cnode;
-    env.page_directory = init_data->page_directory;
-    env.endpoint = endpoint;
-    env.priority = init_data->priority;
-    env.cspace_size_bits = init_data->cspace_size_bits;
-    env.tcb = init_data->tcb;
-    env.domain = init_data->domain;
-    env.asid_pool = init_data->asid_pool;
-    env.asid_ctrl = init_data->asid_ctrl;
-    env.sched_ctrl = init_data->sched_ctrl;
-    env.irq_handler = init_data->serial_irq_handler;
+        /* configure env */
+        env.cspace_root = init_data->root_cnode;
+        env.page_directory = init_data->page_directory;
+        env.priority = init_data->priority;
+        env.cspace_size_bits = init_data->cspace_size_bits;
+        env.tcb = init_data->tcb;
+        env.domain = init_data->domain;
+        env.asid_pool = init_data->asid_pool;
+        env.asid_ctrl = init_data->asid_ctrl;
+        env.sched_ctrl = init_data->sched_ctrl;
+        env.irq_handler = init_data->serial_irq_handler;
 #ifdef CONFIG_IOMMU
-    env.io_space = init_data->io_space;
+        env.io_space = init_data->io_space;
 #endif
 #ifdef CONFIG_TK1_SMMU
-    env.io_space_caps = init_data->io_space_caps;
+        env.io_space_caps = init_data->io_space_caps;
 #endif
-    env.cores = init_data->cores;
-    env.num_regions = init_data->num_elf_regions;
-    memcpy(env.regions, init_data->elf_regions, sizeof(sel4utils_elf_region_t) * env.num_regions);
+        env.cores = init_data->cores;
+        env.num_regions = init_data->num_elf_regions;
+        memcpy(env.regions, init_data->elf_regions, sizeof(sel4utils_elf_region_t) * env.num_regions);
 
-    env.timer_notification.cptr = init_data->timer_ntfn;
+        env.timer_notification.cptr = init_data->timer_ntfn;
 
-    env.device_frame = init_data->device_frame_cap;
+        env.device_frame = init_data->device_frame_cap;
 
-    /* initialse cspace, vspace and untyped memory allocation */
-    init_allocator(&env, init_data);
-    // printf("%s %d self_as_cptr is %d: ", __FUNCTION__, __LINE__, self_as_cap);
-    // debug_cap_identify("test-main", self_as_cap);
+        /* initialse cspace, vspace and untyped memory allocation */
+        init_allocator(&env, init_data);
+        // printf("%s %d self_as_cptr is %d: ", __FUNCTION__, __LINE__, self_as_cap);
+        // debug_cap_identify("test-main", self_as_cap);
 
-    // printf("%s %d ads_endpoint is %ld: ", __FUNCTION__, __LINE__, gpi_endpoint);
-    // debug_cap_identify("test-main", gpi_endpoint);
-    /* initialise simple */
-    init_simple(&env, init_data);
+        // printf("%s %d ads_endpoint is %ld: ", __FUNCTION__, __LINE__, gpi_endpoint);
+        // debug_cap_identify("test-main", gpi_endpoint);
+        /* initialise simple */
+        init_simple(&env, init_data);
+
+        platsupport_serial_setup_simple(&env.vspace, &env.simple, &env.vka);
+    }
 
     /* initialise rpc client */
     sel4rpc_client_init(&env.rpc_client, env.endpoint, SEL4TEST_PROTOBUF_RPC);
 
-    platsupport_serial_setup_simple(&env.vspace, &env.simple, &env.vka);
-
     /* find the test */
-    testcase_t *test = find_test(init_data->name);
+    testcase_t *test = find_test(test_name);
 
     /* run the test */
     sel4test_reset();
@@ -291,14 +297,14 @@ int main(int argc, char **argv)
     else
     {
         result = FAILURE;
-        ZF_LOGF("Cannot find test %s\n", init_data->name);
+        ZF_LOGF("Cannot find test %s\n", test_name);
     }
 
-    printf("Test %s %s\n", init_data->name, result == SUCCESS ? "passed" : "failed");
+    printf("Test %s %s\n", test_name, result == SUCCESS ? "passed" : "failed");
     /* send our result back */
     seL4_MessageInfo_t info = seL4_MessageInfo_new(seL4_Fault_NullFault, 0, 0, 1);
     seL4_SetMR(0, result);
-    seL4_Send(endpoint, info);
+    seL4_Send(env.endpoint, info);
 
     /* It is expected that we are torn down by the test driver before we are
      * scheduled to run again after signalling them with the above send.

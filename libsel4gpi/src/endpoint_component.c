@@ -42,7 +42,8 @@ resource_component_context_t *get_ep_component(void)
  */
 static int ep_new(ep_t *ep, vka_t *server_vka, vspace_t *server_vspace, void *arg0)
 {
-    return vka_alloc_endpoint(server_vka, &ep->endpoint_in_RT);
+    int error = vka_alloc_endpoint(server_vka, &ep->endpoint_in_RT);
+    return error;
 }
 
 static void ep_destroy(ep_t *ep, vka_t *server_vka)
@@ -76,29 +77,33 @@ static void on_ep_registry_delete(resource_registry_node_t *node_gen, void *arg)
     ep_destroy(&node->ep, get_ep_component()->server_vka);
 }
 
-static int ep_component_allocate(uint32_t client_pd,
-                                 seL4_CPtr *ret_ep_in_PD,
-                                 seL4_CPtr *ret_badged_ep,
-                                 ep_component_registry_entry_t **ret_ep_reg_entry)
+int ep_component_allocate(uint32_t client_pd,
+                          seL4_CPtr *ret_ep_in_PD,
+                          seL4_CPtr *ret_badged_ep,
+                          ep_t **ret_ep)
 {
     int error = 0;
+    ep_component_registry_entry_t *ep_entry;
+
     pd_component_registry_entry_t *pd_data = pd_component_registry_get_entry_by_id(client_pd);
     SERVER_GOTO_IF_COND(pd_data == NULL, "Couldn't find PD (%ld)\n", client_pd);
 
     error = resource_component_allocate(get_ep_component(), client_pd, BADGE_OBJ_ID_NULL, false, NULL,
-                                        (resource_registry_node_t **)ret_ep_reg_entry, ret_badged_ep);
+                                        (resource_registry_node_t **)&ep_entry, ret_badged_ep);
     SERVER_GOTO_IF_COND(error || *ret_badged_ep == seL4_CapNull, "Failed to allocate new EP object\n");
 
-    OSDB_PRINTF("Allocated new EP (%d)\n", (*ret_ep_reg_entry)->ep.id);
+    OSDB_PRINTF("Allocated new EP (%d)\n", ep_entry->ep.id);
 
     cspacepath_t ep_in_pd;
     error = resource_component_transfer_cap(get_ep_component()->server_vka,
-                                         pd_data->pd.pd_vka,
-                                         (*ret_ep_reg_entry)->ep.endpoint_in_RT.cptr,
-                                         &ep_in_pd,
-                                         false, 0);
+                                            pd_data->pd.pd_vka,
+                                            ep_entry->ep.endpoint_in_RT.cptr,
+                                            &ep_in_pd,
+                                            false, 0);
     SERVER_GOTO_IF_ERR(error, "Failed to copy raw endpoint to PD %d\n", pd_data->pd.id);
+
     *ret_ep_in_PD = ep_in_pd.capPtr;
+    *ret_ep = &ep_entry->ep;
 
 err_goto:
     return error;
@@ -110,12 +115,12 @@ static void handle_ep_allocation(seL4_Word sender_badge, EpAllocMessage *msg, Ep
     BADGE_PRINT(sender_badge);
 
     int error = 0;
-    ep_component_registry_entry_t *new_entry;
+    ep_t *ep;
     seL4_CPtr badged_ep = 0;
     seL4_CPtr ep_in_PD = 0;
     uint32_t client_id = get_client_id_from_badge(sender_badge);
 
-    error = ep_component_allocate(client_id, &ep_in_PD, &badged_ep, &new_entry);
+    error = ep_component_allocate(client_id, &ep_in_PD, &badged_ep, &ep);
 
     reply_msg->msg.alloc.raw_ep_slot = ep_in_PD;
     reply_msg->msg.alloc.slot = badged_ep;
@@ -153,9 +158,9 @@ static void handle_get_raw_endpoint(seL4_Word sender_badge, EpGetMessage *msg, E
 
     cspacepath_t dest;
     error = resource_component_transfer_cap(get_ep_component()->server_vka,
-                                         pd_data->pd.pd_vka,
-                                         ep_data->ep.endpoint_in_RT.cptr,
-                                         &dest, false, 0);
+                                            pd_data->pd.pd_vka,
+                                            ep_data->ep.endpoint_in_RT.cptr,
+                                            &dest, false, 0);
     SERVER_GOTO_IF_ERR(error, "Failed to copy raw endpoint cap to PD %d\n", pd_data->pd.id);
 
     reply_msg->msg.get.slot = dest.capPtr;

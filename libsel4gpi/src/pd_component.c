@@ -137,16 +137,13 @@ err_goto:
     reply_msg->errorCode = error;
 }
 
-static void handle_terminate_req(seL4_Word sender_badge, PdTerminateMessage *msg, PdReturnMessage *reply_msg)
+int pd_component_terminate(uint32_t pd_id)
 {
-    OSDB_PRINTF("Got terminate request from client badge %lx.\n", sender_badge);
     int error = 0;
 
     /* Find the target PD */
-    pd_component_registry_entry_t *client_data = pd_component_registry_get_entry_by_badge(sender_badge);
-    SERVER_GOTO_IF_COND(client_data == NULL, "Couldn't find PD (%ld)\n", get_object_id_from_badge(sender_badge));
-
-    uint32_t pd_id = client_data->pd.id;
+    pd_component_registry_entry_t *client_data = pd_component_registry_get_entry_by_id(pd_id);
+    SERVER_GOTO_IF_COND(client_data == NULL, "Couldn't find PD (%d)\n", pd_id);
 
     /* Remove the PD from registry, this will also destroy the PD */
     client_data->pd.exit_code = PD_TERMINATED_CODE;
@@ -154,6 +151,17 @@ static void handle_terminate_req(seL4_Word sender_badge, PdTerminateMessage *msg
     resource_registry_delete(&get_pd_component()->registry, (resource_registry_node_t *)client_data);
 
     OSDB_PRINTF("Cleaned up PD %d.\n", pd_id);
+
+err_goto:
+    return error;
+}
+
+static void handle_terminate_req(seL4_Word sender_badge, PdTerminateMessage *msg, PdReturnMessage *reply_msg)
+{
+    OSDB_PRINTF("Got terminate request from client badge %lx.\n", sender_badge);
+    int error = 0;
+
+    error = pd_component_terminate(get_object_id_from_badge(sender_badge));
 
 err_goto:
     reply_msg->which_msg = PdReturnMessage_basic_tag;

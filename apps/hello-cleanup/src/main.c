@@ -30,7 +30,7 @@ size_t morecore_size = APP_MALLOC_SIZE;
 uintptr_t morecore_base = (uintptr_t)PD_HEAP_LOC;
 uintptr_t morecore_top = (uintptr_t)(PD_HEAP_LOC + APP_MALLOC_SIZE);
 
-#define N_CLIENT_REQUESTS 100 // Number of requests clients will make from servers
+#define N_CLIENT_REQUESTS 10 // Number of requests clients will make from servers
 
 typedef enum _hello_mode
 {

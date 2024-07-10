@@ -855,7 +855,10 @@ int pd_send_cap(pd_t *to_pd,
                                 server_src_cap);
         SERVER_WARN_IF_COND(error, "Warning: Failed to add cap to PD's resources\n");
 
-        *slot = new_cap;
+        if (slot)
+        {
+            *slot = new_cap;
+        }
     }
     else
     {
@@ -864,10 +867,16 @@ int pd_send_cap(pd_t *to_pd,
         error = resource_component_transfer_cap(get_pd_component()->server_vka, to_pd->pd_vka, cap, &dest, false, 0);
         SERVER_GOTO_IF_ERR(error, "Failed to copy cap to PD\n");
 
-        *slot = dest.capPtr;
+        if (slot)
+        {
+            *slot = dest.capPtr;
+        }
     }
 
-    OSDB_PRINTF("pd_send_cap: copied cap at %ld to child\n", *slot);
+    if (slot)
+    {
+        OSDB_PRINTF("pd_send_cap: copied cap at %ld to child\n", *slot);
+    }
 
 err_goto:
     return error;
@@ -1170,7 +1179,8 @@ void pd_debug_print_held(pd_t *pd)
 
 inline void pd_set_name(pd_t *pd, const char *image_name)
 {
-    if (pd->name) {
+    if (pd->name)
+    {
         free(pd->name);
     }
     pd->name = malloc(strlen(image_name) + 1);

@@ -182,7 +182,7 @@ int pd_dump(pd_t *pd, model_state_t *ms);
  * @param pd the target PD
  * @param cap the cap to send, if badge is also provided, it will take precedence
  * @param the badge of the cap to send, if cap is also provided, it will be ignored
- * @param[out] slot returns the slot of the cap in the target PD
+ * @param[out] slot returns the slot of the cap in the target PD, (optional)
  * @param inc_refcount if true, increments the refcount of the corresponding resource
  * @param update_core_res the cap being sent is a core PD resource,
  *                        and should be set in its OSmosis data

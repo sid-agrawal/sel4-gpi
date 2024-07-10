@@ -214,3 +214,11 @@ int pd_component_runtime_setup(pd_t *pd,
                                void *entry_point,
                                void *ipc_buf_addr,
                                void *osm_shared_data);
+
+/**
+ * Terminate a PD by ID, from the root task
+ * 
+ * @param pd_id the ID of the PD to terminate
+ * @return 0 on success, error otherwise
+ */
+int pd_component_terminate(uint32_t pd_id);

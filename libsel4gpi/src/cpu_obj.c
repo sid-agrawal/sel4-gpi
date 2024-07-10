@@ -120,6 +120,8 @@ int cpu_new(cpu_t *cpu,
     cpu->reg_ctx = calloc(1, sizeof(seL4_UserContext));
     SERVER_GOTO_IF_COND(cpu->reg_ctx == NULL, "Couldn't malloc CPU's register context\n");
 
+    cpu->ipc_buf_mo = 0;
+
 err_goto:
     return error;
 }
@@ -176,8 +178,18 @@ void cpu_destroy(cpu_t *cpu)
     // Destroy the TCB
     vka_free_object(get_cpu_component()->server_vka, &cpu->tcb);
 
-    // (XXX) Linh: should we be freeing the IPC buffer, here?
-    // This is Same issue as the fault EP, the client of the CPU obj holds it
+    // Decrement refcount of bound IPC buf MO
+    if (cpu->ipc_buf_mo)
+    {
+        error = resource_component_dec(get_mo_component(), cpu->ipc_buf_mo);
+
+        if (error)
+        {
+            OSDB_PRINTERR("Failed to decrement refcount of old IPC buf mo (%d)\n", cpu->ipc_buf_mo);
+        }
+
+        cpu->ipc_buf_mo = 0;
+    }
 
     // Free other things
     free(cpu->reg_ctx);
