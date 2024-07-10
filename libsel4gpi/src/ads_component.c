@@ -98,6 +98,27 @@ err_goto:
     return error;
 }
 
+int ads_component_allocate(uint32_t client_id, ads_t **ret_ads, seL4_CPtr *ret_cap)
+{
+    int error = 0;
+
+    /* Create the VMR space */
+    resspc_component_registry_entry_t *space_entry;
+    error = create_vmr_space(client_id, &space_entry);
+    SERVER_GOTO_IF_ERR(error, "Failed to allocate new VMR space\n");
+
+    /* Create the ADS object, the ADS ID is the same as the VMR space */
+    ads_component_registry_entry_t *new_entry;
+    error = resource_component_allocate(get_ads_component(), client_id, space_entry->space.id, false, NULL,
+                                        (resource_registry_node_t **)&new_entry, ret_cap);
+    SERVER_GOTO_IF_ERR(error, "Failed to allocate new ADS\n");
+
+    *ret_ads = &new_entry->ads;
+
+err_goto:
+    return error;
+}
+
 static void handle_ads_allocation(seL4_Word sender_badge,
                                   AdsReturnMessage *reply_msg)
 {
@@ -106,23 +127,17 @@ static void handle_ads_allocation(seL4_Word sender_badge,
 
     int error = 0;
     seL4_CPtr ret_cap;
-    ads_component_registry_entry_t *new_entry;
+    ads_t *ads;
     uint32_t client_id = get_client_id_from_badge(sender_badge);
 
-    /* Create the VMR space */
-    resspc_component_registry_entry_t *space_entry;
-    error = create_vmr_space(client_id, &space_entry);
-    SERVER_GOTO_IF_ERR(error, "Failed to allocate new VMR space\n");
-
-    /* Create the ADS object, the ADS ID is the same as the VMR space */
-    error = resource_component_allocate(get_ads_component(), client_id, space_entry->space.id, false, NULL,
-                                        (resource_registry_node_t **)&new_entry, &ret_cap);
+    /* Create the ADS object */
+    error = ads_component_allocate(client_id, &ads, &ret_cap);
     SERVER_GOTO_IF_ERR(error, "Failed to allocate new ADS\n");
 
-    OSDB_PRINTF("Successfully allocated a new ADS (%d) with VMR Space (%d).\n", new_entry->ads.id, space_entry->space.id);
+    OSDB_PRINTF("Successfully allocated a new ADS (%d).\n", ads->id);
 
     /* Return this badged end point in the return message. */
-    reply_msg->msg.alloc.id = space_entry->space.id;
+    reply_msg->msg.alloc.id = ads->id;
     reply_msg->msg.alloc.slot = ret_cap;
 
 err_goto:
@@ -316,6 +331,29 @@ err_goto:
     reply_msg->errorCode = error;
 }
 
+int ads_component_load_elf(ads_t *ads, pd_t *target_pd, char *image_name, void **entry_point)
+{
+    int error = 0;
+
+    // Find root task's ADS
+    ads_component_registry_entry_t *root_ads = (ads_component_registry_entry_t *)
+        resource_component_registry_get_by_id(get_ads_component(), get_gpi_server()->rt_ads_id);
+    SERVER_GOTO_IF_COND(root_ads == NULL, "Couldn't find root task ADS (%ld)\n",
+                        get_gpi_server()->rt_ads_id);
+
+    // Load the ELF
+    OSDB_PRINTF("Loading %s's ELF into PD %d\n", image_name, target_pd->id);
+    error = ads_load_elf(ads, &root_ads->ads, target_pd, image_name, entry_point);
+    SERVER_GOTO_IF_ERR(error, "Load ELF failed\n");
+
+    OSDB_PRINTF("Successfully loaded ELF, entry point %p.\n", entry_point);
+
+    pd_set_name(target_pd, image_name);
+
+err_goto:
+    return error;
+}
+
 static void handle_load_elf_request(seL4_Word sender_badge,
                                     AdsLoadElfMessage *msg, AdsReturnMessage *reply_msg)
 {
@@ -331,30 +369,16 @@ static void handle_load_elf_request(seL4_Word sender_badge,
     SERVER_GOTO_IF_COND(target_ads == NULL, "Couldn't find target ADS (%ld)\n",
                         get_object_id_from_badge(sender_badge));
 
-    // Find root task's ADS
-    ads_component_registry_entry_t *root_ads = (ads_component_registry_entry_t *)
-        resource_component_registry_get_by_id(get_ads_component(), get_gpi_server()->rt_ads_id);
-    SERVER_GOTO_IF_COND(root_ads == NULL, "Couldn't find root task ADS (%ld)\n",
-                        get_gpi_server()->rt_ads_id);
-
     // Find target PD
     pd_component_registry_entry_t *target_pd =
         pd_component_registry_get_entry_by_id(get_object_id_from_badge(seL4_GetBadge(0)));
     SERVER_GOTO_IF_COND(target_pd == NULL, "Couldn't find target PD (%ld)\n",
                         get_object_id_from_badge(seL4_GetBadge(0)));
 
-    // Load the ELF
-    OSDB_PRINTF("Loading %s's ELF into PD %d\n", msg->image_name, target_pd->pd.id);
-    error = ads_load_elf(&target_ads->ads, &root_ads->ads, &target_pd->pd, msg->image_name,
-                         &entry_point);
+    error = ads_component_load_elf(&target_ads->ads, &target_pd->pd, msg->image_name, &entry_point);
     SERVER_GOTO_IF_ERR(error, "Load ELF failed\n");
+
     reply_msg->msg.load_elf.entry_point = entry_point;
-
-    OSDB_PRINTF("Successfully loaded ELF, entry point %p.\n", entry_point);
-
-    pd_set_image_name(&target_pd->pd, msg->image_name);
-
-    OSDB_PRINTF("Forged ADS attachments from ELF.\n");
 
 err_goto:
     reply_msg->which_msg = AdsReturnMessage_load_elf_tag;

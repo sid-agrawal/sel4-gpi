@@ -12,6 +12,8 @@
 #include <vspace/vspace.h>
 
 #include <sel4gpi/cpu_obj.h>
+#include <sel4gpi/ads_obj.h>
+#include <sel4gpi/pd_obj.h>
 #include <sel4gpi/resource_component_utils.h>
 
 /** @file APIs for managing and interacting with the serial server thread.
@@ -48,8 +50,45 @@ int forge_cpu_cap_from_tcb(sel4utils_process_t *proc, vka_t *vka, uint32_t clien
 
 /**
  * Stops a CPU's TCB
- * 
+ *
  * @param cpu_id ID of the cpu to stop
  * @return 0 on success, error otherwise
-*/
+ */
 int cpu_component_stop(uint32_t cpu_id);
+
+/**
+ * Allocate a CPU from the root task
+ *
+ * @param client_id the PD id of the client requesting the CPU
+ * @param ret_cpu returns the created CPU
+ * @param ret_cap returns the slot of the new CPU, in the client (or NULL, to make no cap)
+ */
+int cpu_component_allocate(uint32_t client_id, cpu_t **ret_cpu, seL4_CPtr *ret_cap);
+
+/**
+ * @brief Configures a CPU object by binding it to the given ADS and PD
+ * NOTE: the fault endpoint's refcount is not increased here for a few reasons:
+ *       1) we can't send more than 3 unwrapped caps, and don't have a way to indicate which
+ *          EP within the EP component's metadata to refcount -> this could be solved
+ *          with other workarounds
+ *       2) if the refcount to this EP has reached 0, all PDs holding it have exited,
+ *          and nothing will be able to reference it anymore. If the CPU object binded
+ *          to this EP is still lying around, it will have to be reconfigured regardless
+ *          of whether the EP still exists or not.
+ *
+ * @param cpu the CPU object to configure
+ * @param ads the ADS object to bind
+ * @param pd the PD to bind
+ * @param cnode_guard guard configured for the PD's croot
+ * @param fault_ep_position w.r.t the PD's cspace, the fault endpoint (OPTIONAL)
+ * @param ipc_buf_mo MO of the the ipc buf for the cpu (OPTIONAL)
+ * @param ipc_buf_addr w.r.t the given ADS, address to IPC buf (OPTIONAL)
+ * @return int returns 0 on success, 1 on failure
+ */
+int cpu_component_configure(cpu_t *cpu,
+                            ads_t *ads,
+                            pd_t *pd,
+                            seL4_Word cnode_guard,
+                            seL4_CPtr fault_ep,
+                            mo_t *ipc_buf_mo,
+                            void *ipc_buf_addr);

@@ -30,6 +30,7 @@
 #include <sel4gpi/resource_registry.h>
 #include <sel4gpi/linked_list.h>
 
+#define PD_CSPACE_SIZE_BITS 17
 #define TEST_NAME_MAX (64 - 4 * sizeof(seL4_Word))
 #define MAX_SYS_OSM_CAPS 5000
 #define MAX_MO_CHILD 10
@@ -110,10 +111,12 @@ typedef struct _osm_pd_shared_data
     osmosis_rde_t rde[GPICAP_TYPE_MAX][MAX_NS_PER_RDE];              ///< Resource directory
     uint64_t rde_count;
 
-    uint64_t current_client_id; ///< Resource server sets this field while processing a client request
-                                ///< If the server crashes before it finishes, the client will also be killed
-    seL4_CPtr reply_cap;        ///< For resource servers, store the reply cap of the
-                                ///< request that is currently being processed
+    uint64_t current_client_id;    ///< Resource server sets this field while processing a client request
+                                   ///< If the server crashes before it finishes, the client will also be killed
+    seL4_CPtr reply_cap;           ///< For resource servers, store the reply cap of the
+                                   ///< request that is currently being processed
+    char test_name[TEST_NAME_MAX]; ///< For a test process, the name of the test to run
+                                   ///< (XXX) Arya: Placed here for convenience, ideally would be in a separate frame
 } osm_pd_shared_data_t;
 
 typedef struct _pd
@@ -132,7 +135,7 @@ typedef struct _pd
                                                             ///< should be bound to CPU
     seL4_CPtr badged_notification;                          ///< Badged version of notification, RT uses this one
     size_t cspace_size;                                     ///< Size bits of the root CNode
-    const char *image_name;                                 ///< This is for model extraction only
+    const char *name;                                       ///< This is for model extraction only
     seL4_Word cnode_guard;                                  ///< cnode guard for this PD's cspace
     vka_t *pd_vka;                                          ///< Allocator for the PD's cspace
     char allocator_mem_pool[PD_ALLOCATOR_STATIC_POOL_SIZE]; ///< Memory pool to bootstrap the PD's VKA
@@ -379,7 +382,7 @@ void pd_destroy(pd_t *pd, vka_t *server_vka, vspace_t *server_vspace);
  * @param pd the target PD
  * @param image_name name of ELF image
  */
-void pd_set_image_name(pd_t *pd, const char *image_name);
+void pd_set_name(pd_t *pd, const char *image_name);
 
 /**
  * @brief debug print of all the PD's resources

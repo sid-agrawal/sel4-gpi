@@ -233,7 +233,7 @@ int test_cleanup_policy_1(env_t env)
     printf("------------------ENDING: %s------------------\n", __func__);
     return sel4test_get_result();
 }
-DEFINE_TEST(GPICL001, "Test the PD cleanup policy 1", test_cleanup_policy_1, true)
+DEFINE_TEST_OSM(GPICL001, "Test the PD cleanup policy 1", test_cleanup_policy_1, true)
 
 /**
  * More complicated test scenario for cleanup policies with two servers/clients and two resource types

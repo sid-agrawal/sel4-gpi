@@ -38,10 +38,8 @@
 #include <sel4gpi/error_handle.h>
 #include <sel4gpi/linked_list.h>
 
-#define CSPACE_SIZE_BITS 17
 #define ELF_LIB_DATA_SECTION ".lib_data"
 #define ELF_APP_DATA_SECTION ".data"
-#define REMOTE_RR_N_PAGES 8
 
 /* This is doesn't belong here but we need it */
 extern char _cpio_archive[];
@@ -527,7 +525,7 @@ int pd_new(pd_t *pd,
     error = pd_setup_cspace(pd, get_pd_component()->server_vka);
     SERVER_GOTO_IF_ERR(error, "Failed to setup PD's CSpace\n");
 
-    pd_set_image_name(pd, "PD"); // default name, since if a PD isn't a process, this never gets set
+    pd_set_name(pd, "PD"); // default name, since if a PD isn't a process, this never gets set
 
     // Allocate and badge the RT->PD notification
     error = vka_alloc_notification(server_vka, &pd->notification);
@@ -551,7 +549,7 @@ void pd_destroy(pd_t *pd, vka_t *server_vka, vspace_t *server_vspace)
     int error = 0;
     int pd_id = pd->id;
 
-    OSDB_PRINTF("Destroying PD (%d, %s)\n", pd_id, pd->image_name);
+    OSDB_PRINTF("Destroying PD (%d, %s)\n", pd_id, pd->name);
     pd->deleting = true;
 
     /* stop the PD's CPU, if not already stopped */
@@ -606,7 +604,7 @@ void pd_destroy(pd_t *pd, vka_t *server_vka, vspace_t *server_vspace)
     }
 
     /* Free image name */
-    free(pd->image_name);
+    free(pd->name);
 
     // Hash table of holding resources
     // (XXX) Arya: This can trigger sys_munmap which is not supported
@@ -714,7 +712,7 @@ int pd_bootstrap_allocator(pd_t *pd,
 static int pd_setup_cspace(pd_t *pd, vka_t *vka)
 {
     int error = 0;
-    pd->cspace_size = CSPACE_SIZE_BITS;
+    pd->cspace_size = PD_CSPACE_SIZE_BITS;
     pd->cnode_guard = api_make_guard_skip_word(seL4_WordBits - pd->cspace_size);
 
     error = vka_alloc_cnode_object(vka, pd->cspace_size, &pd->cspace);
@@ -734,7 +732,7 @@ static int pd_setup_cspace(pd_t *pd, vka_t *vka)
 
     /* Initialize a vka for the PD's cspace */
     error = pd_bootstrap_allocator(pd, pd->cspace.cptr, cspace_next_free,
-                                   BIT(CSPACE_SIZE_BITS), CSPACE_SIZE_BITS, 0);
+                                   BIT(PD_CSPACE_SIZE_BITS), PD_CSPACE_SIZE_BITS, 0);
     SERVER_GOTO_IF_ERR(error, "Failed to setup allocator for PD %d\n", pd->id);
 
     OSDB_PRINTF("PD next free slot: %ld\n", cspace_next_free);
@@ -1033,7 +1031,7 @@ static int pd_dump_internal(pd_t *pd, model_state_t *ms)
     // Don't add the PD resource space, it is just an implementation detail but not part of the model
 
     /* Add the PD node */
-    pd_node = add_pd_node(ms, pd->image_name, pd->id);
+    pd_node = add_pd_node(ms, pd->name, pd->id);
 
     /* Add request edges for all RDEs from this PD */
     for (int i = 0; i < GPICAP_TYPE_MAX; i++)
@@ -1170,13 +1168,13 @@ void pd_debug_print_held(pd_t *pd)
     }
 }
 
-inline void pd_set_image_name(pd_t *pd, const char *image_name)
+inline void pd_set_name(pd_t *pd, const char *image_name)
 {
-    if (pd->image_name) {
-        free(pd->image_name);
+    if (pd->name) {
+        free(pd->name);
     }
-    pd->image_name = malloc(strlen(image_name) + 1);
-    strcpy(pd->image_name, image_name);
+    pd->name = malloc(strlen(image_name) + 1);
+    strcpy(pd->name, image_name);
 }
 
 int pd_set_core_cap(pd_t *pd, seL4_Word core_cap_badge, seL4_CPtr core_cap)

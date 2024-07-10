@@ -98,3 +98,23 @@ int ads_component_attach_to_rt(uint64_t mo_id, void **ret_vaddr);
  * @param vaddr vaddr where the MO was attached
 */
 int ads_component_remove_from_rt(void *vaddr);
+
+/**
+ * Allocate an ADS from the root task
+ * 
+ * @param client_id the PD id of the client requesting the ADS
+ * @param ret_ads returns the created ADS
+ * @param ret_cap returns the slot of the new ADS, in the client (or NULL, to make no cap)
+ */
+int ads_component_allocate(uint32_t client_id, ads_t **ret_ads, seL4_CPtr *ret_cap);
+
+/**
+ * Load an ELF image into an ADS
+ * 
+ * @param ads the ADS to load the ELF into
+ * @param target_pd the target PD that will be using this ADS 
+ *  (XXX) Arya: we may be able to remove this parameter
+ * @param image_name the name of the image to load, must be in the cpio archive
+ * @param entry_point returns the vaddr of the entry point in the ADS
+ */
+int ads_component_load_elf(ads_t *ads, pd_t *target_pd, char *image_name, void **entry_point);

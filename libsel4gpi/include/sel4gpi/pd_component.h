@@ -14,6 +14,7 @@
 #include <sel4gpi/test_init_data.h>
 #include <sel4gpi/resource_component_utils.h>
 #include <sel4gpi/resource_space_clientapi.h>
+#include <pd_component_rpc.pb.h>
 
 /** @file APIs for managing and interacting with the serial server thread.
  *
@@ -173,3 +174,43 @@ void pd_component_queue_model_extraction_work(pd_component_registry_entry_t *pd_
  * @param work the details of the work
  */
 void pd_component_queue_free_work(pd_component_registry_entry_t *pd_entry, pd_work_entry_t *work);
+
+/**
+ * Allocate a PD from the root task
+ * 
+ * @param client_id the PD id of the client requesting the ADS
+ * @param init_mo an MO to use for the PD's init data
+ * @param ret_ads returns the created PD
+ * @param ret_cap returns the slot of the new PD, in the client (or NULL, to make no cap)
+ */
+int pd_component_allocate(uint32_t client_id, mo_t *mo, pd_t **ret_pd, seL4_CPtr *ret_cap);
+
+/**
+ * @brief 
+ * P repares the (PD, ADS, CPU) combination with the given arguments,
+ *        entry point, stack, and IPC buffer, and OSmosis data frame
+ * This eventually will be removed in favour of a unified PD entry-point
+ * TODO Linh: better explain what differs between setup types
+ *
+ * @param target_pd the target PD to initialize
+ * @param target_ads the ADS where the stack resides
+ * @param target_cpu the CPU which will execute in this ADS and PD
+ * @param setup_type the type of setup (see PdSetupType for details)
+ * @param argc the number of arguments to place on the stack
+ * @param args the arguments, as seL4_Word values
+ * @param stack_top pointer to a position in the stack, in the target ADS, depends on the setup type
+ * @param entry_point the address of the instruction to start executing at (in the target ADS)
+ * @param ipc_buf_addr the address of the IPC buffer for the (PD, ADS, CPU) combination
+ * @param osm_shared_data address of the OSmosis data frame within the target ADS
+ * @return int 0 on success
+ */
+int pd_component_runtime_setup(pd_t *pd,
+                               ads_t *ads,
+                               cpu_t *cpu,
+                               PdSetupType setup_mode,
+                               int argc,
+                               seL4_Word *args,
+                               void *stack_top,
+                               void *entry_point,
+                               void *ipc_buf_addr,
+                               void *osm_shared_data);

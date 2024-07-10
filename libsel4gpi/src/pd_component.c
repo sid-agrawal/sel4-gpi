@@ -70,7 +70,7 @@ static void on_pd_registry_delete(resource_registry_node_t *node_gen, void *arg)
 {
     pd_component_registry_entry_t *node = (pd_component_registry_entry_t *)node_gen;
 
-    OSDB_PRINTF("Destroying PD(%d, %s)\n", node->pd.id, node->pd.image_name);
+    OSDB_PRINTF("Destroying PD(%d, %s)\n", node->pd.id, node->pd.name);
 
     // Destroy PD
     pd_destroy(&node->pd, get_pd_component()->server_vka, get_pd_component()->server_vspace);
@@ -86,12 +86,34 @@ static void on_pd_registry_delete(resource_registry_node_t *node_gen, void *arg)
     linked_list_destroy(node->pending_model_state, true);
 }
 
+int pd_component_allocate(uint32_t client_id, mo_t *init_data_mo, pd_t **ret_pd, seL4_CPtr *ret_cap)
+{
+    int error = 0;
+    pd_component_registry_entry_t *new_entry;
+
+    /* Allocate a new PD */
+    error = resource_component_allocate(get_pd_component(), client_id, BADGE_OBJ_ID_NULL, false, init_data_mo,
+                                        (resource_registry_node_t **)&new_entry, ret_cap);
+    SERVER_GOTO_IF_ERR(error, "failed to allocate a PD\n");
+
+    OSDB_PRINTF("Successfully allocated a new PD %d.\n", new_entry->pd.id);
+
+    /* Initialize the registry entry */
+    new_entry->pending_frees = linked_list_new();
+    new_entry->pending_model_state = linked_list_new();
+
+    *ret_pd = &new_entry->pd;
+
+err_goto:
+    return error;
+}
+
 static void handle_pd_allocation(seL4_Word sender_badge, PdReturnMessage *reply_msg)
 {
     OSDB_PRINTF("Got connect request from badge %lx\n", sender_badge);
     int error = 0;
     seL4_CPtr ret_cap;
-    pd_component_registry_entry_t *new_entry;
+    pd_t *pd;
     uint32_t client_id = get_client_id_from_badge(sender_badge);
     SERVER_GOTO_IF_COND(!sel4gpi_rpc_check_cap(GPICAP_TYPE_MO), "Did not receive MO cap\n");
 
@@ -101,19 +123,14 @@ static void handle_pd_allocation(seL4_Word sender_badge, PdReturnMessage *reply_
     SERVER_GOTO_IF_COND_BG(osm_mo_entry == NULL, seL4_GetBadge(0), "Failed to find MO for OSmosis data: ");
 
     /* Allocate a new PD */
-    error = resource_component_allocate(get_pd_component(), client_id, BADGE_OBJ_ID_NULL, false, &osm_mo_entry->mo,
-                                        (resource_registry_node_t **)&new_entry, &ret_cap);
-    SERVER_GOTO_IF_ERR(error, "failed to allocat a PD\n");
+    error = pd_component_allocate(client_id, &osm_mo_entry->mo, &pd, &ret_cap);
+    SERVER_GOTO_IF_ERR(error, "failed to allocate a PD\n");
 
-    OSDB_PRINTF("Successfully allocated a new PD %d.\n", new_entry->pd.id);
-
-    /* Initialize the registry entry */
-    new_entry->pending_frees = linked_list_new();
-    new_entry->pending_model_state = linked_list_new();
+    OSDB_PRINTF("Successfully allocated a new PD %d.\n", pd->id);
 
     /* Return this badged end point in the return message. */
     reply_msg->msg.alloc.slot = ret_cap;
-    reply_msg->msg.alloc.id = new_entry->pd.id;
+    reply_msg->msg.alloc.id = pd->id;
 
 err_goto:
     reply_msg->which_msg = PdReturnMessage_alloc_tag;
@@ -509,6 +526,72 @@ err_goto:
     reply_msg->errorCode = error;
 }
 
+int pd_component_runtime_setup(pd_t *pd,
+                               ads_t *ads,
+                               cpu_t *cpu,
+                               PdSetupType setup_mode,
+                               int argc,
+                               seL4_Word *args,
+                               void *stack_top,
+                               void *entry_point,
+                               void *ipc_buf_addr,
+                               void *osm_shared_data)
+{
+    int error = 0;
+
+    pd->shared_data_in_PD = osm_shared_data;
+
+    if (setup_mode == PdSetupType_PD_RUNTIME_SETUP)
+    {
+        char string_args[argc][WORD_STRING_SIZE];
+        char *argv[argc];
+
+        for (int i = 0; i < argc; i++)
+        {
+            argv[i] = string_args[i];
+            snprintf(argv[i], WORD_STRING_SIZE, "%" PRIuPTR "", args[i]);
+        }
+
+        void *init_stack;
+        error = ads_write_arguments(pd, ads->vspace, ipc_buf_addr, stack_top,
+                                    argc, argv, &init_stack);
+        if (!error)
+        {
+            error = cpu_set_remote_context(cpu, entry_point, init_stack);
+        }
+    }
+    else if (setup_mode == PdSetupType_PD_REGISTER_SETUP)
+    {
+        error = cpu_set_local_context(cpu,
+                                      entry_point,
+                                      argc > 0 ? (void *)args[0] : NULL,
+                                      argc > 1 ? (void *)args[1] : NULL,
+                                      argc > 2 ? (void *)args[2] : NULL,
+                                      stack_top);
+    }
+    else if (setup_mode == PdSetupType_PD_GUEST_SETUP)
+    {
+        error = cpu_elevate(cpu);
+        if (!error)
+        {
+            SERVER_GOTO_IF_COND(argc == 0, "Setting up a guest requires at least one argument for the DTB\n");
+            error = cpu_set_guest_context(cpu, entry_point, (uintptr_t)args[0]);
+        }
+    }
+    else
+    {
+        error = 1;
+        OSDB_PRINTERR("Invalid PD setup mode specified\n");
+    }
+
+#if CONFIG_DEBUG_BUILD
+    seL4_DebugNameThread(cpu->tcb.cptr, pd->name);
+#endif
+
+err_goto:
+    return error;
+}
+
 static void handle_runtime_setup_req(seL4_Word sender_badge, PdSetupMessage *msg, PdReturnMessage *reply_msg)
 {
     OSDB_PRINTF("Got runtime setup request from client badge: ");
@@ -535,65 +618,18 @@ static void handle_runtime_setup_req(seL4_Word sender_badge, PdSetupMessage *msg
                         "Couldn't find target CPU (%ld)\n",
                         get_object_id_from_badge(seL4_GetBadge(1)));
 
-    /* parse the arguments */
-    int argc = msg->args_count;
-
-    // These brackets limit the scope of argc/argv so we may goto err_goto
-    {
-        char string_args[argc][WORD_STRING_SIZE];
-        char *argv[argc];
-
-        for (int i = 0; i < argc; i++)
-        {
-            argv[i] = string_args[i];
-            snprintf(argv[i], WORD_STRING_SIZE, "%" PRIuPTR "", msg->args[i]);
-        }
-
-        // (XXX) Linh: stack_top meaning differs depending on what PD we're starting, should fix as this is not so nice
-        void *stack_top = (void *)msg->stack_top;
-        void *entry_point = (void *)msg->entry_point;
-        void *ipc_buf_addr = (void *)msg->ipc_buf_addr;
-        target_pd->pd.shared_data_in_PD = (void *)msg->osm_data_addr;
-        PdSetupType setup_mode = msg->setup_mode;
-
-        switch (setup_mode)
-        {
-        case PdSetupType_PD_RUNTIME_SETUP:
-            void *init_stack;
-            error = ads_write_arguments(&target_pd->pd, target_ads->ads.vspace, ipc_buf_addr, stack_top,
-                                        argc, argv, &init_stack);
-            if (!error)
-            {
-                error = cpu_set_remote_context(&target_cpu->cpu, entry_point, init_stack);
-            }
-            break;
-        case PdSetupType_PD_REGISTER_SETUP:
-            error = cpu_set_local_context(&target_cpu->cpu,
-                                          entry_point,
-                                          argc > 0 ? (void *)msg->args[0] : NULL,
-                                          argc > 1 ? (void *)msg->args[1] : NULL,
-                                          argc > 2 ? (void *)msg->args[2] : NULL,
-                                          stack_top);
-            break;
-        case PdSetupType_PD_GUEST_SETUP:
-            error = cpu_elevate(&target_cpu->cpu);
-            if (!error)
-            {
-                SERVER_GOTO_IF_COND(argc == 0, "Setting up a guest requires at least one argument for the DTB\n");
-                error = cpu_set_guest_context(&target_cpu->cpu, entry_point, (uintptr_t)msg->args[0]);
-            }
-            break;
-        default:
-            error = 1;
-            OSDB_PRINTERR("Invalid PD setup mode specified\n");
-            break;
-        }
-    }
+    /* perform the setup */
+    error = pd_component_runtime_setup(&target_pd->pd,
+                                       &target_ads->ads,
+                                       &target_cpu->cpu,
+                                       msg->setup_mode,
+                                       msg->args_count,
+                                       (seL4_Word *)msg->args,
+                                       (void *)msg->stack_top,
+                                       (void *)msg->entry_point,
+                                       (void *)msg->ipc_buf_addr,
+                                       (void *)msg->osm_data_addr);
     SERVER_GOTO_IF_ERR(error, "Failed to setup PD\n");
-
-#if CONFIG_DEBUG_BUILD
-    seL4_DebugNameThread(target_cpu->cpu.tcb.cptr, target_pd->pd.image_name);
-#endif
 
 err_goto:
     reply_msg->which_msg = PdReturnMessage_basic_tag;
@@ -804,7 +840,7 @@ static void handle_set_name_req(seL4_Word sender_badge, PdSetNameMessage *msg, P
     SERVER_GOTO_IF_COND(pd_data == NULL, "Failed to find PD (%d)\n", get_object_id_from_badge(sender_badge));
 
     /* Set the image name */
-    pd_set_image_name(&pd_data->pd, msg->pd_name);
+    pd_set_name(&pd_data->pd, msg->pd_name);
 
 err_goto:
     reply_msg->which_msg = PdReturnMessage_basic_tag;
@@ -1071,7 +1107,7 @@ void forge_pd_cap_from_init_data(test_init_data_t *init_data, sel4utils_process_
     pd->shared_data_in_PD = shared_data_vaddr;
     OSDB_PRINT_VERBOSE("Test process init data is at %p\n", pd->shared_data_in_PD);
 
-    pd_set_image_name(pd, test_name);
+    pd_set_name(pd, test_name);
 
 err_goto:
     return error;

@@ -12,7 +12,9 @@
 #include <sel4utils/elf.h>
 
 #define TEST_PROCESS_CSPACE_SIZE_BITS 17
-/* Init data shared between sel4test-driver and the sel4test-tests app -- the
+
+/**
+ * Init data shared between sel4test-driver and the sel4test-tests app -- the
  * sel4test-driver creates a shmem page to be shared between the driver and the
  * test child processes, and uses this struct to pass the data in the shmem
  * page.
@@ -20,7 +22,10 @@
  * This file is symlinked from the sel4test-driver into the sel4test child
  * process.
  *
- * all caps are in the sel4test-tests process' cspace */
+ * all caps are in the sel4test-tests process' cspace 
+ * 
+ * This is used only for the BASIC test type
+ * */
 typedef struct
 {
     /* page directory of the test process */
@@ -95,4 +100,13 @@ typedef struct
 
 } test_init_data_t;
 
+/**
+ * Init data struct with only the data needed for an OSmosis test process, aka OSM test type
+ */
+typedef struct {
+    /* name of the test to run */
+    char name[TEST_NAME_MAX];
+} osm_test_init_data_t;
+
 compile_time_assert(init_data_fits_in_ipc_buffer, sizeof(test_init_data_t) < PAGE_SIZE_4K);
+compile_time_assert(osm_init_data_fits_in_ipc_buffer, sizeof(osm_test_init_data_t) < PAGE_SIZE_4K);

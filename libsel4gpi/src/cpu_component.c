@@ -26,7 +26,6 @@
 
 #include <sel4gpi/cpu_clientapi.h>
 #include <sel4gpi/cpu_component.h>
-
 #include <sel4gpi/ads_clientapi.h>
 #include <sel4gpi/gpi_server.h>
 #include <sel4gpi/badge_usage.h>
@@ -54,6 +53,22 @@ static void on_cpu_registry_delete(resource_registry_node_t *node_gen, void *arg
     cpu_destroy(&node->cpu);
 }
 
+int cpu_component_allocate(uint32_t client_id, cpu_t **ret_cpu, seL4_CPtr *ret_cap)
+{
+    int error = 0;
+    cpu_component_registry_entry_t *new_entry;
+
+    /* Create the CPU object */
+    error = resource_component_allocate(get_cpu_component(), client_id, BADGE_OBJ_ID_NULL, false, NULL,
+                                        (resource_registry_node_t **)&new_entry, ret_cap);
+    SERVER_GOTO_IF_ERR(error, "Failed to allocate new CPU object\n");
+
+    *ret_cpu = &new_entry->cpu;
+
+err_goto:
+    return error;
+}
+
 static void handle_cpu_allocation(seL4_Word sender_badge, CpuReturnMessage *reply_msg)
 {
     OSDB_PRINTF("Got CPU allocation request from %lx\n", sender_badge);
@@ -61,15 +76,14 @@ static void handle_cpu_allocation(seL4_Word sender_badge, CpuReturnMessage *repl
 
     int error = 0;
     seL4_CPtr ret_cap;
-    cpu_component_registry_entry_t *new_entry;
+    cpu_t *cpu;
     uint32_t client_id = get_client_id_from_badge(sender_badge);
 
-    error = resource_component_allocate(get_cpu_component(), client_id, BADGE_OBJ_ID_NULL, false, NULL,
-                                        (resource_registry_node_t **)&new_entry, &ret_cap);
+    error = cpu_component_allocate(client_id, &cpu, &ret_cap);
     SERVER_GOTO_IF_ERR(error, "Failed to allocate new CPU object\n");
 
     reply_msg->msg.alloc.slot = ret_cap;
-    reply_msg->msg.alloc.id = new_entry->cpu.id;
+    reply_msg->msg.alloc.id = cpu->id;
 
 err_goto:
     reply_msg->which_msg = CpuReturnMessage_alloc_tag;
@@ -95,6 +109,43 @@ err_goto:
     reply_msg->errorCode = error;
 }
 
+int cpu_component_configure(cpu_t *cpu,
+                            ads_t *ads,
+                            pd_t *pd,
+                            seL4_Word cnode_guard,
+                            seL4_CPtr fault_ep,
+                            mo_t *ipc_buf_mo,
+                            void *ipc_buf_addr)
+{
+    int error = 0;
+
+    seL4_CNode cspace_root = pd->cspace.cptr;
+
+    /* Get the frame from the IPC buf MO */
+    seL4_CPtr ipc_buf_frame = ipc_buf_mo == NULL ? seL4_CapNull : ipc_buf_mo->frame_caps_in_root_task[0];
+
+    /* Configure the vspace */
+    error = cpu_config_vspace(cpu,
+                              get_cpu_component()->server_vka,
+                              ads->vspace,
+                              cspace_root,
+                              cnode_guard,
+                              fault_ep,
+                              ipc_buf_frame,
+                              ipc_buf_addr);
+
+    /* Set the bound notification */
+    // (XXX) Arya: I'm not sure where this should go
+    error = cpu_bind_notif(cpu, pd->notification.cptr);
+    SERVER_GOTO_IF_ERR(error, "Failed to configure vspace for CPU (%d)\n", cpu->id);
+
+    cpu->binded_ads_id = ads->id;
+    OSDB_PRINTF("Finished configuring CPU\n");
+
+err_goto:
+    return error;
+}
+
 static void handle_config_req(seL4_Word sender_badge,
                               CpuConfigMessage *msg, CpuReturnMessage *reply_msg)
 {
@@ -104,7 +155,7 @@ static void handle_config_req(seL4_Word sender_badge,
     SERVER_GOTO_IF_COND(!sel4gpi_rpc_check_caps_2(GPICAP_TYPE_PD, GPICAP_TYPE_ADS),
                         "Did not receive PD/ADS caps\n");
 
-    /* Find the client */
+    /* Find the CPU */
     cpu_component_registry_entry_t *cpu_data = (cpu_component_registry_entry_t *)
         resource_component_registry_get_by_badge(get_cpu_component(), sender_badge);
     SERVER_GOTO_IF_COND(cpu_data == NULL, "Couldn't find CPU (%ld)\n", get_object_id_from_badge(sender_badge));
@@ -112,51 +163,27 @@ static void handle_config_req(seL4_Word sender_badge,
     pd_component_registry_entry_t *pd_data = pd_component_registry_get_entry_by_badge(seL4_GetBadge(0));
     SERVER_GOTO_IF_COND(pd_data == NULL, "Couldn't find PD (%ld)\n", get_object_id_from_badge(seL4_GetBadge(0)));
 
-    /* Get Fault EP - we do not increase the refcount for it here, see note in cpu_client_config() */
-    seL4_CPtr fault_ep = msg->fault_ep_cap;
-
-    /* Get IPC buf addr */
-    seL4_Word ipc_buf_addr = msg->ipc_buf_addr;
-
-    /* get cnode guard*/
-    seL4_Word cnode_guard = msg->cnode_guard;
-
-    /* Get the vspace for the ads */
+    /* Find the ADS */
     seL4_Word ads_cap_badge = seL4_GetBadge(1);
-    ads_component_registry_entry_t *asre = (ads_component_registry_entry_t *)
+    ads_component_registry_entry_t *ads_data = (ads_component_registry_entry_t *)
         resource_component_registry_get_by_badge(get_ads_component(), ads_cap_badge);
-    SERVER_GOTO_IF_COND(asre == NULL, "Couldn't find ADS (%ld)\n", get_object_id_from_badge(ads_cap_badge));
-
-    vspace_t *ads_vspace = asre->ads.vspace;
+    SERVER_GOTO_IF_COND(ads_data == NULL, "Couldn't find ADS (%ld)\n", get_object_id_from_badge(ads_cap_badge));
 
     /* Find the IPC MO, if it exists (OK if it doesn't exist) */
     seL4_Word ipc_buf_mo_badge = seL4_GetBadge(2);
     mo_component_registry_entry_t *ipc_mo_data = (mo_component_registry_entry_t *)
         resource_component_registry_get_by_badge(get_mo_component(), ipc_buf_mo_badge);
 
-    seL4_CPtr ipc_buf_frame = ipc_mo_data == NULL ? seL4_CapNull : ipc_mo_data->mo.frame_caps_in_root_task[0];
-
-    /* Configure the vspace */
-    seL4_CNode cspace_root = pd_data->pd.cspace.cptr;
-
-    error = cpu_config_vspace(&cpu_data->cpu,
-                              get_cpu_component()->server_vka,
-                              ads_vspace,
-                              cspace_root,
-                              cnode_guard,
-                              fault_ep,
-                              ipc_buf_frame,
-                              ipc_buf_addr);
-
-    /* Set the bound notification */
-    // (XXX) Arya: I'm not sure where this should go
-    error = cpu_bind_notif(&cpu_data->cpu, pd_data->pd.notification.cptr);
-
-    // (XXX) Arya: here, the issue with va_args was seen before adding the CPU object ID to the format
-    SERVER_GOTO_IF_ERR(error, "Failed to configure vspace for CPU (%ld)\n", get_object_id_from_badge(sender_badge));
-
-    cpu_data->cpu.binded_ads_id = asre->ads.id;
-    OSDB_PRINTF("Finished configuring CPU\n");
+    /* Do the configurataion */
+    error = cpu_component_configure(
+        &cpu_data->cpu,
+        &ads_data->ads,
+        &pd_data->pd,
+        msg->cnode_guard,
+        msg->fault_ep_cap,
+        &ipc_mo_data->mo,
+        msg->ipc_buf_addr
+    );
 
 err_goto:
     reply_msg->which_msg = CpuReturnMessage_basic_tag;

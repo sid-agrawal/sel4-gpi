@@ -27,8 +27,6 @@
 
 #include <vka/capops.h>
 
-#include <sel4gpi/pd_clientapi.h>
-
 #include "helpers.h"
 #include "test.h"
 #include "init.h"
@@ -41,18 +39,16 @@ size_t morecore_size = 2 * 1024 * 1024;
 char *morecore_area = morecore_arr;
 uintptr_t morecore_base = (uintptr_t)&morecore_arr[0];
 uintptr_t morecore_top = (uintptr_t)&morecore_arr[TP_MALLOC_SIZE];
-// int *shared_addr_between_threads;
 
 /* we use this in native benchmarking */
 extern char _cpio_archive[];
 extern char _cpio_archive_end[];
 
+/* type of test to run */
+enum test_type_name test_type;
+
 /* endpoint to call back to the test driver on */
 static seL4_CPtr endpoint;
-static seL4_CPtr gpi_endpoint;
-static seL4_CPtr self_as_cap;
-static seL4_CPtr self_cpu_cap;
-static seL4_CPtr self_pd_cap;
 
 /* global static memory for init */
 static sel4utils_alloc_data_t alloc_data;
@@ -226,19 +222,19 @@ int main(int argc, char **argv)
 {
     sel4muslcsys_register_stdio_write_fn(write_buf);
 
-    // int x = 0x55;
-    //  shared_addr_between_threads = &x;
-    //  printf("address of x is %p\n", shared_addr_between_threads);
-
     test_init_data_t *init_data;
     struct env env;
-
+    
     /* parse args */
-    assert(argc == 2);
-    endpoint = (seL4_CPtr)atoi(argv[0]);
+    assert(argc == 3);
+    test_type = (enum test_type_name)atoi(argv[0]);
+    endpoint = (seL4_CPtr)atoi(argv[1]);
+    init_data = (void *)atol(argv[2]);
 
-    /* read in init data */
-    init_data = (void *)atol(argv[1]);
+    if (test_type == OSM) {
+        printf("WIP, test process does not support OSM test type\n");
+        return 1;
+    }
 
     /* configure env */
     env.cspace_root = init_data->root_cnode;

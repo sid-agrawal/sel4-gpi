@@ -15,6 +15,7 @@
 #include "test.h"
 #include "timer.h"
 #include <sel4rpc/server.h>
+#include <sel4gpi/gpi_server.h>
 #include <sel4gpi/ads_component.h>
 #include <sel4gpi/mo_component.h>
 #include <sel4gpi/cpu_component.h>
@@ -278,10 +279,10 @@ void basic_set_up(uintptr_t e)
     }
 
     /* map the cap into remote vspace */
-    env->remote_vaddr = vspace_share_mem(&env->vspace, &(env->test_process).vspace, env->init, 1, PAGE_BITS_4K,
-                                         seL4_AllRights, 1);
+    env->init_vaddr = vspace_share_mem(&env->vspace, &(env->test_process).vspace, env->init, 1, PAGE_BITS_4K,
+                                       seL4_AllRights, 1);
 
-    assert(env->remote_vaddr != 0);
+    assert(env->init_vaddr != 0);
 
 Warning:
 
@@ -309,17 +310,18 @@ test_result_t basic_run_test(struct testcase *test, uintptr_t e)
 #endif
 
     /* set up args for the test process */
-    seL4_Word argc = 2;
+    seL4_Word argc = 3;
     char string_args[argc][WORD_STRING_SIZE];
     char *argv[argc];
     sel4utils_create_word_args(string_args, argv, argc,
+                               BASIC,
                                env->endpoint,
-                               env->remote_vaddr);
+                               env->init_vaddr);
 
     int num_res;
 
 /* spawn the process */
-#if PD_FORGE
+#if 1
     // (XXX) Arya: We aren't starting the test process as a normal PD yet,
     // so use this workaround to create a PD object anyway
     void *osm_shared_data;
@@ -352,7 +354,7 @@ void basic_tear_down(uintptr_t e)
 {
     driver_env_t env = (driver_env_t)e;
     /* unmap the env->init data frame */
-    vspace_unmap_pages(&(env->test_process).vspace, env->remote_vaddr, 1, PAGE_BITS_4K, NULL);
+    vspace_unmap_pages(&(env->test_process).vspace, env->init_vaddr, 1, PAGE_BITS_4K, NULL);
 
     /* reset all the untypeds for the next test */
     for (int i = 0; i < env->num_untypeds; i++)
@@ -362,7 +364,7 @@ void basic_tear_down(uintptr_t e)
         vka_cnode_revoke(&path);
     }
 
-#if PD_FORGE
+#if 1
     destroy_test_pd();
 #else
     /* destroy the process */
@@ -403,3 +405,145 @@ void start_thread_stack(vka_t *vka, vspace_t *current, vspace_t *target, vspace_
     }
 }
 #endif
+
+void osm_set_up(uintptr_t e)
+{
+    int error = 0;
+    driver_env_t env = (driver_env_t)e;
+
+    // Create the init data MO
+    mo_t *osm_init_mo;
+    error = mo_component_allocate_rt(1, &osm_init_mo);
+    assert(error == 0);
+
+    // Create the PD, ADS, and CPU
+    pd_t *pd;
+    error = pd_component_allocate(get_gpi_server()->rt_pd_id, osm_init_mo, &pd, NULL);
+    assert(error == 0);
+    env->test_pd = pd;
+
+    ads_t *ads;
+    error = ads_component_allocate(get_gpi_server()->rt_pd_id, &ads, NULL);
+    assert(error == 0);
+
+    cpu_t *cpu;
+    error = cpu_component_allocate(get_gpi_server()->rt_pd_id, &cpu, NULL);
+    assert(error == 0);
+    env->test_cpu = cpu;
+
+    // Load the test image in the ADS
+    void *entry_pt;
+    error = ads_component_load_elf(ads, pd, TESTS_APP, &entry_pt);
+    assert(error == 0);
+
+    // Load the init data in the ADS
+    void *osm_init_vaddr;
+    error = ads_attach(ads, pd->pd_vka, NULL, osm_init_mo, 1, seL4_ReadWrite,
+                       &osm_init_vaddr, SEL4UTILS_RES_TYPE_SHARED_FRAMES);
+    assert(error == 0);
+
+    // Create the IPC buffer
+    mo_t *ipc_buf_mo;
+    void *ipc_buf_vaddr;
+    error = mo_component_allocate_rt(1, &ipc_buf_mo);
+    assert(error == 0);
+
+    error = ads_attach(ads, pd->pd_vka, NULL, ipc_buf_mo, 1, seL4_ReadWrite,
+                       &ipc_buf_vaddr, SEL4UTILS_RES_TYPE_IPC_BUF);
+    assert(error == 0);
+
+    // Create the stack
+    int stack_n_pages = CONFIG_SEL4UTILS_STACK_SIZE / SIZE_BITS_TO_BYTES(MO_PAGE_BITS);
+    mo_t *stack_mo;
+    error = mo_component_allocate_rt(stack_n_pages, &stack_mo);
+    assert(error == 0);
+
+    // Attach stack to test process with guard page
+    void *stack_top;
+
+    attach_node_t *stack_attach_node;
+    error = ads_reserve(ads, NULL, stack_n_pages + 1, MO_PAGE_BITS, SEL4UTILS_RES_TYPE_STACK,
+                        1, seL4_ReadWrite, &stack_attach_node);
+    assert(error == 0);
+
+    error = ads_attach_to_res(ads, pd->pd_vka, stack_attach_node, SIZE_BITS_TO_BYTES(MO_PAGE_BITS), stack_mo);
+    assert(error == 0);
+
+    stack_top = stack_attach_node->vaddr + CONFIG_SEL4UTILS_STACK_SIZE;
+
+    // Configure the CPU
+    error = cpu_component_configure(cpu, ads, pd,
+                                    api_make_guard_skip_word(seL4_WordBits - PD_CSPACE_SIZE_BITS), 0,
+                                    ipc_buf_mo, ipc_buf_vaddr);
+    assert(error == 0);
+
+    // Configure the PD runtime
+    seL4_Word args[3] = {OSM, env->endpoint, 0};
+    error = pd_component_runtime_setup(pd, ads, cpu,
+                                       PdSetupType_PD_RUNTIME_SETUP,
+                                       3, args,
+                                       stack_top,
+                                       entry_pt,
+                                       ipc_buf_vaddr,
+                                       osm_init_vaddr);
+    assert(error == 0);
+
+    // Add the basic RDEs
+    rde_type_t resspc_type = {.type = GPICAP_TYPE_RESSPC};
+    pd_add_rde(pd, resspc_type, "RESSPC", RESSPC_SPACE_ID, get_gpi_server()->server_ep_obj.cptr);
+
+    rde_type_t ads_type = {.type = GPICAP_TYPE_ADS};
+    pd_add_rde(pd, ads_type, "ADS", get_ads_component()->space_id, get_gpi_server()->server_ep_obj.cptr);
+
+    rde_type_t cpu_type = {.type = GPICAP_TYPE_CPU};
+    pd_add_rde(pd, cpu_type, "CPU", get_cpu_component()->space_id, get_gpi_server()->server_ep_obj.cptr);
+
+    rde_type_t mo_type = {.type = GPICAP_TYPE_MO};
+    pd_add_rde(pd, mo_type, "MO", get_mo_component()->space_id, get_gpi_server()->server_ep_obj.cptr);
+
+    rde_type_t pd_type = {.type = GPICAP_TYPE_PD};
+    pd_add_rde(pd, pd_type, "PD", get_pd_component()->space_id, get_gpi_server()->server_ep_obj.cptr);
+
+    rde_type_t ep_type = {.type = GPICAP_TYPE_EP};
+    pd_add_rde(pd, ep_type, "EP", get_ep_component()->space_id, get_gpi_server()->server_ep_obj.cptr);
+}
+
+test_result_t osm_run_test(struct testcase *test, uintptr_t e)
+{
+    int error;
+    driver_env_t env = (driver_env_t)e;
+
+    /* copy test name */
+    char *test_name_dest = env->test_pd->shared_data->test_name;
+    strncpy(test_name_dest, test->name, TEST_NAME_MAX);
+    /* ensure string is null terminated */
+    test_name_dest[TEST_NAME_MAX - 1] = '\0';
+#ifdef CONFIG_DEBUG_BUILD
+    pd_set_name(env->test_pd, test->name);
+#endif
+
+    /* start the process */
+    error = cpu_start(env->test_cpu);
+
+    ZF_LOGF_IF(error != 0, "Failed to start test process!");
+
+    seL4_Yield();
+    int result = 0;
+#if 0
+    /* wait on it to finish or fault, report result */
+    int result = sel4test_driver_wait(env, test);
+
+    test_assert(result == SUCCESS);
+#else
+    printf("WIP, driver does not wait on osmosis process\n");
+#endif
+
+    return result;
+}
+
+void osm_tear_down(uintptr_t e)
+{
+    printf("WIP, driver does not tear down osmosis process\n");
+}
+
+DEFINE_TEST_TYPE(OSM, OSM, NULL, NULL, osm_set_up, osm_tear_down, osm_run_test);

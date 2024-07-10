@@ -22,15 +22,11 @@
 
 /* This file is shared with seltest-tests. */
 #include <test_init_data.h>
+
 #include <sel4gpi/pd_obj.h>
+#include <sel4gpi/cpu_obj.h>
 
 #define TESTS_APP "sel4test-tests"
-#define HELLO_APP "hello"
-#define MAX_MO_CHILD 10
-#define RAMDISK_APP "ramdisk_server"
-#define FS_APP "fs_server"
-#define KVSTORE_APP "kvstore_server"
-#define TEST_PD_ID 1
 
 #define MAX_TIMER_IRQS 4
 
@@ -43,13 +39,6 @@ typedef struct timer_callback_info timer_callback_info_t;
 
 struct driver_env
 {
-    /* An initialised vka that may be used by the test. */
-    vka_t vka;
-    /* virtual memory management interface */
-    vspace_t vspace;
-    /* abtracts over kernel version and boot environment */
-    simple_t simple;
-
     /* IO ops for devices */
     ps_io_ops_t ops;
 
@@ -78,20 +67,8 @@ struct driver_env
     /* timer callback information */
     timer_callback_info_t timer_cbs[MAX_TIMER_IRQS];
 
-    /* init data frame vaddr */
-    test_init_data_t *init;
-    /* extra cap to the init data frame for mapping into the remote vspace */
-    seL4_CPtr init_frame_cap_copy;
-
-    void *remote_vaddr;
-    sel4utils_process_t test_process;
-    seL4_CPtr endpoint;
-
     /* Add for libsel4gpi */
     seL4_CPtr gpi_endpoint_in_parent;
-
-    int num_untypeds;
-    vka_object_t *untypeds;
 
     /* device frame to use for some tests */
     vka_object_t device_obj;
@@ -101,6 +78,38 @@ struct driver_env
 
     /* irq handler for serial driver */
     seL4_CPtr serial_irq_handler;
+
+    /** FIELDS FOR NON-OSMOSIS TEST **/
+
+    /* init data frame vaddr */
+    test_init_data_t *init;
+    /* extra cap to the init data frame for mapping into the remote vspace */
+    seL4_CPtr init_frame_cap_copy;
+    /* address of the init data in the test process */
+    void *init_vaddr;
+
+    /* details of untypeds for test's allocator */
+    int num_untypeds;
+    vka_object_t *untypeds;
+
+    /* An initialised vka that may be used by the test. */
+    vka_t vka;
+    /* virtual memory management interface */
+    vspace_t vspace;
+    /* abtracts over kernel version and boot environment */
+    simple_t simple;
+
+    /* slot of the fault endpoint in the test process*/
+    seL4_CPtr endpoint;
+
+    /* test process */
+    sel4utils_process_t test_process;
+
+    /** FIELDS FOR OSMOSIS TEST **/
+
+    /* OSmosis PD running the test executable */
+    pd_t *test_pd;
+    cpu_t *test_cpu;
 };
 typedef struct driver_env *driver_env_t;
 

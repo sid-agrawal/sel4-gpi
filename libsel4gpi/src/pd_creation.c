@@ -198,7 +198,7 @@ int sel4gpi_ads_configure(ads_config_t *cfg,
     if (osm_data_mo && osm_data_mo->ep != seL4_CapNull)
     {
         void *pd_osm_data;
-        error = ads_client_attach(&vmr_rde, NULL, osm_data_mo, SEL4UTILS_RES_TYPE_GENERIC, &pd_osm_data);
+        error = ads_client_attach(&vmr_rde, NULL, osm_data_mo, SEL4UTILS_RES_TYPE_SHARED_FRAMES, &pd_osm_data);
         GOTO_IF_ERR(error, "Failed to attach OSmosis data MO to PD's ADS\n");
 
         if (ret_osm_data)
@@ -350,7 +350,7 @@ int sel4gpi_prepare_pd(pd_config_t *cfg, sel4gpi_runnable_t *runnable, int argc,
     seL4_CPtr free_slot;
     pd_client_context_t self_pd_conn = sel4gpi_get_pd_conn();
 
-    seL4_Word cnode_guard = api_make_guard_skip_word(seL4_WordBits - TEST_PROCESS_CSPACE_SIZE_BITS);
+    seL4_Word cnode_guard = api_make_guard_skip_word(seL4_WordBits - PD_CSPACE_SIZE_BITS);
 
     mo_client_context_t ipc_mo = {0};
     void *entry_point = NULL;
