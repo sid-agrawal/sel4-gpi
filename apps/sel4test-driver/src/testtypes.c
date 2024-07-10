@@ -330,18 +330,8 @@ test_result_t basic_run_test(struct testcase *test, uintptr_t e)
     int num_res;
 
 /* spawn the process */
-#if 1
-    // (XXX) Arya: We aren't starting the test process as a normal PD yet,
-    // so use this workaround to create a PD object anyway
-    void *osm_shared_data;
-    forge_pd_cap_from_init_data(env->init, &env->test_process, env->init->name, &osm_shared_data);
-    error = sel4utils_osm_spawn_process_v(&(env->test_process), osm_shared_data,
-                                          &env->vka, &env->vspace,
-                                          argc, argv, 1);
-#else
     error = sel4utils_spawn_process_v(&(env->test_process), &env->vka, &env->vspace,
                                       argc, argv, 1);
-#endif
 
     ZF_LOGF_IF(error != 0, "Failed to start test process!");
 
@@ -373,12 +363,8 @@ void basic_tear_down(uintptr_t e)
         vka_cnode_revoke(&path);
     }
 
-#if 1
-    destroy_test_pd();
-#else
     /* destroy the process */
     sel4utils_destroy_process(&(env->test_process), &env->vka);
-#endif
 }
 
 DEFINE_TEST_TYPE(BASIC, BASIC, NULL, NULL, basic_set_up, basic_tear_down, basic_run_test);

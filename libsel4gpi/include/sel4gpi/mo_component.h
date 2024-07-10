@@ -47,9 +47,7 @@ resource_component_context_t *get_mo_component(void);
 
 /**
  * @brief forges an MO resource given the list of frames.
- * Since this is currently only used for forging ELF regions, assume that page sizes are 4KB
- * (XXX) Arya: Eventually we should be able to remove this entirely.
- * For now, it is used when forging ADS attachments only.
+ * This is used when forging ADS attachments to root task only.
  *
  * @param frame_caps the frames belonging to the MO
  * @param num_pages total number of pages

@@ -408,36 +408,6 @@ int cpu_component_initialize(vka_t *server_vka,
 
 /** --- Functions callable by root task --- **/
 
-int forge_cpu_cap_from_tcb(sel4utils_process_t *process, // Change this to the sel4utils_thread_t
-                           vka_t *vka, uint32_t client_id,
-                           seL4_CPtr *cap_ret, uint32_t *id_ret)
-{
-    OSDB_PRINTF("Forging CPU cap from TCB\n");
-
-    assert(process != NULL);
-
-    int error = 0;
-    seL4_CPtr ret_cap;
-    cpu_component_registry_entry_t *new_entry;
-
-    /* Allocate the CPU object */
-    error = resource_component_allocate(get_cpu_component(), client_id, BADGE_OBJ_ID_NULL, false, NULL,
-                                        (resource_registry_node_t **)&new_entry, &ret_cap);
-    SERVER_GOTO_IF_ERR(error, "Failed to allocate new CPU object for forge\n");
-
-    new_entry->cpu.cspace = process->cspace.cptr;
-
-    *cap_ret = ret_cap;
-
-    if (id_ret)
-    {
-        *id_ret = new_entry->cpu.id;
-    }
-
-err_goto:
-    return error;
-}
-
 int cpu_component_stop(uint32_t cpu_id)
 {
     int error = 0;

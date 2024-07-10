@@ -45,6 +45,7 @@ resource_component_context_t *get_ads_component(void);
 
 /**
  * @brief Given a vspace_t insert it into the ADS server's metadata and return a cap to it.
+ * This should only be used for the root task
  *
  * @param vspace The vspace to insert.
  * @param vka The vka instance to use for allocating the cap.
