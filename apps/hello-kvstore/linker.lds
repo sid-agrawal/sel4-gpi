@@ -4,9 +4,14 @@
  * SPDX-License-Identifier: GPL-2.0-only
  */
 
+
 SECTIONS
 {
-  .lib_data :
+  .lib_data_prefix (NOLOAD) :
+  {
+    . = .;
+  }
+  .lib_data : ALIGN(4096)
   {
     apps/sel4test-driver/sel4test-tests/sqlite3/libsqlite3.a(.data)
     apps/sel4test-driver/kvstore/libkvstore_server_lib.a(.data)

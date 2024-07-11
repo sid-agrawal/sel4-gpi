@@ -39,13 +39,6 @@
 #define GPI_CLEANUP_PD_DEPTH 0
 
 /**
- * If false, start the test process in the sel4test way, then forge an OSmosis PD for it
- * If true, starts the test process as an OSmosis PD
- * - It will not have access to its own VKA
-*/
-#define TEST_PD_OSM 1
-
-/**
  * If true:     Resource servers call the root task to notify it when map relations are created.
  * If false:    Resource servers only expose map relations when dumping resource relations.
 */

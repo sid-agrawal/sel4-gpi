@@ -33,6 +33,8 @@
 #define HELLO_CLEANUP_APP "hello_cleanup"
 #define TOY_BLOCK_SERVER_RESOURCE_TYPE "TOY_BLOCK"
 #define TOY_FILE_SERVER_RESOURCE_TYPE "TOY_FILE"
+#define TOY_DB_SERVER_RESOURCE_TYPE "TOY_DB"
+#define N_REQUESTS 10
 
 static ads_client_context_t ads_conn;
 static pd_client_context_t pd_conn;
@@ -46,14 +48,20 @@ static uint64_t toy_block_space_id;
 static gpi_cap_t toy_file_type;
 static uint64_t toy_file_space_id;
 
-// This needs to be the same as the definition in hello-cleanup/main.c
+// Track the type/space ID of the toy_db server
+static gpi_cap_t toy_db_type;
+static uint64_t toy_db_space_id;
+
+// This needs to be the same as the definition in hello-cleanup/toy_server.h
 typedef enum _hello_mode
 {
     HELLO_CLEANUP_TOY_BLOCK_SERVER_MODE, ///< Process will serve toy_blocks
     HELLO_CLEANUP_TOY_FILE_SERVER_MODE,  ///< Process will serve toy_file
+    HELLO_CLEANUP_TOY_DB_SERVER_MODE,    ///< Process will serve toy_db
     HELLO_CLEANUP_TOY_BLOCK_CLIENT_MODE, ///< Process will request toy_blocks
     HELLO_CLEANUP_TOY_FILE_CLIENT_MODE,  ///< Process will request toy_file
-    HELLO_CLEANUP_NOTHING_MODE,         ///< Process will do nothing
+    HELLO_CLEANUP_TOY_DB_CLIENT_MODE,    ///< Process will request toy_DB
+    HELLO_CLEANUP_NOTHING_MODE,          ///< Process will do nothing
 } hello_mode_t;
 
 // Setup before all tests
@@ -78,10 +86,11 @@ static int setup(env_t env)
  * Starts the hello-cleanup process
  *
  * @param mode the mode for hello to run in
+ * @param n_client_requests number of requests for clients to make
  * @param hello_pd  returns the pd resource for the hello process
  * @return 0 on success, error otherwise
  */
-static int start_hello(hello_mode_t mode, pd_client_context_t *hello_pd)
+static int start_hello(hello_mode_t mode, uint32_t n_client_requests, pd_client_context_t *hello_pd)
 {
     int error;
 
@@ -107,6 +116,17 @@ static int start_hello(hello_mode_t mode, pd_client_context_t *hello_pd)
         toy_file_type = sel4gpi_get_resource_type_code(TOY_FILE_SERVER_RESOURCE_TYPE);
         return 0;
     }
+    else if (mode == HELLO_CLEANUP_TOY_DB_SERVER_MODE)
+    {
+        // Start the server with the resource server utility function
+        error = start_resource_server_pd_args(toy_file_type, toy_file_space_id, HELLO_CLEANUP_APP, &mode, 1,
+                                              &hello_pd->ep, &toy_db_space_id);
+
+        test_assert(error == 0);
+
+        toy_db_type = sel4gpi_get_resource_type_code(TOY_DB_SERVER_RESOURCE_TYPE);
+        return 0;
+    }
 
     // Otherwise, start the process normally
     sel4gpi_runnable_t runnable = {0};
@@ -116,10 +136,11 @@ static int start_hello(hello_mode_t mode, pd_client_context_t *hello_pd)
     *hello_pd = runnable.pd;
 
     // Setup the hello PD's args
-    int argc = 3;
+    int argc = 4;
     seL4_Word args[argc];
     // Second arg is unused, leave blank so we can use the same main function as hello server
     args[2] = mode;
+    args[3] = n_client_requests;
 
     // Copy the parent ep
     error = pd_client_send_cap(hello_pd, self_ep.ep, &args[0]);
@@ -133,6 +154,10 @@ static int start_hello(hello_mode_t mode, pd_client_context_t *hello_pd)
     else if (mode == HELLO_CLEANUP_TOY_FILE_CLIENT_MODE)
     {
         sel4gpi_add_rde_config(cfg, toy_file_type, toy_file_space_id);
+    }
+    else if (mode == HELLO_CLEANUP_TOY_DB_CLIENT_MODE)
+    {
+        sel4gpi_add_rde_config(cfg, toy_db_type, toy_db_space_id);
     }
 
     // Start it
@@ -177,15 +202,15 @@ int test_cleanup_policy_1(env_t env)
 
     /* Start the PDs */
     pd_client_context_t hello_server_pd;
-    error = start_hello(HELLO_CLEANUP_TOY_BLOCK_SERVER_MODE, &hello_server_pd);
+    error = start_hello(HELLO_CLEANUP_TOY_BLOCK_SERVER_MODE, N_REQUESTS, &hello_server_pd);
     test_assert(error == 0);
 
     pd_client_context_t hello_client_pd;
-    error = start_hello(HELLO_CLEANUP_TOY_BLOCK_CLIENT_MODE, &hello_client_pd);
+    error = start_hello(HELLO_CLEANUP_TOY_BLOCK_CLIENT_MODE, N_REQUESTS, &hello_client_pd);
     test_assert(error == 0);
 
     pd_client_context_t hello_dummy_pd;
-    error = start_hello(HELLO_CLEANUP_NOTHING_MODE, &hello_dummy_pd);
+    error = start_hello(HELLO_CLEANUP_NOTHING_MODE, N_REQUESTS, &hello_dummy_pd);
     test_assert(error == 0);
 
 #ifdef CONFIG_DEBUG_BUILD
@@ -201,6 +226,15 @@ int test_cleanup_policy_1(env_t env)
     /* Remove RDE from test process so that it won't be cleaned up by recursive cleanup */
     error = pd_client_remove_rde(&pd_conn, toy_block_type, toy_block_space_id);
     test_assert(error == 0);
+
+    /* Wait for clients to finish making requests */
+    seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0, 0);
+    for (int i = 0; i < 2; i++)
+    {
+        tag = seL4_Recv(self_ep.raw_endpoint, NULL);
+        error = seL4_MessageInfo_get_label(tag);
+        test_assert(error == 0);
+    }
 
     /* Print model state before crash */
     printf("Dumping model state before crash\n");
@@ -282,23 +316,23 @@ int test_cleanup_policy_2(env_t env)
 
     /* Start the PDs */
     pd_client_context_t hello_server_toy_block_pd;
-    error = start_hello(HELLO_CLEANUP_TOY_BLOCK_SERVER_MODE, &hello_server_toy_block_pd);
+    error = start_hello(HELLO_CLEANUP_TOY_BLOCK_SERVER_MODE, N_REQUESTS, &hello_server_toy_block_pd);
     test_assert(error == 0);
 
     pd_client_context_t hello_server_toy_file_pd;
-    error = start_hello(HELLO_CLEANUP_TOY_FILE_SERVER_MODE, &hello_server_toy_file_pd);
+    error = start_hello(HELLO_CLEANUP_TOY_FILE_SERVER_MODE, N_REQUESTS, &hello_server_toy_file_pd);
     test_assert(error == 0);
 
     pd_client_context_t hello_client_toy_block_pd;
-    error = start_hello(HELLO_CLEANUP_TOY_BLOCK_CLIENT_MODE, &hello_client_toy_block_pd);
+    error = start_hello(HELLO_CLEANUP_TOY_BLOCK_CLIENT_MODE, N_REQUESTS, &hello_client_toy_block_pd);
     test_assert(error == 0);
 
     pd_client_context_t hello_client_toy_file_pd;
-    error = start_hello(HELLO_CLEANUP_TOY_FILE_CLIENT_MODE, &hello_client_toy_file_pd);
+    error = start_hello(HELLO_CLEANUP_TOY_FILE_CLIENT_MODE, N_REQUESTS, &hello_client_toy_file_pd);
     test_assert(error == 0);
 
     pd_client_context_t hello_dummy_pd;
-    error = start_hello(HELLO_CLEANUP_NOTHING_MODE, &hello_dummy_pd);
+    error = start_hello(HELLO_CLEANUP_NOTHING_MODE, N_REQUESTS, &hello_dummy_pd);
     test_assert(error == 0);
 
 #ifdef CONFIG_DEBUG_BUILD
@@ -321,6 +355,15 @@ int test_cleanup_policy_2(env_t env)
 
     error = pd_client_remove_rde(&pd_conn, toy_file_type, toy_file_space_id);
     test_assert(error == 0);
+
+    /* Wait for clients to finish making requests */
+    seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0, 0);
+    for (int i = 0; i < 3; i++)
+    {
+        tag = seL4_Recv(self_ep.raw_endpoint, NULL);
+        error = seL4_MessageInfo_get_label(tag);
+        test_assert(error == 0);
+    }
 
     /* Print model state before crash */
     printf("Dumping model state before crash\n");
@@ -372,3 +415,146 @@ int test_cleanup_policy_2(env_t env)
     return sel4test_get_result();
 }
 DEFINE_TEST_OSM(GPICL002, "Test the PD cleanup policy 2", test_cleanup_policy_2, true)
+
+int test_cleanup_policy_3(env_t env)
+{
+    int error;
+
+    setup(env);
+
+    printf("------------------STARTING TEST: %s------------------\n", __func__);
+
+    /* Start the PDs */
+    pd_client_context_t hello_server_toy_block_pd;
+    error = start_hello(HELLO_CLEANUP_TOY_BLOCK_SERVER_MODE, N_REQUESTS, &hello_server_toy_block_pd);
+    test_assert(error == 0);
+
+    pd_client_context_t hello_server_toy_file_pd;
+    error = start_hello(HELLO_CLEANUP_TOY_FILE_SERVER_MODE, N_REQUESTS, &hello_server_toy_file_pd);
+    test_assert(error == 0);
+
+    pd_client_context_t hello_server_toy_db_pd;
+    error = start_hello(HELLO_CLEANUP_TOY_DB_SERVER_MODE, N_REQUESTS, &hello_server_toy_db_pd);
+    test_assert(error == 0);
+
+    pd_client_context_t hello_client_toy_block_pd;
+    error = start_hello(HELLO_CLEANUP_TOY_BLOCK_CLIENT_MODE, N_REQUESTS, &hello_client_toy_block_pd);
+    test_assert(error == 0);
+
+    pd_client_context_t hello_client_toy_file_pd;
+    error = start_hello(HELLO_CLEANUP_TOY_FILE_CLIENT_MODE, N_REQUESTS, &hello_client_toy_file_pd);
+    test_assert(error == 0);
+
+    pd_client_context_t hello_client_toy_db_pd;
+    error = start_hello(HELLO_CLEANUP_TOY_DB_CLIENT_MODE, N_REQUESTS, &hello_client_toy_db_pd);
+    test_assert(error == 0);
+
+    pd_client_context_t hello_dummy_pd;
+    error = start_hello(HELLO_CLEANUP_NOTHING_MODE, N_REQUESTS, &hello_dummy_pd);
+    test_assert(error == 0);
+
+#ifdef CONFIG_DEBUG_BUILD
+    // Name the PDs for model extraction
+    error = pd_client_set_name(&hello_server_toy_block_pd, "toy_block_server");
+    test_assert(error == 0);
+    error = pd_client_set_name(&hello_client_toy_block_pd, "toy_block_client");
+    test_assert(error == 0);
+    error = pd_client_set_name(&hello_server_toy_file_pd, "toy_file_server");
+    test_assert(error == 0);
+    error = pd_client_set_name(&hello_client_toy_file_pd, "toy_file_client");
+    test_assert(error == 0);
+    error = pd_client_set_name(&hello_server_toy_db_pd, "toy_db_server");
+    test_assert(error == 0);
+    error = pd_client_set_name(&hello_client_toy_db_pd, "toy_db_client");
+    test_assert(error == 0);
+    error = pd_client_set_name(&hello_dummy_pd, "dummy_pd");
+    test_assert(error == 0);
+#endif
+
+    /* Remove RDEs from test process so that it won't be cleaned up by recursive cleanup */
+    error = pd_client_remove_rde(&pd_conn, toy_block_type, toy_block_space_id);
+    test_assert(error == 0);
+
+    error = pd_client_remove_rde(&pd_conn, toy_file_type, toy_file_space_id);
+    test_assert(error == 0);
+
+    error = pd_client_remove_rde(&pd_conn, toy_db_type, toy_db_space_id);
+    test_assert(error == 0);
+
+    /* Wait for clients to finish making requests */
+    seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0, 0);
+    for (int i = 0; i < 4; i++)
+    {
+        tag = seL4_Recv(self_ep.raw_endpoint, NULL);
+        error = seL4_MessageInfo_get_label(tag);
+        test_assert(error == 0);
+    }
+
+    /* Print model state before crash */
+    printf("Dumping model state before crash\n");
+    error = pd_client_dump(&pd_conn, NULL, 0);
+    test_assert(error == 0);
+
+    /* Crash a PD */
+    printf("Crashing toy_block server PD\n");
+    error = pd_client_terminate(&hello_server_toy_block_pd);
+    test_assert(error == 0);
+
+    /* Print model state after crash */
+    printf("Dumping model state after crash\n");
+    error = pd_client_dump(&pd_conn, NULL, 0);
+    test_assert(error == 0);
+
+    /* Cleanup PDs */
+    error = pd_client_terminate(&hello_server_toy_file_pd);
+
+    if (error != seL4_NoError)
+    {
+        printf("WARNING: Failed to cleanup hello-server-toy_file PD (%d), "
+               "this may be expected if the cleanup policy already destroyed it. \n",
+               hello_server_toy_file_pd.id);
+    }
+
+    error = pd_client_terminate(&hello_server_toy_db_pd);
+
+    if (error != seL4_NoError)
+    {
+        printf("WARNING: Failed to cleanup hello-server-toy_db PD (%d), "
+               "this may be expected if the cleanup policy already destroyed it. \n",
+               hello_server_toy_db_pd.id);
+    }
+
+    error = pd_client_terminate(&hello_client_toy_block_pd);
+
+    if (error != seL4_NoError)
+    {
+        printf("WARNING: Failed to cleanup hello-client-toy_block PD (%d), "
+               "this may be expected if the cleanup policy already destroyed it. \n",
+               hello_client_toy_block_pd.id);
+    }
+
+    error = pd_client_terminate(&hello_client_toy_file_pd);
+
+    if (error != seL4_NoError)
+    {
+        printf("WARNING: Failed to cleanup hello-client-toy_file PD (%d), "
+               "this may be expected if the cleanup policy already destroyed it. \n",
+               hello_client_toy_file_pd.id);
+    }
+
+    error = pd_client_terminate(&hello_client_toy_db_pd);
+
+    if (error != seL4_NoError)
+    {
+        printf("WARNING: Failed to cleanup hello-client-toy_db PD (%d), "
+               "this may be expected if the cleanup policy already destroyed it. \n",
+               hello_client_toy_db_pd.id);
+    }
+
+    error = pd_client_terminate(&hello_dummy_pd);
+    test_assert(error == 0);
+
+    printf("------------------ENDING: %s------------------\n", __func__);
+    return sel4test_get_result();
+}
+DEFINE_TEST_OSM(GPICL003, "Test the PD cleanup policy 3", test_cleanup_policy_3, true)

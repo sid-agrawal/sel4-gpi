@@ -31,7 +31,7 @@ int sel4gpi_rpc_call(sel4gpi_rpc_env_t *env, seL4_CPtr ep, void *msg,
     if (!ret)
     {
         ZF_LOGE("sel4gpi_rpc: Failed to encode message (%s)", PB_GET_ERROR(&stream));
-        return -1;
+        return 1;
     }
 
     size_t stream_size = stream.bytes_written / sizeof(seL4_Word);
@@ -52,7 +52,7 @@ int sel4gpi_rpc_call(sel4gpi_rpc_env_t *env, seL4_CPtr ep, void *msg,
 
     if (seL4_MessageInfo_ptr_get_label(&reply_tag) != seL4_NoError)
     {
-        return -1;
+        return 1;
     }
 
     pb_istream_t istream = pb_istream_from_IPC(0);
@@ -60,7 +60,7 @@ int sel4gpi_rpc_call(sel4gpi_rpc_env_t *env, seL4_CPtr ep, void *msg,
     if (!ret)
     {
         ZF_LOGE("sel4gpi_rpc: Failed to decode server reply (%s)", PB_GET_ERROR(&stream));
-        return -1;
+        return 1;
     }
 
     return 0;
@@ -73,7 +73,7 @@ int sel4gpi_rpc_recv(sel4gpi_rpc_env_t *env, void *res)
     if (!ret)
     {
         ZF_LOGE("Invalid protobuf stream (%s)", PB_GET_ERROR(&stream));
-        return -1;
+        return 1;
     }
 
     return 0;
@@ -87,7 +87,7 @@ int sel4gpi_rpc_reply(sel4gpi_rpc_env_t *env, void *msg, seL4_MessageInfo_t *msg
     if (!ret)
     {
         ZF_LOGE("Failed to encode reply (%s)", PB_GET_ERROR(&ostream));
-        return -1;
+        return 1;
     }
 
     size_t size = ostream.bytes_written / sizeof(seL4_Word);

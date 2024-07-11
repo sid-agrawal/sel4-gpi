@@ -47,19 +47,6 @@ int cpu_component_initialize(vka_t *server_vka,
 resource_component_context_t *get_cpu_component(void);
 
 /**
- * @brief Given a sel4utils process, insert it into the CPU server's metadata and return a cap to it.
- * This should only be used for the root task
- *
- * @param proc The process to forge
- * @param vka The vka instance to use for allocating the cap.
- * @param client_id the client requesting a CPU cap
- * @param cap_ret returns the cap to the CPU
- * @param cap_ret returns the ID of the new CPU
- * @return int 0 on success, error otherwise
- */
-int forge_cpu_cap_from_tcb(sel4utils_process_t *proc, vka_t *vka, uint32_t client_id, seL4_CPtr *cap_ret, uint32_t *id_ret);
-
-/**
  * Stops a CPU's TCB
  *
  * @param cpu_id ID of the cpu to stop
