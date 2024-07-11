@@ -43,7 +43,7 @@ set(
 # Compile DTS to DTB
 execute_process(
     COMMAND
-        ${DTC_TOOL} -I dts -O dtb -o ${VmDTBPath} ${VmDTSPath}
+        ${DTC_TOOL} -q -I dts -O dtb -o ${VmDTBPath} ${VmDTSPath}
     RESULT_VARIABLE error
 )
 if(error)
@@ -83,7 +83,7 @@ list(
 list(
     REMOVE_ITEM
     deps
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/arch/${KernelSel4Arch}/vgic/vgic_v3.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/arch/${KernelSel4Arch}/${VMMImplementation}/vgic/vgic_v3.c
 )
 
 # add_link_options("-fuse-ld=lld")

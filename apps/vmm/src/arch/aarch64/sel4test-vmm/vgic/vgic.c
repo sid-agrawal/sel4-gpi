@@ -7,6 +7,7 @@
 #include "vgic/vgic.h"
 #include "vgic/virq.h"
 #include <utils/arith.h>
+#include <vmm-common/vmm_common.h>
 #include <sel4test-vmm/fault.h>
 
 #if defined(GIC_V2)
@@ -22,7 +23,7 @@
 /* The driver expects the VGIC state to be initialised before calling any of the driver functionality. */
 extern vgic_t vgic;
 
-bool fault_handle_vgic_maintenance(size_t vcpu_id)
+bool fault_handle_vgic_maintenance(seL4_CPtr vcpu, size_t vcpu_id)
 {
     // @ivanv: reivist, also inconsistency between int and bool
     bool success = true;
@@ -42,9 +43,9 @@ bool fault_handle_vgic_maintenance(size_t vcpu_id)
     slot->ack_fn = NULL;
     slot->ack_data = NULL;
     /* Clear pending */
-    LOG_IRQ("Maintenance IRQ %d\n", lr_virq.virq);
+    VMM_PRINT("Maintenance IRQ %d\n", lr_virq.virq);
     set_pending(vgic_get_dist(vgic.registers), lr_virq.virq, false, vcpu_id);
-    virq_ack(vcpu_id, &lr_virq);
+    virq_ack(vcpu, &lr_virq);
     /* Check the overflow list for pending IRQs */
     struct virq_handle *virq = vgic_irq_dequeue(&vgic, vcpu_id);
 
@@ -58,13 +59,12 @@ bool fault_handle_vgic_maintenance(size_t vcpu_id)
 
     if (virq)
     {
-        success = vgic_vcpu_load_list_reg(&vgic, vcpu_id, idx, group, virq);
+        success = vgic_vcpu_load_list_reg(vcpu, &vgic, vcpu_id, idx, group, virq);
     }
 
     if (!success)
     {
-        printf("VGIC|ERROR: maintenance handler failed\n");
-        assert(0);
+        VMM_PRINTERR("VGIC: maintenance handler failed\n");
     }
 
     return success;
@@ -83,11 +83,11 @@ bool vgic_register_irq(size_t vcpu_id, int virq_num, virq_ack_fn_t ack_fn, void 
     return virq_add(vcpu_id, &vgic, &virq);
 }
 
-bool vgic_inject_irq(size_t vcpu_id, int irq)
+bool vgic_inject_irq(seL4_CPtr vcpu, size_t vcpu_id, int irq)
 {
-    LOG_IRQ("Injecting IRQ %d\n", irq);
+    VMM_PRINTV("Injecting IRQ %d\n", irq);
 
-    return vgic_dist_set_pending_irq(&vgic, vcpu_id, irq);
+    return vgic_dist_set_pending_irq(vcpu, &vgic, vcpu_id, irq);
 
     // @ivanv: explain why we don't check error before checking this fault stuff
     // @ivanv: seperately, it seems weird to have this fault handling code here?
@@ -99,7 +99,8 @@ bool vgic_inject_irq(size_t vcpu_id, int irq)
 }
 
 // @ivanv: revisit this whole function
-bool handle_vgic_dist_fault(seL4_CPtr tcb, size_t vcpu_id, uint64_t fault_addr, uint64_t fsr, seL4_UserContext *regs)
+bool handle_vgic_dist_fault(seL4_CPtr vcpu, seL4_CPtr tcb, size_t vcpu_id,
+                            uint64_t fault_addr, uint64_t fsr, seL4_UserContext *regs)
 {
     /* Make sure that the fault address actually lies within the GIC distributor region. */
     assert(fault_addr >= GIC_DIST_PADDR);
@@ -109,14 +110,12 @@ bool handle_vgic_dist_fault(seL4_CPtr tcb, size_t vcpu_id, uint64_t fault_addr, 
     bool success = false;
     if (fault_is_read(fsr))
     {
-        // printf("VGIC|INFO: Read dist\n");
         success = vgic_dist_reg_read(tcb, vcpu_id, &vgic, offset, fsr, regs);
         assert(success);
     }
     else
     {
-        // printf("VGIC|INFO: Write dist\n");
-        success = vgic_dist_reg_write(tcb, vcpu_id, &vgic, offset, fsr, regs);
+        success = vgic_dist_reg_write(vcpu, tcb, vcpu_id, &vgic, offset, fsr, regs);
         assert(success);
     }
 

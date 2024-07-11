@@ -20,7 +20,7 @@ bool guest_start(seL4_CPtr tcb, uintptr_t kernel_pc, uintptr_t dtb, uintptr_t in
     regs.pc = kernel_pc;
     /* Write out all the TCB registers */
     seL4_Error err = seL4_TCB_WriteRegisters(
-        tcb,   // XXX + boot_vcpu_id?
+        tcb,
         false, // We'll explcitly start the guest below rather than in this call
         0,     // No flags
         4,     // Writing to x0, pc, and spsr

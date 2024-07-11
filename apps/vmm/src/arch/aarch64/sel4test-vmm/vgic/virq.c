@@ -1,4 +1,5 @@
 #include "vgic/vgic.h"
+#include <vmm-common/vmm_common.h>
 #include <sel4test-vmm/virq.h>
 #include <utils/util.h>
 
@@ -6,10 +7,13 @@
 #define SGI_FUNC_CALL 1
 #define PPI_VTIMER_IRQ 27
 
-static void vppi_event_ack(size_t vcpu_id, int irq, void *cookie)
+static void vppi_event_ack(seL4_CPtr vcpu, int irq, void *cookie)
 {
-    ZF_LOGE("Not implemented");
-    // microkit_arm_vcpu_ack_vppi(vcpu_id, irq); // XXX
+    seL4_Error err = seL4_ARM_VCPU_AckVPPI(vcpu, irq);
+    if (err != seL4_NoError)
+    {
+        VMM_PRINTERR("Failed to ack VPPI event\n");
+    }
 }
 
 static void sgi_ack(size_t vcpu_id, int irq, void *cookie) {}
@@ -48,9 +52,9 @@ bool virq_controller_init(size_t boot_vcpu_id)
     return true;
 }
 
-bool virq_inject(size_t vcpu_id, int irq)
+bool virq_inject(seL4_CPtr vcpu, size_t vcpu_id, int irq)
 {
-    return vgic_inject_irq(vcpu_id, irq);
+    return vgic_inject_irq(vcpu, vcpu_id, irq);
 }
 
 bool virq_register(size_t vcpu_id, size_t virq_num, virq_ack_fn_t ack_fn, void *ack_data)

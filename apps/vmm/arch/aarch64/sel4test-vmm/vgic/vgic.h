@@ -73,9 +73,10 @@
     } while (0)
 #endif
 
+/* every vcpu_id reference here is the ID of the virtual processor - NOT the VMM's assigned ID for the guest */
 void vgic_init();
-bool fault_handle_vgic_maintenance(size_t vcpu_id);
-bool handle_vgic_dist_fault(seL4_CPtr tcb, size_t vcpu_id, uint64_t fault_addr, uint64_t fsr, seL4_UserContext *regs);
-bool handle_vgic_redist_fault(seL4_CPtr tcb, size_t vcpu_id, uint64_t fault_addr, uint64_t fsr, seL4_UserContext *regs);
+bool fault_handle_vgic_maintenance(seL4_CPtr vcpu, size_t vcpu_id);
+bool handle_vgic_dist_fault(seL4_CPtr vcpu, seL4_CPtr tcb, size_t vcpu_id, uint64_t fault_addr, uint64_t fsr, seL4_UserContext *regs);
+bool handle_vgic_redist_fault(seL4_CPtr vcpu, seL4_CPtr tcb, size_t vcpu_id, uint64_t fault_addr, uint64_t fsr, seL4_UserContext *regs);
 bool vgic_register_irq(size_t vcpu_id, int virq_num, virq_ack_fn_t ack_fn, void *ack_data);
-bool vgic_inject_irq(size_t vcpu_id, int irq);
+bool vgic_inject_irq(seL4_CPtr vcpu, size_t vcpu_id, int irq);

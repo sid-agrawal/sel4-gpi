@@ -15,8 +15,8 @@
 bool fault_handle(vm_context_t *vm, seL4_MessageInfo_t *msg);
 
 bool fault_handle_vcpu_exception(vm_context_t *vm);
-bool fault_handle_vppi_event(size_t vcpu_id);
-bool fault_handle_user_exception(size_t vcpu_id);
+bool fault_handle_vppi_event(vm_context_t *vm);
+bool fault_handle_user_exception(vm_context_t *vm);
 bool fault_handle_unknown_syscall(vm_context_t *vm);
 bool fault_handle_vm_exception(vm_context_t *vm);
 

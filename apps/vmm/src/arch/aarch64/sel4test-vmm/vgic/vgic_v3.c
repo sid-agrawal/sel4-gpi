@@ -40,7 +40,7 @@
 #include <stdint.h>
 #include <stdlib.h>
 
-#include "sel4test-fault.h"
+#include "sel4test-vmm/fault.h"
 #include "vgic/virq.h"
 #include "vgic/vgic_v3.h"
 #include "vgic/vdist.h"
@@ -99,7 +99,8 @@ fault_return:
     return success;
 }
 
-static bool handle_vgic_redist_write_fault(seL4_CPtr tcb, size_t vcpu_id, vgic_t *vgic, uint64_t offset, uint64_t fsr, seL4_UserContext *regs)
+static bool handle_vgic_redist_write_fault(seL4_CPtr tcb, seL4_CPtr vcpu, size_t vcpu_id, vgic_t *vgic,
+                                           uint64_t offset, uint64_t fsr, seL4_UserContext *regs)
 {
     // @ivanv: why is this not reading from the redist?
     uintptr_t fault_addr = GIC_REDIST_PADDR + offset;
@@ -123,7 +124,7 @@ static bool handle_vgic_redist_write_fault(seL4_CPtr tcb, size_t vcpu_id, vgic_t
             int irq;
             irq = CTZ(data);
             data &= ~(1U << irq);
-            vgic_dist_enable_irq(vgic, vcpu_id, irq);
+            vgic_dist_enable_irq(vcpu, vgic, vcpu_id, irq);
         }
         break;
     case RANGE32(GICR_ICENABLER0, GICR_ICENABLER0):
@@ -159,7 +160,7 @@ static bool handle_vgic_redist_write_fault(seL4_CPtr tcb, size_t vcpu_id, vgic_t
     return true;
 }
 
-bool handle_vgic_redist_fault(seL4_CPtr tcb, size_t vcpu_id, uint64_t fault_addr, uint64_t fsr, seL4_UserContext *regs)
+bool handle_vgic_redist_fault(seL4_CPtr vcpu, seL4_CPtr tcb, size_t vcpu_id, uint64_t fault_addr, uint64_t fsr, seL4_UserContext *regs)
 {
     assert(fault_addr >= GIC_REDIST_PADDR);
     uint64_t offset = fault_addr - GIC_REDIST_PADDR;
@@ -171,7 +172,7 @@ bool handle_vgic_redist_fault(seL4_CPtr tcb, size_t vcpu_id, uint64_t fault_addr
     }
     else
     {
-        return handle_vgic_redist_write_fault(tcb, vcpu_id, &vgic, offset, fsr, regs);
+        return handle_vgic_redist_write_fault(tcb, vcpu, vcpu_id, &vgic, offset, fsr, regs);
     }
 }
 
@@ -230,11 +231,11 @@ void vgic_init()
     }
     for (int i = 0; i < NUM_VCPU_LOCAL_VIRQS; i++)
     {
-        vgic.vgic_vcpu[VCPU_ID].local_virqs[i].virq = VIRQ_INVALID;
+        vgic.vgic_vcpu[GUEST_VCPU_ID].local_virqs[i].virq = VIRQ_INVALID;
     }
     for (int i = 0; i < NUM_LIST_REGS; i++)
     {
-        vgic.vgic_vcpu[VCPU_ID].lr_shadow[i].virq = VIRQ_INVALID;
+        vgic.vgic_vcpu[GUEST_VCPU_ID].lr_shadow[i].virq = VIRQ_INVALID;
     }
     vgic.registers = &vgic_regs;
     vgic_regs.dist = &dist;

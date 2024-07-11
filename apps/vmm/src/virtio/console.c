@@ -209,7 +209,7 @@ static int virtio_console_handle_tx(struct virtio_device *dev)
     dev->data.InterruptStatus = BIT_LOW(0);
     // @ivanv: The virq_inject API is poor as it expects a vCPU ID even though
     // it doesn't matter for the case of SPIs, which is what virtIO devices use.
-    bool success = virq_inject(GUEST_VCPU_ID, dev->virq);
+    bool success = virq_inject(0, GUEST_VCPU_ID, dev->virq); // TODO: pass in the VCPU cap
     assert(success);
 
     return success;
@@ -269,7 +269,7 @@ int virtio_console_handle_rx(struct virtio_device *dev)
         // 3. Inject IRQ to guest
         // @ivanv: is setting interrupt status necesary?
         dev->data.InterruptStatus = BIT_LOW(0);
-        bool success = virq_inject(GUEST_VCPU_ID, dev->virq);
+        bool success = virq_inject(0, GUEST_VCPU_ID, dev->virq); // TODO: pass in the VCPU cap
         assert(success);
     }
 

@@ -42,11 +42,11 @@ struct virq_handle
 };
 
 // @ivanv: revisit
-static inline void virq_ack(size_t vcpu_id, struct virq_handle *irq)
+static inline void virq_ack(seL4_CPtr vcpu, struct virq_handle *irq)
 {
     // printf("VGIC|INFO: Acking for vIRQ %d\n", irq->virq);
     assert(irq->ack_fn);
-    irq->ack_fn(vcpu_id, irq->virq, irq->ack_data);
+    irq->ack_fn(vcpu, irq->virq, irq->ack_data);
 }
 
 /* TODO: A typical number of list registers supported by GIC is four, but not
@@ -219,13 +219,19 @@ static inline int vgic_find_empty_list_reg(vgic_t *vgic, size_t vcpu_id)
     return -1;
 }
 
-static inline bool vgic_vcpu_load_list_reg(vgic_t *vgic, size_t vcpu_id, int idx, int group, struct virq_handle *virq)
+static inline bool vgic_vcpu_load_list_reg(seL4_CPtr vcpu, vgic_t *vgic, size_t vcpu_id,
+                                           int idx, int group, struct virq_handle *virq)
 {
     vgic_vcpu_t *vgic_vcpu = get_vgic_vcpu(vgic, vcpu_id);
     assert(vgic_vcpu);
     assert((idx >= 0) && (idx < ARRAY_SIZE(vgic_vcpu->lr_shadow)));
     // @ivanv: why is the priority 0?
-    // microkit_arm_vcpu_inject_irq(vcpu_id, virq->virq, 0, group, idx); // XXX
+    seL4_Error err = seL4_ARM_VCPU_InjectIRQ(vcpu, virq->virq, 0, group, idx);
+    if (err)
+    {
+        VMM_PRINTERR("Failed to inject VCPU IRQ\n");
+        return false;
+    }
     vgic_vcpu->lr_shadow[idx] = *virq;
 
     return true;

@@ -15,8 +15,8 @@
  */
 typedef struct _vm_context
 {
-    uint32_t id;
-    vka_object_t vcpu;
+    uint32_t id;       ///< an ID assigned by the VMM
+    vka_object_t vcpu; ///< the vCPU, currently only allow guests to use 1 vCPU
     vka_object_t vspace_root;
     vspace_t vspace;
     sel4utils_alloc_data_t vspace_data;
@@ -41,7 +41,7 @@ typedef struct _vmon_context
     seL4_CPtr serial_irq_ntfn; ///< badged notification for the serial interrupt
     vka_object_t vm_fault_ep;
     uint32_t guest_id_counter; ///< the next free VM ID
-    vm_context_t *guests[GUEST_NUM_VCPUS];
+    vm_context_t *guests[MAX_GUEST_COUNT];
 } vmon_context_t;
 
 /**

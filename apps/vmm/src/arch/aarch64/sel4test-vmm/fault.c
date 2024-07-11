@@ -8,6 +8,7 @@
 #include "hsr.h"
 #include "smc.h"
 #include "vgic/vgic.h"
+#include <sel4debug/register_dump.h>
 #include <sel4gpi/debug.h>
 #include <vmm-common/fault_common.h>
 #include <vmm-common/vmm_common.h>
@@ -57,7 +58,7 @@ static enum fault_width fault_get_width(uint64_t fsr)
     }
     else
     {
-        ZF_LOGE("Received invalid FSR: 0x%lx\n", fsr);
+        VMM_PRINTERR("Received invalid FSR: 0x%lx\n", fsr);
         // @ivanv: reviist
         // int rt;
         // rt = decode_instruction(f);
@@ -87,8 +88,8 @@ uint64_t fault_get_data_mask(uint64_t addr, uint64_t fsr)
         mask = ~mask;
         break;
     default:
-        ZF_LOGE("unknown width: 0x%x, from FSR: 0x%lx, addr: 0x%lx\n",
-                fault_get_width(fsr), fsr, addr);
+        VMM_PRINTERR("unknown width: 0x%x, from FSR: 0x%lx, addr: 0x%lx\n",
+                     fault_get_width(fsr), fsr, addr);
         assert(0);
         return 0;
     }
@@ -166,8 +167,7 @@ seL4_Word *decode_rt(uint64_t reg, seL4_UserContext *regs)
     case 31:
         return &wzr;
     default:
-        printf("invalid reg %ld\n", reg);
-        assert(!"Invalid register");
+        VMM_PRINTERR("invalid reg %ld\n", reg);
         return NULL;
     }
 }
@@ -192,7 +192,7 @@ static int get_rt(uint64_t fsr)
     }
     else
     {
-        printf("decode_insturction for AArch64 not implemented\n");
+        VMM_PRINTERR("decode_insturction for AArch64 not implemented\n");
         assert(0);
         // @ivanv: implement decode instruction for aarch64
         // rt = decode_instruction(f);
@@ -261,7 +261,7 @@ bool fault_handle_vcpu_exception(vm_context_t *vm)
     switch (hsr_ec_class)
     {
     case HSR_SMC_64_EXCEPTION:
-        if (handle_smc(vm->id, &regs, hsr))
+        if (handle_smc(GUEST_VCPU_ID, &regs, hsr))
         {
             return fault_advance_vcpu(vm->tcb.cptr, &regs);
         }
@@ -270,36 +270,40 @@ bool fault_handle_vcpu_exception(vm_context_t *vm)
         // If we get a WFI exception, we just do nothing in the VMM.
         return true;
     default:
-        ZF_LOGE("unknown SMC exception, EC class: 0x%lx, HSR: 0x%x\n", hsr_ec_class, hsr);
+        VMM_PRINTERR("unknown SMC exception, EC class: 0x%lx, HSR: 0x%x\n", hsr_ec_class, hsr);
         return false;
     }
 }
 
-bool fault_handle_vppi_event(size_t vcpu_id)
+bool fault_handle_vppi_event(vm_context_t *vm)
 {
     uint64_t ppi_irq = seL4_GetMR(seL4_VPPIEvent_IRQ);
     // We directly inject the interrupt assuming it has been previously registered.
     // If not the interrupt will dropped by the VM.
-    bool success = vgic_inject_irq(vcpu_id, ppi_irq);
+    bool success = vgic_inject_irq(vm->vcpu.cptr, GUEST_VCPU_ID, ppi_irq);
     if (!success)
     {
         // @ivanv, make a note that when having a lot of printing on it can cause this error
-        ZF_LOGE("VPPI IRQ %lu dropped on vCPU %ld\n", ppi_irq, vcpu_id);
+        VMM_PRINTERR("VPPI IRQ %lu dropped on VM %ld\n", ppi_irq, vm->id);
         // Acknowledge to unmask it as our guest will not use the interrupt
-        // microkit_arm_vcpu_ack_vppi(vcpu_id, ppi_irq); // XXX
+        seL4_Error err = seL4_ARM_VCPU_AckVPPI(vm->vcpu.cptr, ppi_irq);
+        if (err)
+        {
+            VMM_PRINTERR("Failed to ACK VPPI in VM %d\n", vm->id);
+        }
     }
 
     return true;
 }
 
-bool fault_handle_user_exception(size_t vcpu_id)
+bool fault_handle_user_exception(vm_context_t *vm)
 {
     // @ivanv: print out VM name/vCPU id when we have multiple VMs
     size_t fault_ip = seL4_GetMR(seL4_UserException_FaultIP);
     size_t number = seL4_GetMR(seL4_UserException_Number);
-    ZF_LOGE("Invalid instruction fault at IP: 0x%lx, number: 0x%lx", fault_ip, number);
+    VMM_PRINTERR("Invalid instruction fault at IP: 0x%lx, number: 0x%lx", fault_ip, number);
     /* All we do is dump the TCB registers. */
-    // tcb_print_regs(vcpu_id);
+    sel4debug_dump_registers(vm->tcb.cptr);
 
     return true;
 }
@@ -313,19 +317,19 @@ bool fault_handle_unknown_syscall(vm_context_t *vm)
     // @ivanv: should print out the name of the VM the fault came from.
     size_t syscall = seL4_GetMR(seL4_UnknownSyscall_Syscall);
     size_t fault_ip = seL4_GetMR(seL4_UnknownSyscall_FaultIP);
-    ZF_LOGI("Received syscall 0x%lx from VM %d\n", syscall, vm->id);
+    VMM_PRINT("Received syscall 0x%lx from VM %d\n", syscall, vm->id);
     switch (syscall)
     {
     case SYSCALL_PA_TO_IPA:
         // @ivanv: why do we not do anything here?
         // @ivanv, how to get the physical address to translate?
-        ZF_LOGI("Received PA translation syscall\n");
+        VMM_PRINT("Received PA translation syscall\n");
         break;
     case SYSCALL_NOP:
-        ZF_LOGI("Received NOP syscall\n");
+        VMM_PRINT("Received NOP syscall\n");
         break;
     default:
-        ZF_LOGE("Unknown syscall: syscall number: 0x%lx, PC: 0x%lx\n", syscall, fault_ip);
+        VMM_PRINTERR("Unknown syscall: syscall number: 0x%lx, PC: 0x%lx\n", syscall, fault_ip);
         return false;
     }
 
@@ -334,7 +338,7 @@ bool fault_handle_unknown_syscall(vm_context_t *vm)
     assert(err == seL4_NoError);
     if (err != seL4_NoError)
     {
-        ZF_LOGE("Failure reading TCB registers when handling unknown syscall, error %d", err);
+        VMM_PRINTERR("Failure reading TCB registers when handling unknown syscall, error %d", err);
         return false;
     }
 
@@ -393,7 +397,7 @@ static bool fault_handle_registered_vm_exceptions(size_t vcpu_id, uintptr_t addr
             if (!success)
             {
                 // @ivanv: improve error message
-                ZF_LOGE("registered virtual memory exception handler for region [0x%lx..0x%lx) at address 0x%lx failed\n", base, end, addr);
+                VMM_PRINTERR("registered virtual memory exception handler for region [0x%lx..0x%lx) at address 0x%lx failed\n", base, end, addr);
             }
             /* Whether or not the callback actually successfully handled the
              * exception, we return true to say that we at least found a handler
@@ -413,21 +417,20 @@ bool fault_handle_vm_exception(vm_context_t *vm)
 
     seL4_UserContext regs;
     int err = seL4_TCB_ReadRegisters(vm->tcb.cptr, false, 0, SEL4_USER_CONTEXT_SIZE, &regs);
-    // assert(err == seL4_NoError);
-    printf("addr: %lx\n", addr);
-    return false;
+    assert(err == seL4_NoError);
+
     switch (addr)
     {
     case GIC_DIST_PADDR ... GIC_DIST_PADDR + GIC_DIST_SIZE:
-        return handle_vgic_dist_fault(vm->tcb.cptr, vm->id, addr, fsr, &regs);
+        return handle_vgic_dist_fault(vm->vcpu.cptr, vm->tcb.cptr, GUEST_VCPU_ID, addr, fsr, &regs);
 #if defined(GIC_V3)
     /* Need to handle redistributor faults for GICv3 platforms. */
     case GIC_REDIST_PADDR ... GIC_REDIST_PADDR + GIC_REDIST_SIZE:
-        return handle_vgic_redist_fault(vm->tcb.cptr, vm->id, addr, fsr, &regs);
+        return handle_vgic_redist_fault(vm->vcpu.cptr, vm->tcb.cptr, GUEST_VCPU_ID, addr, fsr, &regs);
 #endif
     default:
     {
-        bool success = fault_handle_registered_vm_exceptions(vm->id, addr, fsr, &regs);
+        bool success = fault_handle_registered_vm_exceptions(GUEST_VCPU_ID, addr, fsr, &regs);
         if (!success)
         {
             /*
@@ -439,10 +442,10 @@ bool fault_handle_vm_exception(vm_context_t *vm)
             size_t ip = seL4_GetMR(seL4_VMFault_IP);
             size_t is_prefetch = seL4_GetMR(seL4_VMFault_PrefetchFault);
             bool is_write = fault_is_write(fsr);
-            ZF_LOGE("unexpected memory fault on address: 0x%lx, FSR: 0x%lx, IP: 0x%lx, is_prefetch: %s, is_write: %s\n",
-                    addr, fsr, ip, is_prefetch ? "true" : "false", is_write ? "true" : "false");
-            // tcb_print_regs(vm->id);
-            // vcpu_print_regs(vm->id); // XXX
+            VMM_PRINTERR("unexpected memory fault on address: 0x%lx, FSR: 0x%lx, IP: 0x%lx, is_prefetch: %s, is_write: %s\n",
+                         addr, fsr, ip, is_prefetch ? "true" : "false", is_write ? "true" : "false");
+            sel4debug_dump_registers(vm->tcb.cptr);
+            vcpu_print_regs(vm->vcpu.cptr);
         }
         else
         {
@@ -462,42 +465,39 @@ bool fault_handle(vm_context_t *vm, seL4_MessageInfo_t *msg)
     switch (label)
     {
     case seL4_Fault_VMFault:
-        printf("fault_handle_vm_exception\n");
-        success = fault_handle_vm_exception(0);
+        VMM_PRINTV("fault_handle_vm_exception\n");
+        success = fault_handle_vm_exception(vm);
         break;
     case seL4_Fault_UnknownSyscall:
-        printf("fault_handle_unknown_syscall\n");
-        // success = fault_handle_unknown_syscall(vcpu);
+        VMM_PRINTV("fault_handle_unknown_syscall\n");
+        success = fault_handle_unknown_syscall(vm);
         break;
     case seL4_Fault_UserException:
-        printf("fault_handle_user_exception\n");
-        // success = fault_handle_user_exception(vcpu);
+        VMM_PRINTV("fault_handle_user_exception\n");
+        success = fault_handle_user_exception(vm);
         break;
     case seL4_Fault_VGICMaintenance:
-        printf("fault_handle_vgic_maintenance\n");
-        // success = fault_handle_vgic_maintenance(vcpu);
+        VMM_PRINTV("fault_handle_vgic_maintenance\n");
+        success = fault_handle_vgic_maintenance(vm->vcpu.cptr, GUEST_VCPU_ID);
         break;
     case seL4_Fault_VCPUFault:
-        printf("fault_handle_vcpu_exception\n");
+        VMM_PRINTV("fault_handle_vcpu_exception\n");
         success = fault_handle_vcpu_exception(vm);
         break;
     case seL4_Fault_VPPIEvent:
-        printf("fault_handle_vppi_event\n");
-        // success = fault_handle_vppi_event(vcpu);
+        VMM_PRINTV("fault_handle_vppi_event\n");
+        success = fault_handle_vppi_event(vm);
         break;
     default:
         /* We have reached a genuinely unexpected case, stop the guest. */
-        printf("unknown fault label 0x%lx, stopping guest with ID 0x%lx\n", label, vm->vcpu.cptr);
-        // microkit_vm_stop(vcpu); // XXX
-        /* Dump the TCB and vCPU registers to hopefully get information as
-         * to what has gone wrong. */
-        // tcb_print_regs(vcpu);
-        // vcpu_print_regs(vcpu); // XXX
+        VMM_PRINTERR("unknown fault label 0x%lx, stopping guest with ID 0x%lx\n", label, vm->vcpu.cptr);
+        seL4_TCB_Suspend(vm->tcb.cptr);
     }
 
     if (!success)
     {
-        printf("Failed to handle %s fault\n", fault_to_string(label));
+        VMM_PRINTERR("Failed to handle %s fault\n", fault_to_string(label));
+        sel4debug_dump_registers(vm->tcb.cptr);
         vcpu_print_regs(vm->vcpu.cptr);
     }
 

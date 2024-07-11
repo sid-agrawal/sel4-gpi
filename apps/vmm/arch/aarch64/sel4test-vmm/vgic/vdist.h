@@ -5,7 +5,9 @@
  * SPDX-License-Identifier: BSD-2-Clause
  */
 
+#include <vmm-common/vmm_common.h>
 #include <sel4test-vmm/fault.h>
+#include <sel4test-vmm/vcpu.h>
 
 /* GIC Distributor register access utilities */
 #define GIC_DIST_REGN(offset, reg) ((offset - reg) / sizeof(uint32_t))
@@ -160,9 +162,9 @@ static inline bool is_active(struct gic_dist_map *gic_dist, int irq, int vcpu_id
     }
 }
 
-static void vgic_dist_enable_irq(vgic_t *vgic, size_t vcpu_id, int irq)
+static void vgic_dist_enable_irq(seL4_CPtr vcpu, vgic_t *vgic, size_t vcpu_id, int irq)
 {
-    LOG_DIST("Enabling IRQ %d\n", irq);
+    VMM_PRINTV("Enabling IRQ %d\n", irq);
     set_enable(vgic_get_dist(vgic->registers), irq, true, vcpu_id);
     struct virq_handle *virq_data = virq_find_irq_data(vgic, vcpu_id, irq);
     // assert(virq_data != NULL);
@@ -176,12 +178,12 @@ static void vgic_dist_enable_irq(vgic_t *vgic, size_t vcpu_id, int irq)
         /* STATE b) */
         if (!is_pending(vgic_get_dist(vgic->registers), virq_data->virq, vcpu_id))
         {
-            virq_ack(vcpu_id, virq_data);
+            virq_ack(vcpu, virq_data);
         }
     }
     else
     {
-        LOG_DIST("Enabled IRQ %d has no handle\n", irq);
+        VMM_PRINTV("Enabled IRQ %d has no handle\n", irq);
     }
 }
 
@@ -202,7 +204,7 @@ static void vgic_dist_disable_irq(vgic_t *vgic, size_t vcpu_id, int irq)
     }
 }
 
-static bool vgic_dist_set_pending_irq(vgic_t *vgic, size_t vcpu_id, int irq)
+static bool vgic_dist_set_pending_irq(seL4_CPtr vcpu, vgic_t *vgic, size_t vcpu_id, int irq)
 {
     // @ivanv: I believe this function causes a fault in the VMM if the IRQ has not
     // been registered. This is not good.
@@ -215,15 +217,15 @@ static bool vgic_dist_set_pending_irq(vgic_t *vgic, size_t vcpu_id, int irq)
     {
         if (virq_data->virq == VIRQ_INVALID)
         {
-            ZF_LOGE("vIRQ data could not be found for IRQ 0x%x\n", irq);
+            VMM_PRINTERR("vIRQ data could not be found for IRQ 0x%x\n", irq);
         }
         if (!vgic_dist_is_enabled(dist))
         {
-            ZF_LOGE("vGIC distributor is not enabled for IRQ 0x%x\n", irq);
+            VMM_PRINTERR("vGIC distributor is not enabled for IRQ 0x%x\n", irq);
         }
         if (!is_enabled(dist, irq, vcpu_id))
         {
-            ZF_LOGE("vIRQ 0x%x is not enabled\n", irq);
+            VMM_PRINTERR("vIRQ 0x%x is not enabled\n", irq);
         }
         return false;
     }
@@ -234,7 +236,7 @@ static bool vgic_dist_set_pending_irq(vgic_t *vgic, size_t vcpu_id, int irq)
         return true;
     }
 
-    LOG_DIST("Pending set: Inject IRQ from pending set (%d)\n", irq);
+    VMM_PRINTV("VCPU ID: %d Pending set: Inject IRQ from pending set (%d)\n", vcpu_id, irq);
     set_pending(dist, virq_data->virq, true, vcpu_id);
 
     /* Enqueueing an IRQ and dequeueing it right after makes little sense
@@ -243,7 +245,7 @@ static bool vgic_dist_set_pending_irq(vgic_t *vgic, size_t vcpu_id, int irq)
     bool success = vgic_irq_enqueue(vgic, vcpu_id, virq_data);
     if (!success)
     {
-        ZF_LOGE("Failure enqueueing IRQ, increase MAX_IRQ_QUEUE_LEN");
+        VMM_PRINTERR("Failure enqueueing IRQ, increase MAX_IRQ_QUEUE_LEN");
         assert(0);
         return false;
     }
@@ -270,7 +272,7 @@ static bool vgic_dist_set_pending_irq(vgic_t *vgic, size_t vcpu_id, int irq)
 #endif
 
     // @ivanv: I don't understand why GIC v2 is group 0 and GIC v3 is group 1.
-    return vgic_vcpu_load_list_reg(vgic, vcpu_id, idx, group, virq);
+    return vgic_vcpu_load_list_reg(vcpu, vgic, vcpu_id, idx, group, virq);
 }
 
 static void vgic_dist_clr_pending_irq(struct gic_dist_map *dist, size_t vcpu_id, int irq)
@@ -281,7 +283,7 @@ static void vgic_dist_clr_pending_irq(struct gic_dist_map *dist, size_t vcpu_id,
     // @ivanv
 }
 
-static bool vgic_dist_reg_read(size_t vcpu_id, seL4_CPtr tcb, vgic_t *vgic, uint64_t offset, uint64_t fsr, seL4_UserContext *regs)
+static bool vgic_dist_reg_read(seL4_CPtr tcb, size_t vcpu_id, vgic_t *vgic, uint64_t offset, uint64_t fsr, seL4_UserContext *regs)
 {
     bool success = false;
     struct gic_dist_map *gic_dist = vgic_get_dist(vgic->registers);
@@ -436,7 +438,7 @@ static bool vgic_dist_reg_read(size_t vcpu_id, seL4_CPtr tcb, vgic_t *vgic, uint
         break;
 #endif
     default:
-        ZF_LOGE("Unknown register offset 0x%lx", offset);
+        VMM_PRINTERR("Unknown register offset 0x%lx", offset);
         // err = ignore_fault(fault);
         success = fault_advance_vcpu(tcb, regs);
         assert(success);
@@ -462,7 +464,8 @@ static inline void emulate_reg_write_access(seL4_UserContext *regs, uint64_t add
     *reg = fault_emulate(regs, *reg, addr, fsr, fault_get_data(regs, fsr));
 }
 
-static bool vgic_dist_reg_write(seL4_CPtr tcb, size_t vcpu_id, vgic_t *vgic, uint64_t offset, uint64_t fsr, seL4_UserContext *regs)
+static bool vgic_dist_reg_write(seL4_CPtr vcpu, seL4_CPtr tcb, size_t vcpu_id, vgic_t *vgic,
+                                uint64_t offset, uint64_t fsr, seL4_UserContext *regs)
 {
     bool success = true;
     struct gic_dist_map *gic_dist = vgic_get_dist(vgic->registers);
@@ -484,7 +487,7 @@ static bool vgic_dist_reg_write(seL4_CPtr tcb, size_t vcpu_id, vgic_t *vgic, uin
         }
         else
         {
-            ZF_LOGE("Unknown enable register encoding");
+            VMM_PRINTERR("Unknown enable register encoding");
             // @ivanv: goto ignore fault?
         }
         break;
@@ -526,7 +529,7 @@ static bool vgic_dist_reg_write(seL4_CPtr tcb, size_t vcpu_id, vgic_t *vgic, uin
             irq = CTZ(data);
             data &= ~(1U << irq);
             irq += (offset - GIC_DIST_ISENABLER0) * 8;
-            vgic_dist_enable_irq(vgic, vcpu_id, irq);
+            vgic_dist_enable_irq(vcpu, vgic, vcpu_id, irq);
         }
         break;
     case RANGE32(GIC_DIST_ICENABLER0, GIC_DIST_ICENABLERN):
@@ -553,7 +556,7 @@ static bool vgic_dist_reg_write(seL4_CPtr tcb, size_t vcpu_id, vgic_t *vgic, uin
             data &= ~(1U << irq);
             irq += (offset - GIC_DIST_ISPENDR0) * 8;
             // @ivanv: should be checking this and other calls like it succeed
-            vgic_dist_set_pending_irq(vgic, vcpu_id, irq);
+            vgic_dist_set_pending_irq(vcpu, vgic, vcpu_id, irq);
         }
         break;
     case RANGE32(GIC_DIST_ICPENDR0, GIC_DIST_ICPENDRN):
@@ -628,13 +631,14 @@ static bool vgic_dist_reg_write(seL4_CPtr tcb, size_t vcpu_id, vgic_t *vgic, uin
             target_list = (1 << vcpu_id);
             break;
         default:
-            ZF_LOGE("Unknown SGIR Target List Filter mode");
+            VMM_PRINTERR("Unknown SGIR Target List Filter mode");
             goto ignore_fault;
         }
         // @ivanv: Here we're making the assumption that there's only one vCPU, and
         // we're also blindly injectnig the given IRQ to that vCPU.
         // @ivanv: come back to this, do we have two writes to the TCB registers?
-        success = vgic_inject_irq(vcpu_id, virq);
+        VMM_PRINT("pc: %lX\n", regs->pc);
+        success = vgic_inject_irq(vcpu, vcpu_id, virq);
         assert(success);
         break;
     case RANGE32(0xF04, 0xF0C):
@@ -660,7 +664,7 @@ static bool vgic_dist_reg_write(seL4_CPtr tcb, size_t vcpu_id, vgic_t *vgic, uin
         break;
 #endif
     default:
-        ZF_LOGE("Unknown register offset 0x%lx", offset);
+        VMM_PRINTERR("Unknown register offset 0x%lx", offset);
         assert(0);
     }
 ignore_fault:

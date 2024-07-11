@@ -137,18 +137,17 @@ static void handle_fault(void)
         info = seL4_Recv(vmon_ctxt.vm_fault_ep.cptr, &badge);
         vm_id = (uint32_t)badge;
 
-        if (vm_id == 0 || vm_id >= GUEST_NUM_VCPUS)
+        if (vm_id == 0 || vm_id >= MAX_GUEST_COUNT)
         {
-            VMM_PRINT("Fault received from invalid VM: %u\n", vm_id);
+            VMM_PRINTERR("Fault received from invalid VM: %u\n", vm_id);
             continue;
         }
 
-        VMM_PRINT("VM %u fault: %s\n", vm_id, fault_to_string(seL4_MessageInfo_get_label(info)));
+        VMM_PRINTV("VM %u fault: %s\n", vm_id, fault_to_string(seL4_MessageInfo_get_label(info)));
 
         vm = vmon_ctxt.guests[vm_id];
         assert(vm != NULL);
         fault_handle(vm, &info);
-        // sel4debug_dump_registers(vm->tcb.cptr);
     }
 }
 
@@ -264,7 +263,7 @@ uint32_t sel4test_new_guest(void)
 {
     int error = 0;
     uint32_t guest_id = vmon_ctxt.guest_id_counter;
-    GOTO_IF_COND(vmon_ctxt.guest_id_counter >= GUEST_NUM_VCPUS, "Maximum number of guests started\n");
+    GOTO_IF_COND(vmon_ctxt.guest_id_counter >= MAX_GUEST_COUNT, "Maximum number of guests started\n");
     vm_context_t *vm = calloc(1, sizeof(vm_context_t));
 
     vka_t *vka = vmon_ctxt.vka;
@@ -327,7 +326,9 @@ uint32_t sel4test_new_guest(void)
     GOTO_IF_ERR(error, "Failed to set TCB priority, seL4_Error: %ld\n", error);
 
 #ifdef CONFIG_DEBUG_BUILD
-    seL4_DebugNameThread(vm->tcb.cptr, "vcpu");
+    char vm_name[MAX_VM_NAME_LEN];
+    snprintf(vm_name, MAX_VM_NAME_LEN, "VM%d", guest_id);
+    seL4_DebugNameThread(vm->tcb.cptr, vm_name);
 #endif
 
     reservation_t res;
@@ -338,8 +339,7 @@ uint32_t sel4test_new_guest(void)
     GOTO_IF_ERR(error, "Failed to allocate GIC vCPU frame");
 
     res = vspace_reserve_range_at(&vm->vspace, (void *)LINUX_GIC_PADDR, BIT(seL4_PageBits), seL4_AllRights, 0);
-    seL4_CPtr caps = vm->gic_vcpu_frame.cptr;
-    error = vspace_map_pages_at_vaddr(&vm->vspace, &caps, NULL, (void *)LINUX_GIC_PADDR, 1, seL4_PageBits, res);
+    error = vspace_map_pages_at_vaddr(&vm->vspace, &vm->gic_vcpu_frame.cptr, NULL, (void *)LINUX_GIC_PADDR, 1, seL4_PageBits, res);
     GOTO_IF_ERR(error, "Failed to map GIC vCPU region to VM");
 
 #ifdef BOARD_qemu_arm_virt
@@ -376,7 +376,7 @@ uint32_t sel4test_new_guest(void)
     size_t guest_ram_pages = BYTES_TO_SIZE_BITS_PAGES(GUEST_RAM_SIZE, seL4_LargePageBits);
     res = vspace_reserve_range_at(&vm->vspace, (void *)GUEST_RAM_VADDR, GUEST_RAM_SIZE, seL4_AllRights, 1);
     seL4_CPtr *ram_frames_in_guest = calloc(guest_ram_pages, sizeof(seL4_CPtr));
-    seL4_CPtr *ram_frames_in_hyp = calloc(guest_ram_pages, sizeof(seL4_CPtr));
+    seL4_CPtr *ram_frames_in_vmm = calloc(guest_ram_pages, sizeof(seL4_CPtr));
 
 #ifdef BOARD_qemu_arm_virt
     uintptr_t paddr = GUEST_RAM_PADDR;
@@ -394,7 +394,7 @@ uint32_t sel4test_new_guest(void)
 
         error = vka_cnode_copy(&dst, &src, seL4_AllRights);
         GOTO_IF_ERR(error, "Failed to copy frame\n");
-        ram_frames_in_hyp[i] = dst.capPtr;
+        ram_frames_in_vmm[i] = dst.capPtr;
         paddr += SIZE_BITS_TO_BYTES(seL4_LargePageBits);
     }
 
@@ -414,17 +414,15 @@ uint32_t sel4test_new_guest(void)
 
         error = vka_cnode_copy(&dst, &src, seL4_AllRights);
         GOTO_IF_ERR(error, "Failed to copy frame\n");
-        ram_frames_in_hyp[i] = dst.capPtr;
+        ram_frames_in_vmm[i] = dst.capPtr;
     }
 #endif
 
     error = vspace_map_pages_at_vaddr(&vm->vspace, ram_frames_in_guest, NULL, (void *)GUEST_RAM_VADDR, guest_ram_pages, seL4_LargePageBits, res);
     GOTO_IF_ERR(error, "Failed to map guest RAM in VMM's vspace");
 
-    void *guest_ram_curr_vspace = vspace_map_pages(vspace, ram_frames_in_hyp, NULL, seL4_ReadWrite, guest_ram_pages, seL4_LargePageBits, 1);
-    // res = vspace_reserve_range_at(vspace, (void *)0x40000000, GUEST_RAM_SIZE, seL4_AllRights, 1);
-    // void *guest_ram_curr_vspace = vspace_map_pages_at_vaddr(vspace, ram_frames_in_hyp, NULL, (void *)0x40000000, guest_ram_pages, seL4_LargePageBits, res);
-    ZF_LOGF_IF(guest_ram_curr_vspace == NULL, "Failed to map guest RAM to HYP's vspace");
+    void *guest_ram_curr_vspace = vspace_map_pages(vspace, ram_frames_in_vmm, NULL, seL4_ReadWrite, guest_ram_pages, seL4_LargePageBits, 1);
+    ZF_LOGF_IF(guest_ram_curr_vspace == NULL, "Failed to map guest RAM to VMM's vspace");
 
     size_t kernel_size = _guest_kernel_image_end - _guest_kernel_image;
     size_t dtb_size = _guest_dtb_image_end - _guest_dtb_image;
@@ -447,15 +445,15 @@ uint32_t sel4test_new_guest(void)
     uintptr_t kernel_pc_vm_vspace = (uintptr_t)GUEST_RAM_VADDR + (kernel_pc_curr_vspace - (uintptr_t)guest_ram_curr_vspace);
     VMM_PRINT("kernel_pc_vm_vspace %lx\n", kernel_pc_vm_vspace);
 
-    bool success = virq_controller_init(guest_id);
+    bool success = virq_controller_init(GUEST_VCPU_ID);
     GOTO_IF_COND(!success, "Failed to initialise emulated interrupt controller\n");
 
     // @ivanv: Note that remove this line causes the VMM to fault if we
     // actually get the interrupt. This should be avoided by making the VGIC driver more stable.
-    success = virq_register(guest_id, SERIAL_IRQ, &serial_ack, (void *)vm);
+    success = virq_register(GUEST_VCPU_ID, SERIAL_IRQ, &serial_ack, (void *)vm);
     WARN_IF_COND(!success, "Failed to register VIRQ handler\n");
     /* Just in case there is already an interrupt available to handle, we ack it here. */
-    serial_ack(guest_id, SERIAL_IRQ, (void *)vm);
+    serial_ack(GUEST_VCPU_ID, SERIAL_IRQ, (void *)vm);
 
     success = guest_start(vm->tcb.cptr, (uintptr_t)kernel_pc_vm_vspace,
                           (uintptr_t)GUEST_DTB_VADDR, (uintptr_t)GUEST_INIT_RAM_DISK_VADDR);
@@ -471,9 +469,9 @@ err_goto:
         free(ram_frames_in_guest);
     }
 
-    if (ram_frames_in_hyp)
+    if (ram_frames_in_vmm)
     {
-        free(ram_frames_in_hyp);
+        free(ram_frames_in_vmm);
     }
 
     if (guest_ram_curr_vspace)
