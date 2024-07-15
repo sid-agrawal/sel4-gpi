@@ -24,6 +24,8 @@
 #include <sel4test-vmm/vmm.h>
 #include <osm-vmm/vmm.h>
 
+#define NANOSECOND 1000000000
+
 int test_vmm_native(env_t env)
 {
     int error;
@@ -39,7 +41,7 @@ int test_vmm_native(env_t env)
 
     while (1)
     {
-        seL4_Yield();
+        sel4test_sleep(env, 10 * NANOSECOND);
     }
 #else
     printf("SEL4TEST_VMM is disabled\n");
@@ -63,7 +65,7 @@ int test_vmm_osm(env_t env)
 
     while (1)
     {
-        seL4_Yield();
+        sel4test_sleep(env, 10 * NANOSECOND);
     }
 #else
     printf("OSM_VMM is disabled\n");
