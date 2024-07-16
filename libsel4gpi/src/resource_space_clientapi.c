@@ -108,3 +108,70 @@ int resspc_client_create_resource(resspc_client_context_t *conn,
 
     return error;
 }
+
+int resspc_client_delete_resource(resspc_client_context_t *conn,
+                                  seL4_Word resource_id)
+{
+    OSDB_PRINTF("Sending 'delete resource' request to ResSpc component\n");
+
+    int error = 0;
+
+    ResSpcMessage msg = {
+        .which_msg = ResSpcMessage_delete_resource_tag,
+        .msg.delete_resource = {
+            .resource_id = resource_id,
+        },
+    };
+
+    ResSpcReturnMessage ret_msg;
+
+    error = sel4gpi_rpc_call(&rpc_env, conn->ep, (void *)&msg,
+                             0, NULL, (void *)&ret_msg);
+    error |= ret_msg.errorCode;
+
+    return error;
+}
+
+int resspc_client_revoke_resource(resspc_client_context_t *conn,
+                                  uint32_t resource_id,
+                                  uint32_t target_pd_id)
+{
+    OSDB_PRINTF("Sending 'delete resource' request to ResSpc component\n");
+
+    int error = 0;
+
+    ResSpcMessage msg = {
+        .which_msg = ResSpcMessage_revoke_resource_tag,
+        .msg.revoke_resource = {
+            .resource_id = resource_id,
+            .target_pd_id = target_pd_id,
+        },
+    };
+
+    ResSpcReturnMessage ret_msg;
+
+    error = sel4gpi_rpc_call(&rpc_env, conn->ep, (void *)&msg,
+                             0, NULL, (void *)&ret_msg);
+    error |= ret_msg.errorCode;
+
+    return error;
+}
+
+int resspc_client_destroy(resspc_client_context_t *conn)
+{
+    OSDB_PRINTF("Sending 'destroy' request to ResSpc component\n");
+
+    int error = 0;
+
+    ResSpcMessage msg = {
+        .which_msg = ResSpcMessage_destroy_tag,
+    };
+
+    ResSpcReturnMessage ret_msg;
+
+    error = sel4gpi_rpc_call(&rpc_env, conn->ep, (void *)&msg,
+                             0, NULL, (void *)&ret_msg);
+    error |= ret_msg.errorCode;
+
+    return error;
+}

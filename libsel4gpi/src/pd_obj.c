@@ -97,8 +97,10 @@ static void pd_remove_resource_internal(pd_t *pd, resource_registry_node_t *hold
         if (pd->id != get_gpi_server()->rt_pd_id)
         {
             pd_hold_node_t *node = (pd_hold_node_t *)hold_node;
-            OSDB_PRINTERR("Warning: remove resource %s_%d_%d from PD, slot_in_PD is null!\n",
-                          cap_type_to_str(node->res_id.type), node->res_id.space_id, node->res_id.object_id);
+            OSDB_PRINTERR("Warning: remove resource %s_%d_%d from PD (%d), slot_in_PD is null!\n",
+                          cap_type_to_str(node->res_id.type),
+                          node->res_id.space_id, node->res_id.object_id,
+                          pd->id);
         }
     }
     else

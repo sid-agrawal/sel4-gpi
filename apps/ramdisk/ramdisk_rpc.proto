@@ -12,6 +12,7 @@ enum RamdiskAction {
     ALLOC = 2;      /* request a new free block from the ramdisk */
     READ = 3;       /* request to read a block */
     WRITE = 4;      /* request to write a block */
+    FREE = 5;       /* request to free a block */
 };
 
 /* message type for all ramdisk request messages */

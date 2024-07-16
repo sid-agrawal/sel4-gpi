@@ -59,7 +59,7 @@ typedef struct _xv6fs_server_context
     // Fields for naive block implementation
     mo_client_context_t *shared_mem;
     void *shared_mem_vaddr;
-    ramdisk_client_context_t naive_blocks[FS_SIZE];
+    ramdisk_client_context_t blocks[FS_SIZE];
 } xv6fs_server_context_t;
 
 /**

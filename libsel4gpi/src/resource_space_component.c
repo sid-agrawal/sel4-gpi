@@ -61,11 +61,11 @@ static int resspc_component_space_cleanup(resspc_component_registry_entry_t *nod
             continue;
         }
 
-        // Check if we should delete this PD
+        // Check if we should delete this resource space
         if (GPI_CLEANUP_RESOURCE_SPACE_DEPTH == -1 || depth + 1 <= GPI_CLEANUP_RESOURCE_SPACE_DEPTH)
         {
             // Within resource space deletion depth
-            // Check if the PD has a map edge for the deleted space
+            // Check if the space has a map edge for the deleted space
             if (resspc_check_map(space_entry->space.id, node->space.id))
             {
                 OSDB_PRINTF("Mark resource space (%d) for deletion due to policy, depth %d\n",
@@ -102,7 +102,7 @@ static void on_resspc_registry_delete(resource_registry_node_t *node_gen, void *
 
     // Cleanup the resource space from PDs
     error = pd_component_space_cleanup(node->space.pd_id, node->space.resource_type,
-                                       node->space.id, node->space.cleanup_policy || false);
+                                       node->space.id, node->space.cleanup_policy);
     SERVER_GOTO_IF_ERR(error, "failed to cleanup PDs for deleted resource space (%d)\n", node->space.id);
 
     return;
@@ -260,6 +260,63 @@ err_goto:
     reply_msg->errorCode = error;
 }
 
+static void handle_delete_resource_request(seL4_Word sender_badge,
+                                           ResSpcDeleteResourceMessage *msg, ResSpcReturnMessage *reply_msg)
+{
+    OSDB_PRINTF("Got delete resource request from client badge %lx.\n", sender_badge);
+    int error = 0;
+
+    uint64_t client_id = get_client_id_from_badge(sender_badge);
+    uint64_t space_id = get_object_id_from_badge(sender_badge);
+    uint64_t res_id = msg->resource_id;
+
+    // Find the resource space
+    resspc_component_registry_entry_t *space_entry = resource_space_get_entry_by_id(space_id);
+    SERVER_GOTO_IF_COND(space_entry == NULL, "Couldn't find resource space (%ld)\n", space_id);
+    gpi_cap_t resource_type = space_entry->space.resource_type;
+
+    OSDB_PRINTF("resource server %ld deletes resource in space %ld with ID %ld\n",
+                client_id, space_entry->space.id, res_id);
+
+    // Remove the resource from all PDs
+    error = pd_component_resource_cleanup(make_res_id(resource_type, space_entry->space.id, res_id));
+
+err_goto:
+    reply_msg->which_msg = ResSpcReturnMessage_basic_tag;
+    reply_msg->errorCode = error;
+}
+
+static void handle_revoke_resource_request(seL4_Word sender_badge,
+                                           ResSpcRevokeResourceMessage *msg, ResSpcReturnMessage *reply_msg)
+{
+    OSDB_PRINTF("Got delete resource request from client badge %lx.\n", sender_badge);
+    int error = 0;
+
+    uint64_t client_id = get_client_id_from_badge(sender_badge);
+    uint64_t space_id = get_object_id_from_badge(sender_badge);
+    uint64_t res_id = msg->resource_id;
+
+    // Find the resource space
+    resspc_component_registry_entry_t *space_entry = resource_space_get_entry_by_id(space_id);
+    SERVER_GOTO_IF_COND(space_entry == NULL, "Couldn't find resource space (%ld)\n", space_id);
+    gpi_cap_t resource_type = space_entry->space.resource_type;
+
+    // Find the target PD
+    pd_component_registry_entry_t *target_pd = pd_component_registry_get_entry_by_id(msg->target_pd_id);
+    SERVER_GOTO_IF_COND(target_pd == NULL, "Couldn't find resource server PD (%ld)\n", msg->target_pd_id);
+
+    OSDB_PRINTF("resource server %ld revokes resource in space %ld with ID %ld from PD (%d)\n",
+                client_id, space_entry->space.id, res_id, msg->target_pd_id);
+
+    // Remove the resource from all PDs
+    error = pd_remove_resource(&target_pd->pd,
+                               make_res_id(resource_type, space_entry->space.id, res_id));
+
+err_goto:
+    reply_msg->which_msg = ResSpcReturnMessage_basic_tag;
+    reply_msg->errorCode = error;
+}
+
 int resspc_component_map_space(uint64_t src_spc_id, uint64_t dest_spc_id)
 {
     int error = 0;
@@ -291,6 +348,29 @@ static void handle_map_space_request(seL4_Word sender_badge,
     uint64_t dest_spc_id = msg->space_id;
 
     error = resspc_component_map_space(src_spc_id, dest_spc_id);
+
+err_goto:
+    reply_msg->which_msg = ResSpcReturnMessage_basic_tag;
+    reply_msg->errorCode = error;
+}
+
+static void handle_destroy_space_request(seL4_Word sender_badge,
+                                         ResSpcDestroyMessage *msg, ResSpcReturnMessage *reply_msg)
+{
+    OSDB_PRINTF("Got destroy space request from client badge %lx.\n", sender_badge);
+    int error = 0;
+
+    uint64_t spc_id = get_object_id_from_badge(sender_badge);
+
+    // Find the source resource space
+    resspc_component_registry_entry_t *src_space_entry = resource_space_get_entry_by_id(spc_id);
+    SERVER_GOTO_IF_COND(src_space_entry == NULL, "Couldn't find resource space (%ld)\n", spc_id);
+
+    SERVER_GOTO_IF_COND(src_space_entry->space.to_delete, "Space is already being deleted\n");
+
+    src_space_entry->space.to_delete = true;
+    src_space_entry->space.cleanup_policy = false;
+    error = resource_component_delete(get_resspc_component(), spc_id);
 
 err_goto:
     reply_msg->which_msg = ResSpcReturnMessage_basic_tag;
@@ -345,6 +425,9 @@ static void resspc_component_handle(void *msg_p,
             break;
         case ResSpcMessage_map_tag:
             handle_map_space_request(sender_badge, &msg->msg.map, reply_msg);
+            break;
+        case ResSpcMessage_destroy_tag:
+            handle_destroy_space_request(sender_badge, &msg->msg.destroy, reply_msg);
             break;
         default:
             SERVER_GOTO_IF_COND(1, "Unknown request received: %d\n", msg->which_msg);

@@ -114,7 +114,7 @@ static void ns_registry_entry_on_delete(resource_registry_node_t *node_gen, void
 {
   fs_namespace_entry_t *node = (fs_namespace_entry_t *)node_gen;
 
-  // (XXX) Any cleanup necessary for NS
+  // Cleanup for NS is already done at this point
 }
 
 static void file_registry_entry_on_delete(resource_registry_node_t *node_gen, void *arg)
@@ -134,10 +134,10 @@ xv6fs_server_context_t *get_xv6fs_server(void)
 }
 
 /**
- * Temporary function initializes the file system by requesting
+ * Initializes the file system by requesting
  * every block ahead of time, and using them later for read/write requests
  */
-static int init_naive_blocks()
+static int init_blocks()
 {
   int error;
   seL4_CPtr ramdisk_ep = get_xv6fs_server()->rd_ep;
@@ -145,11 +145,51 @@ static int init_naive_blocks()
   for (int i = 0; i < FS_SIZE; i++)
   {
     error = ramdisk_client_alloc_block(ramdisk_ep,
-                                       &get_xv6fs_server()->naive_blocks[i]);
+                                       &get_xv6fs_server()->blocks[i]);
     CHECK_ERROR(error, "failed to alloc a block from ramdisk");
   }
 
   return 0;
+}
+
+/**
+ * Destroy a namespace from the file system
+ * This removes the namespace from the bookkeeping,
+ * unlinks all files within the namespace, and removes the directory
+ *
+ * @param ns_id the ID of the namespace to remove
+ * @param notify_rt if true, deletes the resource space from the root task as well
+ * @return 0 on success, error otherwises
+ */
+static int destroy_ns(uint32_t ns_id, bool notify_rt)
+{
+  int error = 0;
+
+  // (XXX) Arya: Namespaces are a bit janky at the moment, we don't actually have resources within them,
+  // but just delete the corresponding directory
+
+  // Find the namespace from the registry
+  fs_namespace_entry_t *ns = (fs_namespace_entry_t *)resource_registry_get_by_id(
+      &get_xv6fs_server()->ns_registry,
+      ns_id);
+  CHECK_ERROR_GOTO(ns == NULL, "Namespace did not exist\n", FsError_NO_NS, err_goto);
+
+  // Clear the namespace's directory
+  error = xv6fs_sys_rmdir(ns->ns_prefix, true);
+  CHECK_ERROR_GOTO(error, "Failed to delete namespace's directory\n", FsError_UNKNOWN, err_goto);
+
+  // Notify the rt, if applicable
+  if (notify_rt)
+  {
+    error = resspc_client_destroy(&ns->res_space_conn);
+    CHECK_ERROR_GOTO(error, "Failed to delete namespace's resource space from RT\n", FsError_UNKNOWN, err_goto);
+  }
+
+  // Clear then namespace from the registry
+  resource_registry_delete(&get_xv6fs_server()->ns_registry, (resource_registry_node_t *)ns);
+
+err_goto:
+  return error;
 }
 
 /**
@@ -186,7 +226,7 @@ int xv6fs_init()
                                   sel4gpi_get_default_space_id(block_cap_type));
 
   /* Initialize the blocks */
-  error = init_naive_blocks();
+  error = init_blocks();
   CHECK_ERROR(error, "failed to initialize the blocks");
 
   /* Initialize the fs */
@@ -248,6 +288,9 @@ void xv6fs_request_handler(void *msg_p,
       XV6FS_PRINTF("Registered new namespace with ID %ld\n", resspc_conn.id);
       ns_id = resspc_conn.id;
 
+      // The namespace maps to the file space
+      error = resspc_client_map_space(&resspc_conn, get_xv6fs_server()->gen.default_space.id);
+
       // Bookkeeping the NS
       fs_namespace_entry_t *ns_entry = malloc(sizeof(fs_namespace_entry_t));
       ns_entry->gen.object_id = ns_id;
@@ -268,6 +311,7 @@ void xv6fs_request_handler(void *msg_p,
       pathname = msg->msg.create.path;
 
       /* Update pathname if within a namespace */
+      resspc_client_context_t *space_conn = &get_xv6fs_server()->gen.default_space;
       ns_id = get_space_id_from_badge(sender_badge);
       if (ns_id != get_xv6fs_server()->gen.default_space.id)
       {
@@ -279,6 +323,7 @@ void xv6fs_request_handler(void *msg_p,
           goto done;
         }
 
+        space_conn = &ns->res_space_conn;
         apply_prefix(ns->ns_prefix, pathname);
       }
 
@@ -305,10 +350,6 @@ void xv6fs_request_handler(void *msg_p,
         reg_entry->gen.object_id = file->id;
         reg_entry->file = file;
         resource_registry_insert(&get_xv6fs_server()->file_registry, (resource_registry_node_t *)reg_entry);
-
-        // Notify the PD component about the new reousrce
-        error = resource_server_create_resource(&get_xv6fs_server()->gen, NULL, file->id);
-        CHECK_ERROR_GOTO(error, "Failed to create the resource", error, done);
       }
       else
       {
@@ -320,6 +361,14 @@ void xv6fs_request_handler(void *msg_p,
         filedup(file);
       }
 
+      // (XXX) Arya: Some weirdness due to having namespaces of files instead of file objects
+      // Always create the resource, since it may not already exist within the namespace,
+      // even if it exists in another namespace
+
+      // Notify the PD component about the new reousrce
+      error = resource_server_create_resource(&get_xv6fs_server()->gen, space_conn, file->id);
+      CHECK_ERROR_GOTO(error, "Failed to create the resource", error, done);
+
 #if FS_DEBUG_ENABLED
       // Prints the FS contents to console for debug
       int n_files;
@@ -329,13 +378,10 @@ void xv6fs_request_handler(void *msg_p,
 #endif
 
       // Create the resource endpoint
-      // (XXX) Arya: There is only a file object, which belongs to the default space
-      // so we have to give the resource in the default space
-      // If we add file name resources, they would actually belong to a namespace
       seL4_CPtr dest;
       error = resource_server_give_resource(&get_xv6fs_server()->gen,
-                                            // get_space_id_from_badge(sender_badge),
-                                            get_xv6fs_server()->gen.default_space.id,
+                                            space_conn->id,
+                                            // get_xv6fs_server()->gen.default_space.id,
                                             file->id,
                                             get_client_id_from_badge(sender_badge),
                                             &dest);
@@ -407,6 +453,13 @@ void xv6fs_request_handler(void *msg_p,
       XV6FS_PRINTF("Unlink pathname %s\n", pathname);
       error = xv6fs_sys_unlink(pathname);
       CHECK_ERROR_GOTO(error, "Failed to unlink", FsError_UNKNOWN, done);
+
+      break;
+    case FsMessage_delete_ns_tag:
+      ns_id = get_space_id_from_badge(sender_badge);
+
+      error = destroy_ns(ns_id, true);
+      CHECK_ERROR_GOTO(error, "Failed to destroy NS\n", FsError_UNKNOWN, done);
 
       break;
     default:
@@ -502,7 +555,7 @@ done:
 static int block_read(uint32_t blockno, void *buf)
 {
   XV6FS_PRINTF("Reading blockno %d\n", blockno);
-  int error = ramdisk_client_read(&get_xv6fs_server()->naive_blocks[blockno]);
+  int error = ramdisk_client_read(&get_xv6fs_server()->blocks[blockno]);
 
   if (error == 0)
   {
@@ -516,7 +569,7 @@ static int block_write(uint32_t blockno, void *buf)
 {
   XV6FS_PRINTF("Writing blockno %d\n", blockno);
   memcpy(get_xv6fs_server()->shared_mem_vaddr, buf, RAMDISK_BLOCK_SIZE);
-  return ramdisk_client_write(&get_xv6fs_server()->naive_blocks[blockno]);
+  return ramdisk_client_write(&get_xv6fs_server()->blocks[blockno]);
 }
 
 /* Override xv6 block read/write functions */
@@ -571,8 +624,8 @@ void map_file_to_block(uint64_t file_id, uint32_t blockno)
   seL4_Word file_universal_id = compact_res_id(get_xv6fs_server()->gen.resource_type,
                                                get_xv6fs_server()->gen.default_space.id, file_id);
   seL4_Word block_universal_id = compact_res_id(sel4gpi_get_resource_type_code(BLOCK_RESOURCE_TYPE_NAME),
-                                                get_xv6fs_server()->naive_blocks[blockno].space_id,
-                                                get_xv6fs_server()->naive_blocks[blockno].res_id);
+                                                get_xv6fs_server()->blocks[blockno].space_id,
+                                                get_xv6fs_server()->blocks[blockno].res_id);
 
   error = pd_client_map_resource(&get_xv6fs_server()->gen.pd_conn, file_universal_id, block_universal_id);
   SERVER_GOTO_IF_ERR(error, "Failed to map file (%lx) to block (%lx)\n", file_universal_id, block_universal_id);
@@ -589,7 +642,7 @@ int xv6fs_work_handler(PdWorkReturnMessage *work)
 {
   int error = 0;
   seL4_MessageInfo_t reply_tag = seL4_MessageInfo_new(0, 0, 0, 0);
-  
+
   int op = work->action;
   if (op == PdWorkAction_EXTRACT)
   {
@@ -652,8 +705,8 @@ int xv6fs_work_handler(PdWorkReturnMessage *work)
 
       /* Add nodes for all files and blocks */
       gpi_cap_t block_cap_type = sel4gpi_get_resource_type_code(BLOCK_RESOURCE_TYPE_NAME);
-      uint32_t block_space_id = get_xv6fs_server()->naive_blocks[0].space_id; // (XXX) Arya: Assume only one block space
-      int n_blocknos = 100;                                                   // (XXX) Arya: assumes there are no more than 100 blocks per file
+      uint32_t block_space_id = get_xv6fs_server()->blocks[0].space_id; // (XXX) Arya: Assume only one block space
+      int n_blocknos = 100;                                             // (XXX) Arya: assumes there are no more than 100 blocks per file
       int *blocknos = malloc(sizeof(int) * n_blocknos);
       for (int i = 0; i < n_files; i++)
       {
@@ -675,7 +728,7 @@ int xv6fs_work_handler(PdWorkReturnMessage *work)
         uint64_t block_id;
         for (int j = 0; j < n_blocknos; j++)
         {
-          block_id = get_xv6fs_server()->naive_blocks[blocknos[j]].res_id;
+          block_id = get_xv6fs_server()->blocks[blocknos[j]].res_id;
 
           char block_id_str[CSV_MAX_STRING_SIZE];
           get_resource_id(make_res_id(block_cap_type, block_space_id, block_id), block_id_str);
@@ -712,6 +765,57 @@ int xv6fs_work_handler(PdWorkReturnMessage *work)
       {
         // Decrement the refcount
         resource_registry_dec(&get_xv6fs_server()->file_registry, (resource_registry_node_t *)reg_entry);
+      }
+    }
+  }
+  else if (op == PdWorkAction_DESTROY)
+  {
+    for (int i = 0; i < work->object_ids_count; i++)
+    {
+      uint64_t file_id = work->object_ids[i];
+      uint64_t space_id = work->space_ids[i];
+
+      if (file_id != BADGE_OBJ_ID_NULL)
+      {
+        // Destroy a particular file
+
+        // Find the registry entry
+        file_registry_entry_t *reg_entry = (file_registry_entry_t *)resource_registry_get_by_id(
+            &get_xv6fs_server()->file_registry,
+            file_id);
+
+        if (reg_entry == NULL)
+        {
+          // No-op if the file doesn't exist / isn't open
+          XV6FS_PRINTF("Received file (%d) to free, file isn't open\n");
+        }
+        else
+        {
+          // Decrement the refcount
+          resource_registry_delete(&get_xv6fs_server()->file_registry, (resource_registry_node_t *)reg_entry);
+        }
+      }
+      else
+      {
+        // Destroy a whole space
+        if (space_id == get_xv6fs_server()->gen.default_space.id)
+        {
+          // Destroy the entire file system, this is done by releasing the disk
+          for (int i = 0; i < FS_SIZE; i++)
+          {
+            error = ramdisk_client_free_block(&get_xv6fs_server()->blocks[i]);
+
+            if (error) {
+              XV6FS_PRINTF("Warning: failed to free block %d, it may have already been deleted\n");
+            }
+          }
+        }
+        else
+        {
+          // Destroy just a namespace from the file system
+          error = destroy_ns(space_id, false);
+          CHECK_ERROR_GOTO(error, "Failed to destroy NS\n", FsError_UNKNOWN, err_goto);
+        }
       }
     }
   }

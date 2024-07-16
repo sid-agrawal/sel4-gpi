@@ -15,6 +15,12 @@
 
 #define NO_OFFSET -1
 
+/** Static declarations used in this file **/
+static int isdirempty(struct inode *dp);
+static struct inode *create(char *path, short type, short major, short minor);
+static int clear_dir(struct inode *ip);
+static int unlink_de(struct inode *dp, char *name);
+
 // Is the directory dp empty except for "." and ".." ?
 static int
 isdirempty(struct inode *dp)
@@ -156,7 +162,7 @@ xv6fs_sys_open(char *path, int omode)
 /**
  * Find inums of all files accessible with a walk from
  * the given path
- * 
+ *
  * @param path the starting path for walk
  * @param print if true, prints directory tree to console
  * @param inums output array for the inums found in walk
@@ -307,7 +313,6 @@ int xv6fs_sys_inode_blocknos(int inum, int *buf, int buf_size, int *result_size)
   return iblocknos(ROOTDEV, inum, buf, buf_size, result_size);
 }
 
-
 int xv6fs_sys_write(struct file *f, char *buf, size_t sz, uint32_t off)
 {
   if (f == 0)
@@ -365,6 +370,114 @@ int xv6fs_sys_mkdir(char *path)
   return 0;
 }
 
+/**
+ * Delete the contents of a directory
+ *
+ * @param ip the inode of the directory
+ *
+ * @return 0 on success, -1 on error
+ */
+static int clear_dir(struct inode *ip)
+{
+  ilock(ip);
+  if (ip->type != T_DIR)
+  {
+    iunlockput(ip);
+    return -1;
+  }
+
+  int i = 0;
+  char de_name[DIRSIZ];
+  struct inode *curr_ip = dirlookup_idx(ip, i, de_name);
+  iunlock(ip);
+
+  while (curr_ip != NULL)
+  {
+    if (curr_ip->type == 0 || curr_ip->inum == 0)
+    {
+      // Skip this one
+    }
+    else
+    {
+      ilock(curr_ip);
+
+      if (strcmp(de_name, ".") == 0 || strcmp(de_name, "..") == 0)
+      {
+        // Ignore '.' and '..'
+        // printf("Skip '.' or '..'\n");
+        iunlockput(curr_ip);
+      }
+      else if (curr_ip->type == T_FILE)
+      {
+        // Delete the file
+        iunlockput(curr_ip);
+        if (unlink_de(ip, de_name))
+        {
+          return -1;
+        }
+      }
+      else if (curr_ip->type == T_DIR)
+      {
+        // Recursively delete directory contents
+        iunlock(curr_ip);
+        if (clear_dir(curr_ip))
+        {
+          iput(curr_ip);
+          return -1;
+        }
+        iput(curr_ip);
+
+        // Delete the directory
+        if (unlink_de(ip, de_name))
+        {
+          return -1;
+        }
+      }
+      else
+      {
+        printf("Unknown directory entry type %d\n", curr_ip->type);
+      }
+    }
+
+    i++;
+    ilock(ip);
+    curr_ip = dirlookup_idx(ip, i, de_name);
+    iunlock(ip);
+  }
+
+  return 0;
+}
+
+int xv6fs_sys_rmdir(char *path, bool delete_contents)
+{
+  struct inode *ip;
+
+  if ((ip = namei(path)) == 0)
+  {
+    printf("Couldn't open path %s\n", path);
+    return -1;
+  }
+
+  ilock(ip);
+  if (!delete_contents && !isdirempty(ip))
+  {
+    // Directory is not empty, cannot delete
+    iunlockput(ip);
+    return -1;
+  }
+  iunlock(ip);
+
+  // Clear contents of the directory
+  if (clear_dir(ip))
+  {
+    xv6fs_panic("xv6fs_sys_rmdir: failed to clear directory for deletion\n");
+  }
+  iput(ip);
+
+  // Delete the directory
+  return xv6fs_sys_unlink(path);
+}
+
 int xv6fs_sys_mksock(char *path)
 {
   struct inode *ip;
@@ -377,18 +490,18 @@ int xv6fs_sys_mksock(char *path)
   return 0;
 }
 
-int xv6fs_sys_unlink(char *path)
+/**
+ * Remove a directory entry from a directory
+ *
+ * @param dp directory inode
+ * @param name the name of the entry to unlink
+ */
+static int unlink_de(struct inode *dp, char *name)
 {
-  struct inode *ip, *dp;
+  struct inode *ip;
   struct dirent de;
-  char name[DIRSIZ];
   uint32_t off;
   int r = -1;
-
-  if ((dp = nameiparent(path, name)) == 0)
-  {
-    return -1;
-  }
 
   ilock(dp);
 
@@ -421,7 +534,7 @@ int xv6fs_sys_unlink(char *path)
     dp->nlink--;
     iupdate(dp);
   }
-  iunlockput(dp);
+  iunlock(dp);
 
   ip->nlink--;
   // fprintf(stderr,"%s name:%s, updated ip->nlink:%d\n",__func__, path, ip->nlink);
@@ -431,8 +544,27 @@ int xv6fs_sys_unlink(char *path)
   return 0;
 
 bad:
-  iunlockput(dp);
+  iunlock(dp);
   return r;
+}
+
+int xv6fs_sys_unlink(char *path)
+{
+  struct inode *dp;
+  char name[DIRSIZ];
+
+  if ((dp = nameiparent(path, name)) == 0)
+  {
+    return -1;
+  }
+
+  if (unlink_de(dp, name))
+  {
+    iput(dp);
+    return -1;
+  }
+
+  return 0;
 }
 
 // Create the path new as a link to the same inode as old.

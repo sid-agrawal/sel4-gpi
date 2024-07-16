@@ -43,7 +43,7 @@ int start_ramdisk_pd(seL4_CPtr *ramdisk_pd_cap,
  *
  * @param server_ep_cap raw ramdisk ep
  * @param mo memory to share, should be size >= RAMDISK_BLOCK_SIZE
- * @return int 0 on success, -1 on failure.
+ * @return int 0 on success, error code otherwise
  */
 int ramdisk_client_bind(seL4_CPtr server_ep_cap,
                         mo_client_context_t *mo);
@@ -53,7 +53,7 @@ int ramdisk_client_bind(seL4_CPtr server_ep_cap,
  * Remove shared memory from ramdisk
  *
  * @param server_ep_cap raw ramdisk ep
- * @return int 0 on success, -1 on failure.
+ * @return int 0 on success, error code otherwise
  */
 int ramdisk_client_unbind(seL4_CPtr server_ep_cap);
 
@@ -65,17 +65,25 @@ int ramdisk_client_unbind(seL4_CPtr server_ep_cap);
  *
  * @param server_ep_cap Well known server endpoint cap.
  * @param ret_conn client's connection object
- * @return int 0 on success, -1 on failure.
+ * @return int 0 on success, error code otherwise
  */
 int ramdisk_client_alloc_block(seL4_CPtr server_ep_cap,
                                ramdisk_client_context_t *ret_conn);
+
+/**
+ * @brief Return a block to the ramdisk
+ *
+ * @param conn connection for the block to free
+ * @return int 0 on success, error code otherwise
+ */
+int ramdisk_client_free_block(ramdisk_client_context_t *conn);
 
 /**
  * @brief Read an allocated block from ramdisk
  * Uses the shared memory as set in ramdisk_client_bind
  *
  * @param conn client connection object
- * @return int 0 on success, -1 on failure.
+ * @return int 0 on success, error code otherwise
  */
 int ramdisk_client_read(ramdisk_client_context_t *conn);
 
@@ -84,7 +92,7 @@ int ramdisk_client_read(ramdisk_client_context_t *conn);
  * Uses the shared memory as set in ramdisk_client_bind
  *
  * @param conn client connection object
- * @return int 0 on success, -1 on failure.
+ * @return int 0 on success, error code otherwise
  */
 int ramdisk_client_write(ramdisk_client_context_t *conn);
 

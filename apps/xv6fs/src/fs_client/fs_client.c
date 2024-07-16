@@ -214,7 +214,7 @@ int xv6fs_client_get_file(int fd, seL4_CPtr *file_ep)
 // Not used for libc
 int xv6fs_client_link_file(seL4_CPtr file, const char *pathname)
 {
-  XV6FS_PRINTF("fs_link_file file cptr %d, path %s\n", (int)file, path);
+  XV6FS_PRINTF("fs_link_file file cptr %d, path %s\n", (int)file, pathname);
 
   int error = 0;
   assert(strlen(pathname) <= MAXPATH);
@@ -654,7 +654,6 @@ static int xv6fs_libc_unlink(const char *pathname)
 static int xv6fs_libc_access(const char *pathname, int amode)
 {
   XV6FS_PRINTF("xv6fs_libc_access pathname %s amode 0x%x\n", pathname, amode);
-
   int error = 0;
 
   int flags = 0;
@@ -702,12 +701,6 @@ static void init_global_libc_fs_ops(void)
   libc_fs_ops.access = xv6fs_libc_access;
 }
 
-/**
- * Request a new namespace ID from the file server
- *
- * @param ns_id returns the newly allocated NS ID
- * @return 0 on success, error otherwise
- */
 int xv6fs_client_new_ns(uint64_t *ns_id)
 {
   XV6FS_PRINTF("Requesting new namespace from server ep\n");
@@ -726,5 +719,20 @@ int xv6fs_client_new_ns(uint64_t *ns_id)
     *ns_id = ret_msg.msg.ns.space_id;
   }
 
+  return error;
+}
+
+int xv6fs_client_delete_ns(seL4_CPtr ns_ep)
+{
+  XV6FS_PRINTF("Requesting new namespace from server ep\n");
+
+  FsMessage msg = {
+      .which_msg = FsMessage_delete_ns_tag,
+  };
+
+  FsReturnMessage ret_msg;
+
+  int error = sel4gpi_rpc_call(&rpc_client, ns_ep, (void *)&msg, 0, NULL, (void *)&ret_msg);
+  error |= ret_msg.errorCode;
   return error;
 }

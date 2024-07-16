@@ -351,6 +351,18 @@ void ramdisk_request_handler(
 
             // ARYA-TODO what if the MO is not of RAMDISK_BLOCK_SIZE?
             break;
+        case RamdiskAction_FREE:
+            RAMDISK_PRINTF("Op is free\n");
+
+            RAMDISK_PRINTF("Free blockno %d\n", obj_id);
+            // Free the block in metadata
+            free_block(obj_id);
+
+            // Revoke the resource from the client
+            error = resspc_client_revoke_resource(&get_ramdisk_server()->gen.default_space, obj_id, client_id);
+            CHECK_ERROR_GOTO(error, "Failed to revoke resource from client", RamdiskError_UNKNOWN, done);
+            
+            break;
         default:
             RAMDISK_PRINTF("Op is %d\n", msg->op);
             CHECK_ERROR_GOTO(1, "got invalid op on badged ep with obj id", RamdiskError_UNKNOWN, done);
@@ -389,6 +401,44 @@ int ramdisk_work_handler(PdWorkReturnMessage *work)
 
             RAMDISK_PRINTF("Free blockno %d\n", blockno);
             free_block(blockno);
+        }
+    }
+    else if (op == PdWorkAction_DESTROY)
+    {
+        for (int i = 0; i < work->object_ids_count; i++)
+        {
+            uint64_t space_id = work->space_ids[i];
+            uint64_t blockno = work->object_ids[i];
+
+            assert(space_id == get_ramdisk_server()->gen.default_space.id);
+            assert(blockno >= 0 && blockno < (RAMDISK_SIZE_BYTES / RAMDISK_BLOCK_SIZE));
+
+            if (blockno != BADGE_OBJ_ID_NULL)
+            {
+                // Destroy a block, it can no longer be allocated
+                RAMDISK_PRINTF("Destroy blockno %d\n", blockno);
+
+                // Nothing to be done, just don't return the blockno to the free list
+            }
+            else
+            {
+                /* Destroy the whole space */
+
+                // Free the ramdisk memory
+                error = ads_client_rm(&get_ramdisk_server()->gen.ads_conn, get_ramdisk_server()->ramdisk_buf);
+                CHECK_ERROR_GOTO(error, "Failed to free ramdisk memroy", RamdiskError_UNKNOWN, err_goto);
+
+                error = mo_component_client_disconnect(get_ramdisk_server()->ramdisk_mo);
+                CHECK_ERROR_GOTO(error, "Failed to free ramdisk memroy", RamdiskError_UNKNOWN, err_goto);
+
+                // Clear the list of free blocks
+                ramdisk_block_node_t *next = NULL;
+                for (ramdisk_block_node_t *curr = get_ramdisk_server()->free_blocks; curr != NULL; curr = next)
+                {
+                    next = curr->next;
+                    free(curr);
+                }
+            }
         }
     }
     else

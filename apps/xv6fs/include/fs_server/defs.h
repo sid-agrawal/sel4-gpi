@@ -110,6 +110,7 @@ int xv6fs_sys_fstat(char *path, void *buf);
 int xv6fs_sys_readdirent(void *fh, struct dirent *e, uint32_t off);
 int xv6fs_sys_truncate(char *path);
 int xv6fs_sys_mkdir(char *path);
+int xv6fs_sys_rmdir(char *path, bool delete_contents);
 int xv6fs_sys_mksock(char *path);
 int xv6fs_sys_unlink(char *path);
 int xv6fs_sys_dolink(char *old, char *new);

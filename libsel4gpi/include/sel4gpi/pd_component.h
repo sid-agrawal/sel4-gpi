@@ -49,7 +49,9 @@ typedef struct _pd_component_registry_entry
     /* Pending Work */
     linked_list_t *pending_frees;       ///< List of pd_work_entry_t for resources to free from a resource space
                                         ///< that this PD manages
-    linked_list_t *pending_model_state; ///< List of pd_work_entry_t for resources for which we need the model 
+    linked_list_t *pending_destroy;     ///< List of pd_work_entry_t for resources to destroy from a resource space
+                                        ///< that this PD manages
+    linked_list_t *pending_model_state; ///< List of pd_work_entry_t for resources for which we need the model
                                         ///< state from this PD
 } pd_component_registry_entry_t;
 
@@ -126,7 +128,7 @@ int pd_component_space_cleanup(uint32_t pd_id, gpi_cap_t space_type, uint32_t sp
 
 /**
  * Get a PD from the registry by ID
- * 
+ *
  * @param object_id the PD ID
  * @return the PD's registry entry, or NULL if not found
  */
@@ -134,7 +136,7 @@ pd_component_registry_entry_t *pd_component_registry_get_entry_by_id(seL4_Word o
 
 /**
  * Get a PD from the registry by badge
- * 
+ *
  * @param badge the PD resource badge
  * @return the PD's registry entry, or NULL if not found
  */
@@ -143,7 +145,7 @@ pd_component_registry_entry_t *pd_component_registry_get_entry_by_badge(seL4_Wor
 /**
  * Queue some model extraction work for the PD to complete
  * The work must be part of a currently pending model state extraction task
- * 
+ *
  * @param pd_entry the target PD
  * @param work the details of the work
  */
@@ -151,6 +153,8 @@ void pd_component_queue_model_extraction_work(pd_component_registry_entry_t *pd_
 
 /**
  * Queue a resource for a resource server to free
+ * The resource server is thus notified that another PD has stopped holding one of its resources
+ * The server may or may not decide to destroy the resource / add it back to a pool
  * 
  * @param pd_entry the target PD
  * @param work the details of the work
@@ -158,8 +162,18 @@ void pd_component_queue_model_extraction_work(pd_component_registry_entry_t *pd_
 void pd_component_queue_free_work(pd_component_registry_entry_t *pd_entry, pd_work_entry_t *work);
 
 /**
+ * Queue a resource / space for a resource server to destroy
+ * The resource server will be responsible to clean up any metedata / dependencies
+ * of the deleted resource / space
+ *
+ * @param pd_entry the target PD
+ * @param work the details of the work
+ */
+void pd_component_queue_destroy_work(pd_component_registry_entry_t *pd_entry, pd_work_entry_t *work);
+
+/**
  * Allocate a PD from the root task
- * 
+ *
  * @param client_id the PD id of the client requesting the ADS
  * @param init_mo an MO to use for the PD's init data
  * @param ret_ads returns the created PD
@@ -168,7 +182,7 @@ void pd_component_queue_free_work(pd_component_registry_entry_t *pd_entry, pd_wo
 int pd_component_allocate(uint32_t client_id, mo_t *mo, pd_t **ret_pd, seL4_CPtr *ret_cap);
 
 /**
- * @brief 
+ * @brief
  * P repares the (PD, ADS, CPU) combination with the given arguments,
  *        entry point, stack, and IPC buffer, and OSmosis data frame
  * This eventually will be removed in favour of a unified PD entry-point
@@ -199,7 +213,7 @@ int pd_component_runtime_setup(pd_t *pd,
 
 /**
  * Terminate a PD by ID, from the root task
- * 
+ *
  * @param pd_id the ID of the PD to terminate
  * @return 0 on success, error otherwise
  */

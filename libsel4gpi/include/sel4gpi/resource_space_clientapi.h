@@ -45,3 +45,41 @@ int resspc_client_map_space(resspc_client_context_t *conn,
  */
 int resspc_client_create_resource(resspc_client_context_t *conn,
                                   seL4_Word resource_id);
+
+/**
+ * Delete a resource from a resource space
+ * This will also remove the resource from any PDs that held it
+ *
+ * @param conn the resource space connection
+ * @param resource_id id of the resource within the resource space
+ * @return 0 on success, error otherwise
+ */
+int resspc_client_delete_resource(resspc_client_context_t *conn,
+                                  seL4_Word resource_id);
+
+/**
+ * Revoke a resource from a particular PD
+ * The resource server can use this to retrieve a resource from a client, so the client
+ * will no longer be able to use the resource
+ *
+ * @param conn the resource space connection
+ * @param resource_id id of the resource within the resource space
+ * @param target_pd_id the ID of the client PD to revoke the resource from
+ * @return 0 on success, error otherwise
+ */
+int resspc_client_revoke_resource(resspc_client_context_t *conn,
+                                  uint32_t resource_id,
+                                  uint32_t target_pd_id);
+
+/**
+ * Destroy a resource space from the resource component
+ * Assumption: only the managing PD would hold a resource space, and thus make this request,
+ * so the managing PD does not need to be notified of the deletion
+ * This call does not trigger a cleanup policy
+ *
+ * This will return an error if the resource space is currently in the process of deletion
+ *
+ * @param conn the resource space connection
+ * @return 0 on success, error otherwise
+ */
+int resspc_client_destroy(resspc_client_context_t *conn);

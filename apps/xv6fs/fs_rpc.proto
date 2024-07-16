@@ -44,6 +44,10 @@ message FsCreateNamespaceMessage {
     /* No content */
 }
 
+message FsDeleteNamespaceMessage {
+    /* No content */
+}
+
 /* message type for all ramdisk request messages */
 message FsMessage {
     oneof msg {
@@ -55,6 +59,7 @@ message FsMessage {
         FsUnlinkMessage unlink = 6;
         FsStatMessage stat = 7;
         FsCreateNamespaceMessage ns = 8;
+        FsDeleteNamespaceMessage delete_ns = 9;
     };
 };
 

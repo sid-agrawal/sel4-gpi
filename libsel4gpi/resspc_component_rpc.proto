@@ -19,11 +19,27 @@ message ResSpcCreateResourceMessage {
     uint32 resource_id = 1;     /* resource ID to create */
 }
 
+message ResSpcDestroyMessage {
+    /* no content */
+}
+
+message ResSpcDeleteResourceMessage {
+    uint32 resource_id = 1;     /* resource ID to create */
+}
+
+message ResSpcRevokeResourceMessage {
+    uint32 resource_id = 1;     /* resource ID to create */
+    uint32 target_pd_id = 2;    /* ID of the PD to revoke from */
+}
+
 message ResSpcMessage {
     oneof msg {
         ResSpcAllocMessage alloc = 1;
         ResSpcMapMessage map = 2;
         ResSpcCreateResourceMessage create_resource = 3;
+        ResSpcDestroyMessage destroy = 4;
+        ResSpcDeleteResourceMessage delete_resource = 5;
+        ResSpcRevokeResourceMessage revoke_resource = 6;
     }
 };
 

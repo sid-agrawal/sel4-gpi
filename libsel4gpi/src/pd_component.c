@@ -79,6 +79,7 @@ static void on_pd_registry_delete(resource_registry_node_t *node_gen, void *arg)
 
     // Clear any pending work
     get_gpi_server()->model_extraction_n_missing -= node->pending_model_state->count;
+    linked_list_destroy(node->pending_destroy, true);
     linked_list_destroy(node->pending_frees, true);
     linked_list_destroy(node->pending_model_state, true);
 }
@@ -96,6 +97,7 @@ int pd_component_allocate(uint32_t client_id, mo_t *init_data_mo, pd_t **ret_pd,
     OSDB_PRINTF("Successfully allocated a new PD %d.\n", new_entry->pd.id);
 
     /* Initialize the registry entry */
+    new_entry->pending_destroy = linked_list_new();
     new_entry->pending_frees = linked_list_new();
     new_entry->pending_model_state = linked_list_new();
 
@@ -705,51 +707,38 @@ static void handle_get_work_req(seL4_Word sender_badge, PdGetWorkMessage *msg, P
                         get_client_id_from_badge(sender_badge));
 
     /* Return the next piece of work, if there is any */
-    pd_work_entry_t *work_res;
+    reply_msg->msg.work.action = PdWorkAction_NO_WORK;
     int n_object_ids = sizeof(reply_msg->msg.work.object_ids) / sizeof(reply_msg->msg.work.object_ids[0]);
 
-    if (pd_data->pending_model_state->count > 0)
-    {
-        // Prioritize model extraction before free
-        // The model state may change during the extraction, bias towards including more information rather than less
-        reply_msg->msg.work.action = PdWorkAction_EXTRACT;
-        int n_work = MIN(n_object_ids, pd_data->pending_model_state->count);
-        reply_msg->msg.work.object_ids_count = n_work;
-        reply_msg->msg.work.pd_ids_count = n_work;
-        reply_msg->msg.work.space_ids_count = n_work;
+    // Order gives the priority of different types of work
+    linked_list_t *lists[3] = {pd_data->pending_model_state, pd_data->pending_destroy, pd_data->pending_frees};
+    PdWorkAction work_types[3] = {PdWorkAction_EXTRACT, PdWorkAction_DESTROY, PdWorkAction_FREE};
 
-        for (int i = 0; i < n_work; i++)
-        {
-            linked_list_pop_head(pd_data->pending_model_state, &work_res);
-            assert(work_res != NULL);
-            reply_msg->msg.work.space_ids[i] = work_res->res_id.space_id;
-            reply_msg->msg.work.object_ids[i] = work_res->res_id.object_id;
-            reply_msg->msg.work.pd_ids[i] = work_res->client_pd_id;
-            free(work_res);
-        }
-    }
-    else if (pd_data->pending_frees->count > 0)
+    for (int i = 0; i < 3; i++)
     {
-        reply_msg->msg.work.action = PdWorkAction_FREE;
-        int n_work = MIN(n_object_ids, pd_data->pending_frees->count);
-        reply_msg->msg.work.object_ids_count = n_work;
-        reply_msg->msg.work.pd_ids_count = n_work;
-        reply_msg->msg.work.space_ids_count = n_work;
+        pd_work_entry_t *work_res;
 
-        for (int i = 0; i < n_work; i++)
+        // Check if the list has any content
+        if (lists[i]->count > 0)
         {
-            linked_list_pop_head(pd_data->pending_frees, &work_res);
-            assert(work_res != NULL);
-            reply_msg->msg.work.space_ids[i] = work_res->res_id.space_id;
-            reply_msg->msg.work.object_ids[i] = work_res->res_id.object_id;
-            reply_msg->msg.work.pd_ids[i] = work_res->client_pd_id;
-            free(work_res);
+            reply_msg->msg.work.action = work_types[i];
+            int n_work = MIN(n_object_ids, lists[i]->count);
+            reply_msg->msg.work.object_ids_count = n_work;
+            reply_msg->msg.work.pd_ids_count = n_work;
+            reply_msg->msg.work.space_ids_count = n_work;
+
+            for (int j = 0; j < n_work; j++)
+            {
+                linked_list_pop_head(lists[i], &work_res);
+                assert(work_res != NULL);
+                reply_msg->msg.work.space_ids[j] = work_res->res_id.space_id;
+                reply_msg->msg.work.object_ids[j] = work_res->res_id.object_id;
+                reply_msg->msg.work.pd_ids[j] = work_res->client_pd_id;
+                free(work_res);
+            }
+
+            break;
         }
-    }
-    else
-    {
-        // No work to be done
-        reply_msg->msg.work.action = PdWorkAction_NO_WORK;
     }
 
 err_goto:
@@ -939,11 +928,11 @@ static void pd_component_handle(void *msg_p,
         }
     }
 
-    OSDB_PRINTF("Returning from PD component with error code %d\n", reply_msg->errorCode);
+    OSDB_PRINT_VERBOSE("Returning from PD component with error code %d\n", reply_msg->errorCode);
     return;
 
 err_goto:
-    OSDB_PRINTF("Returning from PD component with error code %d\n", error);
+    OSDB_PRINT_VERBOSE("Returning from PD component with error code %d\n", error);
     reply_msg->errorCode = error;
 }
 
@@ -1067,46 +1056,65 @@ int pd_component_space_cleanup(uint32_t pd_id, gpi_cap_t space_type, uint32_t sp
     int depth = manager_data->pd.deletion_depth;
 
     // Remove the space resource from the manager, if still live
-    gpi_res_id_t space_res_id = make_res_id(GPICAP_TYPE_RESSPC, get_resspc_component()->space_id, space_id);
-    error = pd_remove_resource(&manager_data->pd, space_res_id);
-    SERVER_GOTO_IF_ERR(error, "failed to remove resource space (%d) resource from PD (%d)\n",
-                       space_id, pd_id);
-
-    // Iterate over all live PDs to check if they should be deleted
-    resource_registry_node_t *curr, *tmp;
-    HASH_ITER(hh, get_pd_component()->registry.head, curr, tmp)
+    if (!manager_data->pd.deleting)
     {
-        pd_component_registry_entry_t *pd_entry = (pd_component_registry_entry_t *)curr;
-        pd_t *pd = &pd_entry->pd;
+        // Remove the resource space object
+        gpi_res_id_t space_res_id = make_res_id(GPICAP_TYPE_RESSPC, get_resspc_component()->space_id, space_id);
+        error = pd_remove_resource(&manager_data->pd, space_res_id);
+        SERVER_GOTO_IF_ERR(error, "failed to remove resource space (%d) resource from PD (%d)\n",
+                           space_id, pd_id);
 
-        if (pd->id == get_gpi_server()->rt_pd_id || pd->deleting)
+        if (manager_data->pd.id != get_gpi_server()->rt_pd_id)
         {
-            // Skip the root task, or a PD currently being deleted
-            continue;
+            // Notify the server that its space is being deleted
+            pd_work_entry_t *work_entry = calloc(1, sizeof(pd_work_entry_t));
+            work_entry->res_id.type = space_type;
+            work_entry->res_id.space_id = space_id;
+            work_entry->res_id.object_id = BADGE_OBJ_ID_NULL;
+
+            pd_component_queue_destroy_work(manager_data, work_entry);
         }
+    }
 
-        // Check if we should delete this PD
-        if (GPI_CLEANUP_PD_DEPTH == -1 || depth + 1 <= GPI_CLEANUP_PD_DEPTH)
+    if (execute_cleanup_policy)
+    {
+        // Iterate over all live PDs to check if they should be deleted
+        resource_registry_node_t *curr, *tmp;
+        HASH_ITER(hh, get_pd_component()->registry.head, curr, tmp)
         {
-            // Within PD deletion depth
-            // Check if the PD has a request edge for the deleted space, or holds any resource from the space
-            if (pd_rde_get(pd, space_type, space_id) || pd_has_resources_in_space(pd, space_id))
+            pd_component_registry_entry_t *pd_entry = (pd_component_registry_entry_t *)curr;
+            pd_t *pd = &pd_entry->pd;
+
+            if (pd->id == get_gpi_server()->rt_pd_id || pd->deleting)
             {
-                OSDB_PRINTF("Delete PD (%d) depending on %s_%d at depth %d\n", pd->id, cap_type_to_str(space_type),
-                            space_id, depth + 1);
-
-                // Set the deletion depth
-                pd->deletion_depth = depth + 1;
-
-                // Remove the PD from registry, this will also destroy the PD
-                resource_registry_delete(&get_pd_component()->registry, curr);
-
+                // Skip the root task, or a PD currently being deleted
                 continue;
+            }
+
+            // Check if we should delete this PD
+            if (GPI_CLEANUP_PD_DEPTH == -1 || depth + 1 <= GPI_CLEANUP_PD_DEPTH)
+            {
+                // Within PD deletion depth
+                // Check if the PD has a request edge for the deleted space, or holds any resource from the space
+                if (pd_rde_get(pd, space_type, space_id) || pd_has_resources_in_space(pd, space_id))
+                {
+                    OSDB_PRINTF("Delete PD (%d) depending on %s_%d at depth %d\n", pd->id, cap_type_to_str(space_type),
+                                space_id, depth + 1);
+
+                    // Set the deletion depth
+                    pd->deletion_depth = depth + 1;
+
+                    // Remove the PD from registry, this will also destroy the PD
+                    resource_registry_delete(&get_pd_component()->registry, curr);
+
+                    continue;
+                }
             }
         }
     }
 
     // Iterate over any live PDs to cleanup resources from the deleted space
+    resource_registry_node_t *curr, *tmp;
     HASH_ITER(hh, get_pd_component()->registry.head, curr, tmp)
     {
         pd_component_registry_entry_t *pd_entry = (pd_component_registry_entry_t *)curr;
@@ -1140,6 +1148,7 @@ err_goto:
 void pd_component_queue_model_extraction_work(pd_component_registry_entry_t *pd_entry, pd_work_entry_t *work)
 {
     OSDB_PRINTF("Requesting model subgraph from PD (%d)\n", pd_entry->pd.id);
+    assert(work != NULL);
 
     // Add to the list
     linked_list_insert(pd_entry->pending_model_state, (void *)work);
@@ -1149,8 +1158,21 @@ void pd_component_queue_model_extraction_work(pd_component_registry_entry_t *pd_
     seL4_Signal(pd_entry->pd.badged_notification);
 }
 
+void pd_component_queue_destroy_work(pd_component_registry_entry_t *pd_entry, pd_work_entry_t *work)
+{
+    assert(work != NULL);
+
+    // Add to the list
+    linked_list_insert(pd_entry->pending_destroy, (void *)work);
+
+    // Notify the PD
+    seL4_Signal(pd_entry->pd.badged_notification);
+}
+
 void pd_component_queue_free_work(pd_component_registry_entry_t *pd_entry, pd_work_entry_t *work)
 {
+    assert(work != NULL);
+
     // Add to the list
     linked_list_insert(pd_entry->pending_frees, (void *)work);
 

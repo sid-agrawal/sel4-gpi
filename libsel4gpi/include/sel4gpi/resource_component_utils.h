@@ -183,6 +183,15 @@ int resource_component_dec(resource_component_context_t *component,
                            uint64_t object_id);
 
 /**
+ * Immediately delete a resource object
+ *
+ * @param component
+ * @param object_id ID of the object
+ */
+int resource_component_delete(resource_component_context_t *component,
+                           uint64_t object_id);
+
+/**
  * Debug function to print the existing resources in a resource component
  */
 void resource_component_debug_print(resource_component_context_t *component);

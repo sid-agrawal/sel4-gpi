@@ -240,9 +240,6 @@ int test_fs(env_t env)
 
     error = xv6fs_client_link_file(file, TEST_FNAME_3);
     test_assert(error == 0);
-
-    // Grant permission on ep
-    // Receive slot in FS
     
     error = close(f);
     test_assert(error == 0); // (XXX) Arya: Note we cannot close the original file until it is linked
@@ -253,6 +250,25 @@ int test_fs(env_t env)
     nbytes = read(f, buf, strlen(TEST_STR_3) + 1);
     test_assert(nbytes == strlen(TEST_STR_3) + 1);
     test_assert(strcmp(buf, TEST_STR_3) == 0);
+
+    // Test destroying a NS
+    seL4_CPtr ns_server_ep = sel4gpi_get_rde_by_space_id(ns_id, sel4gpi_get_resource_type_code(FILE_RESOURCE_TYPE_NAME));
+    error = xv6fs_client_delete_ns(ns_server_ep);
+    test_assert(error == 0);
+
+    // Ensure the old NS no longer works
+    nbytes = write(f, buf, strlen(TEST_STR_3) + 1);
+    test_assert(nbytes == -1);
+
+    f = open(TEST_FNAME_3, O_RDWR);
+    test_assert(f == -1);
+
+    // The file from the NS should be deleted from the global NS
+    error = xv6fs_client_set_namespace(fs_id);
+    test_assert(error == 0);
+
+    f = open(TEST_FNAME_3, O_RDWR);
+    test_assert(f == -1);
 
     // Print whole-pd model state
     // error = pd_client_dump(&pd_conn, NULL, 0);

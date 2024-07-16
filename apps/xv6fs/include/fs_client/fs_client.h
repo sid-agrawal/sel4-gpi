@@ -72,6 +72,14 @@ int xv6fs_client_link_file(seL4_CPtr file, const char *path);
  */
 int xv6fs_client_new_ns(uint64_t *ns_id);
 
+/**
+ * Delete a namespace from the file server
+ *
+ * @param ns_ep the endpoint of the namespace connection to the FS server
+ * @return 0 on success, error otherwise
+ */
+int xv6fs_client_delete_ns(seL4_CPtr ns_ep);
+
 /*
 Context of the client for a single file
 */

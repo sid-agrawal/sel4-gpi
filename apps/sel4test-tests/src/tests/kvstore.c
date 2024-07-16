@@ -383,7 +383,7 @@ int test_kvstore_diff_fs(env_t env)
     printf("------------------ENDING: %s------------------\n", __func__);
     return sel4test_get_result();
 }
-DEFINE_TEST_OSM(GPIKV004, "Test app and lib with different", test_kvstore_diff_fs, true)
+DEFINE_TEST_OSM(GPIKV004, "Test app and lib with different file systems", test_kvstore_diff_fs, true)
 
 int test_kvstore_lib_same_pd_diff_ads(env_t env)
 {
@@ -519,3 +519,62 @@ int test_kvstore_two_sets(env_t env)
     return sel4test_get_result();
 }
 DEFINE_TEST_OSM(GPIKV007, "Test kvstore with app and lib in different PDs, 2 sets of each", test_kvstore_two_sets, true)
+
+int test_kvstore_lib_in_diff_pd_crash(env_t env)
+{
+    int error;
+
+    printf("------------------STARTING TEST: %s------------------\n", __func__);
+
+    error = setup(env);
+    test_assert(error == 0);
+
+    /* Create the FS namespaces */
+    seL4_CPtr fs_ep = sel4gpi_get_rde(file_cap_type);
+    uint64_t nsid_1, nsid_2;
+
+    error = xv6fs_client_new_ns(&nsid_1);
+    test_assert(error == 0);
+
+    error = xv6fs_client_new_ns(&nsid_2);
+    test_assert(error == 0);
+
+    /* Start the kvstore PD */
+    pd_client_context_t kvstore_pd;
+    seL4_CPtr kvstore_ep;
+    error = start_kvstore_server(&kvstore_ep, nsid_1, &kvstore_pd);
+    test_assert(error == 0);
+
+    /* Start the app PD */
+    pd_client_context_t hello_pd;
+    error = start_hello_kvstore(SEPARATE_PROC, kvstore_ep, &hello_pd, nsid_2);
+
+    /* Wait for test result */
+    seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0, 0);
+    tag = seL4_Recv(self_ep.raw_endpoint, NULL);
+    error = seL4_MessageInfo_get_label(tag);
+    test_assert(error == 0);
+
+    dump_model();
+
+    /* Crash the ramdisk */
+    printf("Crashing the ramdisk\n");
+    error = pd_client_terminate(&ramdisk_pd);
+    test_assert(error == 0);
+
+    dump_model();
+
+    /* Cleanup servers */
+    error = pd_client_terminate(&hello_pd);
+    test_assert(error == 0);
+    error = pd_client_terminate(&kvstore_pd);
+    test_assert(error == 0);
+    error = pd_client_terminate(&fs_pd);
+    test_assert(error == 0);
+
+    printf("------------------ENDING: %s------------------\n", __func__);
+    return sel4test_get_result();
+}
+DEFINE_TEST_OSM(GPIKV008,
+                "Test kvstore with app and lib in different PDs, same FS, different NS: ramdisk crashes",
+                test_kvstore_lib_in_diff_pd_crash, true)

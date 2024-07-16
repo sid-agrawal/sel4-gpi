@@ -68,7 +68,8 @@ void resource_component_handle(resource_component_context_t *component,
     error = sel4gpi_rpc_recv(&component->rpc_env, (void *)rpc_msg_buf);
     assert(error == 0);
 
-    if (MESSAGE_DEBUG_ENABLED) {
+    if (MESSAGE_DEBUG_ENABLED)
+    {
         printf("Message to %s component: \n", cap_type_to_str(component->resource_type));
         sel4gpi_rpc_print_request(&component->rpc_env, (void *)rpc_msg_buf);
     }
@@ -216,6 +217,22 @@ err_goto:
     return error;
 }
 
+int resource_component_delete(resource_component_context_t *component,
+                              uint64_t object_id)
+{
+    int error = 0;
+
+    resource_component_registry_entry_t *reg_entry = resource_component_registry_get_by_id(component, object_id);
+    GOTO_IF_COND(reg_entry == NULL, "Couldn't find %s (%ld)\n", cap_type_to_str(component->resource_type), object_id);
+
+    OSDB_PRINTF("delete object %s (%d)\n", cap_type_to_str(component->resource_type), object_id);
+
+    resource_registry_delete(&component->registry, (resource_registry_node_t *)reg_entry);
+
+err_goto:
+    return error;
+}
+
 void resource_component_debug_print(resource_component_context_t *component)
 {
     resource_registry_node_t *curr;
@@ -304,7 +321,8 @@ void resource_component_remove_from_rt(resource_component_context_t *context, ui
     // Remove from RT, if held
     int error = pd_component_remove_resource_from_rt(make_res_id(context->resource_type, context->space_id, obj_id));
 
-    if (error) {
+    if (error)
+    {
         OSDB_PRINTWARN("Failed to remove %s (%d) from rt\n", cap_type_to_str(context->resource_type), obj_id);
     }
 }

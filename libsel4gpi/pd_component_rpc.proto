@@ -10,6 +10,7 @@ enum PdWorkAction {
     NO_WORK = 0;        /* there is no work to be done */
     EXTRACT = 1;        /* work action to extract model state */
     FREE = 2;           /* work action to free a resource */
+    DESTROY = 3;        /* work action to destroy a resource / space */
 };
 
 enum PdSetupType {

@@ -146,7 +146,7 @@ int pd_client_send_core_cap(pd_client_context_t *conn,
 int pd_client_next_slot(pd_client_context_t *conn,
                         seL4_Word *slot)
 {
-    OSDB_PRINTF("Sending 'next slot' request to PD component\n");
+    OSDB_PRINT_VERBOSE("Sending 'next slot' request to PD component\n");
 
     int error = 0;
 
@@ -171,7 +171,7 @@ int pd_client_next_slot(pd_client_context_t *conn,
 int pd_client_free_slot(pd_client_context_t *conn,
                         seL4_CPtr slot)
 {
-    OSDB_PRINTF("Sending 'free slot' request to PD component\n");
+    OSDB_PRINT_VERBOSE("Sending 'free slot' request to PD component\n");
 
     int error = 0;
 
@@ -191,7 +191,7 @@ int pd_client_free_slot(pd_client_context_t *conn,
 int pd_client_clear_slot(pd_client_context_t *conn,
                          seL4_CPtr slot)
 {
-    // OSDB_PRINTF("Sending 'clear slot' request to PD component\n");
+    OSDB_PRINT_VERBOSE("Sending 'clear slot' request to PD component\n");
 
     int error = 0;
 
@@ -240,8 +240,8 @@ int pd_client_give_resource(pd_client_context_t *conn,
                             seL4_Word resource_id,
                             seL4_CPtr *dest)
 {
-    OSDB_PRINTF("Sending 'give resource' request to PD component: PD (%d), Space (%d), Object (%d)\n",
-                recipient_id, res_space_id, resource_id);
+    OSDB_PRINT_VERBOSE("Sending 'give resource' request to PD component: PD (%d), Space (%d), Object (%d)\n",
+                       recipient_id, res_space_id, resource_id);
 
     int error = 0;
 
