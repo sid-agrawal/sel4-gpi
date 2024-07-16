@@ -211,19 +211,18 @@ int ads_rm(ads_t *ads, vka_t *vka, void *vaddr);
 int ads_bind(ads_t *ads, vka_t *vka, seL4_CPtr *cpu_cap);
 
 /**
- * @brief Copies a VMR from src_ads to dst_ads.
- * The copying method depends on what is set in the given config
- * If config omits a vaddr and size, will search for the VMR corresponding
- * to the given type (if not SEL4UTILS_RES_TYPE_GENERIC or SEL4UTILS_RES_TYPE_SHARED_FRAMES)
+ * @brief Shallow copies a VMR from src_ads to dst_ads.
+ * If config only specifies a VMR type that is neither SEL4UTILS_RES_TYPE_GENERIC nor SEL4UTILS_RES_TYPE_SHARED_FRAMES,
+ * will search for the VMR reservation corresponding to the given type
  *
- * @param loader vspace of the function running this
- * @param vka vka object to allocate cspace slots and PT from
- * @param src_ads ads object to clone
- * @param dst_ads target to copy into
- * @param cfg the configuration describing how the VMR should be copied
+ * @param loader the current vspace
+ * @param vka vka object for cspace and page table allocations
+ * @param src_ads source ADS to copy the VMR from
+ * @param dst_ads target ADS to copy into
+ * @param cfg the configuration describing the VMR to copy
  * @return int
  */
-int ads_copy(vspace_t *loader, vka_t *vka, ads_t *src_ads, ads_t *dst_ads, vmr_config_t *cfg);
+int ads_shallow_copy(vspace_t *loader, vka_t *vka, ads_t *src_ads, ads_t *dst_ads, vmr_config_t *cfg);
 
 /**
  * @param ads ads object to dump the RR for

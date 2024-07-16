@@ -170,36 +170,25 @@ int ads_client_bind_cpu(ads_client_context_t *conn, seL4_CPtr cpu_cap)
     return 0;
 }
 
-int ads_client_copy(ads_client_context_t *src_ads, ads_client_context_t *dst_ads, vmr_config_t *vmr_cfg)
+int ads_client_shallow_copy(ads_client_context_t *src_ads, ads_client_context_t *dst_ads, vmr_config_t *vmr_cfg)
 {
     OSDB_PRINTF("Sending copy request to ADS component\n");
 
     int error = 0;
 
     AdsMessage msg = {
-        .which_msg = AdsMessage_copy_tag,
-        .msg.copy = {
+        .which_msg = AdsMessage_shallow_copy_tag,
+        .msg.shallow_copy = {
             .pages = vmr_cfg->region_pages,
             .type = (uint32_t)vmr_cfg->type,
             .src_vaddr = vmr_cfg->start,
             .dest_vaddr = vmr_cfg->dest_start,
-            .share_degree = vmr_cfg->share_mode,
-            .provided_mo = vmr_cfg->mo != NULL,
         }};
 
     AdsReturnMessage ret_msg;
 
-    if (vmr_cfg->mo)
-    {
-        seL4_CPtr caps[2] = {dst_ads->ep, vmr_cfg->mo->ep};
-        error = sel4gpi_rpc_call(&rpc_env, src_ads->ep, (void *)&msg,
-                                 2, caps, (void *)&ret_msg);
-    }
-    else
-    {
-        error = sel4gpi_rpc_call(&rpc_env, src_ads->ep, (void *)&msg,
-                                 1, &dst_ads->ep, (void *)&ret_msg);
-    }
+    error = sel4gpi_rpc_call(&rpc_env, src_ads->ep, (void *)&msg,
+                             1, &dst_ads->ep, (void *)&ret_msg);
     error |= ret_msg.errorCode;
 
     return error;

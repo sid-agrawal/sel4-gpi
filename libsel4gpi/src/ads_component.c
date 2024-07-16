@@ -293,8 +293,8 @@ err_goto:
     reply_msg->errorCode = error;
 }
 
-static void handle_copy_req(seL4_Word sender_badge, AdsCopyMessage *msg,
-                            AdsReturnMessage *reply_msg, seL4_CPtr received_cap)
+static void handle_copy_req(seL4_Word sender_badge, AdsShallowCopyMessage *msg,
+                            AdsReturnMessage *reply_msg)
 {
     OSDB_PRINTF("Got copy request from client badge: ");
     BADGE_PRINT(sender_badge);
@@ -318,22 +318,10 @@ static void handle_copy_req(seL4_Word sender_badge, AdsCopyMessage *msg,
     vmr_config_t cfg = {.start = (void *)msg->src_vaddr,
                         .dest_start = (void *)msg->dest_vaddr,
                         .region_pages = msg->pages,
-                        .share_mode = (gpi_share_degree_t)msg->share_degree,
-                        .type = (sel4utils_reservation_type_t)msg->type,
-                        .mo = NULL};
+                        .type = (sel4utils_reservation_type_t)msg->type};
 
-    if (msg->provided_mo)
-    {
-        SERVER_GOTO_IF_COND(!sel4gpi_rpc_check_caps_2(GPICAP_TYPE_ADS, GPICAP_TYPE_MO), "Did not receive MO cap\n");
-
-        seL4_Word mo_badge = seL4_GetBadge(1);
-        assert(get_cap_type_from_badge(mo_badge) == GPICAP_TYPE_MO);
-
-        // (XXX) Arya: what to do with MO? I think Linh's commits should implement that
-    }
-
-    error = ads_copy(get_ads_component()->server_vspace, get_ads_component()->server_vka,
-                     &src_ads_data->ads, &dst_ads_data->ads, &cfg);
+    error = ads_shallow_copy(get_ads_component()->server_vspace, get_ads_component()->server_vka,
+                             &src_ads_data->ads, &dst_ads_data->ads, &cfg);
 
 err_goto:
     reply_msg->which_msg = AdsReturnMessage_basic_tag;
@@ -556,9 +544,8 @@ static void ads_component_handle(void *msg_p,
         case AdsMessage_reserve_tag:
             handle_reserve_req(sender_badge, &msg->msg.reserve, reply_msg);
             break;
-        case AdsMessage_copy_tag:
-            handle_copy_req(sender_badge, &msg->msg.copy, reply_msg, received_cap);
-            *need_new_recv_cap = msg->msg.copy.provided_mo;
+        case AdsMessage_shallow_copy_tag:
+            handle_copy_req(sender_badge, &msg->msg.shallow_copy, reply_msg);
             break;
         case AdsMessage_load_elf_tag:
             handle_load_elf_request(sender_badge, &msg->msg.load_elf, reply_msg);

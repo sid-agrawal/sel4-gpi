@@ -34,13 +34,11 @@ message AdsBindCpuMessage {
     /* No content */
 };
 
-message AdsCopyMessage {
+message AdsShallowCopyMessage {
     uint32 pages = 1;           /* number of pages to copy */
     uint32 type = 2;            /* type of VMR reservation */
     uint64 src_vaddr = 3;       /* vaddr in the source ADS */
     uint64 dest_vaddr = 4;      /* vaddr in the dest ADS */
-    uint32 share_degree = 5;    /* the GPI share degree for the VMR region */
-    bool provided_mo = 6;       /* true if the message includes an MO to use for deep-copied regions */
 };
 
 message AdsGetReservationMessage {
@@ -61,7 +59,7 @@ message AdsMessage {
         AdsAttachToReserveMessage attach_reserve = 4;
         AdsRemoveMessage remove = 5;
         AdsBindCpuMessage bind_cpu = 6;
-        AdsCopyMessage copy = 7;
+        AdsShallowCopyMessage shallow_copy = 7;
         AdsGetReservationMessage get_res = 8;
         AdsLoadElfMessage load_elf = 9;
     }

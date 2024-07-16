@@ -188,9 +188,8 @@ int sel4gpi_ads_configure(ads_config_t *cfg,
                           mo_client_context_t *ret_ipc_buf_mo)
 {
     int error = 0;
-    ads_client_context_t vmr_rde = {.ep =
-                                        sel4gpi_get_rde_by_space_id(runnable->ads.id, GPICAP_TYPE_VMR)};
-                                        
+    ads_client_context_t vmr_rde = {.ep = sel4gpi_get_rde_by_space_id(runnable->ads.id, GPICAP_TYPE_VMR)};
+
     uint64_t current_ads_id = sel4gpi_get_binded_ads_id();
     ads_client_context_t self_ads_conn = sel4gpi_get_ads_conn();
 
@@ -217,16 +216,15 @@ int sel4gpi_ads_configure(ads_config_t *cfg,
             vmr = (vmr_config_t *)curr->data;
             switch (vmr->share_mode)
             {
-            case GPI_COPY:
             case GPI_SHARED:
                 /* shallow copying when we're in the same ADS doesn't make sense */
-                if (!(current_ads_id == runnable->ads.id && vmr->share_mode == GPI_SHARED))
+                if (current_ads_id != runnable->ads.id)
                 {
                     PD_CREATION_PRINT("%s VMR (%s) with %lu pages at %p\n",
                                       sel4gpi_share_degree_to_str(vmr->share_mode),
                                       human_readable_va_res_type(vmr->type),
                                       vmr->region_pages, vmr->start);
-                    error = ads_client_copy(&self_ads_conn, &runnable->ads, vmr);
+                    error = ads_client_shallow_copy(&self_ads_conn, &runnable->ads, vmr);
                     GOTO_IF_ERR(error, "Failed to copy VMR (%p)\n", vmr->start);
                 }
                 break;
@@ -259,6 +257,7 @@ int sel4gpi_ads_configure(ads_config_t *cfg,
                     void *vmr_addr = NULL;
                     error = ads_client_attach(&vmr_rde, vmr->start, vmr->mo, vmr->type, &vmr_addr);
                     GOTO_IF_ERR(error, "Failed to attach MO to VMR\n");
+                    // (XXX) Linh: should we also give ownership of this MO to the created PD?
                 }
                 else
                 {
@@ -613,9 +612,7 @@ char *sel4gpi_share_degree_to_str(gpi_share_degree_t share_deg)
     switch (share_deg)
     {
     case GPI_SHARED:
-        return "Shallow Copy";
-    case GPI_COPY:
-        return "Deep Copy";
+        return "Shared";
     case GPI_DISJOINT:
         return "Disjoint";
     default:

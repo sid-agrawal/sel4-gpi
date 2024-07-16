@@ -102,23 +102,20 @@ int ads_client_rm(ads_client_context_t *conn, void *vaddr);
 int ads_client_bind_cpu(ads_client_context_t *conn, seL4_CPtr cpu_cap);
 
 /**
- * @brief Given a VMR config that describes a virtual memory region, copies it from src_ads to dst_ads
- *
- * Copying method will depend on whether an MO is supplied in the config.
- * If provided, the region will be deep copied, if not, it will be shallow copied.
- * NOTE: if this function is being called, share_mode is assumed to be GPI_SHARED, and thus ignored
+ * @brief Given a VMR config that describes a virtual memory region, shallow copies it from src_ads to dst_ads
  *
  * For regions with type other than SEL4UTILS_RES_TYPE_GENERIC and SEL4UTILS_RES_TYPE_SHARED_FRAMES,
- * the config can omit all fields EXCEPT `type`, and the server will attempt to look for the typed VMR.
+ * every config option except `type` can be omitted, and the server will attempt to look for the typed VMR
+ * to shallow copy.
  *
  * @param src_ads the ADS to copy from
  * @param dst_ads the ADS to copy to
- * @param vmr_vfg the config describing one VMR
+ * @param vmr_vfg the config describing one VMR, the `share_mode` and `mo` option are ignored
  * @return int 0 on success
  */
-int ads_client_copy(ads_client_context_t *src_ads,
-                    ads_client_context_t *dst_ads,
-                    vmr_config_t *vmr_cfg);
+int ads_client_shallow_copy(ads_client_context_t *src_ads,
+                            ads_client_context_t *dst_ads,
+                            vmr_config_t *vmr_cfg);
 
 /**
  * @brief Obtains info about an ADS reservation for a given VMR type. If multiple reservations of

@@ -511,6 +511,7 @@ void ads_dump_rr(ads_t *ads, model_state_t *ms, gpi_model_node_t *pd_node)
 
 /**
  * @brief deep copies the contents of src_mo to dst_ads, a reservation for the VMR in dst_ads must already exist
+ * (XXX) Linh: this is a legacy function that can be deprecated, do we need to keep it around for any purpose?
  *
  * @param dst_ads ADS to copy MO contents into
  * @param src_mo MO of data to be copied
@@ -563,11 +564,11 @@ err_goto:
     return error;
 }
 
-int ads_copy(vspace_t *loader,
-             vka_t *vka,
-             ads_t *src_ads,
-             ads_t *dst_ads,
-             vmr_config_t *cfg)
+int ads_shallow_copy(vspace_t *loader,
+                     vka_t *vka,
+                     ads_t *src_ads,
+                     ads_t *dst_ads,
+                     vmr_config_t *cfg)
 {
     int error = 0;
     linked_list_t *src_attaches = NULL;
@@ -628,19 +629,7 @@ int ads_copy(vspace_t *loader,
                             src_attach_node->mo_id, (void *)src_attach_node->vaddr);
         old_mo = &old_mo_reg_entry->mo;
 
-        switch (cfg->share_mode)
-        {
-        case GPI_SHARED:
-            error = ads_attach_to_res(dst_ads, vka, new_attach_node, src_attach_node->mo_offset, old_mo);
-            break;
-        case GPI_COPY:
-            error = ads_deep_copy(dst_ads, old_mo, new_attach_node, src_attach_node);
-            break;
-        default:
-            SERVER_GOTO_IF_COND(1, "Invalid sharing mode specified: %s\n", sel4gpi_share_degree_to_str(cfg->share_mode));
-            break;
-        }
-
+        error = ads_attach_to_res(dst_ads, vka, new_attach_node, src_attach_node->mo_offset, old_mo);
         SERVER_GOTO_IF_ERR(error, "Failed to attach source MO (%d) to dst ADS (%d)\n", old_mo->id, dst_ads->id);
     }
 

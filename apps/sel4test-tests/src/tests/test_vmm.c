@@ -24,7 +24,7 @@
 #include <sel4test-vmm/vmm.h>
 #include <osm-vmm/vmm.h>
 
-#define NANOSECOND 1000000000
+#define NANOSECOND 1000000000UL
 
 int test_vmm_native(env_t env)
 {
@@ -41,7 +41,7 @@ int test_vmm_native(env_t env)
 
     while (1)
     {
-        sel4test_sleep(env, 10 * NANOSECOND);
+        sel4test_sleep(env, 10UL * NANOSECOND);
     }
 #else
     printf("SEL4TEST_VMM is disabled\n");
@@ -65,7 +65,7 @@ int test_vmm_osm(env_t env)
 
     while (1)
     {
-        sel4test_sleep(env, 10 * NANOSECOND);
+        sel4test_sleep(env, 10UL * NANOSECOND);
     }
 #else
     printf("OSM_VMM is disabled\n");
@@ -79,5 +79,5 @@ int test_vmm_osm(env_t env)
 }
 
 // (XXX) Arya: Disable these because they are WIP
-DEFINE_TEST(GPIVM001, "Test VMM that starts one Linux guest (native)", test_vmm_native, true)
+DEFINE_TEST(GPIVM001, "Test VMM that starts one Linux guest (native)", test_vmm_native, false)
 DEFINE_TEST_OSM(GPIVM002, "Test VMM that starts one Linux guest (osm)", test_vmm_osm, false)

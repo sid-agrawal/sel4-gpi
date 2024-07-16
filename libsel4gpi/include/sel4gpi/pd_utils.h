@@ -207,3 +207,12 @@ int sel4gpi_alloc_endpoint(ep_client_context_t *ret_ep_conn);
  * @return int 0 on success, 1 on failure
  */
 int sel4gpi_copy_data_to_mo(void *vaddr, size_t size_bytes, mo_client_context_t *dest_mo);
+
+/**
+ * @brief debug print of the contents of memory starting at the given virtual address
+ * referenced from the Barrelfish OS project
+ *
+ * @param start_addr the virtual address to dump memory contents of
+ * @param range byte range to dump
+ */
+void debug_print_mem_at(void *start_addr, uint32_t range);

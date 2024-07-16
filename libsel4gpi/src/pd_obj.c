@@ -914,6 +914,7 @@ static int res_dump(pd_t *pd, model_state_t *ms, pd_hold_node_t *current_cap, gp
             SERVER_GOTO_IF_COND(ads_data == NULL, "Failed to find ADS data\n");
 
             ads_dump_rr(&ads_data->ads, ms, pd_node);
+            res_node->dumped = true;
         }
 
         /* Add the hold edge */
@@ -933,6 +934,7 @@ static int res_dump(pd_t *pd, model_state_t *ms, pd_hold_node_t *current_cap, gp
             SERVER_GOTO_IF_COND(mo_data == NULL, "Failed to find MO (%d) data\n", current_cap->res_id.object_id);
 
             mo_dump_rr(&mo_data->mo, ms, pd_node);
+            res_node->dumped = true;
         }
 
         /* Add the hold edge */
@@ -949,6 +951,7 @@ static int res_dump(pd_t *pd, model_state_t *ms, pd_hold_node_t *current_cap, gp
             SERVER_GOTO_IF_COND(cpu_data == NULL, "Failed to find CPU data\n");
 
             cpu_dump_rr(&cpu_data->cpu, ms, pd_node);
+            res_node->dumped = true;
         }
 
         /* Add the hold edge */
@@ -958,7 +961,8 @@ static int res_dump(pd_t *pd, model_state_t *ms, pd_hold_node_t *current_cap, gp
         // Use some other method to get the cap details
         break;
     case GPICAP_TYPE_PD:
-        if ((!res_node || !res_node->dumped) && current_cap->res_id.object_id != pd->id)
+        // PDs should never be added as a resource node, so we don't check for it here
+        if (current_cap->res_id.object_id != pd->id)
         {
             /* Add the PD Node */
             pd_component_registry_entry_t *pd_data = pd_component_registry_get_entry_by_id(current_cap->res_id.object_id);
@@ -979,6 +983,8 @@ static int res_dump(pd_t *pd, model_state_t *ms, pd_hold_node_t *current_cap, gp
             /* Add the resource space node */
             res_node = add_resource_space_node(ms, space_data->space.resource_type, space_data->space.id);
             resspc_dump_rr(&space_data->space, ms, pd_node);
+
+            res_node->dumped = true;
         }
 
         /* Add the hold edge */
@@ -1021,6 +1027,8 @@ static int res_dump(pd_t *pd, model_state_t *ms, pd_hold_node_t *current_cap, gp
 
                 pd_component_queue_model_extraction_work(manager_pd_entry, work_node);
             }
+
+            res_node->dumped = true;
         }
 
         /* Add the hold edge */

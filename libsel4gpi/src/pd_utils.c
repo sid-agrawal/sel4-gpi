@@ -277,6 +277,26 @@ err_goto:
     return error;
 }
 
+void debug_print_mem_at(void *start_addr, uint32_t range)
+{
+    uintptr_t end_addr = (uintptr_t)start_addr + range;
+    printf("Dumping memory in range 0x%lx to 0x%lx:\n", (uintptr_t)start_addr, end_addr);
+
+    for (uintptr_t *p = (void *)start_addr; (uintptr_t)p < end_addr; p++)
+    {
+        uint8_t *bytes = (void *)p;
+        char buf[32];
+        size_t bufpos = 0;
+        for (unsigned i = 0; i < sizeof(uintptr_t); i++)
+        {
+            bufpos += snprintf(&buf[bufpos], sizeof(buf) - bufpos, "%02x ", bytes[i]);
+            assert(bufpos < sizeof(buf));
+        }
+        printf("%p: %.*s %*lx\n", p, (int)sizeof(buf), buf,
+               (int)sizeof(uintptr_t) * 2, *p);
+    }
+}
+
 int sel4gpi_copy_data_to_mo(void *vaddr, size_t size_bytes, mo_client_context_t *dest_mo)
 {
     int error = 0;

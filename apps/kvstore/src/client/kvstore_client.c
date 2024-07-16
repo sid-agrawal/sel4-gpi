@@ -17,6 +17,8 @@
 #include <kvstore_server.h>
 #include <fs_client.h>
 
+#include <malloc.h>
+
 static kvstore_mode_t mode;
 static seL4_CPtr server_ep;
 static ads_client_context_t kvserv_ads;
@@ -58,66 +60,64 @@ static int configure_separate_ads()
     seL4_CPtr ads_rde = sel4gpi_get_rde(GPICAP_TYPE_ADS);
     GOTO_IF_COND(ads_rde == seL4_CapNull, "Can't make new ADS, no ADS RDE\n");
 
+    seL4_CPtr mo_rde = sel4gpi_get_rde(GPICAP_TYPE_MO);
+    GOTO_IF_COND(mo_rde == seL4_CapNull, "No MO RDE found\n");
+
+    ads_client_context_t self_ads_conn = sel4gpi_get_ads_conn();
+
     error = ads_component_client_connect(ads_rde, &runnable.ads);
     GOTO_IF_ERR(error, "failed to allocate a new ADS");
 
     ads_config_t other_ads_cfg = {0};
 
-    linked_list_t other_vmr_cfg = {0};
-    int n_cfgs = 0;
-    vmr_config_t heap_cfg = {
-        .start = (void *)PD_HEAP_LOC,
-        .region_pages = DEFAULT_HEAP_PAGES,
-        .type = SEL4UTILS_RES_TYPE_HEAP,
-        .share_mode = GPI_COPY};
-    n_cfgs++;
+    /* heap: deep copied */
+    // (XXX) Linh: this currently needs to be deep-copied due to malloc bookkeeping requirements
+    mo_client_context_t heap_mo = {0};
+    error = mo_component_client_connect(mo_rde, DEFAULT_HEAP_PAGES, MO_PAGE_BITS, &heap_mo);
+    GOTO_IF_ERR(error, "Failed to allocate MO for the heap\n");
 
-    vmr_config_t osm_shared_data_cfg = {
-        .start = sel4runtime_get_osm_shared_data(),
-        .region_pages = 1,
-        .type = SEL4UTILS_RES_TYPE_GENERIC,
-        .share_mode = GPI_SHARED};
-    n_cfgs++;
+    sel4gpi_add_vmr_config(&other_ads_cfg, GPI_DISJOINT, SEL4UTILS_RES_TYPE_HEAP,
+                           (void *)PD_HEAP_LOC, NULL, DEFAULT_HEAP_PAGES, MO_PAGE_BITS, &heap_mo);
 
-    vmr_config_t code_reg_cfg = {
-        .start = 0,
-        .region_pages = 0,
-        .type = SEL4UTILS_RES_TYPE_CODE,
-        .share_mode = GPI_SHARED};
-    n_cfgs++;
+    /* per-PD OSmosis data: shallow copied */
+    sel4gpi_add_vmr_config(&other_ads_cfg, GPI_SHARED, SEL4UTILS_RES_TYPE_GENERIC, sel4runtime_get_osm_shared_data(),
+                           NULL, 1, MO_PAGE_BITS, NULL);
 
-    vmr_config_t data_reg_cfg = {
-        .start = 0,
-        .region_pages = 0,
-        .type = SEL4UTILS_RES_TYPE_DATA,
-        .share_mode = GPI_COPY};
-    n_cfgs++;
+    /* ELF data section: deep copied */
+    void *elf_data_va = NULL;
+    size_t elf_data_pages = 0;
+    size_t elf_page_bits = 0;
+    mo_client_context_t elf_data_mo = {0};
+    error = ads_client_get_reservation(&self_ads_conn, SEL4UTILS_RES_TYPE_DATA,
+                                       &elf_data_va, &elf_data_pages, &elf_page_bits);
+    GOTO_IF_ERR(error, "Failed to get ADS data reservation for ELF data section\n");
+    error = mo_component_client_connect(mo_rde, elf_data_pages, elf_page_bits, &elf_data_mo);
+    GOTO_IF_ERR(error, "Failed to allocate MO for ELF data\n");
 
-    vmr_config_t stack_reg_cfg = {
-        .start = 0,
-        .region_pages = 0,
-        .type = SEL4UTILS_RES_TYPE_STACK,
-        .share_mode = GPI_SHARED};
-    n_cfgs++;
+    sel4gpi_add_vmr_config(&other_ads_cfg, GPI_DISJOINT, SEL4UTILS_RES_TYPE_DATA, elf_data_va, NULL, elf_data_pages,
+                           elf_page_bits, &elf_data_mo);
 
-    vmr_config_t ipc_buf_cfg = {
-        .start = 0,
-        .region_pages = 0,
-        .type = SEL4UTILS_RES_TYPE_IPC_BUF,
-        .share_mode = GPI_SHARED};
-    n_cfgs++;
+    /* ELF code section: shallow copy by type */
+    sel4gpi_add_vmr_config(&other_ads_cfg, GPI_SHARED, SEL4UTILS_RES_TYPE_CODE, NULL, NULL, 0, 0, NULL);
 
-    linked_list_insert_many(&other_vmr_cfg, n_cfgs,
-                            &code_reg_cfg, &data_reg_cfg, &heap_cfg,
-                            &osm_shared_data_cfg, &stack_reg_cfg, &ipc_buf_cfg);
+    /* stack: shallow copy by type */
+    sel4gpi_add_vmr_config(&other_ads_cfg, GPI_SHARED, SEL4UTILS_RES_TYPE_STACK, NULL, NULL, 0, 0, NULL);
 
-    other_ads_cfg.vmr_cfgs = &other_vmr_cfg;
+    /* IPC buffer: shallow copy by type */
+    sel4gpi_add_vmr_config(&other_ads_cfg, GPI_SHARED, SEL4UTILS_RES_TYPE_IPC_BUF, NULL, NULL, 0, 0, NULL);
+
+    /* These deep-copying calls must happen here due to malloc bookkeeping */
+    error = sel4gpi_copy_data_to_mo((void *)PD_HEAP_LOC, DEFAULT_HEAP_PAGES * SIZE_BITS_TO_BYTES(MO_PAGE_BITS), &heap_mo);
+    GOTO_IF_ERR(error, "Failed to deep-copy heap\n");
+
+    error = sel4gpi_copy_data_to_mo(elf_data_va, elf_data_pages * SIZE_BITS_TO_BYTES(elf_page_bits), &elf_data_mo);
+    GOTO_IF_ERR(error, "Failed to deep copy ELF data region\n");
 
     error = sel4gpi_ads_configure(&other_ads_cfg, &runnable, NULL, NULL, NULL, NULL, NULL, NULL);
     GOTO_IF_ERR(error, "Failed to configure other ADS\n");
     kvserv_ads = runnable.ads;
 
-    linked_list_destroy(&other_vmr_cfg, false);
+    linked_list_destroy(other_ads_cfg.vmr_cfgs, true);
 
     self_cpu_conn = sel4gpi_get_cpu_conn();
     error = cpu_client_change_vspace(&self_cpu_conn, &kvserv_ads);

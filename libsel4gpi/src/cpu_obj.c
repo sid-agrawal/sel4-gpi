@@ -191,6 +191,11 @@ void cpu_destroy(cpu_t *cpu)
         cpu->ipc_buf_mo = 0;
     }
 
+    if (cpu->vcpu.cptr != seL4_CapNull)
+    {
+        vka_free_object(get_cpu_component()->server_vka, &cpu->vcpu);
+    }
+
     // Free other things
     free(cpu->reg_ctx);
 

@@ -54,28 +54,39 @@ typedef enum _gpi_share_degree
 {
     GPI_SHARED = 1, ///< this resource is directly shared with the other PD,
                     ///< e.g. virt pages that map to the same phys page
-    GPI_COPY,       ///< (XXX) Linh: Remove this option
-                    ///< this resource is copied into the other PD,
-                    ///< e.g. virt pages with separate phys pages with contents copied
     GPI_DISJOINT,   ///< this resource exists in the other PD, but has no relation with the source PD
 } gpi_share_degree_t;
 
 /**
  * @brief configuration of a particular VMR
+ *
+ * Sharing mode dictates which options are optional and/or ignored
+ *
+ * +--------------+------------+--------------+-----------------------------------------+
+ * |    Option    | GPI_SHARED | GPI_DISJOINT |         Default (when optional)         |
+ * +--------------+------------+--------------+-----------------------------------------+
+ * | type         | required   | required     |                                         |
+ * | start        | required   | optional     | any available vaddr                     |
+ * | dest_start   | optional   | ignored      | `start`                                 |
+ * | region_pages | optional^  | ignored^     | VMR info will be searched from the type |
+ * | page_bits    | ignored    | optional     | 4K pages (ARM specific)                 |
+ * | mo           | ignored    | optional     | new MO will be allocated                |
+ * +--------------+------------+--------------+-----------------------------------------+
+ * optional^ = only optional if type != SHARED_FRAMES or GENERIC
+ * ignored^ = only ignored if an MO is provided (the page count of the MO will be used)
+ *
  */
 typedef struct _vmr_config
 {
-    gpi_share_degree_t share_mode;
-    sel4utils_reservation_type_t type;
-    void *start;             ///< vaddr to start of the VMR in the src ADS, only optional if share_mode = GPI_DISJOINT
+    gpi_share_degree_t share_mode;     ///< the type of sharing between the current ADS ands the configured,
+                                       ///< dictates which of the below are optional or ignored,
+                                       ///< see table above for reference
+    sel4utils_reservation_type_t type; ///< type of VMR
+    void *start;                       ///< vaddr to start of the VMR in the src ADS
     void *dest_start;        ///< OPTIONAL vaddr to the start of VMR in the destination ADS
-                             ///< can be NULL to use `start`, only takes effect if share_mode != GPI_DISJOINT
-    uint64_t region_pages;   ///< number of pages in this VMR, ignored if an MO is provided
+    uint64_t region_pages;   ///< number of pages in this VMR
     size_t page_bits;        ///< OPTIONAL size of an individual page in this VMR, 4K pages by default
-    mo_client_context_t *mo; ///< OPTIONAL an MO to use to map the VMR,
-                             ///< if share_mode = GPI_DISJOINT, a new MO will be allocated if this is omitted
-                             ///< if share_mode = GPI_SHARED, omitting this will result in shallow copying of
-                             ///< the VMR, and providing will result in a deep copy
+    mo_client_context_t *mo; ///< OPTIONAL an MO to use to map the VMR
 } vmr_config_t;
 
 /**
@@ -244,11 +255,11 @@ void sel4gpi_add_rde_config(pd_config_t *cfg, gpi_cap_t rde_type, uint32_t space
  * and \ref ads_config_t for a higher-level explanation of ADS configuration
  *
  * @param cfg the ADS config, if no VMR config list was already created, will make a new one
- * @param share_mode sharing type
+ * @param share_mode sharing type - will determine whether the below arguments are necessary
  * @param type the sel4utils_reservation_type_t of the VMR
  * @param start start address of the VMR (in the current ADS)
  * @param dest_start OPTIONAL start address of the VMR (in the destination ADS)
- * @param region_pages number of pages in the VMR
+ * @param region_pages OPTIONAL number of pages in the VMR
  * @param page_bits OPTIONAL size of an individual page
  * @param mo OPTIONAL an MO to map to the VMR
  */
