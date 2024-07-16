@@ -181,6 +181,7 @@ static int destroy_ns(uint32_t ns_id, bool notify_rt)
   // Notify the rt, if applicable
   if (notify_rt)
   {
+    // The RT will also delete any resources in the NS from client PDs
     error = resspc_client_destroy(&ns->res_space_conn);
     CHECK_ERROR_GOTO(error, "Failed to delete namespace's resource space from RT\n", FsError_UNKNOWN, err_goto);
   }
@@ -365,9 +366,16 @@ void xv6fs_request_handler(void *msg_p,
       // Always create the resource, since it may not already exist within the namespace,
       // even if it exists in another namespace
 
-      // Notify the PD component about the new reousrce
-      error = resource_server_create_resource(&get_xv6fs_server()->gen, space_conn, file->id);
-      CHECK_ERROR_GOTO(error, "Failed to create the resource", error, done);
+      // Notify the PD component about the new file in the global namespace
+      error = resource_server_create_resource(&get_xv6fs_server()->gen, &get_xv6fs_server()->gen.default_space, file->id);
+      CHECK_ERROR_GOTO(error, "Failed to create a file resource in the global namespace", error, done);
+
+      // Notify the PD component about the new resource in the namespace
+      if (ns_id != get_xv6fs_server()->gen.default_space.id)
+      {
+        error = resource_server_create_resource(&get_xv6fs_server()->gen, space_conn, file->id);
+        CHECK_ERROR_GOTO(error, "Failed to create a file resource in the local namespace", error, done);
+      }
 
 #if FS_DEBUG_ENABLED
       // Prints the FS contents to console for debug
@@ -436,10 +444,11 @@ void xv6fs_request_handler(void *msg_p,
       pathname = msg->msg.unlink.path;
 
       /* Update pathname if within a namespace */
+      fs_namespace_entry_t *ns;
       ns_id = get_space_id_from_badge(sender_badge);
       if (ns_id != get_xv6fs_server()->gen.default_space.id)
       {
-        fs_namespace_entry_t *ns = (fs_namespace_entry_t *)resource_registry_get_by_id(&get_xv6fs_server()->ns_registry, ns_id);
+        ns = (fs_namespace_entry_t *)resource_registry_get_by_id(&get_xv6fs_server()->ns_registry, ns_id);
         if (ns == NULL)
         {
           XV6FS_PRINTF("Namespace did not exist\n");
@@ -451,8 +460,38 @@ void xv6fs_request_handler(void *msg_p,
       }
 
       XV6FS_PRINTF("Unlink pathname %s\n", pathname);
-      error = xv6fs_sys_unlink(pathname);
+      uint32_t inum;
+      bool was_last_link;
+      error = xv6fs_sys_unlink(pathname, &inum, &was_last_link);
       CHECK_ERROR_GOTO(error, "Failed to unlink", FsError_UNKNOWN, done);
+
+      // Delete the namespace resource, if there is one
+      if (ns_id != get_xv6fs_server()->gen.default_space.id)
+      {
+        error = resspc_client_delete_resource(&ns->res_space_conn, inum);
+        CHECK_ERROR_GOTO(error, "Failed to delete file resource in namespace", FsError_UNKNOWN, done);
+      }
+
+      // If the unlink deleted the file, delete the file resource
+      if (was_last_link)
+      {
+        // Find the file in the registry
+        file_registry_entry_t *reg_entry =
+            (file_registry_entry_t *)resource_registry_get_by_badge(
+                &get_xv6fs_server()->file_registry,
+                sender_badge);
+
+        if (reg_entry)
+        {
+          // Remove the file from registry
+          resource_registry_delete(&get_xv6fs_server()->file_registry, (resource_registry_node_t *)reg_entry);
+
+          // Delete the resource
+          error = resspc_client_delete_resource(&get_xv6fs_server()->gen.default_space.id, inum);
+          CHECK_ERROR_GOTO(error, "Failed to delete file resource in global namespace", FsError_UNKNOWN, done);
+        }
+        // If there is no reg entry, then there is no resource to delete
+      }
 
       break;
     case FsMessage_delete_ns_tag:
@@ -805,7 +844,8 @@ int xv6fs_work_handler(PdWorkReturnMessage *work)
           {
             error = ramdisk_client_free_block(&get_xv6fs_server()->blocks[i]);
 
-            if (error) {
+            if (error)
+            {
               XV6FS_PRINTF("Warning: failed to free block %d, it may have already been deleted\n");
             }
           }

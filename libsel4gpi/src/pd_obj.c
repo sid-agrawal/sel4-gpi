@@ -94,13 +94,21 @@ static void pd_remove_resource_internal(pd_t *pd, resource_registry_node_t *hold
 
     if (cap == seL4_CapNull)
     {
-        if (pd->id != get_gpi_server()->rt_pd_id)
+        // This should only happen if the PD is the resource server for this resource
+        // Only check if we have warn messages enabled
+        if (pd->id != get_gpi_server()->rt_pd_id && OSDB_WARN >= OSDB_LEVEL)
         {
+            uint32_t space_id = get_space_id_from_badge(hold_node->object_id);
             pd_hold_node_t *node = (pd_hold_node_t *)hold_node;
-            OSDB_PRINTERR("Warning: remove resource %s_%d_%d from PD (%d), slot_in_PD is null!\n",
-                          cap_type_to_str(node->res_id.type),
-                          node->res_id.space_id, node->res_id.object_id,
-                          pd->id);
+            resspc_component_registry_entry_t *space_entry = resource_space_get_entry_by_id(node->res_id.space_id);
+
+            if (space_entry->space.pd_id != pd->id)
+            {
+                OSDB_PRINTERR("Warning: remove resource %s_%d_%d from PD (%d), slot_in_PD is null!\n",
+                              cap_type_to_str(node->res_id.type),
+                              node->res_id.space_id, node->res_id.object_id,
+                              pd->id);
+            }
         }
     }
     else

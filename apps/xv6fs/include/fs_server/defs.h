@@ -94,14 +94,40 @@ int holdingsleep(struct sleeplock *);
 void initsleeplock(struct sleeplock *, char *);
 
 // functions for port to osmosis
+
+/**
+ * The file system uses this to request to read one of the file system's blocks
+ * The FS server needs to implement this function
+ * 
+ * @param sec the block number according to the file system - a logical block number
+ * @param buf the buffer to read the block into
+ */
 void xv6fs_bread(uint32_t sec, void *buf);
+
+/**
+ * The file system uses this to request to write one of the file system's blocks
+ * The FS server needs to implement this function
+ * 
+ * @param sec the block number according to the file system - a logical block number
+ * @param buf the buffer containing information to write
+ */
 void xv6fs_bwrite(uint32_t sec, void *buf);
 void disk_rw(struct buf *, int);
+
+/**
+ * The file system uses this to notify the file server when a block is assigned to a file
+ * The FS server needs to implement this function
+ * 
+ * @param file_id the file's inum
+ * @param blockno the block being assigned to it
+ */
 void map_file_to_block(uint64_t file_id, uint32_t blockno);
+
+/// (XXX) ??
 int init_disk_file(void);
-void fd_init(void);
 
 // syscall functions
+// (XXX) Arya: These need to be documented
 struct file *xv6fs_sys_open(char *path, int omode);
 int xv6fs_sys_fileclose(void *fh);
 int xv6fs_sys_read(struct file *f, char *buf, size_t sz, uint32_t off);
@@ -112,7 +138,16 @@ int xv6fs_sys_truncate(char *path);
 int xv6fs_sys_mkdir(char *path);
 int xv6fs_sys_rmdir(char *path, bool delete_contents);
 int xv6fs_sys_mksock(char *path);
-int xv6fs_sys_unlink(char *path);
+
+/**
+ * Unlink the path from its currently linked inode
+ * 
+ * @param path the path to unlink
+ * @param inum returns the inum of the inode that the path previously linked to (optional)
+ * @param was_last_link returns true if this was the last link to the inode (optional)
+ *                      (in this case, the inode will be deleted)
+ */
+int xv6fs_sys_unlink(char *path, uint32_t *inum, bool *was_last_link);
 int xv6fs_sys_dolink(char *old, char *new);
 int xv6fs_sys_dolink2(struct file *old, char *new);
 int xv6fs_sys_rename(char *path1, char *path2);

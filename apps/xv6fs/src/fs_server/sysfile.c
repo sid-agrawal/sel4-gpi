@@ -475,7 +475,7 @@ int xv6fs_sys_rmdir(char *path, bool delete_contents)
   iput(ip);
 
   // Delete the directory
-  return xv6fs_sys_unlink(path);
+  return xv6fs_sys_unlink(path, NULL, NULL);
 }
 
 int xv6fs_sys_mksock(char *path)
@@ -548,7 +548,7 @@ bad:
   return r;
 }
 
-int xv6fs_sys_unlink(char *path)
+int xv6fs_sys_unlink(char *path, uint32_t *inum, bool *was_last_link)
 {
   struct inode *dp;
   char name[DIRSIZ];
@@ -556,6 +556,18 @@ int xv6fs_sys_unlink(char *path)
   if ((dp = nameiparent(path, name)) == 0)
   {
     return -1;
+  }
+
+  if (inum || was_last_link) {
+    struct inode *ip = dirlookup(dp, name, NULL);
+
+    if (inum) {
+      *inum = ip->inum;
+    }
+
+    if (was_last_link) {
+      *was_last_link = ip->nlink == 1;
+    }
   }
 
   if (unlink_de(dp, name))
@@ -654,13 +666,13 @@ int xv6fs_sys_rename(char *path1, char *path2)
 {
   int r = -1;
 
-  r = xv6fs_sys_unlink(path2);
+  r = xv6fs_sys_unlink(path2, NULL, NULL);
   if ((r == 0) || (r == ENOENT))
   {
     r = xv6fs_sys_dolink(path1, path2);
     if (r == 0)
     {
-      r = xv6fs_sys_unlink(path1);
+      r = xv6fs_sys_unlink(path1, NULL, NULL);
     }
   }
   return r;

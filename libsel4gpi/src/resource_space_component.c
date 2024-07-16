@@ -429,6 +429,12 @@ static void resspc_component_handle(void *msg_p,
         case ResSpcMessage_destroy_tag:
             handle_destroy_space_request(sender_badge, &msg->msg.destroy, reply_msg);
             break;
+        case ResSpcMessage_delete_resource_tag:
+            handle_delete_resource_request(sender_badge, &msg->msg.delete_resource, reply_msg);
+            break;
+        case ResSpcMessage_revoke_resource_tag:
+            handle_revoke_resource_request(sender_badge, &msg->msg.revoke_resource, reply_msg);
+            break;
         default:
             SERVER_GOTO_IF_COND(1, "Unknown request received: %d\n", msg->which_msg);
             break;
