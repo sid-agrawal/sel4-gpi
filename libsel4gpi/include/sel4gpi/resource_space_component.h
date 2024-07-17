@@ -103,9 +103,10 @@ int resspc_component_sweep(void);
 
 /**
  * Add any relations of a given space to the model state
- * 
+ *
  * @param space the target space
  * @param ms the model state
  * @param pd_node the node for the PD being extracted (unused)
+ * @return gpi_model_node_t * the model state node for the resource space
  */
-void resspc_dump_rr(res_space_t *space, model_state_t *ms, gpi_model_node_t *pd_node);
+gpi_model_node_t *resspc_dump_rr(res_space_t *space, model_state_t *ms, gpi_model_node_t *pd_node);

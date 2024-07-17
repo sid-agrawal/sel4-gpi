@@ -56,11 +56,6 @@ int test_new_process_osmosis_shmem(env_t env)
     test_error_eq(error, 0);
 
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0, 0);
-    //cspacepath_t ipc_cap;
-    //error = vka_cspace_alloc_path(&env->vka, &ipc_cap);
-    //test_error_eq(error, 0);
-
-    //seL4_SetCapReceivePath(ipc_cap.root, ipc_cap.capPtr, ipc_cap.capDepth);
     seL4_Recv(ep_conn.raw_endpoint, NULL);
 
     pd_client_context_t self_pd = sel4gpi_get_pd_conn();
@@ -75,6 +70,9 @@ int test_new_process_osmosis_shmem(env_t env)
     seL4_SetMR(0, slot);
     tag = seL4_MessageInfo_new(0, 0, 0, 1);
     seL4_ReplyRecv(ep_conn.raw_endpoint, tag, NULL);
+
+    error = pd_client_dump(&runnable.pd, NULL, 0);
+    test_assert(error == 0);
 
     sel4gpi_config_destroy(proc_cfg);
 
@@ -109,4 +107,4 @@ int test_pd_dump(env_t env)
     return sel4test_get_result();
 }
 
-DEFINE_TEST_OSM(GPIPD003, "Test PD dump", test_pd_dump, true)
+DEFINE_TEST_OSM(GPIPD002, "Test PD dump", test_pd_dump, true)

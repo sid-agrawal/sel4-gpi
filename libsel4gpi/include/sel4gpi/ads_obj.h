@@ -228,9 +228,9 @@ int ads_shallow_copy(vspace_t *loader, vka_t *vka, ads_t *src_ads, ads_t *dst_ad
  * @param ads ads object to dump the RR for
  * @param ms pointer to model state
  * @param pd_node the existing node for pd that is being dumped
- * @return void
+ * @return gpi_model_node_t * the model state node for the resource space
  */
-void ads_dump_rr(ads_t *ads, model_state_t *ms, gpi_model_node_t *pd_node);
+gpi_model_node_t *ads_dump_rr(ads_t *ads, model_state_t *ms, gpi_model_node_t *pd_node);
 
 /**
  * Destroys an ADS, including all metadata and internal tracking

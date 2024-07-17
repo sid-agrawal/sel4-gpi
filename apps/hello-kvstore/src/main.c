@@ -30,6 +30,8 @@ size_t morecore_size = APP_MALLOC_SIZE;
 uintptr_t morecore_base = (uintptr_t)PD_HEAP_LOC;
 uintptr_t morecore_top = (uintptr_t)(PD_HEAP_LOC + APP_MALLOC_SIZE);
 
+#define EXTRACT 0
+
 // (XXX) Linh: TO BE REMOVED: terrible hack for threads - only one thread can use the fs client at a time
 extern global_xv6fs_client_context_t xv6fs_client;
 
@@ -152,6 +154,12 @@ int main(int argc, char **argv)
 
 main_exit:
     /* notify parent of test result */
+
+#ifdef EXTRACT
+    pd_client_context_t self_pd = sel4gpi_get_pd_conn();
+    error = pd_client_dump(&self_pd, NULL, 0);
+    CHECK_ERROR(error, "Failed to extract model state\n");
+#endif
     printf("hello-kvstore: Exiting, notifying parent of test result: %d\n", error);
     tag = seL4_MessageInfo_new(error, 0, 0, 0);
     seL4_Send(parent_ep.raw_endpoint, tag);

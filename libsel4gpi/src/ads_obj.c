@@ -463,50 +463,60 @@ int ads_bind(ads_t *ads, vka_t *vka, seL4_CPtr *cpu_cap)
     return 0;
 }
 
-void ads_dump_rr(ads_t *ads, model_state_t *ms, gpi_model_node_t *pd_node)
+gpi_model_node_t *ads_dump_rr(ads_t *ads, model_state_t *ms, gpi_model_node_t *pd_node)
 {
     // Add the ADS resource space
-    gpi_model_node_t *ads_space_node = add_resource_space_node(ms, GPICAP_TYPE_ADS, get_ads_component()->space_id);
-    add_edge(ms, GPI_EDGE_TYPE_HOLD, get_root_node(ms), ads_space_node); // the RT holds this resource space
+    gpi_model_node_t *ads_space_node = get_resource_space_node(ms, GPICAP_TYPE_ADS, ads->id);
 
-    // Add the ADS node
-    gpi_model_node_t *ads_node = add_resource_node(
-        ms, make_res_id(GPICAP_TYPE_ADS, get_ads_component()->space_id, ads->id));
-    add_edge(ms, GPI_EDGE_TYPE_SUBSET, ads_node, ads_space_node);
-
-    // (XXX) Arya: Do we want to only include the currently active ADS? Reintroduce the 'mapped' property?
-    add_edge(ms, GPI_EDGE_TYPE_HOLD, pd_node, ads_node);
-
-    for (attach_node_t *res = (attach_node_t *)ads->attach_registry.head; res != NULL; res = (attach_node_t *)res->gen.hh.next)
+    if (!ads_space_node)
     {
-        /* Add the VMR node */
-        // VMR is sometimes an implicit resource (eg. MO attached without reservation)
-        gpi_model_node_t *vmr_node = add_resource_node(ms, make_res_id(GPICAP_TYPE_VMR, ads->id, (uint64_t)res->vaddr));
-        add_edge(ms, GPI_EDGE_TYPE_SUBSET, vmr_node, ads_node);
-        add_edge(ms, GPI_EDGE_TYPE_HOLD, pd_node, vmr_node);
-        // set the VMR type, number of pages, and page size as extra data on the node
-        char extra[CSV_MAX_STRING_SIZE] = {0};
-        snprintf(extra, CSV_MAX_STRING_SIZE, "%s_%d_%zu",
-                 human_readable_va_res_type(res->type),
-                 res->n_pages, res->page_bits);
-        set_node_extra(vmr_node, extra);
-
-        /* Add the relation from VMR to MO node, if there is one */
-        if (res->mo_attached)
-        {
-            gpi_model_node_t *mo_node = get_resource_node(ms, make_res_id(GPICAP_TYPE_MO,
-                                                                          get_mo_component()->space_id, res->mo_id));
-
-            if (!mo_node)
-            {
-                mo_node = add_resource_node(ms, make_res_id(GPICAP_TYPE_MO, get_mo_component()->space_id, res->mo_id));
-                // mark the node to be dumped later on, since we've only added it here for the MAP edge
-                mo_node->dumped = false;
-            }
-
-            add_edge(ms, GPI_EDGE_TYPE_MAP, vmr_node, mo_node);
-        }
+        ads_space_node = add_resource_space_node(ms, GPICAP_TYPE_ADS, ads->id, false);
     }
+
+    if (!ads_space_node->extracted)
+    {
+        add_edge(ms, GPI_EDGE_TYPE_HOLD, get_root_node(ms), ads_space_node); // the RT holds this resource space
+
+        for (attach_node_t *res = (attach_node_t *)ads->attach_registry.head; res != NULL; res = (attach_node_t *)res->gen.hh.next)
+        {
+            /* Add the VMR node */
+            // VMR is sometimes an implicit resource (eg. MO attached without reservation)
+            // (XXX) Linh: we are casting the vaddr to a 4-byte int, which may not be enough bytes to display it
+            //             we could increase the CSV string size to fit 8-byte object IDs
+            gpi_model_node_t *vmr_node = add_resource_node(ms,
+                                                           make_res_id(GPICAP_TYPE_VMR, ads->id, (uint32_t)res->vaddr),
+                                                           true);
+            add_edge(ms, GPI_EDGE_TYPE_SUBSET, vmr_node, ads_space_node);
+            add_edge(ms, GPI_EDGE_TYPE_HOLD, pd_node, vmr_node);
+            // set the VMR type, number of pages, and page size as extra data on the node
+            char extra[CSV_MAX_STRING_SIZE] = {0};
+            snprintf(extra, CSV_MAX_STRING_SIZE, "%s_%d_%zu",
+                     human_readable_va_res_type(res->type),
+                     res->n_pages, res->page_bits);
+            set_node_extra(vmr_node, extra);
+
+            /* Add the relation from VMR to MO node, if there is one */
+            if (res->mo_attached)
+            {
+                gpi_model_node_t *mo_node = get_resource_node(ms, make_res_id(GPICAP_TYPE_MO,
+                                                                              get_mo_component()->space_id, res->mo_id));
+
+                if (!mo_node)
+                {
+                    mo_node = add_resource_node(ms,
+                                                make_res_id(GPICAP_TYPE_MO, get_mo_component()->space_id, res->mo_id),
+                                                true);
+                    // mark the node to be dumped later on, since we've only added it here for the MAP edge
+                }
+
+                add_edge(ms, GPI_EDGE_TYPE_MAP, vmr_node, mo_node);
+            }
+        }
+
+        ads_space_node->extracted = true;
+    }
+
+    return ads_space_node;
 }
 
 /**

@@ -41,8 +41,9 @@ typedef struct _gpi_model_node
     char data[CSV_MAX_STRING_SIZE];  ///< Stores any additional data in the node
                                      ///< Eg. the name of a PD node, or the type of a resource node
     char data2[CSV_MAX_STRING_SIZE]; ///< Stores extra data for the node
-    bool dumped;                     ///< whether or not the resource relations have been extracted
-                                     ///< Used when backing resource for a MAP relation hasn't been dumped yet
+    bool extracted;                  ///< whether or not the dependent relations have been extracted
+                                     ///< it's possible a node may be added as a dependency for another node
+                                     ///< before it has been extracted itself
     UT_hash_handle hh;
 } gpi_model_node_t;
 
@@ -135,13 +136,14 @@ void print_model_state(model_state_t *model_state);
 void combine_model_states(model_state_t *dest, model_state_t *src);
 
 /**
- * Add a resource to the model state
+ * Add a resource to the model state, may overwrite node data if it exists, but empty
  *
  * @param model_state
  * @param res_id unique ID of the resource
+ * @param extracted whether the resource relations for this node has been extracted
  * @return The model node for the resource
  */
-gpi_model_node_t *add_resource_node(model_state_t *model_state, gpi_res_id_t res_id);
+gpi_model_node_t *add_resource_node(model_state_t *model_state, gpi_res_id_t res_id, bool extracted);
 
 /**
  * Get a resource from the model state
@@ -163,14 +165,16 @@ gpi_model_node_t *get_resource_node(model_state_t *model_state, gpi_res_id_t res
 void set_node_extra(gpi_model_node_t *node, char *extra);
 
 /**
- * Add a resource space to the model state
+ * Add a resource space to the model state, may overwrite node data if it exists, but empty
  *
  * @param model_state
  * @param resource_type type of the resource space
  * @param res_space_id unique ID of the resource space
+ * @param extracted whether the resource relations for this node has been extracted
  * @return The model node for the resource space
  */
-gpi_model_node_t *add_resource_space_node(model_state_t *model_state, gpi_cap_t resource_type, uint64_t res_space_id);
+gpi_model_node_t *add_resource_space_node(model_state_t *model_state, gpi_cap_t resource_type,
+                                          uint64_t res_space_id, bool extracted);
 
 /**
  * Get a resource space from the model state
@@ -183,14 +187,15 @@ gpi_model_node_t *add_resource_space_node(model_state_t *model_state, gpi_cap_t 
 gpi_model_node_t *get_resource_space_node(model_state_t *model_state, gpi_cap_t resource_type, uint64_t res_space_id);
 
 /**
- * Add a PD to the model state
+ * Add a PD to the model state, may overwrite node data if it exists, but empty
  *
  * @param model_state
  * @param pd_name the "friendly" name of the PD, may be NULL
  * @param pd_id unique ID of the PD
+ * @param extracted whether the dependent relations for this node has been extracted
  * @return The model node for the PD
  */
-gpi_model_node_t *add_pd_node(model_state_t *model_state, const char *pd_name, uint64_t pd_id);
+gpi_model_node_t *add_pd_node(model_state_t *model_state, const char *pd_name, uint64_t pd_id, bool extracted);
 
 /**
  * Get a PD node from the model state

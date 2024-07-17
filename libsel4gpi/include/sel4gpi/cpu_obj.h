@@ -116,9 +116,9 @@ int cpu_new(cpu_t *cpu,
  * @param cpu cpu object to dump the RR for
  * @param ms pointer to model state
  * @param pd_node the existing node for pd that is being dumped
- * @return void
+ * @return gpi_model_node_t * the model state node for the resource
  */
-void cpu_dump_rr(cpu_t *cpu, model_state_t *ms, gpi_model_node_t *pd_node);
+gpi_model_node_t *cpu_dump_rr(cpu_t *cpu, model_state_t *ms, gpi_model_node_t *pd_node);
 
 /**
  * Destroys a VCPU object

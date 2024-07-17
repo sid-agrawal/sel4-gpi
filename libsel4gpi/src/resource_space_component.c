@@ -503,21 +503,32 @@ resspc_component_registry_entry_t *resource_space_get_entry_by_id(seL4_Word spac
     return (resspc_component_registry_entry_t *)resource_component_registry_get_by_id(get_resspc_component(), space_id);
 }
 
-void resspc_dump_rr(res_space_t *space, model_state_t *ms, gpi_model_node_t *pd_node)
+gpi_model_node_t *resspc_dump_rr(res_space_t *space, model_state_t *ms, gpi_model_node_t *pd_node)
 {
     gpi_model_node_t *root_node = get_root_node(ms);
 
     // Add the resource space
-    gpi_model_node_t *space_node = add_resource_space_node(ms, space->resource_type, space->id);
+    gpi_model_node_t *space_node = get_resource_space_node(ms, space->resource_type, space->id);
 
-    // Add any map edges
-    res_space_t *maps_to;
-    char maps_to_id[CSV_MAX_STRING_SIZE];
-    for (linked_list_node_t *curr = space->map_spaces.head; curr != NULL; curr = curr->next)
+    if (!space_node)
     {
-        maps_to = (res_space_t *)curr->data;
-
-        get_resource_space_id(maps_to->resource_type, maps_to->id, &maps_to_id);
-        add_edge_by_id(ms, GPI_EDGE_TYPE_MAP, space_node->id, maps_to_id);
+        space_node = add_resource_space_node(ms, space->resource_type, space->id, false);
     }
+
+    if (!space_node->extracted)
+    {
+        // Add any map edges
+        res_space_t *maps_to;
+        char maps_to_id[CSV_MAX_STRING_SIZE];
+        for (linked_list_node_t *curr = space->map_spaces.head; curr != NULL; curr = curr->next)
+        {
+            maps_to = (res_space_t *)curr->data;
+
+            get_resource_space_id(maps_to->resource_type, maps_to->id, &maps_to_id);
+            add_edge_by_id(ms, GPI_EDGE_TYPE_MAP, space_node->id, maps_to_id);
+        }
+        space_node->extracted = true;
+    }
+
+    return space_node;
 }

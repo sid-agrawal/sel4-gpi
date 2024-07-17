@@ -266,7 +266,8 @@ static gpi_model_node_t *get_node(model_state_t *model_state, char *id)
 }
 
 // Add a node to the model state
-static gpi_model_node_t *add_node(model_state_t *model_state, gpi_node_type_t node_type, char *id, char *data)
+static gpi_model_node_t *add_node(model_state_t *model_state, gpi_node_type_t node_type,
+                                  char *id, char *data, bool extracted)
 {
     gpi_model_node_t *node = get_node(model_state, id);
 
@@ -310,8 +311,8 @@ static gpi_model_node_t *add_node(model_state_t *model_state, gpi_node_type_t no
         strncpy(node->data, data, CSV_MAX_STRING_SIZE);
     }
 
-    // by default the node is considered dumped when it has been added, unless explicitly toggled
-    node->dumped = true;
+    // whether dependent relations for this node has been dumped
+    node->extracted = extracted;
 
     // HASH_ADD_KEYPTR(hh, model_state->nodes, &node->id, CSV_MAX_STRING_SIZE, node);
     HASH_ADD_STR(model_state->nodes, id, node);
@@ -411,12 +412,12 @@ void get_pd_id(uint64_t pd_id, char *str_id)
     make_node_id(str_id, "PD", pd_id);
 }
 
-gpi_model_node_t *add_resource_node(model_state_t *model_state, gpi_res_id_t res_id)
+gpi_model_node_t *add_resource_node(model_state_t *model_state, gpi_res_id_t res_id, bool extracted)
 {
     char node_id[CSV_MAX_STRING_SIZE];
     get_resource_id(res_id, node_id);
 
-    return add_node(model_state, GPI_NODE_TYPE_RESOURCE, node_id, cap_type_to_str(res_id.type));
+    return add_node(model_state, GPI_NODE_TYPE_RESOURCE, node_id, cap_type_to_str(res_id.type), extracted);
 }
 
 gpi_model_node_t *get_resource_node(model_state_t *model_state, gpi_res_id_t res_id)
@@ -427,12 +428,13 @@ gpi_model_node_t *get_resource_node(model_state_t *model_state, gpi_res_id_t res
     return get_node(model_state, node_id);
 }
 
-gpi_model_node_t *add_resource_space_node(model_state_t *model_state, gpi_cap_t resource_type, uint64_t res_space_id)
+gpi_model_node_t *add_resource_space_node(model_state_t *model_state, gpi_cap_t resource_type,
+                                          uint64_t res_space_id, bool extracted)
 {
     char node_id[CSV_MAX_STRING_SIZE];
     get_resource_space_id(resource_type, res_space_id, node_id);
 
-    return add_node(model_state, GPI_NODE_TYPE_SPACE, node_id, cap_type_to_str(resource_type));
+    return add_node(model_state, GPI_NODE_TYPE_SPACE, node_id, cap_type_to_str(resource_type), extracted);
 }
 
 gpi_model_node_t *get_resource_space_node(model_state_t *model_state, gpi_cap_t resource_type, uint64_t res_space_id)
@@ -444,12 +446,12 @@ gpi_model_node_t *get_resource_space_node(model_state_t *model_state, gpi_cap_t 
 }
 
 // Add a PD to the model state
-gpi_model_node_t *add_pd_node(model_state_t *model_state, const char *pd_name, uint64_t pd_id)
+gpi_model_node_t *add_pd_node(model_state_t *model_state, const char *pd_name, uint64_t pd_id, bool extracted)
 {
     char node_id[CSV_MAX_STRING_SIZE];
     get_pd_id(pd_id, node_id);
 
-    return add_node(model_state, GPI_NODE_TYPE_PD, node_id, pd_name);
+    return add_node(model_state, GPI_NODE_TYPE_PD, node_id, pd_name, extracted);
 }
 
 gpi_model_node_t *get_pd_node(model_state_t *model_state, uint64_t pd_id)
@@ -462,7 +464,7 @@ gpi_model_node_t *get_pd_node(model_state_t *model_state, uint64_t pd_id)
 
 gpi_model_node_t *get_root_node(model_state_t *model_state)
 {
-    return add_pd_node(model_state, "ROOT_TASK", 0);
+    return add_pd_node(model_state, "ROOT_TASK", 0, true);
 }
 
 // Add any nodes and edges from source state to dest state
@@ -475,7 +477,7 @@ void combine_model_states(model_state_t *dest, model_state_t *src)
         {
             if (item->type == GPI_MODEL_NODE)
             {
-                add_node(dest, item->node.node_type, item->node.id, item->node.data);
+                add_node(dest, item->node.node_type, item->node.id, item->node.data, true);
             }
             else if (item->type == GPI_MODEL_EDGE)
             {
@@ -488,7 +490,7 @@ void combine_model_states(model_state_t *dest, model_state_t *src)
         // Combine a source model state from the same heap as the destination model state
         for (gpi_model_node_t *node = src->nodes; node != NULL; node = node->hh.next)
         {
-            add_node(dest, node->node_type, node->id, node->data);
+            add_node(dest, node->node_type, node->id, node->data, true);
         }
 
         for (gpi_model_edge_t *edge = src->edges; edge != NULL; edge = edge->hh.next)

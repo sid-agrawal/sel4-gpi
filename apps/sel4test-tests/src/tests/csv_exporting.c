@@ -47,16 +47,16 @@ int test_model_state_export(env_t env)
 
     // Add PD nodes
     gpi_model_node_t *root_node = get_root_node(model_state);
-    gpi_model_node_t *pd1 = add_pd_node(model_state, "Proc1", 1);
-    gpi_model_node_t *pd2 = add_pd_node(model_state, "Proc2", 2);
+    gpi_model_node_t *pd1 = add_pd_node(model_state, "Proc1", 1, true);
+    gpi_model_node_t *pd2 = add_pd_node(model_state, "Proc2", 2, true);
 
     // Add resource nodes
     int mo_space_id = 1;
     int pmr_space_id = 1;
-    gpi_model_node_t *mo1 = add_resource_node(model_state, make_res_id(GPICAP_TYPE_MO, mo_space_id, 1));
-    gpi_model_node_t *mo2 = add_resource_node(model_state, make_res_id(GPICAP_TYPE_MO, mo_space_id, 2));
-    gpi_model_node_t *page1 = add_resource_node(model_state, make_res_id(GPICAP_TYPE_VMR, pmr_space_id, 1));
-    gpi_model_node_t *page2 = add_resource_node(model_state, make_res_id(GPICAP_TYPE_VMR, pmr_space_id, 2));
+    gpi_model_node_t *mo1 = add_resource_node(model_state, make_res_id(GPICAP_TYPE_MO, mo_space_id, 1), true);
+    gpi_model_node_t *mo2 = add_resource_node(model_state, make_res_id(GPICAP_TYPE_MO, mo_space_id, 2), true);
+    gpi_model_node_t *page1 = add_resource_node(model_state, make_res_id(GPICAP_TYPE_VMR, pmr_space_id, 1), true);
+    gpi_model_node_t *page2 = add_resource_node(model_state, make_res_id(GPICAP_TYPE_VMR, pmr_space_id, 2), true);
 
     // Add hold edges
     add_edge(model_state, GPI_EDGE_TYPE_HOLD, pd1, mo1);
@@ -73,7 +73,7 @@ int test_model_state_export(env_t env)
     add_request_edge(model_state, pd2, root_node, GPICAP_TYPE_MO);
 
     // Add some duplicate nodes/edges
-    pd1 = add_pd_node(model_state, "Proc1", 1);
+    pd1 = add_pd_node(model_state, "Proc1", 1, true);
     add_edge(model_state, GPI_EDGE_TYPE_MAP, page2, mo2);
     add_request_edge(model_state, pd1, root_node, GPICAP_TYPE_MO);
 

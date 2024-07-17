@@ -55,9 +55,9 @@ int mo_new(mo_t *mo,
  * @param mo mo object to dump the RR for
  * @param ms pointer to model state
  * @param pd_node the existing node for pd that is being dumped
- * @return void
+ * @return gpi_model_node_t * the model state node for the resource
  */
-void mo_dump_rr(mo_t *mo, model_state_t *ms, gpi_model_node_t *pd_node);
+gpi_model_node_t *mo_dump_rr(mo_t *mo, model_state_t *ms, gpi_model_node_t *pd_node);
 
 /**
  * Destroys an MO, including all metadata and the underlying frames

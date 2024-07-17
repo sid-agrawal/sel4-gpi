@@ -101,44 +101,55 @@ err_goto:
     return error;
 }
 
-void mo_dump_rr(mo_t *mo, model_state_t *ms, gpi_model_node_t *pd_node)
+gpi_model_node_t *mo_dump_rr(mo_t *mo, model_state_t *ms, gpi_model_node_t *pd_node)
 {
     gpi_model_node_t *root_node = get_root_node(ms);
 
     // Add the MO resource space
-    gpi_model_node_t *mo_space_node = add_resource_space_node(ms, GPICAP_TYPE_MO, get_mo_component()->space_id);
+    gpi_model_node_t *mo_space_node = add_resource_space_node(ms, GPICAP_TYPE_MO, get_mo_component()->space_id, false);
     add_edge(ms, GPI_EDGE_TYPE_HOLD, root_node, mo_space_node); // the RT holds this resource space
 
     /* Add the MO node */
-    gpi_model_node_t *mo_node = add_resource_node(
-        ms,
-        make_res_id(GPICAP_TYPE_MO, get_mo_component()->space_id, mo->id));
-    add_edge(ms, GPI_EDGE_TYPE_HOLD, pd_node, mo_node);
-    add_edge(ms, GPI_EDGE_TYPE_SUBSET, mo_node, mo_space_node);
+    gpi_res_id_t mo_id = make_res_id(GPICAP_TYPE_MO, get_mo_component()->space_id, mo->id);
+    gpi_model_node_t *mo_node = get_resource_node(ms, mo_id);
 
-    /* Add the page nodes and relations */
-    int num_pages = 0;
-    for (int i = 0; i < mo->num_pages; i++)
+    if (!mo_node)
     {
-        if (mo->frame_caps_in_root_task[i] == 0)
-        {
-            /**
-             * This can happen if there was an ADS deep copy of a region that did not
-             * have backing pages for the entire region.
-             * (XXX) Arya: we should be able to remove this if we fix the ADS copy
-             */
-            continue;
-        }
-
-        // Do not add the physical pages as relations, just count them
-        // and store the count in the MO node
-        num_pages++;
+        mo_node = add_resource_node(ms, mo_id, false);
     }
 
-    // Set the number of pages, page size and starting phys addr as extra data on the MO
-    char extra_str[CSV_MAX_STRING_SIZE];
-    snprintf(extra_str, CSV_MAX_STRING_SIZE, "0x%lx_%d_%zu", mo->frame_paddrs[0], num_pages, mo->page_bits);
-    set_node_extra(mo_node, extra_str);
+    if (!mo_node->extracted)
+    {
+        add_edge(ms, GPI_EDGE_TYPE_HOLD, pd_node, mo_node);
+        add_edge(ms, GPI_EDGE_TYPE_SUBSET, mo_node, mo_space_node);
+
+        /* Add the page nodes and relations */
+        int num_pages = 0;
+        for (int i = 0; i < mo->num_pages; i++)
+        {
+            if (mo->frame_caps_in_root_task[i] == 0)
+            {
+                /**
+                 * This can happen if there was an ADS deep copy of a region that did not
+                 * have backing pages for the entire region.
+                 * (XXX) Arya: we should be able to remove this if we fix the ADS copy
+                 */
+                continue;
+            }
+
+            // Do not add the physical pages as relations, just count them
+            // and store the count in the MO node
+            num_pages++;
+        }
+
+        // Set the number of pages, page size and starting phys addr as extra data on the MO
+        char extra_str[CSV_MAX_STRING_SIZE];
+        snprintf(extra_str, CSV_MAX_STRING_SIZE, "0x%lx_%d_%zu", mo->frame_paddrs[0], num_pages, mo->page_bits);
+        set_node_extra(mo_node, extra_str);
+
+        mo_node->extracted = true;
+    }
+    return mo_node;
 }
 
 void mo_destroy(mo_t *mo, vka_t *server_vka)

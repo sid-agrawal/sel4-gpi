@@ -126,36 +126,46 @@ err_goto:
     return error;
 }
 
-void cpu_dump_rr(cpu_t *cpu, model_state_t *ms, gpi_model_node_t *pd_node)
+gpi_model_node_t *cpu_dump_rr(cpu_t *cpu, model_state_t *ms, gpi_model_node_t *pd_node)
 {
     gpi_model_node_t *root_node = get_root_node(ms);
 
     // Add the VCPU resource space
-    gpi_model_node_t *vcpu_space_node = add_resource_space_node(ms, GPICAP_TYPE_CPU, get_cpu_component()->space_id);
+    gpi_model_node_t *vcpu_space_node = add_resource_space_node(ms, GPICAP_TYPE_CPU,
+                                                                get_cpu_component()->space_id, false);
 
     /* Add the Virtual CPU node */
-    gpi_model_node_t *cpu_node = add_resource_node(
-        ms,
-        make_res_id(GPICAP_TYPE_CPU, get_cpu_component()->space_id, cpu->id));
-    if (cpu->vcpu.cptr != seL4_CapNull)
-    {
-        set_node_extra(cpu_node, "elevated");
-    }
-    add_edge(ms, GPI_EDGE_TYPE_HOLD, pd_node, cpu_node);
-    add_edge(ms, GPI_EDGE_TYPE_SUBSET, cpu_node, vcpu_space_node);
+    gpi_res_id_t cpu_id = make_res_id(GPICAP_TYPE_CPU, get_cpu_component()->space_id, cpu->id);
+    gpi_model_node_t *cpu_node = get_resource_node(ms, cpu_id);
 
-    seL4_Word affinity = 0;
+    if (!cpu_node)
+    {
+        cpu_node = add_resource_node(ms, cpu_id, false);
+    }
+
+    if (!cpu_node->extracted)
+    {
+
+        if (cpu->vcpu.cptr != seL4_CapNull)
+        {
+            set_node_extra(cpu_node, "elevated");
+        }
+        add_edge(ms, GPI_EDGE_TYPE_HOLD, pd_node, cpu_node);
+        add_edge(ms, GPI_EDGE_TYPE_SUBSET, cpu_node, vcpu_space_node);
+
+        seL4_Word affinity = 0;
 #if CONFIG_MAX_NUM_NODES > 1
-    seL4_TCB_GetAffinity_t affinity_res = seL4_TCB_GetAffinity(cpu->tcb.cptr);
-    affinity = affinity_res.affinity;
+        seL4_TCB_GetAffinity_t affinity_res = seL4_TCB_GetAffinity(cpu->tcb.cptr);
+        affinity = affinity_res.affinity;
 #endif
 
-    /* Add the Physical CPU (core) node */
-    gpi_model_node_t *cpu_core_node = add_resource_node(ms, make_res_id(GPICAP_TYPE_PCPU, 1, affinity));
-    add_edge(ms, GPI_EDGE_TYPE_MAP, cpu_node, cpu_core_node);
-    add_edge(ms, GPI_EDGE_TYPE_HOLD, root_node, cpu_core_node);
-    add_edge(ms, GPI_EDGE_TYPE_HOLD, root_node, vcpu_space_node); // the RT holds this resource space
+        /* Add the Physical CPU (core) node */
+        gpi_model_node_t *cpu_core_node = add_resource_node(ms, make_res_id(GPICAP_TYPE_PCPU, 1, affinity), true);
+        add_edge(ms, GPI_EDGE_TYPE_MAP, cpu_node, cpu_core_node);
+        add_edge(ms, GPI_EDGE_TYPE_HOLD, root_node, cpu_core_node);
+        add_edge(ms, GPI_EDGE_TYPE_HOLD, root_node, vcpu_space_node); // the RT holds this resource space
 
+        cpu_node->extracted = true;
 // (XXX) Arya: Do not actually show CPU->ADS arrow... do we need it?
 #if 0
     // this isn't really an RR, but will be changed in the interp layer
@@ -163,6 +173,9 @@ void cpu_dump_rr(cpu_t *cpu, model_state_t *ms, gpi_model_node_t *pd_node)
     make_res_id(ads_res_id, GPICAP_TYPE_ADS, cpu->binded_ads_id);
     add_resource_depends_on(ms, cpu_res_id, ads_res_id, REL_TYPE_MAP);
 #endif
+    }
+
+    return cpu_node;
 }
 
 void cpu_destroy(cpu_t *cpu)
