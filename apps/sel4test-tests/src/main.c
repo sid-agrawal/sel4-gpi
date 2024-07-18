@@ -227,10 +227,11 @@ int main(int argc, char **argv)
     struct env env;
 
     /* parse args */
-    assert(argc == 3);
+    assert(argc == 4);
     test_type = (enum test_type_name)atoi(argv[0]);
     endpoint = env.endpoint = (seL4_CPtr)atoi(argv[1]);
     // Third arg is for BASIC test types only
+    env.ipc_bench_ep = (seL4_CPtr)atoi(argv[3]);
 
     char *test_name;
     if (test_type == OSM)

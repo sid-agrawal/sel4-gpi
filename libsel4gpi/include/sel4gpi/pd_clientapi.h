@@ -265,5 +265,4 @@ int pd_client_set_name(pd_client_context_t *conn, char *name);
 
 void pd_client_bench_ipc(pd_client_context_t *conn,
                          seL4_CPtr dummy_send_cap,
-                         seL4_CPtr dummy_recv_cap,
                          bool cap_transfer);

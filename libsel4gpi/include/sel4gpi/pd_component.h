@@ -218,3 +218,8 @@ int pd_component_runtime_setup(pd_t *pd,
  * @return 0 on success, error otherwise
  */
 int pd_component_terminate(uint32_t pd_id);
+
+/**
+ * Create a special endpoint for benchmark IPC to root task
+ */
+seL4_CPtr pd_component_create_ipc_bench_ep(void);

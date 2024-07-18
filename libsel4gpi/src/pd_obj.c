@@ -562,9 +562,12 @@ void pd_destroy(pd_t *pd, vka_t *server_vka, vspace_t *server_vspace)
     pd->deleting = true;
 
     /* stop the PD's CPU, if not already stopped */
-    error = cpu_component_stop(pd->shared_data->cpu_conn.id);
-    SERVER_GOTO_IF_ERR(error, "Failed to stop CPU (%d) while destroying PD (%d)\n",
-                       pd->shared_data->cpu_conn.id, pd_id);
+    if (pd->shared_data->cpu_conn.id)
+    {
+        error = cpu_component_stop(pd->shared_data->cpu_conn.id);
+        SERVER_GOTO_IF_ERR(error, "Failed to stop CPU (%d) while destroying PD (%d)\n",
+                           pd->shared_data->cpu_conn.id, pd_id);
+    }
 
     /* Reply with an error to any client waiting on this PD */
     if (pd->shared_data->reply_cap != seL4_CapNull)

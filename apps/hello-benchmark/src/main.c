@@ -23,53 +23,46 @@ char _cpio_archive_end[1];
 
 /* Initialization for static morecore */
 #define APP_MALLOC_SIZE (PAGE_SIZE_4K)
-char *morecore_area = (char *) PD_HEAP_LOC;
+char *morecore_area = (char *)PD_HEAP_LOC;
 size_t morecore_size = APP_MALLOC_SIZE;
-uintptr_t morecore_base = (uintptr_t) PD_HEAP_LOC;
-uintptr_t morecore_top = (uintptr_t) (PD_HEAP_LOC + APP_MALLOC_SIZE);
+uintptr_t morecore_base = (uintptr_t)PD_HEAP_LOC;
+uintptr_t morecore_top = (uintptr_t)(PD_HEAP_LOC + APP_MALLOC_SIZE);
 
 int main(int argc, char **argv)
 {
-    sel4gpi_set_exit_cb();
-    
+    // sel4gpi_set_exit_cb();
+
     int error;
     ccnt_t ctx_start, ctx_end;
     ccnt_t creation_start, creation_end;
+
+    // Record creation end time
     SEL4BENCH_READ_CCNT(creation_end);
 
+    // Get args
     assert(argc > 0);
     seL4_CPtr ep = atol(argv[0]);
     bool native = (bool)atol(argv[1]);
 
-    // printf("hello_benchmark %s! argv[0] = %lx, creation end time: %ld\n",
-    //        get_bench_type_name(native), ep, creation_end);
+    printf("hello_benchmark main! creation end time: %ld\n", creation_end);
+
+    // Send a message to parent with creation end time
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0, 2);
-    seL4_SetMR(0, BM_PD_CREATE); // send a message saying we've started
+    seL4_SetMR(0, BM_PD_CREATE);
     seL4_SetMR(1, creation_end);
     seL4_Send(ep, tag);
 
-    tag = seL4_MessageInfo_new(0, 0, 0, 2);
-    ccnt_t ipc_round_start;
-    ccnt_t ipc_round_end;
-    SEL4BENCH_READ_CCNT(ipc_round_start);
+    // Wait for message from parent to time IPC
+    seL4_Word sender;
+    tag = seL4_Recv(ep, &sender);
+    tag = seL4_MessageInfo_new(0, 0, 0, 1);
     seL4_SetMR(0, BM_IPC);
-    seL4_SetMR(1, ipc_round_start);
-    seL4_Call(ep, tag);
+    seL4_Reply(tag);
 
-    seL4_Word bench_type = seL4_GetMR(0);
-    assert(bench_type == BM_IPC);
-    SEL4BENCH_READ_CCNT(ipc_round_end);
+    // Block this PD so it does not exit
+    seL4_Recv(ep, &sender);
 
-    tag = seL4_MessageInfo_new(0, 0, 0, 1);
-    seL4_SetMR(0, BM_PRINT);
-    seL4_Send(ep, tag);
+    printf("ERROR: hello_benchmark should not have gotten here");
 
-    // printf("%s: IPC benchmark: start %ld\n", get_bench_type_name(native), ipc_round_start);
-    printf("%s: IPC roundtrip end: %ld, round trip total: %ld\n", get_bench_type_name(native), ipc_round_end, ipc_round_end - ipc_round_start);
-
-    tag = seL4_MessageInfo_new(0, 0, 0, 1);
-    seL4_SetMR(0, BM_DONE);
-    seL4_Send(ep, tag);
-    printf("%s: Goodbye cruel world!\n", get_bench_type_name(native));
     return 0;
 }

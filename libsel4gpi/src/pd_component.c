@@ -512,23 +512,15 @@ err_goto:
     OSDB_PRINTERR("Error while cleaning up exited PD (%d)\n", pd_id);
 }
 
-static void handle_ipc_bench_req(PdBenchIPCMessage *msg, PdReturnMessage *reply_msg)
+static void handle_ipc_bench_req(PdBenchIPCMessage *msg, PdReturnMessage *reply_msg, seL4_CPtr received_cap)
 {
     int error = 0;
-    bool do_cap_transfer = msg->do_cap_transfer;
 
-    int num_caps = 0;
-    if (do_cap_transfer)
-    {
-        // (XXX) Arya: this doesn't work with the new setup for protobuf, because no component should
-        // return a cap through IPC
-        gpi_panic("IPC bench does not currently work with cap transfer\n", 1);
-        seL4_CPtr dummy_reply_cap;
-        int error = vka_cspace_alloc(get_pd_component()->server_vka, &dummy_reply_cap);
-        assert(error == 0);
-        seL4_SetCap(0, dummy_reply_cap);
-        num_caps = 1;
-    }
+    // nothing to do
+    cspacepath_t path;
+    vka_cspace_make_path(get_pd_component()->server_vka, received_cap, &path);
+    error = vka_cnode_delete(&path);
+    SERVER_GOTO_IF_ERR(error, "failed to delete cap sent for IPC bench\n");
 
 err_goto:
     reply_msg->which_msg = PdReturnMessage_basic_tag;
@@ -903,7 +895,7 @@ static void pd_component_handle(void *msg_p,
             *should_reply = false;
             break;
         case PdMessage_bench_ipc_tag:
-            handle_ipc_bench_req(&msg->msg.bench_ipc, reply_msg);
+            handle_ipc_bench_req(&msg->msg.bench_ipc, reply_msg, received_cap);
             break;
         case PdMessage_setup_tag:
             handle_runtime_setup_req(sender_badge, &msg->msg.setup, reply_msg);
@@ -1178,4 +1170,20 @@ void pd_component_queue_free_work(pd_component_registry_entry_t *pd_entry, pd_wo
 
     // Notify the PD
     seL4_Signal(pd_entry->pd.badged_notification);
+}
+
+seL4_CPtr pd_component_create_ipc_bench_ep(void)
+{
+    // Make a special badged endpoint just for IPC benchmark request
+    seL4_Word badge = gpi_new_badge(GPICAP_TYPE_PD, 0, 0, 0, 0);
+
+    seL4_CPtr slot = resource_component_make_badged_ep_custom(
+        get_pd_component()->server_vka,
+        get_pd_component()->server_vka,
+        get_gpi_server()->server_ep_obj.cptr,
+        badge);
+
+    assert(slot != seL4_CapNull);
+
+    return slot;
 }

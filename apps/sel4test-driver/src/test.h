@@ -85,6 +85,12 @@ struct driver_env
     /* slot of the fault endpoint in the test process*/
     seL4_CPtr endpoint_in_test;
 
+    /* slot of the benchmark endpoint in the test driver */
+    seL4_CPtr bench_endpoint_in_driver;
+
+    /* slot of the benchmark endpoint in the test process*/
+    seL4_CPtr bench_endpoint_in_test;
+
     /** FIELDS FOR NON-OSMOSIS TEST **/
 
     /* init data frame vaddr */

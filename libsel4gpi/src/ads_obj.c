@@ -145,7 +145,7 @@ int ads_new(ads_t *ads,
         alloc_data,
         vka,
         vspace_root_object->cptr,
-        sel4utils_allocated_object,
+        sel4utils_allocated_object, // (XXX) Arya: could we just set this to null? Or our own fn
 
         /*
             sel4utils_allocated_object expects a process struct as a cookie

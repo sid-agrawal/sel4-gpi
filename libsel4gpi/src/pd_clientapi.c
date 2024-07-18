@@ -391,7 +391,7 @@ int pd_client_remove_rde(pd_client_context_t *conn, gpi_cap_t type, uint64_t spa
     return error;
 }
 
-void pd_client_bench_ipc(pd_client_context_t *conn, seL4_CPtr dummy_send_cap, seL4_CPtr dummy_recv_cap, bool cap_transfer)
+void pd_client_bench_ipc(pd_client_context_t *conn, seL4_CPtr dummy_send_cap, bool cap_transfer)
 {
     OSDB_PRINTF("Sending 'bench IPC' request to PD component\n");
 
@@ -404,11 +404,6 @@ void pd_client_bench_ipc(pd_client_context_t *conn, seL4_CPtr dummy_send_cap, se
         }};
 
     PdReturnMessage ret_msg;
-
-    seL4_SetCapReceivePath(SEL4UTILS_CNODE_SLOT, /* Position of the cap to the CNODE */
-                           dummy_recv_cap,       /* CPTR in this CSPACE */
-                           /* This works coz we have a single level cnode with no guard.*/
-                           seL4_WordBits); /* Depth i.e. how many bits of free_slot to interpret*/
 
     if (cap_transfer)
     {

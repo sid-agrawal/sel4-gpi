@@ -276,9 +276,13 @@ void basic_set_up(uintptr_t e)
     env->endpoint_in_driver = env->test_process.fault_endpoint.cptr;
     env->endpoint_in_test = sel4utils_copy_cap_to_process(&(env->test_process), &env->vka, env->test_process.fault_endpoint.cptr);
 
+    /* get the benchmark IPC endpoint */
+    env->bench_endpoint_in_driver = pd_component_create_ipc_bench_ep();
+    env->bench_endpoint_in_test = sel4utils_copy_cap_to_process(&(env->test_process), &env->vka, env->bench_endpoint_in_driver);
+
     // Keep this one as the last COPY, so that  init->free_slot.start a few lines below stays valid.
     // See at label "Warning"
-    seL4_CPtr free_slot_start = env->endpoint_in_test + 1;
+    seL4_CPtr free_slot_start = env->bench_endpoint_in_test + 1;
 
     /* copy the device frame, if any */
     if (env->init->device_frame_cap)
@@ -319,17 +323,18 @@ test_result_t basic_run_test(struct testcase *test, uintptr_t e)
 #endif
 
     /* set up args for the test process */
-    seL4_Word argc = 3;
+    seL4_Word argc = 4;
     char string_args[argc][WORD_STRING_SIZE];
     char *argv[argc];
     sel4utils_create_word_args(string_args, argv, argc,
                                BASIC,
                                env->endpoint_in_test,
-                               env->init_vaddr);
+                               env->init_vaddr,
+                               env->bench_endpoint_in_test);
 
     int num_res;
 
-/* spawn the process */
+    /* spawn the process */
     error = sel4utils_spawn_process_v(&(env->test_process), &env->vka, &env->vspace,
                                       argc, argv, 1);
 
@@ -510,11 +515,15 @@ void osm_set_up(uintptr_t e)
                                     ipc_buf_mo, ipc_buf_vaddr);
     assert(error == 0);
 
+    /* Set the benchmark IPC endpoint, same as the PD ep */
+    env->bench_endpoint_in_test = pd->shared_data->pd_conn.ep;
+
     // Configure the PD runtime
-    seL4_Word args[3] = {OSM, env->endpoint_in_test, 0};
+    int argc = 4;
+    seL4_Word args[4] = {OSM, env->endpoint_in_test, 0, env->bench_endpoint_in_test};
     error = pd_component_runtime_setup(pd, ads, cpu,
                                        PdSetupType_PD_RUNTIME_SETUP,
-                                       3, args,
+                                       argc, args,
                                        stack_top,
                                        entry_pt,
                                        ipc_buf_vaddr,
