@@ -201,7 +201,7 @@ void resource_component_debug_print(resource_component_context_t *component);
  *
  * @param src_vka vka for the source endpoint
  * @param dst_vka vka for the destination (or NULL, to use src vka for destination)
- * @param src_ep source endpoint to badge
+ * @param src_cap source cap - doesn't have to be an enpoint
  * @param dest empty cspacepath_t to fill in with destination slot
  * @param mint if true, the cap being transfered is an endpoint cap, and will be minted rather than copied
  * @param badge OPTIONAL a badge to mint onto the endpoint cap - only applies if mint = true,
@@ -209,7 +209,7 @@ void resource_component_debug_print(resource_component_context_t *component);
  */
 int resource_component_transfer_cap(vka_t *src_vka,
                                     vka_t *dst_vka,
-                                    seL4_CPtr src_ep,
+                                    seL4_CPtr src_cap,
                                     cspacepath_t *dest,
                                     bool mint,
                                     seL4_Word badge);

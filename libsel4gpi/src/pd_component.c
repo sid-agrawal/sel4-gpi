@@ -70,8 +70,6 @@ static void on_pd_registry_delete(resource_registry_node_t *node_gen, void *arg)
 {
     pd_component_registry_entry_t *node = (pd_component_registry_entry_t *)node_gen;
 
-    OSDB_PRINTF("Destroying PD(%d, %s)\n", node->pd.id, node->pd.name);
-
     resource_component_remove_from_rt(get_pd_component(), node->pd.id);
 
     // Destroy PD

@@ -67,12 +67,14 @@ int test_new_process_osmosis_shmem(env_t env)
     error = pd_client_send_cap(&runnable.pd, shared_mo.ep, &slot);
     test_error_eq(error, 0);
 
+#if DUMP_MODEL
+    error = pd_client_dump(&runnable.pd, NULL, 0);
+    test_assert(error == 0);
+#endif
+
     seL4_SetMR(0, slot);
     tag = seL4_MessageInfo_new(0, 0, 0, 1);
     seL4_ReplyRecv(ep_conn.raw_endpoint, tag, NULL);
-
-    error = pd_client_dump(&runnable.pd, NULL, 0);
-    test_assert(error == 0);
 
     sel4gpi_config_destroy(proc_cfg);
 

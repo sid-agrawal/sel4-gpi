@@ -316,6 +316,31 @@ err_goto:
     reply_msg->errorCode = error;
 }
 
+static void handle_suspend_req(seL4_Word sender_badge, CpuReturnMessage *reply_msg, bool *should_reply)
+{
+    int error = 0;
+    OSDB_PRINTF("Got suspend request: ");
+    BADGE_PRINT(sender_badge);
+
+    cpu_component_registry_entry_t *cpu_data = (cpu_component_registry_entry_t *)
+        resource_component_registry_get_by_badge(get_cpu_component(), sender_badge);
+    SERVER_GOTO_IF_COND_BG(cpu_data == NULL, sender_badge, "Couldn't find CPU from badge: ");
+
+    error = cpu_component_stop(get_object_id_from_badge(sender_badge));
+
+    /* the PD whose running on this CPU requested to be suspended, so it will not receive a reply */
+    if (cpu_data->cpu.id == get_client_id_from_badge(sender_badge))
+    {
+        *should_reply = false;
+        return;
+    }
+
+err_goto:
+    *should_reply = true;
+    reply_msg->which_msg = CpuReturnMessage_basic_tag;
+    reply_msg->errorCode = error;
+}
+
 static void cpu_component_handle(void *msg_p,
                                  seL4_Word sender_badge,
                                  seL4_CPtr received_cap,
@@ -340,7 +365,6 @@ static void cpu_component_handle(void *msg_p,
         case CpuMessage_start_tag:
             handle_start_req(sender_badge, &msg->msg.start, reply_msg);
             break;
-
         case CpuMessage_config_tag:
             handle_config_req(sender_badge, &msg->msg.config, reply_msg);
             break;
@@ -356,6 +380,9 @@ static void cpu_component_handle(void *msg_p,
             break;
         case CpuMessage_read_reg_tag:
             handle_read_registers_req(sender_badge, &msg->msg.read_reg, reply_msg);
+            break;
+        case CpuMessage_suspend_tag:
+            handle_suspend_req(sender_badge, reply_msg, should_reply);
             break;
         default:
             SERVER_GOTO_IF_COND(1, "Unknown request received: %d\n", msg->which_msg);

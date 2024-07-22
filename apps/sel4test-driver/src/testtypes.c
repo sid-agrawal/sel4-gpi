@@ -518,9 +518,25 @@ void osm_set_up(uintptr_t e)
     /* Set the benchmark IPC endpoint, same as the PD ep */
     env->bench_endpoint_in_test = pd->shared_data->pd_conn.ep;
 
+    cspacepath_t timer_ntfn_in_PD = {0};
+    if (config_set(CONFIG_HAVE_TIMER))
+    {
+        error = resource_component_transfer_cap(get_gpi_server()->server_vka,
+                                                pd->pd_vka,
+                                                env->timer_notify_test.cptr,
+                                                &timer_ntfn_in_PD,
+                                                false,
+                                                0);
+        WARN_IF_COND(error, "Failed to copy timer notification to PD, sleep requests will fail\n");
+
+        error = tm_alloc_id_at(&env->tm, TIMER_ID);
+        WARN_IF_COND(error, "Failed to alloc time id %d, sleep requests will fail", TIMER_ID);
+    }
+
     // Configure the PD runtime
     int argc = 4;
-    seL4_Word args[4] = {OSM, env->endpoint_in_test, 0, env->bench_endpoint_in_test};
+    seL4_Word args[4] = {OSM, env->endpoint_in_test, timer_ntfn_in_PD.capPtr, env->bench_endpoint_in_test};
+
     error = pd_component_runtime_setup(pd, ads, cpu,
                                        PdSetupType_PD_RUNTIME_SETUP,
                                        argc, args,

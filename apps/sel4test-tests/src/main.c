@@ -230,17 +230,19 @@ int main(int argc, char **argv)
     assert(argc == 4);
     test_type = (enum test_type_name)atoi(argv[0]);
     endpoint = env.endpoint = (seL4_CPtr)atoi(argv[1]);
-    // Third arg is for BASIC test types only
+    // Third arg for BASIC test types is a whole bunch of initialization data,
+    //           for OSM test types, it is the timer notification for sleep requests
     env.ipc_bench_ep = (seL4_CPtr)atoi(argv[3]);
 
     char *test_name;
     if (test_type == OSM)
     {
         test_name = sel4gpi_get_shared_data()->test_name;
+        env.timer_notification.cptr = (seL4_CPtr)atoi(argv[2]);
     }
     else
     {
-        test_init_data_t *init_data = (void *)atol(argv[2]);;
+        test_init_data_t *init_data = (void *)atol(argv[2]);
         test_name = init_data->name;
 
         /* configure env */

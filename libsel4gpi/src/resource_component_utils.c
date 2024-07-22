@@ -244,14 +244,14 @@ void resource_component_debug_print(resource_component_context_t *component)
 
 int resource_component_transfer_cap(vka_t *src_vka,
                                     vka_t *dst_vka,
-                                    seL4_CPtr src_ep,
+                                    seL4_CPtr src_cap,
                                     cspacepath_t *dest,
                                     bool mint,
                                     seL4_Word badge)
 {
     int error = 0;
     cspacepath_t src;
-    vka_cspace_make_path(src_vka, src_ep, &src);
+    vka_cspace_make_path(src_vka, src_cap, &src);
 
     if (dst_vka)
     {

@@ -35,8 +35,24 @@ extern __thread void *__sel4gpi_osm_data;
 
 static void test_thread(void *arg0, void *arg1, void *arg2)
 {
-    printf("In test thread, arg0: %ld, arg1: %ld, arg2: %ld\n", (uint64_t)arg0, (uint64_t)arg1, (uint64_t)arg2);
+    bool is_osm_thread = (bool)arg0;
+    printf("In test thread, OSM thread? %d, %s: %lX, arg2: %ld\n",
+           is_osm_thread,
+           is_osm_thread ? "CPU" : "TCB",
+           (uint64_t)arg1,
+           (uint64_t)arg2);
     printf("goodbye!\n");
+
+    if (is_osm_thread)
+    {
+        cpu_client_context_t self_cpu = sel4gpi_get_cpu_conn();
+        cpu_client_suspend(&self_cpu);
+    }
+    else
+    {
+        seL4_CPtr tcb = (seL4_CPtr)arg1;
+        seL4_TCB_Suspend(tcb);
+    }
 }
 
 int test_native_threads(env_t env)
@@ -53,52 +69,46 @@ int test_native_threads(env_t env)
 
     test_error_eq(error, 0);
 
-    error = sel4utils_start_thread(&thread, test_thread, (void *)1, (void *)2, 1);
+    error = sel4utils_start_thread(&thread, test_thread, (void *)false, (void *)thread.tcb.cptr, 1);
     test_error_eq(error, 0);
+
+    sel4test_sleep(env, 5 * MILLISECOND);
+
+    sel4utils_clean_up_thread(&env->vka, &env->vspace, &thread);
+
     return sel4test_get_result();
 }
 
-// (XXX) Arya: This test is broken
 DEFINE_TEST(GPITH001,
             "Spawn a native thread",
             test_native_threads,
-            false);
+            true);
 
 int test_osm_threads(env_t env)
 {
     int error;
     printf("------------------STARTING: %s------------------\n", __func__);
 
-    ep_client_context_t fault_ep = {0};
-    error = ep_client_forge(sel4gpi_get_rde(GPICAP_TYPE_EP), env->endpoint, &fault_ep);
-    test_assert(!error && fault_ep.ep != seL4_CapNull);
-
     sel4gpi_runnable_t runnable = {0};
-    pd_config_t *cfg = sel4gpi_configure_thread(test_thread, &fault_ep, &runnable);
+    pd_config_t *cfg = sel4gpi_configure_thread(test_thread, seL4_CapNull, &runnable);
     test_assert(cfg != NULL);
 
-    seL4_Word arg0 = 1;
-    error = sel4gpi_prepare_pd(cfg, &runnable, 1, &arg0);
+    seL4_Word args = true;
+    error = sel4gpi_prepare_pd(cfg, &runnable, 1, &args);
     test_assert(error == 0);
 
     error = sel4gpi_start_pd(&runnable);
     test_assert(error == 0);
 
-    // terrible sleep mechanism to allow thread to run bc we don't have usleep
-    int i = 0;
-    while (i < 100000)
-    {
-        seL4_Yield();
-        i++;
-    }
-
+    sel4test_sleep(env, 5 * MILLISECOND);
     sel4gpi_config_destroy(cfg);
 
     // pd_client_dump(&test_pd_os_cap, NULL, 0);
     return sel4test_get_result();
 }
 
-// (XXX) Arya: This test is broken
+// (XXX) Linh: this test current causes a memory leak with the thread-PD, since we have not
+// implemented a config option to clean up children PD when the parent PD exits
 DEFINE_TEST_OSM(GPITH002,
                 "Test Multiple Threads in PD",
                 test_osm_threads,
