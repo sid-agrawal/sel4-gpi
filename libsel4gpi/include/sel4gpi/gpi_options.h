@@ -35,7 +35,7 @@
  * CLEANUP_DEPENDENTS_RECURSIVE: resource_space_depth 0, pd_depth -1
  *  Same as CLEANUP_DEPENDENTS_DIRECT, except it also recursively kills any PDs that depended on other killed PDs.
 */
-#define GPI_CLEANUP_RESOURCE_SPACE_DEPTH 2
+#define GPI_CLEANUP_RESOURCE_SPACE_DEPTH 0
 #define GPI_CLEANUP_PD_DEPTH 0
 
 /**

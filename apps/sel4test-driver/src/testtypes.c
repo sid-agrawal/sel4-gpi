@@ -61,11 +61,30 @@ static seL4_SlotRegion copy_untypeds_to_process(sel4utils_process_t *process,
 
     for (int i = 0; i < num_untypeds; i++)
     {
+        
+        // Enabled the #if to clear all untypeds before the test
+        // This prevents a slowdown in tests beyond the first test, caused by the kernel zero-ing the untypeds
+#if 0
+        // fake retype to clear the untyped first
+        cspacepath_t dest;
+        int error = vka_cspace_alloc_path(&env->vka, &dest);
+        assert(error == 0);
+
+        error = vka_untyped_retype(&untypeds[i], seL4_UntypedObject, untypeds[i].size_bits, 1, &dest);
+        assert(error == 0);
+
+        // printf("DRIVER: Adding untyped to process: cap: %lu ut: %lu sz: %s\n ",
+        //        untypeds[i].cptr,
+        //        untypeds[i].ut,
+        //        human_readable_size(1ULL << untypeds[i].size_bits));
+        seL4_CPtr slot = sel4utils_copy_cap_to_process(process, &env->vka, dest.capPtr);
+#else
         // printf("DRIVER: Adding untyped to process: cap: %lu ut: %lu sz: %s\n ",
         //        untypeds[i].cptr,
         //        untypeds[i].ut,
         //        human_readable_size(1ULL << untypeds[i].size_bits));
         seL4_CPtr slot = sel4utils_copy_cap_to_process(process, &env->vka, untypeds[i].cptr);
+#endif
 
         /* set up the cap range */
         if (i == 0)
@@ -277,7 +296,9 @@ void basic_set_up(uintptr_t e)
     env->endpoint_in_test = sel4utils_copy_cap_to_process(&(env->test_process), &env->vka, env->test_process.fault_endpoint.cptr);
 
     /* get the benchmark IPC endpoint */
-    env->bench_endpoint_in_driver = pd_component_create_ipc_bench_ep();
+    // (XXX) Arya: This used to communicate with GPI server, but now we do not start it for basic tests
+    //env->bench_endpoint_in_driver = pd_component_create_ipc_bench_ep();
+    env->bench_endpoint_in_driver = env->test_process.fault_endpoint.cptr;
     env->bench_endpoint_in_test = sel4utils_copy_cap_to_process(&(env->test_process), &env->vka, env->bench_endpoint_in_driver);
 
     // Keep this one as the last COPY, so that  init->free_slot.start a few lines below stays valid.

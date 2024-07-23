@@ -19,6 +19,14 @@ SEL4_GENERATE_PROTOBUF(proto_srcs proto_hdrs
     ${CMAKE_CURRENT_SOURCE_DIR}/resspc_component_rpc.proto
 )
 
+set(GPIServerEnabled ON CACHE BOOL "If true, run the GPI server")
+
+if (GPIServerEnabled)
+    set(GPIServerDef "GPI_SERVER_ENABLED")
+else()
+    set(GPIServerDef "GPI_SERVER_DISABLED")
+endif()
+
 file(GLOB deps src/*.c)
 
 list(SORT deps)
@@ -37,3 +45,6 @@ target_link_libraries(sel4gpi
         sel4nanopb
         elf
 )
+
+target_compile_options(sel4gpi PUBLIC 
+    "-D${GPIServerDef}")

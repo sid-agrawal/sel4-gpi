@@ -7,20 +7,20 @@
 #include <sel4/sel4.h>
 #include <sel4test/test.h>
 #include <sel4test/macros.h>
-#include <sel4gpi/pd_obj.h>
-#include <sel4gpi/debug.h>
-
 #include <vka/capops.h>
-
 #include <sel4utils/thread.h>
-#include <sel4gpi/debug.h>
 #include "../test.h"
 #include "../helpers.h"
 #include <stdio.h>
-
-#include <sel4gpi/pd_clientapi.h>
 #include <sel4bench/arch/sel4bench.h>
 #include <utils/uthash.h>
+#include <fcntl.h>
+#include <sel4rpc/client.h>
+#include <rpc.pb.h>
+
+#include <sel4gpi/pd_clientapi.h>
+#include <sel4gpi/pd_obj.h>
+#include <sel4gpi/debug.h>
 #include <sel4gpi/pd_utils.h>
 #include <sel4gpi/bench_utils.h>
 #include <sel4gpi/ads_client_context.h>
@@ -28,9 +28,12 @@
 #include <sel4gpi/pd_client_context.h>
 #include <sel4gpi/cpu_client_context.h>
 #include <sel4gpi/pd_creation.h>
+
 #include <fs_client.h>
 #include <ramdisk_client.h>
-#include <fcntl.h>
+
+// If true, run each test 50 times in one boot
+#define TEST_MULTIPLE 1
 
 // #define TEST_DEBUG
 
@@ -67,6 +70,11 @@ static void benchmark_init(env_t env)
     }
 }
 
+static void print_result(uint64_t result)
+{
+    printf("RESULT>%ld\n", result);
+}
+
 /**
  * Send an seL4_Call to root task, optionally including a cap to send
  * This times the round-trip time:
@@ -80,14 +88,20 @@ static int benchmark_ipc_rt(env_t env, seL4_CPtr cap, bool print)
     ccnt_t call_start;
     ccnt_t call_end;
 
+    RpcMessage rpcMsg = {
+        .which_msg = RpcMessage_bench_tag
+    };
+
     SEL4BENCH_READ_CCNT(call_start);
-    pd_client_context_t self_pd_conn = {.ep = env->ipc_bench_ep};
-    pd_client_bench_ipc(&self_pd_conn, cap, cap != seL4_CapNull);
+    error = sel4rpc_call(&env->rpc_client, &rpcMsg, 0, 0, 0);
+
+    //pd_client_context_t self_pd_conn = {.ep = env->ipc_bench_ep};
+    //pd_client_bench_ipc(&self_pd_conn, cap, cap != seL4_CapNull);
     SEL4BENCH_READ_CCNT(call_end);
 
     if (print)
     {
-        printf("%ld,", call_end - call_start);
+        print_result(call_end - call_start);
     }
 }
 
@@ -112,39 +126,67 @@ static int benchmark_ipc_pd(seL4_CPtr ep)
 
     assert(seL4_GetMR(0) == BM_IPC);
 
-    printf("%ld,", call_end - call_start);
+    print_result(call_end - call_start);
 
     return 0;
 }
 
-static int benchmark_pd_create_sel4utils(env_t env, cspacepath_t *cspace)
+static int benchmark_pd_create_sel4utils(env_t env, cspacepath_t *cspace_path, vka_object_t *cspace_obj)
 {
     ccnt_t pd_create_start;
     ccnt_t pd_create_end;
     int error;
     TEST_LOG("\nPD CREATE");
 
+    ccnt_t step_start, step_end;
+
     // For sel4utils, PD creation is just creating a cspace
 
     SEL4BENCH_READ_CCNT(pd_create_start);
-
-    vka_object_t cnode;
     cspacepath_t dest;
     seL4_Word cspace_root_data;
 
-    error = vka_alloc_cnode_object(&env->vka, cspace_size_bits, &cnode);
+    #if 1
+    error = vka_alloc_cnode_object(&env->vka, cspace_size_bits, cspace_obj);
     test_error_eq(error, 0);
-    vka_cspace_make_path(&env->vka, cnode.cptr, cspace);
+
+    // This was used to split the vka_alloc_cnode_object operation for timing individual steps
+    #else
+    vka_object_t untyped;
+    SEL4BENCH_READ_CCNT(step_start);
+    error = vka_alloc_untyped(&env->vka, cspace_size_bits + seL4_SlotBits, &untyped);
+    SEL4BENCH_READ_CCNT(step_end);
+    printf("step 1: %ld, bits %ld\n", step_end-step_start, cspace_size_bits + seL4_SlotBits);
+    test_error_eq(error, 0);
+
+    cspacepath_t cnode_dest;
+    SEL4BENCH_READ_CCNT(step_start);
+    error = vka_cspace_alloc_path(&env->vka, &cnode_dest);
+    SEL4BENCH_READ_CCNT(step_end);
+    printf("step 2: %ld\n", step_end-step_start);
+    test_error_eq(error, 0);
+
+    SEL4BENCH_READ_CCNT(step_start);
+    error = vka_untyped_retype(&untyped, seL4_CapTableObject, cspace_size_bits, 1, &cnode_dest);
+    SEL4BENCH_READ_CCNT(step_end);
+    printf("step 3: %ld, bits %ld, type %d\n", step_end-step_start, cspace_size_bits, seL4_CapTableObject);
+    cspace_obj->type = seL4_CapTableObject;
+    cspace_obj->cptr = cnode_dest.capPtr;
+    cspace_obj->size_bits = cspace_size_bits;
+    test_error_eq(error, 0);
+    #endif
+
+    vka_cspace_make_path(&env->vka, cspace_obj->cptr, cspace_path);
     cspace_root_data = api_make_guard_skip_word(seL4_WordBits - cspace_size_bits);
     dest.capPtr = 1;
-    dest.root = cnode.cptr;
+    dest.root = cspace_obj->cptr;
     dest.capDepth = cspace_size_bits;
-    error = vka_cnode_mint(&dest, cspace, seL4_AllRights, cspace_root_data);
+    error = vka_cnode_mint(&dest, cspace_path, seL4_AllRights, cspace_root_data);
     test_error_eq(error, 0);
 
     SEL4BENCH_READ_CCNT(pd_create_end);
 
-    printf("%ld,", pd_create_end - pd_create_start);
+    print_result(pd_create_end - pd_create_start);
 
     return 0;
 }
@@ -163,13 +205,53 @@ static int benchmark_pd_create_osm(pd_client_context_t *pd)
 
     // Get the PD cap
     SEL4BENCH_READ_CCNT(pd_create_start);
-
     error = pd_component_client_connect(sel4gpi_get_rde(GPICAP_TYPE_PD), &mo, pd);
-    test_error_eq(error, 0);
-
     SEL4BENCH_READ_CCNT(pd_create_end);
 
-    printf("%ld,", pd_create_end - pd_create_start);
+    test_error_eq(error, 0);
+
+    print_result(pd_create_end - pd_create_start);
+
+    return 0;
+}
+
+static int benchmark_pd_delete_sel4utils(env_t env, cspacepath_t *cspace_path, vka_object_t *cspace_obj)
+{
+    ccnt_t pd_delete_start;
+    ccnt_t pd_delete_end;
+    int error;
+    TEST_LOG("\nPD DELETE");
+
+    // For sel4utils, PD deletion is just deleting a cspace
+
+    SEL4BENCH_READ_CCNT(pd_delete_start);
+    error = vka_cnode_revoke(cspace_path);
+    vka_free_object(&env->vka, cspace_obj);
+    SEL4BENCH_READ_CCNT(pd_delete_end);
+
+    test_error_eq(error, 0);
+
+    print_result(pd_delete_end - pd_delete_start);
+
+    return 0;
+}
+
+static int benchmark_pd_delete_osm(pd_client_context_t *pd)
+{
+    ccnt_t pd_delete_start;
+    ccnt_t pd_delete_end;
+    int error;
+    TEST_LOG("\nPD DELETE");
+
+    // For osm, PD deletion is also revoking the PD cap
+
+    SEL4BENCH_READ_CCNT(pd_delete_start);
+    error = pd_client_terminate(pd);
+    SEL4BENCH_READ_CCNT(pd_delete_end);
+
+    test_error_eq(error, 0);
+
+    print_result(pd_delete_end - pd_delete_start);
 
     return 0;
 }
@@ -218,7 +300,7 @@ static int benchmark_pd_spawn_sel4utils(env_t env, sel4utils_process_t *sel4util
     seL4_Word bench_type = seL4_GetMR(0);
     test_assert(bench_type == BM_PD_CREATE);
     seL4_Word pd_create_end_time = seL4_GetMR(1);
-    printf("%ld,", pd_create_end_time - pd_create_start_time);
+    print_result(pd_create_end_time - pd_create_start_time);
     return error;
 
 #if CONFIG_MAX_NUM_NODES > 1
@@ -231,7 +313,7 @@ static int benchmark_pd_spawn_sel4utils(env_t env, sel4utils_process_t *sel4util
 }
 
 // This tests specifically a process PD, to compare with sel4test version
-static int benchmark_pd_spawn_osm(pd_client_context_t *osm_pd, seL4_CPtr *ep)
+static int benchmark_pd_spawn_osm(pd_client_context_t *pd, seL4_CPtr *ep)
 {
     ccnt_t pd_create_start_time;
     TEST_LOG("\nPD SPAWN");
@@ -249,12 +331,12 @@ static int benchmark_pd_spawn_osm(pd_client_context_t *osm_pd, seL4_CPtr *ep)
     sel4gpi_runnable_t runnable = {0};
     pd_config_t *cfg = sel4gpi_configure_process("hello_benchmark", DEFAULT_STACK_PAGES, DEFAULT_HEAP_PAGES, &runnable);
     test_assert(cfg != NULL);
-    *osm_pd = runnable.pd;
+    *pd = runnable.pd;
 
     // Send the parent endpoint to the PD
     // (XXX) Arya: Should this be subtracted from timing?
     seL4_CPtr slot;
-    error = pd_client_send_cap(osm_pd, hello_ep.raw_endpoint, &slot);
+    error = pd_client_send_cap(pd, hello_ep.raw_endpoint, &slot);
     test_error_eq(error, 0);
 
     // Prepare the arguments
@@ -275,7 +357,7 @@ static int benchmark_pd_spawn_osm(pd_client_context_t *osm_pd, seL4_CPtr *ep)
     seL4_Word bench_type = seL4_GetMR(0);
     test_assert(bench_type == BM_PD_CREATE);
     seL4_Word pd_create_end_time = seL4_GetMR(1);
-    printf("%ld,", pd_create_end_time - pd_create_start_time);
+    print_result(pd_create_end_time - pd_create_start_time);
     return error;
 
     sel4gpi_config_destroy(cfg);
@@ -299,12 +381,12 @@ static int benchmark_send_cap_sel4utils(env_t env, sel4utils_process_t *sel4util
     sel4utils_copy_cap_to_process(sel4utils_proc, &env->vka, bench_frame.cptr);
     SEL4BENCH_READ_CCNT(send_cap_end);
 
-    printf("%ld,", send_cap_end - send_cap_start);
+    print_result(send_cap_end - send_cap_start);
 
     return error;
 }
 
-static int benchmark_send_cap_osm(pd_client_context_t *osm_pd)
+static int benchmark_send_cap_osm(pd_client_context_t *pd)
 {
     int error;
     ccnt_t send_cap_start;
@@ -322,12 +404,89 @@ static int benchmark_send_cap_osm(pd_client_context_t *osm_pd)
     // Send the MO resource
     SEL4BENCH_READ_CCNT(send_cap_start);
     seL4_CPtr slot;
-    error = pd_client_send_cap(osm_pd, mo.ep, &slot);
+    error = pd_client_send_cap(pd, mo.ep, &slot);
     SEL4BENCH_READ_CCNT(send_cap_end);
 
     test_error_eq(error, 0);
 
-    printf("%ld,", send_cap_end - send_cap_start);
+    print_result(send_cap_end - send_cap_start);
+    return error;
+}
+
+static int benchmark_frame_allocate_sel4utils(env_t env, vka_object_t *frame)
+{
+    int error;
+    ccnt_t frame_alloc_start;
+    ccnt_t frame_alloc_end;
+
+    TEST_LOG("\nFRAME ALLOC");
+
+    SEL4BENCH_READ_CCNT(frame_alloc_start);
+    error = vka_alloc_frame(&env->vka, seL4_PageBits, frame);
+    SEL4BENCH_READ_CCNT(frame_alloc_end);
+
+    test_error_eq(error, 0);
+
+    print_result(frame_alloc_end - frame_alloc_start);
+
+    return error;
+}
+
+static int benchmark_frame_allocate_osm(mo_client_context_t *mo)
+{
+    int error;
+    ccnt_t frame_alloc_start;
+    ccnt_t frame_alloc_end;
+
+    TEST_LOG("\nFRAME ALLOC");
+
+    SEL4BENCH_READ_CCNT(frame_alloc_start);
+    error = mo_component_client_connect(sel4gpi_get_rde(GPICAP_TYPE_MO),
+                                        1,
+                                        MO_PAGE_BITS,
+                                        mo);
+    SEL4BENCH_READ_CCNT(frame_alloc_end);
+
+    test_error_eq(error, 0);
+
+    print_result(frame_alloc_end - frame_alloc_start);
+
+    return error;
+}
+
+static int benchmark_frame_free_sel4utils(env_t env, vka_object_t *frame)
+{
+    int error;
+    ccnt_t frame_alloc_start;
+    ccnt_t frame_alloc_end;
+
+    TEST_LOG("\nFRAME FREE");
+
+    SEL4BENCH_READ_CCNT(frame_alloc_start);
+    vka_free_object(&env->vka, frame);
+    SEL4BENCH_READ_CCNT(frame_alloc_end);
+
+    print_result(frame_alloc_end - frame_alloc_start);
+
+    return error;
+}
+
+static int benchmark_frame_free_osm(mo_client_context_t *mo)
+{
+    int error;
+    ccnt_t frame_alloc_start;
+    ccnt_t frame_alloc_end;
+
+    TEST_LOG("\nFRAME FREE");
+
+    SEL4BENCH_READ_CCNT(frame_alloc_start);
+    error = mo_component_client_disconnect(mo);
+    SEL4BENCH_READ_CCNT(frame_alloc_end);
+
+    print_result(frame_alloc_end - frame_alloc_start);
+
+    test_error_eq(error, 0);
+
     return error;
 }
 
@@ -349,18 +508,19 @@ static int benchmark_ads_create_sel4utils(env_t env, vspace_t *vspace)
 
     error = assign_asid_pool(env->asid_pool, vspace_root.cptr);
     test_error_eq(error, 0);
+    // why is there no 'unassign asid pool'?
 
     error = sel4utils_get_empty_vspace(&env->vspace, vspace, vspace_alloc_data, &env->vka, vspace_root.cptr,
                                        NULL, NULL);
     test_error_eq(error, 0);
     SEL4BENCH_READ_CCNT(ads_create_end);
 
-    printf("%ld,", ads_create_end - ads_create_start);
+    print_result(ads_create_end - ads_create_start);
 
     return error;
 }
 
-static int benchmark_ads_create_osm(ads_client_context_t *osm_ads)
+static int benchmark_ads_create_osm(ads_client_context_t *ads)
 {
     int error;
     ccnt_t ads_create_start;
@@ -371,26 +531,21 @@ static int benchmark_ads_create_osm(ads_client_context_t *osm_ads)
     seL4_CPtr ads_rde = sel4gpi_get_rde(GPICAP_TYPE_ADS);
 
     SEL4BENCH_READ_CCNT(ads_create_start);
-    error = ads_component_client_connect(ads_rde, osm_ads);
+    error = ads_component_client_connect(ads_rde, ads);
     SEL4BENCH_READ_CCNT(ads_create_end);
 
-    printf("%ld,", ads_create_end - ads_create_start);
+    print_result(ads_create_end - ads_create_start);
 
     return error;
 }
 
-static int benchmark_ads_attach_sel4utils(env_t env, vspace_t *vspace, seL4_CPtr *frame_cap, void **frame_addr)
+static int benchmark_ads_attach_sel4utils(env_t env, vspace_t *vspace, vka_object_t *frame, void **frame_addr)
 {
     int error;
     ccnt_t ads_attach_start;
     ccnt_t ads_attach_end;
     void *mapped_vaddr;
     TEST_LOG("\nADS ATTACH");
-
-    // Create a frame to attach
-    vka_object_t bench_frame;
-    error = vka_alloc_frame(&env->vka, seL4_PageBits, &bench_frame);
-    test_error_eq(error, 0);
 
     // Attach it to the ADS
     SEL4BENCH_READ_CCNT(ads_attach_start);
@@ -402,47 +557,112 @@ static int benchmark_ads_attach_sel4utils(env_t env, vspace_t *vspace, seL4_CPtr
                                                         seL4_PageBits, seL4_AllRights, 1, &mapped_vaddr);
     test_assert(mapped_vaddr != NULL);
 
-    error = sel4utils_map_pages_at_vaddr(vspace, &bench_frame.cptr, NULL, mapped_vaddr, 1, seL4_PageBits, res);
-
-    // mapped_vaddr = vspace_map_pages(vspace, &bench_frame.cptr, NULL, seL4_AllRights, 1, seL4_PageBits, 1);
+    error = sel4utils_map_pages_at_vaddr(vspace, &frame->cptr, NULL, mapped_vaddr, 1, seL4_PageBits, res);
     test_assert(mapped_vaddr != NULL);
 
     test_error_eq(error, 0);
     SEL4BENCH_READ_CCNT(ads_attach_end);
 
-    printf("%ld,", ads_attach_end - ads_attach_start);
-
-    *frame_cap = bench_frame.cptr;
+    print_result(ads_attach_end - ads_attach_start);
     *frame_addr = mapped_vaddr;
 
     return error;
 }
 
-static int benchmark_ads_attach_osm(ads_client_context_t *osm_ads, mo_client_context_t *mo, void **mo_vaddr)
+static int benchmark_ads_attach_osm(ads_client_context_t *ads, mo_client_context_t *mo, void **mo_vaddr)
 {
     int error;
     ccnt_t ads_attach_start;
     ccnt_t ads_attach_end;
-    ads_client_context_t osm_pd_ads_rde = {.ep = sel4gpi_get_rde_by_space_id(osm_ads->id, GPICAP_TYPE_VMR)};
+    ads_client_context_t vmr_rde = {.ep = sel4gpi_get_rde_by_space_id(ads->id, GPICAP_TYPE_VMR)};
 
     TEST_LOG("\nADS ATTACH");
 
-    // Create an MO to attach
-    error = mo_component_client_connect(sel4gpi_get_rde(GPICAP_TYPE_MO),
-                                        1,
-                                        MO_PAGE_BITS,
-                                        mo);
-    test_error_eq(error, 0);
-
     // Attach the MO to the ADS
     SEL4BENCH_READ_CCNT(ads_attach_start);
-    error = ads_client_attach(&osm_pd_ads_rde, NULL, mo, SEL4UTILS_RES_TYPE_GENERIC, mo_vaddr);
-    test_error_eq(error, 0);
+    error = ads_client_attach(&vmr_rde, NULL, mo, SEL4UTILS_RES_TYPE_GENERIC, mo_vaddr);
     SEL4BENCH_READ_CCNT(ads_attach_end);
 
-    printf("%ld,", ads_attach_end - ads_attach_start);
+    test_error_eq(error, 0);
+
+    print_result(ads_attach_end - ads_attach_start);
 
     return error;
+}
+
+static int benchmark_ads_remove_sel4utils(env_t env, vspace_t *vspace, void **frame_vaddr)
+{
+    int error;
+    ccnt_t ads_remove_start;
+    ccnt_t ads_remove_end;
+    void *mapped_vaddr;
+    TEST_LOG("\nADS REMOVE");
+
+    // Remove the frame from the vspace
+    SEL4BENCH_READ_CCNT(ads_remove_start);
+    // Use VSPACE_PRESERVE so that we don't free the frame/slot while unmapping
+    sel4utils_unmap_pages(vspace, frame_vaddr, 1, seL4_PageBits, VSPACE_PRESERVE);
+    sel4utils_free_reservation_by_vaddr(vspace, frame_vaddr);
+    SEL4BENCH_READ_CCNT(ads_remove_end);
+
+    print_result(ads_remove_end - ads_remove_start);
+
+    return error;
+}
+
+static int benchmark_ads_remove_osm(ads_client_context_t *ads, void *mo_vaddr)
+{
+    int error;
+    ccnt_t ads_remove_start;
+    ccnt_t ads_remove_end;
+    TEST_LOG("\nADS REMOVE");
+
+    ads_client_context_t vmr_rde = {.ep = sel4gpi_get_rde_by_space_id(ads->id, GPICAP_TYPE_VMR)};
+
+    // Remove the MO from the ADS
+    SEL4BENCH_READ_CCNT(ads_remove_start);
+    error = ads_client_rm(&vmr_rde, mo_vaddr);
+    SEL4BENCH_READ_CCNT(ads_remove_end);
+
+    test_error_eq(error, 0);
+
+    print_result(ads_remove_end - ads_remove_start);
+
+    return error;
+}
+
+static int benchmark_ads_delete_sel4utils(env_t env, vspace_t *vspace)
+{
+    ccnt_t ads_delete_start;
+    ccnt_t ads_delete_end;
+    int error;
+    TEST_LOG("\nADS_DELETE");
+
+    SEL4BENCH_READ_CCNT(ads_delete_start);
+    vspace_tear_down(vspace, VSPACE_FREE);
+    SEL4BENCH_READ_CCNT(ads_delete_end);
+
+    print_result(ads_delete_end - ads_delete_start);
+
+    return 0;
+}
+
+static int benchmark_ads_delete_osm(ads_client_context_t *ads)
+{
+    ccnt_t ads_delete_start;
+    ccnt_t ads_delete_end;
+    int error;
+    TEST_LOG("\nADS_DELETE");
+
+    SEL4BENCH_READ_CCNT(ads_delete_start);
+    error = ads_client_disconnect(ads);
+    SEL4BENCH_READ_CCNT(ads_delete_end);
+
+    test_error_eq(error, 0);
+
+    print_result(ads_delete_end - ads_delete_start);
+
+    return 0;
 }
 
 static int benchmark_cpu_create_sel4utils(env_t env, vka_object_t *tcb)
@@ -457,7 +677,7 @@ static int benchmark_cpu_create_sel4utils(env_t env, vka_object_t *tcb)
     error = vka_alloc_tcb(&env->vka, tcb);
     SEL4BENCH_READ_CCNT(cpu_create_end);
 
-    printf("%ld,", cpu_create_end - cpu_create_start);
+    print_result(cpu_create_end - cpu_create_start);
 
     return error;
 }
@@ -476,7 +696,7 @@ static int benchmark_cpu_create_osm(cpu_client_context_t *osm_cpu)
     error = cpu_component_client_connect(cpu_rde, osm_cpu);
     SEL4BENCH_READ_CCNT(cpu_create_end);
 
-    printf("%ld,", cpu_create_end - cpu_create_start);
+    print_result(cpu_create_end - cpu_create_start);
 
     return error;
 }
@@ -511,7 +731,7 @@ static int benchmark_cpu_bind_sel4utils(env_t env, vka_object_t *tcb,
     SEL4BENCH_READ_CCNT(cpu_bind_end);
     test_error_eq(error, 0);
 
-    printf("%ld,", cpu_bind_end - cpu_bind_start);
+    print_result(cpu_bind_end - cpu_bind_start);
 
     return error;
 }
@@ -541,9 +761,45 @@ static int benchmark_cpu_bind_osm(cpu_client_context_t *cpu, ads_client_context_
     test_error_eq(error, 0);
     SEL4BENCH_READ_CCNT(cpu_bind_end);
 
-    printf("%ld,", cpu_bind_end - cpu_bind_start);
+    print_result(cpu_bind_end - cpu_bind_start);
 
     return error;
+}
+
+static int benchmark_cpu_delete_sel4utils(env_t env, vka_object_t *tcb)
+{
+    ccnt_t cpu_delete_start;
+    ccnt_t cpu_delete_end;
+    int error;
+    TEST_LOG("\nCPU_DELETE");
+
+    SEL4BENCH_READ_CCNT(cpu_delete_start);
+    vka_free_object(&env->vka, tcb);
+    SEL4BENCH_READ_CCNT(cpu_delete_end);
+
+    test_error_eq(error, 0);
+
+    print_result(cpu_delete_end - cpu_delete_start);
+
+    return 0;
+}
+
+static int benchmark_cpu_delete_osm(cpu_client_context_t *cpu)
+{
+    ccnt_t cpu_delete_start;
+    ccnt_t cpu_delete_end;
+    int error;
+    TEST_LOG("\nCPU_DELETE");
+
+    SEL4BENCH_READ_CCNT(cpu_delete_start);
+    error = cpu_component_client_disconnect(cpu);
+    SEL4BENCH_READ_CCNT(cpu_delete_end);
+
+    test_error_eq(error, 0);
+
+    print_result(cpu_delete_end - cpu_delete_start);
+
+    return 0;
 }
 
 /**
@@ -590,7 +846,7 @@ static int benchmark_fs(env_t env)
     test_assert(f > 0);
     SEL4BENCH_READ_CCNT(fs_open_end);
 
-    printf("%ld,", fs_open_end - fs_open_start);
+    print_result(fs_open_end - fs_open_start);
 
     // Terminate PDs
     pd_client_context_t fs_context = {.ep = fs_pd_cap};
@@ -636,11 +892,154 @@ int benchmark_mint(env_t env)
 #endif
 
 /**
+ * Benchmark:
+ * + cspace create
+ * + vspace create
+ * + attach a frame to the vspace
+ * + cpu create
+ * + bind vspace/cspace to cpu
+ */
+int benchmark_basic_sel4utils(env_t env)
+{
+    int error = 0;
+
+    benchmark_init(env);
+
+    // PD create
+    cspacepath_t cspace;
+    vka_object_t cspace_obj;
+    error = benchmark_pd_create_sel4utils(env, &cspace, &cspace_obj);
+    test_error_eq(error, 0);
+
+    // Frame create
+    vka_object_t ipc_frame;
+    error = benchmark_frame_allocate_sel4utils(env, &ipc_frame);
+    test_error_eq(error, 0);
+
+    // ADS create / attach
+    vspace_t vspace;
+    error = benchmark_ads_create_sel4utils(env, &vspace);
+    test_error_eq(error, 0);
+
+    void *ipc_frame_addr;
+    error = benchmark_ads_attach_sel4utils(env, &vspace, &ipc_frame, &ipc_frame_addr);
+    test_error_eq(error, 0);
+
+    // CPU create / bind
+    vka_object_t tcb;
+    error = benchmark_cpu_create_sel4utils(env, &tcb);
+    test_error_eq(error, 0);
+
+    error = benchmark_cpu_bind_sel4utils(env, &tcb, cspace.capPtr, vspace.get_root(&vspace),
+                                         ipc_frame.cptr, ipc_frame_addr);
+    test_error_eq(error, 0);
+
+    // ADS remove
+    error = benchmark_ads_remove_sel4utils(env, &vspace, ipc_frame_addr);
+    test_error_eq(error, 0);
+
+    // Frame delete
+    error = benchmark_frame_free_sel4utils(env, &ipc_frame);
+    test_error_eq(error, 0);
+
+    // (XXX) Arya: the deletion order is different for sel4utils vs osm
+    // For sel4utils it is CPU first, because the TCB needs to be deleted first, as it has copies of the other caps
+    // For OSmosis it is PD first, so that the refcounts of ADS/CPU will not reach zero,
+    // and we can delete them independently
+
+    // (XXX) Arya: need to revisit this, the tcb might be the last copy of these caps, maybe PD always first
+
+    // PD delete
+    error = benchmark_pd_delete_sel4utils(env, &cspace, &cspace_obj);
+    test_error_eq(error, 0);
+
+    // CPU delete
+    error = benchmark_cpu_delete_sel4utils(env, &tcb);
+    test_error_eq(error, 0);
+
+    // ADS delete
+    error = benchmark_ads_delete_sel4utils(env, &vspace);
+    test_error_eq(error, 0);
+
+    // Cleanup cnode
+    error = vka_cnode_revoke(&cspace);
+    test_error_eq(error, 0);
+
+    sel4bench_destroy();
+    return sel4test_get_result();
+}
+
+/**
+ * Benchmark
+ * + PD create
+ * + ADS create
+ * + attach a MO to the ADS
+ * + cpu create
+ * + bind ADS/PD cpu
+ */
+int benchmark_basic_osm(env_t env)
+{
+    int error = 0;
+
+    benchmark_init(env);
+
+    // PD create
+    pd_client_context_t pd;
+    error = benchmark_pd_create_osm(&pd);
+    test_error_eq(error, 0);
+
+    // Frame create
+    mo_client_context_t ipc_frame_mo;
+    error = benchmark_frame_allocate_osm(&ipc_frame_mo);
+    test_error_eq(error, 0);
+
+    // ADS bench
+    ads_client_context_t ads;
+    error = benchmark_ads_create_osm(&ads);
+    test_error_eq(error, 0);
+
+    void *ipc_frame_addr;
+    error = benchmark_ads_attach_osm(&ads, &ipc_frame_mo, &ipc_frame_addr);
+    test_error_eq(error, 0);
+
+    // CPU bench
+    cpu_client_context_t cpu;
+    error = benchmark_cpu_create_osm(&cpu);
+    test_error_eq(error, 0);
+
+    error = benchmark_cpu_bind_osm(&cpu, &ads, &pd, &ipc_frame_mo, ipc_frame_addr);
+    test_error_eq(error, 0);
+
+    // ADS remove
+    error = benchmark_ads_remove_osm(&ads, ipc_frame_addr);
+    test_error_eq(error, 0);
+
+    // Frame delete
+    error = benchmark_frame_free_osm(&ipc_frame_mo);
+    test_error_eq(error, 0);
+
+    // PD destroy (doesn't cleanup ADS/CPU, PD has no resources to cleanup)
+    error = benchmark_pd_delete_osm(&pd);
+    test_error_eq(error, 0);
+
+    // CPU destroy
+    error = benchmark_cpu_delete_osm(&cpu);
+    test_error_eq(error, 0);
+
+    // ADS destroy
+    error = benchmark_ads_delete_osm(&ads);
+    test_error_eq(error, 0);
+
+    sel4bench_destroy();
+    return sel4test_get_result();
+}
+
+/**
  * Benchmark process spawn
  * + sending cap to the spawned process
  * + sending IPC to the spaned process
  */
-int benchmark_pd_spawn_plus_sel4utils(env_t env)
+int benchmark_process_spawn_sel4utils(env_t env)
 {
     int error = 0;
 
@@ -667,144 +1066,55 @@ int benchmark_pd_spawn_plus_sel4utils(env_t env)
  * + sending cap to the spawned PD
  * + sending IPC to the spaned PD
  */
-int benchmark_pd_spawn_plus_osm(env_t env)
+int benchmark_process_spawn_osm(env_t env)
 {
     int error = 0;
 
     benchmark_init(env);
 
     // Run benchmarks
-    pd_client_context_t osm_pd;
+    pd_client_context_t pd;
     seL4_CPtr ep;
-    error = benchmark_pd_spawn_osm(&osm_pd, &ep);
+    error = benchmark_pd_spawn_osm(&pd, &ep);
     test_error_eq(error, 0);
 
-    error = benchmark_send_cap_osm(&osm_pd);
+    error = benchmark_send_cap_osm(&pd);
     test_error_eq(error, 0);
 
     error = benchmark_ipc_pd(ep);
     test_error_eq(error, 0);
 
     // Cleanup
-    error = pd_client_terminate(&osm_pd);
+    error = pd_client_terminate(&pd);
     // ignore error, if the PD already terminated
 
     sel4bench_destroy();
     return sel4test_get_result();
 }
 
-/**
- * Benchmark:
- * + cspace create
- * + vspace create
- * + attach a frame to the vspace
- * + cpu create
- * + bind vspace/cspace to cpu
- */
-int benchmark_pd_ads_cpu_sel4utils(env_t env)
-{
-    int error = 0;
-
-    benchmark_init(env);
-
-    // PD create
-    cspacepath_t cspace;
-    error = benchmark_pd_create_sel4utils(env, &cspace);
-    test_error_eq(error, 0);
-
-    // ADS bench
-    vspace_t vspace;
-    error = benchmark_ads_create_sel4utils(env, &vspace);
-    test_error_eq(error, 0);
-
-    seL4_CPtr ipc_frame_cap;
-    void *ipc_frame_addr;
-    error = benchmark_ads_attach_sel4utils(env, &vspace, &ipc_frame_cap, &ipc_frame_addr);
-    test_error_eq(error, 0);
-
-    // CPU bench
-    vka_object_t tcb;
-    error = benchmark_cpu_create_sel4utils(env, &tcb);
-    test_error_eq(error, 0);
-
-    error = benchmark_cpu_bind_sel4utils(env, &tcb, cspace.capPtr, vspace.get_root(&vspace),
-                                         ipc_frame_cap, ipc_frame_addr);
-    test_error_eq(error, 0);
-
-    // Cleanup cnode
-    error = vka_cnode_revoke(&cspace);
-    test_error_eq(error, 0);
-
-    sel4bench_destroy();
-    return sel4test_get_result();
-}
-
-/**
- * Benchmark
- * + PD create
- * + ADS create
- * + attach a MO to the ADS
- * + cpu create
- * + bind ADS/PD cpu
- */
-int benchmark_pd_ads_cpu_osm(env_t env)
-{
-    int error = 0;
-
-    benchmark_init(env);
-
-    // PD create
-    pd_client_context_t pd;
-    error = benchmark_pd_create_osm(&pd);
-    test_error_eq(error, 0);
-
-    // ADS bench
-    ads_client_context_t ads;
-    error = benchmark_ads_create_osm(&ads);
-    test_error_eq(error, 0);
-
-    mo_client_context_t ipc_frame_mo;
-    void *ipc_frame_addr;
-    error = benchmark_ads_attach_osm(&ads, &ipc_frame_mo, &ipc_frame_addr);
-    test_error_eq(error, 0);
-
-    // CPU bench
-    cpu_client_context_t cpu;
-    error = benchmark_cpu_create_osm(&cpu);
-    test_error_eq(error, 0);
-
-    error = benchmark_cpu_bind_osm(&cpu, &ads, &pd, &ipc_frame_mo, ipc_frame_addr);
-    test_error_eq(error, 0);
-
-    // Cleanup PD
-    error = pd_client_terminate(&pd);
-    test_error_eq(error, 0);
-
-    sel4bench_destroy();
-    return sel4test_get_result();
-}
+#if TEST_MULTIPLE
 
 DEFINE_TEST_WITH_TYPE_MULTIPLE(GPIBM001,
-                               "sel4utils PD/ADS/CPU",
-                               benchmark_pd_ads_cpu_sel4utils,
+                               "sel4utils basic bench",
+                               benchmark_basic_sel4utils,
                                BASIC,
                                true)
 
 DEFINE_TEST_WITH_TYPE_MULTIPLE(GPIBM002,
-                               "OSM PD/ADS/CPU",
-                               benchmark_pd_ads_cpu_osm,
+                               "OSM basic bench",
+                               benchmark_basic_osm,
                                OSM,
                                true)
 
 DEFINE_TEST_WITH_TYPE_MULTIPLE(GPIBM003,
-                               "sel4utils PD spawn, send cap, and IPC",
-                               benchmark_pd_spawn_plus_sel4utils,
+                               "sel4utils bench process spawn / send cap",
+                               benchmark_process_spawn_sel4utils,
                                BASIC,
                                true);
 
 DEFINE_TEST_WITH_TYPE_MULTIPLE(GPIBM004,
-                               "osm PD spawn, send cap, and IPC",
-                               benchmark_pd_spawn_plus_osm,
+                               "osm bench process spawn / send cap",
+                               benchmark_process_spawn_osm,
                                OSM,
                                true);
 
@@ -813,3 +1123,31 @@ DEFINE_TEST_WITH_TYPE_MULTIPLE(GPIBM005,
                                benchmark_fs,
                                OSM,
                                true);
+
+#else
+
+DEFINE_TEST(GPIBM001,
+            "sel4utils basic bench",
+            benchmark_basic_sel4utils,
+            true)
+
+DEFINE_TEST_OSM(GPIBM002,
+                "OSM basic bench",
+                benchmark_basic_osm,
+                true)
+
+DEFINE_TEST(GPIBM003,
+            "sel4utils bench process spawn / send cap",
+            benchmark_process_spawn_sel4utils,
+            true);
+
+DEFINE_TEST_OSM(GPIBM004,
+                "osm bench process spawn / send cap",
+                benchmark_process_spawn_osm,
+                true);
+
+DEFINE_TEST_OSM(GPIBM005,
+                "osm FILE create",
+                benchmark_fs,
+                true);
+#endif

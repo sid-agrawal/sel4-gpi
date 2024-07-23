@@ -416,6 +416,34 @@ err_goto:
     reply_msg->errorCode = error;
 }
 
+static void handle_disconnect_request(seL4_Word sender_badge,
+                                   AdsDisconnectMessage *msg,
+                                   AdsReturnMessage *reply_msg)
+{
+    OSDB_PRINTF("Got disconnect request from Client: ");
+    BADGE_PRINT(sender_badge);
+
+    int error = 0;
+
+    uint64_t ads_id = get_object_id_from_badge(sender_badge);
+
+    /* Find the PD */
+    pd_component_registry_entry_t *pd_data =
+        pd_component_registry_get_entry_by_id(get_client_id_from_badge(sender_badge));
+    SERVER_GOTO_IF_COND(pd_data == NULL, "Couldn't find PD (%ld)\n", get_client_id_from_badge(sender_badge));
+
+    /* Remove the MO from the client ADS */
+    error = pd_remove_resource(&pd_data->pd, make_res_id(GPICAP_TYPE_ADS, get_ads_component()->space_id, ads_id));
+    SERVER_GOTO_IF_ERR(error, "Failed to remove MO from PD\n");
+
+    // This will reduce the refcount of the ADS, and then it will be deleted if necessary
+
+err_goto:
+
+    reply_msg->which_msg = AdsReturnMessage_basic_tag;
+    reply_msg->errorCode = error;
+}
+
 /**
  * @brief forges an ADS attachment (and MO) from a given reservation.
  * Since this is currently only used for forging ELF regions, assume that page sizes are 4KB
@@ -556,6 +584,9 @@ static void ads_component_handle(void *msg_p,
             break;
         case AdsMessage_get_res_tag:
             handle_get_res_request(sender_badge, &msg->msg.get_res, reply_msg);
+            break;
+        case AdsMessage_disconnect_tag:
+            handle_disconnect_request(sender_badge, &msg->msg.disconnect, reply_msg);
             break;
         default:
             SERVER_GOTO_IF_COND(1, "Unknown request received: %d\n", msg->which_msg);

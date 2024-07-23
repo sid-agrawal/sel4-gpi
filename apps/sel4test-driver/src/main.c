@@ -444,8 +444,10 @@ void sel4test_run_tests(struct driver_env *e)
                     test_types[tt]->tear_down((uintptr_t)e);
                 }
 
-                // (XXX) Arya: print remaining resources, to see if something exists that should not
-                gpi_debug_print_resources();
+#ifdef GPI_SERVER_ENABLED
+// Print remaining resources, to see if something exists that should not
+// gpi_debug_print_resources();
+#endif
 
                 sel4test_end_test(result);
 
@@ -586,15 +588,15 @@ void *main_continued(void *arg UNUSED)
 
     env.serial_irq_handler = serial_slot.capPtr;
 
-    /* Start core services */
+/* Start core services */
+#ifdef GPI_SERVER_ENABLED
     printf(GPISERVP "Starting GPI server...\n");
     error = gpi_server_parent_spawn_thread(&env.simple,
                                            &env.vka,
                                            &env.vspace,
                                            GPI_SERVER_DEFAULT_PRIORITY,
                                            &env.gpi_endpoint_in_parent);
-    // printf(GPISERVP "Public EP is: %d\n", env.gpi_endpoint_in_parent);
-    // debug_cap_identify(GPISERVP, env.gpi_endpoint_in_parent);
+#endif
 
     /* now run the tests */
     sel4test_run_tests(&env);

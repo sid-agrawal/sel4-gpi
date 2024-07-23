@@ -37,7 +37,11 @@ message CpuSuspendMessage {
 
 message CpuReadRegistersMessage {
     /* No content */
-}
+};
+
+message CpuDisconnectMessage {
+    /* No content */
+};
 
 message CpuMessage {
     oneof msg {
@@ -49,6 +53,7 @@ message CpuMessage {
         CpuSuspendMessage suspend = 6;
         CpuConfigMessage config = 7;
         CpuReadRegistersMessage read_reg = 8;
+        CpuDisconnectMessage disconnect = 9;
     };
 };
 

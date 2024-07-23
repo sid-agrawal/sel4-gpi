@@ -54,6 +54,25 @@ int ads_component_client_connect(seL4_CPtr server_ep_cap,
     return error;
 }
 
+int ads_client_disconnect(ads_client_context_t *conn)
+{
+    OSDB_PRINTF("Sending disconnect request to ADS component\n");
+
+    int error = 0;
+
+    AdsMessage msg = {
+        .which_msg = AdsMessage_disconnect_tag,
+    };
+
+    AdsReturnMessage ret_msg;
+
+    error = sel4gpi_rpc_call(&rpc_env, conn->ep, (void *)&msg,
+                             0, NULL, (void *)&ret_msg);
+    error |= ret_msg.errorCode;
+
+    return error;
+}
+
 int ads_client_attach(ads_client_context_t *conn,
                       void *vaddr,
                       mo_client_context_t *mo_cap,

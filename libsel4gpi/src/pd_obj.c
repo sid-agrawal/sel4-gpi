@@ -591,8 +591,14 @@ void pd_destroy(pd_t *pd, vka_t *server_vka, vspace_t *server_vspace)
     /* decrement the refcount of the PD's binded ADS and CPU */
     // This should destroy the CPU, if this is the only PD using it
     // Then the TCB is destroyed, including the internal copies of IPC frame cap and fault endpoint cap
-    resource_component_dec(get_cpu_component(), pd->shared_data->cpu_conn.id);
-    resource_component_dec(get_ads_component(), pd->shared_data->ads_conn.id);
+    if (pd->shared_data->cpu_conn.id)
+    {
+        resource_component_dec(get_cpu_component(), pd->shared_data->cpu_conn.id);
+    }
+    if (pd->shared_data->ads_conn.id)
+    {
+        resource_component_dec(get_ads_component(), pd->shared_data->ads_conn.id);
+    }
 
     /* destroy the cnode */
     vka_t *vka = server_vka;

@@ -341,6 +341,33 @@ err_goto:
     reply_msg->errorCode = error;
 }
 
+static void handle_disconnect_req(seL4_Word sender_badge,
+                                  CpuDisconnectMessage *msg,
+                                  CpuReturnMessage *reply_msg)
+{
+    OSDB_PRINTF("Got disconnect request from Client: ");
+    BADGE_PRINT(sender_badge);
+
+    int error = 0;
+
+    uint64_t cpu_id = get_object_id_from_badge(sender_badge);
+
+    /* Find the PD */
+    pd_component_registry_entry_t *pd_data =
+        pd_component_registry_get_entry_by_id(get_client_id_from_badge(sender_badge));
+    SERVER_GOTO_IF_COND(pd_data == NULL, "Couldn't find PD (%ld)\n", get_client_id_from_badge(sender_badge));
+
+    /* Remove the MO from the client CPU */
+    error = pd_remove_resource(&pd_data->pd, make_res_id(GPICAP_TYPE_CPU, get_cpu_component()->space_id, cpu_id));
+    SERVER_GOTO_IF_ERR(error, "Failed to remove MO from PD\n");
+
+    // This will reduce the refcount of the CPU, and then it will be deleted if necessary
+
+err_goto:
+    reply_msg->which_msg = CpuReturnMessage_basic_tag;
+    reply_msg->errorCode = error;
+}
+
 static void cpu_component_handle(void *msg_p,
                                  seL4_Word sender_badge,
                                  seL4_CPtr received_cap,
@@ -383,6 +410,9 @@ static void cpu_component_handle(void *msg_p,
             break;
         case CpuMessage_suspend_tag:
             handle_suspend_req(sender_badge, reply_msg, should_reply);
+            break;
+        case CpuMessage_disconnect_tag:
+            handle_disconnect_req(sender_badge, &msg->msg.disconnect, reply_msg);
             break;
         default:
             SERVER_GOTO_IF_COND(1, "Unknown request received: %d\n", msg->which_msg);

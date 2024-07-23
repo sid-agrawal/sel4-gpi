@@ -52,6 +52,25 @@ int cpu_component_client_connect(seL4_CPtr server_ep_cap,
     return error;
 }
 
+int cpu_component_client_disconnect(cpu_client_context_t *conn)
+{
+    OSDB_PRINTF("Sending disconnect request to CPU component\n");
+
+    int error = 0;
+
+    CpuMessage msg = {
+        .which_msg = CpuMessage_disconnect_tag,
+    };
+
+    CpuReturnMessage ret_msg;
+
+    error = sel4gpi_rpc_call(&rpc_env, conn->ep, (void *)&msg,
+                             0, NULL, (void *)&ret_msg);
+    error |= ret_msg.errorCode;
+
+    return error;
+}
+
 int cpu_client_config(cpu_client_context_t *cpu,
                       ads_client_context_t *ads,
                       pd_client_context_t *pd,

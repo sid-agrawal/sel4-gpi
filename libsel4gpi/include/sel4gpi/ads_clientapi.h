@@ -30,7 +30,7 @@ int ads_component_client_connect(seL4_CPtr server_ep_cap,
  * @param conn
  * @return int 0 on success, 1 on failure.
  */
-int ads_component_client_disconnect(ads_client_context_t *conn);
+int ads_client_disconnect(ads_client_context_t *conn);
 
 /**
  * Attach an MO to an ADS, and simultaneously reserve the VMR of the correct
