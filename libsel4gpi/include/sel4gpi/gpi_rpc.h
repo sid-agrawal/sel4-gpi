@@ -11,8 +11,8 @@
 
 typedef struct sel4gpi_rpc_env
 {
-    pb_msgdesc_t *request_desc; ///< Message description for this RPC protocol's requests
-    pb_msgdesc_t *reply_desc;   ///< Message description for this RPC protocol's replies
+    const pb_msgdesc_t *request_desc; ///< Message description for this RPC protocol's requests
+    const pb_msgdesc_t *reply_desc;   ///< Message description for this RPC protocol's replies
 } sel4gpi_rpc_env_t;
 
 /**
@@ -62,7 +62,7 @@ int sel4gpi_rpc_reply(sel4gpi_rpc_env_t *env, void *msg, seL4_MessageInfo_t *msg
 
 /**
  * Check if the first received cap has the given GPI type
- * 
+ *
  * @param type the expected type of the first cap
  * @return true if the received cap is the expected type, false otherwise
  */
@@ -70,7 +70,7 @@ bool sel4gpi_rpc_check_cap(gpi_cap_t type);
 
 /**
  * Check if the first 2 received caps have the given GPI types
- * 
+ *
  * @param type1 the expected type of the first cap
  * @param type2 the expected type of the second cap
  * @return true if the received caps have the expected types, false otherwise
@@ -79,7 +79,7 @@ bool sel4gpi_rpc_check_caps_2(gpi_cap_t type1, gpi_cap_t type2);
 
 /**
  * Check if the first 2 received caps have the given GPI types
- * 
+ *
  * @param type1 the expected type of the first cap
  * @param type2 the expected type of the second cap
  * @param type2 the expected type of the third cap
@@ -89,7 +89,7 @@ bool sel4gpi_rpc_check_caps_3(gpi_cap_t type1, gpi_cap_t type2, gpi_cap_t type3)
 
 /**
  * Prints an RPC request to standard output
- * 
+ *
  * @param env the RPC env
  * @param msg the message to print
  */

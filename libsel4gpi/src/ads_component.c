@@ -98,7 +98,7 @@ static int create_vmr_space(uint32_t client_id, resspc_component_registry_entry_
 
     /* Map the VMR space to the default MO space */
     error = resspc_component_map_space(space_entry->space.id, get_mo_component()->space_id);
-    SERVER_GOTO_IF_ERR(error, "Failed to map new VMR space (%d) to MO space (%d)\n",
+    SERVER_GOTO_IF_ERR(error, "Failed to map new VMR space (%d) to MO space (%ld)\n",
                        space_entry->space.id, get_mo_component()->space_id);
 
     OSDB_PRINTF("Added new VMR (%d) RDE to PD (%d)\n", space_entry->space.id, client_id);
@@ -176,7 +176,7 @@ static void handle_reserve_req(seL4_Word sender_badge,
 
     /* Find the PD */
     pd_component_registry_entry_t *pd_data = pd_component_registry_get_entry_by_id(client_id);
-    SERVER_GOTO_IF_COND(pd_data == NULL, "Couldn't find PD (%ld)\n", client_id);
+    SERVER_GOTO_IF_COND(pd_data == NULL, "Couldn't find PD (%d)\n", client_id);
 
     // Make the reservation
     // (XXX) Arya: add cacheable / rights to client api
@@ -207,7 +207,7 @@ static void handle_attach_req(seL4_Word sender_badge,
                               AdsAttachMessage *msg, AdsReturnMessage *reply_msg,
                               seL4_CPtr mo_cap)
 {
-    OSDB_PRINTF("Got attach request from client badge: ", sender_badge);
+    OSDB_PRINTF("Got attach request from client badge: ");
     BADGE_PRINT(sender_badge);
 
     int error = 0;
@@ -225,7 +225,7 @@ static void handle_attach_req(seL4_Word sender_badge,
 
     error = ads_component_attach(ads_id, mo_id, vmr_type, vaddr, &vaddr);
 
-    OSDB_PRINTF("Successfully reserved an ads region (%s) at %p and attached MO (%d).\n",
+    OSDB_PRINTF("Successfully reserved an ads region (%s) at %p and attached MO (%ld).\n",
                 human_readable_va_res_type(vmr_type), vaddr, mo_id);
 
     reply_msg->msg.attach.vaddr = (uint64_t)vaddr;
@@ -268,7 +268,7 @@ static void handle_attach_to_reserve_req(seL4_Word sender_badge,
 
     error = ads_attach_to_res(&ads_entry->ads, get_ads_component()->server_vka, reservation, offset, &mo_reg->mo);
 
-    OSDB_PRINTF("Successfully attached MO (%d) to ads region (%s, %p).\n",
+    OSDB_PRINTF("Successfully attached MO (%ld) to ads region (%s, %p).\n",
                 mo_id, human_readable_va_res_type(reservation->type), reservation->vaddr);
 
 err_goto:
@@ -375,7 +375,7 @@ static void handle_load_elf_request(seL4_Word sender_badge,
     error = ads_component_load_elf(&target_ads->ads, &target_pd->pd, msg->image_name, &entry_point);
     SERVER_GOTO_IF_ERR(error, "Load ELF failed\n");
 
-    reply_msg->msg.load_elf.entry_point = entry_point;
+    reply_msg->msg.load_elf.entry_point = (uint64_t) entry_point;
 
 err_goto:
     reply_msg->which_msg = AdsReturnMessage_load_elf_tag;
@@ -402,7 +402,7 @@ static void handle_get_res_request(seL4_Word sender_badge,
     attach_node_t *res = (attach_node_t *)linked_list_get_at_idx(found_res, 0);
     if (res)
     {
-        reply_msg->msg.get_res.vaddr = res->vaddr;
+        reply_msg->msg.get_res.vaddr = (uint64_t) res->vaddr;
         reply_msg->msg.get_res.num_pages = res->n_pages;
         reply_msg->msg.get_res.page_bits = res->page_bits;
     }

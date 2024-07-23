@@ -310,8 +310,8 @@ int ads_attach_to_res(ads_t *ads,
                         SIZE_BITS_TO_BYTES(mo->page_bits),
                         SIZE_BITS_TO_BYTES(reservation->page_bits));
 
-    OSDB_PRINTF("attaching mo (id %lu, pages: %d, page size: %zu)"
-                "to reservation(vaddr: %p, type: %s, pages: %d) offset %ld\n",
+    OSDB_PRINTF("attaching mo (id %u, pages: %u, page size: %zu)"
+                "to reservation(vaddr: %p, type: %s, pages: %u) offset %zu\n",
                 mo->id, mo->num_pages,
                 SIZE_BITS_TO_BYTES(mo->page_bits),
                 reservation->vaddr,
@@ -483,9 +483,11 @@ gpi_model_node_t *ads_dump_rr(ads_t *ads, model_state_t *ms, gpi_model_node_t *p
             // VMR is sometimes an implicit resource (eg. MO attached without reservation)
             // (XXX) Linh: we are casting the vaddr to a 4-byte int, which may not be enough bytes to display it
             //             we could increase the CSV string size to fit 8-byte object IDs
-            gpi_model_node_t *vmr_node = add_resource_node(ms,
-                                                           make_res_id(GPICAP_TYPE_VMR, ads->id, (uint32_t)res->vaddr),
-                                                           true);
+            // (XXX) Arya: I am using attach ID instead of vaddr as the object ID now to avoid this issue
+            gpi_model_node_t *vmr_node = add_resource_node(
+                ms,
+                make_res_id(GPICAP_TYPE_VMR, ads->id, (uint32_t)res->map_entry->gen.object_id),
+                true);
             add_edge(ms, GPI_EDGE_TYPE_SUBSET, vmr_node, ads_space_node);
             add_edge(ms, GPI_EDGE_TYPE_HOLD, pd_node, vmr_node);
             // set the VMR type, number of pages, and page size as extra data on the node
@@ -608,7 +610,7 @@ int ads_shallow_copy(vspace_t *loader,
      */
     SERVER_GOTO_IF_COND(src_attaches->count > 1 && cfg->dest_start != NULL,
                         "Specified a destination vaddr (%p) for a source VMR(%s, %p) with non-contiguous regions\n",
-                        human_readable_va_res_type(cfg->type), cfg->start, cfg->dest_start);
+                        cfg->dest_start, human_readable_va_res_type(cfg->type), cfg->start);
 
     for (linked_list_node_t *curr = src_attaches->head; curr != NULL; curr = curr->next)
     {
@@ -762,7 +764,7 @@ int ads_write_arguments(pd_t *pd,
     auxv[3].a_type = AT_PHENT;
     auxv[3].a_un.a_val = sizeof(Elf_Phdr);
     auxv[4].a_type = AT_SEL4_IPC_BUFFER_PTR;
-    auxv[4].a_un.a_val = ipc_buf_addr;
+    auxv[4].a_un.a_val = (uint64_t)ipc_buf_addr;
     auxv[5].a_type = AT_SEL4_TCB;
     auxv[5].a_un.a_val = seL4_CapNull; // Is it ok that we don't give the process access to its TCB?
 

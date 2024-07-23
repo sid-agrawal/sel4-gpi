@@ -86,7 +86,7 @@ int ads_client_attach(ads_client_context_t *conn,
     AdsMessage msg = {
         .which_msg = AdsMessage_attach_tag,
         .msg.attach = {
-            .vaddr = vaddr,
+            .vaddr = (uint64_t)vaddr,
             .type = vmr_type,
         }};
 
@@ -98,7 +98,7 @@ int ads_client_attach(ads_client_context_t *conn,
 
     if (!error)
     {
-        *ret_vaddr = ret_msg.msg.attach.vaddr;
+        *ret_vaddr = (void *)ret_msg.msg.attach.vaddr;
     }
 
     return error;
@@ -119,7 +119,7 @@ int ads_client_reserve(ads_client_context_t *conn,
     AdsMessage msg = {
         .which_msg = AdsMessage_reserve_tag,
         .msg.reserve = {
-            .vaddr = vaddr,
+            .vaddr = (uint64_t)vaddr,
             .type = vmr_type,
             .size = size,
             .page_bits = page_bits,
@@ -133,7 +133,7 @@ int ads_client_reserve(ads_client_context_t *conn,
 
     if (!error)
     {
-        *ret_vaddr = ret_msg.msg.reserve.vaddr;
+        *ret_vaddr = (void *)ret_msg.msg.reserve.vaddr;
         ret_conn->ep = ret_msg.msg.reserve.slot;
     }
 
@@ -172,7 +172,7 @@ int ads_client_rm(ads_client_context_t *conn, void *vaddr)
     AdsMessage msg = {
         .which_msg = AdsMessage_remove_tag,
         .msg.remove = {
-            .vaddr = vaddr,
+            .vaddr = (uint64_t)vaddr,
         }};
 
     AdsReturnMessage ret_msg;
@@ -200,8 +200,8 @@ int ads_client_shallow_copy(ads_client_context_t *src_ads, ads_client_context_t 
         .msg.shallow_copy = {
             .pages = vmr_cfg->region_pages,
             .type = (uint32_t)vmr_cfg->type,
-            .src_vaddr = vmr_cfg->start,
-            .dest_vaddr = vmr_cfg->dest_start,
+            .src_vaddr = (uint64_t)vmr_cfg->start,
+            .dest_vaddr = (uint64_t)vmr_cfg->dest_start,
         }};
 
     AdsReturnMessage ret_msg;
@@ -236,7 +236,7 @@ int ads_client_get_reservation(ads_client_context_t *ads, sel4utils_reservation_
     {
         if (ret_vaddr)
         {
-            *ret_vaddr = ret_msg.msg.get_res.vaddr;
+            *ret_vaddr = (void *)ret_msg.msg.get_res.vaddr;
         }
 
         if (ret_num_pages)
@@ -286,7 +286,7 @@ int ads_client_load_elf(ads_client_context_t *loadee_ads,
 
     if (!error)
     {
-        *ret_entry_point = ret_msg.msg.load_elf.entry_point;
+        *ret_entry_point = (void *)ret_msg.msg.load_elf.entry_point;
     }
 
     return error;

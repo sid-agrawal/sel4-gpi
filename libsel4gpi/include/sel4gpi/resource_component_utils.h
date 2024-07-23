@@ -104,8 +104,8 @@ int resource_component_initialize(
     vka_t *server_vka,
     vspace_t *server_vspace,
     seL4_CPtr server_ep,
-    pb_msgdesc_t *request_msgdesc,
-    pb_msgdesc_t *reply_msgdesc);
+    const pb_msgdesc_t *request_msgdesc,
+    const pb_msgdesc_t *reply_msgdesc);
 
 /**
  * Handle a message to a resource component
