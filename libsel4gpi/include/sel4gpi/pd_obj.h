@@ -135,7 +135,7 @@ typedef struct _pd
                                                             ///< should be bound to CPU
     seL4_CPtr badged_notification;                          ///< Badged version of notification, RT uses this one
     size_t cspace_size;                                     ///< Size bits of the root CNode
-    const char *name;                                       ///< This is for model extraction only
+    char *name;                                             ///< This is for model extraction only
     seL4_Word cnode_guard;                                  ///< cnode guard for this PD's cspace
     vka_t *pd_vka;                                          ///< Allocator for the PD's cspace
     char allocator_mem_pool[PD_ALLOCATOR_STATIC_POOL_SIZE]; ///< Memory pool to bootstrap the PD's VKA
@@ -382,7 +382,7 @@ void pd_destroy(pd_t *pd, vka_t *server_vka, vspace_t *server_vspace);
  * @param pd the target PD
  * @param image_name name of ELF image
  */
-void pd_set_name(pd_t *pd, const char *image_name);
+void pd_set_name(pd_t *pd, char *image_name);
 
 /**
  * @brief debug print of all the PD's resources

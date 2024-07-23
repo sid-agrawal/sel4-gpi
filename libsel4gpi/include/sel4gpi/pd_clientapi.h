@@ -17,7 +17,7 @@
 
 /**
  * @file Definition of the client API for interacting with the PD component
-*/
+ */
 
 #define PD_MAX_ARGC 8 // Should be the same as the length of the args array in the protobuf file
 
@@ -159,7 +159,7 @@ int pd_client_free_slot(pd_client_context_t *conn,
  * @return int 0 on success, -1 on failure.
  */
 int pd_client_clear_slot(pd_client_context_t *conn,
-                        seL4_CPtr slot);
+                         seL4_CPtr slot);
 
 /** RESOURCE SERVER PD OPERATIONS **/
 
@@ -198,7 +198,7 @@ int pd_client_map_resource(pd_client_context_t *conn,
 
 /**
  * For a resource server to check if there is any work the root task needs it to do
- * 
+ *
  * @param conn the resource server's pd connection
  * @param work this structure gets filled out with the return work
  * @return 0 on success, error otherwise
@@ -207,7 +207,7 @@ int pd_client_get_work(pd_client_context_t *conn, PdWorkReturnMessage *work);
 
 /**
  * @brief For a resource server to send a subgraph as a response to pd_client_get_work
- * 
+ *
  * @param conn the resource server's pd connection
  * @param mo_conn an MO containing the model subgraph
  * @param has_data true if including an MO, false if there is no data to send
@@ -229,12 +229,12 @@ void pd_client_exit(pd_client_context_t *conn, int code);
 
 /**
  * @brief Remove an RDE from a PD
- * 
+ *
  * @param conn the target PD's connection object
  * @param type the type of RDE to remove
  * @param space_id the space ID of the RDE to remove, or RESSPC_ID_NULL to remove all RDEs of the given type
  * @return 0 on success, error otherwise
-*/
+ */
 int pd_client_remove_rde(pd_client_context_t *conn, gpi_cap_t type, uint64_t space_id);
 
 /** MODEL EXTRACTION & BENCHMARKING **/
@@ -255,7 +255,7 @@ int pd_client_dump(pd_client_context_t *conn,
 #ifdef CONFIG_DEBUG_BUILD
 /**
  * @brief Assign a human-readable name to a PD, for debug / model extraction
- * 
+ *
  * @param conn the target PD's connection object
  * @param name the name to assign
  * @return 0 on success, error otherwise
@@ -263,6 +263,6 @@ int pd_client_dump(pd_client_context_t *conn,
 int pd_client_set_name(pd_client_context_t *conn, char *name);
 #endif
 
-void pd_client_bench_ipc(pd_client_context_t *conn,
-                         seL4_CPtr dummy_send_cap,
-                         bool cap_transfer);
+int pd_client_bench_ipc(pd_client_context_t *conn,
+                        seL4_CPtr dummy_send_cap,
+                        bool cap_transfer);

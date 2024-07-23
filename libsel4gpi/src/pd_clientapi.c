@@ -240,7 +240,7 @@ int pd_client_give_resource(pd_client_context_t *conn,
                             seL4_Word resource_id,
                             seL4_CPtr *dest)
 {
-    OSDB_PRINT_VERBOSE("Sending 'give resource' request to PD component: PD (%d), Space (%d), Object (%d)\n",
+    OSDB_PRINT_VERBOSE("Sending 'give resource' request to PD component: PD (%ld), Space (%ld), Object (%ld)\n",
                        recipient_id, res_space_id, resource_id);
 
     int error = 0;
@@ -391,7 +391,7 @@ int pd_client_remove_rde(pd_client_context_t *conn, gpi_cap_t type, uint64_t spa
     return error;
 }
 
-void pd_client_bench_ipc(pd_client_context_t *conn, seL4_CPtr dummy_send_cap, bool cap_transfer)
+int pd_client_bench_ipc(pd_client_context_t *conn, seL4_CPtr dummy_send_cap, bool cap_transfer)
 {
     OSDB_PRINTF("Sending 'bench IPC' request to PD component\n");
 
@@ -441,11 +441,11 @@ int pd_client_runtime_setup(pd_client_context_t *target_pd,
     PdMessage msg = {
         .which_msg = PdMessage_setup_tag,
         .msg.setup = {
-            .entry_point = entry_point,
-            .ipc_buf_addr = ipc_buf_addr,
+            .entry_point = (uint64_t)entry_point,
+            .ipc_buf_addr = (uint64_t)ipc_buf_addr,
             .setup_mode = setup_type,
-            .stack_top = stack_pos,
-            .osm_data_addr = osm_data_in_PD,
+            .stack_top = (uint64_t)stack_pos,
+            .osm_data_addr = (uint64_t)osm_data_in_PD,
             .args_count = argc,
         }};
     memcpy(msg.msg.setup.args, args, sizeof(seL4_Word) * argc);

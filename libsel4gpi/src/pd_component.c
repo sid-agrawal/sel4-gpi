@@ -115,7 +115,7 @@ static void handle_pd_allocation(seL4_Word sender_badge, PdReturnMessage *reply_
     SERVER_GOTO_IF_COND(!sel4gpi_rpc_check_cap(GPICAP_TYPE_MO), "Did not receive MO cap\n");
 
     /* Find the MO to use for PD's OSmosis data */
-    mo_component_registry_entry_t *osm_mo_entry =
+    mo_component_registry_entry_t *osm_mo_entry = (mo_component_registry_entry_t *)
         resource_component_registry_get_by_badge(get_mo_component(), seL4_GetBadge(0));
     SERVER_GOTO_IF_COND_BG(osm_mo_entry == NULL, seL4_GetBadge(0), "Failed to find MO for OSmosis data: ");
 
@@ -489,7 +489,7 @@ err_goto:
 
 static void handle_exit_req(seL4_Word sender_badge, PdExitMessage *msg)
 {
-    OSDB_PRINTF("Got exit request from client badge %lx, exit code %d\n", sender_badge, msg->exit_code);
+    OSDB_PRINTF("Got exit request from client badge %lx, exit code %ld\n", sender_badge, msg->exit_code);
     int error = 0;
 
     /* Find the target PD */
@@ -574,7 +574,7 @@ int pd_component_runtime_setup(pd_t *pd,
         if (!error)
         {
             SERVER_GOTO_IF_COND(argc == 0, "Setting up a guest requires at least one argument for the DTB\n");
-            error = cpu_set_guest_context(cpu, entry_point, (uintptr_t)args[0]);
+            error = cpu_set_guest_context(cpu, (uintptr_t)entry_point, (uintptr_t)args[0]);
         }
     }
     else
@@ -690,10 +690,10 @@ static void handle_get_work_req(seL4_Word sender_badge, PdGetWorkMessage *msg, P
 
     /* Find the target PD */
     pd_component_registry_entry_t *pd_data = pd_component_registry_get_entry_by_badge(sender_badge);
-    SERVER_GOTO_IF_COND(pd_data == NULL, "Failed to find PD (%d)\n", get_object_id_from_badge(sender_badge));
+    SERVER_GOTO_IF_COND(pd_data == NULL, "Failed to find PD (%ld)\n", get_object_id_from_badge(sender_badge));
 
     SERVER_GOTO_IF_COND(get_client_id_from_badge(sender_badge) != get_object_id_from_badge(sender_badge),
-                        "Invalid request for work from a different PD (%d)\n",
+                        "Invalid request for work from a different PD (%ld)\n",
                         get_client_id_from_badge(sender_badge));
 
     /* Return the next piece of work, if there is any */
@@ -719,7 +719,7 @@ static void handle_get_work_req(seL4_Word sender_badge, PdGetWorkMessage *msg, P
 
             for (int j = 0; j < n_work; j++)
             {
-                linked_list_pop_head(lists[i], &work_res);
+                linked_list_pop_head(lists[i], (void **)&work_res);
                 assert(work_res != NULL);
                 reply_msg->msg.work.space_ids[j] = work_res->res_id.space_id;
                 reply_msg->msg.work.object_ids[j] = work_res->res_id.object_id;
@@ -823,7 +823,7 @@ static void handle_set_name_req(seL4_Word sender_badge, PdSetNameMessage *msg, P
 
     /* Find the target PD */
     pd_component_registry_entry_t *pd_data = pd_component_registry_get_entry_by_badge(sender_badge);
-    SERVER_GOTO_IF_COND(pd_data == NULL, "Failed to find PD (%d)\n", get_object_id_from_badge(sender_badge));
+    SERVER_GOTO_IF_COND(pd_data == NULL, "Failed to find PD (%ld)\n", get_object_id_from_badge(sender_badge));
 
     /* Set the image name */
     pd_set_name(&pd_data->pd, msg->pd_name);
@@ -995,7 +995,7 @@ int pd_component_remove_resource_from_rt(gpi_res_id_t res_id)
     // Get the root task PD
     pd_component_registry_entry_t *pd_entry = pd_component_registry_get_entry_by_id(get_gpi_server()->rt_pd_id);
     SERVER_GOTO_IF_COND(pd_entry == NULL,
-                        "Couldn't find RT PD (%d) to remove resource \n",
+                        "Couldn't find RT PD (%ld) to remove resource \n",
                         get_gpi_server()->rt_pd_id);
 
     // Remove the resource from it

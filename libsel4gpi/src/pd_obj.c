@@ -324,12 +324,12 @@ static int pd_remove_rde_by_idx(pd_t *pd, rde_type_t type, int idx)
     cspacepath_t rde_ep_path;
     vka_cspace_make_path(pd->pd_vka, pd->shared_data->rde[type.type][idx].slot_in_PD, &rde_ep_path);
     error = vka_cnode_revoke(&rde_ep_path);
-    SERVER_GOTO_IF_ERR(error, "Failed to revoke RDE endpoint (slot %d) for PD (%d)\n", rde_ep_path.capPtr, pd->id);
+    SERVER_GOTO_IF_ERR(error, "Failed to revoke RDE endpoint (slot %ld) for PD (%d)\n", rde_ep_path.capPtr, pd->id);
     error = vka_cnode_delete(&rde_ep_path);
-    SERVER_GOTO_IF_ERR(error, "Failed to delete RDE endpoint (slot %d) for PD (%d)\n", rde_ep_path.capPtr, pd->id);
+    SERVER_GOTO_IF_ERR(error, "Failed to delete RDE endpoint (slot %ld) for PD (%d)\n", rde_ep_path.capPtr, pd->id);
 
     uint64_t space_id = pd->shared_data->rde[type.type][idx].space_id;
-    OSDB_PRINTF("Removed RDE of type %s, space %d from PD (%d)\n", cap_type_to_str(type.type), space_id, pd->id);
+    OSDB_PRINTF("Removed RDE of type %s, space %ld from PD (%d)\n", cap_type_to_str(type.type), space_id, pd->id);
 
     // Clear the entry
     pd->shared_data->rde[type.type][idx].space_id = RESSPC_ID_NULL;
@@ -363,7 +363,7 @@ int pd_remove_rde(pd_t *pd,
             found_entry = true;
 
             error = pd_remove_rde_by_idx(pd, type, i);
-            SERVER_GOTO_IF_ERR(error, "Failed to remove RDE[%d][%d] from PD (%d)\n", type, i, pd->id);
+            SERVER_GOTO_IF_ERR(error, "Failed to remove RDE[%lu][%d] from PD (%d)\n", type.type, i, pd->id);
 
             if (space_id != RESSPC_ID_NULL)
             {
@@ -567,7 +567,7 @@ void pd_destroy(pd_t *pd, vka_t *server_vka, vspace_t *server_vspace)
     if (pd->shared_data->cpu_conn.id)
     {
         error = cpu_component_stop(pd->shared_data->cpu_conn.id);
-        SERVER_GOTO_IF_ERR(error, "Failed to stop CPU (%d) while destroying PD (%d)\n",
+        SERVER_GOTO_IF_ERR(error, "Failed to stop CPU (%ld) while destroying PD (%d)\n",
                            pd->shared_data->cpu_conn.id, pd_id);
     }
 
@@ -582,7 +582,7 @@ void pd_destroy(pd_t *pd, vka_t *server_vka, vspace_t *server_vspace)
 
         // error = vka_cnode_copy(&reply_cap_path_in_rt, &reply_cap_path_in_pd, seL4_CanWrite);
         error = vka_cnode_move(&reply_cap_path_in_rt, &reply_cap_path_in_pd);
-        SERVER_GOTO_IF_ERR(error, "Failed to move reply cap (%d) while destroying PD (%d)\n",
+        SERVER_GOTO_IF_ERR(error, "Failed to move reply cap (%ld) while destroying PD (%d)\n",
                            pd->shared_data->reply_cap,
                            pd_id);
 
@@ -738,14 +738,14 @@ static int pd_setup_cspace(pd_t *pd, vka_t *vka)
 
     pd->shared_data->cspace_root = PD_CAP_ROOT;
     /* first slot is always 1, never allocate 0 as a cslot */
-    uint32_t cspace_next_free = 1;
+    uint64_t cspace_next_free = 1;
 
     /*  mint the cnode cap into the PD's cspace */
     cspacepath_t src;
     vka_cspace_make_path(vka, pd->cspace.cptr, &src);
     cspacepath_t dest = {.capPtr = cspace_next_free, .root = src.capPtr, .capDepth = pd->cspace_size};
     error = vka_cnode_mint(&dest, &src, seL4_AllRights, pd->cnode_guard);
-    SERVER_GOTO_IF_ERR(error, "Failed to mint PD %d's cnode into its cspace\n");
+    SERVER_GOTO_IF_ERR(error, "Failed to mint PD (%d)'s cnode into its cspace\n", pd->id);
     cspace_next_free++;
 
     /* Initialize a vka for the PD's cspace */
@@ -955,7 +955,7 @@ static int res_dump(pd_t *pd, model_state_t *ms, pd_hold_node_t *current_cap, gp
         {
             /* Add the PD Node */
             pd_component_registry_entry_t *pd_data = pd_component_registry_get_entry_by_id(current_cap->res_id.object_id);
-            SERVER_GOTO_IF_COND(pd_data == NULL, "Failed to find PD (%d) data\n", current_cap->res_id);
+            SERVER_GOTO_IF_COND(pd_data == NULL, "Failed to find PD (%d) data\n", current_cap->res_id.object_id);
 
             pd_dump_internal(&pd_data->pd, ms);
         }
@@ -996,7 +996,7 @@ static int res_dump(pd_t *pd, model_state_t *ms, pd_hold_node_t *current_cap, gp
 
             /* Add the subset edge */
             char space_id[CSV_MAX_STRING_SIZE];
-            get_resource_space_id(space_entry->space.resource_type, space_entry->space.id, &space_id);
+            get_resource_space_id(space_entry->space.resource_type, space_entry->space.id, space_id);
             add_edge_by_id(ms, GPI_EDGE_TYPE_SUBSET, res_node->id, space_id);
 
             /* Find the resource server */
@@ -1183,7 +1183,7 @@ void pd_debug_print_held(pd_t *pd)
     }
 }
 
-inline void pd_set_name(pd_t *pd, const char *image_name)
+inline void pd_set_name(pd_t *pd, char *image_name)
 {
     if (pd->name)
     {
