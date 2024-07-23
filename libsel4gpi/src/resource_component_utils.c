@@ -206,7 +206,19 @@ int resource_component_dec(resource_component_context_t *component,
     int error = 0;
 
     resource_component_registry_entry_t *reg_entry = resource_component_registry_get_by_id(component, object_id);
-    GOTO_IF_COND(reg_entry == NULL, "Couldn't find %s (%ld)\n", cap_type_to_str(component->resource_type), object_id);
+    if (reg_entry == NULL)
+    {
+        // an MO may have already been deleted during the ADS Resource Space deletion, but not yet
+        // removed from a PD's held registry, which causes it to not be found here, but that is fine,
+        // and is not an error
+        if (!component->resource_type == GPICAP_TYPE_MO)
+        {
+            OSDB_PRINTERR("Couldn't find %s (%ld)\n", cap_type_to_str(component->resource_type), object_id);
+            error = 1;
+        }
+
+        goto err_goto;
+    }
 
     OSDB_PRINTF("dec refcount %s (%d), new count %d\n",
                 cap_type_to_str(component->resource_type), object_id, reg_entry->gen.count - 1);

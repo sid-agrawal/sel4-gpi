@@ -36,7 +36,7 @@ int cpu_start(cpu_t *cpu)
 
 int cpu_stop(cpu_t *cpu)
 {
-    OSDB_PRINTF("cpu_start: stopping CPU (%d) at PC: 0x%lx\n", cpu->id, cpu->reg_ctx->pc);
+    OSDB_PRINTF("cpu_stop: stopping CPU (%d) at PC: 0x%lx\n", cpu->id, cpu->reg_ctx->pc);
     return seL4_TCB_Suspend(cpu->tcb.cptr);
 }
 

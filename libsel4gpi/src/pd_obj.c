@@ -561,6 +561,8 @@ void pd_destroy(pd_t *pd, vka_t *server_vka, vspace_t *server_vspace)
     OSDB_PRINTF("Destroying PD (%d, %s)\n", pd_id, pd->name);
     pd->deleting = true;
 
+    sync_mutex_lock(get_gpi_server()->mx);
+
     /* stop the PD's CPU, if not already stopped */
     if (pd->shared_data->cpu_conn.id)
     {
@@ -648,10 +650,8 @@ void pd_destroy(pd_t *pd, vka_t *server_vka, vspace_t *server_vspace)
     error = pd_component_resource_cleanup(make_res_id(GPICAP_TYPE_PD, get_pd_component()->space_id, pd_id));
     SERVER_GOTO_IF_ERR(error, "Failed to remove destroyed PD resource from other PDs\n");
 
-    return;
-
 err_goto:
-    OSDB_PRINTERR("Error while destroying PD (%d)\n", pd_id);
+    sync_mutex_unlock(get_gpi_server()->mx);
 }
 
 int pd_next_slot(pd_t *pd,

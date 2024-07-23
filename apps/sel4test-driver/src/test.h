@@ -114,6 +114,9 @@ struct driver_env
     /* test process */
     sel4utils_process_t test_process;
 
+    /* mutex for synchronization between the test driver and GPI server */
+    sync_mutex_t mx;
+
     /** FIELDS FOR OSMOSIS TEST **/
 
     /* OSmosis PD running the test executable */

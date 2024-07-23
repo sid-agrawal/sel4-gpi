@@ -19,6 +19,7 @@
 #include <vka/vka.h>
 #include <vspace/vspace.h>
 #include <sel4utils/process.h>
+#include <sync/mutex.h>
 #include <sel4gpi/ads_component.h>
 #include <sel4gpi/mo_component.h>
 #include <sel4gpi/pd_component.h>
@@ -55,13 +56,15 @@
  *                      spawning the server thread.
  * @param priority Server thread's priority.
  * @param server_endpoint Server thread's endpoint cap.
+ * @param mx an initialized and managed mutex for synchronization between the test driver and gpi server
  * @return seL4_Error value.
  */
 seL4_Error gpi_server_parent_spawn_thread(simple_t *parent_simple,
                                           vka_t *parent_vka,
                                           vspace_t *parent_vspace,
                                           uint8_t priority,
-                                          seL4_CPtr *server_endpoint);
+                                          seL4_CPtr *server_endpoint,
+                                          sync_mutex_t *mx);
 
 /*
 Context of the server
@@ -107,6 +110,8 @@ typedef struct _gpi_server_context
     model_state_t *model_state;       ///< Partial model state for a pending model extraction
     seL4_CPtr model_extraction_reply; ///< The reply cap for the pending model extraction
     int model_extraction_n_missing;   ///< Number of missing replies before model state is complete
+
+    sync_mutex_t *mx; ///< mutex for synchronization between the test driver and GPI server
 } gpi_server_context_t;
 
 /**

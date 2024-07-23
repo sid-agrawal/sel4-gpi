@@ -590,14 +590,20 @@ void *main_continued(void *arg UNUSED)
 
 /* Start core services */
 #ifdef GPI_SERVER_ENABLED
+    error = sync_mutex_new(&env.vka, &env.mx);
+    ZF_LOGE_IFERR(error, "Failed to allocation notification for mutex\n");
+
+    /* Start core services */
     printf(GPISERVP "Starting GPI server...\n");
     error = gpi_server_parent_spawn_thread(&env.simple,
                                            &env.vka,
                                            &env.vspace,
                                            GPI_SERVER_DEFAULT_PRIORITY,
-                                           &env.gpi_endpoint_in_parent);
+                                           &env.gpi_endpoint_in_parent,
+                                           &env.mx);
+    // printf(GPISERVP "Public EP is: %d\n", env.gpi_endpoint_in_parent);
+    // debug_cap_identify(GPISERVP, env.gpi_endpoint_in_parent);
 #endif
-
     /* now run the tests */
     sel4test_run_tests(&env);
 

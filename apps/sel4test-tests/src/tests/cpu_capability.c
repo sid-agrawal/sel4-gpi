@@ -36,7 +36,7 @@ extern __thread void *__sel4gpi_osm_data;
 static void test_thread(void *arg0, void *arg1, void *arg2)
 {
     bool is_osm_thread = (bool)arg0;
-    printf("In test thread, OSM thread? %d, %s: %lX, arg2: %ld\n",
+    printf("In test thread, OSM thread? %d, %s: %lX, arg2: %lX\n",
            is_osm_thread,
            is_osm_thread ? "CPU" : "TCB",
            (uint64_t)arg1,
@@ -45,8 +45,10 @@ static void test_thread(void *arg0, void *arg1, void *arg2)
 
     if (is_osm_thread)
     {
-        cpu_client_context_t self_cpu = sel4gpi_get_cpu_conn();
-        cpu_client_suspend(&self_cpu);
+        // cpu_client_context_t self_cpu = sel4gpi_get_cpu_conn();
+        // cpu_client_suspend(&self_cpu);
+        pd_client_context_t self_pd = sel4gpi_get_pd_conn();
+        pd_client_exit(&self_pd, 0);
     }
     else
     {
@@ -107,9 +109,7 @@ int test_osm_threads(env_t env)
     return sel4test_get_result();
 }
 
-// (XXX) Linh: this test current causes a memory leak with the thread-PD, since we have not
-// implemented a config option to clean up children PD when the parent PD exits
 DEFINE_TEST_OSM(GPITH002,
                 "Test Multiple Threads in PD",
                 test_osm_threads,
-                false);
+                true);

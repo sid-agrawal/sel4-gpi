@@ -623,7 +623,7 @@ void osm_tear_down(uintptr_t e)
 {
     int error;
     driver_env_t env = (driver_env_t)e;
-
+    cpu_component_stop(env->test_cpu->id);
     error = pd_component_terminate(env->test_pd->id);
     assert(error == 0);
 }

@@ -304,7 +304,7 @@ static int benchmark_pd_spawn_sel4utils(env_t env, sel4utils_process_t *sel4util
     return error;
 
 #if CONFIG_MAX_NUM_NODES > 1
-    seL4_TCB_GetAffinity_t affinity = seL4_TCB_GetAffinity(sel4utils_proc.thread.tcb.cptr);
+    seL4_TCB_GetAffinity_t affinity = seL4_TCB_GetAffinity(sel4utils_proc->thread.tcb.cptr);
     TEST_LOG("\naffinity: %ld", affinity.affinity);
 #endif
     // seL4_DebugNameThread(proc.thread.tcb.cptr, "bench");

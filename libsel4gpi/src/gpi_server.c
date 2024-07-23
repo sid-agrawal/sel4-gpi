@@ -27,6 +27,7 @@
 #include <sel4gpi/endpoint_component.h>
 #include <sel4gpi/badge_usage.h>
 #include <sel4gpi/debug.h>
+#include <sel4gpi/error_handle.h>
 
 // Defined for utility printing macros
 #define DEBUG_ID GPI_DEBUG
@@ -63,7 +64,8 @@ seL4_Error
 gpi_server_parent_spawn_thread(simple_t *parent_simple, vka_t *parent_vka,
                                vspace_t *parent_vspace,
                                uint8_t priority,
-                               seL4_CPtr *server_ep_cap)
+                               seL4_CPtr *server_ep_cap,
+                               sync_mutex_t *mx)
 {
     seL4_Error error;
     cspacepath_t parent_cspace_cspath;
@@ -87,6 +89,7 @@ gpi_server_parent_spawn_thread(simple_t *parent_simple, vka_t *parent_vka,
     get_gpi_server()->server_cspace = parent_cspace_cspath.root;
     get_gpi_server()->server_vspace = parent_vspace;
     get_gpi_server()->rt_pd_id = RT_PD_ID;
+    get_gpi_server()->mx = mx;
 
     /* Allocate the Endpoint that the server will be listening on. */
     error = vka_alloc_endpoint(parent_vka, &get_gpi_server()->server_ep_obj);
