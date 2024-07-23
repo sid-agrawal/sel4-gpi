@@ -32,9 +32,6 @@
 #include <fs_client.h>
 #include <ramdisk_client.h>
 
-// If true, run each test 50 times in one boot
-#define TEST_MULTIPLE 1
-
 // #define TEST_DEBUG
 
 #ifdef TEST_DEBUG
@@ -1092,7 +1089,7 @@ int benchmark_process_spawn_osm(env_t env)
     return sel4test_get_result();
 }
 
-#if TEST_MULTIPLE
+#ifdef GPI_BENCHMARK_MULTIPLE
 
 DEFINE_TEST_WITH_TYPE_MULTIPLE(GPIBM001,
                                "sel4utils basic bench",

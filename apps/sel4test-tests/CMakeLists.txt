@@ -60,6 +60,15 @@ set_property(
        " -Wl,-T ${linkerScript} -static -Wl,--build-id=none"
 )
 
+# Add cmake configuration options
+set(GPIBenchmarkMultiple ON CACHE BOOL "If true, run benchmark tests multiple times")
+
+if (GPIBenchmarkMultiple)
+    set(GPIBenchmarkDef "GPI_BENCHMARK_MULTIPLE")
+else()
+    set(GPIBenchmarkDef "GPI_BENCHMARK_SINGLE")
+endif()
+
 target_link_libraries(
     sel4test-tests
     PUBLIC
@@ -84,3 +93,6 @@ target_link_libraries(
         sqlite3
     PRIVATE sel4test-driver_Config
 )
+
+target_compile_options(sel4test-tests PUBLIC
+    "-D${GPIBenchmarkDef}")
