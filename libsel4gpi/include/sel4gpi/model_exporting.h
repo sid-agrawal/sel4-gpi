@@ -195,7 +195,7 @@ gpi_model_node_t *get_resource_space_node(model_state_t *model_state, gpi_cap_t 
  * @param extracted whether the dependent relations for this node has been extracted
  * @return The model node for the PD
  */
-gpi_model_node_t *add_pd_node(model_state_t *model_state, const char *pd_name, uint64_t pd_id, bool extracted);
+gpi_model_node_t *add_pd_node(model_state_t *model_state, char *pd_name, uint64_t pd_id, bool extracted);
 
 /**
  * Get a PD node from the model state

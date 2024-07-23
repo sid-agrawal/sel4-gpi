@@ -48,7 +48,7 @@ typedef struct sel4gpi_elf_region
     /* whether the region is executable, this is a separate field because it is not captured by seL4_CapRights_t*/
     bool executable;
     /* the address of the region in the source */
-    char *src;
+    const char *src;
     size_t src_size;
 } sel4gpi_elf_region_t;
 

@@ -14,8 +14,8 @@
  */
 
 int sel4gpi_rpc_env_init(sel4gpi_rpc_env_t *env,
-                         pb_msgdesc_t *request_desc,
-                         pb_msgdesc_t *reply_desc)
+                         const pb_msgdesc_t *request_desc,
+                         const pb_msgdesc_t *reply_desc)
 {
     env->request_desc = request_desc;
     env->reply_desc = reply_desc;

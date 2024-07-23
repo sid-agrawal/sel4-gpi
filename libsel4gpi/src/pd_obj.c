@@ -363,7 +363,7 @@ int pd_remove_rde(pd_t *pd,
             found_entry = true;
 
             error = pd_remove_rde_by_idx(pd, type, i);
-            SERVER_GOTO_IF_ERR(error, "Failed to remove RDE[%lu][%d] from PD (%d)\n", type.type, i, pd->id);
+            SERVER_GOTO_IF_ERR(error, "Failed to remove RDE[%u][%d] from PD (%d)\n", type.type, i, pd->id);
 
             if (space_id != RESSPC_ID_NULL)
             {

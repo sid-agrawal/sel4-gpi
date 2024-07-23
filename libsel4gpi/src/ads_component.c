@@ -58,7 +58,8 @@ static void on_ads_registry_delete(resource_registry_node_t *node_gen, void *arg
     // Destroy the VMR space with the ADS object
     int error = resource_component_dec(get_resspc_component(), node->ads.id);
 
-    if (error) {
+    if (error)
+    {
         OSDB_PRINTWARN("Failed to destroy VMR space while destroying ADS (%d)\n", node->ads.id);
     }
 
@@ -335,7 +336,7 @@ int ads_component_load_elf(ads_t *ads, pd_t *target_pd, char *image_name, void *
     // Find root task's ADS
     ads_component_registry_entry_t *root_ads = (ads_component_registry_entry_t *)
         resource_component_registry_get_by_id(get_ads_component(), get_gpi_server()->rt_ads_id);
-    SERVER_GOTO_IF_COND(root_ads == NULL, "Couldn't find root task ADS (%ld)\n",
+    SERVER_GOTO_IF_COND(root_ads == NULL, "Couldn't find root task ADS (%d)\n",
                         get_gpi_server()->rt_ads_id);
 
     // Load the ELF
@@ -375,7 +376,7 @@ static void handle_load_elf_request(seL4_Word sender_badge,
     error = ads_component_load_elf(&target_ads->ads, &target_pd->pd, msg->image_name, &entry_point);
     SERVER_GOTO_IF_ERR(error, "Load ELF failed\n");
 
-    reply_msg->msg.load_elf.entry_point = (uint64_t) entry_point;
+    reply_msg->msg.load_elf.entry_point = (uint64_t)entry_point;
 
 err_goto:
     reply_msg->which_msg = AdsReturnMessage_load_elf_tag;
@@ -402,7 +403,7 @@ static void handle_get_res_request(seL4_Word sender_badge,
     attach_node_t *res = (attach_node_t *)linked_list_get_at_idx(found_res, 0);
     if (res)
     {
-        reply_msg->msg.get_res.vaddr = (uint64_t) res->vaddr;
+        reply_msg->msg.get_res.vaddr = (uint64_t)res->vaddr;
         reply_msg->msg.get_res.num_pages = res->n_pages;
         reply_msg->msg.get_res.page_bits = res->page_bits;
     }
@@ -417,8 +418,8 @@ err_goto:
 }
 
 static void handle_disconnect_request(seL4_Word sender_badge,
-                                   AdsDisconnectMessage *msg,
-                                   AdsReturnMessage *reply_msg)
+                                      AdsDisconnectMessage *msg,
+                                      AdsReturnMessage *reply_msg)
 {
     OSDB_PRINTF("Got disconnect request from Client: ");
     BADGE_PRINT(sender_badge);

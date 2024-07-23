@@ -995,7 +995,7 @@ int pd_component_remove_resource_from_rt(gpi_res_id_t res_id)
     // Get the root task PD
     pd_component_registry_entry_t *pd_entry = pd_component_registry_get_entry_by_id(get_gpi_server()->rt_pd_id);
     SERVER_GOTO_IF_COND(pd_entry == NULL,
-                        "Couldn't find RT PD (%ld) to remove resource \n",
+                        "Couldn't find RT PD (%d) to remove resource \n",
                         get_gpi_server()->rt_pd_id);
 
     // Remove the resource from it

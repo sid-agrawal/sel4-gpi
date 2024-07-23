@@ -266,7 +266,8 @@ int sel4gpi_ads_configure(ads_config_t *cfg,
                     mo_client_context_t mo = {0};
                     void *vmr_addr = sel4gpi_get_vmr(&vmr_rde, vmr->region_pages, vmr->start, vmr->type,
                                                      vmr->page_bits ? vmr->page_bits : MO_PAGE_BITS, &mo);
-                    GOTO_IF_ERR(vmr_addr == NULL, "failed to allocate VMR (%s@%p)\n", vmr->type, vmr->start);
+                    GOTO_IF_ERR(vmr_addr == NULL, "failed to allocate VMR (%s@%p)\n",
+                                human_readable_va_res_type(vmr->type), vmr->start);
 
                     if (vmr->type == SEL4UTILS_RES_TYPE_IPC_BUF)
                     {

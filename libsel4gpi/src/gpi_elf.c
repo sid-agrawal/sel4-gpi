@@ -8,7 +8,6 @@
 
 #include <string.h>
 #include <sel4/sel4.h>
-#include <elf/elf.h>
 #include <vka/capops.h>
 #include <sel4utils/thread.h>
 #include <sel4utils/util.h>
@@ -42,7 +41,7 @@ static inline seL4_CapRights_t rights_from_elf(unsigned long permissions)
  * @param src_offset offset into the source file to start at
  * @param len length to write at the destination vaddr
  */
-static void copy_region(void *dest, char *src, size_t src_file_size, size_t src_offset, size_t len)
+static void copy_region(void *dest, const char *src, size_t src_file_size, size_t src_offset, size_t len)
 {
     size_t len_from_src = src_file_size - src_offset;
 

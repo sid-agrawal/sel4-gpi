@@ -56,11 +56,13 @@ static gpi_cap_t alloc_new_resource_type(char *name)
 gpi_cap_t get_resource_type_code(char *name)
 {
     // Check if the resource type already exists
-    for (resource_type_registry_entry_t *curr = registry->head; curr != NULL; curr = curr->gen.hh.next)
+    for (resource_registry_node_t *curr = registry->head; curr != NULL; curr = curr->hh.next)
     {
-        if (strcmp(name, curr->name) == 0)
+        resource_type_registry_entry_t *node = (resource_type_registry_entry_t *)curr;
+
+        if (strcmp(name, node->name) == 0)
         {
-            return (gpi_cap_t)curr->gen.object_id;
+            return (gpi_cap_t)node->gen.object_id;
         }
     }
 

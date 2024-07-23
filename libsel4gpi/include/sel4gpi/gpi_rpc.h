@@ -23,8 +23,8 @@ typedef struct sel4gpi_rpc_env
  * @param reply_desc generated message description for this RPC protocol's replies
  */
 int sel4gpi_rpc_env_init(sel4gpi_rpc_env_t *client,
-                         pb_msgdesc_t *request_desc,
-                         pb_msgdesc_t *reply_desc);
+                         const pb_msgdesc_t *request_desc,
+                         const pb_msgdesc_t *reply_desc);
 
 /**
  * Send a message to an RPC server

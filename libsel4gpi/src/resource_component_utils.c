@@ -1,5 +1,3 @@
-#pragma once
-
 #include <vka/object.h>
 #include <vka/capops.h>
 
@@ -191,7 +189,7 @@ int resource_component_inc(resource_component_context_t *component,
     resource_component_registry_entry_t *reg_entry = resource_component_registry_get_by_id(component, object_id);
     GOTO_IF_COND(reg_entry == NULL, "Couldn't find %s (%ld)\n", cap_type_to_str(component->resource_type), object_id);
 
-    OSDB_PRINTF("inc refcount %s (%d), new count %d\n",
+    OSDB_PRINTF("inc refcount %s (%ld), new count %d\n",
                 cap_type_to_str(component->resource_type), object_id, reg_entry->gen.count + 1);
 
     resource_registry_inc(&component->registry, (resource_registry_node_t *)reg_entry);
@@ -220,7 +218,7 @@ int resource_component_dec(resource_component_context_t *component,
         goto err_goto;
     }
 
-    OSDB_PRINTF("dec refcount %s (%d), new count %d\n",
+    OSDB_PRINTF("dec refcount %s (%ld), new count %d\n",
                 cap_type_to_str(component->resource_type), object_id, reg_entry->gen.count - 1);
 
     resource_registry_dec(&component->registry, (resource_registry_node_t *)reg_entry);
@@ -237,7 +235,7 @@ int resource_component_delete(resource_component_context_t *component,
     resource_component_registry_entry_t *reg_entry = resource_component_registry_get_by_id(component, object_id);
     GOTO_IF_COND(reg_entry == NULL, "Couldn't find %s (%ld)\n", cap_type_to_str(component->resource_type), object_id);
 
-    OSDB_PRINTF("delete object %s (%d)\n", cap_type_to_str(component->resource_type), object_id);
+    OSDB_PRINTF("delete object %s (%ld)\n", cap_type_to_str(component->resource_type), object_id);
 
     resource_registry_delete(&component->registry, (resource_registry_node_t *)reg_entry);
 
@@ -250,7 +248,7 @@ void resource_component_debug_print(resource_component_context_t *component)
     resource_registry_node_t *curr;
     for (curr = component->registry.head; curr != NULL; curr = curr->hh.next)
     {
-        printf(" - %s (%d), refcount %d\n", cap_type_to_str(component->resource_type), curr->object_id, curr->count);
+        printf(" - %s (%ld), refcount %d\n", cap_type_to_str(component->resource_type), curr->object_id, curr->count);
     }
 }
 

@@ -176,7 +176,8 @@ int resource_server_main(void *context_v)
         received_cap_path.capDepth);
 
     // Send our space ID to the parent process
-    RESOURCE_SERVER_PRINTF("Messaging parent process at slot %d, sending space ID %d\n", (int)context->parent_ep.raw_endpoint, context->default_space.id);
+    RESOURCE_SERVER_PRINTF("Messaging parent process at slot %ld, sending space ID %ld\n",
+                           context->parent_ep.raw_endpoint, context->default_space.id);
     tag = seL4_MessageInfo_new(0, 0, 0, 1);
     seL4_SetMR(0, context->default_space.id);
     seL4_Send(context->parent_ep.raw_endpoint, tag);
@@ -205,12 +206,12 @@ int resource_server_main(void *context_v)
         char unwrapped_str[100];
         badge_sprint(unwrapped_str, seL4_GetBadge(0));
 
-        RESOURCE_SERVER_PRINTF("Message on endpoint %p\n", seL4_GetCapPaddr(context->server_ep.raw_endpoint));
+        RESOURCE_SERVER_PRINTF("Message on endpoint 0x%lx\n", seL4_GetCapPaddr(context->server_ep.raw_endpoint));
         RESOURCE_SERVER_PRINTF("- sender badge: %s\n", sender_badge_str);
-        RESOURCE_SERVER_PRINTF("- extracaps %d, capsunwrapped %d\n",
+        RESOURCE_SERVER_PRINTF("- extracaps %lu, capsunwrapped %lu\n",
                                seL4_MessageInfo_get_extraCaps(tag), seL4_MessageInfo_get_capsUnwrapped(tag));
 #if CONFIG_DEBUG_BUILD
-        RESOURCE_SERVER_PRINTF("- Received cap: type %d addr %p\n",
+        RESOURCE_SERVER_PRINTF("- Received cap: type %u addr 0x%lx\n",
                                seL4_DebugCapIdentify(received_cap_path.capPtr),
                                seL4_GetCapPaddr(received_cap_path.capPtr));
 #endif
@@ -232,7 +233,7 @@ int resource_server_main(void *context_v)
                 RESOURCE_SERVER_PRINTF("Got some work from RT\n");
                 if (context->debug_print)
                 {
-                    pb_pretty_print(&PdWorkReturnMessage_msg, (void *) &work);
+                    pb_pretty_print(&PdWorkReturnMessage_msg, (void *)&work);
                 }
 
                 if (work.action != PdWorkAction_NO_WORK)

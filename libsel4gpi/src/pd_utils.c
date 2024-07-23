@@ -218,9 +218,9 @@ static void *get_vmr(ads_client_context_t *vmr_rde,
     void *new_vaddr;
     error = ads_client_attach(vmr_rde, vaddr, &mo, vmr_type, &new_vaddr);
     GOTO_IF_ERR(error, "failed to attach MO\n");
-    WARN_IF_COND(vaddr && (new_vaddr != vaddr), "ADS attached vaddr (%lx) differs from requested (%lx)\n",
+    WARN_IF_COND(vaddr && (new_vaddr != vaddr), "ADS attached vaddr (%p) differs from requested (%p)\n",
                  new_vaddr, vaddr);
-    WARN_IF_COND(paddr && vaddr && (paddr == (uintptr_t)vaddr) && (new_vaddr != (uintptr_t)paddr),
+    WARN_IF_COND(paddr && vaddr && (paddr == (uintptr_t)vaddr) && ((uintptr_t)new_vaddr != paddr),
                  "Identity mapping failed\n");
 
     if (ret_mo)
