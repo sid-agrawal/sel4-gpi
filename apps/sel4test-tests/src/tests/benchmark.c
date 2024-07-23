@@ -724,7 +724,7 @@ static int benchmark_cpu_bind_sel4utils(env_t env, vka_object_t *tcb,
     // Bind cpu
     SEL4BENCH_READ_CCNT(cpu_bind_start);
     error = seL4_TCB_Configure(tcb->cptr, fault_ep_dest.capPtr, cspace_root,
-                               0, vspace_root, 0, ipc_buf_vaddr, ipc_buf_frame);
+                               0, vspace_root, 0, (seL4_Word) ipc_buf_vaddr, ipc_buf_frame);
     SEL4BENCH_READ_CCNT(cpu_bind_end);
     test_error_eq(error, 0);
 
@@ -754,7 +754,7 @@ static int benchmark_cpu_bind_osm(cpu_client_context_t *cpu, ads_client_context_
 
     // Bind CPU
     SEL4BENCH_READ_CCNT(cpu_bind_start);
-    error = cpu_client_config(cpu, ads, pd, ipc_buf_mo, 0, fault_ep_in_pd, ipc_buf_vaddr);
+    error = cpu_client_config(cpu, ads, pd, ipc_buf_mo, 0, fault_ep_in_pd, (seL4_Word) ipc_buf_vaddr);
     test_error_eq(error, 0);
     SEL4BENCH_READ_CCNT(cpu_bind_end);
 

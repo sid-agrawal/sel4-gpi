@@ -97,7 +97,8 @@ static int start_hello(hello_mode_t mode, uint32_t n_client_requests, pd_client_
     if (mode == HELLO_CLEANUP_TOY_BLOCK_SERVER_MODE)
     {
         // Start the server with the resource server utility function
-        error = start_resource_server_pd_args(0, 0, HELLO_CLEANUP_APP, &mode, 1,
+        error = start_resource_server_pd_args(0, 0, HELLO_CLEANUP_APP,
+                                              (seL4_Word *)&mode, 1,
                                               &hello_pd->ep, &toy_block_space_id);
 
         test_assert(error == 0);
@@ -108,7 +109,8 @@ static int start_hello(hello_mode_t mode, uint32_t n_client_requests, pd_client_
     else if (mode == HELLO_CLEANUP_TOY_FILE_SERVER_MODE)
     {
         // Start the server with the resource server utility function
-        error = start_resource_server_pd_args(toy_block_type, toy_block_space_id, HELLO_CLEANUP_APP, &mode, 1,
+        error = start_resource_server_pd_args(toy_block_type, toy_block_space_id, HELLO_CLEANUP_APP,
+                                              (seL4_Word *)&mode, 1,
                                               &hello_pd->ep, &toy_file_space_id);
 
         test_assert(error == 0);
@@ -119,7 +121,8 @@ static int start_hello(hello_mode_t mode, uint32_t n_client_requests, pd_client_
     else if (mode == HELLO_CLEANUP_TOY_DB_SERVER_MODE)
     {
         // Start the server with the resource server utility function
-        error = start_resource_server_pd_args(toy_file_type, toy_file_space_id, HELLO_CLEANUP_APP, &mode, 1,
+        error = start_resource_server_pd_args(toy_file_type, toy_file_space_id, HELLO_CLEANUP_APP,
+                                              (seL4_Word *)&mode, 1,
                                               &hello_pd->ep, &toy_db_space_id);
 
         test_assert(error == 0);
@@ -256,7 +259,7 @@ int test_cleanup_policy_1(env_t env)
 
     if (error != seL4_NoError)
     {
-        printf("WARNING: Failed to cleanup hello-client PD (%d), "
+        printf("WARNING: Failed to cleanup hello-client PD (%ld), "
                "this may be expected if the cleanup policy already destroyed it. \n",
                hello_client_pd.id);
     }
@@ -385,7 +388,7 @@ int test_cleanup_policy_2(env_t env)
 
     if (error != seL4_NoError)
     {
-        printf("WARNING: Failed to cleanup hello-server-toy_file PD (%d), "
+        printf("WARNING: Failed to cleanup hello-server-toy_file PD (%ld), "
                "this may be expected if the cleanup policy already destroyed it. \n",
                hello_server_toy_file_pd.id);
     }
@@ -394,7 +397,7 @@ int test_cleanup_policy_2(env_t env)
 
     if (error != seL4_NoError)
     {
-        printf("WARNING: Failed to cleanup hello-client-toy_block PD (%d), "
+        printf("WARNING: Failed to cleanup hello-client-toy_block PD (%ld), "
                "this may be expected if the cleanup policy already destroyed it. \n",
                hello_client_toy_block_pd.id);
     }
@@ -403,7 +406,7 @@ int test_cleanup_policy_2(env_t env)
 
     if (error != seL4_NoError)
     {
-        printf("WARNING: Failed to cleanup hello-client-toy_file PD (%d), "
+        printf("WARNING: Failed to cleanup hello-client-toy_file PD (%ld), "
                "this may be expected if the cleanup policy already destroyed it. \n",
                hello_client_toy_file_pd.id);
     }
@@ -510,7 +513,7 @@ int test_cleanup_policy_3(env_t env)
 
     if (error != seL4_NoError)
     {
-        printf("WARNING: Failed to cleanup hello-server-toy_file PD (%d), "
+        printf("WARNING: Failed to cleanup hello-server-toy_file PD (%ld), "
                "this may be expected if the cleanup policy already destroyed it. \n",
                hello_server_toy_file_pd.id);
     }
@@ -519,7 +522,7 @@ int test_cleanup_policy_3(env_t env)
 
     if (error != seL4_NoError)
     {
-        printf("WARNING: Failed to cleanup hello-server-toy_db PD (%d), "
+        printf("WARNING: Failed to cleanup hello-server-toy_db PD (%ld), "
                "this may be expected if the cleanup policy already destroyed it. \n",
                hello_server_toy_db_pd.id);
     }
@@ -528,7 +531,7 @@ int test_cleanup_policy_3(env_t env)
 
     if (error != seL4_NoError)
     {
-        printf("WARNING: Failed to cleanup hello-client-toy_block PD (%d), "
+        printf("WARNING: Failed to cleanup hello-client-toy_block PD (%ld), "
                "this may be expected if the cleanup policy already destroyed it. \n",
                hello_client_toy_block_pd.id);
     }
@@ -537,7 +540,7 @@ int test_cleanup_policy_3(env_t env)
 
     if (error != seL4_NoError)
     {
-        printf("WARNING: Failed to cleanup hello-client-toy_file PD (%d), "
+        printf("WARNING: Failed to cleanup hello-client-toy_file PD (%ld), "
                "this may be expected if the cleanup policy already destroyed it. \n",
                hello_client_toy_file_pd.id);
     }
@@ -546,7 +549,7 @@ int test_cleanup_policy_3(env_t env)
 
     if (error != seL4_NoError)
     {
-        printf("WARNING: Failed to cleanup hello-client-toy_db PD (%d), "
+        printf("WARNING: Failed to cleanup hello-client-toy_db PD (%ld), "
                "this may be expected if the cleanup policy already destroyed it. \n",
                hello_client_toy_db_pd.id);
     }

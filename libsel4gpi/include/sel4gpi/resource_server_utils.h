@@ -104,8 +104,8 @@ int resource_server_start(resource_server_context_t *context,
                           uint64_t parent_pd_id,
                           int (*init_fn)(),
                           bool debug_print,
-                          pb_msgdesc_t *request_desc,
-                          pb_msgdesc_t *reply_desc);
+                          const pb_msgdesc_t *request_desc,
+                          const pb_msgdesc_t *reply_desc);
 
 /**
  * Main function for a resource server, receives requests

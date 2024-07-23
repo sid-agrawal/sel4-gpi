@@ -487,7 +487,7 @@ void xv6fs_request_handler(void *msg_p,
           resource_registry_delete(&get_xv6fs_server()->file_registry, (resource_registry_node_t *)reg_entry);
 
           // Delete the resource
-          error = resspc_client_delete_resource(&get_xv6fs_server()->gen.default_space.id, inum);
+          error = resspc_client_delete_resource(&get_xv6fs_server()->gen.default_space, (seL4_Word) inum);
           CHECK_ERROR_GOTO(error, "Failed to delete file resource in global namespace", FsError_UNKNOWN, done);
         }
         // If there is no reg entry, then there is no resource to delete

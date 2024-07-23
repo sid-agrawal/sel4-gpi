@@ -139,7 +139,7 @@ int toy_work_handler(
             for (int i = 0; i < work->object_ids_count; i++)
             {
                 uint32_t toy_id = work->object_ids[i];
-                PRINTF2("Get rr for toy #%ld\n", toy_id);
+                PRINTF2("Get rr for toy #%d\n", toy_id);
 
                 if (toy_id == BADGE_OBJ_ID_NULL)
                 {
