@@ -247,7 +247,7 @@ static void handle_create_resource_request(seL4_Word sender_badge,
 
     gpi_cap_t resource_type = space_entry->space.resource_type;
 
-    OSDB_PRINTF("resource server %ld creates resource in space %ld with ID %ld\n",
+    OSDB_PRINTF("resource server %d creates resource in space %d with ID %ld\n",
                 server_pd->pd.id, space_entry->space.id, res_id);
 
     // Resource does not exist as a cap anywhere yet
@@ -275,7 +275,7 @@ static void handle_delete_resource_request(seL4_Word sender_badge,
     SERVER_GOTO_IF_COND(space_entry == NULL, "Couldn't find resource space (%ld)\n", space_id);
     gpi_cap_t resource_type = space_entry->space.resource_type;
 
-    OSDB_PRINTF("resource server %ld deletes resource in space %ld with ID %ld\n",
+    OSDB_PRINTF("resource server %ld deletes resource in space %d with ID %ld\n",
                 client_id, space_entry->space.id, res_id);
 
     // Remove the resource from all PDs
@@ -303,9 +303,9 @@ static void handle_revoke_resource_request(seL4_Word sender_badge,
 
     // Find the target PD
     pd_component_registry_entry_t *target_pd = pd_component_registry_get_entry_by_id(msg->target_pd_id);
-    SERVER_GOTO_IF_COND(target_pd == NULL, "Couldn't find resource server PD (%ld)\n", msg->target_pd_id);
+    SERVER_GOTO_IF_COND(target_pd == NULL, "Couldn't find resource server PD (%d)\n", msg->target_pd_id);
 
-    OSDB_PRINTF("resource server %ld revokes resource in space %ld with ID %ld from PD (%d)\n",
+    OSDB_PRINTF("resource server %ld revokes resource in space %d with ID %ld from PD (%d)\n",
                 client_id, space_entry->space.id, res_id, msg->target_pd_id);
 
     // Remove the resource from all PDs
@@ -321,7 +321,7 @@ int resspc_component_map_space(uint64_t src_spc_id, uint64_t dest_spc_id)
 {
     int error = 0;
 
-    OSDB_PRINTF("Mapping resource space (%d) to resource space (%d)\n", src_spc_id, dest_spc_id);
+    OSDB_PRINTF("Mapping resource space (%ld) to resource space (%ld)\n", src_spc_id, dest_spc_id);
 
     // Find the source resource space
     resspc_component_registry_entry_t *src_space_entry = resource_space_get_entry_by_id(src_spc_id);
@@ -524,7 +524,7 @@ gpi_model_node_t *resspc_dump_rr(res_space_t *space, model_state_t *ms, gpi_mode
         {
             maps_to = (res_space_t *)curr->data;
 
-            get_resource_space_id(maps_to->resource_type, maps_to->id, &maps_to_id);
+            get_resource_space_id(maps_to->resource_type, maps_to->id, maps_to_id);
             add_edge_by_id(ms, GPI_EDGE_TYPE_MAP, space_node->id, maps_to_id);
         }
         space_node->extracted = true;
