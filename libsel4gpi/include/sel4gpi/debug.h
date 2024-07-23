@@ -22,7 +22,7 @@
 #define MESSAGE_DEBUG_ENABLED 0 // Separate toggle, prints all RPC messages to root task
 
 // selectively enable component debug e.g. (PD_DEBUG | ADS_DEBUG)
-#define OSDB_TOPIC (NO_DEBUG)
+#define OSDB_TOPIC (ALL_DEBUG)
 
 /** Debug levels */
 #define OSDB_VERBOSE 1

@@ -168,7 +168,7 @@ void mo_destroy(mo_t *mo, vka_t *server_vka)
 #ifdef CONFIG_DEBUG_BUILD
         if (!seL4_DebugCapIsLastCopy(mo->vka_objects[i].cptr))
         {
-            OSDB_PRINTERR("Freeing frame (%p) for MO (%d), cap (%d) is not last copy\n",
+            OSDB_PRINTERR("Freeing frame (%lx) for MO (%d), cap (%ld) is not last copy\n",
                           mo->frame_paddrs[i], mo->id, mo->vka_objects[i].cptr);
         }
 #endif
