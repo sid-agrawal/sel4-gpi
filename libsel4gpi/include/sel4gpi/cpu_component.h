@@ -86,7 +86,7 @@ int cpu_component_allocate(uint32_t client_id, cpu_t **ret_cpu, seL4_CPtr *ret_c
 int cpu_component_configure(cpu_t *cpu,
                             ads_t *ads,
                             pd_t *pd,
-                            seL4_Word cnode_guard,
+                            uint64_t cnode_guard,
                             seL4_CPtr fault_ep,
                             mo_t *ipc_buf_mo,
                             void *ipc_buf_addr);

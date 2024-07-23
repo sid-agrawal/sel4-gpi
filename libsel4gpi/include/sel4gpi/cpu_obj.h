@@ -28,13 +28,13 @@ typedef struct _cpu
     uint32_t id;
 
     vka_object_t tcb;          ///< the TCB object
-    seL4_Word ipc_buf_addr;    ///< address of the IPC buffer in the TCB's binded ADS
+    void *ipc_buf_addr;        ///< address of the IPC buffer in the TCB's binded ADS
     uint32_t ipc_buf_mo;       ///< ID of the IPC buffer's MO
     seL4_CPtr ipc_frame_cap;   ///< the frame cap for the IPC buffer
     uint64_t binded_ads_id;    ///< ID of the ADS that is binded to the TCB
     void *tls_base;            ///< address of the TLS base (currently unused)
     seL4_CPtr cspace;          ///< cap to the currently binded cspace
-    seL4_Word cspace_guard;    ///< guard of the currently binded cspace
+    uint64_t cspace_guard;     ///< guard of the currently binded cspace
     seL4_CPtr fault_ep;        ///< currently binded fault endpoint
     seL4_UserContext *reg_ctx; ///< TCB register values that are to be written, NOT the current values
     vka_object_t vcpu;         ///< VCPU object (only exists if CPU is elevated)
@@ -71,10 +71,10 @@ int cpu_config_vspace(cpu_t *cpu,
                       vka_t *vka,
                       vspace_t *vspace,
                       seL4_CNode root_cnode,
-                      seL4_Word cnode_guard,
+                      uint64_t cnode_guard,
                       seL4_CPtr fault_ep,
                       seL4_CPtr ipc_buffer_frame,
-                      seL4_Word ipc_buf_addr);
+                      void *ipc_buf_addr);
 
 /**
  * @brief Change the vspace of the CPU object

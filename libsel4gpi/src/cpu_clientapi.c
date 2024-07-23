@@ -181,7 +181,7 @@ int cpu_client_set_tls_base(cpu_client_context_t *cpu, void *tls_base)
     CpuMessage msg = {
         .which_msg = CpuMessage_tls_base_tag,
         .msg.tls_base = {
-            .tls_base_addr = tls_base,
+            .tls_base_addr = (uint64_t) tls_base,
         }};
 
     CpuReturnMessage ret_msg;

@@ -114,7 +114,7 @@ err_goto:
 int cpu_component_configure(cpu_t *cpu,
                             ads_t *ads,
                             pd_t *pd,
-                            seL4_Word cnode_guard,
+                            uint64_t cnode_guard,
                             seL4_CPtr fault_ep,
                             mo_t *ipc_buf_mo,
                             void *ipc_buf_addr)
@@ -143,7 +143,7 @@ int cpu_component_configure(cpu_t *cpu,
                               get_cpu_component()->server_vka,
                               ads->vspace,
                               cspace_root,
-                              cnode_guard,
+                              (uint64_t) cnode_guard,
                               fault_ep,
                               ipc_buf_frame,
                               ipc_buf_addr);
@@ -193,10 +193,10 @@ static void handle_config_req(seL4_Word sender_badge,
         &cpu_data->cpu,
         &ads_data->ads,
         &pd_data->pd,
-        msg->cnode_guard,
+        (uint64_t) msg->cnode_guard,
         msg->fault_ep_cap,
         &ipc_mo_data->mo,
-        msg->ipc_buf_addr);
+        (void *) msg->ipc_buf_addr);
 
 err_goto:
     reply_msg->which_msg = CpuReturnMessage_basic_tag;
@@ -403,7 +403,7 @@ static void cpu_component_handle(void *msg_p,
             handle_set_tls_req(sender_badge, &msg->msg.tls_base, reply_msg);
             break;
         case CpuMessage_elevate_privilege_tag:
-            handle_elevate_req(sender_badge, &msg->msg.start, reply_msg);
+            handle_elevate_req(sender_badge, &msg->msg.elevate_privilege, reply_msg);
             break;
         case CpuMessage_read_reg_tag:
             handle_read_registers_req(sender_badge, &msg->msg.read_reg, reply_msg);
@@ -472,7 +472,7 @@ int cpu_component_stop(uint32_t cpu_id)
     // Find the CPU
     cpu_component_registry_entry_t *cpu_data = (cpu_component_registry_entry_t *)
         resource_component_registry_get_by_id(get_cpu_component(), cpu_id);
-    SERVER_GOTO_IF_COND(cpu_data == NULL, "Couldn't find CPU (%ld)\n", cpu_id);
+    SERVER_GOTO_IF_COND(cpu_data == NULL, "Couldn't find CPU (%d)\n", cpu_id);
 
     // Stop the CPU
     error = cpu_stop(&cpu_data->cpu);

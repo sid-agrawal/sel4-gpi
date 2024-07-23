@@ -15,6 +15,7 @@
 #include <sel4utils/helpers.h>
 
 #include <sel4gpi/cpu_component.h>
+#include <sel4gpi/mo_component.h>
 #include <sel4gpi/cpu_obj.h>
 #include <sel4gpi/debug.h>
 #include <sel4gpi/model_exporting.h>
@@ -43,14 +44,14 @@ int cpu_stop(cpu_t *cpu)
 int cpu_config_vspace(cpu_t *cpu,
                       vka_t *vka,
                       vspace_t *vspace,
-                      seL4_CNode root_cnode,
+                      uint64_t root_cnode,
                       seL4_Word cnode_guard,
                       seL4_CPtr fault_ep,
                       seL4_CPtr ipc_buffer_frame,
-                      seL4_Word ipc_buf_addr)
+                      void *ipc_buf_addr)
 {
     int error = 0;
-    OSDB_PRINTF("Configuring CPU, cspace: %lx, cspace_guard: %lx, fault_ep: %lx, ipc_buf_addr: %lx, ipc_buf_frame: %lx\n",
+    OSDB_PRINTF("Configuring CPU, cspace: %lx, cspace_guard: %lx, fault_ep: %lx, ipc_buf_addr: %p, ipc_buf_frame: %ld\n",
                 root_cnode, cnode_guard, fault_ep, ipc_buf_addr, ipc_buffer_frame);
 
     seL4_CPtr vspace_root = vspace->get_root(vspace); // root page table
@@ -68,7 +69,7 @@ int cpu_config_vspace(cpu_t *cpu,
                                cnode_guard,
                                vspace_root,
                                0, // domain
-                               ipc_buf_addr,
+                               (seL4_Word) ipc_buf_addr,
                                ipc_buffer_frame);
     SERVER_GOTO_IF_ERR(error, "Failed to configure TCB\n");
 
@@ -93,7 +94,7 @@ int cpu_change_vspace(cpu_t *cpu,
                                cpu->cspace_guard,
                                vspace_root,
                                0, // domain
-                               cpu->ipc_buf_addr,
+                               (seL4_Word) cpu->ipc_buf_addr,
                                cpu->ipc_frame_cap);
 
 err_goto:
@@ -218,7 +219,7 @@ void cpu_destroy(cpu_t *cpu)
 int cpu_set_tls_base(cpu_t *cpu, void *tls_base, bool write_reg)
 {
     int error = 0;
-    OSDB_PRINTF("Setting TLS base (0x%lx) for CPU %d\n", tls_base, cpu->id);
+    OSDB_PRINTF("Setting TLS base (%p) for CPU %d\n", tls_base, cpu->id);
     cpu->tls_base = (void *)tls_base;
 
     error = sel4utils_arch_init_context_tls_base(cpu->reg_ctx, tls_base);
