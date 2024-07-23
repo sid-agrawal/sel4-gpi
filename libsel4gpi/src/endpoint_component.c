@@ -88,7 +88,7 @@ int ep_component_allocate(uint32_t client_pd,
     ep_component_registry_entry_t *ep_entry;
 
     pd_component_registry_entry_t *pd_data = pd_component_registry_get_entry_by_id(client_pd);
-    SERVER_GOTO_IF_COND(pd_data == NULL, "Couldn't find PD (%ld)\n", client_pd);
+    SERVER_GOTO_IF_COND(pd_data == NULL, "Couldn't find PD (%d)\n", client_pd);
 
     error = resource_component_allocate(get_ep_component(), client_pd, BADGE_OBJ_ID_NULL, false, NULL,
                                         (resource_registry_node_t **)&ep_entry, ret_badged_ep);
@@ -189,7 +189,7 @@ static void handle_forge_req(seL4_Word sender_badge, EpForgeMessage *msg,
                                         BADGE_OBJ_ID_NULL,
                                         true,
                                         NULL,
-                                        &new_entry,
+                                        (resource_registry_node_t **)&new_entry,
                                         &badged_ep);
 
     reply_msg->msg.alloc.slot = badged_ep;
