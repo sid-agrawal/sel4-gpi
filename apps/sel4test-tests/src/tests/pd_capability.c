@@ -67,7 +67,7 @@ int test_new_process_osmosis_shmem(env_t env)
     error = pd_client_send_cap(&runnable.pd, shared_mo.ep, &slot);
     test_error_eq(error, 0);
 
-#if DUMP_MODEL
+#if EXTRACT_MODEL
     error = pd_client_dump(&runnable.pd, NULL, 0);
     test_assert(error == 0);
 #endif
@@ -79,8 +79,8 @@ int test_new_process_osmosis_shmem(env_t env)
     sel4gpi_config_destroy(proc_cfg);
 
     // Cleanup the PD
-    printf("Attempting to clean up PD, ignore error since the PD may have exited already\n");
-    error = pd_client_terminate(&runnable.pd);
+    // printf("Attempting to clean up PD, ignore error since the PD may have exited already\n");
+    // error = pd_client_terminate(&runnable.pd);
     // Ignore error, PD may have exited before we terminate it
 
     return sel4test_get_result();

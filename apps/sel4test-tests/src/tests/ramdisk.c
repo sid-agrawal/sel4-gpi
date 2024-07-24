@@ -138,8 +138,9 @@ int test_ramdisk(env_t env)
     test_assert(error == seL4_NoError);
 
     // Print whole-pd model state
-    // error = pd_client_dump(&pd_conn, NULL, 0);
-
+#if EXTRACT_MODEL
+    error = pd_client_dump(&pd_conn, NULL, 0);
+#endif
     // Cleanup server
     pd_client_context_t ramdisk_pd_conn;
     ramdisk_pd_conn.ep = ramdisk_pd_cap;

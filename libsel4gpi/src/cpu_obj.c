@@ -240,7 +240,7 @@ int cpu_set_local_context(cpu_t *cpu, void *entry_point,
                           void *arg2, void *init_stack)
 {
     int error = 0;
-    OSDB_PRINTF("Setting local context with args: [%p, %p, %p]\n", arg0, arg1, arg2);
+    OSDB_PRINTF("Setting local context with args: [%p, %p, %p], init_stack: %p\n", arg0, arg1, arg2, init_stack);
     error = sel4utils_arch_init_local_context(entry_point, arg0, arg1, arg2, init_stack, cpu->reg_ctx);
     SERVER_GOTO_IF_ERR(error, "failed to set CPU context\n");
 
@@ -255,6 +255,9 @@ int cpu_set_remote_context(cpu_t *cpu, void *entry_point, void *init_stack)
     int error = 0;
     error = sel4utils_arch_init_context(entry_point, init_stack, cpu->reg_ctx);
     SERVER_GOTO_IF_ERR(error, "failed to set CPU context\n");
+
+    error = sel4utils_arch_set_context_type(OSM_PD, cpu->reg_ctx);
+    SERVER_GOTO_IF_ERR(error, "failed to set CPU context type\n");
 
     error = seL4_TCB_WriteRegisters(cpu->tcb.cptr, 0, 0, sizeof(seL4_UserContext) / sizeof(seL4_Word), cpu->reg_ctx);
     SERVER_GOTO_IF_ERR(error, "failed to write TCB registers\n");

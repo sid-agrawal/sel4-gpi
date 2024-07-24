@@ -40,7 +40,7 @@ typedef enum _kvstore_mode
 
 static void dump_model()
 {
-#if DUMP_MODEL
+#if EXTRACT_MODEL
     /* Print model state */
     pd_client_dump(&pd_conn, NULL, 0);
 #endif

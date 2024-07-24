@@ -67,7 +67,6 @@ int do_nothing(void)
 
 int main(int argc, char **argv)
 {
-    sel4gpi_set_exit_cb();
     printf("hello-cleanup main!\n");
     int error = 0;
 

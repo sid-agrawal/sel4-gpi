@@ -113,7 +113,7 @@ static int configure_separate_ads()
     error = sel4gpi_copy_data_to_mo(elf_data_va, elf_data_pages * SIZE_BITS_TO_BYTES(elf_page_bits), &elf_data_mo);
     GOTO_IF_ERR(error, "Failed to deep copy ELF data region\n");
 
-    error = sel4gpi_ads_configure(&other_ads_cfg, &runnable, NULL, NULL, NULL, NULL, NULL, NULL);
+    error = sel4gpi_ads_configure(&other_ads_cfg, &runnable, NULL, NULL);
     GOTO_IF_ERR(error, "Failed to configure other ADS\n");
     kvserv_ads = runnable.ads;
 

@@ -9,7 +9,7 @@
 #include <sel4gpi/pd_creation.h>
 #include <sel4gpi/pd_utils.h>
 
-void *sel4gpi_new_sized_stack(ads_client_context_t *ads_rde, size_t n_pages)
+void *sel4gpi_new_sized_stack(ads_client_context_t *ads_rde, size_t n_pages, mo_client_context_t *ret_mo)
 {
     int error = 0;
 
@@ -37,6 +37,11 @@ void *sel4gpi_new_sized_stack(ads_client_context_t *ads_rde, size_t n_pages)
     GOTO_IF_ERR(error, "failed to attach MO to reserved stack\n");
 
     uintptr_t stack_top = (uintptr_t)vaddr + res_size;
+
+    if (ret_mo)
+    {
+        *ret_mo = mo;
+    }
 
     return (void *)stack_top;
 
@@ -173,7 +178,7 @@ static int setup_tls_in_stack(void *dest_stack,
     *ret_sp = (void *)ALIGN_DOWN(tls_base, STACK_CALL_ALIGNMENT);
     *ret_tp = (void *)tp;
 
-    PD_CREATION_PRINT("tls base: %lx, tp: %lx, ipc_buf: %p\n", tls_base, tp, ipc_buffer_addr);
+    PD_CREATION_PRINT("stack: %lx, tls base: %lx, tp: %lx, ipc_buf: %p\n", dest_stack, tls_base, tp, ipc_buffer_addr);
 err_goto:
     return error;
 }
@@ -181,11 +186,7 @@ err_goto:
 int sel4gpi_ads_configure(ads_config_t *cfg,
                           sel4gpi_runnable_t *runnable,
                           mo_client_context_t *osm_data_mo,
-                          void **ret_stack,
-                          void **ret_ipc_buf,
-                          void **ret_entry_point,
-                          void **ret_osm_data,
-                          mo_client_context_t *ret_ipc_buf_mo)
+                          runtime_addrs_t *ret_runtime_addrs)
 {
     int error = 0;
     ads_client_context_t vmr_rde = {.ep = sel4gpi_get_rde_by_space_id(runnable->ads.id, GPICAP_TYPE_VMR)};
@@ -200,9 +201,9 @@ int sel4gpi_ads_configure(ads_config_t *cfg,
         error = ads_client_attach(&vmr_rde, NULL, osm_data_mo, SEL4UTILS_RES_TYPE_SHARED_FRAMES, &pd_osm_data);
         GOTO_IF_ERR(error, "Failed to attach OSmosis data MO to PD's ADS\n");
 
-        if (ret_osm_data)
+        if (ret_runtime_addrs)
         {
-            *ret_osm_data = pd_osm_data;
+            ret_runtime_addrs->osm_data = pd_osm_data;
         }
     }
 
@@ -244,10 +245,12 @@ int sel4gpi_ads_configure(ads_config_t *cfg,
                 else if (vmr->type == SEL4UTILS_RES_TYPE_STACK)
                 {
                     PD_CREATION_PRINT("Allocating stack (%zu pages)\n", vmr->region_pages);
-                    void *stack = sel4gpi_new_sized_stack(&vmr_rde, vmr->region_pages);
-                    if (ret_stack)
+                    mo_client_context_t mo = {0};
+                    void *stack = sel4gpi_new_sized_stack(&vmr_rde, vmr->region_pages, &mo);
+                    if (ret_runtime_addrs)
                     {
-                        *ret_stack = stack;
+                        ret_runtime_addrs->stack = stack;
+                        ret_runtime_addrs->stack_mo = mo;
                     }
                     GOTO_IF_ERR(stack == NULL, "failed to allocate a new stack");
                 }
@@ -271,14 +274,10 @@ int sel4gpi_ads_configure(ads_config_t *cfg,
 
                     if (vmr->type == SEL4UTILS_RES_TYPE_IPC_BUF)
                     {
-                        if (ret_ipc_buf)
+                        if (ret_runtime_addrs)
                         {
-                            *ret_ipc_buf = vmr_addr;
-                        }
-
-                        if (ret_ipc_buf_mo)
-                        {
-                            *ret_ipc_buf_mo = mo;
+                            ret_runtime_addrs->ipc_buf = vmr_addr;
+                            ret_runtime_addrs->ipc_buf_mo = mo;
                         }
                     }
                 }
@@ -291,9 +290,9 @@ int sel4gpi_ads_configure(ads_config_t *cfg,
         }
     }
 
-    if (ret_entry_point)
+    if (ret_runtime_addrs)
     {
-        *ret_entry_point = cfg->entry_point == NULL ? auto_entry_point : cfg->entry_point;
+        ret_runtime_addrs->entry_point = cfg->entry_point == NULL ? auto_entry_point : cfg->entry_point;
     }
 
 err_goto:
@@ -341,6 +340,125 @@ static vmr_config_t *find_vmr_cfg_by_type(ads_config_t *cfg, sel4utils_reservati
     return found;
 }
 
+/**
+ * @brief writes one word at the current stack position
+ *
+ * @param stack_pos the current position of the stack in the current ADS
+ * @param value the value to write
+ * @return void* the position of the stack after writing the value
+ */
+static void *write_stack_constant(uintptr_t stack_pos, long value)
+{
+    stack_pos -= sizeof(value);
+    memcpy((void *)stack_pos, &value, sizeof(value));
+
+    return (void *)stack_pos;
+}
+
+/**
+ * @brief Writes an arbitrarily long value onto the stack.
+ * Assumes that the value fits into the stack.
+ *
+ * @param stack_pos the current position of the stack in the current ADS
+ * @param value the value to write
+ * @param value_size size, in bytes, of the value to write
+ * @return void* the ALIGNED position of the stack after writing the value
+ */
+static void *write_stack_value(uintptr_t stack_pos, void *value, size_t value_size)
+{
+    CPRINTF("writing value size: %zu\n", value_size);
+    stack_pos -= value_size;
+    memcpy((void *)stack_pos, value, value_size);
+    // this is referenced from sel4libs, I'm not really sure why it's aligned to 4 byte addresses, and not 8
+    return (void *)(ALIGN_DOWN(stack_pos, 4));
+}
+
+static int write_stack_args(ads_client_context_t *ads,
+                            runtime_addrs_t *runtime_addrs,
+                            size_t stack_pages,
+                            int argc,
+                            seL4_Word *word_args)
+{
+    int error = 0;
+    PD_CREATION_PRINT("Writing arguments onto the stack\n");
+    void *stack_in_curr_ads;
+    ads_client_context_t vmr_rde = sel4gpi_get_bound_vmr_rde();
+    if (ads->id != sel4gpi_get_binded_ads_id())
+    {
+        CPRINTF("mapping\n");
+        error = ads_client_attach(&vmr_rde, NULL, &runtime_addrs->stack_mo,
+                                  SEL4UTILS_RES_TYPE_GENERIC, (void *)&stack_in_curr_ads);
+        if (error)
+        {
+            UNCONDITIONAL_PRINTERR("Failed to map PD stack into current ADS\n");
+            return 1;
+        }
+        // TODO: map only pages necessary
+        // set the pointer to the top of the stack
+        stack_in_curr_ads += (stack_pages + 1) * SIZE_BITS_TO_BYTES(MO_PAGE_BITS);
+    }
+    else
+    {
+        stack_in_curr_ads = runtime_addrs->stack;
+    }
+
+    uintptr_t curr_sp = (uintptr_t)stack_in_curr_ads;
+    CPRINTF("curr_sp before: %lX\n", curr_sp);
+    // ensure that after writing arguments, the stack pointer is aligned to a 16-byte boundary
+    // compute total size of values to write onto the stack = argc (1 word) + the arguments buffer
+    size_t total_stack_write = sizeof(long) + (sizeof(seL4_Word) * argc);
+    uintptr_t stack_unaligned = curr_sp - total_stack_write;
+    uintptr_t stack_aligned = ALIGN_DOWN(stack_unaligned, STACK_CALL_ALIGNMENT);
+    // adjust initial stack position for alignment
+    curr_sp -= stack_aligned - stack_unaligned;
+    CPRINTF("curr_sp after: %lX\n", curr_sp);
+
+    /* write argv */
+    // size_t arg_bytes = sizeof(seL4_Word) * (size_t)argc;
+    // // curr_sp = ROUND_DOWN(curr_sp - arg_bytes, 4);
+    // curr_sp -= arg_bytes;
+    // CPRINTF("write argv, %lX, arg_bytes: %zu\n", curr_sp, arg_bytes);
+    // memcpy((void *)curr_sp, argv, arg_bytes);
+
+    // char string_args[argc][WORD_STRING_SIZE];
+    // char *argv[argc];
+
+    // for (int i = 0; i < argc; i++)
+    // {
+    //     argv[i] = string_args[i];
+    //     snprintf(argv[i], WORD_STRING_SIZE, "%" PRIuPTR "", word_args[i]);
+    //     curr_sp = write_stack_value(curr_sp, argv[i], strlen(argv[i]) + 1); // +1 for the null character
+    // }
+    curr_sp = write_stack_value(curr_sp, word_args, sizeof(seL4_Word) * argc);
+
+    /* write argc */
+    // curr_sp = ROUND_DOWN(curr_sp - sizeof(int), 4);
+    // curr_sp -= sizeof(long);
+    // CPRINTF("write argc: %lX, %d, sizeof long: %zu\n", curr_sp, argc, sizeof(long));
+    // long argc_val = (long)argc;
+    // memcpy((void *)curr_sp, (void *)&argc_val, sizeof(long));
+    curr_sp = write_stack_constant(curr_sp, (long)argc);
+    CPRINTF("curr_sp: %p\n", curr_sp);
+
+    runtime_addrs->stack = curr_sp;
+
+    debug_print_mem_at(runtime_addrs->stack - 128, 256);
+
+    void *stack = runtime_addrs->stack;
+    unsigned long argc1 = *((unsigned long const *)stack);
+    // Second word on the stack is the start of the argument vector.
+    char const *const *argv2 = &((char const *const *)stack)[1];
+    CPRINTF("stack: %p, %lX, %lX\n", stack, argc1, argv2);
+
+    if (ads->id != sel4gpi_get_binded_ads_id())
+    {
+        error = ads_client_rm(&vmr_rde, stack_in_curr_ads);
+        WARN_IF_COND(error, "Failed to unmap PD stack from current ADS\n");
+    }
+
+    return error;
+}
+
 int sel4gpi_prepare_pd(pd_config_t *cfg, sel4gpi_runnable_t *runnable, int argc, seL4_Word *args)
 {
     int error;
@@ -353,13 +471,9 @@ int sel4gpi_prepare_pd(pd_config_t *cfg, sel4gpi_runnable_t *runnable, int argc,
     seL4_Word cnode_guard = api_make_guard_skip_word(seL4_WordBits - PD_CSPACE_SIZE_BITS);
 
     mo_client_context_t ipc_mo = {0};
-    void *entry_point = NULL;
-    void *stack = NULL;
-    void *ipc_buf = NULL;
-    void *osm_shared_data = NULL;
+    runtime_addrs_t runtime_addrs = {0};
 
-    error = sel4gpi_ads_configure(&cfg->ads_cfg, runnable, &cfg->osm_data_mo,
-                                  &stack, &ipc_buf, &entry_point, &osm_shared_data, &ipc_mo);
+    error = sel4gpi_ads_configure(&cfg->ads_cfg, runnable, &cfg->osm_data_mo, &runtime_addrs);
     GOTO_IF_ERR(error, "Failed to configure ADS\n");
 
     error = rde_configure(cfg, runnable);
@@ -421,16 +535,23 @@ int sel4gpi_prepare_pd(pd_config_t *cfg, sel4gpi_runnable_t *runnable, int argc,
         setup_mode = PdSetupType_PD_RUNTIME_SETUP;
     }
 
-    vmr_config_t *stack_cfg = find_vmr_cfg_by_type(&cfg->ads_cfg, SEL4UTILS_RES_TYPE_STACK);
-    if (stack_cfg && stack_cfg->share_mode != GPI_SHARED)
+    if (runtime_addrs.stack)
     {
+        vmr_config_t *stack_cfg = find_vmr_cfg_by_type(&cfg->ads_cfg, SEL4UTILS_RES_TYPE_STACK);
         PD_CREATION_PRINT("Setting up runtime\n");
         if (setup_mode == PdSetupType_PD_REGISTER_SETUP)
         {
             PD_CREATION_PRINT("C Runtime already initialized, setup the TLS ourselves\n");
             void *tp = NULL;
-            error = setup_tls_in_stack(stack, stack_cfg->region_pages, ipc_buf, osm_shared_data, &stack, &tp);
+            error = setup_tls_in_stack(runtime_addrs.stack,
+                                       stack_cfg->region_pages,
+                                       runtime_addrs.ipc_buf,
+                                       runtime_addrs.osm_data,
+                                       &runtime_addrs.stack, &tp);
             GOTO_IF_ERR(error, "failed to write TLS\n");
+
+            error = write_stack_args(&runnable->ads, &runtime_addrs, stack_cfg->region_pages, argc, args);
+            GOTO_IF_ERR(error, "failed to write stack arguments\n");
 
             error = cpu_client_set_tls_base(&runnable->cpu, tp);
             GOTO_IF_ERR(error, "failed to set TLS base\n");
@@ -440,12 +561,12 @@ int sel4gpi_prepare_pd(pd_config_t *cfg, sel4gpi_runnable_t *runnable, int argc,
     error = pd_client_runtime_setup(&runnable->pd,
                                     &runnable->ads,
                                     &runnable->cpu,
-                                    stack,
+                                    runtime_addrs.stack,
                                     argc,
                                     args,
-                                    entry_point,
-                                    ipc_buf,
-                                    osm_shared_data,
+                                    runtime_addrs.entry_point,
+                                    runtime_addrs.ipc_buf,
+                                    runtime_addrs.osm_data,
                                     setup_mode);
     GOTO_IF_ERR(error, "failed to prepare runtime");
 
@@ -453,10 +574,10 @@ int sel4gpi_prepare_pd(pd_config_t *cfg, sel4gpi_runnable_t *runnable, int argc,
     error = cpu_client_config(&runnable->cpu,
                               &runnable->ads,
                               &runnable->pd,
-                              &ipc_mo,
+                              &runtime_addrs.ipc_buf_mo,
                               cnode_guard,
                               fault_ep_in_PD.raw_endpoint,
-                              ipc_buf);
+                              runtime_addrs.ipc_buf);
     GOTO_IF_ERR(error, "failed to configure CPU\n");
 
 err_goto:

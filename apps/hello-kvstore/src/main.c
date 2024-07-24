@@ -49,8 +49,6 @@ extern global_xv6fs_client_context_t xv6fs_client;
 
 int kvstore_tests(void)
 {
-    sel4gpi_set_exit_cb();
-
     int error;
     uint64_t key, val, val_ret;
 
@@ -155,7 +153,7 @@ int main(int argc, char **argv)
 main_exit:
     /* notify parent of test result */
 
-#ifdef EXTRACT
+#if EXTRACT_MODEL
     pd_client_context_t self_pd = sel4gpi_get_pd_conn();
     error = pd_client_dump(&self_pd, NULL, 0);
     CHECK_ERROR(error, "Failed to extract model state\n");

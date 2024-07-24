@@ -68,12 +68,13 @@ typedef enum _gpi_share_degree
  * | type         | required   | required     |                                         |
  * | start        | required   | optional     | any available vaddr                     |
  * | dest_start   | optional   | ignored      | `start`                                 |
- * | region_pages | optional^  | ignored^     | VMR info will be searched from the type |
+ * | region_pages | required^1 | required^2   |                                         |
  * | page_bits    | ignored    | optional     | 4K pages (ARM specific)                 |
  * | mo           | ignored    | optional     | new MO will be allocated                |
  * +--------------+------------+--------------+-----------------------------------------+
- * optional^ = only optional if type != SHARED_FRAMES or GENERIC
- * ignored^ = only ignored if an MO is provided (the page count of the MO will be used)
+ * 1 = optional if type != SHARED_FRAMES or GENERIC, the VMR will be searched
+ *     for by type, and info will be taken from the found VMR
+ * 2 = ignored if an MO is provided (the page count of the MO will be used)
  *
  */
 typedef struct _vmr_config
@@ -88,6 +89,19 @@ typedef struct _vmr_config
     size_t page_bits;        ///< OPTIONAL size of an individual page in this VMR, 4K pages by default
     mo_client_context_t *mo; ///< OPTIONAL an MO to use to map the VMR
 } vmr_config_t;
+
+/**
+ * @brief holds the various addresses a PD depends on for execution
+ */
+typedef struct _runtime_addrs
+{
+    void *stack;                    ///< address of bottom of the stack
+    void *ipc_buf;                  ///< address of the IPC buffer
+    void *entry_point;              ///< address to PD entry point
+    void *osm_data;                 ///< address to PD's OSmosis data
+    mo_client_context_t stack_mo;   ///< MO for the stack
+    mo_client_context_t ipc_buf_mo; ///< MO for the IPC buffer
+} runtime_addrs_t;
 
 /**
  * @brief Configuration of an entire ADS, the type of sharing is w.r.t. the current ADS
@@ -220,22 +234,14 @@ char *sel4gpi_share_degree_to_str(gpi_share_degree_t share_deg);
  * @param cfg The ADS config options
  * @param runnable an allocated runnable struct that can be empty, but typically with the PD context filled in
  * @param osm_data_mo OPTIONAL: an MO for holding OSmosis data
- * @param ret_stack OPTIONAL: address of the allocated stack
- * @param ret_ipc_buf OPTIONAL: address of the allocated IPC buffer
- * @param ret_entry_point OPTIONAL: address of the entry point, if found. If an entry point is specified in the config,
- *                        this will be the same
- * @param ret_osm_data OPTIONAL: address of the mapped OSmosis data frame (only applies if osm_data_mo is given)
- * @param ret_ipc_buf_mo OPTIONAL: the MO for the IPC buffer
+ * @param ret_runtime_addrs OPTIONAL: returns a struct holding all the addresses a PD relies on for execution
+
  * @return int 0 on success
  */
 int sel4gpi_ads_configure(ads_config_t *cfg,
                           sel4gpi_runnable_t *runnable,
                           mo_client_context_t *osm_data_mo,
-                          void **ret_stack,
-                          void **ret_ipc_buf,
-                          void **ret_entry_point,
-                          void **ret_osm_data,
-                          mo_client_context_t *ret_ipc_buf_mo);
+                          runtime_addrs_t *ret_runtime_addrs);
 
 /**
  * @brief Convenience function for configuring a new RDE to share with a PD (that's not yet started)
@@ -277,6 +283,7 @@ void sel4gpi_add_vmr_config(ads_config_t *cfg,
  *        NOTE: no guard page is created
  * @param ads the ADS in which to create the stack
  * @param n_pages number of pages for the stack
- * @return the top of the stack in the given ADS (NOT the current one)
+ * @param[out] ret_mo OPTIONAL: returns the MO backing the stack
+ * @return the top of the stack in the given ADS
  */
-void *sel4gpi_new_sized_stack(ads_client_context_t *ads, size_t n_pages);
+void *sel4gpi_new_sized_stack(ads_client_context_t *ads, size_t n_pages, mo_client_context_t *ret_mo);

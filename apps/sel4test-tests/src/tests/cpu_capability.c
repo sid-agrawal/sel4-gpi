@@ -26,6 +26,7 @@
 #include <sel4runtime.h>
 
 extern __thread void *__sel4gpi_osm_data;
+extern void _start(void);
 
 #define TEST_LOG(msg, ...)                                  \
     do                                                      \
@@ -33,28 +34,41 @@ extern __thread void *__sel4gpi_osm_data;
         printf("%s(): " msg "\n", __func__, ##__VA_ARGS__); \
     } while (0)
 
-static void test_thread(void *arg0, void *arg1, void *arg2)
+static void test_thread(int argc, char **argv)
 {
-    bool is_osm_thread = (bool)arg0;
-    printf("In test thread, OSM thread? %d, %s: %lX, arg2: %lX\n",
-           is_osm_thread,
-           is_osm_thread ? "CPU" : "TCB",
-           (uint64_t)arg1,
-           (uint64_t)arg2);
-    printf("goodbye!\n");
+    printf("hello again world! argc: %d\n", argc);
+    if (argc > 0)
+    {
+        printf("%lX\n", (uint64_t)argv[0]);
+        printf("%lX\n", (uint64_t)argv[1]);
+    }
+    // bool is_osm_thread = (bool)arg0;
+    // printf("In test thread, OSM thread? %d, %s: %lX, arg2: %lX\n",
+    //        is_osm_thread,
+    //        is_osm_thread ? "CPU" : "TCB",
+    //        (uint64_t)arg1,
+    //        (uint64_t)arg2);
+    // printf("goodbye!\n");
 
-    if (is_osm_thread)
-    {
-        // cpu_client_context_t self_cpu = sel4gpi_get_cpu_conn();
-        // cpu_client_suspend(&self_cpu);
-        pd_client_context_t self_pd = sel4gpi_get_pd_conn();
-        pd_client_exit(&self_pd, 0);
-    }
-    else
-    {
-        seL4_CPtr tcb = (seL4_CPtr)arg1;
-        seL4_TCB_Suspend(tcb);
-    }
+    // if (is_osm_thread)
+    // {
+    //     // cpu_client_context_t self_cpu = sel4gpi_get_cpu_conn();
+    //     // cpu_client_suspend(&self_cpu);
+    //     pd_client_context_t self_pd = sel4gpi_get_pd_conn();
+    //     pd_client_exit(&self_pd, 0);
+    // }
+    // else
+    // {
+    //     seL4_CPtr tcb = (seL4_CPtr)arg1;
+    //     seL4_TCB_Suspend(tcb);
+    // }
+}
+
+static void sel4utils_thread(void *arg0, void *arg1, void *ipc_buf)
+{
+    printf("Made it to sel4utils_thread, goodbye!\n");
+    seL4_CPtr tcb = (seL4_CPtr)arg0;
+    seL4_TCB_Suspend(tcb);
 }
 
 int test_native_threads(env_t env)
@@ -71,7 +85,7 @@ int test_native_threads(env_t env)
 
     test_error_eq(error, 0);
 
-    error = sel4utils_start_thread(&thread, test_thread, (void *)false, (void *)thread.tcb.cptr, 1);
+    error = sel4utils_start_thread(&thread, sel4utils_thread, (void *)thread.tcb.cptr, (void *)NULL, 1);
     test_error_eq(error, 0);
 
     sel4test_sleep(env, 5 * MILLISECOND);
@@ -92,11 +106,11 @@ int test_osm_threads(env_t env)
     printf("------------------STARTING: %s------------------\n", __func__);
 
     sel4gpi_runnable_t runnable = {0};
-    pd_config_t *cfg = sel4gpi_configure_thread(test_thread, seL4_CapNull, &runnable);
+    pd_config_t *cfg = sel4gpi_configure_thread(_start, seL4_CapNull, &runnable);
     test_assert(cfg != NULL);
 
-    seL4_Word args = true;
-    error = sel4gpi_prepare_pd(cfg, &runnable, 1, &args);
+    seL4_Word argv[2] = {0xa, test_thread};
+    error = sel4gpi_prepare_pd(cfg, &runnable, 2, argv);
     test_assert(error == 0);
 
     error = sel4gpi_start_pd(&runnable);
@@ -105,7 +119,9 @@ int test_osm_threads(env_t env)
     sel4test_sleep(env, 5 * MILLISECOND);
     sel4gpi_config_destroy(cfg);
 
-    // pd_client_dump(&test_pd_os_cap, NULL, 0);
+#if EXTRACT_MODEL
+    pd_client_dump(&test_pd_os_cap, NULL, 0);
+#endif
     return sel4test_get_result();
 }
 

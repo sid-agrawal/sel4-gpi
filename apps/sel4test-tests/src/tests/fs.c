@@ -271,7 +271,9 @@ int test_fs(env_t env)
     test_assert(f == -1);
 
     // Print whole-pd model state
-    // error = pd_client_dump(&pd_conn, NULL, 0);
+#if EXTRACT_MODEL
+    error = pd_client_dump(&pd_conn, NULL, 0);
+#endif
 
     // Cleanup servers
     pd_client_context_t fs_pd_conn;
@@ -434,7 +436,9 @@ int test_multiple_fs(env_t env)
     test_assert(error == 0);
 
     // Print whole-pd model state
-    // error = pd_client_dump(&pd_conn, NULL, 0);
+#if EXTRACT_MODEL
+    error = pd_client_dump(&pd_conn, NULL, 0);
+#endif
 
     printf("------------------ENDING: %s------------------\n", __func__);
     return sel4test_get_result();

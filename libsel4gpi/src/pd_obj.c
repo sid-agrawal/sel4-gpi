@@ -884,7 +884,7 @@ int pd_send_cap(pd_t *to_pd,
     }
     else
     {
-        OSDB_PRINTF("[Warning]: Untracked cap being sent to PD\n");
+        OSDB_PRINTWARN("Untracked cap being sent to PD\n");
         cspacepath_t dest = {0};
         error = resource_component_transfer_cap(get_pd_component()->server_vka, to_pd->pd_vka, cap, &dest, false, 0);
         SERVER_GOTO_IF_ERR(error, "Failed to copy cap to PD\n");

@@ -116,7 +116,6 @@ int main(int argc, char **argv)
 {
     int error = 0;
 
-    sel4gpi_set_exit_cb();
     printf("hello-sync main!\n");
 
     /* parse args */

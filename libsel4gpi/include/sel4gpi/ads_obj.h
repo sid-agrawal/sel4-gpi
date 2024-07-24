@@ -95,7 +95,7 @@ int ads_initialize(ads_t *ads);
  * Reserve a region of the ADS
  *
  * @param ads ads object
- * @param vaddr virtual address to reserve
+ * @param vaddr OPTIONAL: virtual address to reserve
  * @param num_pages num of pages to reserve
  * @param size_bits size of the pages
  * @param vmr_type the type of VMR, e.g. heap, stack, IPC buffer, etc.
