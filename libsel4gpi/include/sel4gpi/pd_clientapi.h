@@ -57,7 +57,7 @@ int pd_client_terminate(pd_client_context_t *conn);
  */
 int pd_client_send_cap(pd_client_context_t *conn,
                        seL4_CPtr cap_to_send,
-                       seL4_Word *slot);
+                       seL4_CPtr *slot);
 
 /**
  * @brief Sends a core resource (PD, CPU, ADS) cap to a PD.
@@ -71,7 +71,7 @@ int pd_client_send_cap(pd_client_context_t *conn,
  */
 int pd_client_send_core_cap(pd_client_context_t *conn,
                             seL4_CPtr cap_to_send,
-                            seL4_Word *slot);
+                            seL4_CPtr *slot);
 
 /**
  * @brief Share an RDE with another PD
@@ -85,7 +85,7 @@ int pd_client_send_core_cap(pd_client_context_t *conn,
  */
 int pd_client_share_rde(pd_client_context_t *target_pd,
                         gpi_cap_t cap_type,
-                        uint64_t space_id);
+                        gpi_space_id_t space_id);
 
 /**
  * @brief (WIP) prepares the (PD, ADS, CPU) combination with the given arguments,
@@ -135,7 +135,7 @@ int pd_client_share_resource_by_type(pd_client_context_t *src_pd, pd_client_cont
  * @param slot next free slot in the PD
  * @return int 0 on success, -1 on failure.
  */
-int pd_client_next_slot(pd_client_context_t *conn, seL4_Word *slot);
+int pd_client_next_slot(pd_client_context_t *conn, seL4_CPtr *slot);
 
 /**
  * @brief Free an unused slot in the PD's cspace.
@@ -175,9 +175,9 @@ int pd_client_clear_slot(pd_client_context_t *conn,
  * @param dest returns the destination slot in the recipient PD
  */
 int pd_client_give_resource(pd_client_context_t *conn,
-                            seL4_Word res_space_id,
-                            seL4_Word recipient_id,
-                            seL4_Word resource_id,
+                            gpi_space_id_t res_space_id,
+                            gpi_obj_id_t recipient_id,
+                            gpi_obj_id_t resource_id,
                             seL4_CPtr *dest);
 
 #if TRACK_MAP_RELATIONS
@@ -192,8 +192,8 @@ int pd_client_give_resource(pd_client_context_t *conn,
  * @param dest_res_id the universal ID of the destination resource (compact_res_id)
  */
 int pd_client_map_resource(pd_client_context_t *conn,
-                           seL4_Word src_res_id,
-                           seL4_Word dest_res_id);
+                           gpi_obj_id_t src_res_id,
+                           gpi_obj_id_t dest_res_id);
 #endif
 
 /**
@@ -235,7 +235,7 @@ void pd_client_exit(pd_client_context_t *conn, int code);
  * @param space_id the space ID of the RDE to remove, or RESSPC_ID_NULL to remove all RDEs of the given type
  * @return 0 on success, error otherwise
  */
-int pd_client_remove_rde(pd_client_context_t *conn, gpi_cap_t type, uint64_t space_id);
+int pd_client_remove_rde(pd_client_context_t *conn, gpi_cap_t type, gpi_space_id_t space_id);
 
 /** MODEL EXTRACTION & BENCHMARKING **/
 

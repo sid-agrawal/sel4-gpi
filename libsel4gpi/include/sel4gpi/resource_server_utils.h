@@ -59,7 +59,7 @@ typedef struct _resource_server_context
 
     int (*init_fn)(); ///< Run once when the server is started
 
-    uint64_t parent_pd_id; ///< Client ID of the parent PD
+    gpi_obj_id_t parent_pd_id; ///< Client ID of the parent PD
 
     bool debug_print; ///< True if the resource server should output debug prints
 
@@ -101,7 +101,7 @@ int resource_server_start(resource_server_context_t *context,
                           void (*request_handler)(void *, void *, seL4_Word, seL4_CPtr, bool *),
                           int (*work_handler)(PdWorkReturnMessage *),
                           seL4_CPtr parent_ep,
-                          uint64_t parent_pd_id,
+                          gpi_obj_id_t parent_pd_id,
                           int (*init_fn)(),
                           bool debug_print,
                           const pb_msgdesc_t *request_desc,
@@ -138,7 +138,7 @@ int resource_server_unattach(resource_server_context_t *context,
  */
 int resource_server_create_resource(resource_server_context_t *context,
                                     resspc_client_context_t *space_conn,
-                                    uint64_t resource_id);
+                                    gpi_obj_id_t resource_id);
 
 /**
  * Notifies the PD component to create a badged copy of the server's endpoint
@@ -150,9 +150,9 @@ int resource_server_create_resource(resource_server_context_t *context,
  * @param dest Returns the slot of the badged copy in the recipient's cspace
  */
 int resource_server_give_resource(resource_server_context_t *context,
-                                  uint64_t space_id,
-                                  uint64_t resource_id,
-                                  uint64_t client_id,
+                                  gpi_space_id_t space_id,
+                                  gpi_obj_id_t resource_id,
+                                  gpi_obj_id_t client_id,
                                   seL4_CPtr *dest);
 
 /**
@@ -163,7 +163,7 @@ int resource_server_give_resource(resource_server_context_t *context,
  * @param ret_conn returns the newly allocated resource space
  */
 int resource_server_new_res_space(resource_server_context_t *context,
-                                  uint64_t client_id,
+                                  gpi_obj_id_t client_id,
                                   resspc_client_context_t *ret_conn);
 
 /**

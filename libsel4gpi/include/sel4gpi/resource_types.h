@@ -27,14 +27,20 @@ typedef enum GPICAP_CORE_TYPE
 
 #define GPICAP_TYPE_MAX (GPICAP_TYPE_seL4 + 8) // Maximum number of resource types
 
+// The data type of a resource space ID
+typedef uint32_t gpi_space_id_t;
+
+// The data type of an object ID (the object ID of a resource is unique within its space)
+typedef uint32_t gpi_obj_id_t;
+
 /**
  * Fields to uniquely identify a resource
  */
 typedef struct _gpi_res_id
 {
     gpi_cap_t type;
-    uint32_t space_id;
-    uint32_t object_id;
+    gpi_space_id_t space_id;
+    gpi_obj_id_t object_id;
 } gpi_res_id_t;
 
 /**
@@ -66,4 +72,4 @@ void resource_types_initialize(void);
  * @param space_id the resource space ID
  * @param object_id the resource object ID (unique within the space)
  */
-gpi_res_id_t make_res_id(gpi_cap_t type, uint32_t space_id, uint32_t object_id);
+gpi_res_id_t make_res_id(gpi_cap_t type, gpi_space_id_t space_id, gpi_obj_id_t object_id);

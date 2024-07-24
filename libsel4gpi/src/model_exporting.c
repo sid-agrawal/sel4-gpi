@@ -50,15 +50,15 @@ static char *node_type_to_str(gpi_node_type_t node_type)
 }
 
 // Create a string ID for a node
-static void make_node_id(char *str_id, char *prefix, uint64_t id)
+static void make_node_id(char *str_id, char *prefix, gpi_obj_id_t id)
 {
-    snprintf(str_id, CSV_MAX_STRING_SIZE, "%s_%lx", prefix, id);
+    snprintf(str_id, CSV_MAX_STRING_SIZE, "%s_%x", prefix, id);
 }
 
 // Create a string ID for a node with two IDs
-static void make_node_id_2(char *str_id, char *prefix, uint64_t id1, uint64_t id2)
+static void make_node_id_2(char *str_id, char *prefix, gpi_obj_id_t id1, gpi_obj_id_t id2)
 {
-    snprintf(str_id, CSV_MAX_STRING_SIZE, "%s_%lx_%lx", prefix, id1, id2);
+    snprintf(str_id, CSV_MAX_STRING_SIZE, "%s_%x_%x", prefix, id1, id2);
 }
 
 void init_model_state(model_state_t *model_state, void *free_ptr, size_t free_size)
@@ -66,7 +66,7 @@ void init_model_state(model_state_t *model_state, void *free_ptr, size_t free_si
     assert(model_state != NULL);
 
     memset(model_state, 0, sizeof(model_state_t));
-    
+
     model_state->nodes = NULL;
     model_state->edges = NULL;
     model_state->mem_start = (gpi_model_state_component_t *)free_ptr;
@@ -327,7 +327,7 @@ void set_node_extra(gpi_model_node_t *node, char *extra)
 }
 
 static void internal_add_edge_by_id(model_state_t *model_state, gpi_edge_type_t type, char *from_id,
-                           char *to_id, gpi_cap_t req_type)
+                                    char *to_id, gpi_cap_t req_type)
 {
     gpi_model_edge_t edge_static;
     memset(&edge_static, 0, sizeof(gpi_model_edge_t));
@@ -395,7 +395,7 @@ void add_request_edge_by_id(model_state_t *model_state, char *from, char *to, gp
     internal_add_edge_by_id(model_state, GPI_EDGE_TYPE_REQUEST, from, to, req_type);
 }
 
-void get_resource_space_id(gpi_cap_t resource_type, uint64_t res_space_id, char *str_id)
+void get_resource_space_id(gpi_cap_t resource_type, gpi_space_id_t res_space_id, char *str_id)
 {
     char prefix[CSV_MAX_STRING_SIZE];
     snprintf(prefix, CSV_MAX_STRING_SIZE, "%s_SPACE", cap_type_to_str(resource_type));
@@ -407,7 +407,7 @@ void get_resource_id(gpi_res_id_t res_id, char *str_id)
     make_node_id_2(str_id, cap_type_to_str(res_id.type), res_id.space_id, res_id.object_id);
 }
 
-void get_pd_id(uint64_t pd_id, char *str_id)
+void get_pd_id(gpi_obj_id_t pd_id, char *str_id)
 {
     make_node_id(str_id, "PD", pd_id);
 }
@@ -429,7 +429,7 @@ gpi_model_node_t *get_resource_node(model_state_t *model_state, gpi_res_id_t res
 }
 
 gpi_model_node_t *add_resource_space_node(model_state_t *model_state, gpi_cap_t resource_type,
-                                          uint64_t res_space_id, bool extracted)
+                                          gpi_space_id_t res_space_id, bool extracted)
 {
     char node_id[CSV_MAX_STRING_SIZE];
     get_resource_space_id(resource_type, res_space_id, node_id);
@@ -437,7 +437,8 @@ gpi_model_node_t *add_resource_space_node(model_state_t *model_state, gpi_cap_t 
     return add_node(model_state, GPI_NODE_TYPE_SPACE, node_id, cap_type_to_str(resource_type), extracted);
 }
 
-gpi_model_node_t *get_resource_space_node(model_state_t *model_state, gpi_cap_t resource_type, uint64_t res_space_id)
+gpi_model_node_t *get_resource_space_node(model_state_t *model_state, gpi_cap_t resource_type,
+                                          gpi_space_id_t res_space_id)
 {
     char node_id[CSV_MAX_STRING_SIZE];
     get_resource_space_id(resource_type, res_space_id, node_id);
@@ -446,7 +447,7 @@ gpi_model_node_t *get_resource_space_node(model_state_t *model_state, gpi_cap_t 
 }
 
 // Add a PD to the model state
-gpi_model_node_t *add_pd_node(model_state_t *model_state, char *pd_name, uint64_t pd_id, bool extracted)
+gpi_model_node_t *add_pd_node(model_state_t *model_state, char *pd_name, gpi_obj_id_t pd_id, bool extracted)
 {
     char node_id[CSV_MAX_STRING_SIZE];
     get_pd_id(pd_id, node_id);
@@ -454,7 +455,7 @@ gpi_model_node_t *add_pd_node(model_state_t *model_state, char *pd_name, uint64_
     return add_node(model_state, GPI_NODE_TYPE_PD, node_id, pd_name, extracted);
 }
 
-gpi_model_node_t *get_pd_node(model_state_t *model_state, uint64_t pd_id)
+gpi_model_node_t *get_pd_node(model_state_t *model_state, gpi_obj_id_t pd_id)
 {
     char node_id[CSV_MAX_STRING_SIZE];
     get_pd_id(pd_id, node_id);

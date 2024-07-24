@@ -48,8 +48,8 @@ int main(int argc, char **argv)
     ads_conn.ep = sel4gpi_get_rde_by_space_id(sel4gpi_get_binded_ads_id(), GPICAP_TYPE_VMR);
     pd_client_context_t pd_conn = sel4gpi_get_pd_conn();
 
-    printf("Hello: ADS_CAP: %ld\n", (seL4_Word)ads_conn.ep);
-    printf("Hello: PD_CAP: %ld\n", (seL4_Word)pd_conn.ep);
+    printf("Hello: ADS_CAP: %lu\n", ads_conn.ep);
+    printf("Hello: PD_CAP: %lu\n", pd_conn.ep);
     // printf(COLORIZE("osm data: %p\n", CYAN), __sel4gpi_osm_data);
 
     seL4_CPtr mo_server_ep = sel4gpi_get_rde(GPICAP_TYPE_MO);
@@ -77,7 +77,7 @@ int main(int argc, char **argv)
 
     error = pd_client_next_slot(&pd_conn, &slot);
     assert(error == 0);
-    printf("Next free slot is %ld\n", (seL4_Word)slot);
+    printf("Next free slot is %lu\n", slot);
 
     if (argc > 0)
     {

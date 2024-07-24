@@ -77,7 +77,7 @@ typedef struct osmosis_rde
 
     /* RDE is for a particular resource space */
     rde_type_t type; // (XXX) Arya: This may be redundant given the space id
-    uint32_t space_id;
+    gpi_space_id_t space_id;
 } osmosis_rde_t;
 
 // Tracks a resource that a PD holds
@@ -111,17 +111,17 @@ typedef struct _osm_pd_shared_data
     osmosis_rde_t rde[GPICAP_TYPE_MAX][MAX_NS_PER_RDE];              ///< Resource directory
     uint64_t rde_count;
 
-    uint64_t current_client_id;    ///< Resource server sets this field while processing a client request
-                                   ///< If the server crashes before it finishes, the client will also be killed
-    seL4_CPtr reply_cap;           ///< For resource servers, store the reply cap of the
-                                   ///< request that is currently being processed
-    char test_name[TEST_NAME_MAX]; ///< For a test process, the name of the test to run
-                                   ///< (XXX) Arya: Placed here for convenience, ideally would be in a separate frame
+    gpi_obj_id_t current_client_id; ///< Resource server sets this field while processing a client request
+                                    ///< If the server crashes before it finishes, the client will also be killed
+    seL4_CPtr reply_cap;            ///< For resource servers, store the reply cap of the
+                                    ///< request that is currently being processed
+    char test_name[TEST_NAME_MAX];  ///< For a test process, the name of the test to run
+                                    ///< (XXX) Arya: Placed here for convenience, ideally would be in a separate frame
 } osm_pd_shared_data_t;
 
 typedef struct _pd
 {
-    uint32_t id;
+    gpi_obj_id_t id;
 
     /* Fields only used for process PDs */
     uintptr_t sysinfo;
@@ -141,7 +141,7 @@ typedef struct _pd
     char allocator_mem_pool[PD_ALLOCATOR_STATIC_POOL_SIZE]; ///< Memory pool to bootstrap the PD's VKA
     resource_registry_t hold_registry;                      ///< Registry of PD's resources
 
-    uint64_t shared_data_mo_id;              ///< Shared data is mapped to PD and includes RDE, etc.
+    gpi_obj_id_t shared_data_mo_id;          ///< Shared data is mapped to PD and includes RDE, etc.
     osm_pd_shared_data_t *shared_data;       ///< RT vaddr of the shared data
     osm_pd_shared_data_t *shared_data_in_PD; ///< PD's vaddr of the shared
 
@@ -288,7 +288,7 @@ int pd_bulk_add_resource(pd_t *pd, linked_list_t *resources);
  * @param space_id space ID to check for
  * @return true if the PD holds any resource from the given space, false otherwise
  */
-bool pd_has_resources_in_space(pd_t *pd, uint32_t space_id);
+bool pd_has_resources_in_space(pd_t *pd, gpi_space_id_t space_id);
 
 /**
  * @brief Remove all resources in the given space ID from the PD
@@ -297,7 +297,7 @@ bool pd_has_resources_in_space(pd_t *pd, uint32_t space_id);
  * @param space_id remove all resources in this space from the PD
  * @return 0 on success, error otherwise
  */
-int pd_remove_resources_in_space(pd_t *pd, uint32_t space_id);
+int pd_remove_resources_in_space(pd_t *pd, gpi_space_id_t space_id);
 
 /**
  * @brief gets all resources of the given type that belongs to the given PD
@@ -331,7 +331,7 @@ void pd_add_type_name(pd_t *pd,
 int pd_add_rde(pd_t *pd,
                rde_type_t type,
                char *type_name,
-               uint32_t space_id,
+               gpi_space_id_t space_id,
                seL4_CPtr server_ep);
 
 /**
@@ -345,7 +345,7 @@ int pd_add_rde(pd_t *pd,
  */
 int pd_remove_rde(pd_t *pd,
                   rde_type_t type,
-                  uint32_t space_id);
+                  gpi_space_id_t space_id);
 
 /**
  * Gets the entry of the PD's RDE corresponding
@@ -360,7 +360,7 @@ int pd_remove_rde(pd_t *pd,
  */
 osmosis_rde_t *pd_rde_get(pd_t *pd,
                           gpi_cap_t type,
-                          uint32_t space_id);
+                          gpi_space_id_t space_id);
 
 /**
  * Destroys a PD object

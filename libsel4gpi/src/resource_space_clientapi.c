@@ -64,7 +64,7 @@ int resspc_client_connect(seL4_CPtr server_ep,
 }
 
 int resspc_client_map_space(resspc_client_context_t *conn,
-                            seL4_Word space_id)
+                            gpi_space_id_t space_id)
 {
     OSDB_PRINTF("Sending 'map space' request to ResSpc component\n");
 
@@ -87,7 +87,7 @@ int resspc_client_map_space(resspc_client_context_t *conn,
 }
 
 int resspc_client_create_resource(resspc_client_context_t *conn,
-                                  seL4_Word resource_id)
+                                  gpi_obj_id_t resource_id)
 {
     OSDB_PRINTF("Sending 'create resource' request to ResSpc component\n");
 
@@ -110,7 +110,7 @@ int resspc_client_create_resource(resspc_client_context_t *conn,
 }
 
 int resspc_client_delete_resource(resspc_client_context_t *conn,
-                                  seL4_Word resource_id)
+                                  gpi_obj_id_t resource_id)
 {
     OSDB_PRINTF("Sending 'delete resource' request to ResSpc component\n");
 
@@ -133,8 +133,8 @@ int resspc_client_delete_resource(resspc_client_context_t *conn,
 }
 
 int resspc_client_revoke_resource(resspc_client_context_t *conn,
-                                  uint32_t resource_id,
-                                  uint32_t target_pd_id)
+                                  gpi_obj_id_t resource_id,
+                                  gpi_obj_id_t target_pd_id)
 {
     OSDB_PRINTF("Sending 'delete resource' request to ResSpc component\n");
 

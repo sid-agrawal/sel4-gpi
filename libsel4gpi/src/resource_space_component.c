@@ -41,7 +41,7 @@ static int resspc_component_space_cleanup(resspc_component_registry_entry_t *nod
     int error = 0;
     int depth = node->space.deletion_depth;
 
-    OSDB_PRINTF("Execute resource space cleanup policy for space (%d), depth %d\n", node->space.id, depth);
+    OSDB_PRINTF("Execute resource space cleanup policy for space (%u), depth %u\n", node->space.id, depth);
 
     if (GPI_CLEANUP_RESOURCE_SPACE_DEPTH != -1 & depth >= GPI_CLEANUP_RESOURCE_SPACE_DEPTH)
     {
@@ -68,7 +68,7 @@ static int resspc_component_space_cleanup(resspc_component_registry_entry_t *nod
             // Check if the space has a map edge for the deleted space
             if (resspc_check_map(space_entry->space.id, node->space.id))
             {
-                OSDB_PRINTF("Mark resource space (%d) for deletion due to policy, depth %d\n",
+                OSDB_PRINTF("Mark resource space (%u) for deletion due to policy, depth %u\n",
                             space_entry->space.id, depth + 1);
                 space_entry->space.deletion_depth = depth + 1;
                 space_entry->space.to_delete = true;
@@ -88,7 +88,7 @@ static void on_resspc_registry_delete(resource_registry_node_t *node_gen, void *
 
     // Find the resource space
     resspc_component_registry_entry_t *node = (resspc_component_registry_entry_t *)node_gen;
-    OSDB_PRINTF("Deleting resource space (%d)\n", node->space.id);
+    OSDB_PRINTF("Deleting resource space (%u)\n", node->space.id);
     node->space.deleting = true;
 
     resource_component_remove_from_rt(get_resspc_component(), node->space.id);
@@ -97,18 +97,18 @@ static void on_resspc_registry_delete(resource_registry_node_t *node_gen, void *
     if (node->space.cleanup_policy)
     {
         error = resspc_component_space_cleanup(node);
-        SERVER_GOTO_IF_ERR(error, "Failed to execute cleanup policy on resource space %d\n", node->space.id);
+        SERVER_GOTO_IF_ERR(error, "Failed to execute cleanup policy on resource space %u\n", node->space.id);
     }
 
     // Cleanup the resource space from PDs
     error = pd_component_space_cleanup(node->space.pd_id, node->space.resource_type,
                                        node->space.id, node->space.cleanup_policy);
-    SERVER_GOTO_IF_ERR(error, "failed to cleanup PDs for deleted resource space (%d)\n", node->space.id);
+    SERVER_GOTO_IF_ERR(error, "failed to cleanup PDs for deleted resource space (%u)\n", node->space.id);
 
     return;
 
 err_goto:
-    OSDB_PRINTERR("Error while deleting resource space %d\n", node->space.id);
+    OSDB_PRINTERR("Error while deleting resource space %u\n", node->space.id);
 }
 
 static void handle_resspc_allocation_request(seL4_Word sender_badge,
@@ -116,17 +116,17 @@ static void handle_resspc_allocation_request(seL4_Word sender_badge,
 {
     OSDB_PRINTF("Got resource space allocation request from client badge %lx.\n", sender_badge);
     int error = 0;
-    uint64_t caller_id = get_client_id_from_badge(sender_badge);
-    uint64_t client_id = msg->client_id;
+    gpi_obj_id_t caller_id = get_client_id_from_badge(sender_badge);
+    gpi_obj_id_t client_id = msg->client_id;
     SERVER_GOTO_IF_COND(!sel4gpi_rpc_check_cap(GPICAP_TYPE_EP), "Did not receive EP cap\n");
 
     // Find the resource server PD
     pd_component_registry_entry_t *server_pd = pd_component_registry_get_entry_by_id(caller_id);
-    SERVER_GOTO_IF_COND(server_pd == NULL, "Couldn't find resource server PD (%ld)\n", caller_id);
+    SERVER_GOTO_IF_COND(server_pd == NULL, "Couldn't find resource server PD (%u)\n", caller_id);
 
     // Find the client PD (to receive the resource space RDE)
     pd_component_registry_entry_t *client_pd = pd_component_registry_get_entry_by_id(client_id);
-    SERVER_GOTO_IF_COND(client_pd == NULL, "Couldn't find client PD (%ld)\n", client_id);
+    SERVER_GOTO_IF_COND(client_pd == NULL, "Couldn't find client PD (%u)\n", client_id);
 
     ep_component_registry_entry_t *ep_data = (ep_component_registry_entry_t *)
         resource_component_registry_get_by_badge(get_ep_component(), seL4_GetBadge(0));
@@ -135,7 +135,7 @@ static void handle_resspc_allocation_request(seL4_Word sender_badge,
     // Get the resource type code
     gpi_cap_t type = get_resource_type_code(msg->type_name);
 
-    OSDB_PRINTF("Creating resource space for type (%s, %d).\n", msg->type_name, type);
+    OSDB_PRINTF("Creating resource space for type (%s, %u).\n", msg->type_name, type);
 
     // Allocate the resource space
     resspc_component_registry_entry_t *space_entry;
@@ -152,10 +152,10 @@ static void handle_resspc_allocation_request(seL4_Word sender_badge,
                                         (resource_registry_node_t **)&space_entry, &space_cap);
     SERVER_GOTO_IF_ERR(error, "Failed to allocate a new resource space\n");
 
-    OSDB_PRINTF("Registered resource space, server cap is at %ld, ID: %ld.\n",
-                space_entry->space.server_ep, space_entry->gen.object_id);
+    OSDB_PRINTF("Registered resource space, server cap is at %lu, ID: %u.\n",
+                space_entry->space.server_ep, space_entry->space.id);
 
-    uint64_t space_id = space_entry->gen.object_id;
+    gpi_space_id_t space_id = space_entry->space.id;
 
     // Add the RDE to the client PD
     rde_type_t rde_type = {
@@ -176,16 +176,16 @@ err_goto:
     reply_msg->errorCode = error;
 }
 
-int resspc_component_mark_delete(uint64_t space_id, bool execute_cleanup_policy)
+int resspc_component_mark_delete(gpi_space_id_t space_id, bool execute_cleanup_policy)
 {
     int error = 0;
 
-    OSDB_PRINTF("Mark resource space (%ld) for deletion, execute_cleanup_policy (%d) \n",
+    OSDB_PRINTF("Mark resource space (%u) for deletion, execute_cleanup_policy (%u) \n",
                 space_id, execute_cleanup_policy);
 
     // Find the resource space
     resspc_component_registry_entry_t *space_entry = resource_space_get_entry_by_id(space_id);
-    SERVER_GOTO_IF_COND(space_entry == NULL, "Couldn't find resource space (%ld)\n", space_id);
+    SERVER_GOTO_IF_COND(space_entry == NULL, "Couldn't find resource space (%u)\n", space_id);
 
     // (XXX) Arya: We can't clean up the server endpoint because it might be used for another resource space
     // This needs some more thought
@@ -194,15 +194,15 @@ int resspc_component_mark_delete(uint64_t space_id, bool execute_cleanup_policy)
     cspacepath_t server_ep_path;
     pd_make_path(node->space.pd, node->space.server_ep, &server_ep_path);
     error = seL4_CNode_CancelBadgedSends(server_ep_path.root, server_ep_path.capPtr, server_ep_path.capDepth);
-    SERVER_GOTO_IF_ERR(error, "Failed to cancel badged sends on resource space (%d)\n", space_id);
+    SERVER_GOTO_IF_ERR(error, "Failed to cancel badged sends on resource space (%u)\n", space_id);
 
     // Revoke the server EP
     error = vka_cnode_revoke(&server_ep_path);
-    SERVER_GOTO_IF_ERR(error, "Failed to revoke endpoint for resource space (%d)\n", space_id);
+    SERVER_GOTO_IF_ERR(error, "Failed to revoke endpoint for resource space (%u)\n", space_id);
 
     // Delete the server EP
     error = vka_cnode_delete(&server_ep_path);
-    SERVER_GOTO_IF_ERR(error, "Failed to revoke endpoint for resource space (%d)\n", space_id);
+    SERVER_GOTO_IF_ERR(error, "Failed to revoke endpoint for resource space (%u)\n", space_id);
 #endif
 
     // Mark it for deletion
@@ -233,26 +233,26 @@ static void handle_create_resource_request(seL4_Word sender_badge,
     OSDB_PRINTF("Got create resource request from client badge %lx.\n", sender_badge);
     int error = 0;
 
-    uint64_t client_id = get_client_id_from_badge(sender_badge);
-    uint64_t space_id = get_object_id_from_badge(sender_badge);
-    uint64_t res_id = msg->resource_id;
+    gpi_obj_id_t client_id = get_client_id_from_badge(sender_badge);
+    gpi_space_id_t space_id = get_object_id_from_badge(sender_badge);
+    gpi_obj_id_t object_id = msg->resource_id;
 
     // Find the resource space
     resspc_component_registry_entry_t *space_entry = resource_space_get_entry_by_id(space_id);
-    SERVER_GOTO_IF_COND(space_entry == NULL, "Couldn't find resource space (%ld)\n", space_id);
+    SERVER_GOTO_IF_COND(space_entry == NULL, "Couldn't find resource space (%u)\n", space_id);
 
     // Find the resource server PD
     pd_component_registry_entry_t *server_pd = pd_component_registry_get_entry_by_id(client_id);
-    SERVER_GOTO_IF_COND(server_pd == NULL, "Couldn't find resource server PD (%ld)\n", client_id);
+    SERVER_GOTO_IF_COND(server_pd == NULL, "Couldn't find resource server PD (%u)\n", client_id);
 
     gpi_cap_t resource_type = space_entry->space.resource_type;
 
-    OSDB_PRINTF("resource server %d creates resource in space %d with ID %ld\n",
-                server_pd->pd.id, space_entry->space.id, res_id);
+    OSDB_PRINTF("resource server %u creates resource in space %u with ID %u\n",
+                server_pd->pd.id, space_entry->space.id, object_id);
 
     // Resource does not exist as a cap anywhere yet
     error = pd_add_resource(&server_pd->pd,
-                            make_res_id(resource_type, space_entry->space.id, res_id),
+                            make_res_id(resource_type, space_entry->space.id, object_id),
                             seL4_CapNull, seL4_CapNull, seL4_CapNull);
 
 err_goto:
@@ -266,20 +266,20 @@ static void handle_delete_resource_request(seL4_Word sender_badge,
     OSDB_PRINTF("Got delete resource request from client badge %lx.\n", sender_badge);
     int error = 0;
 
-    uint64_t client_id = get_client_id_from_badge(sender_badge);
-    uint64_t space_id = get_object_id_from_badge(sender_badge);
-    uint64_t res_id = msg->resource_id;
+    gpi_obj_id_t client_id = get_client_id_from_badge(sender_badge);
+    gpi_space_id_t space_id = get_object_id_from_badge(sender_badge);
+    gpi_obj_id_t object_id = msg->resource_id;
 
     // Find the resource space
     resspc_component_registry_entry_t *space_entry = resource_space_get_entry_by_id(space_id);
-    SERVER_GOTO_IF_COND(space_entry == NULL, "Couldn't find resource space (%ld)\n", space_id);
+    SERVER_GOTO_IF_COND(space_entry == NULL, "Couldn't find resource space (%u)\n", space_id);
     gpi_cap_t resource_type = space_entry->space.resource_type;
 
-    OSDB_PRINTF("resource server %ld deletes resource in space %d with ID %ld\n",
-                client_id, space_entry->space.id, res_id);
+    OSDB_PRINTF("resource server %u deletes resource in space %u with ID %u\n",
+                client_id, space_entry->space.id, object_id);
 
     // Remove the resource from all PDs
-    error = pd_component_resource_cleanup(make_res_id(resource_type, space_entry->space.id, res_id));
+    error = pd_component_resource_cleanup(make_res_id(resource_type, space_entry->space.id, object_id));
 
 err_goto:
     reply_msg->which_msg = ResSpcReturnMessage_basic_tag;
@@ -292,44 +292,44 @@ static void handle_revoke_resource_request(seL4_Word sender_badge,
     OSDB_PRINTF("Got delete resource request from client badge %lx.\n", sender_badge);
     int error = 0;
 
-    uint64_t client_id = get_client_id_from_badge(sender_badge);
-    uint64_t space_id = get_object_id_from_badge(sender_badge);
-    uint64_t res_id = msg->resource_id;
+    gpi_obj_id_t client_id = get_client_id_from_badge(sender_badge);
+    gpi_space_id_t space_id = get_object_id_from_badge(sender_badge);
+    gpi_obj_id_t object_id = msg->resource_id;
 
     // Find the resource space
     resspc_component_registry_entry_t *space_entry = resource_space_get_entry_by_id(space_id);
-    SERVER_GOTO_IF_COND(space_entry == NULL, "Couldn't find resource space (%ld)\n", space_id);
+    SERVER_GOTO_IF_COND(space_entry == NULL, "Couldn't find resource space (%u)\n", space_id);
     gpi_cap_t resource_type = space_entry->space.resource_type;
 
     // Find the target PD
     pd_component_registry_entry_t *target_pd = pd_component_registry_get_entry_by_id(msg->target_pd_id);
-    SERVER_GOTO_IF_COND(target_pd == NULL, "Couldn't find resource server PD (%d)\n", msg->target_pd_id);
+    SERVER_GOTO_IF_COND(target_pd == NULL, "Couldn't find resource server PD (%u)\n", msg->target_pd_id);
 
-    OSDB_PRINTF("resource server %ld revokes resource in space %d with ID %ld from PD (%d)\n",
-                client_id, space_entry->space.id, res_id, msg->target_pd_id);
+    OSDB_PRINTF("resource server %u revokes resource in space %u with ID %u from PD (%u)\n",
+                client_id, space_entry->space.id, object_id, msg->target_pd_id);
 
     // Remove the resource from all PDs
     error = pd_remove_resource(&target_pd->pd,
-                               make_res_id(resource_type, space_entry->space.id, res_id));
+                               make_res_id(resource_type, space_entry->space.id, object_id));
 
 err_goto:
     reply_msg->which_msg = ResSpcReturnMessage_basic_tag;
     reply_msg->errorCode = error;
 }
 
-int resspc_component_map_space(uint64_t src_spc_id, uint64_t dest_spc_id)
+int resspc_component_map_space(gpi_space_id_t src_spc_id, gpi_space_id_t dest_spc_id)
 {
     int error = 0;
 
-    OSDB_PRINTF("Mapping resource space (%ld) to resource space (%ld)\n", src_spc_id, dest_spc_id);
+    OSDB_PRINTF("Mapping resource space (%u) to resource space (%u)\n", src_spc_id, dest_spc_id);
 
     // Find the source resource space
     resspc_component_registry_entry_t *src_space_entry = resource_space_get_entry_by_id(src_spc_id);
-    SERVER_GOTO_IF_COND(src_space_entry == NULL, "Couldn't find resource space (%ld)\n", src_spc_id);
+    SERVER_GOTO_IF_COND(src_space_entry == NULL, "Couldn't find resource space (%u)\n", src_spc_id);
 
     // Find the destination resource space
     resspc_component_registry_entry_t *dst_space_entry = resource_space_get_entry_by_id(dest_spc_id);
-    SERVER_GOTO_IF_COND(dst_space_entry == NULL, "Couldn't find resource space (%ld)\n", dest_spc_id);
+    SERVER_GOTO_IF_COND(dst_space_entry == NULL, "Couldn't find resource space (%u)\n", dest_spc_id);
 
     // Track the mapping
     linked_list_insert(&src_space_entry->space.map_spaces, (void *)&dst_space_entry->space);
@@ -344,8 +344,8 @@ static void handle_map_space_request(seL4_Word sender_badge,
     OSDB_PRINTF("Got map space request from client badge %lx.\n", sender_badge);
     int error = 0;
 
-    uint64_t src_spc_id = get_object_id_from_badge(sender_badge);
-    uint64_t dest_spc_id = msg->space_id;
+    gpi_space_id_t src_spc_id = get_object_id_from_badge(sender_badge);
+    gpi_space_id_t dest_spc_id = msg->space_id;
 
     error = resspc_component_map_space(src_spc_id, dest_spc_id);
 
@@ -360,11 +360,11 @@ static void handle_destroy_space_request(seL4_Word sender_badge,
     OSDB_PRINTF("Got destroy space request from client badge %lx.\n", sender_badge);
     int error = 0;
 
-    uint64_t spc_id = get_object_id_from_badge(sender_badge);
+    gpi_space_id_t spc_id = get_object_id_from_badge(sender_badge);
 
     // Find the source resource space
     resspc_component_registry_entry_t *src_space_entry = resource_space_get_entry_by_id(spc_id);
-    SERVER_GOTO_IF_COND(src_space_entry == NULL, "Couldn't find resource space (%ld)\n", spc_id);
+    SERVER_GOTO_IF_COND(src_space_entry == NULL, "Couldn't find resource space (%u)\n", spc_id);
 
     SERVER_GOTO_IF_COND(src_space_entry->space.to_delete, "Space is already being deleted\n");
 
@@ -377,13 +377,13 @@ err_goto:
     reply_msg->errorCode = error;
 }
 
-int resspc_check_map(uint64_t src_space_id, uint64_t dest_space_id)
+int resspc_check_map(gpi_space_id_t src_space_id, gpi_space_id_t dest_space_id)
 {
     int error = 0;
 
     // Find the source resource space
     resspc_component_registry_entry_t *src_space_entry = resource_space_get_entry_by_id(src_space_id);
-    SERVER_GOTO_IF_COND(src_space_entry == NULL, "Couldn't find resource space (%ld)\n", src_space_id);
+    SERVER_GOTO_IF_COND(src_space_entry == NULL, "Couldn't find resource space (%u)\n", src_space_id);
 
     // Check the mappings
     for (linked_list_node_t *curr = src_space_entry->space.map_spaces.head; curr != NULL; curr = curr->next)
@@ -436,16 +436,16 @@ static void resspc_component_handle(void *msg_p,
             handle_revoke_resource_request(sender_badge, &msg->msg.revoke_resource, reply_msg);
             break;
         default:
-            SERVER_GOTO_IF_COND(1, "Unknown request received: %d\n", msg->which_msg);
+            SERVER_GOTO_IF_COND(1, "Unknown request received: %u\n", msg->which_msg);
             break;
         }
     }
 
-    OSDB_PRINTF("Returning from ResSpc component with error code %d\n", reply_msg->errorCode);
+    OSDB_PRINTF("Returning from ResSpc component with error code %u\n", reply_msg->errorCode);
     return;
 
 err_goto:
-    OSDB_PRINTF("Returning from ResSpc component with error code %d\n", error);
+    OSDB_PRINTF("Returning from ResSpc component with error code %u\n", error);
     reply_msg->errorCode = error;
 }
 
@@ -498,7 +498,7 @@ int resspc_component_initialize(vka_t *server_vka,
     resource_registry_insert(&get_resspc_component()->registry, (resource_registry_node_t *)reg_entry);
 }
 
-resspc_component_registry_entry_t *resource_space_get_entry_by_id(seL4_Word space_id)
+resspc_component_registry_entry_t *resource_space_get_entry_by_id(gpi_space_id_t space_id)
 {
     return (resspc_component_registry_entry_t *)resource_component_registry_get_by_id(get_resspc_component(), space_id);
 }

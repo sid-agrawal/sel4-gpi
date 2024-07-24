@@ -58,7 +58,7 @@ resource_component_context_t *get_mo_component(void);
  */
 int forge_mo_cap_from_frames(seL4_CPtr *frame_caps,
                              uint32_t num_pages,
-                             uint32_t client_pd_id,
+                             gpi_obj_id_t client_pd_id,
                              seL4_CPtr *cap_ret,
                              mo_t **mo_ref);
 

@@ -180,13 +180,13 @@ int test_sqlite(env_t env)
     pd_client_context_t pd_conn = sel4gpi_get_pd_conn();
 
     /* Start ramdisk server process */
-    uint64_t ramdisk_id;
+    gpi_space_id_t ramdisk_id;
     seL4_CPtr ramdisk_pd_cap;
     error = start_ramdisk_pd(&ramdisk_pd_cap, &ramdisk_id);
     test_assert(error == 0);
 
     /* Start fs server process */
-    uint64_t fs_id;
+    gpi_space_id_t fs_id;
     seL4_CPtr fs_pd_cap;
     error = start_xv6fs_pd(ramdisk_id, &fs_pd_cap, &fs_id);
     test_assert(error == 0);

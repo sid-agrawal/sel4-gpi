@@ -48,14 +48,14 @@ static void on_cpu_registry_delete(resource_registry_node_t *node_gen, void *arg
 {
     cpu_component_registry_entry_t *node = (cpu_component_registry_entry_t *)node_gen;
 
-    OSDB_PRINTF("Destroying CPU (%d)\n", node->cpu.id);
+    OSDB_PRINTF("Destroying CPU (%u)\n", node->cpu.id);
 
     resource_component_remove_from_rt(get_cpu_component(), node->cpu.id);
 
     cpu_destroy(&node->cpu);
 }
 
-int cpu_component_allocate(uint32_t client_id, cpu_t **ret_cpu, seL4_CPtr *ret_cap)
+int cpu_component_allocate(gpi_obj_id_t client_id, cpu_t **ret_cpu, seL4_CPtr *ret_cap)
 {
     int error = 0;
     cpu_component_registry_entry_t *new_entry;
@@ -79,7 +79,7 @@ static void handle_cpu_allocation(seL4_Word sender_badge, CpuReturnMessage *repl
     int error = 0;
     seL4_CPtr ret_cap;
     cpu_t *cpu;
-    uint32_t client_id = get_client_id_from_badge(sender_badge);
+    gpi_obj_id_t client_id = get_client_id_from_badge(sender_badge);
 
     error = cpu_component_allocate(client_id, &cpu, &ret_cap);
     SERVER_GOTO_IF_ERR(error, "Failed to allocate new CPU object\n");
@@ -101,7 +101,7 @@ static void handle_start_req(seL4_Word sender_badge, CpuStartMessage *msg, CpuRe
     /* Find the client */
     cpu_component_registry_entry_t *client_data = (cpu_component_registry_entry_t *)
         resource_component_registry_get_by_badge(get_cpu_component(), sender_badge);
-    SERVER_GOTO_IF_COND(client_data == NULL, "Couldn't find CPU (%ld)\n", get_object_id_from_badge(sender_badge));
+    SERVER_GOTO_IF_COND(client_data == NULL, "Couldn't find CPU (%u)\n", get_object_id_from_badge(sender_badge));
 
     error = cpu_start(&client_data->cpu);
     SERVER_GOTO_IF_ERR(error, "Failed to start CPU\n");
@@ -130,12 +130,12 @@ int cpu_component_configure(cpu_t *cpu,
     if (cpu->ipc_buf_mo)
     {
         error = resource_component_dec(get_mo_component(), cpu->ipc_buf_mo);
-        SERVER_GOTO_IF_ERR(error, "Failed to decrement refcount of old IPC buf mo (%d)\n", cpu->ipc_buf_mo);
+        SERVER_GOTO_IF_ERR(error, "Failed to decrement refcount of old IPC buf mo (%u)\n", cpu->ipc_buf_mo);
         cpu->ipc_buf_mo = 0;
     }
 
     error = resource_component_inc(get_mo_component(), ipc_buf_mo->id);
-    SERVER_GOTO_IF_ERR(error, "Failed to increment refcount of IPC buf mo (%d)\n", ipc_buf_mo->id);
+    SERVER_GOTO_IF_ERR(error, "Failed to increment refcount of IPC buf mo (%u)\n", ipc_buf_mo->id);
     cpu->ipc_buf_mo = ipc_buf_mo->id;
 
     /* Configure the vspace */
@@ -151,7 +151,7 @@ int cpu_component_configure(cpu_t *cpu,
     /* Set the bound notification */
     // (XXX) Arya: I'm not sure where this should go
     error = cpu_bind_notif(cpu, pd->notification.cptr);
-    SERVER_GOTO_IF_ERR(error, "Failed to configure vspace for CPU (%d)\n", cpu->id);
+    SERVER_GOTO_IF_ERR(error, "Failed to configure vspace for CPU (%u)\n", cpu->id);
 
     cpu->binded_ads_id = ads->id;
     OSDB_PRINTF("Finished configuring CPU\n");
@@ -172,16 +172,16 @@ static void handle_config_req(seL4_Word sender_badge,
     /* Find the CPU */
     cpu_component_registry_entry_t *cpu_data = (cpu_component_registry_entry_t *)
         resource_component_registry_get_by_badge(get_cpu_component(), sender_badge);
-    SERVER_GOTO_IF_COND(cpu_data == NULL, "Couldn't find CPU (%ld)\n", get_object_id_from_badge(sender_badge));
+    SERVER_GOTO_IF_COND(cpu_data == NULL, "Couldn't find CPU (%u)\n", get_object_id_from_badge(sender_badge));
 
     pd_component_registry_entry_t *pd_data = pd_component_registry_get_entry_by_badge(seL4_GetBadge(0));
-    SERVER_GOTO_IF_COND(pd_data == NULL, "Couldn't find PD (%ld)\n", get_object_id_from_badge(seL4_GetBadge(0)));
+    SERVER_GOTO_IF_COND(pd_data == NULL, "Couldn't find PD (%u)\n", get_object_id_from_badge(seL4_GetBadge(0)));
 
     /* Find the ADS */
     seL4_Word ads_cap_badge = seL4_GetBadge(1);
     ads_component_registry_entry_t *ads_data = (ads_component_registry_entry_t *)
         resource_component_registry_get_by_badge(get_ads_component(), ads_cap_badge);
-    SERVER_GOTO_IF_COND(ads_data == NULL, "Couldn't find ADS (%ld)\n", get_object_id_from_badge(ads_cap_badge));
+    SERVER_GOTO_IF_COND(ads_data == NULL, "Couldn't find ADS (%u)\n", get_object_id_from_badge(ads_cap_badge));
 
     /* Find the IPC MO, if it exists (OK if it doesn't exist) */
     seL4_Word ipc_buf_mo_badge = seL4_GetBadge(2);
@@ -215,18 +215,18 @@ static void handle_change_vspace_req(seL4_Word sender_badge,
     /* Find the client */
     cpu_component_registry_entry_t *client_data = (cpu_component_registry_entry_t *)
         resource_component_registry_get_by_badge(get_cpu_component(), sender_badge);
-    SERVER_GOTO_IF_COND(client_data == NULL, "Couldn't find CPU (%ld)\n", get_object_id_from_badge(sender_badge));
+    SERVER_GOTO_IF_COND(client_data == NULL, "Couldn't find CPU (%u)\n", get_object_id_from_badge(sender_badge));
 
     /* Find the PD */
     pd_component_registry_entry_t *pd_data =
         pd_component_registry_get_entry_by_id(get_client_id_from_badge(sender_badge));
-    SERVER_GOTO_IF_COND(pd_data == NULL, "Couldn't find PD (%ld)\n", get_client_id_from_badge(sender_badge));
+    SERVER_GOTO_IF_COND(pd_data == NULL, "Couldn't find PD (%u)\n", get_client_id_from_badge(sender_badge));
 
     /* Find the ADS */
     seL4_Word ads_cap_badge = seL4_GetBadge(0);
     ads_component_registry_entry_t *ads_data = (ads_component_registry_entry_t *)
         resource_component_registry_get_by_badge(get_ads_component(), ads_cap_badge);
-    SERVER_GOTO_IF_COND(ads_data == NULL, "Couldn't find ADS (%ld)\n", get_object_id_from_badge(ads_cap_badge));
+    SERVER_GOTO_IF_COND(ads_data == NULL, "Couldn't find ADS (%u)\n", get_object_id_from_badge(ads_cap_badge));
     vspace_t *ads_vspace = ads_data->ads.vspace;
 
     // Change vspace
@@ -350,12 +350,12 @@ static void handle_disconnect_req(seL4_Word sender_badge,
 
     int error = 0;
 
-    uint64_t cpu_id = get_object_id_from_badge(sender_badge);
+    gpi_obj_id_t cpu_id = get_object_id_from_badge(sender_badge);
 
     /* Find the PD */
     pd_component_registry_entry_t *pd_data =
         pd_component_registry_get_entry_by_id(get_client_id_from_badge(sender_badge));
-    SERVER_GOTO_IF_COND(pd_data == NULL, "Couldn't find PD (%ld)\n", get_client_id_from_badge(sender_badge));
+    SERVER_GOTO_IF_COND(pd_data == NULL, "Couldn't find PD (%u)\n", get_client_id_from_badge(sender_badge));
 
     /* Remove the MO from the client CPU */
     error = pd_remove_resource(&pd_data->pd, make_res_id(GPICAP_TYPE_CPU, get_cpu_component()->space_id, cpu_id));
@@ -415,16 +415,16 @@ static void cpu_component_handle(void *msg_p,
             handle_disconnect_req(sender_badge, &msg->msg.disconnect, reply_msg);
             break;
         default:
-            SERVER_GOTO_IF_COND(1, "Unknown request received: %d\n", msg->which_msg);
+            SERVER_GOTO_IF_COND(1, "Unknown request received: %u\n", msg->which_msg);
             break;
         }
     }
 
-    OSDB_PRINTF("Returning from CPU component with error code %d\n", reply_msg->errorCode);
+    OSDB_PRINTF("Returning from CPU component with error code %u\n", reply_msg->errorCode);
     return;
 
 err_goto:
-    OSDB_PRINTF("Returning from CPU component with error code %d\n", error);
+    OSDB_PRINTF("Returning from CPU component with error code %u\n", error);
     reply_msg->errorCode = error;
 }
 
@@ -465,14 +465,14 @@ int cpu_component_initialize(vka_t *server_vka,
 
 /** --- Functions callable by root task --- **/
 
-int cpu_component_stop(uint32_t cpu_id)
+int cpu_component_stop(gpi_obj_id_t cpu_id)
 {
     int error = 0;
 
     // Find the CPU
     cpu_component_registry_entry_t *cpu_data = (cpu_component_registry_entry_t *)
         resource_component_registry_get_by_id(get_cpu_component(), cpu_id);
-    SERVER_GOTO_IF_COND(cpu_data == NULL, "Couldn't find CPU (%d)\n", cpu_id);
+    SERVER_GOTO_IF_COND(cpu_data == NULL, "Couldn't find CPU (%u)\n", cpu_id);
 
     // Stop the CPU
     error = cpu_stop(&cpu_data->cpu);

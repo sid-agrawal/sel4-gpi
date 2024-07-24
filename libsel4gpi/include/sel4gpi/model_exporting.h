@@ -102,37 +102,37 @@ void init_model_state(model_state_t *model_state, void *free_ptr, size_t free_si
 
 /**
  * Clean up any non-portable data of the model state before sharing with another process
- * 
+ *
  * @param model_state
-*/
+ */
 void clean_model_state(model_state_t *model_state);
 
 /**
  * Frees the entire model state
- * 
+ *
  * @param model_state
-*/
+ */
 void destroy_model_state(model_state_t *model_state);
 
 /**
  * Export the model state to a buffer with CSV formatting
- * 
+ *
  * @param model_state
-*/
+ */
 void export_model_state(model_state_t *model_state, char *buffer, size_t len);
 
 /**
  * Print the model state to a terminal with CSV formatting
- * 
+ *
  * @param model_state
-*/
+ */
 void print_model_state(model_state_t *model_state);
 
 /**
  * Add any nodes and edges from source state to dest state
- * 
+ *
  * @param model_state
-*/
+ */
 void combine_model_states(model_state_t *dest, model_state_t *src);
 
 /**
@@ -158,7 +158,7 @@ gpi_model_node_t *get_resource_node(model_state_t *model_state, gpi_res_id_t res
 
 /**
  * Add extra data to a node
- * 
+ *
  * @param node
  * @param extra data to copy to the 'extra' field of the node
  */
@@ -174,7 +174,7 @@ void set_node_extra(gpi_model_node_t *node, char *extra);
  * @return The model node for the resource space
  */
 gpi_model_node_t *add_resource_space_node(model_state_t *model_state, gpi_cap_t resource_type,
-                                          uint64_t res_space_id, bool extracted);
+                                          gpi_space_id_t res_space_id, bool extracted);
 
 /**
  * Get a resource space from the model state
@@ -184,7 +184,8 @@ gpi_model_node_t *add_resource_space_node(model_state_t *model_state, gpi_cap_t 
  * @param res_space_id unique ID of the resource space
  * @return The model node for the resource space
  */
-gpi_model_node_t *get_resource_space_node(model_state_t *model_state, gpi_cap_t resource_type, uint64_t res_space_id);
+gpi_model_node_t *get_resource_space_node(model_state_t *model_state, gpi_cap_t resource_type,
+                                          gpi_space_id_t res_space_id);
 
 /**
  * Add a PD to the model state, may overwrite node data if it exists, but empty
@@ -195,7 +196,7 @@ gpi_model_node_t *get_resource_space_node(model_state_t *model_state, gpi_cap_t 
  * @param extracted whether the dependent relations for this node has been extracted
  * @return The model node for the PD
  */
-gpi_model_node_t *add_pd_node(model_state_t *model_state, char *pd_name, uint64_t pd_id, bool extracted);
+gpi_model_node_t *add_pd_node(model_state_t *model_state, char *pd_name, gpi_obj_id_t pd_id, bool extracted);
 
 /**
  * Get a PD node from the model state
@@ -204,7 +205,7 @@ gpi_model_node_t *add_pd_node(model_state_t *model_state, char *pd_name, uint64_
  * @param pd_id unique ID of the PD
  * @return The model node for the PD, or NULL if it does not exist
  */
-gpi_model_node_t *get_pd_node(model_state_t *model_state, uint64_t pd_id);
+gpi_model_node_t *get_pd_node(model_state_t *model_state, gpi_obj_id_t pd_id);
 
 /**
  * Returns the root node of the model state (the root task PD)
@@ -218,7 +219,7 @@ gpi_model_node_t *get_root_node(model_state_t *model_state);
  * @param res_space_id unique ID of the resource space
  * @param str_id returns the string ID, must be a buffer of length CSV_MAX_STRING_SIZE
  */
-void get_resource_space_id(gpi_cap_t resource_type, uint64_t res_space_id, char *str_id);
+void get_resource_space_id(gpi_cap_t resource_type, gpi_space_id_t res_space_id, char *str_id);
 
 /**
  * Generate the string ID for a resource node
@@ -232,7 +233,7 @@ void get_resource_id(gpi_res_id_t res_id, char *str_id);
  * @param pd_id unique ID of the PD
  * @param str_id returns the string ID, must be a buffer of length CSV_MAX_STRING_SIZE
  */
-void get_pd_id(uint64_t pd_id, char *str_id);
+void get_pd_id(gpi_obj_id_t pd_id, char *str_id);
 
 /**
  * Functions to add edges to the model state

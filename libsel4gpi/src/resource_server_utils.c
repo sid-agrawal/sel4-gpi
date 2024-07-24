@@ -56,7 +56,7 @@ int resource_server_start(resource_server_context_t *context,
                           void (*request_handler)(void *, void *, seL4_Word, seL4_CPtr, bool *),
                           int (*work_handler)(PdWorkReturnMessage *),
                           seL4_CPtr parent_ep,
-                          uint64_t parent_pd_id,
+                          gpi_space_id_t parent_pd_id,
                           int (*init_fn)(),
                           bool debug_print,
                           const pb_msgdesc_t *request_desc,
@@ -80,10 +80,10 @@ int resource_server_start(resource_server_context_t *context,
     error = ep_client_get_raw_endpoint(&context->parent_ep);
     CHECK_ERROR(error, "Failed to retrieve parent EP\n");
 
-    printf("Resource server ADS_CAP: %ld\n", (seL4_Word)context->ads_conn.ep);
-    printf("Resource server PD_CAP: %ld\n", (seL4_Word)context->pd_conn.ep);
-    printf("Resource server MO ep: %ld\n", (seL4_Word)context->mo_ep);
-    printf("Resource server RESSPC ep: %ld\n", (seL4_Word)context->resspc_ep);
+    printf("Resource server ADS_CAP: %lu\n", context->ads_conn.ep);
+    printf("Resource server PD_CAP: %lu\n", context->pd_conn.ep);
+    printf("Resource server MO ep: %lu\n", context->mo_ep);
+    printf("Resource server RESSPC ep: %lu\n", context->resspc_ep);
 
     /* Allocate the Endpoint that the server will be listening on. */
     error = sel4gpi_alloc_endpoint(&context->server_ep);
@@ -155,7 +155,7 @@ int resource_server_main(void *context_v)
     // Create a default resource space
     error = resource_server_new_res_space(context, context->parent_pd_id, &context->default_space);
     CHECK_ERROR_GOTO(error, "failed to create resource server's default space", exit_main);
-    RESOURCE_SERVER_PRINTF("Resource server's default space ID is 0x%lx\n", context->default_space.id);
+    RESOURCE_SERVER_PRINTF("Resource server's default space ID is 0x%u\n", context->default_space.id);
 
     // Perform any server-specific initialization
     if (context->init_fn != NULL)
@@ -176,7 +176,7 @@ int resource_server_main(void *context_v)
         received_cap_path.capDepth);
 
     // Send our space ID to the parent process
-    RESOURCE_SERVER_PRINTF("Messaging parent process at slot %ld, sending space ID %ld\n",
+    RESOURCE_SERVER_PRINTF("Messaging parent process at slot %lu, sending space ID %u\n",
                            context->parent_ep.raw_endpoint, context->default_space.id);
     tag = seL4_MessageInfo_new(0, 0, 0, 1);
     seL4_SetMR(0, context->default_space.id);
@@ -343,11 +343,11 @@ int resource_server_unattach(resource_server_context_t *context,
 
 int resource_server_create_resource(resource_server_context_t *context,
                                     resspc_client_context_t *space_conn,
-                                    uint64_t resource_id)
+                                    gpi_obj_id_t resource_id)
 {
     int error;
 
-    RESOURCE_SERVER_PRINTF("Creating resource with ID 0x%lx\n", resource_id);
+    RESOURCE_SERVER_PRINTF("Creating resource with ID 0x%u\n", resource_id);
 
     if (space_conn == NULL)
     {
@@ -360,14 +360,14 @@ int resource_server_create_resource(resource_server_context_t *context,
 }
 
 int resource_server_give_resource(resource_server_context_t *context,
-                                  uint64_t space_id,
-                                  uint64_t resource_id,
-                                  uint64_t client_id,
+                                  gpi_space_id_t space_id,
+                                  gpi_obj_id_t resource_id,
+                                  gpi_obj_id_t client_id,
                                   seL4_CPtr *dest)
 {
     int error;
 
-    RESOURCE_SERVER_PRINTF("Giving resource to client, resource ID 0x%lx, client ID 0x%lx\n", resource_id, client_id);
+    RESOURCE_SERVER_PRINTF("Giving resource to client, resource ID 0x%u, client ID 0x%u\n", resource_id, client_id);
 
     error = pd_client_give_resource(&context->pd_conn,
                                     space_id,
@@ -379,7 +379,7 @@ int resource_server_give_resource(resource_server_context_t *context,
 }
 
 int resource_server_new_res_space(resource_server_context_t *context,
-                                  uint64_t client_id,
+                                  gpi_obj_id_t client_id,
                                   resspc_client_context_t *ret_conn)
 {
     int error;
@@ -394,7 +394,7 @@ int resource_server_new_res_space(resource_server_context_t *context,
     context->resource_type = space_conn.resource_type;
     *ret_conn = space_conn;
 
-    RESOURCE_SERVER_PRINTF("Registered resource server, space ID is 0x%lx\n", space_conn.id);
+    RESOURCE_SERVER_PRINTF("Registered resource server, space ID is 0x%u\n", space_conn.id);
 
 err_goto:
     return error;

@@ -42,7 +42,7 @@ int main(int argc, char **argv)
     seL4_CPtr ep = atol(argv[0]);
     bool native = (bool)atol(argv[1]);
 
-    printf("hello_benchmark main! creation end time: %ld\n", creation_end);
+    printf("hello_benchmark main! creation end time: %lu\n", creation_end);
 
     // Send a message to parent with creation end time
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0, 2);

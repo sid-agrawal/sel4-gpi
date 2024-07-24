@@ -50,7 +50,7 @@ static void on_attach_registry_delete(resource_registry_node_t *node_gen, void *
     attach_node_t *node = (attach_node_t *)node_gen;
     ads_t *ads = (ads_t *)ads_v;
 
-    OSDB_PRINTF("Deleting attach node from ADS (%d), vaddr %p, mo_attached %d, type %s\n",
+    OSDB_PRINTF("Deleting attach node from ADS (%u), vaddr %p, mo_attached %u, type %s\n",
                 ads->id, node->vaddr, node->mo_attached, human_readable_va_res_type(node->type));
 
     // Remove the reservation
@@ -234,7 +234,7 @@ int ads_reserve(ads_t *ads,
     resource_registry_insert(&ads->attach_registry, (resource_registry_node_t *)attach_node);
 
     // The root task holds the VMR by default
-    uint64_t vmr_id = attach_node_map_entry->gen.object_id;
+    gpi_obj_id_t vmr_id = attach_node_map_entry->gen.object_id;
     error = pd_add_resource_by_id(get_gpi_server()->rt_pd_id,
                                   make_res_id(GPICAP_TYPE_VMR, ads->id, vmr_id),
                                   seL4_CapNull, seL4_CapNull, seL4_CapNull);
@@ -246,9 +246,11 @@ err_goto:
     return error;
 }
 
-attach_node_t *ads_get_res_by_id(ads_t *ads, uint64_t res_id)
+attach_node_t *ads_get_res_by_id(ads_t *ads, gpi_obj_id_t object_id)
 {
-    attach_node_map_t *map_entry = (attach_node_map_t *)resource_registry_get_by_id(&ads->attach_id_to_vaddr_map, res_id);
+    attach_node_map_t *map_entry = (attach_node_map_t *)
+        resource_registry_get_by_id(&ads->attach_id_to_vaddr_map, object_id);
+        
     if (map_entry == NULL)
     {
         return NULL;
@@ -343,8 +345,8 @@ int ads_attach_to_res(ads_t *ads,
 
 #if TRACK_MAP_RELATIONS
     /* Map the VMR to the MO */
-    uint64_t vmr_universal_id = compact_res_id(GPICAP_TYPE_VMR, ads->id, reservation->map_entry->gen.object_id);
-    uint64_t mo_id = compact_res_id(GPICAP_TYPE_MO, get_mo_component()->space_id, mo->id);
+    gpi_badge_t vmr_universal_id = compact_res_id(GPICAP_TYPE_VMR, ads->id, reservation->map_entry->gen.object_id);
+    gpi_obj_id_t mo_id = compact_res_id(GPICAP_TYPE_MO, get_mo_component()->space_id, mo->id);
     error = pd_component_map_resources(get_gpi_server()->rt_pd_id, vmr_universal_id, mo_id);
     SERVER_GOTO_IF_ERR(error, "Failed to map VMR to MO\n");
 #endif
@@ -486,13 +488,13 @@ gpi_model_node_t *ads_dump_rr(ads_t *ads, model_state_t *ms, gpi_model_node_t *p
             // (XXX) Arya: I am using attach ID instead of vaddr as the object ID now to avoid this issue
             gpi_model_node_t *vmr_node = add_resource_node(
                 ms,
-                make_res_id(GPICAP_TYPE_VMR, ads->id, (uint32_t)res->map_entry->gen.object_id),
+                make_res_id(GPICAP_TYPE_VMR, ads->id, (gpi_obj_id_t)res->map_entry->gen.object_id),
                 true);
             add_edge(ms, GPI_EDGE_TYPE_SUBSET, vmr_node, ads_space_node);
             add_edge(ms, GPI_EDGE_TYPE_HOLD, pd_node, vmr_node);
             // set the VMR type, number of pages, and page size as extra data on the node
             char extra[CSV_MAX_STRING_SIZE] = {0};
-            snprintf(extra, CSV_MAX_STRING_SIZE, "%s_%d_%zu",
+            snprintf(extra, CSV_MAX_STRING_SIZE, "%s_%u_%zu",
                      human_readable_va_res_type(res->type),
                      res->n_pages, res->page_bits);
             set_node_extra(vmr_node, extra);
@@ -586,7 +588,7 @@ int ads_shallow_copy(vspace_t *loader,
     linked_list_t *src_attaches = NULL;
 
     SERVER_GOTO_IF_COND(cfg->type <= SEL4UTILS_RES_TYPE_NONE || cfg->type >= SEL4UTILS_RES_TYPE_MAX,
-                        "Invalid reservation type given: %d\n", cfg->type);
+                        "Invalid reservation type given: %u\n", cfg->type);
 
     if (cfg->start == NULL &&
         cfg->type != SEL4UTILS_RES_TYPE_SHARED_FRAMES &&
@@ -615,7 +617,7 @@ int ads_shallow_copy(vspace_t *loader,
     for (linked_list_node_t *curr = src_attaches->head; curr != NULL; curr = curr->next)
     {
         attach_node_t *src_attach_node = (attach_node_t *)curr->data;
-        OSDB_PRINTF("%s VMR %p (type: %s, pages: %u) from ADS%d -> ADS%d\n",
+        OSDB_PRINTF("%s VMR %p (type: %s, pages: %u) from ADS%u -> ADS%u\n",
                     sel4gpi_share_degree_to_str(cfg->share_mode),
                     src_attach_node->vaddr, human_readable_va_res_type(cfg->type),
                     src_attach_node->n_pages, src_ads->id, dst_ads->id);
@@ -637,12 +639,12 @@ int ads_shallow_copy(vspace_t *loader,
             (mo_component_registry_entry_t *)resource_component_registry_get_by_id(get_mo_component(),
                                                                                    src_attach_node->mo_id);
         SERVER_GOTO_IF_COND(old_mo_reg_entry == NULL,
-                            "Failed to find the MO (%ld) for vaddr: %p\n",
+                            "Failed to find the MO (%u) for vaddr: %p\n",
                             src_attach_node->mo_id, (void *)src_attach_node->vaddr);
         old_mo = &old_mo_reg_entry->mo;
 
         error = ads_attach_to_res(dst_ads, vka, new_attach_node, src_attach_node->mo_offset, old_mo);
-        SERVER_GOTO_IF_ERR(error, "Failed to attach source MO (%d) to dst ADS (%d)\n", old_mo->id, dst_ads->id);
+        SERVER_GOTO_IF_ERR(error, "Failed to attach source MO (%u) to dst ADS (%u)\n", old_mo->id, dst_ads->id);
     }
 
 err_goto:

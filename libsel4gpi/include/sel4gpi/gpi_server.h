@@ -102,8 +102,8 @@ typedef struct _gpi_server_context
     osmosis_cap_t *osm_caps_tail;
 
     // ID of the root task's PD and ADS
-    uint32_t rt_pd_id;
-    uint32_t rt_ads_id;
+    gpi_obj_id_t rt_pd_id;
+    gpi_obj_id_t rt_ads_id;
 
     /* Track a pending model extraction */
     bool pending_extraction;          ///< True if a model extraction is currently in progress

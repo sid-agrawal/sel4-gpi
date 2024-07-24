@@ -25,10 +25,10 @@
     {                                                                                      \
         OSDB_PRINTF_2("BG: %lx\t", (badge));                                               \
         OSDB_PRINTF_2("CapType: %s\t", cap_type_to_str(get_cap_type_from_badge((badge)))); \
-        OSDB_PRINTF_2("Perms: %lu\t", get_perms_from_badge((badge)));                      \
-        OSDB_PRINTF_2("SpaceID: %lu\t", get_space_id_from_badge((badge)));                 \
-        OSDB_PRINTF_2("CID: %lu\t", get_client_id_from_badge((badge)));                    \
-        OSDB_PRINTF_2("OID: %lu\n", get_object_id_from_badge((badge)));                    \
+        OSDB_PRINTF_2("Perms: %u\t", get_perms_from_badge((badge)));                      \
+        OSDB_PRINTF_2("SpaceID: %u\t", get_space_id_from_badge((badge)));                 \
+        OSDB_PRINTF_2("CID: %u\t", get_client_id_from_badge((badge)));                    \
+        OSDB_PRINTF_2("OID: %u\n", get_object_id_from_badge((badge)));                    \
     } while (0)
 
 /*
@@ -42,41 +42,44 @@
 16:0  16 bits for object ID
 */
 
-// Bits: 63:56 are for the cap type. Total of 8 bits, so 255 types.
-uint64_t get_cap_type_from_badge(seL4_Word badge);
+typedef seL4_Word gpi_badge_t;
+typedef uint16_t gpi_perms_t;
 
 // Bits: 63:56 are for the cap type. Total of 8 bits, so 255 types.
-uint64_t set_cap_type_to_badge(seL4_Word badge, uint64_t type);
+gpi_cap_t get_cap_type_from_badge(gpi_badge_t badge);
+
+// Bits: 63:56 are for the cap type. Total of 8 bits, so 255 types.
+gpi_badge_t set_cap_type_to_badge(gpi_badge_t badge, gpi_cap_t type);
 
 // Bits: 55:40 are for the permisions. Total of 16 bits, as a bit-mask so 16 permissions.
-uint64_t get_perms_from_badge(seL4_Word badge);
+gpi_perms_t get_perms_from_badge(gpi_badge_t badge);
 
 // Bits: 55:40 are for the permisions. Total of 16 bits, as a bit-mask so 16 permissions.
-uint64_t set_perms_to_badge(seL4_Word badge, uint64_t perms);
+gpi_badge_t set_perms_to_badge(gpi_badge_t badge, gpi_perms_t perms);
 
 // Bits: 47:40 are for the resource space ID. Total of 8 bits, so 255 resource spaces
-uint64_t get_space_id_from_badge(seL4_Word badge);
+uint32_t get_space_id_from_badge(gpi_badge_t badge);
 
 // Bits: 47:40 are for the resource space ID. Total of 8 bits, so 255 resource spaces
-uint64_t set_space_id_to_badge(seL4_Word badge, uint64_t space_id);
+gpi_badge_t set_space_id_to_badge(gpi_badge_t badge, gpi_space_id_t space_id);
 
 // Bits: 39:20 are for the client id. Total of 20 bits, so 2^20 clients.
-uint64_t get_client_id_from_badge(seL4_Word badge);
+gpi_obj_id_t get_client_id_from_badge(gpi_badge_t badge);
 
 // Bits: 39:20 are for the client id. Total of 20 bits, so 2^20 clients.
-uint64_t set_client_id_to_badge(seL4_Word badge, uint64_t client_id);
+gpi_badge_t set_client_id_to_badge(gpi_badge_t badge, gpi_obj_id_t client_id);
 
 // Bits: 19:0 are for the object id. Total of 20 bits, so 2^20 objects.
-uint64_t get_object_id_from_badge(seL4_Word badge);
+gpi_obj_id_t get_object_id_from_badge(gpi_badge_t badge);
 
 // Bits: 19:0 are for the object id. Total of 20 bits, so 2^20 objects.
-uint64_t set_object_id_to_badge(seL4_Word badge, uint64_t object_id);
+gpi_badge_t set_object_id_to_badge(gpi_badge_t badge, gpi_obj_id_t object_id);
 
-uint64_t gpi_new_badge(gpi_cap_t cap_type,
-                       uint64_t perms,
-                       uint64_t client_id,
-                       uint64_t space_id,
-                       uint64_t object_id);
+gpi_badge_t gpi_new_badge(gpi_cap_t cap_type,
+                          gpi_perms_t perms,
+                          gpi_obj_id_t client_id,
+                          gpi_space_id_t space_id,
+                          gpi_obj_id_t object_id);
 
 /**
  * Make a compact, unique identifier for a resource
@@ -86,7 +89,7 @@ uint64_t gpi_new_badge(gpi_cap_t cap_type,
  * @param space_id the resource space
  * @param object_id the resource ID, unique within the space
  */
-uint64_t compact_res_id(gpi_cap_t type, uint64_t space_id, uint64_t object_id);
+gpi_badge_t compact_res_id(gpi_cap_t type, gpi_space_id_t space_id, gpi_obj_id_t object_id);
 
 /**
  * @brief formats badge details into a string for printing
@@ -94,4 +97,4 @@ uint64_t compact_res_id(gpi_cap_t type, uint64_t space_id, uint64_t object_id);
  * @param dest string buffer
  * @param badge badge to print
  */
-void badge_sprint(char *dest, seL4_Word badge);
+void badge_sprint(char *dest, gpi_badge_t badge);

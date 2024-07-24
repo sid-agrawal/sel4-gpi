@@ -74,7 +74,7 @@ int cpu_client_config(cpu_client_context_t *cpu,
                       mo_client_context_t *ipc_buf_mo,
                       seL4_Word cnode_guard,
                       seL4_CPtr fault_ep_position,
-                      seL4_Word ipc_buf_addr);
+                      void *ipc_buf_addr);
 
 /**
  * @brief Change just the vspace of the CPU object

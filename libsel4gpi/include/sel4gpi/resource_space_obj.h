@@ -8,11 +8,11 @@
 
 typedef struct _res_space
 {
-    uint32_t id;              ///< Unique ID of the space
+    gpi_space_id_t id;        ///< Unique ID of the space
     gpi_cap_t resource_type;  ///< Type of resources in the space
     seL4_CPtr server_ep;      ///< Raw endpoint of the server that manages the resource space
     linked_list_t map_spaces; ///< List of res_space_t pointers, resource spaces that this space maps to
-    uint32_t pd_id;           ///< ID of the managing PD
+    gpi_obj_id_t pd_id;       ///< ID of the managing PD
     void *data;               ///< Generic field for additional resource space data (not used)
     bool to_delete;           ///< Marks a space that will be deleted in the next sweep
     bool cleanup_policy;      ///< Marks a space that will execute a cleanup policy in the next sweep

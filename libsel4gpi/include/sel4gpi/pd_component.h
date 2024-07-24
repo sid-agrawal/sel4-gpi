@@ -34,10 +34,10 @@
 // Data to send when a PD requests work
 typedef struct _pd_work_entry
 {
-    gpi_res_id_t res_id;   ///< Identifier of the resource the work is for
-    uint32_t client_pd_id; ///< Identifier of the PD the work is for
-                           ///< For model extraction: The client PD that held the resource we are extracting
-                           ///< For resource free: Currently unused
+    gpi_res_id_t res_id;       ///< Identifier of the resource the work is for
+    gpi_obj_id_t client_pd_id; ///< Identifier of the PD the work is for
+                               ///< For model extraction: The client PD that held the resource we are extracting
+                               ///< For resource free: Currently unused
 } pd_work_entry_t;
 
 // Registry of PDs maintained by the server
@@ -66,7 +66,7 @@ int pd_component_initialize(vka_t *server_vka,
 resource_component_context_t *get_pd_component(void);
 
 // Creates a dummy PD object for the root task
-void forge_pd_for_root_task(uint64_t rt_id);
+void forge_pd_for_root_task(gpi_obj_id_t rt_id);
 
 /**
  * Add a resource that the PD holds in metadata only, the resource isn't actually minted into the PD's cspace
@@ -78,7 +78,7 @@ void forge_pd_for_root_task(uint64_t rt_id);
  * @param slot_in_serverPD for debugging purposes, may be removed
  * @return 0 on success, 1 otherwise
  */
-int pd_add_resource_by_id(uint32_t pd_id,
+int pd_add_resource_by_id(gpi_obj_id_t pd_id,
                           gpi_res_id_t res_id,
                           seL4_CPtr slot_in_RT,
                           seL4_CPtr slot_in_PD,
@@ -94,7 +94,7 @@ int pd_add_resource_by_id(uint32_t pd_id,
  * @param dest_res_id the universal ID of the destination resource
  * @return 0 on success, error otherwise
  */
-int pd_component_map_resources(uint32_t client_pd_id, uint64_t src_res_id, uint64_t dest_res_id);
+int pd_component_map_resources(gpi_obj_id_t client_pd_id, gpi_obj_id_t src_res_id, gpi_obj_id_t dest_res_id);
 #endif
 
 /**
@@ -124,7 +124,8 @@ int pd_component_resource_cleanup(gpi_res_id_t res_id);
  * @param execute_cleanup_policy if true, execute a cleanup policy for any PDs that still depend on the resource space
  * @return 0 on success, error otherwise
  */
-int pd_component_space_cleanup(uint32_t pd_id, gpi_cap_t space_type, uint32_t space_id, bool execute_cleanup_policy);
+int pd_component_space_cleanup(gpi_obj_id_t pd_id, gpi_cap_t space_type,
+                               gpi_space_id_t space_id, bool execute_cleanup_policy);
 
 /**
  * Get a PD from the registry by ID
@@ -132,7 +133,7 @@ int pd_component_space_cleanup(uint32_t pd_id, gpi_cap_t space_type, uint32_t sp
  * @param object_id the PD ID
  * @return the PD's registry entry, or NULL if not found
  */
-pd_component_registry_entry_t *pd_component_registry_get_entry_by_id(seL4_Word object_id);
+pd_component_registry_entry_t *pd_component_registry_get_entry_by_id(gpi_obj_id_t object_id);
 
 /**
  * Get a PD from the registry by badge
@@ -155,7 +156,7 @@ void pd_component_queue_model_extraction_work(pd_component_registry_entry_t *pd_
  * Queue a resource for a resource server to free
  * The resource server is thus notified that another PD has stopped holding one of its resources
  * The server may or may not decide to destroy the resource / add it back to a pool
- * 
+ *
  * @param pd_entry the target PD
  * @param work the details of the work
  */
@@ -179,7 +180,7 @@ void pd_component_queue_destroy_work(pd_component_registry_entry_t *pd_entry, pd
  * @param ret_ads returns the created PD
  * @param ret_cap returns the slot of the new PD, in the client (or NULL, to make no cap)
  */
-int pd_component_allocate(uint32_t client_id, mo_t *mo, pd_t **ret_pd, seL4_CPtr *ret_cap);
+int pd_component_allocate(gpi_obj_id_t client_id, mo_t *mo, pd_t **ret_pd, seL4_CPtr *ret_cap);
 
 /**
  * @brief
@@ -217,7 +218,7 @@ int pd_component_runtime_setup(pd_t *pd,
  * @param pd_id the ID of the PD to terminate
  * @return 0 on success, error otherwise
  */
-int pd_component_terminate(uint32_t pd_id);
+int pd_component_terminate(gpi_obj_id_t pd_id);
 
 /**
  * Create a special endpoint for benchmark IPC to root task

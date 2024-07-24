@@ -190,7 +190,7 @@ int sel4gpi_ads_configure(ads_config_t *cfg,
     int error = 0;
     ads_client_context_t vmr_rde = {.ep = sel4gpi_get_rde_by_space_id(runnable->ads.id, GPICAP_TYPE_VMR)};
 
-    uint64_t current_ads_id = sel4gpi_get_binded_ads_id();
+    gpi_obj_id_t current_ads_id = sel4gpi_get_binded_ads_id();
     ads_client_context_t self_ads_conn = sel4gpi_get_ads_conn();
 
     /* attach OSmosis data MO to the ADS*/
@@ -285,7 +285,7 @@ int sel4gpi_ads_configure(ads_config_t *cfg,
 
                 break;
             default:
-                GOTO_IF_COND(1, "Invalid sharing degree specified (%d) for VMR (%p)\n", vmr->share_mode, vmr->start);
+                GOTO_IF_COND(1, "Invalid sharing degree specified (%u) for VMR (%p)\n", vmr->share_mode, vmr->start);
                 break;
             }
         }
@@ -311,9 +311,9 @@ static int rde_configure(pd_config_t *cfg, sel4gpi_runnable_t *runnable)
         for (linked_list_node_t *curr = cfg->rde_cfg->head; curr != NULL; curr = curr->next)
         {
             rde = (rde_config_t *)curr->data;
-            PD_CREATION_PRINT("Sharing RDE (type: %s, space ID: %d)\n", cap_type_to_str(rde->type), rde->space_id);
+            PD_CREATION_PRINT("Sharing RDE (type: %s, space ID: %u)\n", cap_type_to_str(rde->type), rde->space_id);
             error = pd_client_share_rde(&runnable->pd, rde->type, rde->space_id);
-            WARN_IF_COND(error, "Couldn't share RDE (type: %d, space ID: %d)\n", rde->type, rde->space_id);
+            WARN_IF_COND(error, "Couldn't share RDE (type: %u, space ID: %u)\n", rde->type, rde->space_id);
         }
     }
 
@@ -456,7 +456,7 @@ int sel4gpi_prepare_pd(pd_config_t *cfg, sel4gpi_runnable_t *runnable, int argc,
                               &ipc_mo,
                               cnode_guard,
                               fault_ep_in_PD.raw_endpoint,
-                              (seL4_Word)ipc_buf);
+                              ipc_buf);
     GOTO_IF_ERR(error, "failed to configure CPU\n");
 
 err_goto:
@@ -621,7 +621,7 @@ char *sel4gpi_share_degree_to_str(gpi_share_degree_t share_deg)
     }
 }
 
-void sel4gpi_add_rde_config(pd_config_t *cfg, gpi_cap_t rde_type, uint32_t space_id)
+void sel4gpi_add_rde_config(pd_config_t *cfg, gpi_cap_t rde_type, gpi_space_id_t space_id)
 {
     rde_config_t *new_rde_cfg = calloc(1, sizeof(rde_config_t));
     if (!new_rde_cfg)

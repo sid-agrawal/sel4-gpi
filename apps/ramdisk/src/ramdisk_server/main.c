@@ -35,7 +35,7 @@ int main(int argc, char **argv)
     /* parse args */
     assert(argc == 2);
     seL4_CPtr parent_ep = (seL4_CPtr)atol(argv[0]);
-    uint64_t parent_pd_id = (uint64_t)atol(argv[1]);
+    gpi_obj_id_t parent_pd_id = (gpi_obj_id_t)atol(argv[1]);
 
     return resource_server_start(
         &get_ramdisk_server()->gen,

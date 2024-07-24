@@ -9,6 +9,6 @@
 typedef struct _resspc_client_context
 {
    seL4_CPtr ep;
-   uint64_t id;             ///< Resource space ID
+   gpi_space_id_t id;       ///< Resource space ID
    gpi_cap_t resource_type; ///< The type of resource that this resource space contains
 } resspc_client_context_t;

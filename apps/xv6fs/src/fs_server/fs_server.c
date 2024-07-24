@@ -85,9 +85,9 @@ __attribute__((noreturn)) void xv6fs_panic(char *s)
 /**
  * Make the path prefix for a namespace
  */
-static void make_ns_prefix(char *prefix, uint64_t nsid)
+static void make_ns_prefix(char *prefix, gpi_space_id_t nsid)
 {
-  snprintf(prefix, MAXPATH, "/ns%ld", nsid);
+  snprintf(prefix, MAXPATH, "/ns%u", nsid);
 }
 
 /**
@@ -161,7 +161,7 @@ static int init_blocks()
  * @param notify_rt if true, deletes the resource space from the root task as well
  * @return 0 on success, error otherwises
  */
-static int destroy_ns(uint32_t ns_id, bool notify_rt)
+static int destroy_ns(gpi_space_id_t ns_id, bool notify_rt)
 {
   int error = 0;
 
@@ -258,9 +258,9 @@ void xv6fs_request_handler(void *msg_p,
   reply_msg->which_msg = FsReturnMessage_basic_tag;
 
   // Get info from badge
-  uint64_t client_id = get_client_id_from_badge(sender_badge);
-  uint64_t obj_id = get_object_id_from_badge(sender_badge);
-  uint64_t ns_id = get_space_id_from_badge(sender_badge);
+  gpi_obj_id_t client_id = get_client_id_from_badge(sender_badge);
+  gpi_obj_id_t obj_id = get_object_id_from_badge(sender_badge);
+  gpi_space_id_t ns_id = get_space_id_from_badge(sender_badge);
   gpi_cap_t cap_type = get_cap_type_from_badge(sender_badge);
 
   CHECK_ERROR_GOTO(sender_badge == 0, "Got message on unbadged ep", FsError_UNKNOWN, done);
@@ -280,13 +280,13 @@ void xv6fs_request_handler(void *msg_p,
       XV6FS_PRINTF("Got request for new namespace\n");
 
       resspc_client_context_t resspc_conn;
-      uint64_t ns_id;
+      gpi_space_id_t ns_id;
 
       // Register a new resource space for the NS
       error = resource_server_new_res_space(&get_xv6fs_server()->gen,
                                             get_client_id_from_badge(sender_badge), &resspc_conn);
       CHECK_ERROR_GOTO(error, "Failed to create a new resource space for namespace\n", FsError_UNKNOWN, done);
-      XV6FS_PRINTF("Registered new namespace with ID %ld\n", resspc_conn.id);
+      XV6FS_PRINTF("Registered new namespace with ID %u\n", resspc_conn.id);
       ns_id = resspc_conn.id;
 
       // The namespace maps to the file space
@@ -380,7 +380,7 @@ void xv6fs_request_handler(void *msg_p,
 #if FS_DEBUG_ENABLED
       // Prints the FS contents to console for debug
       int n_files;
-      uint32_t inums[16];
+      gpi_obj_id_t inums[16];
       error = xv6fs_sys_walk(ROOT_DIR, true, inums, &n_files);
       CHECK_ERROR_GOTO(error, "Failed to walk FS", FsError_UNKNOWN, done);
 #endif
@@ -428,12 +428,12 @@ void xv6fs_request_handler(void *msg_p,
 
       if (reg_entry == NULL)
       {
-        XV6FS_PRINTF("Received invalid file to link, number (%d)\n", get_object_id_from_badge(file_badge));
+        XV6FS_PRINTF("Received invalid file to link, number (%u)\n", get_object_id_from_badge(file_badge));
         error = FsError_BADGE;
         goto done;
       }
 
-      XV6FS_PRINTF("File to link has id %ld, linking to path %s\n", reg_entry->gen.object_id, pathname);
+      XV6FS_PRINTF("File to link has id %lu, linking to path %s\n", reg_entry->gen.object_id, pathname);
 
       /* Do the link */
       error = xv6fs_sys_dolink2(reg_entry->file, pathname);
@@ -460,7 +460,7 @@ void xv6fs_request_handler(void *msg_p,
       }
 
       XV6FS_PRINTF("Unlink pathname %s\n", pathname);
-      uint32_t inum;
+      gpi_obj_id_t inum;
       bool was_last_link;
       error = xv6fs_sys_unlink(pathname, &inum, &was_last_link);
       CHECK_ERROR_GOTO(error, "Failed to unlink", FsError_UNKNOWN, done);
@@ -487,7 +487,7 @@ void xv6fs_request_handler(void *msg_p,
           resource_registry_delete(&get_xv6fs_server()->file_registry, (resource_registry_node_t *)reg_entry);
 
           // Delete the resource
-          error = resspc_client_delete_resource(&get_xv6fs_server()->gen.default_space, (seL4_Word) inum);
+          error = resspc_client_delete_resource(&get_xv6fs_server()->gen.default_space, (seL4_Word)inum);
           CHECK_ERROR_GOTO(error, "Failed to delete file resource in global namespace", FsError_UNKNOWN, done);
         }
         // If there is no reg entry, then there is no resource to delete
@@ -508,7 +508,7 @@ void xv6fs_request_handler(void *msg_p,
   else
   {
     /* Handle Request On Specific Resource */
-    XV6FS_PRINTF("Received badged request with object id 0x%lx\n", get_object_id_from_badge(sender_badge));
+    XV6FS_PRINTF("Received badged request with object id 0x%u\n", get_object_id_from_badge(sender_badge));
 
     // Find the file in the registry
     file_registry_entry_t *reg_entry =
@@ -517,7 +517,7 @@ void xv6fs_request_handler(void *msg_p,
             sender_badge);
     CHECK_ERROR_GOTO(reg_entry == NULL, "Received invalid badge\n", FsError_BADGE, done);
 
-    XV6FS_PRINTF("Got request for file with id %ld\n", reg_entry->file->id);
+    XV6FS_PRINTF("Got request for file with id %u\n", reg_entry->file->id);
     switch (msg->which_msg)
     {
     case FsMessage_read_tag:
@@ -563,7 +563,7 @@ void xv6fs_request_handler(void *msg_p,
       reply_msg->msg.write.n = n_bytes_ret;
       break;
     case FsMessage_close_tag:
-      XV6FS_PRINTF("Close file (%d)\n", reg_entry->file->id);
+      XV6FS_PRINTF("Close file (%u)\n", reg_entry->file->id);
 
       /* Remove the ref in the registry entry */
       resource_registry_dec(&get_xv6fs_server()->file_registry, (resource_registry_node_t *)reg_entry);
@@ -646,7 +646,7 @@ void disk_rw(struct buf *b, int write)
 
 /* Notifies the component when a new block is assigned to a file */
 // (XXX) Arya: what about releasing?
-void map_file_to_block(uint64_t file_id, uint32_t blockno)
+void map_file_to_block(uint32_t file_id, uint32_t blockno)
 {
 #if TRACK_MAP_RELATIONS
   int error = 0;
@@ -660,14 +660,14 @@ void map_file_to_block(uint64_t file_id, uint32_t blockno)
     return;
   }
 
-  seL4_Word file_universal_id = compact_res_id(get_xv6fs_server()->gen.resource_type,
-                                               get_xv6fs_server()->gen.default_space.id, file_id);
-  seL4_Word block_universal_id = compact_res_id(sel4gpi_get_resource_type_code(BLOCK_RESOURCE_TYPE_NAME),
-                                                get_xv6fs_server()->blocks[blockno].space_id,
-                                                get_xv6fs_server()->blocks[blockno].res_id);
+  gpi_badge_t file_universal_id = compact_res_id(get_xv6fs_server()->gen.resource_type,
+                                                 get_xv6fs_server()->gen.default_space.id, file_id);
+  gpi_badge_t block_universal_id = compact_res_id(sel4gpi_get_resource_type_code(BLOCK_RESOURCE_TYPE_NAME),
+                                                  get_xv6fs_server()->blocks[blockno].space_id,
+                                                  get_xv6fs_server()->blocks[blockno].res_id);
 
   error = pd_client_map_resource(&get_xv6fs_server()->gen.pd_conn, file_universal_id, block_universal_id);
-  SERVER_GOTO_IF_ERR(error, "Failed to map file (%lx) to block (%lx)\n", file_universal_id, block_universal_id);
+  SERVER_GOTO_IF_ERR(error, "Failed to map file (%u) to block (%u)\n", file_universal_id, block_universal_id);
 
   return;
 
@@ -693,9 +693,9 @@ int xv6fs_work_handler(PdWorkReturnMessage *work)
 
     for (int i = 0; i < work->object_ids_count; i++)
     {
-      uint64_t space_id = work->space_ids[i];
-      uint64_t fileno = work->object_ids[i];
-      uint64_t client_pd_id = work->pd_ids[i];
+      gpi_space_id_t space_id = work->space_ids[i];
+      gpi_obj_id_t fileno = work->object_ids[i];
+      gpi_obj_id_t client_pd_id = work->pd_ids[i];
 
       if (fileno != BADGE_OBJ_ID_NULL)
       {
@@ -725,7 +725,7 @@ int xv6fs_work_handler(PdWorkReturnMessage *work)
 
       /* List all the files in the NS */
       int n_files;
-      uint32_t inums[16];
+      gpi_obj_id_t inums[16];
 
       error = xv6fs_sys_walk(path, false, inums, &n_files);
       CHECK_ERROR_GOTO(error, "Failed to walk FS", FsError_UNKNOWN, err_goto);
@@ -744,12 +744,12 @@ int xv6fs_work_handler(PdWorkReturnMessage *work)
 
       /* Add nodes for all files and blocks */
       gpi_cap_t block_cap_type = sel4gpi_get_resource_type_code(BLOCK_RESOURCE_TYPE_NAME);
-      uint32_t block_space_id = get_xv6fs_server()->blocks[0].space_id; // (XXX) Arya: Assume only one block space
-      int n_blocknos = 100;                                             // (XXX) Arya: assumes there are no more than 100 blocks per file
+      gpi_space_id_t block_space_id = get_xv6fs_server()->blocks[0].space_id; // (XXX) Arya: Assume only one block space
+      int n_blocknos = 100;                                                   // (XXX) Arya: assumes there are no more than 100 blocks per file
       int *blocknos = malloc(sizeof(int) * n_blocknos);
       for (int i = 0; i < n_files; i++)
       {
-        XV6FS_PRINTF("Get RR for fileno %ld\n", inums[i]);
+        XV6FS_PRINTF("Get RR for fileno %u\n", inums[i]);
 
         /* Add the file resource node */
         char file_id[CSV_MAX_STRING_SIZE];
@@ -764,7 +764,7 @@ int xv6fs_work_handler(PdWorkReturnMessage *work)
         CHECK_ERROR_GOTO(error, "Failed to get blocknos for file", FsError_UNKNOWN, err_goto);
         XV6FS_PRINTF("File has %d blocks\n", n_blocknos);
 
-        uint64_t block_id;
+        gpi_obj_id_t block_id;
         for (int j = 0; j < n_blocknos; j++)
         {
           block_id = get_xv6fs_server()->blocks[blocknos[j]].res_id;
@@ -788,7 +788,7 @@ int xv6fs_work_handler(PdWorkReturnMessage *work)
     {
       // Actually don't do much when a file is freed, it's the same as file close
       // We still want to keep it in the file system, but we can reduce the refcount
-      uint64_t file_id = work->object_ids[i];
+      gpi_obj_id_t file_id = work->object_ids[i];
 
       // Find the registry entry
       file_registry_entry_t *reg_entry = (file_registry_entry_t *)resource_registry_get_by_id(
@@ -798,7 +798,7 @@ int xv6fs_work_handler(PdWorkReturnMessage *work)
       if (reg_entry == NULL)
       {
         // No-op if the file doesn't exist / isn't open
-        XV6FS_PRINTF("Received file (%d) to free, file isn't open\n");
+        XV6FS_PRINTF("Received file (%u) to free, file isn't open\n");
       }
       else
       {
@@ -811,8 +811,8 @@ int xv6fs_work_handler(PdWorkReturnMessage *work)
   {
     for (int i = 0; i < work->object_ids_count; i++)
     {
-      uint64_t file_id = work->object_ids[i];
-      uint64_t space_id = work->space_ids[i];
+      gpi_obj_id_t file_id = work->object_ids[i];
+      gpi_space_id_t space_id = work->space_ids[i];
 
       if (file_id != BADGE_OBJ_ID_NULL)
       {
@@ -826,7 +826,7 @@ int xv6fs_work_handler(PdWorkReturnMessage *work)
         if (reg_entry == NULL)
         {
           // No-op if the file doesn't exist / isn't open
-          XV6FS_PRINTF("Received file (%d) to free, file isn't open\n");
+          XV6FS_PRINTF("Received file (%u) to free, file isn't open\n");
         }
         else
         {

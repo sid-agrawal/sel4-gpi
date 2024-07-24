@@ -32,7 +32,7 @@
 typedef struct _resspc_component_registry_entry
 {
     resource_registry_node_t gen; ///< Generic registry entry data
-    res_space_t space;                   ///< Resource space data
+    res_space_t space;            ///< Resource space data
 } resspc_component_registry_entry_t;
 
 /**
@@ -41,10 +41,10 @@ typedef struct _resspc_component_registry_entry
  **/
 typedef struct _resspc_config
 {
-    gpi_cap_t type; ///< Type of resources in the space
-    seL4_CPtr ep;   ///< Raw endpoint of the resource space manager
-    uint32_t pd_id; ///< ID of the manager PD
-    void *data;     ///< Field for some generic data (not used)
+    gpi_cap_t type;     ///< Type of resources in the space
+    seL4_CPtr ep;       ///< Raw endpoint of the resource space manager
+    gpi_obj_id_t pd_id; ///< ID of the manager PD
+    void *data;         ///< Field for some generic data (not used)
 } resspc_config_t;
 
 /**
@@ -62,7 +62,7 @@ resource_component_context_t *get_resspc_component(void);
  *
  * @param space_id the resource space id
  */
-resspc_component_registry_entry_t *resource_space_get_entry_by_id(seL4_Word space_id);
+resspc_component_registry_entry_t *resource_space_get_entry_by_id(gpi_space_id_t space_id);
 
 /**
  * Add a map connection from one resource space to another
@@ -72,7 +72,7 @@ resspc_component_registry_entry_t *resource_space_get_entry_by_id(seL4_Word spac
  * @param dest_spc_id ID of the destination resource space
  * @return 0 on success, error otherwise
  */
-int resspc_component_map_space(uint64_t src_spc_id, uint64_t dest_spc_id);
+int resspc_component_map_space(gpi_space_id_t src_spc_id, gpi_space_id_t dest_spc_id);
 
 /**
  * Check if the source resource space maps to the destination resource space
@@ -81,7 +81,7 @@ int resspc_component_map_space(uint64_t src_spc_id, uint64_t dest_spc_id);
  * @param dest_space_id ID of the destination resource space
  * @return 1 if the mapping exists, 0 otherwise
  */
-int resspc_check_map(uint64_t src_space_id, uint64_t dest_space_id);
+int resspc_check_map(gpi_space_id_t src_space_id, gpi_space_id_t dest_space_id);
 
 /**
  * Mark a resource space for deletion
@@ -92,7 +92,7 @@ int resspc_check_map(uint64_t src_space_id, uint64_t dest_space_id);
  * @param execute_cleanup_policy if true, execute a cleanup policy starting from this space
  * @return 0 on success, error otherwise
  */
-int resspc_component_mark_delete(uint64_t spc_id, bool execute_cleanup_policy);
+int resspc_component_mark_delete(gpi_space_id_t spc_id, bool execute_cleanup_policy);
 
 /**
  * Sweep any resource spaces marked for deletion

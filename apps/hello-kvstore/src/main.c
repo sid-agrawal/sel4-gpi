@@ -110,8 +110,8 @@ int main(int argc, char **argv)
     seL4_CPtr fs_ep = sel4gpi_get_rde(sel4gpi_get_resource_type_code(FILE_RESOURCE_TYPE_NAME));
     seL4_CPtr mo_ep = sel4gpi_get_rde(GPICAP_TYPE_MO);
 
-    printf("hello-kvstore: parent ep (%d), kvstore ep (%d), mode (%d), fs ep(%d), mo ep(%d) \n",
-           (int)parent_ep.raw_endpoint, (int)kvstore_ep, (int)mode, (int)fs_ep, (int)mo_ep);
+    printf("hello-kvstore: parent ep (%lu), kvstore ep (%lu), mode (%u), fs ep(%lu), mo ep(%lu) \n",
+           parent_ep.raw_endpoint, kvstore_ep, mode, fs_ep, mo_ep);
 
     /* initialize */
     // (XXX) Linh: TO BE REMOVED, terrible hack so that our separate threads test runs - only one thread can use the fs client at a time
@@ -160,11 +160,12 @@ main_exit:
     error = pd_client_dump(&self_pd, NULL, 0);
     CHECK_ERROR(error, "Failed to extract model state\n");
 #endif
-    printf("hello-kvstore: Exiting, notifying parent of test result: %d\n", error);
+    printf("hello-kvstore: Exiting, notifying parent of test result: %u\n", error);
     tag = seL4_MessageInfo_new(error, 0, 0, 0);
     seL4_Send(parent_ep.raw_endpoint, tag);
 
-    while(1) {
+    while (1)
+    {
         // (XXX) Arya: Do not exit, so we can dump the model state
     }
 

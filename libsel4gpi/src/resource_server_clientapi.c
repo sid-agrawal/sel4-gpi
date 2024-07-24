@@ -28,21 +28,21 @@
     } while (0);
 
 int start_resource_server_pd(gpi_cap_t rde_type,
-                             uint64_t rde_id,
+                             gpi_space_id_t rde_id,
                              char *image_name,
                              seL4_CPtr *server_pd_cap,
-                             uint64_t *space_id)
+                             gpi_space_id_t *space_id)
 {
     return start_resource_server_pd_args(rde_type, rde_id, image_name, NULL, 0, server_pd_cap, space_id);
 }
 
 int start_resource_server_pd_args(gpi_cap_t rde_type,
-                                  uint64_t rde_id,
+                                  gpi_space_id_t rde_id,
                                   char *image_name,
                                   seL4_Word *args_input,
-                                  uint argc_input,
+                                  uint32_t argc_input,
                                   seL4_CPtr *server_pd_cap,
-                                  uint64_t *space_id)
+                                  gpi_space_id_t *space_id)
 {
     int error;
 
@@ -65,7 +65,7 @@ int start_resource_server_pd_args(gpi_cap_t rde_type,
     }
 
     // Copy the parent ep to the new PD
-    seL4_Word parent_ep_slot;
+    seL4_CPtr parent_ep_slot;
     error = pd_client_send_cap(&runnable.pd, ep_conn.ep, &parent_ep_slot);
     CHECK_ERROR(error, "failed to send parent's ep cap to pd");
 

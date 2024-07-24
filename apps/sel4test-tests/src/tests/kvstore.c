@@ -22,11 +22,11 @@ static ads_client_context_t ads_conn;
 static pd_client_context_t pd_conn;
 static ep_client_context_t self_ep;
 
-static uint64_t ramdisk_id;
+static gpi_space_id_t ramdisk_id;
 static pd_client_context_t ramdisk_pd;
-static uint64_t fs_id;
+static gpi_space_id_t fs_id;
 static pd_client_context_t fs_pd;
-static uint64_t fs_2_id;
+static gpi_space_id_t fs_2_id;
 static pd_client_context_t fs_2_pd;
 static gpi_cap_t file_cap_type;
 
@@ -86,7 +86,7 @@ static int setup(env_t env)
  * @param fs_nsid namespace ID of fs to share
  * @param kvstore_pd  returns the pd resource for the kvstore process
  */
-static int start_kvstore_server(seL4_CPtr *kvstore_ep, uint64_t fs_nsid, pd_client_context_t *kvstore_pd)
+static int start_kvstore_server(seL4_CPtr *kvstore_ep, gpi_space_id_t fs_nsid, pd_client_context_t *kvstore_pd)
 {
     int error;
 
@@ -146,7 +146,7 @@ static int start_kvstore_server(seL4_CPtr *kvstore_ep, uint64_t fs_nsid, pd_clie
 static int start_hello_kvstore(kvstore_mode_t kvstore_mode,
                                seL4_CPtr kvstore_ep,
                                pd_client_context_t *hello_pd,
-                               uint64_t fs_nsid)
+                               gpi_space_id_t fs_nsid)
 {
     int error;
 
@@ -293,7 +293,7 @@ int test_kvstore_diff_namespace(env_t env)
 
     /* Create the FS namespaces */
     seL4_CPtr fs_ep = sel4gpi_get_rde(file_cap_type);
-    uint64_t nsid_1, nsid_2;
+    gpi_space_id_t nsid_1, nsid_2;
 
     error = xv6fs_client_new_ns(&nsid_1);
     test_assert(error == 0);
@@ -530,7 +530,7 @@ int test_kvstore_lib_in_diff_pd_crash(env_t env)
 
     /* Create the FS namespaces */
     seL4_CPtr fs_ep = sel4gpi_get_rde(file_cap_type);
-    uint64_t nsid_1, nsid_2;
+    gpi_space_id_t nsid_1, nsid_2;
 
     error = xv6fs_client_new_ns(&nsid_1);
     test_assert(error == 0);

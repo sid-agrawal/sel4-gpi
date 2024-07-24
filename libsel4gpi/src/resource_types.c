@@ -97,7 +97,7 @@ char *cap_type_to_str(gpi_cap_t cap_type)
     }
 }
 
-gpi_res_id_t make_res_id(gpi_cap_t type, uint32_t space_id, uint32_t object_id)
+gpi_res_id_t make_res_id(gpi_cap_t type, gpi_space_id_t space_id, gpi_obj_id_t object_id)
 {
     gpi_res_id_t res_id = {
         .type = type,

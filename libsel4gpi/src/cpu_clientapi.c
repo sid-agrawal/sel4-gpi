@@ -77,7 +77,7 @@ int cpu_client_config(cpu_client_context_t *cpu,
                       mo_client_context_t *ipc_buf_mo,
                       seL4_Word cnode_guard,
                       seL4_CPtr fault_ep_position,
-                      seL4_Word ipc_buf_addr)
+                      void *ipc_buf_addr)
 {
     OSDB_PRINTF("Sending config request to CPU component\n");
 
@@ -88,7 +88,7 @@ int cpu_client_config(cpu_client_context_t *cpu,
         .msg.config = {
             .cnode_guard = cnode_guard,
             .fault_ep_cap = fault_ep_position,
-            .ipc_buf_addr = ipc_buf_addr,
+            .ipc_buf_addr = (uint64_t)ipc_buf_addr,
         }};
 
     CpuReturnMessage ret_msg;
@@ -181,7 +181,7 @@ int cpu_client_set_tls_base(cpu_client_context_t *cpu, void *tls_base)
     CpuMessage msg = {
         .which_msg = CpuMessage_tls_base_tag,
         .msg.tls_base = {
-            .tls_base_addr = (uint64_t) tls_base,
+            .tls_base_addr = (uint64_t)tls_base,
         }};
 
     CpuReturnMessage ret_msg;

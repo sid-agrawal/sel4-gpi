@@ -131,9 +131,9 @@ global_xv6fs_client_context_t *get_xv6fs_client(void)
   return &xv6fs_client;
 }
 
-int start_xv6fs_pd(uint64_t rd_id,
+int start_xv6fs_pd(gpi_space_id_t rd_id,
                    seL4_CPtr *fs_pd_cap,
-                   uint64_t *fs_id)
+                   gpi_space_id_t *fs_id)
 {
   int error = start_resource_server_pd(sel4gpi_get_resource_type_code(BLOCK_RESOURCE_TYPE_NAME), rd_id,
                                        FS_APP, fs_pd_cap, fs_id);
@@ -184,9 +184,9 @@ xv6fs_client_init(void)
   return error;
 }
 
-int xv6fs_client_set_namespace(uint64_t ns_id)
+int xv6fs_client_set_namespace(gpi_space_id_t ns_id)
 {
-  XV6FS_PRINTF("Client of FS server will use namespace %ld\n", ns_id);
+  XV6FS_PRINTF("Client of FS server will use namespace %u\n", ns_id);
 
   get_xv6fs_client()->space_id = ns_id;
 
@@ -465,7 +465,7 @@ static int xv6fs_libc_close(int fd)
 
 static int xv6fs_libc_lseek(int fd, off_t offset, int whence)
 {
-  XV6FS_PRINTF("xv6fs_libc_lseek fd %d offset %ld whence %d\n", fd, offset, whence);
+  XV6FS_PRINTF("xv6fs_libc_lseek fd %d offset %lu whence %d\n", fd, offset, whence);
 
   // Handle file offset locally
 
@@ -701,7 +701,7 @@ static void init_global_libc_fs_ops(void)
   libc_fs_ops.access = xv6fs_libc_access;
 }
 
-int xv6fs_client_new_ns(uint64_t *ns_id)
+int xv6fs_client_new_ns(gpi_space_id_t *ns_id)
 {
   XV6FS_PRINTF("Requesting new namespace from server ep\n");
 

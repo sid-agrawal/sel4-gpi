@@ -51,14 +51,14 @@ typedef struct _attach_node
     // (XXX) Arya: Assumes we only need to attach one MO to a reservation
     bool mo_attached;      ///< True if an MO is attached (next fields are valid only if true)
     size_t mo_offset;      ///< Offset where the MO is attached in the reservation
-    seL4_Word mo_id;       ///< ID of the MO attached
+    gpi_obj_id_t mo_id;    ///< ID of the MO attached
     seL4_CPtr *frame_caps; ///< Array of frame caps copied for this attach
     uint32_t n_frames;     ///< Number of frame caps in the array
 } attach_node_t;
 
 typedef struct _ads
 {
-    uint32_t id;
+    gpi_obj_id_t id;
 
     vspace_t *vspace;
     vka_object_t *root_page_dir;
@@ -120,7 +120,7 @@ int ads_reserve(ads_t *ads,
  * @param res_id the ID of the reservation to find
  * @return the corresponding attach node, or NULL if not found
  */
-attach_node_t *ads_get_res_by_id(ads_t *ads, uint64_t res_id);
+attach_node_t *ads_get_res_by_id(ads_t *ads, gpi_obj_id_t res_id);
 
 /**
  * Get an attach node from the ADS by vaddr

@@ -37,12 +37,12 @@ int main(int argc, char **argv)
 
     seL4_CPtr ramdisk_ep = sel4gpi_get_rde(sel4gpi_get_resource_type_code(BLOCK_RESOURCE_TYPE_NAME));
 
-    printf("FS: RAMDISK EP: %ld\n", (seL4_Word)ramdisk_ep);
+    printf("FS: RAMDISK EP: %lu\n", (seL4_Word)ramdisk_ep);
 
     /* parse args */
     assert(argc == 2);
     seL4_CPtr parent_ep = (seL4_CPtr)atol(argv[0]);
-    uint64_t parent_pd_id = (uint64_t)atol(argv[1]);
+    gpi_obj_id_t parent_pd_id = (gpi_obj_id_t)atol(argv[1]);
 
     get_xv6fs_server()->rd_ep = ramdisk_ep;
 

@@ -9,7 +9,7 @@
 typedef struct _ads_client_context
 {
    seL4_CPtr ep;
-   uint64_t id;
+   gpi_obj_id_t id;
 } ads_client_context_t;
 
 typedef struct _ads_vmr_context

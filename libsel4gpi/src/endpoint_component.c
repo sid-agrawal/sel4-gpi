@@ -61,7 +61,7 @@ static void ep_destroy(ep_t *ep, vka_t *server_vka)
     int error = vka_cnode_revoke(&path);
     if (error)
     {
-        OSDB_PRINTERR("Failed to revoke EP (%d), future allocations will fail!\n", ep->id);
+        OSDB_PRINTERR("Failed to revoke EP (%u), future allocations will fail!\n", ep->id);
     }
 
     vka_free_object(server_vka, &ep->endpoint_in_RT);
@@ -72,14 +72,14 @@ static void on_ep_registry_delete(resource_registry_node_t *node_gen, void *arg)
 {
     ep_component_registry_entry_t *node = (ep_component_registry_entry_t *)node_gen;
 
-    OSDB_PRINTF("Destroying EP (%d)\n", node->ep.id);
+    OSDB_PRINTF("Destroying EP (%u)\n", node->ep.id);
 
     resource_component_remove_from_rt(get_ep_component(), node->ep.id);
 
     ep_destroy(&node->ep, get_ep_component()->server_vka);
 }
 
-int ep_component_allocate(uint32_t client_pd,
+int ep_component_allocate(gpi_obj_id_t client_pd,
                           seL4_CPtr *ret_ep_in_PD,
                           seL4_CPtr *ret_badged_ep,
                           ep_t **ret_ep)
@@ -88,13 +88,13 @@ int ep_component_allocate(uint32_t client_pd,
     ep_component_registry_entry_t *ep_entry;
 
     pd_component_registry_entry_t *pd_data = pd_component_registry_get_entry_by_id(client_pd);
-    SERVER_GOTO_IF_COND(pd_data == NULL, "Couldn't find PD (%d)\n", client_pd);
+    SERVER_GOTO_IF_COND(pd_data == NULL, "Couldn't find PD (%u)\n", client_pd);
 
     error = resource_component_allocate(get_ep_component(), client_pd, BADGE_OBJ_ID_NULL, false, NULL,
                                         (resource_registry_node_t **)&ep_entry, ret_badged_ep);
     SERVER_GOTO_IF_COND(error || *ret_badged_ep == seL4_CapNull, "Failed to allocate new EP object\n");
 
-    OSDB_PRINTF("Allocated new EP (%d)\n", ep_entry->ep.id);
+    OSDB_PRINTF("Allocated new EP (%u)\n", ep_entry->ep.id);
 
     cspacepath_t ep_in_pd;
     error = resource_component_transfer_cap(get_ep_component()->server_vka,
@@ -102,7 +102,7 @@ int ep_component_allocate(uint32_t client_pd,
                                             ep_entry->ep.endpoint_in_RT.cptr,
                                             &ep_in_pd,
                                             false, 0);
-    SERVER_GOTO_IF_ERR(error, "Failed to copy raw endpoint to PD %d\n", pd_data->pd.id);
+    SERVER_GOTO_IF_ERR(error, "Failed to copy raw endpoint to PD %u\n", pd_data->pd.id);
 
     *ret_ep_in_PD = ep_in_pd.capPtr;
     *ret_ep = &ep_entry->ep;
@@ -120,7 +120,7 @@ static void handle_ep_allocation(seL4_Word sender_badge, EpAllocMessage *msg, Ep
     ep_t *ep;
     seL4_CPtr badged_ep = 0;
     seL4_CPtr ep_in_PD = 0;
-    uint32_t client_id = get_client_id_from_badge(sender_badge);
+    gpi_obj_id_t client_id = get_client_id_from_badge(sender_badge);
 
     error = ep_component_allocate(client_id, &ep_in_PD, &badged_ep, &ep);
 
@@ -163,7 +163,7 @@ static void handle_get_raw_endpoint(seL4_Word sender_badge, EpGetMessage *msg, E
                                             pd_data->pd.pd_vka,
                                             ep_data->ep.endpoint_in_RT.cptr,
                                             &dest, false, 0);
-    SERVER_GOTO_IF_ERR(error, "Failed to copy raw endpoint cap to PD %d\n", pd_data->pd.id);
+    SERVER_GOTO_IF_ERR(error, "Failed to copy raw endpoint cap to PD %u\n", pd_data->pd.id);
 
     reply_msg->msg.get.slot = dest.capPtr;
 
@@ -182,7 +182,7 @@ static void handle_forge_req(seL4_Word sender_badge, EpForgeMessage *msg,
     int error = 0;
     ep_component_registry_entry_t *new_entry;
     seL4_CPtr badged_ep = 0;
-    uint32_t client_id = get_client_id_from_badge(sender_badge);
+    gpi_obj_id_t client_id = get_client_id_from_badge(sender_badge);
 
     error = resource_component_allocate(get_ep_component(),
                                         client_id,
@@ -229,15 +229,15 @@ static void ep_component_handle(void *msg_p,
         *need_new_recv_cap = true;
         break;
     default:
-        SERVER_GOTO_IF_COND(1, "Unknown request received: %d\n", msg->which_msg);
+        SERVER_GOTO_IF_COND(1, "Unknown request received: %u\n", msg->which_msg);
         break;
     }
 
-    OSDB_PRINTF("Returning from EP component with error code %d\n", reply_msg->errorCode);
+    OSDB_PRINTF("Returning from EP component with error code %u\n", reply_msg->errorCode);
     return;
 
 err_goto:
-    OSDB_PRINTF("Returning from EP component with error code %d\n", error);
+    OSDB_PRINTF("Returning from EP component with error code %u\n", error);
     reply_msg->errorCode = error;
 }
 

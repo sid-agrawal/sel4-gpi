@@ -56,10 +56,10 @@ int pd_add_resource(pd_t *pd, gpi_res_id_t res_id,
                     seL4_CPtr slot_in_RT, seL4_CPtr slot_in_PD, seL4_CPtr slot_in_serverPD)
 {
     // Unique resource ID is the badge with the following fields: type, space_id, res_id
-    uint64_t compact_id = compact_res_id(res_id.type, res_id.space_id, res_id.object_id);
+    gpi_badge_t compact_id = compact_res_id(res_id.type, res_id.space_id, res_id.object_id);
     pd_hold_node_t *node = (pd_hold_node_t *)resource_registry_get_by_id(&pd->hold_registry, compact_id);
 
-    OSDB_PRINT_VERBOSE("Adding resource %s_%d_%d to PD (%d)\n",
+    OSDB_PRINT_VERBOSE("Adding resource %s_%u_%u to PD (%u)\n",
                        cap_type_to_str(res_id.type), res_id.space_id, res_id.object_id, pd->id);
 
     if (node != NULL)
@@ -98,13 +98,13 @@ static void pd_remove_resource_internal(pd_t *pd, resource_registry_node_t *hold
         // Only check if we have warn messages enabled
         if (pd->id != get_gpi_server()->rt_pd_id && OSDB_WARN >= OSDB_LEVEL)
         {
-            uint32_t space_id = get_space_id_from_badge(hold_node->object_id);
+            gpi_space_id_t space_id = get_space_id_from_badge(hold_node->object_id);
             pd_hold_node_t *node = (pd_hold_node_t *)hold_node;
             resspc_component_registry_entry_t *space_entry = resource_space_get_entry_by_id(node->res_id.space_id);
 
             if (space_entry->space.pd_id != pd->id)
             {
-                OSDB_PRINTERR("Warning: remove resource %s_%d_%d from PD (%d), slot_in_PD is null!\n",
+                OSDB_PRINTERR("Warning: remove resource %s_%u_%u from PD (%u), slot_in_PD is null!\n",
                               cap_type_to_str(node->res_id.type),
                               node->res_id.space_id, node->res_id.object_id,
                               pd->id);
@@ -124,13 +124,13 @@ static void pd_remove_resource_internal(pd_t *pd, resource_registry_node_t *hold
         error = vka_cnode_revoke(&path);
         if (error)
         {
-            OSDB_PRINTERR("Failed to revoke resource from PD(%d)\n", pd->id);
+            OSDB_PRINTERR("Failed to revoke resource from PD(%u)\n", pd->id);
         }
 
         error = vka_cnode_delete(&path);
         if (error)
         {
-            OSDB_PRINTERR("Failed to delete resource from PD(%d)\n", pd->id);
+            OSDB_PRINTERR("Failed to delete resource from PD(%u)\n", pd->id);
         }
 
         pd->pd_vka->cspace_free(pd->pd_vka->data, cap);
@@ -143,7 +143,7 @@ static void pd_remove_resource_internal(pd_t *pd, resource_registry_node_t *hold
 int pd_remove_resource(pd_t *pd, gpi_res_id_t res_id)
 {
     // See if the resource exists, remove it if so
-    uint64_t res_node_id = compact_res_id(res_id.type, res_id.space_id, res_id.object_id);
+    gpi_badge_t res_node_id = compact_res_id(res_id.type, res_id.space_id, res_id.object_id);
     resource_registry_node_t *node = resource_registry_get_by_id(&pd->hold_registry, res_node_id);
 
     if (node != NULL)
@@ -154,7 +154,7 @@ int pd_remove_resource(pd_t *pd, gpi_res_id_t res_id)
     return 0;
 }
 
-bool pd_has_resources_in_space(pd_t *pd, uint32_t space_id)
+bool pd_has_resources_in_space(pd_t *pd, gpi_space_id_t space_id)
 {
     // Search through the held resources, check if any belong to the given space ID
     resource_registry_node_t *curr, *tmp;
@@ -169,7 +169,7 @@ bool pd_has_resources_in_space(pd_t *pd, uint32_t space_id)
     return false;
 }
 
-int pd_remove_resources_in_space(pd_t *pd, uint32_t space_id)
+int pd_remove_resources_in_space(pd_t *pd, gpi_space_id_t space_id)
 {
     // Search through the held resources, remove any belonging to the given space ID
     resource_registry_node_t *curr, *tmp;
@@ -186,7 +186,7 @@ int pd_remove_resources_in_space(pd_t *pd, uint32_t space_id)
 
 static int pd_rde_find_idx(pd_t *pd,
                            gpi_cap_t type,
-                           uint32_t space_id)
+                           gpi_space_id_t space_id)
 {
     int idx = -1;
 
@@ -211,7 +211,7 @@ static int pd_rde_find_idx(pd_t *pd,
 
 osmosis_rde_t *pd_rde_get(pd_t *pd,
                           gpi_cap_t type,
-                          uint32_t space_id)
+                          gpi_space_id_t space_id)
 {
     int idx = pd_rde_find_idx(pd, type, space_id);
 
@@ -235,7 +235,7 @@ void pd_add_type_name(pd_t *pd,
 int pd_add_rde(pd_t *pd,
                rde_type_t type,
                char *type_name,
-               uint32_t space_id,
+               gpi_space_id_t space_id,
                seL4_CPtr server_ep)
 {
     // Add the RDE to the init data structure
@@ -261,7 +261,7 @@ int pd_add_rde(pd_t *pd,
 
     if (idx == -1)
     {
-        OSDB_PRINTF("Either no more RDE NS slots available for type %d or RDE being added already exists\n", type.type);
+        OSDB_PRINTF("Either no more RDE NS slots available for type %u or RDE being added already exists\n", type.type);
         return 1;
     }
 
@@ -273,7 +273,7 @@ int pd_add_rde(pd_t *pd,
     pd->shared_data->rde[type.type][idx].slot_in_RT = server_ep;
 
     // Badge the endpoint into the client PD
-    uint32_t client_id = pd->id;
+    gpi_obj_id_t client_id = pd->id;
 
     // Badge the raw endpoint for the client PD
     cspacepath_t src, dest;
@@ -302,7 +302,7 @@ int pd_add_rde(pd_t *pd,
 
     pd->shared_data->rde[type.type][idx].slot_in_PD = dest.capPtr;
 
-    OSDB_PRINTF("Added new RDE of type %s to PD %d, in slot %d, with badge %lx\n", cap_type_to_str(type.type), client_id, (int)dest.capPtr, badge_val);
+    OSDB_PRINTF("Added new RDE of type %s to PD %u, in slot %u, with badge %lx\n", cap_type_to_str(type.type), client_id, (int)dest.capPtr, badge_val);
 
     pd->shared_data->rde_count++;
     return 0;
@@ -324,12 +324,12 @@ static int pd_remove_rde_by_idx(pd_t *pd, rde_type_t type, int idx)
     cspacepath_t rde_ep_path;
     vka_cspace_make_path(pd->pd_vka, pd->shared_data->rde[type.type][idx].slot_in_PD, &rde_ep_path);
     error = vka_cnode_revoke(&rde_ep_path);
-    SERVER_GOTO_IF_ERR(error, "Failed to revoke RDE endpoint (slot %ld) for PD (%d)\n", rde_ep_path.capPtr, pd->id);
+    SERVER_GOTO_IF_ERR(error, "Failed to revoke RDE endpoint (slot %lu) for PD (%u)\n", rde_ep_path.capPtr, pd->id);
     error = vka_cnode_delete(&rde_ep_path);
-    SERVER_GOTO_IF_ERR(error, "Failed to delete RDE endpoint (slot %ld) for PD (%d)\n", rde_ep_path.capPtr, pd->id);
+    SERVER_GOTO_IF_ERR(error, "Failed to delete RDE endpoint (slot %lu) for PD (%u)\n", rde_ep_path.capPtr, pd->id);
 
-    uint64_t space_id = pd->shared_data->rde[type.type][idx].space_id;
-    OSDB_PRINTF("Removed RDE of type %s, space %ld from PD (%d)\n", cap_type_to_str(type.type), space_id, pd->id);
+    gpi_space_id_t space_id = pd->shared_data->rde[type.type][idx].space_id;
+    OSDB_PRINTF("Removed RDE of type %s, space %u from PD (%u)\n", cap_type_to_str(type.type), space_id, pd->id);
 
     // Clear the entry
     pd->shared_data->rde[type.type][idx].space_id = RESSPC_ID_NULL;
@@ -345,7 +345,7 @@ err_goto:
 
 int pd_remove_rde(pd_t *pd,
                   rde_type_t type,
-                  uint32_t space_id)
+                  gpi_space_id_t space_id)
 {
     int error = 0;
 
@@ -363,7 +363,7 @@ int pd_remove_rde(pd_t *pd,
             found_entry = true;
 
             error = pd_remove_rde_by_idx(pd, type, i);
-            SERVER_GOTO_IF_ERR(error, "Failed to remove RDE[%u][%d] from PD (%d)\n", type.type, i, pd->id);
+            SERVER_GOTO_IF_ERR(error, "Failed to remove RDE[%u][%u] from PD (%u)\n", type.type, i, pd->id);
 
             if (space_id != RESSPC_ID_NULL)
             {
@@ -375,7 +375,7 @@ int pd_remove_rde(pd_t *pd,
     if (found_entry == false)
     {
         // This may not be an error, just print
-        OSDB_PRINTF("Could not find RDE type %d, id %d to remove\n", type.type, space_id);
+        OSDB_PRINTF("Could not find RDE type %u, id %u to remove\n", type.type, space_id);
         return 1;
     }
 
@@ -419,7 +419,7 @@ int pd_bulk_add_resource(pd_t *pd, linked_list_t *resources)
         {
             in_error = pd_add_resource(pd, res->res_id, res->slot_in_RT_Debug,
                                        copied_res, res->slot_in_ServerPD_Debug);
-            WARN_IF_COND(in_error, "failed to add resource (type: %s, space_id: %d) to PD %d\n",
+            WARN_IF_COND(in_error, "failed to add resource (type: %s, space_id: %u) to PD %u\n",
                          cap_type_to_str(res->res_id.type), res->res_id.space_id, pd->id);
             error = error || in_error;
         }
@@ -435,7 +435,7 @@ pd_held_resource_on_delete(resource_registry_node_t *node_gen, void *pd_v)
     pd_hold_node_t *node = (pd_hold_node_t *)node_gen;
     pd_t *pd = (pd_t *)pd_v;
 
-    OSDB_PRINTF("Freeing resource %s_%d_%d from PD (%d)\n",
+    OSDB_PRINTF("Freeing resource %s_%u_%u from PD (%u)\n",
                 cap_type_to_str(node->res_id.type), node->res_id.space_id, node->res_id.object_id,
                 pd->id);
 
@@ -474,7 +474,7 @@ pd_held_resource_on_delete(resource_registry_node_t *node_gen, void *pd_v)
     default:
         // Otherwise, call the manager PD
         resspc_component_registry_entry_t *space_data = resource_space_get_entry_by_id(node->res_id.space_id);
-        SERVER_GOTO_IF_COND(space_data == NULL, "couldn't find resource space (%d)\n", node->res_id.space_id);
+        SERVER_GOTO_IF_COND(space_data == NULL, "couldn't find resource space (%u)\n", node->res_id.space_id);
 
         // If the space is deleted,
         // or the manager PD is this PD itself,
@@ -498,7 +498,7 @@ pd_held_resource_on_delete(resource_registry_node_t *node_gen, void *pd_v)
 err_goto:
     if (error)
     {
-        OSDB_PRINTERR("Warning: Could not free PD's held resource %s-%d\n",
+        OSDB_PRINTERR("Warning: Could not free PD's held resource %s-%u\n",
                       cap_type_to_str(node->res_id.type), node->res_id.object_id);
     }
 }
@@ -558,7 +558,7 @@ void pd_destroy(pd_t *pd, vka_t *server_vka, vspace_t *server_vspace)
     int error = 0;
     int pd_id = pd->id;
 
-    OSDB_PRINTF("Destroying PD (%d, %s)\n", pd_id, pd->name);
+    OSDB_PRINTF("Destroying PD (%u, %s)\n", pd_id, pd->name);
     pd->deleting = true;
 
     sync_mutex_lock(get_gpi_server()->mx);
@@ -567,7 +567,7 @@ void pd_destroy(pd_t *pd, vka_t *server_vka, vspace_t *server_vspace)
     if (pd->shared_data->cpu_conn.id)
     {
         error = cpu_component_stop(pd->shared_data->cpu_conn.id);
-        SERVER_GOTO_IF_ERR(error, "Failed to stop CPU (%ld) while destroying PD (%d)\n",
+        SERVER_GOTO_IF_ERR(error, "Failed to stop CPU (%u) while destroying PD (%u)\n",
                            pd->shared_data->cpu_conn.id, pd_id);
     }
 
@@ -582,7 +582,7 @@ void pd_destroy(pd_t *pd, vka_t *server_vka, vspace_t *server_vspace)
 
         // error = vka_cnode_copy(&reply_cap_path_in_rt, &reply_cap_path_in_pd, seL4_CanWrite);
         error = vka_cnode_move(&reply_cap_path_in_rt, &reply_cap_path_in_pd);
-        SERVER_GOTO_IF_ERR(error, "Failed to move reply cap (%ld) while destroying PD (%d)\n",
+        SERVER_GOTO_IF_ERR(error, "Failed to move reply cap (%lu) while destroying PD (%u)\n",
                            pd->shared_data->reply_cap,
                            pd_id);
 
@@ -707,7 +707,7 @@ int pd_bootstrap_allocator(pd_t *pd,
                                            .end_slot = end_slot});
     if (error != seL4_NoError)
     {
-        OSDB_PRINTF("%s: Failed to initialize single-level cspace for PD id %d.\n",
+        OSDB_PRINTF("%s: Failed to initialize single-level cspace for PD id %u.\n",
                     __FUNCTION__, pd->id);
         return -1;
     }
@@ -715,7 +715,7 @@ int pd_bootstrap_allocator(pd_t *pd,
     error = allocman_attach_cspace(allocator, cspace_single_level_make_interface(cspace));
     if (error != seL4_NoError)
     {
-        OSDB_PRINTF("%s: Failed to attach cspace to allocman for PD id %d.\n",
+        OSDB_PRINTF("%s: Failed to attach cspace to allocman for PD id %u.\n",
                     __FUNCTION__, pd->id);
         return -1;
     }
@@ -734,7 +734,7 @@ static int pd_setup_cspace(pd_t *pd, vka_t *vka)
     pd->cnode_guard = api_make_guard_skip_word(seL4_WordBits - pd->cspace_size);
 
     error = vka_alloc_cnode_object(vka, pd->cspace_size, &pd->cspace);
-    SERVER_GOTO_IF_ERR(error, "Failed to create PD %d's cspace", pd->id);
+    SERVER_GOTO_IF_ERR(error, "Failed to create PD %u's cspace", pd->id);
 
     pd->shared_data->cspace_root = PD_CAP_ROOT;
     /* first slot is always 1, never allocate 0 as a cslot */
@@ -745,15 +745,15 @@ static int pd_setup_cspace(pd_t *pd, vka_t *vka)
     vka_cspace_make_path(vka, pd->cspace.cptr, &src);
     cspacepath_t dest = {.capPtr = cspace_next_free, .root = src.capPtr, .capDepth = pd->cspace_size};
     error = vka_cnode_mint(&dest, &src, seL4_AllRights, pd->cnode_guard);
-    SERVER_GOTO_IF_ERR(error, "Failed to mint PD (%d)'s cnode into its cspace\n", pd->id);
+    SERVER_GOTO_IF_ERR(error, "Failed to mint PD (%u)'s cnode into its cspace\n", pd->id);
     cspace_next_free++;
 
     /* Initialize a vka for the PD's cspace */
     error = pd_bootstrap_allocator(pd, pd->cspace.cptr, cspace_next_free,
                                    BIT(PD_CSPACE_SIZE_BITS), PD_CSPACE_SIZE_BITS, 0);
-    SERVER_GOTO_IF_ERR(error, "Failed to setup allocator for PD %d\n", pd->id);
+    SERVER_GOTO_IF_ERR(error, "Failed to setup allocator for PD %u\n", pd->id);
 
-    OSDB_PRINTF("PD next free slot: %ld\n", cspace_next_free);
+    OSDB_PRINTF("PD next free slot: %lu\n", cspace_next_free);
 
     return 0;
 
@@ -769,7 +769,7 @@ err_goto:
 int pd_send_cap(pd_t *to_pd,
                 seL4_CPtr cap,
                 seL4_Word badge,
-                seL4_Word *slot,
+                seL4_CPtr *slot,
                 bool inc_refcount,
                 bool update_core_cap)
 {
@@ -781,7 +781,7 @@ int pd_send_cap(pd_t *to_pd,
     seL4_CPtr server_src_cap;
     bool should_mint = true;
 
-    OSDB_PRINTF("Sending %s cap to PD %d, with badge: ", cap_type_to_str(cap_type), to_pd->id);
+    OSDB_PRINTF("Sending %s cap to PD %u, with badge: ", cap_type_to_str(cap_type), to_pd->id);
     BADGE_PRINT(badge);
 
     switch (cap_type)
@@ -893,7 +893,7 @@ int pd_send_cap(pd_t *to_pd,
 
     if (slot)
     {
-        OSDB_PRINTF("pd_send_cap: copied cap at %ld to child\n", *slot);
+        OSDB_PRINTF("pd_send_cap: copied cap at %lu to child\n", *slot);
     }
 
 err_goto:
@@ -929,7 +929,7 @@ static int res_dump(pd_t *pd, model_state_t *ms, pd_hold_node_t *current_cap, gp
 
         mo_component_registry_entry_t *mo_data = (mo_component_registry_entry_t *)
             resource_component_registry_get_by_id(get_mo_component(), current_cap->res_id.object_id);
-        SERVER_GOTO_IF_COND(mo_data == NULL, "Failed to find MO (%d) data\n", current_cap->res_id.object_id);
+        SERVER_GOTO_IF_COND(mo_data == NULL, "Failed to find MO (%u) data\n", current_cap->res_id.object_id);
 
         /* Add the resource node */
         res_node = mo_dump_rr(&mo_data->mo, ms, pd_node);
@@ -955,7 +955,7 @@ static int res_dump(pd_t *pd, model_state_t *ms, pd_hold_node_t *current_cap, gp
         {
             /* Add the PD Node */
             pd_component_registry_entry_t *pd_data = pd_component_registry_get_entry_by_id(current_cap->res_id.object_id);
-            SERVER_GOTO_IF_COND(pd_data == NULL, "Failed to find PD (%d) data\n", current_cap->res_id.object_id);
+            SERVER_GOTO_IF_COND(pd_data == NULL, "Failed to find PD (%u) data\n", current_cap->res_id.object_id);
 
             pd_dump_internal(&pd_data->pd, ms);
         }
@@ -991,7 +991,7 @@ static int res_dump(pd_t *pd, model_state_t *ms, pd_hold_node_t *current_cap, gp
         {
             /* Find the resource space */
             resspc_component_registry_entry_t *space_entry = resource_space_get_entry_by_id(current_cap->res_id.space_id);
-            SERVER_GOTO_IF_COND(space_entry == NULL, "Failed to find resource space (%d)\n",
+            SERVER_GOTO_IF_COND(space_entry == NULL, "Failed to find resource space (%u)\n",
                                 current_cap->res_id.space_id);
 
             /* Add the subset edge */
@@ -1002,7 +1002,7 @@ static int res_dump(pd_t *pd, model_state_t *ms, pd_hold_node_t *current_cap, gp
             /* Find the resource server */
             pd_component_registry_entry_t *manager_pd_entry =
                 pd_component_registry_get_entry_by_id(space_entry->space.pd_id);
-            SERVER_GOTO_IF_COND(manager_pd_entry == NULL, "Failed to find PD (%d)\n", space_entry->space.pd_id);
+            SERVER_GOTO_IF_COND(manager_pd_entry == NULL, "Failed to find PD (%u)\n", space_entry->space.pd_id);
 
             /* Request additional relations for the resource */
             if (space_entry->space.map_spaces.count > 0)
@@ -1041,7 +1041,7 @@ static int pd_dump_internal(pd_t *pd, model_state_t *ms)
         return 0; // This PD is already dumped
     }
 
-    OSDB_PRINTF("Extracting state of PD (%d)\n", pd->id);
+    OSDB_PRINTF("Extracting state of PD (%u)\n", pd->id);
 
     // Don't add the PD resource space, it is just an implementation detail but not part of the model
 
@@ -1058,7 +1058,7 @@ static int pd_dump_internal(pd_t *pd, model_state_t *ms)
             if (rde.type.type != GPICAP_TYPE_NONE)
             {
                 resspc_component_registry_entry_t *rm = resource_space_get_entry_by_id(rde.space_id);
-                SERVER_GOTO_IF_COND(rm == NULL, "Couldn't find resource space (%d)\n", rde.space_id);
+                SERVER_GOTO_IF_COND(rm == NULL, "Couldn't find resource space (%u)\n", rde.space_id);
 
                 /* Add the resource server PD node */
                 char resource_manager_pd_id[CSV_MAX_STRING_SIZE];
@@ -1071,7 +1071,7 @@ static int pd_dump_internal(pd_t *pd, model_state_t *ms)
                     /* Find the resource server PD */
                     pd_component_registry_entry_t *manager_pd_entry =
                         pd_component_registry_get_entry_by_id(rm->space.pd_id);
-                    SERVER_GOTO_IF_COND(rm == NULL, "Couldn't find PD (%d)\n", rde.space_id);
+                    SERVER_GOTO_IF_COND(rm == NULL, "Couldn't find PD (%u)\n", rde.space_id);
 
                     /* Request info about the resource space */
                     pd_work_entry_t *work_node = calloc(1, sizeof(gpi_res_id_t));
@@ -1155,7 +1155,7 @@ err_goto:
 
 inline void print_pd_osm_cap_info(pd_hold_node_t *o)
 {
-    printf("Resource_ID: %d Slot_RT:%lx\t Slot_PD: %lx\t Slot_ServerPD: %lx\t T: %s\n",
+    printf("Resource_ID: %u Slot_RT:%lx\t Slot_PD: %lx\t Slot_ServerPD: %lx\t T: %s\n",
            o->res_id.object_id,
            o->slot_in_RT_Debug,
            o->slot_in_PD_Debug,
@@ -1196,9 +1196,9 @@ inline void pd_set_name(pd_t *pd, char *image_name)
 int pd_set_core_cap(pd_t *pd, seL4_Word core_cap_badge, seL4_CPtr core_cap)
 {
     int error = 0;
-    uint64_t cap_type = get_cap_type_from_badge(core_cap_badge);
-    uint64_t cap_id = get_object_id_from_badge(core_cap_badge);
-    OSDB_PRINTF("Setting PD%d's OSmosis %s cap\n", pd->id, cap_type_to_str(cap_type));
+    gpi_cap_t cap_type = get_cap_type_from_badge(core_cap_badge);
+    gpi_obj_id_t cap_id = get_object_id_from_badge(core_cap_badge);
+    OSDB_PRINTF("Setting PD%u's OSmosis %s cap\n", pd->id, cap_type_to_str(cap_type));
 
     switch (cap_type)
     {

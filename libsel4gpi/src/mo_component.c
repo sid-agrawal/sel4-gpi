@@ -48,7 +48,7 @@ static void on_mo_registry_delete(resource_registry_node_t *node_gen, void *arg)
 {
     mo_component_registry_entry_t *node = (mo_component_registry_entry_t *)node_gen;
 
-    OSDB_PRINTF("Destroying MO (%d)\n", node->mo.id);
+    OSDB_PRINTF("Destroying MO (%u)\n", node->mo.id);
 
     resource_component_remove_from_rt(get_mo_component(), node->mo.id);
     
@@ -72,7 +72,7 @@ int mo_component_allocate_rt(int num_pages, mo_t **ret_mo)
         (resource_registry_node_t **)&new_entry, NULL);
     SERVER_GOTO_IF_ERR(error, "Failed to allocate new MO object for RT\n");
 
-    OSDB_PRINTF("Root task allocated a new MO (%d) with %d pages.\n",
+    OSDB_PRINTF("Root task allocated a new MO (%u) with %u pages.\n",
                 new_entry->mo.id, new_entry->mo.num_pages);
 
     *ret_mo = &new_entry->mo;
@@ -90,12 +90,12 @@ static void handle_mo_allocation_request(seL4_Word sender_badge,
     int error = 0;
     seL4_CPtr ret_cap;
     mo_component_registry_entry_t *new_entry;
-    uint32_t client_id = get_client_id_from_badge(sender_badge);
-    seL4_Word num_pages = msg->num_pages;
+    gpi_obj_id_t client_id = get_client_id_from_badge(sender_badge);
+    uint32_t num_pages = msg->num_pages;
     uintptr_t paddr = msg->phys_addr;
     size_t page_bits = msg->page_bits;
 
-    OSDB_PRINTF("Got connect request for %ld pages of size: %zu\n", num_pages, SIZE_BITS_TO_BYTES(page_bits));
+    OSDB_PRINTF("Got connect request for %u pages of size: %zu\n", num_pages, SIZE_BITS_TO_BYTES(page_bits));
 
     if (paddr)
     {
@@ -108,7 +108,7 @@ static void handle_mo_allocation_request(seL4_Word sender_badge,
                                         (resource_registry_node_t **)&new_entry, &ret_cap);
     SERVER_GOTO_IF_ERR(error, "Failed to allocate new MO object\n");
 
-    OSDB_PRINTF("Allocated a new MO (%d) with %d pages.\n",
+    OSDB_PRINTF("Allocated a new MO (%u) with %u pages.\n",
                 new_entry->mo.id, new_entry->mo.num_pages);
 
     /* Return this badged end point in the return message. */
@@ -128,12 +128,12 @@ static void handle_mo_disconnect_request(seL4_Word sender_badge,
     OSDB_PRINTF("Got MO disconnect request from %lx\n", sender_badge);
     BADGE_PRINT(sender_badge);
 
-    uint64_t mo_id = get_object_id_from_badge(sender_badge);
+    gpi_obj_id_t mo_id = get_object_id_from_badge(sender_badge);
 
     /* Find the PD */
     pd_component_registry_entry_t *pd_data =
         pd_component_registry_get_entry_by_id(get_client_id_from_badge(sender_badge));
-    SERVER_GOTO_IF_COND(pd_data == NULL, "Couldn't find PD (%ld)\n", get_client_id_from_badge(sender_badge));
+    SERVER_GOTO_IF_COND(pd_data == NULL, "Couldn't find PD (%u)\n", get_client_id_from_badge(sender_badge));
 
     /* Remove the MO from the client PD */
     error = pd_remove_resource(&pd_data->pd, make_res_id(GPICAP_TYPE_MO, get_mo_component()->space_id, mo_id));
@@ -171,16 +171,16 @@ static void mo_component_handle(void *msg_p,
             handle_mo_disconnect_request(sender_badge, &msg->msg.disconnect, reply_msg);
             break;
         default:
-            SERVER_GOTO_IF_COND(1, "Unknown request received: %d\n", msg->which_msg);
+            SERVER_GOTO_IF_COND(1, "Unknown request received: %u\n", msg->which_msg);
             break;
         }
     }
 
-    OSDB_PRINTF("Returning from MO component with error code %d\n", reply_msg->errorCode);
+    OSDB_PRINTF("Returning from MO component with error code %u\n", reply_msg->errorCode);
     return;
 
 err_goto:
-    OSDB_PRINTF("Returning from MO component with error code %d\n", error);
+    OSDB_PRINTF("Returning from MO component with error code %u\n", error);
     reply_msg->errorCode = error;
 }
 
@@ -222,7 +222,7 @@ int mo_component_initialize(vka_t *server_vka,
 
 int forge_mo_cap_from_frames(seL4_CPtr *frame_caps,
                              uint32_t num_pages,
-                             uint32_t client_pd_id,
+                             gpi_obj_id_t client_pd_id,
                              seL4_CPtr *cap_ret,
                              mo_t **mo_ret)
 {
@@ -267,7 +267,7 @@ int forge_mo_cap_from_frames(seL4_CPtr *frame_caps,
 
     SERVER_GOTO_IF_ERR(error, "Failed to add new MO to root task\n");
 
-    OSDB_PRINTF("Forged a new MO (%d) with %d pages.\n",
+    OSDB_PRINTF("Forged a new MO (%u) with %u pages.\n",
                 mo->id, new_entry->mo.num_pages);
 
     *mo_ret = &new_entry->mo;

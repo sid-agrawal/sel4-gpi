@@ -30,14 +30,14 @@
 
 int cpu_start(cpu_t *cpu)
 {
-    OSDB_PRINTF("cpu_start: starting CPU (%d) at PC: 0x%lx\n", cpu->id, cpu->reg_ctx->pc);
+    OSDB_PRINTF("cpu_start: starting CPU (%u)\n", cpu->id);
     seL4_TCB_Resume(cpu->tcb.cptr);
     return 0;
 }
 
 int cpu_stop(cpu_t *cpu)
 {
-    OSDB_PRINTF("cpu_stop: stopping CPU (%d) at PC: 0x%lx\n", cpu->id, cpu->reg_ctx->pc);
+    OSDB_PRINTF("cpu_stop: stopping CPU (%u)\n", cpu->id);
     return seL4_TCB_Suspend(cpu->tcb.cptr);
 }
 
@@ -186,7 +186,7 @@ void cpu_destroy(cpu_t *cpu)
 
     if (error)
     {
-        OSDB_PRINTERR("Error while stopping CPU (%d)\n", cpu->id);
+        OSDB_PRINTERR("Error while stopping CPU (%u)\n", cpu->id);
     }
 
     // Destroy the TCB
@@ -199,7 +199,7 @@ void cpu_destroy(cpu_t *cpu)
 
         if (error)
         {
-            OSDB_PRINTERR("Failed to decrement refcount of old IPC buf mo (%d)\n", cpu->ipc_buf_mo);
+            OSDB_PRINTERR("Failed to decrement refcount of old IPC buf mo (%u)\n", cpu->ipc_buf_mo);
         }
 
         cpu->ipc_buf_mo = 0;
@@ -219,7 +219,7 @@ void cpu_destroy(cpu_t *cpu)
 int cpu_set_tls_base(cpu_t *cpu, void *tls_base, bool write_reg)
 {
     int error = 0;
-    OSDB_PRINTF("Setting TLS base (%p) for CPU %d\n", tls_base, cpu->id);
+    OSDB_PRINTF("Setting TLS base (%p) for CPU %u\n", tls_base, cpu->id);
     cpu->tls_base = (void *)tls_base;
 
     error = sel4utils_arch_init_context_tls_base(cpu->reg_ctx, tls_base);

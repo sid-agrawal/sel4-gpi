@@ -30,7 +30,7 @@
  */
 typedef struct _ep
 {
-    uint32_t id;
+    gpi_obj_id_t id;
     vka_object_t endpoint_in_RT; ///< the EP in the RT's CSpace, it exists here
                                  ///< for convenience during transfer and freeing
 } ep_t;
@@ -62,7 +62,7 @@ int ep_component_initialize(vka_t *server_vka,
  * @param ret_badged_ep returns the slot of the badged endpoint resource in the client PD's cspace
  * @param ret_ep returns the allocated endpoint object
  */
-int ep_component_allocate(uint32_t client_pd,
+int ep_component_allocate(gpi_obj_id_t client_pd,
                           seL4_CPtr *ret_ep_in_PD,
                           seL4_CPtr *ret_badged_ep,
                           ep_t **ret_ep);

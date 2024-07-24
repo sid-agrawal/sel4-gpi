@@ -24,8 +24,8 @@
 // Linked list node represents a block or block range
 typedef struct _ramdisk_block_node
 {
-    uint64_t blockno;
-    uint64_t n_blocks;
+    gpi_obj_id_t blockno;
+    uint32_t n_blocks;
     struct _ramdisk_block_node *next;
 } ramdisk_block_node_t;
 

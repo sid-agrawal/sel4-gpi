@@ -50,7 +50,7 @@ int test_ramdisk(env_t env)
     */
 
     /* Start ramdisk server process */
-    uint64_t ramdisk_id;
+    gpi_space_id_t ramdisk_id;
     seL4_CPtr ramdisk_pd_cap;
     error = start_ramdisk_pd(&ramdisk_pd_cap, &ramdisk_id);
     test_assert(error == 0);

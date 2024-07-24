@@ -52,7 +52,8 @@ resource_component_context_t *get_ads_component(void);
  * @param cap_ret The cap to the vspace.
  * @return int
  */
-int forge_ads_cap_from_vspace(vspace_t *vspace, vka_t *vka, uint32_t client_pd_id, seL4_CPtr *cap_ret, uint32_t *id_ret);
+int forge_ads_cap_from_vspace(vspace_t *vspace, vka_t *vka, gpi_obj_id_t client_pd_id,
+                              seL4_CPtr *cap_ret, gpi_obj_id_t *id_ret);
 
 /**
  * Attach an MO to an ADS by ID
@@ -65,55 +66,56 @@ int forge_ads_cap_from_vspace(vspace_t *vspace, vka_t *vka, uint32_t client_pd_i
  * @param vaddr Requested vaddr to attach at, or NULL
  * @param ret_vaddr Returns the attached vaddr
  */
-int ads_component_attach(uint64_t ads_id, uint64_t mo_id, sel4utils_reservation_type_t vmr_type, void *vaddr, void **ret_vaddr);
+int ads_component_attach(gpi_obj_id_t ads_id, gpi_obj_id_t mo_id,
+                         sel4utils_reservation_type_t vmr_type, void *vaddr, void **ret_vaddr);
 
 /**
  * Remove an MO from an ADS by vaddr
  * Note: Only useable from the root task
- * 
+ *
  * @param ads_id ID of the ADS to remove from
  * @param vmr_id ID of the region to remove
-*/
-int ads_component_rm_by_id(uint64_t ads_id, uint32_t vmr_id);
+ */
+int ads_component_rm_by_id(gpi_obj_id_t ads_id, gpi_obj_id_t vmr_id);
 
 /**
  * Remove an MO from an ADS by vaddr
  * Note: Only useable from the root task
- * 
+ *
  * @param ads_id ID of the ADS to remove from
  * @param vaddr vaddr of the region to remove
-*/
-int ads_component_rm_by_vaddr(uint64_t ads_id, void *vaddr);
+ */
+int ads_component_rm_by_vaddr(gpi_obj_id_t ads_id, void *vaddr);
 
 /**
  * Map an MO to the root task's address space
- * 
+ *
  * @param mo_id ID of the MO to attach
  * @param ret_vaddr Returns the attached vaddr
-*/
-int ads_component_attach_to_rt(uint64_t mo_id, void **ret_vaddr);
+ */
+int ads_component_attach_to_rt(gpi_obj_id_t mo_id, void **ret_vaddr);
 
 /**
  * Unmap an MO from the root task's address space
- * 
+ *
  * @param vaddr vaddr where the MO was attached
-*/
+ */
 int ads_component_remove_from_rt(void *vaddr);
 
 /**
  * Allocate an ADS from the root task
- * 
+ *
  * @param client_id the PD id of the client requesting the ADS
  * @param ret_ads returns the created ADS
  * @param ret_cap returns the slot of the new ADS, in the client (or NULL, to make no cap)
  */
-int ads_component_allocate(uint32_t client_id, ads_t **ret_ads, seL4_CPtr *ret_cap);
+int ads_component_allocate(gpi_obj_id_t client_id, ads_t **ret_ads, seL4_CPtr *ret_cap);
 
 /**
  * Load an ELF image into an ADS
- * 
+ *
  * @param ads the ADS to load the ELF into
- * @param target_pd the target PD that will be using this ADS 
+ * @param target_pd the target PD that will be using this ADS
  *  (XXX) Arya: we may be able to remove this parameter
  * @param image_name the name of the image to load, must be in the cpio archive
  * @param entry_point returns the vaddr of the entry point in the ADS

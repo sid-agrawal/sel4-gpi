@@ -26,7 +26,7 @@
  */
 typedef struct _resource_component_object
 {
-    uint32_t id;
+    gpi_obj_id_t id;
 } resource_component_object_t;
 
 /**
@@ -64,7 +64,7 @@ typedef struct _resource_component_context
         vspace_t *server_vspace,          ///< Server's vspace
         void *arg0);                      ///< Optional argument
 
-    uint64_t space_id;                   //< Component's default resource space ID
+    gpi_space_id_t space_id;                   //< Component's default resource space ID
     resource_registry_t registry; ///< Registry of the component's resources
     size_t reg_entry_size;               ///< Size in bits of a registry entry
 
@@ -96,7 +96,7 @@ typedef struct _resource_component_context
 int resource_component_initialize(
     resource_component_context_t *component,
     gpi_cap_t resource_type,
-    uint64_t space_id,
+    gpi_space_id_t space_id,
     void (*request_handler)(void *, seL4_Word, seL4_CPtr, void *, bool *, bool *),
     int (*new_obj)(resource_component_object_t *, vka_t *, vspace_t *, void *),
     void (*on_registry_delete)(resource_registry_node_t *, void *),
@@ -135,8 +135,8 @@ void resource_component_handle(resource_component_context_t *component,
  *                if NULL, does not make a badged endpoint
  */
 int resource_component_allocate(resource_component_context_t *component,
-                                uint64_t client_id,
-                                uint64_t object_id,
+                                gpi_obj_id_t client_id,
+                                gpi_obj_id_t object_id,
                                 bool forge,
                                 void *arg0,
                                 resource_registry_node_t **ret_entry,
@@ -160,7 +160,7 @@ resource_component_registry_entry_t *resource_component_registry_get_by_badge(re
  * @return the registry entry, or NULL if not found
  */
 resource_component_registry_entry_t *resource_component_registry_get_by_id(resource_component_context_t *component,
-                                                                           seL4_Word object_id);
+                                                                           gpi_obj_id_t object_id);
 
 /**
  * Increment the reference count to a resource object
@@ -170,7 +170,7 @@ resource_component_registry_entry_t *resource_component_registry_get_by_id(resou
  * @param object_id ID of the object
  */
 int resource_component_inc(resource_component_context_t *component,
-                           uint64_t object_id);
+                           gpi_obj_id_t object_id);
 
 /**
  * Decrement the reference count to a resource object
@@ -180,7 +180,7 @@ int resource_component_inc(resource_component_context_t *component,
  * @param object_id ID of the object
  */
 int resource_component_dec(resource_component_context_t *component,
-                           uint64_t object_id);
+                           gpi_obj_id_t object_id);
 
 /**
  * Immediately delete a resource object
@@ -189,7 +189,7 @@ int resource_component_dec(resource_component_context_t *component,
  * @param object_id ID of the object
  */
 int resource_component_delete(resource_component_context_t *component,
-                           uint64_t object_id);
+                           gpi_obj_id_t object_id);
 
 /**
  * Debug function to print the existing resources in a resource component
@@ -239,8 +239,8 @@ seL4_CPtr resource_component_make_badged_ep_custom(vka_t *src_vka, vka_t *dst_vk
  * @return the new resource's EP cap in the CSpace managed by dst_vka (or src_vka if dst_vka is NULL)
  */
 seL4_CPtr resource_component_make_badged_ep(vka_t *src_vka, vka_t *dst_vka, seL4_CPtr src_ep,
-                                            gpi_cap_t resource_type, uint64_t space_id, 
-                                            uint64_t res_id, uint64_t client_id);
+                                            gpi_cap_t resource_type, gpi_space_id_t space_id, 
+                                            gpi_obj_id_t object_id, gpi_obj_id_t client_id);
 
 /**
  * Utility function for a resource component
@@ -250,4 +250,4 @@ seL4_CPtr resource_component_make_badged_ep(vka_t *src_vka, vka_t *dst_vka, seL4
  * @param context the resource component
  * @param obj_id ID of the resource in the component to remove from the root task
  */
-void resource_component_remove_from_rt(resource_component_context_t *context, uint32_t obj_id);
+void resource_component_remove_from_rt(resource_component_context_t *context, gpi_obj_id_t obj_id);

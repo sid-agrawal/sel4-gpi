@@ -121,7 +121,7 @@ void disk_rw(struct buf *, int);
  * @param file_id the file's inum
  * @param blockno the block being assigned to it
  */
-void map_file_to_block(uint64_t file_id, uint32_t blockno);
+void map_file_to_block(uint32_t file_id, uint32_t blockno);
 
 /// (XXX) ??
 int init_disk_file(void);

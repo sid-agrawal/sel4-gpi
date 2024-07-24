@@ -24,7 +24,7 @@
  * @return int 0 on success, 1 on failure.
  */
 int mo_component_client_connect(seL4_CPtr server_ep_cap,
-                                seL4_Word num_pages,
+                                uint32_t num_pages,
                                 size_t page_bits,
                                 mo_client_context_t *ret_conn);
 
@@ -39,7 +39,7 @@ int mo_component_client_connect(seL4_CPtr server_ep_cap,
  * @return int 0 on success, 1 on failure
  */
 int mo_component_client_connect_paddr(seL4_CPtr server_ep_cap,
-                                      seL4_Word num_pages,
+                                      uint32_t num_pages,
                                       size_t page_bits,
                                       uintptr_t paddr,
                                       mo_client_context_t *ret_conn);

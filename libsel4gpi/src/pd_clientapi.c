@@ -101,7 +101,7 @@ int pd_client_dump(pd_client_context_t *conn,
     return error;
 }
 
-static int send_cap_req(pd_client_context_t *conn, seL4_CPtr cap_to_send, seL4_Word *slot, bool is_core)
+static int send_cap_req(pd_client_context_t *conn, seL4_CPtr cap_to_send, seL4_CPtr *slot, bool is_core)
 {
     OSDB_PRINTF("Sending 'send cap' request to PD component\n");
 
@@ -130,7 +130,7 @@ static int send_cap_req(pd_client_context_t *conn, seL4_CPtr cap_to_send, seL4_W
 // convenient wrapper for send_cap_req
 int pd_client_send_cap(pd_client_context_t *conn,
                        seL4_CPtr cap_to_send,
-                       seL4_Word *slot)
+                       seL4_CPtr *slot)
 {
     return send_cap_req(conn, cap_to_send, slot, false);
 }
@@ -138,13 +138,13 @@ int pd_client_send_cap(pd_client_context_t *conn,
 // convenient wrapper for send_cap_req
 int pd_client_send_core_cap(pd_client_context_t *conn,
                             seL4_CPtr cap_to_send,
-                            seL4_Word *slot)
+                            seL4_CPtr *slot)
 {
     return send_cap_req(conn, cap_to_send, slot, true);
 }
 
 int pd_client_next_slot(pd_client_context_t *conn,
-                        seL4_Word *slot)
+                        seL4_CPtr *slot)
 {
     OSDB_PRINT_VERBOSE("Sending 'next slot' request to PD component\n");
 
@@ -212,7 +212,7 @@ int pd_client_clear_slot(pd_client_context_t *conn,
 
 int pd_client_share_rde(pd_client_context_t *target_pd,
                         gpi_cap_t cap_type,
-                        uint64_t space_id)
+                        gpi_space_id_t space_id)
 {
     OSDB_PRINTF("Sending 'share RDE' request to PD component\n");
 
@@ -235,12 +235,12 @@ int pd_client_share_rde(pd_client_context_t *target_pd,
 }
 
 int pd_client_give_resource(pd_client_context_t *conn,
-                            seL4_Word res_space_id,
-                            seL4_Word recipient_id,
-                            seL4_Word resource_id,
+                            gpi_space_id_t res_space_id,
+                            gpi_obj_id_t recipient_id,
+                            gpi_obj_id_t resource_id,
                             seL4_CPtr *dest)
 {
-    OSDB_PRINT_VERBOSE("Sending 'give resource' request to PD component: PD (%ld), Space (%ld), Object (%ld)\n",
+    OSDB_PRINT_VERBOSE("Sending 'give resource' request to PD component: PD (%u), Space (%u), Object (%u)\n",
                        recipient_id, res_space_id, resource_id);
 
     int error = 0;
@@ -269,8 +269,8 @@ int pd_client_give_resource(pd_client_context_t *conn,
 
 #if TRACK_MAP_RELATIONS
 int pd_client_map_resource(pd_client_context_t *conn,
-                           seL4_Word src_res_id,
-                           seL4_Word dest_res_id)
+                           gpi_obj_id_t src_res_id,
+                           gpi_obj_id_t dest_res_id)
 {
     OSDB_PRINTF("Sending 'map resource' request to PD component\n");
 
@@ -369,7 +369,7 @@ void pd_client_exit(pd_client_context_t *conn, int code)
     ZF_LOGF("Failed to send 'exit' message to PD component\n");
 }
 
-int pd_client_remove_rde(pd_client_context_t *conn, gpi_cap_t type, uint64_t space_id)
+int pd_client_remove_rde(pd_client_context_t *conn, gpi_cap_t type, gpi_space_id_t space_id)
 {
     OSDB_PRINTF("Sending 'remove RDE' request to PD component\n");
 

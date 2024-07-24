@@ -29,9 +29,9 @@ cpu_client_context_t sel4gpi_get_cpu_conn(void)
     return conn;
 }
 
-uint64_t sel4gpi_get_binded_ads_id(void)
+gpi_obj_id_t sel4gpi_get_binded_ads_id(void)
 {
-    uint64_t id = ((osm_pd_shared_data_t *)sel4runtime_get_osm_shared_data())->ads_conn.id;
+    gpi_obj_id_t id = ((osm_pd_shared_data_t *)sel4runtime_get_osm_shared_data())->ads_conn.id;
     return id;
 }
 
@@ -70,7 +70,7 @@ char *sel4gpi_get_resource_type_name(gpi_cap_t type)
 seL4_CPtr sel4gpi_get_rde(int type)
 {
     seL4_CPtr slot = ((osm_pd_shared_data_t *)sel4runtime_get_osm_shared_data())->rde[type][0].slot_in_PD;
-    WARN_IF_COND(slot == seL4_CapNull, "Could not find RDE (type: %d) for PD (%ld)\n", type, sel4gpi_get_pd_conn().id);
+    WARN_IF_COND(slot == seL4_CapNull, "Could not find RDE (type: %d) for PD (%u)\n", type, sel4gpi_get_pd_conn().id);
 
     return slot;
 }
@@ -82,14 +82,14 @@ ads_client_context_t sel4gpi_get_bound_vmr_rde()
     return ads_conn;
 }
 
-uint64_t sel4gpi_get_default_space_id(int type)
+gpi_obj_id_t sel4gpi_get_default_space_id(int type)
 {
-    uint64_t space_id = ((osm_pd_shared_data_t *)sel4runtime_get_osm_shared_data())->rde[type][0].space_id;
+    gpi_space_id_t space_id = ((osm_pd_shared_data_t *)sel4runtime_get_osm_shared_data())->rde[type][0].space_id;
 
     return space_id;
 }
 
-seL4_CPtr sel4gpi_get_rde_by_space_id(uint32_t space_id, gpi_cap_t type)
+seL4_CPtr sel4gpi_get_rde_by_space_id(gpi_space_id_t space_id, gpi_cap_t type)
 {
     assert(type != GPICAP_TYPE_NONE && type != GPICAP_TYPE_MAX);
     osm_pd_shared_data_t *shared_data = ((osm_pd_shared_data_t *)sel4runtime_get_osm_shared_data());
@@ -109,7 +109,7 @@ seL4_CPtr sel4gpi_get_rde_by_space_id(uint32_t space_id, gpi_cap_t type)
         }
     }
 
-    UNCONDITIONAL_WARN("could not find RDE (type: %d, space: %d) for PD (%ld)\n",
+    UNCONDITIONAL_WARN("could not find RDE (type: %d, space: %d) for PD (%u)\n",
                        type, space_id, sel4gpi_get_pd_conn().id);
     return seL4_CapNull;
 }

@@ -69,7 +69,7 @@ static void benchmark_init(env_t env)
 
 static void print_result(uint64_t result)
 {
-    printf("RESULT>%ld\n", result);
+    printf("RESULT>%lu\n", result);
 }
 
 /**
@@ -153,20 +153,20 @@ static int benchmark_pd_create_sel4utils(env_t env, cspacepath_t *cspace_path, v
     SEL4BENCH_READ_CCNT(step_start);
     error = vka_alloc_untyped(&env->vka, cspace_size_bits + seL4_SlotBits, &untyped);
     SEL4BENCH_READ_CCNT(step_end);
-    printf("step 1: %ld, bits %ld\n", step_end-step_start, cspace_size_bits + seL4_SlotBits);
+    printf("step 1: %lu, bits %lu\n", step_end-step_start, cspace_size_bits + seL4_SlotBits);
     test_error_eq(error, 0);
 
     cspacepath_t cnode_dest;
     SEL4BENCH_READ_CCNT(step_start);
     error = vka_cspace_alloc_path(&env->vka, &cnode_dest);
     SEL4BENCH_READ_CCNT(step_end);
-    printf("step 2: %ld\n", step_end-step_start);
+    printf("step 2: %lu\n", step_end-step_start);
     test_error_eq(error, 0);
 
     SEL4BENCH_READ_CCNT(step_start);
     error = vka_untyped_retype(&untyped, seL4_CapTableObject, cspace_size_bits, 1, &cnode_dest);
     SEL4BENCH_READ_CCNT(step_end);
-    printf("step 3: %ld, bits %ld, type %d\n", step_end-step_start, cspace_size_bits, seL4_CapTableObject);
+    printf("step 3: %lu, bits %lu, type %d\n", step_end-step_start, cspace_size_bits, seL4_CapTableObject);
     cspace_obj->type = seL4_CapTableObject;
     cspace_obj->cptr = cnode_dest.capPtr;
     cspace_obj->size_bits = cspace_size_bits;
@@ -302,7 +302,7 @@ static int benchmark_pd_spawn_sel4utils(env_t env, sel4utils_process_t *sel4util
 
 #if CONFIG_MAX_NUM_NODES > 1
     seL4_TCB_GetAffinity_t affinity = seL4_TCB_GetAffinity(sel4utils_proc->thread.tcb.cptr);
-    TEST_LOG("\naffinity: %ld", affinity.affinity);
+    TEST_LOG("\naffinity: %lu", affinity.affinity);
 #endif
     // seL4_DebugNameThread(proc.thread.tcb.cptr, "bench");
     // seL4_DebugDumpScheduler();
@@ -754,7 +754,7 @@ static int benchmark_cpu_bind_osm(cpu_client_context_t *cpu, ads_client_context_
 
     // Bind CPU
     SEL4BENCH_READ_CCNT(cpu_bind_start);
-    error = cpu_client_config(cpu, ads, pd, ipc_buf_mo, 0, fault_ep_in_pd, (seL4_Word) ipc_buf_vaddr);
+    error = cpu_client_config(cpu, ads, pd, ipc_buf_mo, 0, fault_ep_in_pd, ipc_buf_vaddr);
     test_error_eq(error, 0);
     SEL4BENCH_READ_CCNT(cpu_bind_end);
 
@@ -815,13 +815,13 @@ static int benchmark_fs(env_t env)
     pd_client_context_t pd_conn = sel4gpi_get_pd_conn();
 
     /* Start ramdisk server process */
-    uint64_t ramdisk_id;
+    gpi_obj_id_t ramdisk_id;
     seL4_CPtr ramdisk_pd_cap;
     error = start_ramdisk_pd(&ramdisk_pd_cap, &ramdisk_id);
     test_assert(error == 0);
 
     /* Start fs server process */
-    uint64_t fs_id;
+    gpi_obj_id_t fs_id;
     seL4_CPtr fs_pd_cap;
     error = start_xv6fs_pd(ramdisk_id, &fs_pd_cap, &fs_id);
     test_assert(error == 0);
@@ -881,7 +881,7 @@ int benchmark_mint(env_t env)
         test_error_eq(error, 0);
         SEL4BENCH_READ_CCNT(end);
 
-        printf("%ld\n", end - start);
+        printf("%lu\n", end - start);
     }
 
     return 0;

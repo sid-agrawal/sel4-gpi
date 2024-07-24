@@ -11,7 +11,7 @@ struct file
     FD_INODE,
     FD_DEVICE
   } type;
-  uint64_t id; // unique ID of the file
+  uint32_t id; // unique ID of the file
   int ref;     // reference count
   char readable;
   char writable;

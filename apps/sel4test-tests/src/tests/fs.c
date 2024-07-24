@@ -46,13 +46,13 @@ int test_fs(env_t env)
     printf("Finished mo_component_client_connect\n");
 
     /* Start ramdisk server process */
-    uint64_t ramdisk_id;
+    gpi_space_id_t ramdisk_id;
     seL4_CPtr ramdisk_pd_cap;
     error = start_ramdisk_pd(&ramdisk_pd_cap, &ramdisk_id);
     test_assert(error == 0);
 
     /* Start fs server process */
-    uint64_t fs_id;
+    gpi_space_id_t fs_id;
     seL4_CPtr fs_pd_cap;
     error = start_xv6fs_pd(ramdisk_id, &fs_pd_cap, &fs_id);
     test_assert(error == 0);
@@ -185,7 +185,7 @@ int test_fs(env_t env)
     free(write_buf);
 
     // Create a namespace
-    uint64_t ns_id;
+    gpi_space_id_t ns_id;
     error = xv6fs_client_new_ns(&ns_id);
     test_assert(error == 0);
     test_assert(ns_id != 0);
@@ -219,7 +219,7 @@ int test_fs(env_t env)
     test_assert(error == 0);
 
     char fname[16];
-    sprintf(fname, "/ns%ld/%s", ns_id, TEST_FNAME);
+    sprintf(fname, "/ns%u/%s", ns_id, TEST_FNAME);
     f = open(fname, O_RDWR);
     test_assert(f > 0);
 
@@ -346,7 +346,7 @@ int test_multiple_fs(env_t env)
     printf("Finished mo_component_client_connect\n");
 
     /* Start ramdisk server process */
-    uint64_t ramdisk_id;
+    gpi_space_id_t ramdisk_id;
     seL4_CPtr ramdisk_pd_cap;
     error = start_ramdisk_pd(&ramdisk_pd_cap, &ramdisk_id);
     test_assert(error == 0);
@@ -354,7 +354,7 @@ int test_multiple_fs(env_t env)
     printf("------------------STARTING TESTS: %s------------------\n", __func__);
 
     /* Start FS 1 */
-    uint64_t fs_1_id;
+    gpi_space_id_t fs_1_id;
     seL4_CPtr fs_1_pd_cap;
     error = start_xv6fs_pd(ramdisk_id, &fs_1_pd_cap, &fs_1_id);
     test_assert(error == 0);
@@ -376,7 +376,7 @@ int test_multiple_fs(env_t env)
     test_assert(error == 0);
 
     /* Start FS 2 */
-    uint64_t fs_2_id;
+    gpi_space_id_t fs_2_id;
     seL4_CPtr fs_2_pd_cap;
     error = start_xv6fs_pd(ramdisk_id, &fs_2_pd_cap, &fs_2_id);
     test_assert(error == 0);
@@ -401,7 +401,7 @@ int test_multiple_fs(env_t env)
     test_assert(error == 0);
 
     /* Start FS 3 */
-    uint64_t fs_3_id;
+    gpi_space_id_t fs_3_id;
     seL4_CPtr fs_3_pd_cap;
     error = start_xv6fs_pd(ramdisk_id, &fs_3_pd_cap, &fs_3_id);
     test_assert(error == 0);

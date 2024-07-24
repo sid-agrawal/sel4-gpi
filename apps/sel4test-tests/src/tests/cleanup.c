@@ -42,15 +42,15 @@ static ep_client_context_t self_ep;
 
 // Track the type/space ID of the toy_block server
 static gpi_cap_t toy_block_type;
-static uint64_t toy_block_space_id;
+static gpi_space_id_t toy_block_space_id;
 
 // Track the type/space ID of the toy_file server
 static gpi_cap_t toy_file_type;
-static uint64_t toy_file_space_id;
+static gpi_space_id_t toy_file_space_id;
 
 // Track the type/space ID of the toy_db server
 static gpi_cap_t toy_db_type;
-static uint64_t toy_db_space_id;
+static gpi_space_id_t toy_db_space_id;
 
 // This needs to be the same as the definition in hello-cleanup/toy_server.h
 typedef enum _hello_mode
@@ -259,7 +259,7 @@ int test_cleanup_policy_1(env_t env)
 
     if (error != seL4_NoError)
     {
-        printf("WARNING: Failed to cleanup hello-client PD (%ld), "
+        printf("WARNING: Failed to cleanup hello-client PD (%u), "
                "this may be expected if the cleanup policy already destroyed it. \n",
                hello_client_pd.id);
     }
@@ -388,7 +388,7 @@ int test_cleanup_policy_2(env_t env)
 
     if (error != seL4_NoError)
     {
-        printf("WARNING: Failed to cleanup hello-server-toy_file PD (%ld), "
+        printf("WARNING: Failed to cleanup hello-server-toy_file PD (%u), "
                "this may be expected if the cleanup policy already destroyed it. \n",
                hello_server_toy_file_pd.id);
     }
@@ -397,7 +397,7 @@ int test_cleanup_policy_2(env_t env)
 
     if (error != seL4_NoError)
     {
-        printf("WARNING: Failed to cleanup hello-client-toy_block PD (%ld), "
+        printf("WARNING: Failed to cleanup hello-client-toy_block PD (%u), "
                "this may be expected if the cleanup policy already destroyed it. \n",
                hello_client_toy_block_pd.id);
     }
@@ -406,7 +406,7 @@ int test_cleanup_policy_2(env_t env)
 
     if (error != seL4_NoError)
     {
-        printf("WARNING: Failed to cleanup hello-client-toy_file PD (%ld), "
+        printf("WARNING: Failed to cleanup hello-client-toy_file PD (%u), "
                "this may be expected if the cleanup policy already destroyed it. \n",
                hello_client_toy_file_pd.id);
     }
@@ -513,7 +513,7 @@ int test_cleanup_policy_3(env_t env)
 
     if (error != seL4_NoError)
     {
-        printf("WARNING: Failed to cleanup hello-server-toy_file PD (%ld), "
+        printf("WARNING: Failed to cleanup hello-server-toy_file PD (%u), "
                "this may be expected if the cleanup policy already destroyed it. \n",
                hello_server_toy_file_pd.id);
     }
@@ -522,7 +522,7 @@ int test_cleanup_policy_3(env_t env)
 
     if (error != seL4_NoError)
     {
-        printf("WARNING: Failed to cleanup hello-server-toy_db PD (%ld), "
+        printf("WARNING: Failed to cleanup hello-server-toy_db PD (%u), "
                "this may be expected if the cleanup policy already destroyed it. \n",
                hello_server_toy_db_pd.id);
     }
@@ -531,7 +531,7 @@ int test_cleanup_policy_3(env_t env)
 
     if (error != seL4_NoError)
     {
-        printf("WARNING: Failed to cleanup hello-client-toy_block PD (%ld), "
+        printf("WARNING: Failed to cleanup hello-client-toy_block PD (%u), "
                "this may be expected if the cleanup policy already destroyed it. \n",
                hello_client_toy_block_pd.id);
     }
@@ -540,7 +540,7 @@ int test_cleanup_policy_3(env_t env)
 
     if (error != seL4_NoError)
     {
-        printf("WARNING: Failed to cleanup hello-client-toy_file PD (%ld), "
+        printf("WARNING: Failed to cleanup hello-client-toy_file PD (%u), "
                "this may be expected if the cleanup policy already destroyed it. \n",
                hello_client_toy_file_pd.id);
     }
@@ -549,7 +549,7 @@ int test_cleanup_policy_3(env_t env)
 
     if (error != seL4_NoError)
     {
-        printf("WARNING: Failed to cleanup hello-client-toy_db PD (%ld), "
+        printf("WARNING: Failed to cleanup hello-client-toy_db PD (%u), "
                "this may be expected if the cleanup policy already destroyed it. \n",
                hello_client_toy_db_pd.id);
     }

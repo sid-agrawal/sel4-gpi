@@ -9,5 +9,5 @@
 typedef struct _pd_client_context
 {
    seL4_CPtr ep;
-   uint64_t id;
+   gpi_obj_id_t id;
 } pd_client_context_t;

@@ -27,9 +27,9 @@
  * @param fs_id returns the resource space ID of the new fs server
  * @return 0 on success, or -1 otherwise
  */
-int start_xv6fs_pd(uint64_t rd_id,
+int start_xv6fs_pd(gpi_space_id_t rd_id,
                    seL4_CPtr *fs_pd_cap,
-                   uint64_t *fs_id);
+                   gpi_space_id_t *fs_id);
 
 /**
  * Initializes a process as a xv6fs client
@@ -46,7 +46,7 @@ xv6fs_client_init(void);
  * @return 0 on success, 
  *         -1 if the namespace was not found in the resource directory
 */
-int xv6fs_client_set_namespace(uint64_t ns_id);
+int xv6fs_client_set_namespace(gpi_space_id_t ns_id);
 
 /**
  * Get the file resource for a given file descriptor
@@ -70,7 +70,7 @@ int xv6fs_client_link_file(seL4_CPtr file, const char *path);
  * @param ns_id returns the ID of the new NS
  * @return 0 on success, error otherwise
  */
-int xv6fs_client_new_ns(uint64_t *ns_id);
+int xv6fs_client_new_ns(gpi_space_id_t *ns_id);
 
 /**
  * Delete a namespace from the file server
@@ -97,7 +97,7 @@ typedef struct _global_xv6fs_client_context_t
 {
     vka_t *client_vka;
     gpi_cap_t file_cap_type;
-    uint32_t space_id;
+    gpi_space_id_t space_id;
     seL4_CPtr server_ep;
 
     // Shared memory frame with the file server, sent on every request

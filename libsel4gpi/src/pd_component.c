@@ -53,7 +53,7 @@ resource_component_context_t *get_pd_component(void)
     return &get_gpi_server()->pd_component;
 }
 
-pd_component_registry_entry_t *pd_component_registry_get_entry_by_id(seL4_Word object_id)
+pd_component_registry_entry_t *pd_component_registry_get_entry_by_id(gpi_obj_id_t object_id)
 {
     return (pd_component_registry_entry_t *)
         resource_component_registry_get_by_id(get_pd_component(), object_id);
@@ -82,7 +82,7 @@ static void on_pd_registry_delete(resource_registry_node_t *node_gen, void *arg)
     linked_list_destroy(node->pending_model_state, true);
 }
 
-int pd_component_allocate(uint32_t client_id, mo_t *init_data_mo, pd_t **ret_pd, seL4_CPtr *ret_cap)
+int pd_component_allocate(gpi_obj_id_t client_id, mo_t *init_data_mo, pd_t **ret_pd, seL4_CPtr *ret_cap)
 {
     int error = 0;
     pd_component_registry_entry_t *new_entry;
@@ -92,7 +92,7 @@ int pd_component_allocate(uint32_t client_id, mo_t *init_data_mo, pd_t **ret_pd,
                                         (resource_registry_node_t **)&new_entry, ret_cap);
     SERVER_GOTO_IF_ERR(error, "failed to allocate a PD\n");
 
-    OSDB_PRINTF("Successfully allocated a new PD %d.\n", new_entry->pd.id);
+    OSDB_PRINTF("Successfully allocated a new PD %u.\n", new_entry->pd.id);
 
     /* Initialize the registry entry */
     new_entry->pending_destroy = linked_list_new();
@@ -111,7 +111,7 @@ static void handle_pd_allocation(seL4_Word sender_badge, PdReturnMessage *reply_
     int error = 0;
     seL4_CPtr ret_cap;
     pd_t *pd;
-    uint32_t client_id = get_client_id_from_badge(sender_badge);
+    gpi_obj_id_t client_id = get_client_id_from_badge(sender_badge);
     SERVER_GOTO_IF_COND(!sel4gpi_rpc_check_cap(GPICAP_TYPE_MO), "Did not receive MO cap\n");
 
     /* Find the MO to use for PD's OSmosis data */
@@ -123,7 +123,7 @@ static void handle_pd_allocation(seL4_Word sender_badge, PdReturnMessage *reply_
     error = pd_component_allocate(client_id, &osm_mo_entry->mo, &pd, &ret_cap);
     SERVER_GOTO_IF_ERR(error, "failed to allocate a PD\n");
 
-    OSDB_PRINTF("Successfully allocated a new PD %d.\n", pd->id);
+    OSDB_PRINTF("Successfully allocated a new PD %u.\n", pd->id);
 
     /* Return this badged end point in the return message. */
     reply_msg->msg.alloc.slot = ret_cap;
@@ -134,20 +134,20 @@ err_goto:
     reply_msg->errorCode = error;
 }
 
-int pd_component_terminate(uint32_t pd_id)
+int pd_component_terminate(gpi_obj_id_t pd_id)
 {
     int error = 0;
 
     /* Find the target PD */
     pd_component_registry_entry_t *client_data = pd_component_registry_get_entry_by_id(pd_id);
-    SERVER_GOTO_IF_COND(client_data == NULL, "Couldn't find PD (%d)\n", pd_id);
+    SERVER_GOTO_IF_COND(client_data == NULL, "Couldn't find PD (%u)\n", pd_id);
 
     /* Remove the PD from registry, this will also destroy the PD */
     client_data->pd.exit_code = PD_TERMINATED_CODE;
     client_data->pd.deletion_depth = 0; // This PD is the root of a deletion tree
     resource_registry_delete(&get_pd_component()->registry, (resource_registry_node_t *)client_data);
 
-    OSDB_PRINTF("Cleaned up PD %d.\n", pd_id);
+    OSDB_PRINTF("Cleaned up PD %u.\n", pd_id);
 
 err_goto:
     return error;
@@ -171,9 +171,9 @@ static void handle_next_slot_req(seL4_Word sender_badge, PdNextSlotMessage *msg,
     int error = 0;
 
     pd_component_registry_entry_t *client_data = pd_component_registry_get_entry_by_badge(sender_badge);
-    SERVER_GOTO_IF_COND(client_data == NULL, "Couldn't find PD (%ld)\n", get_object_id_from_badge(sender_badge));
+    SERVER_GOTO_IF_COND(client_data == NULL, "Couldn't find PD (%u)\n", get_object_id_from_badge(sender_badge));
 
-    seL4_Word slot;
+    seL4_CPtr slot;
     error = pd_next_slot(&client_data->pd,
                          &slot);
 
@@ -190,9 +190,9 @@ static void handle_free_slot_req(seL4_Word sender_badge, PdFreeSlotMessage *msg,
     int error = 0;
 
     pd_component_registry_entry_t *client_data = pd_component_registry_get_entry_by_badge(sender_badge);
-    SERVER_GOTO_IF_COND(client_data == NULL, "Couldn't find PD (%ld)\n", get_object_id_from_badge(sender_badge));
+    SERVER_GOTO_IF_COND(client_data == NULL, "Couldn't find PD (%u)\n", get_object_id_from_badge(sender_badge));
 
-    seL4_Word slot = msg->slot;
+    seL4_CPtr slot = msg->slot;
 
     // Ignore error from clear slot, error occurs if the slot was already empty
     pd_clear_slot(&client_data->pd, slot);
@@ -209,9 +209,9 @@ static void handle_clear_slot_req(seL4_Word sender_badge, PdClearSlotMessage *ms
     int error = 0;
 
     pd_component_registry_entry_t *client_data = pd_component_registry_get_entry_by_badge(sender_badge);
-    SERVER_GOTO_IF_COND(client_data == NULL, "Couldn't find PD (%ld)\n", get_object_id_from_badge(sender_badge));
+    SERVER_GOTO_IF_COND(client_data == NULL, "Couldn't find PD (%u)\n", get_object_id_from_badge(sender_badge));
 
-    seL4_Word slot = msg->slot;
+    seL4_CPtr slot = msg->slot;
 
     error = pd_clear_slot(&client_data->pd, slot);
 
@@ -231,14 +231,14 @@ static void handle_send_cap_req(seL4_Word sender_badge, PdSendCapMessage *msg, P
 
     /* Find the client */
     pd_component_registry_entry_t *client_data = pd_component_registry_get_entry_by_badge(sender_badge);
-    SERVER_GOTO_IF_COND(client_data == NULL, "Couldn't find PD (%ld)\n", get_object_id_from_badge(sender_badge));
+    SERVER_GOTO_IF_COND(client_data == NULL, "Couldn't find PD (%u)\n", get_object_id_from_badge(sender_badge));
 
     /* Get the cap to send */
     seL4_Word received_caps_badge = seL4_GetBadge(0);
     bool is_core_cap = msg->is_core_cap;
 
     /* Send the cap to the target */
-    seL4_Word slot;
+    seL4_CPtr slot;
     error = pd_send_cap(&client_data->pd,
                         received_cap,
                         received_caps_badge,
@@ -264,7 +264,7 @@ static void handle_dump_cap_req(seL4_Word sender_badge, PdDumpMessage *msg,
 
     /* Find the client */
     pd_component_registry_entry_t *client_data = pd_component_registry_get_entry_by_badge(sender_badge);
-    SERVER_GOTO_IF_COND(client_data == NULL, "Couldn't find PD (%ld)\n", get_object_id_from_badge(sender_badge));
+    SERVER_GOTO_IF_COND(client_data == NULL, "Couldn't find PD (%u)\n", get_object_id_from_badge(sender_badge));
 
     /* Initialize the model state */
     model_state_t *ms = calloc(1, sizeof(model_state_t));
@@ -304,24 +304,24 @@ static void handle_share_rde_req(seL4_Word sender_badge, PdShareRDEMessage *msg,
 {
     int error = 0;
 
-    seL4_Word type = msg->res_type;
-    seL4_Word space_id = msg->space_id;
+    gpi_cap_t type = msg->res_type;
+    gpi_space_id_t space_id = msg->space_id;
 
-    OSDB_PRINTF("share_rde_req: Got request from client badge %lx for RDE type %s with space %ld.\n",
+    OSDB_PRINTF("share_rde_req: Got request from client badge %lx for RDE type %s with space %u.\n",
                 sender_badge, cap_type_to_str(type), space_id);
 
     /* Find the source PD */
-    seL4_Word client_id = get_client_id_from_badge(sender_badge);
+    gpi_obj_id_t client_id = get_client_id_from_badge(sender_badge);
     pd_component_registry_entry_t *client_data = pd_component_registry_get_entry_by_id(client_id);
-    SERVER_GOTO_IF_COND(client_data == NULL, "Couldn't find client PD (%ld)\n", client_id);
+    SERVER_GOTO_IF_COND(client_data == NULL, "Couldn't find client PD (%u)\n", client_id);
 
     /* Find the destination PD */
     pd_component_registry_entry_t *target_data = pd_component_registry_get_entry_by_badge(sender_badge);
-    SERVER_GOTO_IF_COND(target_data == NULL, "Couldn't find target PD (%ld)\n", get_object_id_from_badge(sender_badge));
+    SERVER_GOTO_IF_COND(target_data == NULL, "Couldn't find target PD (%u)\n", get_object_id_from_badge(sender_badge));
 
     /* Find the source RDE */
     osmosis_rde_t *rde = pd_rde_get(&client_data->pd, type, space_id);
-    SERVER_GOTO_IF_COND(rde == NULL, "share_rde_req: Failed to find RDE for type %ld and space %ld.\n", type, space_id);
+    SERVER_GOTO_IF_COND(rde == NULL, "share_rde_req: Failed to find RDE for type %u and space %u.\n", type, space_id);
 
     /* Check if RDE already exists in target */
     osmosis_rde_t *target_pd_rde = pd_rde_get(&target_data->pd, type, space_id);
@@ -334,7 +334,7 @@ static void handle_share_rde_req(seL4_Word sender_badge, PdShareRDEMessage *msg,
     /* Find the space for the RDE */
     resspc_component_registry_entry_t *resource_space_data = resource_space_get_entry_by_id(rde->space_id);
     SERVER_GOTO_IF_COND(resource_space_data == NULL,
-                        "share_rde_req: Failed to find resource space ID %d.\n",
+                        "share_rde_req: Failed to find resource space ID %u.\n",
                         rde->space_id);
 
     /* Copy the RDE */
@@ -354,17 +354,17 @@ static void handle_remove_rde_req(seL4_Word sender_badge, PdRemoveRDEMessage *ms
 {
     int error = 0;
 
-    seL4_Word type = msg->res_type;
-    seL4_Word space_id = msg->space_id;
+    gpi_cap_t type = msg->res_type;
+    gpi_space_id_t space_id = msg->space_id;
 
-    OSDB_PRINTF("remove_rde_req: Got request from client badge %lx for RDE type %ld with space %ld.\n",
+    OSDB_PRINTF("remove_rde_req: Got request from client badge %lx for RDE type %u with space %u.\n",
                 sender_badge, type, space_id);
 
     /* Find the client PD */
-    seL4_Word client_id = get_client_id_from_badge(sender_badge);
+    gpi_obj_id_t client_id = get_client_id_from_badge(sender_badge);
     pd_component_registry_entry_t *target_data = pd_component_registry_get_entry_by_badge(sender_badge);
 
-    SERVER_GOTO_IF_COND(target_data == NULL, "Couldn't find target PD (%ld)\n", get_object_id_from_badge(sender_badge));
+    SERVER_GOTO_IF_COND(target_data == NULL, "Couldn't find target PD (%u)\n", get_object_id_from_badge(sender_badge));
 
     /* Remove the RDE */
     rde_type_t rde_type = {.type = type};
@@ -381,33 +381,33 @@ static void handle_give_resource_req(seL4_Word sender_badge, PdGiveResourceMessa
 {
     int error = 0;
 
-    seL4_Word server_id = get_object_id_from_badge(sender_badge);
-    seL4_Word recipient_id = msg->pd_id;
-    seL4_Word space_id = msg->space_id;
-    seL4_Word resource_id = msg->object_id;
+    gpi_obj_id_t server_id = get_object_id_from_badge(sender_badge);
+    gpi_obj_id_t recipient_id = msg->pd_id;
+    gpi_space_id_t space_id = msg->space_id;
+    gpi_obj_id_t resource_id = msg->object_id;
 
-    OSDB_PRINT_VERBOSE("Got give resource request from client badge %lx, space ID %ld, resource ID %ld.\n",
+    OSDB_PRINT_VERBOSE("Got give resource request from client badge %lx, space ID %u, resource ID %u.\n",
                        sender_badge, space_id, resource_id);
 
     /* Find the resource server PD */
     pd_component_registry_entry_t *server_data = pd_component_registry_get_entry_by_id(server_id);
-    SERVER_GOTO_IF_COND(server_data == NULL, "Couldn't find server PD (%ld)\n", server_id);
+    SERVER_GOTO_IF_COND(server_data == NULL, "Couldn't find server PD (%u)\n", server_id);
 
     /* Find the recipient PD */
     pd_component_registry_entry_t *recipient_data = pd_component_registry_get_entry_by_id(recipient_id);
-    SERVER_GOTO_IF_COND(recipient_data == NULL, "Couldn't find target PD (%ld)\n", recipient_id);
+    SERVER_GOTO_IF_COND(recipient_data == NULL, "Couldn't find target PD (%u)\n", recipient_id);
 
     /* Find the resource space */
     resspc_component_registry_entry_t *resource_space_data = resource_space_get_entry_by_id(space_id);
-    SERVER_GOTO_IF_COND(resource_space_data == NULL, "Couldn't find resource space (%ld)\n", space_id);
+    SERVER_GOTO_IF_COND(resource_space_data == NULL, "Couldn't find resource space (%u)\n", space_id);
 
     /* Find the resource */
-    uint64_t res_node_id = compact_res_id(resource_space_data->space.resource_type, space_id, resource_id);
+    gpi_badge_t res_node_id = compact_res_id(resource_space_data->space.resource_type, space_id, resource_id);
     pd_hold_node_t *resource_data = (pd_hold_node_t *)
         resource_registry_get_by_id(&server_data->pd.hold_registry, res_node_id);
     SERVER_GOTO_IF_COND(resource_data == NULL, "Couldn't find resource (%lx)\n", res_node_id);
 
-    OSDB_PRINT_VERBOSE("resource server %ld gives resource in space %ld with ID %ld to client %ld\n",
+    OSDB_PRINT_VERBOSE("resource server %u gives resource in space %u with ID %u to client %u\n",
                        server_id, space_id, resource_id, recipient_id);
 
     /* Create a new badged EP for the resource */
@@ -423,7 +423,7 @@ static void handle_give_resource_req(seL4_Word sender_badge, PdGiveResourceMessa
     error = pd_add_resource(&recipient_data->pd,
                             make_res_id(resource_space_data->space.resource_type, space_id, resource_id),
                             seL4_CapNull, dest, seL4_CapNull);
-    SERVER_GOTO_IF_ERR(error, "Failed to add resource to PD (%ld)\n", recipient_id);
+    SERVER_GOTO_IF_ERR(error, "Failed to add resource to PD (%u)\n", recipient_id);
 
 err_goto:
     reply_msg->which_msg = PdReturnMessage_give_resource_tag;
@@ -431,13 +431,13 @@ err_goto:
 }
 
 #if TRACK_MAP_RELATIONS
-int pd_component_map_resources(uint32_t client_pd_id, uint64_t src_res_id, uint64_t dest_res_id)
+int pd_component_map_resources(gpi_obj_id_t client_pd_id, gpi_obj_id_t src_res_id, gpi_obj_id_t dest_res_id)
 {
     int error = 0;
 
     // Find the server PD
     pd_component_registry_entry_t *server_data = pd_component_registry_get_entry_by_id(client_pd_id);
-    SERVER_GOTO_IF_COND(server_data == NULL, "Couldn't find server PD (%ld)\n", client_pd_id);
+    SERVER_GOTO_IF_COND(server_data == NULL, "Couldn't find server PD (%u)\n", client_pd_id);
 
     // Find the resources
     pd_hold_node_t *src_res = (pd_hold_node_t *)resource_registry_get_by_id(&server_data->pd.hold_registry,
@@ -449,15 +449,15 @@ int pd_component_map_resources(uint32_t client_pd_id, uint64_t src_res_id, uint6
 
     // Find the source space
     resspc_component_registry_entry_t *src_space_data = resource_space_get_entry_by_id(src_res->space_id);
-    SERVER_GOTO_IF_COND(src_space_data == NULL, "Couldn't find resource space (%ld)\n", src_res->space_id);
+    SERVER_GOTO_IF_COND(src_space_data == NULL, "Couldn't find resource space (%u)\n", src_res->space_id);
 
     // Confirm the mapping is valid
     SERVER_GOTO_IF_COND(client_pd_id != get_gpi_server()->rt_pd_id && src_space_data->space.pd->id != client_pd_id,
-                        "PD (%ld) can't map resource from a space (%ld) it doesn't manage.\n",
+                        "PD (%u) can't map resource from a space (%u) it doesn't manage.\n",
                         client_pd_id, src_res->space_id);
 
     SERVER_GOTO_IF_COND(resspc_check_map(src_res->space_id, dest_res->space_id) != 1,
-                        "Mapping a resource in space (%ld) to a resource in space (%ld) is not valid.\n",
+                        "Mapping a resource in space (%u) to a resource in space (%u) is not valid.\n",
                         src_res->space_id, dest_res->space_id);
 
     // (XXX) Arya: should we also track the mapping?
@@ -472,11 +472,11 @@ static void handle_map_resource_req(seL4_Word sender_badge, PdMapResourceMessage
 {
     int error = 0;
 
-    seL4_Word server_id = get_object_id_from_badge(sender_badge);
-    seL4_Word src_res_id = msg->src_resource;
-    seL4_Word dest_res_id = msg->dest_resource;
+    gpi_obj_id_t server_id = get_object_id_from_badge(sender_badge);
+    gpi_obj_id_t src_res_id = msg->src_resource;
+    gpi_obj_id_t dest_res_id = msg->dest_resource;
 
-    OSDB_PRINTF("Got map resource request from client badge %lx, srd ID %lx, dest ID %lx.\n",
+    OSDB_PRINTF("Got map resource request from client badge %lx, srd ID %u, dest ID %u.\n",
                 sender_badge, src_res_id, dest_res_id);
 
     error = pd_component_map_resources(server_id, src_res_id, dest_res_id);
@@ -494,20 +494,20 @@ static void handle_exit_req(seL4_Word sender_badge, PdExitMessage *msg)
 
     /* Find the target PD */
     pd_component_registry_entry_t *client_data = pd_component_registry_get_entry_by_badge(sender_badge);
-    SERVER_GOTO_IF_COND(client_data == NULL, "Couldn't find PD (%ld)\n", get_object_id_from_badge(sender_badge));
+    SERVER_GOTO_IF_COND(client_data == NULL, "Couldn't find PD (%u)\n", get_object_id_from_badge(sender_badge));
 
-    uint32_t pd_id = client_data->pd.id;
+    gpi_obj_id_t pd_id = client_data->pd.id;
 
     /* Remove the PD from registry, this will also destroy the PD */
     client_data->pd.exit_code = msg->exit_code;
     client_data->pd.deletion_depth = 0; // This PD is the root of a deletion tree
     resource_registry_delete(&get_pd_component()->registry, (resource_registry_node_t *)client_data);
 
-    OSDB_PRINTF("Cleaned up exited PD (%d)\n", pd_id);
+    OSDB_PRINTF("Cleaned up exited PD (%u)\n", pd_id);
     return;
 
 err_goto:
-    OSDB_PRINTERR("Error while cleaning up exited PD (%d)\n", pd_id);
+    OSDB_PRINTERR("Error while cleaning up exited PD (%u)\n", pd_id);
 }
 
 static void handle_ipc_bench_req(PdBenchIPCMessage *msg, PdReturnMessage *reply_msg, seL4_CPtr received_cap)
@@ -601,20 +601,20 @@ static void handle_runtime_setup_req(seL4_Word sender_badge, PdSetupMessage *msg
 
     /* Find the target PD */
     pd_component_registry_entry_t *target_pd = pd_component_registry_get_entry_by_badge(sender_badge);
-    SERVER_GOTO_IF_COND(target_pd == NULL, "Couldn't find target PD (%ld)\n", get_object_id_from_badge(sender_badge));
+    SERVER_GOTO_IF_COND(target_pd == NULL, "Couldn't find target PD (%u)\n", get_object_id_from_badge(sender_badge));
 
     /* Find the target ADS */
     ads_component_registry_entry_t *target_ads = (ads_component_registry_entry_t *)
         resource_component_registry_get_by_id(get_ads_component(), get_object_id_from_badge(seL4_GetBadge(0)));
     SERVER_GOTO_IF_COND(target_ads == NULL,
-                        "Couldn't find target ADS (%ld)\n",
+                        "Couldn't find target ADS (%u)\n",
                         get_object_id_from_badge(seL4_GetBadge(0)));
 
     /* Find the target CPU */
     cpu_component_registry_entry_t *target_cpu = (cpu_component_registry_entry_t *)
         resource_component_registry_get_by_id(get_cpu_component(), get_object_id_from_badge(seL4_GetBadge(1)));
     SERVER_GOTO_IF_COND(target_cpu == NULL,
-                        "Couldn't find target CPU (%ld)\n",
+                        "Couldn't find target CPU (%u)\n",
                         get_object_id_from_badge(seL4_GetBadge(1)));
 
     /* perform the setup */
@@ -656,7 +656,7 @@ static void handle_share_resource_type_req(seL4_Word sender_badge,
 
     /* Check for invalid sharing */
     SERVER_GOTO_IF_COND(src_pd_data->pd.id == dst_pd_data->pd.id,
-                        "Invalid sharing of resources between the same PD (%d -> %d)\n",
+                        "Invalid sharing of resources between the same PD (%u -> %u)\n",
                         src_pd_data->pd.id, dst_pd_data->pd.id);
 
     SERVER_GOTO_IF_COND(res_type != GPICAP_TYPE_MO && res_type < GPICAP_TYPE_seL4,
@@ -669,7 +669,7 @@ static void handle_share_resource_type_req(seL4_Word sender_badge,
     error = pd_bulk_add_resource(&dst_pd_data->pd, resources);
     SERVER_GOTO_IF_ERR(error, "Error occurred during resource sharing (some may still have been successful)\n");
 
-    OSDB_PRINTF("Shared %s resources between PDs (%d -> %d)\n", cap_type_to_str(res_type),
+    OSDB_PRINTF("Shared %s resources between PDs (%u -> %u)\n", cap_type_to_str(res_type),
                 src_pd_data->pd.id, dst_pd_data->pd.id);
 
 err_goto:
@@ -690,10 +690,10 @@ static void handle_get_work_req(seL4_Word sender_badge, PdGetWorkMessage *msg, P
 
     /* Find the target PD */
     pd_component_registry_entry_t *pd_data = pd_component_registry_get_entry_by_badge(sender_badge);
-    SERVER_GOTO_IF_COND(pd_data == NULL, "Failed to find PD (%ld)\n", get_object_id_from_badge(sender_badge));
+    SERVER_GOTO_IF_COND(pd_data == NULL, "Failed to find PD (%u)\n", get_object_id_from_badge(sender_badge));
 
     SERVER_GOTO_IF_COND(get_client_id_from_badge(sender_badge) != get_object_id_from_badge(sender_badge),
-                        "Invalid request for work from a different PD (%ld)\n",
+                        "Invalid request for work from a different PD (%u)\n",
                         get_client_id_from_badge(sender_badge));
 
     /* Return the next piece of work, if there is any */
@@ -805,7 +805,7 @@ static void handle_send_subgraph_req(seL4_Word sender_badge, PdSendSubgraphMessa
     }
     else
     {
-        OSDB_PRINTF("Current model extraction is still missing %d pieces\n", get_gpi_server()->model_extraction_n_missing);
+        OSDB_PRINTF("Current model extraction is still missing %u pieces\n", get_gpi_server()->model_extraction_n_missing);
     }
 
 err_goto:
@@ -823,7 +823,7 @@ static void handle_set_name_req(seL4_Word sender_badge, PdSetNameMessage *msg, P
 
     /* Find the target PD */
     pd_component_registry_entry_t *pd_data = pd_component_registry_get_entry_by_badge(sender_badge);
-    SERVER_GOTO_IF_COND(pd_data == NULL, "Failed to find PD (%ld)\n", get_object_id_from_badge(sender_badge));
+    SERVER_GOTO_IF_COND(pd_data == NULL, "Failed to find PD (%u)\n", get_object_id_from_badge(sender_badge));
 
     /* Set the image name */
     pd_set_name(&pd_data->pd, msg->pd_name);
@@ -848,7 +848,7 @@ static void pd_component_handle(void *msg_p,
     if (get_object_id_from_badge(sender_badge) == BADGE_OBJ_ID_NULL)
     {
         SERVER_GOTO_IF_COND(msg->which_msg != PdMessage_alloc_tag,
-                            "Received invalid request on the allocation endpoint: %d\n", msg->which_msg);
+                            "Received invalid request on the allocation endpoint: %u\n", msg->which_msg);
         handle_pd_allocation(sender_badge, reply_msg);
     }
     else
@@ -913,16 +913,16 @@ static void pd_component_handle(void *msg_p,
             break;
 #endif
         default:
-            SERVER_GOTO_IF_COND(1, "Unknown request received: %d\n", msg->which_msg);
+            SERVER_GOTO_IF_COND(1, "Unknown request received: %u\n", msg->which_msg);
             break;
         }
     }
 
-    OSDB_PRINT_VERBOSE("Returning from PD component with error code %d\n", reply_msg->errorCode);
+    OSDB_PRINT_VERBOSE("Returning from PD component with error code %u\n", reply_msg->errorCode);
     return;
 
 err_goto:
-    OSDB_PRINT_VERBOSE("Returning from PD component with error code %d\n", error);
+    OSDB_PRINT_VERBOSE("Returning from PD component with error code %u\n", error);
     reply_msg->errorCode = error;
 }
 
@@ -962,7 +962,7 @@ int pd_component_initialize(vka_t *server_vka,
                                   &PdReturnMessage_msg);
 }
 
-void forge_pd_for_root_task(uint64_t rt_id)
+void forge_pd_for_root_task(gpi_obj_id_t rt_id)
 {
     pd_component_registry_entry_t *rt_entry = calloc(1, sizeof(pd_component_registry_entry_t));
     rt_entry->gen.object_id = rt_id;
@@ -971,7 +971,7 @@ void forge_pd_for_root_task(uint64_t rt_id)
     resource_registry_insert(&get_pd_component()->registry, (resource_registry_node_t *)rt_entry);
 }
 
-int pd_add_resource_by_id(uint32_t pd_id,
+int pd_add_resource_by_id(gpi_obj_id_t pd_id,
                           gpi_res_id_t res_id,
                           seL4_CPtr slot_in_RT,
                           seL4_CPtr slot_in_PD,
@@ -980,7 +980,7 @@ int pd_add_resource_by_id(uint32_t pd_id,
     int error = 0;
 
     pd_component_registry_entry_t *client_pd_data = pd_component_registry_get_entry_by_id(pd_id);
-    SERVER_GOTO_IF_COND(client_pd_data == NULL, "Couldn't find PD (%d) to add resource \n", pd_id);
+    SERVER_GOTO_IF_COND(client_pd_data == NULL, "Couldn't find PD (%u) to add resource \n", pd_id);
 
     error = pd_add_resource(&client_pd_data->pd, res_id, slot_in_RT, slot_in_PD, slot_in_serverPD);
 
@@ -995,7 +995,7 @@ int pd_component_remove_resource_from_rt(gpi_res_id_t res_id)
     // Get the root task PD
     pd_component_registry_entry_t *pd_entry = pd_component_registry_get_entry_by_id(get_gpi_server()->rt_pd_id);
     SERVER_GOTO_IF_COND(pd_entry == NULL,
-                        "Couldn't find RT PD (%d) to remove resource \n",
+                        "Couldn't find RT PD (%u) to remove resource \n",
                         get_gpi_server()->rt_pd_id);
 
     // Remove the resource from it
@@ -1021,11 +1021,11 @@ int pd_component_resource_cleanup(gpi_res_id_t res_id)
             continue;
         }
 
-        OSDB_PRINTF("Remove resource %s_%d_%d from PD(%d)\n", cap_type_to_str(res_id.type),
+        OSDB_PRINTF("Remove resource %s_%u_%u from PD(%u)\n", cap_type_to_str(res_id.type),
                     res_id.space_id, res_id.object_id, pd_entry->pd.id);
 
         error = pd_remove_resource(&pd_entry->pd, res_id);
-        SERVER_GOTO_IF_ERR(error, "failed to remove resource %s_%d_%d from PD (%d)\n",
+        SERVER_GOTO_IF_ERR(error, "failed to remove resource %s_%u_%u from PD (%u)\n",
                            cap_type_to_str(res_id.type),
                            res_id.space_id, res_id.object_id, pd_entry->pd.id);
     }
@@ -1034,15 +1034,16 @@ err_goto:
     return error;
 }
 
-int pd_component_space_cleanup(uint32_t pd_id, gpi_cap_t space_type, uint32_t space_id, bool execute_cleanup_policy)
+int pd_component_space_cleanup(gpi_obj_id_t pd_id, gpi_cap_t space_type,
+                               gpi_space_id_t space_id, bool execute_cleanup_policy)
 {
     int error = 0;
 
-    OSDB_PRINTF("Starting to cleanup resource space %s_%d \n", cap_type_to_str(space_type), space_id);
+    OSDB_PRINTF("Starting to cleanup resource space %s_%u \n", cap_type_to_str(space_type), space_id);
 
     // Find the manager PD of this resource space
     pd_component_registry_entry_t *manager_data = pd_component_registry_get_entry_by_id(pd_id);
-    SERVER_GOTO_IF_COND(manager_data == NULL, "couldn't find PD (%d) managing resource space (%d)", pd_id, space_id);
+    SERVER_GOTO_IF_COND(manager_data == NULL, "couldn't find PD (%u) managing resource space (%u)", pd_id, space_id);
     int depth = manager_data->pd.deletion_depth;
 
     // Remove the space resource from the manager, if still live
@@ -1051,7 +1052,7 @@ int pd_component_space_cleanup(uint32_t pd_id, gpi_cap_t space_type, uint32_t sp
         // Remove the resource space object
         gpi_res_id_t space_res_id = make_res_id(GPICAP_TYPE_RESSPC, get_resspc_component()->space_id, space_id);
         error = pd_remove_resource(&manager_data->pd, space_res_id);
-        SERVER_GOTO_IF_ERR(error, "failed to remove resource space (%d) resource from PD (%d)\n",
+        SERVER_GOTO_IF_ERR(error, "failed to remove resource space (%u) resource from PD (%u)\n",
                            space_id, pd_id);
 
         if (manager_data->pd.id != get_gpi_server()->rt_pd_id)
@@ -1088,7 +1089,7 @@ int pd_component_space_cleanup(uint32_t pd_id, gpi_cap_t space_type, uint32_t sp
                 // Check if the PD has a request edge for the deleted space, or holds any resource from the space
                 if (pd_rde_get(pd, space_type, space_id) || pd_has_resources_in_space(pd, space_id))
                 {
-                    OSDB_PRINTF("Delete PD (%d) depending on %s_%d at depth %d\n", pd->id, cap_type_to_str(space_type),
+                    OSDB_PRINTF("Delete PD (%u) depending on %s_%u at depth %u\n", pd->id, cap_type_to_str(space_type),
                                 space_id, depth + 1);
 
                     // Set the deletion depth
@@ -1116,7 +1117,7 @@ int pd_component_space_cleanup(uint32_t pd_id, gpi_cap_t space_type, uint32_t sp
             continue;
         }
 
-        OSDB_PRINTF("Cleanup resource space %s_%d in PD(%d)\n", cap_type_to_str(space_type),
+        OSDB_PRINTF("Cleanup resource space %s_%u in PD(%u)\n", cap_type_to_str(space_type),
                     space_id, pd->id);
 
         // Remove an RDE if there is one
@@ -1126,7 +1127,7 @@ int pd_component_space_cleanup(uint32_t pd_id, gpi_cap_t space_type, uint32_t sp
 
         // Remove resources belonging to the deleted space
         error = pd_remove_resources_in_space(pd, space_id);
-        SERVER_GOTO_IF_ERR(error, "failed to remove resources in %s_%d from PD (%d)\n",
+        SERVER_GOTO_IF_ERR(error, "failed to remove resources in %s_%u from PD (%u)\n",
                            cap_type_to_str(space_type),
                            space_id, pd->id);
     }
@@ -1137,7 +1138,7 @@ err_goto:
 
 void pd_component_queue_model_extraction_work(pd_component_registry_entry_t *pd_entry, pd_work_entry_t *work)
 {
-    OSDB_PRINTF("Requesting model subgraph from PD (%d)\n", pd_entry->pd.id);
+    OSDB_PRINTF("Requesting model subgraph from PD (%u)\n", pd_entry->pd.id);
     assert(work != NULL);
 
     // Add to the list

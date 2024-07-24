@@ -25,19 +25,19 @@
 
 typedef struct _cpu
 {
-    uint32_t id;
+    gpi_obj_id_t id;
 
-    vka_object_t tcb;          ///< the TCB object
-    void *ipc_buf_addr;        ///< address of the IPC buffer in the TCB's binded ADS
-    uint32_t ipc_buf_mo;       ///< ID of the IPC buffer's MO
-    seL4_CPtr ipc_frame_cap;   ///< the frame cap for the IPC buffer
-    uint64_t binded_ads_id;    ///< ID of the ADS that is binded to the TCB
-    void *tls_base;            ///< address of the TLS base (currently unused)
-    seL4_CPtr cspace;          ///< cap to the currently binded cspace
-    uint64_t cspace_guard;     ///< guard of the currently binded cspace
-    seL4_CPtr fault_ep;        ///< currently binded fault endpoint
-    seL4_UserContext *reg_ctx; ///< TCB register values that are to be written, NOT the current values
-    vka_object_t vcpu;         ///< VCPU object (only exists if CPU is elevated)
+    vka_object_t tcb;           ///< the TCB object
+    void *ipc_buf_addr;         ///< address of the IPC buffer in the TCB's binded ADS
+    gpi_obj_id_t ipc_buf_mo;    ///< ID of the IPC buffer's MO
+    seL4_CPtr ipc_frame_cap;    ///< the frame cap for the IPC buffer
+    gpi_obj_id_t binded_ads_id; ///< ID of the ADS that is binded to the TCB
+    void *tls_base;             ///< address of the TLS base (currently unused)
+    seL4_CPtr cspace;           ///< cap to the currently binded cspace
+    uint64_t cspace_guard;      ///< guard of the currently binded cspace
+    seL4_CPtr fault_ep;         ///< currently binded fault endpoint
+    seL4_UserContext *reg_ctx;  ///< TCB register values that are to be written, NOT the current values
+    vka_object_t vcpu;          ///< VCPU object (only exists if CPU is elevated)
 } cpu_t;
 
 /**

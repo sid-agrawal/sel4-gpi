@@ -23,7 +23,7 @@ static void resource_component_reply(resource_component_context_t *component, se
 int resource_component_initialize(
     resource_component_context_t *component,
     gpi_cap_t resource_type,
-    uint64_t space_id,
+    gpi_space_id_t space_id,
     void (*request_handler)(void *, seL4_Word, seL4_CPtr, void *, bool *, bool *),
     int (*new_obj)(resource_component_object_t *, vka_t *, vspace_t *, void *),
     void (*on_registry_delete)(resource_registry_node_t *, void *),
@@ -99,8 +99,8 @@ void resource_component_handle(resource_component_context_t *component,
 }
 
 int resource_component_allocate(resource_component_context_t *component,
-                                uint64_t client_id,
-                                uint64_t object_id,
+                                gpi_obj_id_t client_id,
+                                gpi_obj_id_t object_id,
                                 bool forge,
                                 void *arg0,
                                 resource_registry_node_t **ret_entry,
@@ -112,7 +112,7 @@ int resource_component_allocate(resource_component_context_t *component,
     resource_component_registry_entry_t *reg_entry = calloc(1, component->reg_entry_size);
     GOTO_IF_COND(reg_entry == NULL, "Couldn't allocate new %s reg entry\n", cap_type_to_str(component->resource_type));
 
-    uint64_t resource_id;
+    gpi_obj_id_t resource_id;
     if (object_id == BADGE_OBJ_ID_NULL)
     {
         resource_id = resource_registry_insert_new_id(&component->registry, (resource_registry_node_t *)reg_entry);
@@ -137,7 +137,7 @@ int resource_component_allocate(resource_component_context_t *component,
     {
         // Find the client PD
         pd_component_registry_entry_t *pd_data = pd_component_registry_get_entry_by_id(client_id);
-        SERVER_GOTO_IF_COND(pd_data == NULL, "Couldn't find PD (%ld)\n", client_id);
+        SERVER_GOTO_IF_COND(pd_data == NULL, "Couldn't find PD (%u)\n", client_id);
 
         vka_t *client_vka = pd_data->pd.pd_vka;
 
@@ -176,20 +176,20 @@ resource_component_registry_entry_t *resource_component_registry_get_by_badge(re
 }
 
 resource_component_registry_entry_t *resource_component_registry_get_by_id(resource_component_context_t *component,
-                                                                           seL4_Word object_id)
+                                                                           gpi_obj_id_t object_id)
 {
-    return (resource_component_registry_entry_t *)resource_registry_get_by_id(&component->registry, object_id);
+    return (resource_component_registry_entry_t *)resource_registry_get_by_id(&component->registry, (uint64_t)object_id);
 }
 
 int resource_component_inc(resource_component_context_t *component,
-                           uint64_t object_id)
+                           gpi_obj_id_t object_id)
 {
     int error = 0;
 
     resource_component_registry_entry_t *reg_entry = resource_component_registry_get_by_id(component, object_id);
-    GOTO_IF_COND(reg_entry == NULL, "Couldn't find %s (%ld)\n", cap_type_to_str(component->resource_type), object_id);
+    GOTO_IF_COND(reg_entry == NULL, "Couldn't find %s (%u)\n", cap_type_to_str(component->resource_type), object_id);
 
-    OSDB_PRINTF("inc refcount %s (%ld), new count %d\n",
+    OSDB_PRINTF("inc refcount %s (%u), new count %u\n",
                 cap_type_to_str(component->resource_type), object_id, reg_entry->gen.count + 1);
 
     resource_registry_inc(&component->registry, (resource_registry_node_t *)reg_entry);
@@ -199,7 +199,7 @@ err_goto:
 }
 
 int resource_component_dec(resource_component_context_t *component,
-                           uint64_t object_id)
+                           gpi_obj_id_t object_id)
 {
     int error = 0;
 
@@ -211,14 +211,14 @@ int resource_component_dec(resource_component_context_t *component,
         // and is not an error
         if (!component->resource_type == GPICAP_TYPE_MO)
         {
-            OSDB_PRINTERR("Couldn't find %s (%ld)\n", cap_type_to_str(component->resource_type), object_id);
+            OSDB_PRINTERR("Couldn't find %s (%u)\n", cap_type_to_str(component->resource_type), object_id);
             error = 1;
         }
 
         goto err_goto;
     }
 
-    OSDB_PRINTF("dec refcount %s (%ld), new count %d\n",
+    OSDB_PRINTF("dec refcount %s (%u), new count %u\n",
                 cap_type_to_str(component->resource_type), object_id, reg_entry->gen.count - 1);
 
     resource_registry_dec(&component->registry, (resource_registry_node_t *)reg_entry);
@@ -228,14 +228,14 @@ err_goto:
 }
 
 int resource_component_delete(resource_component_context_t *component,
-                              uint64_t object_id)
+                              gpi_obj_id_t object_id)
 {
     int error = 0;
 
     resource_component_registry_entry_t *reg_entry = resource_component_registry_get_by_id(component, object_id);
-    GOTO_IF_COND(reg_entry == NULL, "Couldn't find %s (%ld)\n", cap_type_to_str(component->resource_type), object_id);
+    GOTO_IF_COND(reg_entry == NULL, "Couldn't find %s (%u)\n", cap_type_to_str(component->resource_type), object_id);
 
-    OSDB_PRINTF("delete object %s (%ld)\n", cap_type_to_str(component->resource_type), object_id);
+    OSDB_PRINTF("delete object %s (%u)\n", cap_type_to_str(component->resource_type), object_id);
 
     resource_registry_delete(&component->registry, (resource_registry_node_t *)reg_entry);
 
@@ -248,7 +248,7 @@ void resource_component_debug_print(resource_component_context_t *component)
     resource_registry_node_t *curr;
     for (curr = component->registry.head; curr != NULL; curr = curr->hh.next)
     {
-        printf(" - %s (%ld), refcount %d\n", cap_type_to_str(component->resource_type), curr->object_id, curr->count);
+        printf(" - %s (%lu), refcount %u\n", cap_type_to_str(component->resource_type), curr->object_id, curr->count);
     }
 }
 
@@ -303,7 +303,8 @@ seL4_CPtr resource_component_make_badged_ep_custom(vka_t *src_vka,
 }
 
 seL4_CPtr resource_component_make_badged_ep(vka_t *src_vka, vka_t *dst_vka, seL4_CPtr src_ep,
-                                            gpi_cap_t resource_type, uint64_t space_id, uint64_t res_id, uint64_t client_id)
+                                            gpi_cap_t resource_type, gpi_space_id_t space_id, 
+                                            gpi_obj_id_t object_id, gpi_obj_id_t client_id)
 {
     int error = 0;
 
@@ -312,7 +313,7 @@ seL4_CPtr resource_component_make_badged_ep(vka_t *src_vka, vka_t *dst_vka, seL4
                                     0x00,
                                     client_id,
                                     space_id,
-                                    res_id);
+                                    object_id);
 
     GOTO_IF_COND(badge == 0, "Failed to make badge\n");
 
@@ -326,13 +327,13 @@ err_goto:
     return seL4_CapNull;
 }
 
-void resource_component_remove_from_rt(resource_component_context_t *context, uint32_t obj_id)
+void resource_component_remove_from_rt(resource_component_context_t *context, gpi_obj_id_t obj_id)
 {
     // Remove from RT, if held
     int error = pd_component_remove_resource_from_rt(make_res_id(context->resource_type, context->space_id, obj_id));
 
     if (error)
     {
-        OSDB_PRINTWARN("Failed to remove %s (%d) from rt\n", cap_type_to_str(context->resource_type), obj_id);
+        OSDB_PRINTWARN("Failed to remove %s (%u) from rt\n", cap_type_to_str(context->resource_type), obj_id);
     }
 }

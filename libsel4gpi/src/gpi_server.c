@@ -95,7 +95,7 @@ gpi_server_parent_spawn_thread(simple_t *parent_simple, vka_t *parent_vka,
     error = vka_alloc_endpoint(parent_vka, &get_gpi_server()->server_ep_obj);
     if (error != 0)
     {
-        ZF_LOGE(GPISERVP "spawn_thread: failed to alloc endpoint, err=%d.",
+        ZF_LOGE(GPISERVP "spawn_thread: failed to alloc endpoint, err=%u.",
                 error);
         return error;
     }
@@ -170,7 +170,7 @@ gpi_server_parent_spawn_thread(simple_t *parent_simple, vka_t *parent_vka,
     if (error != 0)
     {
         ZF_LOGE(GPISERVP "spawn_thread: sel4utils_configure_thread failed "
-                         "with %d.",
+                         "with %u.",
                 error);
         goto out;
     }
@@ -182,7 +182,7 @@ gpi_server_parent_spawn_thread(simple_t *parent_simple, vka_t *parent_vka,
     if (error != 0)
     {
         ZF_LOGE(GPISERVP "spawn_thread: sel4utils_start_thread failed with "
-                         "%d.",
+                         "%u.",
                 error);
         goto out;
     }
@@ -330,8 +330,8 @@ void gpi_debug_print_resources(void)
     printf("*** DONE LISTING RESOURCES ***\n\n");
 
     printf("Expected resources to remain:\n");
-    printf(" - RT PD (%d)\n", get_gpi_server()->rt_pd_id);
-    printf(" - RT ADS (%d)\n", get_gpi_server()->rt_ads_id);
+    printf(" - RT PD (%u)\n", get_gpi_server()->rt_pd_id);
+    printf(" - RT ADS (%u)\n", get_gpi_server()->rt_ads_id);
 
 
     ads_component_registry_entry_t *ads_entry = (ads_component_registry_entry_t *)
@@ -340,7 +340,7 @@ void gpi_debug_print_resources(void)
     for (resource_registry_node_t *node = ads_entry->ads.attach_registry.head; node != NULL; node = node->hh.next)
     {
         attach_node_t *attach_node = (attach_node_t *)node;
-        printf(" - RT MO (%d)\n", (int) attach_node->mo_id);
+        printf(" - RT MO (%u)\n", (int) attach_node->mo_id);
     }
     printf("\n\n");
 }

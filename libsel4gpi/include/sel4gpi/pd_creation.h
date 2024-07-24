@@ -112,7 +112,7 @@ typedef struct _ads_config
 typedef struct _rde_config
 {
     gpi_cap_t type;
-    uint32_t space_id;
+    gpi_space_id_t space_id;
 } rde_config_t;
 
 /**
@@ -245,7 +245,7 @@ int sel4gpi_ads_configure(ads_config_t *cfg,
  * @param rde_type type of RDE to share
  * @param space_id resource space ID of the RDE
  */
-void sel4gpi_add_rde_config(pd_config_t *cfg, gpi_cap_t rde_type, uint32_t space_id);
+void sel4gpi_add_rde_config(pd_config_t *cfg, gpi_cap_t rde_type, gpi_space_id_t space_id);
 
 /**
  * @brief Convenience function for adding a new VMR config to an ADS config

@@ -82,7 +82,7 @@ static void *ramdisk_ptr(unsigned int sector)
  * @param blockno returns the allocated block number
  * @param return 0 on success, 1 if there are no blocks available
  */
-static int alloc_block(uint64_t *blockno)
+static int alloc_block(gpi_obj_id_t *blockno)
 {
     if (get_ramdisk_server()->free_blocks == NULL)
     {
@@ -91,7 +91,7 @@ static int alloc_block(uint64_t *blockno)
 
     *blockno = get_ramdisk_server()->free_blocks->blockno;
 
-    RAMDISK_PRINTF("Allocating blockno %ld\n", *blockno);
+    RAMDISK_PRINTF("Allocating blockno %u\n", *blockno);
 
     // Update free block list
     get_ramdisk_server()->free_blocks->blockno++;
@@ -246,8 +246,8 @@ void ramdisk_request_handler(
     reply_msg->which_msg = RamdiskReturnMessage_basic_tag;
 
     // Get info from badge
-    uint64_t client_id = get_client_id_from_badge(sender_badge);
-    uint64_t obj_id = get_object_id_from_badge(sender_badge);
+    gpi_obj_id_t client_id = get_client_id_from_badge(sender_badge);
+    gpi_obj_id_t obj_id = get_object_id_from_badge(sender_badge);
     gpi_cap_t cap_type = get_cap_type_from_badge(sender_badge);
 
     CHECK_ERROR_GOTO(sender_badge == 0, "Got message on unbadged ep", RamdiskError_UNKNOWN, done);
@@ -263,7 +263,7 @@ void ramdisk_request_handler(
         case RamdiskAction_BIND:
             *need_new_recv_cap = true;
 
-            RAMDISK_PRINTF("Binding MO for client %ld\n", client_id);
+            RAMDISK_PRINTF("Binding MO for client %u\n", client_id);
 
             /* Attach memory object to server ADS */
             error = resource_server_attach_mo(&get_ramdisk_server()->gen, cap, &mo_vaddr);
@@ -274,7 +274,7 @@ void ramdisk_request_handler(
             // RAMDISK_PRINTF("Can access vaddr %p, val 0x%x\n", mo_vaddr, *((int *)mo_vaddr));
             break;
         case RamdiskAction_UNBIND:
-            RAMDISK_PRINTF("Unbinding MO for client %ld\n", client_id);
+            RAMDISK_PRINTF("Unbinding MO for client %u\n", client_id);
 
             /* Remove shared mem from server ADS */
             mo_vaddr = get_ramdisk_server()->shared_mem[client_id];
@@ -286,7 +286,7 @@ void ramdisk_request_handler(
             break;
         case RamdiskAction_ALLOC:
             // Assign a new block to this ep
-            uint64_t blockno;
+            gpi_obj_id_t blockno;
             error = alloc_block(&blockno);
 
             CHECK_ERROR_GOTO(error, "no more free blocks to assign", RamdiskError_NO_BLOCKS, done);
@@ -329,7 +329,7 @@ void ramdisk_request_handler(
 
             /* Read ramdisk */
             void *ramdisk_vaddr = ramdisk_ptr(obj_id);
-            RAMDISK_PRINTF("Reading from blockno %ld to %p\n", obj_id, mo_vaddr);
+            RAMDISK_PRINTF("Reading from blockno %u to %p\n", obj_id, mo_vaddr);
             memcpy(mo_vaddr, ramdisk_vaddr, RAMDISK_BLOCK_SIZE);
 
             RAMDISK_PRINTF("Read block\n");
@@ -346,7 +346,7 @@ void ramdisk_request_handler(
 
             /* Write ramdisk */
             ramdisk_vaddr = ramdisk_ptr(obj_id);
-            RAMDISK_PRINTF("Writing from %p to blockno %ld\n", mo_vaddr, obj_id);
+            RAMDISK_PRINTF("Writing from %p to blockno %u\n", mo_vaddr, obj_id);
             memcpy(ramdisk_vaddr, mo_vaddr, RAMDISK_BLOCK_SIZE);
 
             // ARYA-TODO what if the MO is not of RAMDISK_BLOCK_SIZE?
@@ -381,7 +381,7 @@ int ramdisk_work_handler(PdWorkReturnMessage *work)
     int op = work->action;
     if (op == PdWorkAction_EXTRACT)
     {
-        uint64_t ramdisk_pd_id = sel4gpi_get_pd_conn().id;
+        gpi_obj_id_t ramdisk_pd_id = sel4gpi_get_pd_conn().id;
 
         /* Blocks never have any resource relations */
 
@@ -393,8 +393,8 @@ int ramdisk_work_handler(PdWorkReturnMessage *work)
     {
         for (int i = 0; i < work->object_ids_count; i++)
         {
-            uint64_t space_id = work->space_ids[i];
-            uint64_t blockno = work->object_ids[i];
+            gpi_space_id_t space_id = work->space_ids[i];
+            gpi_obj_id_t blockno = work->object_ids[i];
 
             assert(space_id == get_ramdisk_server()->gen.default_space.id);
             assert(blockno >= 0 && blockno < (RAMDISK_SIZE_BYTES / RAMDISK_BLOCK_SIZE));
@@ -407,8 +407,8 @@ int ramdisk_work_handler(PdWorkReturnMessage *work)
     {
         for (int i = 0; i < work->object_ids_count; i++)
         {
-            uint64_t space_id = work->space_ids[i];
-            uint64_t blockno = work->object_ids[i];
+            gpi_space_id_t space_id = work->space_ids[i];
+            gpi_obj_id_t blockno = work->object_ids[i];
 
             assert(space_id == get_ramdisk_server()->gen.default_space.id);
             assert(blockno >= 0 && blockno < (RAMDISK_SIZE_BYTES / RAMDISK_BLOCK_SIZE));

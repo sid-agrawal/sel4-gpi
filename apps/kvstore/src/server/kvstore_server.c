@@ -148,7 +148,7 @@ int kvstore_server_main(seL4_CPtr parent_ep)
     error = ep_client_get_raw_endpoint(&parent_ep_conn);
     CHECK_ERROR(error, "Failed to retrieve parent EP\n", KVSTORE_ERROR_UNKNOWN);
 
-    printf("kvstore-server main: parent ep (%d), fs ep(%d) \n", (int)parent_ep_conn.raw_endpoint, (int)fs_ep);
+    printf("kvstore-server main: parent ep (%lu), fs ep(%lu) \n", parent_ep_conn.raw_endpoint, fs_ep);
 
     pd_client_context_t pd_conn = sel4gpi_get_pd_conn();
 
@@ -162,7 +162,8 @@ int kvstore_server_main(seL4_CPtr parent_ep)
     CHECK_ERROR(error, "failed to allocate endpoint\n", KVSTORE_ERROR_UNKNOWN);
 
     /* notify parent that we have started */
-    KVSTORE_PRINTF("Messaging parent process at slot %d, sending ep (%d)\n", (int)parent_ep_conn.raw_endpoint, (int)ep_conn.raw_endpoint);
+    KVSTORE_PRINTF("Messaging parent process at slot %lu, sending ep (%lu)\n", 
+    parent_ep_conn.raw_endpoint, ep_conn.raw_endpoint);
     tag = seL4_MessageInfo_new(0, 0, 1, 0);
     seL4_SetCap(0, ep_conn.raw_endpoint);
     seL4_Send(parent_ep_conn.raw_endpoint, tag);
@@ -220,7 +221,7 @@ main_exit:
 static void kvstore_server_main_thread(void *arg0, void *arg1, void *arg2)
 {
     seL4_CPtr parent_ep = (seL4_CPtr)arg0;
-    printf("kvstore-server: in thread, parent ep (%d) \n", (int)parent_ep);
+    printf("kvstore-server: in thread, parent ep (%lu) \n", parent_ep);
 
     printf("arg0 %p, arg1 %p arg2 %p\n", arg0, arg1, arg2);
 
@@ -266,7 +267,7 @@ int kvstore_server_start_thread(seL4_CPtr *kvstore_ep)
     CHECK_ERROR(error, "kvstore thread setup failed", KVSTORE_ERROR_UNKNOWN);
 
     *kvstore_ep = receive_slot;
-    KVSTORE_PRINTF("Started thread, ep (%d)\n", (int)receive_slot);
+    KVSTORE_PRINTF("Started thread, ep (%lu)\n", receive_slot);
 
     sel4gpi_config_destroy(cfg);
 

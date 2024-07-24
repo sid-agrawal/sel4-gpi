@@ -74,7 +74,7 @@ int main(int argc, char **argv)
     /* parse args */
     ep_client_context_t parent_ep;
     parent_ep.ep = (seL4_CPtr)atol(argv[0]);
-    uint64_t parent_pd_id = (uint64_t)atol(argv[1]);
+    gpi_obj_id_t parent_pd_id = (gpi_obj_id_t)atol(argv[1]);
     mode = (seL4_CPtr)atol(argv[2]);
     if (argc > 3)
     {

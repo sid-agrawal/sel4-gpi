@@ -52,7 +52,7 @@ resource_component_context_t *get_cpu_component(void);
  * @param cpu_id ID of the cpu to stop
  * @return 0 on success, error otherwise
  */
-int cpu_component_stop(uint32_t cpu_id);
+int cpu_component_stop(gpi_obj_id_t cpu_id);
 
 /**
  * Allocate a CPU from the root task
@@ -61,7 +61,7 @@ int cpu_component_stop(uint32_t cpu_id);
  * @param ret_cpu returns the created CPU
  * @param ret_cap returns the slot of the new CPU, in the client (or NULL, to make no cap)
  */
-int cpu_component_allocate(uint32_t client_id, cpu_t **ret_cpu, seL4_CPtr *ret_cap);
+int cpu_component_allocate(gpi_obj_id_t client_id, cpu_t **ret_cpu, seL4_CPtr *ret_cap);
 
 /**
  * @brief Configures a CPU object by binding it to the given ADS and PD

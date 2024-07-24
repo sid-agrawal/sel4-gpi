@@ -49,7 +49,7 @@ int test_vka_alloc_untyped(env_t env)
     SEL4BENCH_READ_CCNT(step_end);
     test_error_eq(error, 0);
 
-    printf("%ld\n", step_end - step_start);
+    printf("%lu\n", step_end - step_start);
 
     sel4bench_destroy();
     return sel4test_get_result();

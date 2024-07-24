@@ -77,7 +77,7 @@ int mo_new(mo_t *mo,
     mo->frame_paddrs = calloc(alloc_args->num_pages, sizeof(uintptr_t));
     mo->vka_objects = calloc(alloc_args->num_pages, sizeof(vka_object_t));
     SERVER_GOTO_IF_COND(mo->frame_caps_in_root_task == NULL || mo->frame_paddrs == NULL || mo->vka_objects == NULL,
-                        "malloc ran out of memory to allocate MO with %d frames\n", alloc_args->num_pages);
+                        "malloc ran out of memory to allocate MO with %u frames\n", alloc_args->num_pages);
 
     /* Allocate frames */
     if (alloc_args->paddr)
@@ -144,7 +144,7 @@ gpi_model_node_t *mo_dump_rr(mo_t *mo, model_state_t *ms, gpi_model_node_t *pd_n
 
         // Set the number of pages, page size and starting phys addr as extra data on the MO
         char extra_str[CSV_MAX_STRING_SIZE];
-        snprintf(extra_str, CSV_MAX_STRING_SIZE, "0x%lx_%d_%zu", mo->frame_paddrs[0], num_pages, mo->page_bits);
+        snprintf(extra_str, CSV_MAX_STRING_SIZE, "0x%lx_%u_%zu", mo->frame_paddrs[0], num_pages, mo->page_bits);
         set_node_extra(mo_node, extra_str);
 
         mo_node->extracted = true;
@@ -156,7 +156,7 @@ void mo_destroy(mo_t *mo, vka_t *server_vka)
 {
     if (mo->vka_objects == NULL)
     {
-        OSDB_PRINTWARN("Can't free frames for MO (%d), no associated vka objects\n", mo->id);
+        OSDB_PRINTWARN("Can't free frames for MO (%u), no associated vka objects\n", mo->id);
         return;
     }
 
@@ -168,7 +168,7 @@ void mo_destroy(mo_t *mo, vka_t *server_vka)
 #ifdef CONFIG_DEBUG_BUILD
         if (!seL4_DebugCapIsLastCopy(mo->vka_objects[i].cptr))
         {
-            OSDB_PRINTERR("Freeing frame (%lx) for MO (%d), cap (%ld) is not last copy\n",
+            OSDB_PRINTERR("Freeing frame (%lx) for MO (%u), cap (%lu) is not last copy\n",
                           mo->frame_paddrs[i], mo->id, mo->vka_objects[i].cptr);
         }
 #endif

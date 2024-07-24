@@ -51,7 +51,7 @@ static sel4gpi_rpc_env_t rpc_client = {
 };
 
 int start_ramdisk_pd(seL4_CPtr *ramdisk_pd_cap,
-                     uint64_t *ramdisk_id)
+                     gpi_obj_id_t *ramdisk_id)
 {
     int error;
     error = start_resource_server_pd(GPICAP_TYPE_NONE, 0, RAMDISK_APP,

@@ -9,7 +9,6 @@
  * Utility functions for all servers of GPI resources, both in RT and other PDs
  */
 
-
 /**
  * Generic resource server registry
  * Maintains per-resource metadata
@@ -24,6 +23,8 @@
 typedef struct _resource_registry_node
 {
     uint64_t object_id; ///< Unique ID within the registry
+                        ///< The size is uint64_t since the registry *may* contain a non-gpi-object-ID
+                        ///< (XXX) Arya: should probably make sure the registry is only used with gpi object IDs
     uint32_t count;     ///< Reference count to this node
 
     UT_hash_handle hh;
@@ -32,12 +33,12 @@ typedef struct _resource_registry_node
 typedef struct _resource_registry
 {
     resource_registry_node_t *head; ///< Hash table of registry nodes
-    uint32_t id_counter;                   ///< Next ID to assign for an object in the registry
+    uint64_t id_counter;            ///< Next ID to assign for an object in the registry
 
     void (*on_delete)(resource_registry_node_t *, void *); ///< Function to be called before a node is deleted
-                                                                  ///< or NULL
-                                                                  ///< Args: node, optional arg
-    void *on_delete_arg;                                          ///< Passed as the second argument to on_delete
+                                                           ///< or NULL
+                                                           ///< Args: node, optional arg
+    void *on_delete_arg;                                   ///< Passed as the second argument to on_delete
 
 } resource_registry_t;
 
@@ -51,8 +52,8 @@ typedef struct _resource_registry
  * @param on_delete_arg (optional) to pass as the second argument to on_delete
  */
 void resource_registry_initialize(resource_registry_t *registry,
-                                         void (*on_delete)(resource_registry_node_t *, void *),
-                                         void *on_delete_arg);
+                                  void (*on_delete)(resource_registry_node_t *, void *),
+                                  void *on_delete_arg);
 
 /**
  * Insert a new node to the registry

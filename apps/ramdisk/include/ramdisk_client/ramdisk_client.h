@@ -22,8 +22,8 @@ typedef struct _ramdisk_client_context
     seL4_CPtr ep;
 
     // Needed only for RR dump
-    uint64_t space_id;
-    uint64_t res_id;
+    gpi_space_id_t space_id;
+    gpi_obj_id_t res_id;
 } ramdisk_client_context_t;
 
 /**
@@ -34,7 +34,7 @@ typedef struct _ramdisk_client_context
  * @return 0 on success, or -1 otherwise
  */
 int start_ramdisk_pd(seL4_CPtr *ramdisk_pd_cap,
-                     uint64_t *ramdisk_id);
+                     gpi_obj_id_t *ramdisk_id);
 
 /**
  * @brief

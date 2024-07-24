@@ -49,7 +49,7 @@ cpu_client_context_t sel4gpi_get_cpu_conn(void);
 /**
  * Get the ID of the currently bound ADS
  */
-uint64_t sel4gpi_get_binded_ads_id(void);
+gpi_obj_id_t sel4gpi_get_binded_ads_id(void);
 
 /*
  * Get the cspace root cap from the env
@@ -94,7 +94,7 @@ ads_client_context_t sel4gpi_get_bound_vmr_rde(void);
  * @return the resource space ID of the default RDE,
  *         or 0 if there is none for the given type
  */
-uint64_t sel4gpi_get_default_space_id(int type);
+gpi_obj_id_t sel4gpi_get_default_space_id(int type);
 
 /**
  * Get an osmosis RDE from the env
@@ -105,7 +105,7 @@ uint64_t sel4gpi_get_default_space_id(int type);
  * @param type type of the RDE
  * @return null cap if the RDE cannot be found
  */
-seL4_CPtr sel4gpi_get_rde_by_space_id(uint32_t space_id, gpi_cap_t type);
+seL4_CPtr sel4gpi_get_rde_by_space_id(gpi_space_id_t space_id, gpi_cap_t type);
 
 /**
  * @brief print all RDEs for debugging

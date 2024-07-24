@@ -34,7 +34,7 @@ int resspc_client_connect(seL4_CPtr server_ep,
  * @return 0 on success, error otherwise
  */
 int resspc_client_map_space(resspc_client_context_t *conn,
-                            seL4_Word space_id);
+                            gpi_space_id_t space_id);
 
 /**
  * Create a new resource in a resource space
@@ -44,7 +44,7 @@ int resspc_client_map_space(resspc_client_context_t *conn,
  * @return 0 on success, error otherwise
  */
 int resspc_client_create_resource(resspc_client_context_t *conn,
-                                  seL4_Word resource_id);
+                                  gpi_obj_id_t resource_id);
 
 /**
  * Delete a resource from a resource space
@@ -55,7 +55,7 @@ int resspc_client_create_resource(resspc_client_context_t *conn,
  * @return 0 on success, error otherwise
  */
 int resspc_client_delete_resource(resspc_client_context_t *conn,
-                                  seL4_Word resource_id);
+                                  gpi_obj_id_t resource_id);
 
 /**
  * Revoke a resource from a particular PD
@@ -68,8 +68,8 @@ int resspc_client_delete_resource(resspc_client_context_t *conn,
  * @return 0 on success, error otherwise
  */
 int resspc_client_revoke_resource(resspc_client_context_t *conn,
-                                  uint32_t resource_id,
-                                  uint32_t target_pd_id);
+                                  gpi_obj_id_t resource_id,
+                                  gpi_obj_id_t target_pd_id);
 
 /**
  * Destroy a resource space from the resource component
