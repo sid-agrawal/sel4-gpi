@@ -24,7 +24,7 @@
 // selectively enable component debug e.g. (PD_DEBUG | ADS_DEBUG)
 #define OSDB_TOPIC (NO_DEBUG)
 
-/** Debug levels */
+/* Debug levels */
 #define OSDB_VERBOSE 1
 #define OSDB_INFO 2
 #define OSDB_WARN 3

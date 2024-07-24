@@ -19,8 +19,12 @@ SEL4_GENERATE_PROTOBUF(proto_srcs proto_hdrs
     ${CMAKE_CURRENT_SOURCE_DIR}/resspc_component_rpc.proto
 )
 
+# CMake options
 set(GPIServerEnabled ON CACHE BOOL "If true, run the GPI server")
+set(GPIPDDeletionDepth "0" CACHE STRING "PD deletion depth for cleanup policies")
+set(GPIRSDeletionDepth "0" CACHE STRING "Resource space deletion depth for cleanup policies")
 
+# Convert CMake options to defines
 if (GPIServerEnabled)
     set(GPIServerDef "GPI_SERVER_ENABLED")
 else()
@@ -47,4 +51,6 @@ target_link_libraries(sel4gpi
 )
 
 target_compile_options(sel4gpi PUBLIC 
-    "-D${GPIServerDef}")
+    "-D${GPIServerDef}" 
+    "-DGPI_CLEANUP_PD_DEPTH=${GPIPDDeletionDepth}"
+    "-DGPI_CLEANUP_RS_DEPTH=${GPIRSDeletionDepth}")

@@ -172,6 +172,16 @@ int toy_work_handler(
             }
         }
     }
+    else if (op == PdWorkAction_FREE)
+    {
+        // Toy server does nothing
+        error = pd_client_finish_work(&get_toy_server()->gen.pd_conn, work->object_ids_count);
+    }
+    else if (op == PdWorkAction_DESTROY)
+    {
+        // Toy server does nothing
+        error = pd_client_finish_work(&get_toy_server()->gen.pd_conn, work->object_ids_count);
+    }
     else
     {
         PRINTF("Unknown work action\n");

@@ -206,7 +206,7 @@ int pd_client_map_resource(pd_client_context_t *conn,
 int pd_client_get_work(pd_client_context_t *conn, PdWorkReturnMessage *work);
 
 /**
- * @brief For a resource server to send a subgraph as a response to pd_client_get_work
+ * @brief For a resource server to send a subgraph as a response to pd_client_get_work of type PdWorkAction_EXTRACT
  *
  * @param conn the resource server's pd connection
  * @param mo_conn an MO containing the model subgraph
@@ -215,6 +215,16 @@ int pd_client_get_work(pd_client_context_t *conn, PdWorkReturnMessage *work);
  * @return 0 on success, error otherwise
  */
 int pd_client_send_subgraph(pd_client_context_t *conn, mo_client_context_t *mo_conn, bool has_data, int n_requests);
+
+/**
+ * @brief For a resource server to send as a response to pd_client_get_work of 
+ * type PdWorkAction_FREE / PdWorkAction_DESTROY
+ *
+ * @param conn the resource server's pd connection
+ * @param n_requests the number of requests that the PD is fulfilling
+ * @return 0 on success, error otherwise
+ */
+int pd_client_finish_work(pd_client_context_t *conn, int n_requests);
 
 /** OTHER FUNCTIONS FOR ACTIVE PDs **/
 

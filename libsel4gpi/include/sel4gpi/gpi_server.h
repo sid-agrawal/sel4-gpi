@@ -111,6 +111,12 @@ typedef struct _gpi_server_context
     seL4_CPtr model_extraction_reply; ///< The reply cap for the pending model extraction
     int model_extraction_n_missing;   ///< Number of missing replies before model state is complete
 
+    /* Track a pending PD termination */
+    /* (XXX) Arya: For now, we can only do one PD termination at a time */
+    bool pending_termination;       ///< True if a PD termination is currently in progress
+    seL4_CPtr pd_termination_reply; ///< The reply cap for the pending pd termination
+    int pd_termination_n_missing;   ///< Number of missing replies before cleanup is complete
+
     sync_mutex_t *mx; ///< mutex for synchronization between the test driver and GPI server
 } gpi_server_context_t;
 

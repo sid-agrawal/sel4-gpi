@@ -61,7 +61,7 @@ static seL4_SlotRegion copy_untypeds_to_process(sel4utils_process_t *process,
 
     for (int i = 0; i < num_untypeds; i++)
     {
-        
+
         // Enabled the #if to clear all untypeds before the test
         // This prevents a slowdown in tests beyond the first test, caused by the kernel zero-ing the untypeds
 #if 0
@@ -141,6 +141,12 @@ static void handle_timer_requests(driver_env_t env, sel4test_output_t test_outpu
     }
 }
 
+static void handle_bench_request(driver_env_t env)
+{
+    seL4_SetMR(0, 0);
+    api_reply(env->reply.cptr, seL4_MessageInfo_new(0, 0, 0, 0));
+}
+
 /* This function waits on:
  * Timer interrupts (from hardware)
  * Requests from tests (sel4driver acts as a server)
@@ -208,6 +214,11 @@ static int sel4test_driver_wait(driver_env_t env, struct testcase *test)
         else if (test_output == SEL4TEST_PROTOBUF_RPC)
         {
             sel4rpc_server_recv(&rpc_server);
+            continue;
+        }
+        else if (test_output == SEL4TEST_BENCH_IPC)
+        {
+            handle_bench_request(env);
             continue;
         }
 
@@ -297,7 +308,7 @@ void basic_set_up(uintptr_t e)
 
     /* get the benchmark IPC endpoint */
     // (XXX) Arya: This used to communicate with GPI server, but now we do not start it for basic tests
-    //env->bench_endpoint_in_driver = pd_component_create_ipc_bench_ep();
+    // env->bench_endpoint_in_driver = pd_component_create_ipc_bench_ep();
     env->bench_endpoint_in_driver = env->test_process.fault_endpoint.cptr;
     env->bench_endpoint_in_test = sel4utils_copy_cap_to_process(&(env->test_process), &env->vka, env->bench_endpoint_in_driver);
 

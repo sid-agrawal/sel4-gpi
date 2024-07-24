@@ -153,16 +153,46 @@ err_goto:
     return error;
 }
 
-static void handle_terminate_req(seL4_Word sender_badge, PdTerminateMessage *msg, PdReturnMessage *reply_msg)
+static void handle_terminate_req(seL4_Word sender_badge, PdTerminateMessage *msg, PdReturnMessage *reply_msg,
+                                 bool *should_reply)
 {
     OSDB_PRINTF("Got terminate request from client badge %lx.\n", sender_badge);
     int error = 0;
+    *should_reply = true;
 
+    /* Check if a PD cleanup is already in progress */
+    SERVER_GOTO_IF_COND(get_gpi_server()->pending_termination, "PD cleanup is already in progress\n");
+
+    /* Find the client */
+    pd_component_registry_entry_t *client_data = pd_component_registry_get_entry_by_badge(sender_badge);
+    SERVER_GOTO_IF_COND(client_data == NULL, "Couldn't find PD (%u)\n", get_object_id_from_badge(sender_badge));
+
+    /* Start the termination */
+    get_gpi_server()->pending_termination = true;
     error = pd_component_terminate(get_object_id_from_badge(sender_badge));
+    SERVER_GOTO_IF_ERR(error, "PD termination failed\n");
+
+    /* If we are waiting on missing pieces, bookkeep and don't reply yet */
+    if (get_gpi_server()->pd_termination_n_missing > 0)
+    {
+        printf("TEMPA waiting for %d pieces for termination\n", get_gpi_server()->pd_termination_n_missing);
+        cspacepath_t reply_path;
+        vka_cspace_alloc_path(get_pd_component()->server_vka, &reply_path);
+        seL4_CNode_SaveCaller(reply_path.root, reply_path.capPtr, reply_path.capDepth);
+        get_gpi_server()->pd_termination_reply = reply_path.capPtr;
+
+        *should_reply = false;
+    } else {
+        printf("TEMPA reply immediately to termination\n");
+        get_gpi_server()->pending_termination = false;
+    }
 
 err_goto:
-    reply_msg->which_msg = PdReturnMessage_basic_tag;
-    reply_msg->errorCode = error;
+    if (should_reply)
+    {
+        reply_msg->which_msg = PdReturnMessage_basic_tag;
+        reply_msg->errorCode = error;
+    }
 }
 
 static void handle_next_slot_req(seL4_Word sender_badge, PdNextSlotMessage *msg, PdReturnMessage *reply_msg)
@@ -813,6 +843,51 @@ err_goto:
     reply_msg->errorCode = error;
 }
 
+static void handle_finish_work_req(seL4_Word sender_badge, PdFinishWorkMessage *msg, PdReturnMessage *reply_msg)
+{
+    int error = 0;
+
+    OSDB_PRINTF("Got a 'finish work' message from: ");
+    BADGE_PRINT(sender_badge);
+
+    // (XXX) Arya: doesn't do any authentication, or check if we actually needed this piece
+    // For simplicity, just decrement the counter of "remaining pieces"
+    SERVER_GOTO_IF_COND(!get_gpi_server()->pending_termination,
+                        "Got subgraph when there is no pending model extraction\n");
+
+    // Update the pending termination counter
+    get_gpi_server()->pd_termination_n_missing -= msg->n_requests;
+
+    /* Check if the cleanup is finished */
+    if (get_gpi_server()->pd_termination_n_missing == 0)
+    {
+        OSDB_PRINTF("Current PD cleanup is finished\n");
+
+        get_gpi_server()->pending_termination = false;
+        printf("TEMPA reply delayed to termination\n");
+
+        // Reply to the PD that requested the termination
+        PdReturnMessage return_msg = {
+            .which_msg = PdReturnMessage_basic_tag,
+            .errorCode = PdComponentError_NONE};
+
+        seL4_MessageInfo_t return_tag;
+        sel4gpi_rpc_reply(&get_pd_component()->rpc_env, (void *)&return_msg, &return_tag);
+        seL4_Send(get_gpi_server()->pd_termination_reply, return_tag);
+
+        // Free the reply cap's slot
+        vka_cspace_free(get_pd_component()->server_vka, get_gpi_server()->pd_termination_reply);
+    }
+    else
+    {
+        OSDB_PRINTF("Current PD cleanup is still missing %u pieces\n", get_gpi_server()->model_extraction_n_missing);
+    }
+
+err_goto:
+    reply_msg->which_msg = PdReturnMessage_basic_tag;
+    reply_msg->errorCode = error;
+}
+
 #ifdef CONFIG_DEBUG_BUILD
 static void handle_set_name_req(seL4_Word sender_badge, PdSetNameMessage *msg, PdReturnMessage *reply_msg)
 {
@@ -856,7 +931,7 @@ static void pd_component_handle(void *msg_p,
         switch (msg->which_msg)
         {
         case PdMessage_terminate_tag:
-            handle_terminate_req(sender_badge, &msg->msg.terminate, reply_msg);
+            handle_terminate_req(sender_badge, &msg->msg.terminate, reply_msg, should_reply);
             break;
         case PdMessage_next_slot_tag:
             handle_next_slot_req(sender_badge, &msg->msg.next_slot, reply_msg);
@@ -906,6 +981,9 @@ static void pd_component_handle(void *msg_p,
             break;
         case PdMessage_send_subgraph_tag:
             handle_send_subgraph_req(sender_badge, &msg->msg.send_subgraph, reply_msg);
+            break;
+        case PdMessage_finish_work_tag:
+            handle_finish_work_req(sender_badge, &msg->msg.finish_work, reply_msg);
             break;
 #ifdef CONFIG_DEBUG_BUILD
         case PdMessage_set_name_tag:
@@ -1153,6 +1231,11 @@ void pd_component_queue_destroy_work(pd_component_registry_entry_t *pd_entry, pd
 {
     assert(work != NULL);
 
+    if (get_gpi_server()->pending_termination)
+    {
+        get_gpi_server()->pd_termination_n_missing++;
+    }
+
     // Add to the list
     linked_list_insert(pd_entry->pending_destroy, (void *)work);
 
@@ -1163,6 +1246,11 @@ void pd_component_queue_destroy_work(pd_component_registry_entry_t *pd_entry, pd
 void pd_component_queue_free_work(pd_component_registry_entry_t *pd_entry, pd_work_entry_t *work)
 {
     assert(work != NULL);
+
+    if (get_gpi_server()->pending_termination)
+    {
+        get_gpi_server()->pd_termination_n_missing++;
+    }
 
     // Add to the list
     linked_list_insert(pd_entry->pending_frees, (void *)work);

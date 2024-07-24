@@ -20,6 +20,8 @@
 #include <sel4gpi/pd_creation.h>
 #include <sel4gpi/resource_server_clientapi.h>
 
+#include "test_shared.h"
+
 /**
  * Test the PD cleanup policies
  *
@@ -52,18 +54,6 @@ static gpi_space_id_t toy_file_space_id;
 static gpi_cap_t toy_db_type;
 static gpi_space_id_t toy_db_space_id;
 
-// This needs to be the same as the definition in hello-cleanup/toy_server.h
-typedef enum _hello_mode
-{
-    HELLO_CLEANUP_TOY_BLOCK_SERVER_MODE, ///< Process will serve toy_blocks
-    HELLO_CLEANUP_TOY_FILE_SERVER_MODE,  ///< Process will serve toy_file
-    HELLO_CLEANUP_TOY_DB_SERVER_MODE,    ///< Process will serve toy_db
-    HELLO_CLEANUP_TOY_BLOCK_CLIENT_MODE, ///< Process will request toy_blocks
-    HELLO_CLEANUP_TOY_FILE_CLIENT_MODE,  ///< Process will request toy_file
-    HELLO_CLEANUP_TOY_DB_CLIENT_MODE,    ///< Process will request toy_DB
-    HELLO_CLEANUP_NOTHING_MODE,          ///< Process will do nothing
-} hello_mode_t;
-
 // Setup before all tests
 static int setup(env_t env)
 {
@@ -82,15 +72,8 @@ static int setup(env_t env)
     return error;
 }
 
-/**
- * Starts the hello-cleanup process
- *
- * @param mode the mode for hello to run in
- * @param n_client_requests number of requests for clients to make
- * @param hello_pd  returns the pd resource for the hello process
- * @return 0 on success, error otherwise
- */
-static int start_hello(hello_mode_t mode, uint32_t n_client_requests, pd_client_context_t *hello_pd)
+int start_toy_cleanup_process(hello_cleanup_mode_t mode, uint32_t n_client_requests,
+                              ep_client_context_t *ep, pd_client_context_t *hello_pd)
 {
     int error;
 
@@ -146,7 +129,7 @@ static int start_hello(hello_mode_t mode, uint32_t n_client_requests, pd_client_
     args[3] = n_client_requests;
 
     // Copy the parent ep
-    error = pd_client_send_cap(hello_pd, self_ep.ep, &args[0]);
+    error = pd_client_send_cap(hello_pd, ep->ep, &args[0]);
     test_assert(error == 0);
 
     // Share an RDE for client
@@ -205,15 +188,15 @@ int test_cleanup_policy_1(env_t env)
 
     /* Start the PDs */
     pd_client_context_t hello_server_pd;
-    error = start_hello(HELLO_CLEANUP_TOY_BLOCK_SERVER_MODE, N_REQUESTS, &hello_server_pd);
+    error = start_toy_cleanup_process(HELLO_CLEANUP_TOY_BLOCK_SERVER_MODE, N_REQUESTS, &self_ep, &hello_server_pd);
     test_assert(error == 0);
 
     pd_client_context_t hello_client_pd;
-    error = start_hello(HELLO_CLEANUP_TOY_BLOCK_CLIENT_MODE, N_REQUESTS, &hello_client_pd);
+    error = start_toy_cleanup_process(HELLO_CLEANUP_TOY_BLOCK_CLIENT_MODE, N_REQUESTS, &self_ep, &hello_client_pd);
     test_assert(error == 0);
 
     pd_client_context_t hello_dummy_pd;
-    error = start_hello(HELLO_CLEANUP_NOTHING_MODE, N_REQUESTS, &hello_dummy_pd);
+    error = start_toy_cleanup_process(HELLO_CLEANUP_NOTHING_MODE, N_REQUESTS, &self_ep, &hello_dummy_pd);
     test_assert(error == 0);
 
 #ifdef CONFIG_DEBUG_BUILD
@@ -319,23 +302,27 @@ int test_cleanup_policy_2(env_t env)
 
     /* Start the PDs */
     pd_client_context_t hello_server_toy_block_pd;
-    error = start_hello(HELLO_CLEANUP_TOY_BLOCK_SERVER_MODE, N_REQUESTS, &hello_server_toy_block_pd);
+    error = start_toy_cleanup_process(HELLO_CLEANUP_TOY_BLOCK_SERVER_MODE, N_REQUESTS,
+                                      &self_ep, &hello_server_toy_block_pd);
     test_assert(error == 0);
 
     pd_client_context_t hello_server_toy_file_pd;
-    error = start_hello(HELLO_CLEANUP_TOY_FILE_SERVER_MODE, N_REQUESTS, &hello_server_toy_file_pd);
+    error = start_toy_cleanup_process(HELLO_CLEANUP_TOY_FILE_SERVER_MODE, N_REQUESTS,
+                                      &self_ep, &hello_server_toy_file_pd);
     test_assert(error == 0);
 
     pd_client_context_t hello_client_toy_block_pd;
-    error = start_hello(HELLO_CLEANUP_TOY_BLOCK_CLIENT_MODE, N_REQUESTS, &hello_client_toy_block_pd);
+    error = start_toy_cleanup_process(HELLO_CLEANUP_TOY_BLOCK_CLIENT_MODE, N_REQUESTS,
+                                      &self_ep, &hello_client_toy_block_pd);
     test_assert(error == 0);
 
     pd_client_context_t hello_client_toy_file_pd;
-    error = start_hello(HELLO_CLEANUP_TOY_FILE_CLIENT_MODE, N_REQUESTS, &hello_client_toy_file_pd);
+    error = start_toy_cleanup_process(HELLO_CLEANUP_TOY_FILE_CLIENT_MODE, N_REQUESTS,
+                                      &self_ep, &hello_client_toy_file_pd);
     test_assert(error == 0);
 
     pd_client_context_t hello_dummy_pd;
-    error = start_hello(HELLO_CLEANUP_NOTHING_MODE, N_REQUESTS, &hello_dummy_pd);
+    error = start_toy_cleanup_process(HELLO_CLEANUP_NOTHING_MODE, N_REQUESTS, &self_ep, &hello_dummy_pd);
     test_assert(error == 0);
 
 #ifdef CONFIG_DEBUG_BUILD
@@ -429,31 +416,35 @@ int test_cleanup_policy_3(env_t env)
 
     /* Start the PDs */
     pd_client_context_t hello_server_toy_block_pd;
-    error = start_hello(HELLO_CLEANUP_TOY_BLOCK_SERVER_MODE, N_REQUESTS, &hello_server_toy_block_pd);
+    error = start_toy_cleanup_process(HELLO_CLEANUP_TOY_BLOCK_SERVER_MODE, N_REQUESTS,
+                                      &self_ep, &hello_server_toy_block_pd);
     test_assert(error == 0);
 
     pd_client_context_t hello_server_toy_file_pd;
-    error = start_hello(HELLO_CLEANUP_TOY_FILE_SERVER_MODE, N_REQUESTS, &hello_server_toy_file_pd);
+    error = start_toy_cleanup_process(HELLO_CLEANUP_TOY_FILE_SERVER_MODE, N_REQUESTS,
+                                      &self_ep, &hello_server_toy_file_pd);
     test_assert(error == 0);
 
     pd_client_context_t hello_server_toy_db_pd;
-    error = start_hello(HELLO_CLEANUP_TOY_DB_SERVER_MODE, N_REQUESTS, &hello_server_toy_db_pd);
+    error = start_toy_cleanup_process(HELLO_CLEANUP_TOY_DB_SERVER_MODE, N_REQUESTS, &self_ep, &hello_server_toy_db_pd);
     test_assert(error == 0);
 
     pd_client_context_t hello_client_toy_block_pd;
-    error = start_hello(HELLO_CLEANUP_TOY_BLOCK_CLIENT_MODE, N_REQUESTS, &hello_client_toy_block_pd);
+    error = start_toy_cleanup_process(HELLO_CLEANUP_TOY_BLOCK_CLIENT_MODE, N_REQUESTS,
+                                      &self_ep, &hello_client_toy_block_pd);
     test_assert(error == 0);
 
     pd_client_context_t hello_client_toy_file_pd;
-    error = start_hello(HELLO_CLEANUP_TOY_FILE_CLIENT_MODE, N_REQUESTS, &hello_client_toy_file_pd);
+    error = start_toy_cleanup_process(HELLO_CLEANUP_TOY_FILE_CLIENT_MODE, N_REQUESTS,
+                                      &self_ep, &hello_client_toy_file_pd);
     test_assert(error == 0);
 
     pd_client_context_t hello_client_toy_db_pd;
-    error = start_hello(HELLO_CLEANUP_TOY_DB_CLIENT_MODE, N_REQUESTS, &hello_client_toy_db_pd);
+    error = start_toy_cleanup_process(HELLO_CLEANUP_TOY_DB_CLIENT_MODE, N_REQUESTS, &self_ep, &hello_client_toy_db_pd);
     test_assert(error == 0);
 
     pd_client_context_t hello_dummy_pd;
-    error = start_hello(HELLO_CLEANUP_NOTHING_MODE, N_REQUESTS, &hello_dummy_pd);
+    error = start_toy_cleanup_process(HELLO_CLEANUP_NOTHING_MODE, N_REQUESTS, &self_ep, &hello_dummy_pd);
     test_assert(error == 0);
 
 #ifdef CONFIG_DEBUG_BUILD

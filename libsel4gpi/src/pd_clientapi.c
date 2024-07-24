@@ -348,6 +348,28 @@ int pd_client_send_subgraph(pd_client_context_t *conn, mo_client_context_t *mo_c
     return error;
 }
 
+int pd_client_finish_work(pd_client_context_t *conn, int n_requests)
+{
+    OSDB_PRINTF("Sending 'finish work' request to PD component\n");
+
+    int error = 0;
+
+    PdMessage msg = {
+        .which_msg = PdMessage_finish_work_tag,
+        .msg.finish_work = {
+            .n_requests = n_requests,
+        }};
+
+    PdReturnMessage ret_msg;
+
+    error = sel4gpi_rpc_call(&rpc_env, conn->ep, (void *)&msg,
+                             0, NULL, (void *)&ret_msg);
+
+    error |= ret_msg.errorCode;
+
+    return error;
+}
+
 void pd_client_exit(pd_client_context_t *conn, int code)
 {
     OSDB_PRINTF("Sending 'exit' message to PD component\n");

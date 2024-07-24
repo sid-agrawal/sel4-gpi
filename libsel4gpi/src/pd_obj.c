@@ -561,7 +561,9 @@ void pd_destroy(pd_t *pd, vka_t *server_vka, vspace_t *server_vspace)
     OSDB_PRINTF("Destroying PD (%u, %s)\n", pd_id, pd->name);
     pd->deleting = true;
 
-    sync_mutex_lock(get_gpi_server()->mx);
+    // (XXX) Arya: this lock won't work for PD deletion depth > 0
+    // commenting for now, until we move to another solution
+    // sync_mutex_lock(get_gpi_server()->mx);
 
     /* stop the PD's CPU, if not already stopped */
     if (pd->shared_data->cpu_conn.id)
@@ -651,7 +653,9 @@ void pd_destroy(pd_t *pd, vka_t *server_vka, vspace_t *server_vspace)
     SERVER_GOTO_IF_ERR(error, "Failed to remove destroyed PD resource from other PDs\n");
 
 err_goto:
-    sync_mutex_unlock(get_gpi_server()->mx);
+    // (XXX) Arya: this lock won't work for PD deletion depth > 0
+    // commenting for now, until we move to another solution
+    // sync_mutex_unlock(get_gpi_server()->mx);
 }
 
 int pd_next_slot(pd_t *pd,

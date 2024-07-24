@@ -445,8 +445,8 @@ void sel4test_run_tests(struct driver_env *e)
                 }
 
 #ifdef GPI_SERVER_ENABLED
-// Print remaining resources, to see if something exists that should not
-// gpi_debug_print_resources();
+                // Print remaining resources, to see if something exists that should not
+                gpi_debug_print_resources();
 #endif
 
                 sel4test_end_test(result);

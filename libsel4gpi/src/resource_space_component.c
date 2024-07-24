@@ -43,7 +43,7 @@ static int resspc_component_space_cleanup(resspc_component_registry_entry_t *nod
 
     OSDB_PRINTF("Execute resource space cleanup policy for space (%u), depth %u\n", node->space.id, depth);
 
-    if (GPI_CLEANUP_RESOURCE_SPACE_DEPTH != -1 & depth >= GPI_CLEANUP_RESOURCE_SPACE_DEPTH)
+    if (GPI_CLEANUP_RS_DEPTH != -1 & depth >= GPI_CLEANUP_RS_DEPTH)
     {
         // Past the maximum depth
         return 0;
@@ -62,7 +62,7 @@ static int resspc_component_space_cleanup(resspc_component_registry_entry_t *nod
         }
 
         // Check if we should delete this resource space
-        if (GPI_CLEANUP_RESOURCE_SPACE_DEPTH == -1 || depth + 1 <= GPI_CLEANUP_RESOURCE_SPACE_DEPTH)
+        if (GPI_CLEANUP_RS_DEPTH == -1 || depth + 1 <= GPI_CLEANUP_RS_DEPTH)
         {
             // Within resource space deletion depth
             // Check if the space has a map edge for the deleted space

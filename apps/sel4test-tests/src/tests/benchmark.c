@@ -31,6 +31,7 @@
 
 #include <fs_client.h>
 #include <ramdisk_client.h>
+#include "test_shared.h"
 
 // #define TEST_DEBUG
 
@@ -86,14 +87,14 @@ static int benchmark_ipc_rt(env_t env, seL4_CPtr cap, bool print)
     ccnt_t call_end;
 
     RpcMessage rpcMsg = {
-        .which_msg = RpcMessage_bench_tag
-    };
+        .which_msg = RpcMessage_bench_tag};
 
     SEL4BENCH_READ_CCNT(call_start);
+    // (XXX) Arya: does not do cap transfer at the moment
     error = sel4rpc_call(&env->rpc_client, &rpcMsg, 0, 0, 0);
 
-    //pd_client_context_t self_pd_conn = {.ep = env->ipc_bench_ep};
-    //pd_client_bench_ipc(&self_pd_conn, cap, cap != seL4_CapNull);
+    // pd_client_context_t self_pd_conn = {.ep = env->ipc_bench_ep};
+    // pd_client_bench_ipc(&self_pd_conn, cap, cap != seL4_CapNull);
     SEL4BENCH_READ_CCNT(call_end);
 
     if (print)
@@ -143,35 +144,35 @@ static int benchmark_pd_create_sel4utils(env_t env, cspacepath_t *cspace_path, v
     cspacepath_t dest;
     seL4_Word cspace_root_data;
 
-    #if 1
+#if 1
     error = vka_alloc_cnode_object(&env->vka, cspace_size_bits, cspace_obj);
     test_error_eq(error, 0);
 
-    // This was used to split the vka_alloc_cnode_object operation for timing individual steps
-    #else
+// This was used to split the vka_alloc_cnode_object operation for timing individual steps
+#else
     vka_object_t untyped;
     SEL4BENCH_READ_CCNT(step_start);
     error = vka_alloc_untyped(&env->vka, cspace_size_bits + seL4_SlotBits, &untyped);
     SEL4BENCH_READ_CCNT(step_end);
-    printf("step 1: %lu, bits %lu\n", step_end-step_start, cspace_size_bits + seL4_SlotBits);
+    printf("step 1: %lu, bits %lu\n", step_end - step_start, cspace_size_bits + seL4_SlotBits);
     test_error_eq(error, 0);
 
     cspacepath_t cnode_dest;
     SEL4BENCH_READ_CCNT(step_start);
     error = vka_cspace_alloc_path(&env->vka, &cnode_dest);
     SEL4BENCH_READ_CCNT(step_end);
-    printf("step 2: %lu\n", step_end-step_start);
+    printf("step 2: %lu\n", step_end - step_start);
     test_error_eq(error, 0);
 
     SEL4BENCH_READ_CCNT(step_start);
     error = vka_untyped_retype(&untyped, seL4_CapTableObject, cspace_size_bits, 1, &cnode_dest);
     SEL4BENCH_READ_CCNT(step_end);
-    printf("step 3: %lu, bits %lu, type %d\n", step_end-step_start, cspace_size_bits, seL4_CapTableObject);
+    printf("step 3: %lu, bits %lu, type %d\n", step_end - step_start, cspace_size_bits, seL4_CapTableObject);
     cspace_obj->type = seL4_CapTableObject;
     cspace_obj->cptr = cnode_dest.capPtr;
     cspace_obj->size_bits = cspace_size_bits;
     test_error_eq(error, 0);
-    #endif
+#endif
 
     vka_cspace_make_path(&env->vka, cspace_obj->cptr, cspace_path);
     cspace_root_data = api_make_guard_skip_word(seL4_WordBits - cspace_size_bits);
@@ -724,7 +725,7 @@ static int benchmark_cpu_bind_sel4utils(env_t env, vka_object_t *tcb,
     // Bind cpu
     SEL4BENCH_READ_CCNT(cpu_bind_start);
     error = seL4_TCB_Configure(tcb->cptr, fault_ep_dest.capPtr, cspace_root,
-                               0, vspace_root, 0, (seL4_Word) ipc_buf_vaddr, ipc_buf_frame);
+                               0, vspace_root, 0, (seL4_Word)ipc_buf_vaddr, ipc_buf_frame);
     SEL4BENCH_READ_CCNT(cpu_bind_end);
     test_error_eq(error, 0);
 
@@ -1089,6 +1090,309 @@ int benchmark_process_spawn_osm(env_t env)
     return sel4test_get_result();
 }
 
+/**
+ * Benchmark the time to cleanup a process
+ * This depends on the cleanup policy, set by the CMake options GPI_CLEANUP_PD_DEPTH & GPI_CLEANUP_RS_DEPTH
+ *
+ * This is a test scenario with toy servers (Block, File, and DB servers)
+ * The servers have no real functionality, so this tests the root task's cleanup overhead only.
+ */
+int internal_benchmark_cleanup_toy_servers(env_t env, hello_cleanup_mode_t server_to_crash)
+{
+    int error = 0;
+
+    benchmark_init(env);
+
+    int n_requests = 10;
+
+    /* Create EP to listen for test results */
+    ep_client_context_t self_ep;
+    error = sel4gpi_alloc_endpoint(&self_ep);
+    test_assert(error == 0);
+
+    /* Start the PDs */
+    pd_client_context_t hello_server_toy_block_pd;
+    error = start_toy_cleanup_process(HELLO_CLEANUP_TOY_BLOCK_SERVER_MODE, n_requests,
+                                      &self_ep, &hello_server_toy_block_pd);
+    test_assert(error == 0);
+
+    pd_client_context_t hello_server_toy_file_pd;
+    error = start_toy_cleanup_process(HELLO_CLEANUP_TOY_FILE_SERVER_MODE, n_requests,
+                                      &self_ep, &hello_server_toy_file_pd);
+    test_assert(error == 0);
+
+    pd_client_context_t hello_server_toy_db_pd;
+    error = start_toy_cleanup_process(HELLO_CLEANUP_TOY_DB_SERVER_MODE, n_requests,
+                                      &self_ep, &hello_server_toy_db_pd);
+    test_assert(error == 0);
+
+    pd_client_context_t hello_client_toy_block_pd;
+    error = start_toy_cleanup_process(HELLO_CLEANUP_TOY_BLOCK_CLIENT_MODE, n_requests,
+                                      &self_ep, &hello_client_toy_block_pd);
+    test_assert(error == 0);
+
+    pd_client_context_t hello_client_toy_file_pd;
+    error = start_toy_cleanup_process(HELLO_CLEANUP_TOY_FILE_CLIENT_MODE, n_requests,
+                                      &self_ep, &hello_client_toy_file_pd);
+    test_assert(error == 0);
+
+    pd_client_context_t hello_client_toy_db_pd;
+    error = start_toy_cleanup_process(HELLO_CLEANUP_TOY_DB_CLIENT_MODE, n_requests,
+                                      &self_ep, &hello_client_toy_db_pd);
+    test_assert(error == 0);
+
+    pd_client_context_t hello_dummy_pd;
+    error = start_toy_cleanup_process(HELLO_CLEANUP_NOTHING_MODE, n_requests,
+                                      &self_ep, &hello_dummy_pd);
+    test_assert(error == 0);
+
+    /* Remove RDEs from test process so that it won't be cleaned up by recursive cleanup */
+    gpi_cap_t toy_block_type = sel4gpi_get_resource_type_code(TOY_BLOCK_SERVER_RESOURCE_TYPE);
+    gpi_cap_t toy_file_type = sel4gpi_get_resource_type_code(TOY_FILE_SERVER_RESOURCE_TYPE);
+    gpi_cap_t toy_db_type = sel4gpi_get_resource_type_code(TOY_DB_SERVER_RESOURCE_TYPE);
+    pd_client_context_t pd_conn = sel4gpi_get_pd_conn();
+
+    error = pd_client_remove_rde(&pd_conn, toy_block_type, RESSPC_ID_NULL);
+    test_assert(error == 0);
+
+    error = pd_client_remove_rde(&pd_conn, toy_file_type, RESSPC_ID_NULL);
+    test_assert(error == 0);
+
+    error = pd_client_remove_rde(&pd_conn, toy_db_type, RESSPC_ID_NULL);
+    test_assert(error == 0);
+
+    // (XXX) Arya: whether or not to wait should be another option
+    /* Wait for clients to finish making requests */
+    seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0, 0);
+    for (int i = 0; i < 4; i++)
+    {
+        tag = seL4_Recv(self_ep.raw_endpoint, NULL);
+        error = seL4_MessageInfo_get_label(tag);
+        test_assert(error == 0);
+    }
+
+    /* Crash a PD */
+    ccnt_t start, end;
+
+    if (server_to_crash == HELLO_CLEANUP_TOY_BLOCK_SERVER_MODE)
+    {
+        printf("Crashing toy_block_server PD\n");
+        SEL4BENCH_READ_CCNT(start);
+        error = pd_client_terminate(&hello_server_toy_block_pd);
+        SEL4BENCH_READ_CCNT(end);
+        test_assert(error == 0);
+    }
+    else if (server_to_crash == HELLO_CLEANUP_TOY_FILE_SERVER_MODE)
+    {
+        printf("Crashing toy_block_server PD\n");
+        SEL4BENCH_READ_CCNT(start);
+        error = pd_client_terminate(&hello_server_toy_file_pd);
+        SEL4BENCH_READ_CCNT(end);
+        test_assert(error == 0);
+    }
+    else if (server_to_crash == HELLO_CLEANUP_TOY_DB_SERVER_MODE)
+    {
+        printf("Crashing toy_block_server PD\n");
+        SEL4BENCH_READ_CCNT(start);
+        error = pd_client_terminate(&hello_server_toy_db_pd);
+        SEL4BENCH_READ_CCNT(end);
+        test_assert(error == 0);
+    }
+    else
+    {
+        // Invalid mode of server to crash
+        test_assert(0);
+    }
+    print_result(end - start);
+
+    /* Cleanup other PDs */
+
+    if (server_to_crash != HELLO_CLEANUP_TOY_BLOCK_SERVER_MODE)
+    {
+        error = pd_client_terminate(&hello_server_toy_block_pd);
+
+        if (error != seL4_NoError)
+        {
+            printf("WARNING: Failed to cleanup hello-server-toy_block PD (%u), "
+                   "this may be expected if the cleanup policy already destroyed it. \n",
+                   hello_server_toy_block_pd.id);
+        }
+    }
+
+    if (server_to_crash != HELLO_CLEANUP_TOY_FILE_SERVER_MODE)
+    {
+        error = pd_client_terminate(&hello_server_toy_file_pd);
+
+        if (error != seL4_NoError)
+        {
+            printf("WARNING: Failed to cleanup hello-server-toy_file PD (%u), "
+                   "this may be expected if the cleanup policy already destroyed it. \n",
+                   hello_server_toy_file_pd.id);
+        }
+    }
+
+    if (server_to_crash != HELLO_CLEANUP_TOY_DB_SERVER_MODE)
+    {
+        error = pd_client_terminate(&hello_server_toy_db_pd);
+
+        if (error != seL4_NoError)
+        {
+            printf("WARNING: Failed to cleanup hello-server-toy_db PD (%u), "
+                   "this may be expected if the cleanup policy already destroyed it. \n",
+                   hello_server_toy_db_pd.id);
+        }
+    }
+
+    error = pd_client_terminate(&hello_client_toy_block_pd);
+
+    if (error != seL4_NoError)
+    {
+        printf("WARNING: Failed to cleanup hello-client-toy_block PD (%u), "
+               "this may be expected if the cleanup policy already destroyed it. \n",
+               hello_client_toy_block_pd.id);
+    }
+
+    error = pd_client_terminate(&hello_client_toy_file_pd);
+
+    if (error != seL4_NoError)
+    {
+        printf("WARNING: Failed to cleanup hello-client-toy_file PD (%u), "
+               "this may be expected if the cleanup policy already destroyed it. \n",
+               hello_client_toy_file_pd.id);
+    }
+
+    error = pd_client_terminate(&hello_client_toy_db_pd);
+
+    if (error != seL4_NoError)
+    {
+        printf("WARNING: Failed to cleanup hello-client-toy_db PD (%u), "
+               "this may be expected if the cleanup policy already destroyed it. \n",
+               hello_client_toy_db_pd.id);
+    }
+
+    error = pd_client_terminate(&hello_dummy_pd);
+    test_assert(error == 0);
+
+    sel4bench_destroy();
+    return sel4test_get_result();
+}
+
+/**
+ * Test cleanup policy of toy servers, where we crash the first level toy server (the block server)
+ */
+int benchmark_cleanup_toy_servers_1(env_t env)
+{
+    internal_benchmark_cleanup_toy_servers(env, HELLO_CLEANUP_TOY_BLOCK_SERVER_MODE);
+}
+
+/**
+ * Test cleanup policy of toy servers, where we crash the second level toy server (the file server)
+ */
+int benchmark_cleanup_toy_servers_2(env_t env)
+{
+    internal_benchmark_cleanup_toy_servers(env, HELLO_CLEANUP_TOY_FILE_SERVER_MODE);
+}
+
+/**
+ * Test cleanup policy of toy servers, where we crash the third level toy server (the db server)
+ */
+int benchmark_cleanup_toy_servers_3(env_t env)
+{
+    internal_benchmark_cleanup_toy_servers(env, HELLO_CLEANUP_TOY_DB_SERVER_MODE);
+}
+
+/**
+ * Benchmark the time to cleanup a process
+ * This depends on the cleanup policy, set by the CMake options GPI_CLEANUP_PD_DEPTH & GPI_CLEANUP_RS_DEPTH
+ *
+ * This is a scenario with real servers (Ramdisk, File Server, and KVstore)
+ * This tests both the root task's cleanup work, and the cleanup time for actual servers
+ * Eg. the servers may clean up destroyed resource spaces once the root task notifies them
+ */
+int benchmark_cleanup_osm(env_t env)
+{
+    int error = 0;
+
+    benchmark_init(env);
+
+    // (XXX) Arya: NOT IMPLEMENTED
+
+    sel4bench_destroy();
+    return sel4test_get_result();
+}
+
+int internal_benchmark_regular_ipc(env_t env, int n_iters)
+{
+    int error = 0;
+    ccnt_t call_start;
+    ccnt_t call_end;
+
+    benchmark_init(env);
+
+    for (int i = 0; i < n_iters; i++)
+    {
+        seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0, 1);
+        seL4_SetMR(0, SEL4TEST_BENCH_IPC);
+
+        SEL4BENCH_READ_CCNT(call_start);
+        // (XXX) Arya: does not do cap transfer at the moment
+        tag = seL4_Call(env->endpoint, tag);
+        SEL4BENCH_READ_CCNT(call_end);
+        test_error_eq(seL4_MessageInfo_ptr_get_label(&tag), 0);
+
+        print_result(call_end - call_start);
+    }
+
+    sel4bench_destroy();
+    return sel4test_get_result();
+}
+
+int benchmark_single_regular_ipc(env_t env)
+{
+    return internal_benchmark_regular_ipc(env, 1);
+}
+
+int benchmark_many_regular_ipc(env_t env)
+{
+    return internal_benchmark_regular_ipc(env, 50);
+}
+
+int internal_benchmark_nanopb_ipc(env_t env, int n_iters)
+{
+    int error = 0;
+    ccnt_t call_start;
+    ccnt_t call_end;
+
+    benchmark_init(env);
+
+    for (int i = 0; i < n_iters; i++)
+    {
+        RpcMessage rpcMsg = {
+            .which_msg = RpcMessage_bench_tag};
+
+        SEL4BENCH_READ_CCNT(call_start);
+        // (XXX) Arya: does not do cap transfer at the moment
+        error = sel4rpc_call(&env->rpc_client, &rpcMsg, 0, 0, 0);
+        SEL4BENCH_READ_CCNT(call_end);
+        test_error_eq(error, 0);
+
+        print_result(call_end - call_start);
+    }
+
+    sel4bench_destroy();
+    return sel4test_get_result();
+}
+
+int benchmark_single_nanopb_ipc(env_t env)
+{
+    return internal_benchmark_nanopb_ipc(env, 1);
+}
+
+int benchmark_many_nanopb_ipc(env_t env)
+{
+    return internal_benchmark_nanopb_ipc(env, 50);
+}
+
 #ifdef GPI_BENCHMARK_MULTIPLE
 
 DEFINE_TEST_WITH_TYPE_MULTIPLE(GPIBM001,
@@ -1121,6 +1425,35 @@ DEFINE_TEST_WITH_TYPE_MULTIPLE(GPIBM005,
                                OSM,
                                true);
 
+DEFINE_TEST_WITH_TYPE_MULTIPLE(GPIBM006,
+                               "osm toy server cleanup, crash block server",
+                               benchmark_cleanup_toy_servers_1,
+                               OSM,
+                               true);
+
+DEFINE_TEST_WITH_TYPE_MULTIPLE(GPIBM007,
+                               "osm toy server cleanup, crash file server",
+                               benchmark_cleanup_toy_servers_2,
+                               OSM,
+                               true);
+
+DEFINE_TEST_WITH_TYPE_MULTIPLE(GPIBM008,
+                               "osm toy server cleanup, crash db server",
+                               benchmark_cleanup_toy_servers_3,
+                               OSM,
+                               true);
+
+DEFINE_TEST_WITH_TYPE_MULTIPLE(GPIBM010,
+                               "single regular IPC to root task",
+                               benchmark_single_regular_ipc,
+                               BASIC,
+                               true)
+
+DEFINE_TEST_WITH_TYPE_MULTIPLE(GPIBM011,
+                               "single nanopb IPC to root task",
+                               benchmark_single_nanopb_ipc,
+                               BASIC,
+                               true)
 #else
 
 DEFINE_TEST(GPIBM001,
@@ -1147,4 +1480,40 @@ DEFINE_TEST_OSM(GPIBM005,
                 "osm FILE create",
                 benchmark_fs,
                 true);
+
+DEFINE_TEST_OSM(GPIBM006,
+                "osm toy server cleanup, crash block server",
+                benchmark_cleanup_toy_servers_1,
+                true);
+
+DEFINE_TEST_OSM(GPIBM007,
+                "osm toy server cleanup, crash file server",
+                benchmark_cleanup_toy_servers_2,
+                true);
+
+DEFINE_TEST_OSM(GPIBM008,
+                "osm toy server cleanup, crash db server",
+                benchmark_cleanup_toy_servers_3,
+                true);
+
+DEFINE_TEST(GPIBM010,
+            "single regular IPC to root task",
+            benchmark_single_regular_ipc,
+            true)
+
+DEFINE_TEST(GPIBM011,
+            "single nanopb IPC to root task",
+            benchmark_single_nanopb_ipc,
+            true)
+
+DEFINE_TEST(GPIBM012,
+            "many regular IPC to root task",
+            benchmark_many_regular_ipc,
+            true)
+
+DEFINE_TEST(GPIBM013,
+            "many nanopb IPC to root task",
+            benchmark_many_nanopb_ipc,
+            true)
+
 #endif
