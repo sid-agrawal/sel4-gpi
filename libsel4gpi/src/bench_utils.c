@@ -1,7 +1,7 @@
-#include <stdbool.h>
+#include <sel4bench/arch/sel4bench.h>
 #include <sel4gpi/bench_utils.h>
 
-char *get_bench_type_name(bool native)
+void benchmark_print_result(uint64_t result)
 {
-    return native ? "Native" : "Cellulos";
+    printf("RESULT>%lu\n", result);
 }

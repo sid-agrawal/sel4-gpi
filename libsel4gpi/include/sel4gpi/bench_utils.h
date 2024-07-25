@@ -1,5 +1,8 @@
 #pragma once
 
+#include <sel4/sel4.h>
+#include <sel4test/test.h>
+
 enum hello_benchmark_type
 {
     BM_PD_CREATE = 0,
@@ -8,4 +11,7 @@ enum hello_benchmark_type
     BM_DONE
 };
 
-char *get_bench_type_name(bool native);
+/**
+ * Print a benchmark timing result formatted for the run_benchmarks.py script
+ */
+void benchmark_print_result(uint64_t result);

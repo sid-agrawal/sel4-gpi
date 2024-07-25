@@ -49,58 +49,26 @@ static size_t cspace_size_bits = 17;
 
 // (XXX) Arya: Is it ok to include test_error_eq in the timings?
 
-static int benchmark_ipc_rt(env_t env, seL4_CPtr cap, bool print);
-
-/**
- * Initializes sel4bench, and issues some IPC calls for warmup
- */
-static void benchmark_init(env_t env)
+void benchmark_init(env_t env)
 {
     sel4bench_init();
 
-    // Send a cap we know exists for testing
-    // If we send this to the root task, it won't be unwrapped
-    seL4_CPtr cap = env->endpoint;
-
     for (int i = 0; i < 5; i++)
     {
-        benchmark_ipc_rt(env, cap, false);
+        benchmark_ipc_rt(env);
     }
 }
 
-static void print_result(uint64_t result)
+int benchmark_ipc_rt(env_t env)
 {
-    printf("RESULT>%lu\n", result);
-}
-
-/**
- * Send an seL4_Call to root task, optionally including a cap to send
- * This times the round-trip time:
- * - send an IPC to root task (optionally with cap transfer)
- * - receive an IPC response from root task (no cap transfer)
- */
-static int benchmark_ipc_rt(env_t env, seL4_CPtr cap, bool print)
-{
-    TEST_LOG("\nCALL RT - %s", cap != seL4_CapNull ? "CAP TRANSFER" : "NO CAP TRANSFER");
     int error = 0;
-    ccnt_t call_start;
-    ccnt_t call_end;
 
     RpcMessage rpcMsg = {
         .which_msg = RpcMessage_bench_tag};
 
-    SEL4BENCH_READ_CCNT(call_start);
-    // (XXX) Arya: does not do cap transfer at the moment
+
     error = sel4rpc_call(&env->rpc_client, &rpcMsg, 0, 0, 0);
-
-    // pd_client_context_t self_pd_conn = {.ep = env->ipc_bench_ep};
-    // pd_client_bench_ipc(&self_pd_conn, cap, cap != seL4_CapNull);
-    SEL4BENCH_READ_CCNT(call_end);
-
-    if (print)
-    {
-        print_result(call_end - call_start);
-    }
+    return error;
 }
 
 /**
@@ -124,7 +92,7 @@ static int benchmark_ipc_pd(seL4_CPtr ep)
 
     assert(seL4_GetMR(0) == BM_IPC);
 
-    print_result(call_end - call_start);
+    benchmark_print_result(call_end - call_start);
 
     return 0;
 }
@@ -184,7 +152,7 @@ static int benchmark_pd_create_sel4utils(env_t env, cspacepath_t *cspace_path, v
 
     SEL4BENCH_READ_CCNT(pd_create_end);
 
-    print_result(pd_create_end - pd_create_start);
+    benchmark_print_result(pd_create_end - pd_create_start);
 
     return 0;
 }
@@ -208,7 +176,7 @@ static int benchmark_pd_create_osm(pd_client_context_t *pd)
 
     test_error_eq(error, 0);
 
-    print_result(pd_create_end - pd_create_start);
+    benchmark_print_result(pd_create_end - pd_create_start);
 
     return 0;
 }
@@ -229,7 +197,7 @@ static int benchmark_pd_delete_sel4utils(env_t env, cspacepath_t *cspace_path, v
 
     test_error_eq(error, 0);
 
-    print_result(pd_delete_end - pd_delete_start);
+    benchmark_print_result(pd_delete_end - pd_delete_start);
 
     return 0;
 }
@@ -249,7 +217,7 @@ static int benchmark_pd_delete_osm(pd_client_context_t *pd)
 
     test_error_eq(error, 0);
 
-    print_result(pd_delete_end - pd_delete_start);
+    benchmark_print_result(pd_delete_end - pd_delete_start);
 
     return 0;
 }
@@ -298,7 +266,7 @@ static int benchmark_pd_spawn_sel4utils(env_t env, sel4utils_process_t *sel4util
     seL4_Word bench_type = seL4_GetMR(0);
     test_assert(bench_type == BM_PD_CREATE);
     seL4_Word pd_create_end_time = seL4_GetMR(1);
-    print_result(pd_create_end_time - pd_create_start_time);
+    benchmark_print_result(pd_create_end_time - pd_create_start_time);
     return error;
 
 #if CONFIG_MAX_NUM_NODES > 1
@@ -355,7 +323,7 @@ static int benchmark_pd_spawn_osm(pd_client_context_t *pd, seL4_CPtr *ep)
     seL4_Word bench_type = seL4_GetMR(0);
     test_assert(bench_type == BM_PD_CREATE);
     seL4_Word pd_create_end_time = seL4_GetMR(1);
-    print_result(pd_create_end_time - pd_create_start_time);
+    benchmark_print_result(pd_create_end_time - pd_create_start_time);
     return error;
 
     sel4gpi_config_destroy(cfg);
@@ -379,7 +347,7 @@ static int benchmark_send_cap_sel4utils(env_t env, sel4utils_process_t *sel4util
     sel4utils_copy_cap_to_process(sel4utils_proc, &env->vka, bench_frame.cptr);
     SEL4BENCH_READ_CCNT(send_cap_end);
 
-    print_result(send_cap_end - send_cap_start);
+    benchmark_print_result(send_cap_end - send_cap_start);
 
     return error;
 }
@@ -407,7 +375,7 @@ static int benchmark_send_cap_osm(pd_client_context_t *pd)
 
     test_error_eq(error, 0);
 
-    print_result(send_cap_end - send_cap_start);
+    benchmark_print_result(send_cap_end - send_cap_start);
     return error;
 }
 
@@ -425,7 +393,7 @@ static int benchmark_frame_allocate_sel4utils(env_t env, vka_object_t *frame)
 
     test_error_eq(error, 0);
 
-    print_result(frame_alloc_end - frame_alloc_start);
+    benchmark_print_result(frame_alloc_end - frame_alloc_start);
 
     return error;
 }
@@ -447,7 +415,7 @@ static int benchmark_frame_allocate_osm(mo_client_context_t *mo)
 
     test_error_eq(error, 0);
 
-    print_result(frame_alloc_end - frame_alloc_start);
+    benchmark_print_result(frame_alloc_end - frame_alloc_start);
 
     return error;
 }
@@ -464,7 +432,7 @@ static int benchmark_frame_free_sel4utils(env_t env, vka_object_t *frame)
     vka_free_object(&env->vka, frame);
     SEL4BENCH_READ_CCNT(frame_alloc_end);
 
-    print_result(frame_alloc_end - frame_alloc_start);
+    benchmark_print_result(frame_alloc_end - frame_alloc_start);
 
     return error;
 }
@@ -481,7 +449,7 @@ static int benchmark_frame_free_osm(mo_client_context_t *mo)
     error = mo_component_client_disconnect(mo);
     SEL4BENCH_READ_CCNT(frame_alloc_end);
 
-    print_result(frame_alloc_end - frame_alloc_start);
+    benchmark_print_result(frame_alloc_end - frame_alloc_start);
 
     test_error_eq(error, 0);
 
@@ -513,7 +481,7 @@ static int benchmark_ads_create_sel4utils(env_t env, vspace_t *vspace)
     test_error_eq(error, 0);
     SEL4BENCH_READ_CCNT(ads_create_end);
 
-    print_result(ads_create_end - ads_create_start);
+    benchmark_print_result(ads_create_end - ads_create_start);
 
     return error;
 }
@@ -532,7 +500,7 @@ static int benchmark_ads_create_osm(ads_client_context_t *ads)
     error = ads_component_client_connect(ads_rde, ads);
     SEL4BENCH_READ_CCNT(ads_create_end);
 
-    print_result(ads_create_end - ads_create_start);
+    benchmark_print_result(ads_create_end - ads_create_start);
 
     return error;
 }
@@ -561,7 +529,7 @@ static int benchmark_ads_attach_sel4utils(env_t env, vspace_t *vspace, vka_objec
     test_error_eq(error, 0);
     SEL4BENCH_READ_CCNT(ads_attach_end);
 
-    print_result(ads_attach_end - ads_attach_start);
+    benchmark_print_result(ads_attach_end - ads_attach_start);
     *frame_addr = mapped_vaddr;
 
     return error;
@@ -583,7 +551,7 @@ static int benchmark_ads_attach_osm(ads_client_context_t *ads, mo_client_context
 
     test_error_eq(error, 0);
 
-    print_result(ads_attach_end - ads_attach_start);
+    benchmark_print_result(ads_attach_end - ads_attach_start);
 
     return error;
 }
@@ -603,7 +571,7 @@ static int benchmark_ads_remove_sel4utils(env_t env, vspace_t *vspace, void **fr
     sel4utils_free_reservation_by_vaddr(vspace, frame_vaddr);
     SEL4BENCH_READ_CCNT(ads_remove_end);
 
-    print_result(ads_remove_end - ads_remove_start);
+    benchmark_print_result(ads_remove_end - ads_remove_start);
 
     return error;
 }
@@ -624,7 +592,7 @@ static int benchmark_ads_remove_osm(ads_client_context_t *ads, void *mo_vaddr)
 
     test_error_eq(error, 0);
 
-    print_result(ads_remove_end - ads_remove_start);
+    benchmark_print_result(ads_remove_end - ads_remove_start);
 
     return error;
 }
@@ -640,7 +608,7 @@ static int benchmark_ads_delete_sel4utils(env_t env, vspace_t *vspace)
     vspace_tear_down(vspace, VSPACE_FREE);
     SEL4BENCH_READ_CCNT(ads_delete_end);
 
-    print_result(ads_delete_end - ads_delete_start);
+    benchmark_print_result(ads_delete_end - ads_delete_start);
 
     return 0;
 }
@@ -658,7 +626,7 @@ static int benchmark_ads_delete_osm(ads_client_context_t *ads)
 
     test_error_eq(error, 0);
 
-    print_result(ads_delete_end - ads_delete_start);
+    benchmark_print_result(ads_delete_end - ads_delete_start);
 
     return 0;
 }
@@ -675,7 +643,7 @@ static int benchmark_cpu_create_sel4utils(env_t env, vka_object_t *tcb)
     error = vka_alloc_tcb(&env->vka, tcb);
     SEL4BENCH_READ_CCNT(cpu_create_end);
 
-    print_result(cpu_create_end - cpu_create_start);
+    benchmark_print_result(cpu_create_end - cpu_create_start);
 
     return error;
 }
@@ -694,7 +662,7 @@ static int benchmark_cpu_create_osm(cpu_client_context_t *osm_cpu)
     error = cpu_component_client_connect(cpu_rde, osm_cpu);
     SEL4BENCH_READ_CCNT(cpu_create_end);
 
-    print_result(cpu_create_end - cpu_create_start);
+    benchmark_print_result(cpu_create_end - cpu_create_start);
 
     return error;
 }
@@ -729,7 +697,7 @@ static int benchmark_cpu_bind_sel4utils(env_t env, vka_object_t *tcb,
     SEL4BENCH_READ_CCNT(cpu_bind_end);
     test_error_eq(error, 0);
 
-    print_result(cpu_bind_end - cpu_bind_start);
+    benchmark_print_result(cpu_bind_end - cpu_bind_start);
 
     return error;
 }
@@ -759,7 +727,7 @@ static int benchmark_cpu_bind_osm(cpu_client_context_t *cpu, ads_client_context_
     test_error_eq(error, 0);
     SEL4BENCH_READ_CCNT(cpu_bind_end);
 
-    print_result(cpu_bind_end - cpu_bind_start);
+    benchmark_print_result(cpu_bind_end - cpu_bind_start);
 
     return error;
 }
@@ -777,7 +745,7 @@ static int benchmark_cpu_delete_sel4utils(env_t env, vka_object_t *tcb)
 
     test_error_eq(error, 0);
 
-    print_result(cpu_delete_end - cpu_delete_start);
+    benchmark_print_result(cpu_delete_end - cpu_delete_start);
 
     return 0;
 }
@@ -795,7 +763,7 @@ static int benchmark_cpu_delete_osm(cpu_client_context_t *cpu)
 
     test_error_eq(error, 0);
 
-    print_result(cpu_delete_end - cpu_delete_start);
+    benchmark_print_result(cpu_delete_end - cpu_delete_start);
 
     return 0;
 }
@@ -844,7 +812,7 @@ static int benchmark_fs(env_t env)
     test_assert(f > 0);
     SEL4BENCH_READ_CCNT(fs_open_end);
 
-    print_result(fs_open_end - fs_open_start);
+    benchmark_print_result(fs_open_end - fs_open_start);
 
     // Terminate PDs
     pd_client_context_t fs_context = {.ep = fs_pd_cap};
@@ -1203,7 +1171,7 @@ static int internal_benchmark_cleanup_toy_servers(env_t env, hello_cleanup_mode_
         // Invalid mode of server to crash
         test_assert(0);
     }
-    print_result(end - start);
+    benchmark_print_result(end - start);
 
     /* Cleanup other PDs */
 
@@ -1379,7 +1347,7 @@ static int internal_benchmark_cleanup(env_t env, cleanup_scenario_server_t serve
         // Invalid mode of server to crash
         test_assert(0);
     }
-    print_result(end - start);
+    benchmark_print_result(end - start);
 
     /* Cleanup other PDs */
 
@@ -1438,381 +1406,6 @@ int benchmark_cleanup_fs(env_t env)
 {
     return internal_benchmark_cleanup(env, CLEANUP_FS);
 }
-
-/**
- * Benchmark RTT of regular IPCs to the sel4test driver
- * Parameters configure the outgoing message, but the return message will always be the same
- * (no caps, short message), to represent the messages sent within CellulOS
- *
- * @param env
- * @param n_iters number of test iterations to run
- * @param long_msg if true, send a long outgoing message (512 bytes)
- *                 if false, send a short outgoing message (64 bytes)
- * @param caps caps to send with each outgoing message
- * @param n_caps number of caps to send
- */
-static int internal_benchmark_regular_ipc(env_t env, int n_iters, int long_msg, seL4_CPtr *caps, int n_caps)
-{
-    int error = 0;
-    ccnt_t call_start;
-    ccnt_t call_end;
-    int long_msg_len = 8;
-
-    benchmark_init(env);
-
-    for (int i = 0; i < n_iters; i++)
-    {
-        SEL4BENCH_READ_CCNT(call_start);
-        // Include time to write data to IPC buf, since the NanoPB functions include it
-        seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, n_caps, long_msg ? 1 + long_msg_len : 1);
-        seL4_SetMR(0, SEL4TEST_BENCH_IPC);
-
-        if (long_msg)
-        {
-            for (int i = 1; i < long_msg_len + 1; i++)
-            {
-                seL4_SetMR(i, 0x4242424242424242);
-            }
-        }
-
-        for (int i = 0; i < n_caps; i++)
-        {
-            seL4_SetCap(i, caps[i]);
-        }
-
-        tag = seL4_Call(env->endpoint, tag);
-        SEL4BENCH_READ_CCNT(call_end);
-
-        test_error_eq(seL4_MessageInfo_ptr_get_label(&tag), 0);
-
-        print_result(call_end - call_start);
-    }
-
-    sel4bench_destroy();
-    return sel4test_get_result();
-}
-
-/**
- * Benchmark RTT of IPCs to the sel4test driver using NanoPB
- * Parameters configure the outgoing message, but the return message will always be the same
- * (no caps, short message), to represent the messages sent within CellulOS
- *
- * @param env
- * @param n_iters number of test iterations to run
- * @param long_msg if true, send a long outgoing message (512 bytes)
- *                 if false, send a short outgoing message (64 bytes)
- * @param caps caps to send with each outgoing message
- * @param n_caps number of caps to send
- */
-static int internal_benchmark_nanopb_ipc(env_t env, int n_iters, int long_msg, seL4_CPtr *caps, int n_caps)
-{
-    int error = 0;
-    ccnt_t call_start;
-    ccnt_t call_end;
-    
-    benchmark_init(env);
-
-    for (int i = 0; i < n_iters; i++)
-    {
-        RpcMessage rpcMsg;
-
-        if (long_msg)
-        {
-            rpcMsg.which_msg = RpcMessage_bench_long_tag;
-            memset(rpcMsg.msg.bench_long.args, 0x42, sizeof(rpcMsg.msg.bench_long.args));
-        }
-        else
-        {
-            rpcMsg.which_msg = RpcMessage_bench_tag;
-        }
-
-        SEL4BENCH_READ_CCNT(call_start);
-        // (XXX) Arya: does not do cap transfer at the moment
-        error = sel4rpc_call_with_caps(&env->rpc_client, &rpcMsg, 0, 0, 0, caps, n_caps);
-        SEL4BENCH_READ_CCNT(call_end);
-        test_error_eq(error, 0);
-
-        print_result(call_end - call_start);
-    }
-
-    sel4bench_destroy();
-    return sel4test_get_result();
-}
-
-int benchmark_regular_ipc_nocap_short(env_t env)
-{
-    return internal_benchmark_regular_ipc(env, 1, 0, NULL, 0);
-}
-
-int benchmark_regular_ipc_nocap_long(env_t env)
-{
-    return internal_benchmark_regular_ipc(env, 1, 1, NULL, 0);
-}
-
-int benchmark_regular_ipc_cap_short(env_t env)
-{
-    seL4_CPtr caps[1] = {env->cspace_root};
-    return internal_benchmark_regular_ipc(env, 1, 0, caps, 1);
-}
-
-int benchmark_regular_ipc_cap_long(env_t env)
-{
-    seL4_CPtr caps[1] = {env->cspace_root};
-    return internal_benchmark_regular_ipc(env, 1, 1, caps, 1);
-}
-
-// Create a badged version of the driver endpoint
-static int make_badged_endpoint(env_t env, seL4_CPtr *result)
-{
-    int error = 0;
-    cspacepath_t src, dest;
-
-    vka_cspace_make_path(&env->vka, env->endpoint, &src);
-    error = vka_cspace_alloc_path(&env->vka, &dest);
-    test_error_eq(error, 0);
-
-    error = vka_cnode_mint(&dest, &src, seL4_AllRights, 0x42);
-    test_error_eq(error, 0);
-
-    *result = dest.capPtr;
-
-    return error;
-}
-
-int benchmark_regular_ipc_nocap_unwrapped_short(env_t env)
-{
-    int error = 0;
-
-    // Make a badged version of the driver ep to send
-    seL4_CPtr badged_ep;
-    test_error_eq(make_badged_endpoint(env, &badged_ep), 0);
-
-    seL4_CPtr caps[1] = {badged_ep};
-    return internal_benchmark_regular_ipc(env, 1, 0, caps, 1);
-}
-
-int benchmark_regular_ipc_nocap_unwrapped_long(env_t env)
-{
-    int error = 0;
-
-    // Make a badged version of the driver ep to send
-    seL4_CPtr badged_ep;
-    test_error_eq(make_badged_endpoint(env, &badged_ep), 0);
-
-    seL4_CPtr caps[1] = {badged_ep};
-    return internal_benchmark_regular_ipc(env, 1, 1, caps, 1);
-}
-
-int benchmark_regular_ipc_cap_unwrapped_short(env_t env)
-{
-    int error = 0;
-
-    // Make a badged version of the driver ep to send
-    seL4_CPtr badged_ep;
-    test_error_eq(make_badged_endpoint(env, &badged_ep), 0);
-
-    seL4_CPtr caps[2] = {env->cspace_root, badged_ep};
-    return internal_benchmark_regular_ipc(env, 1, 0, caps, 2);
-}
-
-int benchmark_regular_ipc_cap_unwrapped_long(env_t env)
-{
-    int error = 0;
-
-    // Make a badged version of the driver ep to send
-    seL4_CPtr badged_ep;
-    test_error_eq(make_badged_endpoint(env, &badged_ep), 0);
-
-    seL4_CPtr caps[2] = {env->cspace_root, badged_ep};
-    return internal_benchmark_regular_ipc(env, 1, 1, caps, 2);
-}
-
-int benchmark_regular_ipc_nocap_2_unwrapped_short(env_t env)
-{
-    int error = 0;
-
-    // Make a badged version of the driver ep to send
-    seL4_CPtr badged_ep_1, badged_ep_2;
-    test_error_eq(make_badged_endpoint(env, &badged_ep_1), 0);
-    test_error_eq(make_badged_endpoint(env, &badged_ep_2), 0);
-
-    seL4_CPtr caps[2] = {badged_ep_1, badged_ep_2};
-    return internal_benchmark_regular_ipc(env, 1, 0, caps, 2);
-}
-
-int benchmark_regular_ipc_nocap_2_unwrapped_long(env_t env)
-{
-    int error = 0;
-
-    // Make a badged version of the driver ep to send
-    seL4_CPtr badged_ep_1, badged_ep_2;
-    test_error_eq(make_badged_endpoint(env, &badged_ep_1), 0);
-    test_error_eq(make_badged_endpoint(env, &badged_ep_2), 0);
-
-    seL4_CPtr caps[2] = {badged_ep_1, badged_ep_2};
-    return internal_benchmark_regular_ipc(env, 1, 0, caps, 2);
-}
-
-int benchmark_regular_ipc_cap_2_unwrapped_short(env_t env)
-{
-    int error = 0;
-
-    // Make a badged version of the driver ep to send
-    seL4_CPtr badged_ep_1, badged_ep_2;
-    test_error_eq(make_badged_endpoint(env, &badged_ep_1), 0);
-    test_error_eq(make_badged_endpoint(env, &badged_ep_2), 0);
-
-    seL4_CPtr caps[3] = {env->cspace_root, badged_ep_1, badged_ep_2};
-    return internal_benchmark_regular_ipc(env, 1, 0, caps, 3);
-}
-
-int benchmark_regular_ipc_cap_2_unwrapped_long(env_t env)
-{
-    int error = 0;
-
-    // Make a badged version of the driver ep to send
-    seL4_CPtr badged_ep_1, badged_ep_2;
-    test_error_eq(make_badged_endpoint(env, &badged_ep_1), 0);
-    test_error_eq(make_badged_endpoint(env, &badged_ep_2), 0);
-
-    seL4_CPtr caps[3] = {env->cspace_root, badged_ep_1, badged_ep_2};
-    return internal_benchmark_regular_ipc(env, 1, 0, caps, 3);
-}
-
-int benchmark_nanopb_ipc_nocap_short(env_t env)
-{
-    return internal_benchmark_nanopb_ipc(env, 1, 0, NULL, 0);
-}
-
-int benchmark_nanopb_ipc_nocap_long(env_t env)
-{
-    return internal_benchmark_nanopb_ipc(env, 1, 1, NULL, 0);
-}
-
-int benchmark_nanopb_ipc_cap_short(env_t env)
-{
-    seL4_CPtr caps[1] = {env->cspace_root};
-    return internal_benchmark_nanopb_ipc(env, 1, 0, caps, 1);
-}
-
-int benchmark_nanopb_ipc_cap_long(env_t env)
-{
-    seL4_CPtr caps[1] = {env->cspace_root};
-    return internal_benchmark_nanopb_ipc(env, 1, 1, caps, 1);
-}
-
-int benchmark_nanopb_ipc_nocap_unwrapped_short(env_t env)
-{
-    int error = 0;
-
-    // Make a badged version of the driver ep to send
-    seL4_CPtr badged_ep;
-    test_error_eq(make_badged_endpoint(env, &badged_ep), 0);
-
-    seL4_CPtr caps[1] = {badged_ep};
-    return internal_benchmark_nanopb_ipc(env, 1, 0, caps, 1);
-}
-
-int benchmark_nanopb_ipc_nocap_unwrapped_long(env_t env)
-{
-    int error = 0;
-
-    // Make a badged version of the driver ep to send
-    seL4_CPtr badged_ep;
-    test_error_eq(make_badged_endpoint(env, &badged_ep), 0);
-
-    seL4_CPtr caps[1] = {badged_ep};
-    return internal_benchmark_nanopb_ipc(env, 1, 1, caps, 1);
-}
-
-int benchmark_nanopb_ipc_cap_unwrapped_short(env_t env)
-{
-    int error = 0;
-
-    // Make a badged version of the driver ep to send
-    seL4_CPtr badged_ep;
-    test_error_eq(make_badged_endpoint(env, &badged_ep), 0);
-
-    seL4_CPtr caps[2] = {env->cspace_root, badged_ep};
-    return internal_benchmark_nanopb_ipc(env, 1, 0, caps, 2);
-}
-
-int benchmark_nanopb_ipc_cap_unwrapped_long(env_t env)
-{
-    int error = 0;
-
-    // Make a badged version of the driver ep to send
-    seL4_CPtr badged_ep;
-    test_error_eq(make_badged_endpoint(env, &badged_ep), 0);
-
-    seL4_CPtr caps[2] = {env->cspace_root, badged_ep};
-    return internal_benchmark_nanopb_ipc(env, 1, 1, caps, 2);
-}
-
-int benchmark_nanopb_ipc_nocap_2_unwrapped_short(env_t env)
-{
-    int error = 0;
-
-    // Make a badged version of the driver ep to send
-    seL4_CPtr badged_ep_1, badged_ep_2;
-    test_error_eq(make_badged_endpoint(env, &badged_ep_1), 0);
-    test_error_eq(make_badged_endpoint(env, &badged_ep_2), 0);
-
-    seL4_CPtr caps[3] = {badged_ep_1, badged_ep_2};
-    return internal_benchmark_nanopb_ipc(env, 1, 0, caps, 2);
-}
-
-int benchmark_nanopb_ipc_nocap_2_unwrapped_long(env_t env)
-{
-    int error = 0;
-
-    // Make a badged version of the driver ep to send
-    seL4_CPtr badged_ep_1, badged_ep_2;
-    test_error_eq(make_badged_endpoint(env, &badged_ep_1), 0);
-    test_error_eq(make_badged_endpoint(env, &badged_ep_2), 0);
-
-    seL4_CPtr caps[2] = {badged_ep_1, badged_ep_2};
-    return internal_benchmark_nanopb_ipc(env, 1, 0, caps, 2);
-}
-
-int benchmark_nanopb_ipc_cap_2_unwrapped_short(env_t env)
-{
-    int error = 0;
-
-    // Make a badged version of the driver ep to send
-    seL4_CPtr badged_ep_1, badged_ep_2;
-    test_error_eq(make_badged_endpoint(env, &badged_ep_1), 0);
-    test_error_eq(make_badged_endpoint(env, &badged_ep_2), 0);
-
-    seL4_CPtr caps[3] = {env->cspace_root, badged_ep_1, badged_ep_2};
-    return internal_benchmark_nanopb_ipc(env, 1, 0, caps, 3);
-}
-
-int benchmark_nanopb_ipc_cap_2_unwrapped_long(env_t env)
-{
-    int error = 0;
-
-    // Make a badged version of the driver ep to send
-    seL4_CPtr badged_ep_1, badged_ep_2;
-    test_error_eq(make_badged_endpoint(env, &badged_ep_1), 0);
-    test_error_eq(make_badged_endpoint(env, &badged_ep_2), 0);
-
-    seL4_CPtr caps[3] = {env->cspace_root, badged_ep_1, badged_ep_2};
-    return internal_benchmark_nanopb_ipc(env, 1, 0, caps, 3);
-}
-
-// (XXX) Arya: TODO test many IPC in a row
-#if 0
-int benchmark_many_regular_ipc(env_t env)
-{
-    return internal_benchmark_regular_ipc(env, 50, 0, NULL, 0);
-}
-
-int benchmark_many_nanopb_ipc(env_t env)
-{
-    return internal_benchmark_nanopb_ipc(env, 50, 0, NULL, 0);
-}
-#endif
 
 #ifdef GPI_BENCHMARK_MULTIPLE
 
@@ -1876,151 +1469,6 @@ DEFINE_TEST_WITH_TYPE_MULTIPLE(GPIBM010,
                                OSM,
                                true)
 
-/* BENCH IPC */
-DEFINE_TEST_WITH_TYPE_MULTIPLE(GPIBM100,
-                               "benchmark_regular_ipc_nocap_short",
-                               benchmark_regular_ipc_nocap_short,
-                               BASIC,
-                               true)
-
-DEFINE_TEST_WITH_TYPE_MULTIPLE(GPIBM101,
-                               "benchmark_regular_ipc_nocap_long",
-                               benchmark_regular_ipc_nocap_long,
-                               BASIC,
-                               true)
-
-DEFINE_TEST_WITH_TYPE_MULTIPLE(GPIBM102,
-                               "benchmark_regular_ipc_cap_short",
-                               benchmark_regular_ipc_cap_short,
-                               BASIC,
-                               true)
-
-DEFINE_TEST_WITH_TYPE_MULTIPLE(GPIBM103,
-                               "benchmark_regular_ipc_cap_long",
-                               benchmark_regular_ipc_cap_long,
-                               BASIC,
-                               true)
-
-DEFINE_TEST_WITH_TYPE_MULTIPLE(GPIBM104,
-                               "benchmark_regular_ipc_nocap_unwrapped_short",
-                               benchmark_regular_ipc_nocap_unwrapped_short,
-                               BASIC,
-                               true)
-
-DEFINE_TEST_WITH_TYPE_MULTIPLE(GPIBM105,
-                               "benchmark_regular_ipc_nocap_unwrapped_long",
-                               benchmark_regular_ipc_nocap_unwrapped_long,
-                               BASIC,
-                               true)
-
-DEFINE_TEST_WITH_TYPE_MULTIPLE(GPIBM106,
-                               "benchmark_regular_ipc_cap_unwrapped_short",
-                               benchmark_regular_ipc_cap_unwrapped_short,
-                               BASIC,
-                               true)
-
-DEFINE_TEST_WITH_TYPE_MULTIPLE(GPIBM107,
-                               "benchmark_regular_ipc_cap_unwrapped_long",
-                               benchmark_regular_ipc_cap_unwrapped_long,
-                               BASIC,
-                               true)
-
-DEFINE_TEST_WITH_TYPE_MULTIPLE(GPIBM108,
-                               "benchmark_regular_ipc_nocap_2_unwrapped_short",
-                               benchmark_regular_ipc_nocap_2_unwrapped_short,
-                               BASIC,
-                               true)
-
-DEFINE_TEST_WITH_TYPE_MULTIPLE(GPIBM109,
-                               "benchmark_regular_ipc_nocap_2_unwrapped_long",
-                               benchmark_regular_ipc_nocap_2_unwrapped_long,
-                               BASIC,
-                               true)
-
-DEFINE_TEST_WITH_TYPE_MULTIPLE(GPIBM110,
-                               "benchmark_regular_ipc_cap_2_unwrapped_short",
-                               benchmark_regular_ipc_cap_2_unwrapped_short,
-                               BASIC,
-                               true)
-
-DEFINE_TEST_WITH_TYPE_MULTIPLE(GPIBM111,
-                               "benchmark_regular_ipc_cap_2_unwrapped_long",
-                               benchmark_regular_ipc_cap_2_unwrapped_long,
-                               BASIC,
-                               true)
-
-DEFINE_TEST_WITH_TYPE_MULTIPLE(GPIBM112,
-                               "benchmark_nanopb_ipc_nocap_short",
-                               benchmark_nanopb_ipc_nocap_short,
-                               BASIC,
-                               true)
-
-DEFINE_TEST_WITH_TYPE_MULTIPLE(GPIBM113,
-                               "benchmark_nanopb_ipc_nocap_long",
-                               benchmark_nanopb_ipc_nocap_long,
-                               BASIC,
-                               true)
-
-DEFINE_TEST_WITH_TYPE_MULTIPLE(GPIBM114,
-                               "benchmark_nanopb_ipc_cap_short",
-                               benchmark_nanopb_ipc_cap_short,
-                               BASIC,
-                               true)
-
-DEFINE_TEST_WITH_TYPE_MULTIPLE(GPIBM115,
-                               "benchmark_nanopb_ipc_cap_long",
-                               benchmark_nanopb_ipc_cap_long,
-                               BASIC,
-                               true)
-
-DEFINE_TEST_WITH_TYPE_MULTIPLE(GPIBM116,
-                               "benchmark_nanopb_ipc_nocap_unwrapped_short",
-                               benchmark_nanopb_ipc_nocap_unwrapped_short,
-                               BASIC,
-                               true)
-
-DEFINE_TEST_WITH_TYPE_MULTIPLE(GPIBM117,
-                               "benchmark_nanopb_ipc_nocap_unwrapped_long",
-                               benchmark_nanopb_ipc_nocap_unwrapped_long,
-                               BASIC,
-                               true)
-
-DEFINE_TEST_WITH_TYPE_MULTIPLE(GPIBM118,
-                               "benchmark_nanopb_ipc_cap_unwrapped_short",
-                               benchmark_nanopb_ipc_cap_unwrapped_short,
-                               BASIC,
-                               true)
-
-DEFINE_TEST_WITH_TYPE_MULTIPLE(GPIBM119,
-                               "benchmark_nanopb_ipc_cap_unwrapped_long",
-                               benchmark_nanopb_ipc_cap_unwrapped_long,
-                               BASIC,
-                               true)
-
-DEFINE_TEST_WITH_TYPE_MULTIPLE(GPIBM120,
-                               "benchmark_nanopb_ipc_nocap_2_unwrapped_short",
-                               benchmark_nanopb_ipc_nocap_2_unwrapped_short,
-                               BASIC,
-                               true)
-
-DEFINE_TEST_WITH_TYPE_MULTIPLE(GPIBM121,
-                               "benchmark_nanopb_ipc_nocap_2_unwrapped_long",
-                               benchmark_nanopb_ipc_nocap_2_unwrapped_long,
-                               BASIC,
-                               true)
-
-DEFINE_TEST_WITH_TYPE_MULTIPLE(GPIBM122,
-                               "benchmark_nanopb_ipc_cap_2_unwrapped_short",
-                               benchmark_nanopb_ipc_cap_2_unwrapped_short,
-                               BASIC,
-                               true)
-
-DEFINE_TEST_WITH_TYPE_MULTIPLE(GPIBM123,
-                               "benchmark_nanopb_ipc_cap_2_unwrapped_long",
-                               benchmark_nanopb_ipc_cap_2_unwrapped_long,
-                               BASIC,
-                               true)
-
 #else
 
 DEFINE_TEST(GPIBM001,
@@ -2071,127 +1519,6 @@ DEFINE_TEST(GPIBM09,
 DEFINE_TEST(GPIBM010,
             "osm crash fs server",
             benchmark_cleanup_fs,
-            true)
-
-/* BENCH IPC */
-DEFINE_TEST(GPIBM100,
-            "benchmark_regular_ipc_nocap_short",
-            benchmark_regular_ipc_nocap_short,
-            true)
-
-DEFINE_TEST(GPIBM101,
-            "benchmark_regular_ipc_nocap_long",
-            benchmark_regular_ipc_nocap_long,
-            true)
-
-DEFINE_TEST(GPIBM102,
-            "benchmark_regular_ipc_cap_short",
-            benchmark_regular_ipc_cap_short,
-            true)
-
-DEFINE_TEST(GPIBM103,
-            "benchmark_regular_ipc_cap_long",
-            benchmark_regular_ipc_cap_long,
-            true)
-
-DEFINE_TEST(GPIBM104,
-            "benchmark_regular_ipc_nocap_unwrapped_short",
-            benchmark_regular_ipc_nocap_unwrapped_short,
-            true)
-
-DEFINE_TEST(GPIBM105,
-            "benchmark_regular_ipc_nocap_unwrapped_long",
-            benchmark_regular_ipc_nocap_unwrapped_long,
-            true)
-
-DEFINE_TEST(GPIBM106,
-            "benchmark_regular_ipc_cap_unwrapped_short",
-            benchmark_regular_ipc_cap_unwrapped_short,
-            true)
-
-DEFINE_TEST(GPIBM107,
-            "benchmark_regular_ipc_cap_unwrapped_long",
-            benchmark_regular_ipc_cap_unwrapped_long,
-            true)
-
-DEFINE_TEST(GPIBM108,
-            "benchmark_regular_ipc_nocap_2_unwrapped_short",
-            benchmark_regular_ipc_nocap_2_unwrapped_short,
-            true)
-
-DEFINE_TEST(GPIBM109,
-            "benchmark_regular_ipc_nocap_2_unwrapped_long",
-            benchmark_regular_ipc_nocap_2_unwrapped_long,
-            true)
-
-DEFINE_TEST(GPIBM110,
-            "benchmark_regular_ipc_cap_2_unwrapped_short",
-            benchmark_regular_ipc_cap_2_unwrapped_short,
-            true)
-
-DEFINE_TEST(GPIBM111,
-            "benchmark_regular_ipc_cap_2_unwrapped_long",
-            benchmark_regular_ipc_cap_2_unwrapped_long,
-            true)
-
-DEFINE_TEST(GPIBM112,
-            "benchmark_nanopb_ipc_nocap_short",
-            benchmark_nanopb_ipc_nocap_short,
-            true)
-
-DEFINE_TEST(GPIBM113,
-            "benchmark_nanopb_ipc_nocap_long",
-            benchmark_nanopb_ipc_nocap_long,
-            true)
-
-DEFINE_TEST(GPIBM114,
-            "benchmark_nanopb_ipc_cap_short",
-            benchmark_nanopb_ipc_cap_short,
-            true)
-
-DEFINE_TEST(GPIBM115,
-            "benchmark_nanopb_ipc_cap_long",
-            benchmark_nanopb_ipc_cap_long,
-            true)
-
-DEFINE_TEST(GPIBM116,
-            "benchmark_nanopb_ipc_nocap_unwrapped_short",
-            benchmark_nanopb_ipc_nocap_unwrapped_short,
-            true)
-
-DEFINE_TEST(GPIBM117,
-            "benchmark_nanopb_ipc_nocap_unwrapped_long",
-            benchmark_nanopb_ipc_nocap_unwrapped_long,
-            true)
-
-DEFINE_TEST(GPIBM118,
-            "benchmark_nanopb_ipc_cap_unwrapped_short",
-            benchmark_nanopb_ipc_cap_unwrapped_short,
-            true)
-
-DEFINE_TEST(GPIBM119,
-            "benchmark_nanopb_ipc_cap_unwrapped_long",
-            benchmark_nanopb_ipc_cap_unwrapped_long,
-            true)
-
-DEFINE_TEST(GPIBM120,
-            "benchmark_nanopb_ipc_nocap_2_unwrapped_short",
-            benchmark_nanopb_ipc_nocap_2_unwrapped_short,
-            true)
-
-DEFINE_TEST(GPIBM121,
-            "benchmark_nanopb_ipc_nocap_2_unwrapped_long",
-            benchmark_nanopb_ipc_nocap_2_unwrapped_long,
-            true)
-
-DEFINE_TEST(GPIBM122,
-            "benchmark_nanopb_ipc_cap_2_unwrapped_short",
-            benchmark_nanopb_ipc_cap_2_unwrapped_short,
-            true)
-
-DEFINE_TEST(GPIBM123,
-            "benchmark_nanopb_ipc_cap_2_unwrapped_long",
-            benchmark_nanopb_ipc_cap_2_unwrapped_long,
             true)
 
 #endif

@@ -6,6 +6,20 @@
  * @file Define some functions shared between tests
  */
 
+/** BENCHMARKS **/
+
+/**
+ * Initializes sel4bench, and issues some IPC calls for warmup
+ */
+void benchmark_init(env_t env);
+
+/**
+ * Send an seL4_Call to root task, this is meant to warmup IPCs
+ */
+static int benchmark_ipc_rt(env_t env);
+
+/** TOY RESOURCE SERVERS **/
+
 #define TOY_BLOCK_SERVER_RESOURCE_TYPE "TOY_BLOCK"
 #define TOY_FILE_SERVER_RESOURCE_TYPE "TOY_FILE"
 #define TOY_DB_SERVER_RESOURCE_TYPE "TOY_DB"
