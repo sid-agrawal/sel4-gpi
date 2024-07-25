@@ -560,6 +560,7 @@ int xv6fs_sys_unlink(char *path, uint32_t *inum, bool *was_last_link)
 
   if (inum || was_last_link) {
     struct inode *ip = dirlookup(dp, name, NULL);
+    ilock(ip);
 
     if (inum) {
       *inum = ip->inum;
@@ -568,6 +569,8 @@ int xv6fs_sys_unlink(char *path, uint32_t *inum, bool *was_last_link)
     if (was_last_link) {
       *was_last_link = ip->nlink == 1;
     }
+
+    iunlockput(ip);
   }
 
   if (unlink_de(dp, name))

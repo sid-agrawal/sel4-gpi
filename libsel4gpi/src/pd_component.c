@@ -181,7 +181,9 @@ static void handle_terminate_req(seL4_Word sender_badge, PdTerminateMessage *msg
         get_gpi_server()->pd_termination_reply = reply_path.capPtr;
 
         *should_reply = false;
-    } else {
+    }
+    else
+    {
         get_gpi_server()->pending_termination = false;
     }
 
@@ -850,8 +852,11 @@ static void handle_finish_work_req(seL4_Word sender_badge, PdFinishWorkMessage *
 
     // (XXX) Arya: doesn't do any authentication, or check if we actually needed this piece
     // For simplicity, just decrement the counter of "remaining pieces"
-    SERVER_GOTO_IF_COND(!get_gpi_server()->pending_termination,
-                        "Got subgraph when there is no pending model extraction\n");
+
+    if (!get_gpi_server()->pending_termination) {
+        // Nothing to do, but all is well
+        goto err_goto;
+    }
 
     // Update the pending termination counter
     get_gpi_server()->pd_termination_n_missing -= msg->n_requests;

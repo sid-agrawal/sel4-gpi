@@ -61,7 +61,7 @@ set_property(
 )
 
 # Add cmake configuration options
-set(GPIBenchmarkMultiple ON CACHE BOOL "If true, run benchmark tests multiple times")
+set(GPIBenchmarkMultiple OFF CACHE BOOL "If true, run benchmark tests multiple times")
 
 if (GPIBenchmarkMultiple)
     set(GPIBenchmarkDef "GPI_BENCHMARK_MULTIPLE")

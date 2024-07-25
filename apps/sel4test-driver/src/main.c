@@ -377,7 +377,8 @@ void sel4test_run_tests(struct driver_env *e)
     }
     int tc_tests = tc_size / sizeof(testcase_t);
     int all_tests = driver_tests + tc_tests;
-    testcase_t *tests[all_tests];
+    testcase_t **tests = calloc(all_tests, sizeof(testcase_t *));
+    ZF_LOGF_IF(tests == NULL, "Not enough memory for %d tests\n", all_tests);
 
     /* Extract and filter the tests based on the regex */
     regex_t reg;

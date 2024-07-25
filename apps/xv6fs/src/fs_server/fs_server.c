@@ -806,6 +806,8 @@ int xv6fs_work_handler(PdWorkReturnMessage *work)
         resource_registry_dec(&get_xv6fs_server()->file_registry, (resource_registry_node_t *)reg_entry);
       }
     }
+
+    error = pd_client_finish_work(&get_xv6fs_server()->gen.pd_conn, work->object_ids_count);
   }
   else if (op == PdWorkAction_DESTROY)
   {
@@ -858,6 +860,8 @@ int xv6fs_work_handler(PdWorkReturnMessage *work)
         }
       }
     }
+
+    error = pd_client_finish_work(&get_xv6fs_server()->gen.pd_conn, work->object_ids_count);
   }
   else
   {
