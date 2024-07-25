@@ -336,7 +336,7 @@ Warning:
     /* set up free slot range */
     env->init->cspace_size_bits = TEST_PROCESS_CSPACE_SIZE_BITS;
     env->init->free_slots.start = free_slot_start;
-    printf("%s:%d: free_slot.start %ld\n", __FUNCTION__, __LINE__, env->init->free_slots.start);
+    //printf("%s:%d: free_slot.start %ld\n", __FUNCTION__, __LINE__, env->init->free_slots.start);
     env->init->free_slots.end = (1u << TEST_PROCESS_CSPACE_SIZE_BITS);
     assert(env->init->free_slots.start < env->init->free_slots.end);
 }

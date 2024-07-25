@@ -175,7 +175,6 @@ static void handle_terminate_req(seL4_Word sender_badge, PdTerminateMessage *msg
     /* If we are waiting on missing pieces, bookkeep and don't reply yet */
     if (get_gpi_server()->pd_termination_n_missing > 0)
     {
-        printf("TEMPA waiting for %d pieces for termination\n", get_gpi_server()->pd_termination_n_missing);
         cspacepath_t reply_path;
         vka_cspace_alloc_path(get_pd_component()->server_vka, &reply_path);
         seL4_CNode_SaveCaller(reply_path.root, reply_path.capPtr, reply_path.capDepth);
@@ -183,7 +182,6 @@ static void handle_terminate_req(seL4_Word sender_badge, PdTerminateMessage *msg
 
         *should_reply = false;
     } else {
-        printf("TEMPA reply immediately to termination\n");
         get_gpi_server()->pending_termination = false;
     }
 
@@ -864,7 +862,6 @@ static void handle_finish_work_req(seL4_Word sender_badge, PdFinishWorkMessage *
         OSDB_PRINTF("Current PD cleanup is finished\n");
 
         get_gpi_server()->pending_termination = false;
-        printf("TEMPA reply delayed to termination\n");
 
         // Reply to the PD that requested the termination
         PdReturnMessage return_msg = {
