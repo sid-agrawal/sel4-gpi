@@ -13,12 +13,6 @@ enum PdWorkAction {
     DESTROY = 3;        /* work action to destroy a resource / space */
 };
 
-enum PdSetupType {
-    PD_RUNTIME_SETUP = 0;   /* sets up the entire C runtime from scratch, writes any arguments onto the stack */
-    PD_REGISTER_SETUP = 1;  /* writes a limited number of arguments into registers only */
-    PD_GUEST_SETUP = 2;     /* writes the necessary registers to run a guest */
-};
-
 message PdAllocMessage {
     /* No content */
 };
@@ -76,8 +70,7 @@ message PdSetupMessage {
     uint64 entry_point = 2;         /* address of the code entry point in the PD's ADS */
     uint64 ipc_buf_addr = 3;        /* address of the IPC buffer in the PD's ADS */
     uint64 osm_data_addr = 4;       /* address of the init data in the PD's ADS */
-    PdSetupType setup_mode = 5;     /* the PD's setup mode */
-    repeated uint64 args = 6 [(nanopb).max_count = 8]; /* args for the main function */
+    repeated uint64 args = 5 [(nanopb).max_count = 8]; /* args for the main function */
 };
 
 message PdShareResTypeMessage {

@@ -570,7 +570,6 @@ void osm_set_up(uintptr_t e)
     seL4_Word args[4] = {OSM, env->endpoint_in_test, timer_ntfn_in_PD.capPtr, env->bench_endpoint_in_test};
 
     error = pd_component_runtime_setup(pd, ads, cpu,
-                                       PdSetupType_PD_RUNTIME_SETUP,
                                        argc, args,
                                        stack_top,
                                        entry_pt,

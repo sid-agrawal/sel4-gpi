@@ -102,7 +102,6 @@ int pd_client_share_rde(pd_client_context_t *target_pd,
  * @param entry_point the address of the instruction to start executing at (in the target ADS)
  * @param ipc_buf_addr the address of the IPC buffer for the (PD, ADS, CPU) combination
  * @param osm_data_in_PD address of the OSmosis data frame within the target ADS
- * @param setup_type the type of setup (see PdSetupType for details)
  * @return int 0 on success
  */
 int pd_client_runtime_setup(pd_client_context_t *target_pd,
@@ -113,8 +112,7 @@ int pd_client_runtime_setup(pd_client_context_t *target_pd,
                             seL4_Word *args,
                             void *entry_point,
                             void *ipc_buf_addr,
-                            void *osm_data_in_PD,
-                            PdSetupType setup_type);
+                            void *osm_data_in_PD);
 
 /**
  * @brief shares all resources of the given type from src_pd to dest_pd

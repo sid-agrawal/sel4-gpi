@@ -558,7 +558,6 @@ err_goto:
 int pd_component_runtime_setup(pd_t *pd,
                                ads_t *ads,
                                cpu_t *cpu,
-                               PdSetupType setup_mode,
                                int argc,
                                seL4_Word *args,
                                void *stack_top,
@@ -570,7 +569,8 @@ int pd_component_runtime_setup(pd_t *pd,
 
     pd->shared_data_in_PD = osm_shared_data;
 
-    if (setup_mode == PdSetupType_PD_RUNTIME_SETUP)
+    // we've loaded an ELF for the PD, so we must set up the entire runtime
+    if (pd->num_elf_phdrs > 0)
     {
         char string_args[argc][WORD_STRING_SIZE];
         char *argv[argc];
@@ -589,16 +589,7 @@ int pd_component_runtime_setup(pd_t *pd,
             error = cpu_set_remote_context(cpu, entry_point, init_stack);
         }
     }
-    else if (setup_mode == PdSetupType_PD_REGISTER_SETUP)
-    {
-        error = cpu_set_local_context(cpu,
-                                      entry_point,
-                                      argc > 0 ? (void *)args[0] : NULL,
-                                      argc > 1 ? (void *)args[1] : NULL,
-                                      argc > 2 ? (void *)args[2] : NULL,
-                                      stack_top);
-    }
-    else if (setup_mode == PdSetupType_PD_GUEST_SETUP)
+    else if (cpu->vcpu.cptr != seL4_CapNull) // CPU is elevated, this is a guest-OS PD
     {
         error = cpu_elevate(cpu);
         if (!error)
@@ -607,10 +598,14 @@ int pd_component_runtime_setup(pd_t *pd,
             error = cpu_set_guest_context(cpu, (uintptr_t)entry_point, (uintptr_t)args[0]);
         }
     }
-    else
+    else // No ELF was loaded for this PD, setup only the CPU and arguments
     {
-        error = 1;
-        OSDB_PRINTERR("Invalid PD setup mode specified\n");
+        error = cpu_set_local_context(cpu,
+                                      entry_point,
+                                      argc > 0 ? (void *)args[0] : NULL,
+                                      argc > 1 ? (void *)args[1] : NULL,
+                                      argc > 2 ? (void *)args[2] : NULL,
+                                      stack_top);
     }
 
 #if CONFIG_DEBUG_BUILD
@@ -651,7 +646,6 @@ static void handle_runtime_setup_req(seL4_Word sender_badge, PdSetupMessage *msg
     error = pd_component_runtime_setup(&target_pd->pd,
                                        &target_ads->ads,
                                        &target_cpu->cpu,
-                                       msg->setup_mode,
                                        msg->args_count,
                                        (seL4_Word *)msg->args,
                                        (void *)msg->stack_top,

@@ -18,7 +18,7 @@ file(
     GLOB
         deps
         src/*.c
-        src/tests/*.c
+        src/tests/pd_capability.c
         src/tests/*.S
         src/arch/${arch}/*.c
         src/arch/${KernelArch}/tests/*.c

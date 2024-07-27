@@ -192,7 +192,6 @@ int pd_component_allocate(gpi_obj_id_t client_id, mo_t *mo, pd_t **ret_pd, seL4_
  * @param target_pd the target PD to initialize
  * @param target_ads the ADS where the stack resides
  * @param target_cpu the CPU which will execute in this ADS and PD
- * @param setup_type the type of setup (see PdSetupType for details)
  * @param argc the number of arguments to place on the stack
  * @param args the arguments, as seL4_Word values
  * @param stack_top pointer to a position in the stack, in the target ADS, depends on the setup type
@@ -204,7 +203,6 @@ int pd_component_allocate(gpi_obj_id_t client_id, mo_t *mo, pd_t **ret_pd, seL4_
 int pd_component_runtime_setup(pd_t *pd,
                                ads_t *ads,
                                cpu_t *cpu,
-                               PdSetupType setup_mode,
                                int argc,
                                seL4_Word *args,
                                void *stack_top,

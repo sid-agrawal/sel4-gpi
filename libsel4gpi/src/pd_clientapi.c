@@ -451,8 +451,7 @@ int pd_client_runtime_setup(pd_client_context_t *target_pd,
                             seL4_Word *args,
                             void *entry_point,
                             void *ipc_buf_addr,
-                            void *osm_data_in_PD,
-                            PdSetupType setup_type)
+                            void *osm_data_in_PD)
 {
     OSDB_PRINTF("Sending 'runtime setup' request to PD component\n");
 
@@ -465,7 +464,6 @@ int pd_client_runtime_setup(pd_client_context_t *target_pd,
         .msg.setup = {
             .entry_point = (uint64_t)entry_point,
             .ipc_buf_addr = (uint64_t)ipc_buf_addr,
-            .setup_mode = setup_type,
             .stack_top = (uint64_t)stack_pos,
             .osm_data_addr = (uint64_t)osm_data_in_PD,
             .args_count = argc,
