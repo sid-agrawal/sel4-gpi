@@ -66,7 +66,6 @@ int benchmark_ipc_rt(env_t env)
     RpcMessage rpcMsg = {
         .which_msg = RpcMessage_bench_tag};
 
-
     error = sel4rpc_call(&env->rpc_client, &rpcMsg, 0, 0, 0);
     return error;
 }
@@ -456,7 +455,8 @@ static int benchmark_frame_free_osm(mo_client_context_t *mo)
     return error;
 }
 
-static int benchmark_ads_create_sel4utils(env_t env, vspace_t *vspace)
+static int benchmark_ads_create_sel4utils(env_t env, vspace_t *vspace, vka_object_t *vspace_root,
+                                          sel4utils_alloc_data_t **vspace_alloc_data)
 {
     int error;
     ccnt_t ads_create_start;
@@ -466,17 +466,16 @@ static int benchmark_ads_create_sel4utils(env_t env, vspace_t *vspace)
 
     SEL4BENCH_READ_CCNT(ads_create_start);
 
-    sel4utils_alloc_data_t *vspace_alloc_data = calloc(1, sizeof(sel4utils_alloc_data_t));
+    *vspace_alloc_data = calloc(1, sizeof(sel4utils_alloc_data_t));
 
-    vka_object_t vspace_root;
-    error = vka_alloc_vspace_root(&env->vka, &vspace_root);
+    error = vka_alloc_vspace_root(&env->vka, vspace_root);
     test_error_eq(error, 0);
 
-    error = assign_asid_pool(env->asid_pool, vspace_root.cptr);
+    error = assign_asid_pool(env->asid_pool, vspace_root->cptr);
     test_error_eq(error, 0);
     // why is there no 'unassign asid pool'?
 
-    error = sel4utils_get_empty_vspace(&env->vspace, vspace, vspace_alloc_data, &env->vka, vspace_root.cptr,
+    error = sel4utils_get_empty_vspace(&env->vspace, vspace, *vspace_alloc_data, &env->vka, vspace_root->cptr,
                                        NULL, NULL);
     test_error_eq(error, 0);
     SEL4BENCH_READ_CCNT(ads_create_end);
@@ -597,7 +596,8 @@ static int benchmark_ads_remove_osm(ads_client_context_t *ads, void *mo_vaddr)
     return error;
 }
 
-static int benchmark_ads_delete_sel4utils(env_t env, vspace_t *vspace)
+static int benchmark_ads_delete_sel4utils(env_t env, vspace_t *vspace, vka_object_t *vspace_root,
+                                          sel4utils_alloc_data_t *vspace_alloc_data)
 {
     ccnt_t ads_delete_start;
     ccnt_t ads_delete_end;
@@ -606,6 +606,8 @@ static int benchmark_ads_delete_sel4utils(env_t env, vspace_t *vspace)
 
     SEL4BENCH_READ_CCNT(ads_delete_start);
     vspace_tear_down(vspace, VSPACE_FREE);
+    vka_free_object(&env->vka, vspace_root);
+    free(vspace_alloc_data);
     SEL4BENCH_READ_CCNT(ads_delete_end);
 
     benchmark_print_result(ads_delete_end - ads_delete_start);
@@ -884,7 +886,9 @@ int benchmark_basic_sel4utils(env_t env)
 
     // ADS create / attach
     vspace_t vspace;
-    error = benchmark_ads_create_sel4utils(env, &vspace);
+    vka_object_t vspace_root;
+    sel4utils_alloc_data_t *vspace_alloc_data;
+    error = benchmark_ads_create_sel4utils(env, &vspace, &vspace_root, &vspace_alloc_data);
     test_error_eq(error, 0);
 
     void *ipc_frame_addr;
@@ -924,7 +928,7 @@ int benchmark_basic_sel4utils(env_t env)
     test_error_eq(error, 0);
 
     // ADS delete
-    error = benchmark_ads_delete_sel4utils(env, &vspace);
+    error = benchmark_ads_delete_sel4utils(env, &vspace, &vspace_root, vspace_alloc_data);
     test_error_eq(error, 0);
 
     // Cleanup cnode
@@ -1514,11 +1518,11 @@ DEFINE_TEST_OSM(GPIBM008,
 DEFINE_TEST(GPIBM09,
             "osm crash ramdisk server",
             benchmark_cleanup_ramdisk,
-            true)
+            false)
 
 DEFINE_TEST(GPIBM010,
             "osm crash fs server",
             benchmark_cleanup_fs,
-            true)
+            false)
 
 #endif

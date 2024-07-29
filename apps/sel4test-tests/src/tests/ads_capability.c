@@ -95,6 +95,51 @@ int test_ads_rm(env_t env)
 }
 DEFINE_TEST_OSM(GPIADS002, "Ensure the ads remove works", test_ads_rm, true)
 
+int ads_create_many_osm(env_t env)
+{
+    int error;
+
+    seL4_CPtr ads_rde = sel4gpi_get_rde(GPICAP_TYPE_ADS);
+    ads_client_context_t ads;
+
+    // Test create & delete
+    for (int i = 0; i < 2048; i++)
+    {
+        error = ads_component_client_connect(ads_rde, &ads);
+        if (error != 0)
+        {
+            printf("Failed ADS create on iter %d\n", i);
+        }
+        test_assert(error == 0);
+
+        error = ads_client_disconnect(&ads);
+        if (error != 0)
+        {
+            printf("Failed ADS delete on iter %d\n", i);
+        }
+        test_assert(error == 0);
+    }
+
+    // Test just create
+    pd_client_context_t self_pd = sel4gpi_get_pd_conn();
+    // Can't create more than the BADGE_MAX_SPACE_ID at once
+    for (int i = 0; i < BADGE_MAX_SPACE_ID - 10; i++)
+    {
+        error = ads_component_client_connect(ads_rde, &ads);
+        if (error != 0)
+        {
+            printf("Failed ADS create on iter %d\n", i);
+        }
+        test_assert(error == 0);
+
+        // Remove RDE to avoid hitting resource directory size limit
+        pd_client_remove_rde(&self_pd, GPICAP_TYPE_VMR, ads.id);
+    }
+
+    return sel4test_get_result();
+}
+DEFINE_TEST_OSM(GPIADS003, "Test creating and destroying a lot of address spaces", ads_create_many_osm, true)
+
 // (XXX) Arya: These are very old, we should write some new tests
 #if 0
 int test_ads_shallow_copy(env_t env)

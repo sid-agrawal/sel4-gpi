@@ -635,6 +635,9 @@ int ads_component_initialize(vka_t *server_vka,
                                   server_ep_obj.cptr,
                                   &AdsMessage_msg,
                                   &AdsReturnMessage_msg);
+
+    // Initial ASID pool is provided by the kernel
+    get_ads_component()->pool = seL4_CapInitThreadASIDPool;
 }
 
 /** --- Functions callable by root task --- **/

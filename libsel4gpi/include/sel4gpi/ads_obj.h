@@ -257,11 +257,6 @@ static seL4_CPtr get_asid_pool(seL4_CPtr asid_pool)
 static seL4_CPtr assign_asid_pool(seL4_CPtr asid_pool, seL4_CPtr pd)
 {
     int error = seL4_ARCH_ASIDPool_Assign(get_asid_pool(asid_pool), pd);
-    if (error)
-    {
-        ZF_LOGE("Failed to assign asid pool\n");
-    }
-
     return error;
 }
 

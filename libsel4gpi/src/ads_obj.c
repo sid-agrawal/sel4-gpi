@@ -134,9 +134,45 @@ int ads_new(ads_t *ads,
     SERVER_GOTO_IF_COND(alloc_data == NULL, "Failed to allocate memory for alloc data\n");
 
     // Assign an asid pool
-    SERVER_GOTO_IF_COND(!config_set(CONFIG_X86_64) &&
-                            assign_asid_pool(seL4_CapInitThreadASIDPool, vspace_root_object->cptr) != seL4_NoError,
-                        "Failed to allocate asid pool\n");
+    if (!config_set(CONFIG_X86_64))
+    {
+        error = assign_asid_pool(get_ads_component()->pool, vspace_root_object->cptr);
+
+        if (error == seL4_DeleteFirst)
+        {
+            OSDB_PRINTF("Ran out of space in ASID pool, creating a new one\n");
+            OSDB_PRINTWARN("Creating a new ASID pool is a leaky operation\n");
+
+            /**
+             * Arya: This is leaky - we just ignore the old ASID pool, though it may end up having free slots
+             * or needing to be freed itself in the future
+             */
+
+            // Alloc untyped for new pool
+            vka_object_t ut;
+            error = vka_alloc_untyped(get_ads_component()->server_vka, seL4_PageBits, &ut);
+            SERVER_GOTO_IF_ERR(error, "Failed to allocate untyped for new ASID pool\n");
+
+            // Make anew pool
+            cspacepath_t dest;
+            error = vka_cspace_alloc_path(get_ads_component()->server_vka, &dest);
+            SERVER_GOTO_IF_ERR(error, "Failed to allocate path for new ASID pool\n");
+
+            error = seL4_ARCH_ASIDControl_MakePool(seL4_CapASIDControl, ut.cptr,
+                                                   dest.root, dest.capPtr, dest.capDepth);
+            SERVER_GOTO_IF_ERR(error, "Failed to make new ASID pool\n");
+
+            get_ads_component()->pool = dest.capPtr;
+
+            error = assign_asid_pool(get_ads_component()->pool, vspace_root_object->cptr);
+            SERVER_GOTO_IF_ERR(error, "Failed to assign ASID from new pool\n");
+        }
+        else if (error != seL4_NoError)
+        {
+            OSDB_PRINTERR("Failed to allocate asid pool, unknown error\n");
+            goto err_goto;
+        }
+    }
 
     // Create empty vspace
     error = sel4utils_get_vspace(
@@ -675,13 +711,22 @@ void ads_destroy(ads_t *ads)
      * VSPACE_FREE does not currently work, it seems that some freed frame
      * has another cap to it and causes the VKA to break
      */
-    vspace_tear_down(ads->vspace, VSPACE_PRESERVE);
+    vspace_tear_down(ads->vspace, VSPACE_FREE);
 
     /**
      * we should not need to free any objects created by the vspace,
      * as they should be all MOs
      * (XXX) Arya: Make sure this is the case
      */
+
+    /* destroy the capability */
+    vka_free_object(get_ads_component()->server_vka, ads->root_page_dir);
+
+    /* free other memory */
+    free(ads->process_for_cookies);
+    free(ads->vspace->data);
+    free(ads->root_page_dir);
+    free(ads->vspace);
 }
 
 /* ======================================= CONVENIENCE FUNCTIONS (NOT PART OF FRAMEWORK) ================================================= */

@@ -440,6 +440,10 @@ void start_thread_stack(vka_t *vka, vspace_t *current, vspace_t *target, vspace_
 
 void osm_set_up(uintptr_t e)
 {
+    #ifndef GPI_SERVER_ENABLED
+    gpi_panic("GPI server not enabled for OSmosis test, check GPIServerEnabled in CMake\n", 1);
+    #endif
+
     int error = 0;
     driver_env_t env = (driver_env_t)e;
 
