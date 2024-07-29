@@ -284,8 +284,10 @@ int ads_load_elf(ads_t *loadee,
                  void **ret_entry_point);
 
 /**
- * @brief slightly modified version of the sel4utils process spawn function
- * sets up the stack with arguments for setting up the C runtime
+ * @brief writes ELF information, Aux vectors, and user arguments onto the
+ * stack, in preparation for a sel4runtime setup
+ *
+ * This is slightly modified version of the sel4utils_process_spawn_v function
  *
  * @param pd target PD to write arguments for, it's expected that an ELF has already been loaded into its ADS,
  *          and the relevant ELF data fields inside pd_t are filled out
@@ -297,10 +299,26 @@ int ads_load_elf(ads_t *loadee,
  * @param ret_init_stack the position of the initial stack pointer after setup
  * @return 0 on success, 1 on failure
  */
-int ads_write_arguments(pd_t *pd,
-                        vspace_t *loadee_vspace,
-                        void *ipc_buf_addr,
-                        void *stack_top,
-                        int argc,
-                        char *argv[],
-                        void **ret_init_stack);
+int ads_write_stack_runtime(pd_t *pd,
+                            vspace_t *loadee_vspace,
+                            void *ipc_buf_addr,
+                            void *stack_top,
+                            int argc,
+                            char *argv[],
+                            void **ret_init_stack);
+
+/**
+ * @brief write string arguments onto the stack
+ *
+ * @param target_ads ADS which the stack is mapped in
+ * @param argc number of arguments
+ * @param argv string args
+ * @param stack_top the top of the stack in target_ads
+ * @param ret_init_stack the aligned stack pointer after arguments have been written
+ * @return int 0 on success, 1 on failure
+ */
+int ads_write_stack_args(ads_t *target_ads,
+                         int argc,
+                         char *argv[],
+                         void *stack_top,
+                         void **ret_init_stack);

@@ -38,6 +38,8 @@
 #include <sel4gpi/endpoint_component.h>
 #include <sel4gpi/gpi_rpc.h>
 
+#include <sel4runtime.h>
+
 // Defined for utility printing macros
 #define DEBUG_ID PD_DEBUG
 #define SERVER_ID PDSERVS
@@ -531,7 +533,9 @@ static void handle_exit_req(seL4_Word sender_badge, PdExitMessage *msg)
     /* Remove the PD from registry, this will also destroy the PD */
     client_data->pd.exit_code = msg->exit_code;
     client_data->pd.deletion_depth = 0; // This PD is the root of a deletion tree
+    sync_mutex_lock(get_gpi_server()->mx);
     resource_registry_delete(&get_pd_component()->registry, (resource_registry_node_t *)client_data);
+    sync_mutex_unlock(get_gpi_server()->mx);
 
     OSDB_PRINTF("Cleaned up exited PD (%u)\n", pd_id);
     return;
@@ -555,6 +559,16 @@ err_goto:
     reply_msg->errorCode = error;
 }
 
+static void word_args_to_strings(char strings[][WORD_STRING_SIZE], char *argv[], seL4_Word *word_args, int argc)
+{
+    for (int i = 0; i < argc; i++)
+    {
+        argv[i] = strings[i];
+        snprintf(argv[i], WORD_STRING_SIZE, "%" PRIuPTR "", word_args[i]);
+        OSDB_PRINTF("%s\n", argv[i]);
+    }
+}
+
 int pd_component_runtime_setup(pd_t *pd,
                                ads_t *ads,
                                cpu_t *cpu,
@@ -572,21 +586,17 @@ int pd_component_runtime_setup(pd_t *pd,
     // we've loaded an ELF for the PD, so we must set up the entire runtime
     if (pd->num_elf_phdrs > 0)
     {
+        void *init_stack;
         char string_args[argc][WORD_STRING_SIZE];
         char *argv[argc];
+        word_args_to_strings(string_args, argv, args, argc);
 
-        for (int i = 0; i < argc; i++)
-        {
-            argv[i] = string_args[i];
-            snprintf(argv[i], WORD_STRING_SIZE, "%" PRIuPTR "", args[i]);
-        }
-
-        void *init_stack;
-        error = ads_write_arguments(pd, ads->vspace, ipc_buf_addr, stack_top,
-                                    argc, argv, &init_stack);
+        error = ads_write_stack_runtime(pd, ads->vspace, ipc_buf_addr, stack_top,
+                                        argc, argv, &init_stack);
         if (!error)
         {
-            error = cpu_set_remote_context(cpu, entry_point, init_stack);
+            /* set a flag in the first argument register to trigger the entire C runtime setup for OSmosis PDs */
+            error = cpu_set_remote_context(cpu, entry_point, init_stack, OSM_PD_RUNTIME);
         }
     }
     else if (cpu->vcpu.cptr != seL4_CapNull) // CPU is elevated, this is a guest-OS PD
@@ -600,12 +610,22 @@ int pd_component_runtime_setup(pd_t *pd,
     }
     else // No ELF was loaded for this PD, setup only the CPU and arguments
     {
-        error = cpu_set_local_context(cpu,
-                                      entry_point,
-                                      argc > 0 ? (void *)args[0] : NULL,
-                                      argc > 1 ? (void *)args[1] : NULL,
-                                      argc > 2 ? (void *)args[2] : NULL,
-                                      stack_top);
+        SERVER_GOTO_IF_COND(argc == 0,
+                            "No ELF was loaded for this PD, one argument for the function-style entry-point expected\n");
+        void *init_stack;
+        char string_args[argc - 1][WORD_STRING_SIZE];
+        char *argv[argc - 1];
+        // the first argument will not be passed to the PD
+        word_args_to_strings(string_args, argv, &args[1], argc - 1);
+
+        error = ads_write_stack_args(ads, argc - 1, argv, stack_top, &init_stack);
+        SERVER_GOTO_IF_ERR(error, "Failed to write arguments on PD's stack\n");
+
+        /*
+         * if we're not setting up the entire runtime, entry point function expects the second argument register
+         * to contain the address of the function to execute
+         */
+        error = cpu_set_remote_context(cpu, entry_point, init_stack, args[0]);
     }
 
 #if CONFIG_DEBUG_BUILD

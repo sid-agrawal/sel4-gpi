@@ -98,7 +98,7 @@ int pd_client_share_rde(pd_client_context_t *target_pd,
  * @param target_cpu the CPU which will execute in this ADS and PD
  * @param stack_pos pointer to a position in the stack, depends on the setup type
  * @param argc the number of arguments to place on the stack
- * @param args the arguments
+ * @param args word arguments
  * @param entry_point the address of the instruction to start executing at (in the target ADS)
  * @param ipc_buf_addr the address of the IPC buffer for the (PD, ADS, CPU) combination
  * @param osm_data_in_PD address of the OSmosis data frame within the target ADS

@@ -87,26 +87,30 @@ typedef struct _vmr_config
     void *dest_start;        ///< OPTIONAL vaddr to the start of VMR in the destination ADS
     uint64_t region_pages;   ///< number of pages in this VMR
     size_t page_bits;        ///< OPTIONAL size of an individual page in this VMR, 4K pages by default
-    mo_client_context_t *mo; ///< OPTIONAL an MO to use to map the VMR
+    mo_client_context_t mo;  ///< OPTIONAL an MO to use to map the VMR
 } vmr_config_t;
 
 /**
- * @brief holds the various addresses a PD depends on for execution
+ * @brief holds the various info a PD depends on for execution, includeing runtime addresses
+ * and MOs corresponding to special VMRs
  */
-typedef struct _runtime_addrs
+typedef struct _runtime_context
 {
-    void *stack;                    ///< address of bottom of the stack
-    void *ipc_buf;                  ///< address of the IPC buffer
+    // void *stack;                    ///< address of bottom of the stack
+    // void *ipc_buf;                  ///< address of the IPC buffer
     void *entry_point;              ///< address to PD entry point
     void *osm_data;                 ///< address to PD's OSmosis data
-    mo_client_context_t stack_mo;   ///< MO for the stack
-    mo_client_context_t ipc_buf_mo; ///< MO for the IPC buffer
-} runtime_addrs_t;
+    // mo_client_context_t stack_mo;   ///< MO for the stack
+    // mo_client_context_t ipc_buf_mo; ///< MO for the IPC buffer
+    vmr_config_t *stack_cfg;
+    vmr_config_t *ipc_buf_cfg;
+    bool loaded_elf; ///< ELF was loaded for this runtime
+} runtime_context_t;
 
 /**
  * @brief Configuration of an entire ADS, the type of sharing is w.r.t. the current ADS
- * Although this is an ADS configuration, it is combined with MO sharing as well
- * caller can provide an MO which will both be shared with the created PD and mapped
+ * Although this is an ADS configuration, it is combined with MO sharing.
+ * Caller can provide an MO which will both be shared with the created PD and mapped
  * to the specified VMR
  */
 typedef struct _ads_config
@@ -230,18 +234,19 @@ char *sel4gpi_share_degree_to_str(gpi_share_degree_t share_deg);
 
 /**
  * @brief set up an ADS given the configuration. Can be used as a standalone to configure a new ADS for an existing PD.
+ * The given cfg will be updated with any MOs that were allocated during the setup (excluding ELF MOs)
  *
  * @param cfg The ADS config options
  * @param runnable an allocated runnable struct that can be empty, but typically with the PD context filled in
  * @param osm_data_mo OPTIONAL: an MO for holding OSmosis data
- * @param ret_runtime_addrs OPTIONAL: returns a struct holding all the addresses a PD relies on for execution
+ * @param ret_runtime_context OPTIONAL: returns a struct holding all the addresses a PD relies on for execution
 
  * @return int 0 on success
  */
 int sel4gpi_ads_configure(ads_config_t *cfg,
                           sel4gpi_runnable_t *runnable,
                           mo_client_context_t *osm_data_mo,
-                          runtime_addrs_t *ret_runtime_addrs);
+                          runtime_context_t *ret_runtime_context);
 
 /**
  * @brief Convenience function for configuring a new RDE to share with a PD (that's not yet started)

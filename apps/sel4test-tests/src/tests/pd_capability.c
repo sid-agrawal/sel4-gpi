@@ -25,6 +25,8 @@
 #include <sel4gpi/pd_utils.h>
 #include <sel4gpi/pd_creation.h>
 
+#include <sel4runtime.h>
+
 #define TEST_LOG(msg, ...)                                  \
     do                                                      \
     {                                                       \

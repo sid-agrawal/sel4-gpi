@@ -726,13 +726,13 @@ err_goto:
     return 1;
 }
 
-int ads_write_arguments(pd_t *pd,
-                        vspace_t *loadee_vspace,
-                        void *ipc_buf_addr,
-                        void *stack_top,
-                        int argc,
-                        char *argv[],
-                        void **ret_init_stack)
+int ads_write_stack_runtime(pd_t *pd,
+                            vspace_t *loadee_vspace,
+                            void *ipc_buf_addr,
+                            void *stack_top,
+                            int argc,
+                            char *argv[],
+                            void **ret_init_stack)
 {
     /* define an envp and auxp */
     int error;
@@ -875,4 +875,50 @@ int ads_write_arguments(pd_t *pd,
 
     *ret_init_stack = (void *)initial_stack_pointer;
     return 0;
+}
+
+int ads_write_stack_args(ads_t *target_ads,
+                         int argc,
+                         char *argv[],
+                         void *stack_top,
+                         void **ret_init_stack)
+{
+    int error = 0;
+    uintptr_t dest_argv[argc];
+    vspace_t *vspace = get_ads_component()->server_vspace;
+    vspace_t *loadee_vspace = target_ads->vspace;
+    vka_t *vka = get_ads_component()->server_vka;
+    uintptr_t initial_stack_pointer = (uintptr_t)stack_top;
+
+    /* write all the strings into the stack */
+    /* Copy over the user arguments */
+    error = sel4utils_stack_copy_args(vspace, loadee_vspace, vka,
+                                      argc, argv, dest_argv, &initial_stack_pointer);
+    SERVER_GOTO_IF_ERR(error, " Failed to copy string args to stack\n");
+
+    /* we need to make sure the stack is aligned to a double word boundary after we push on everything else
+     * below this point. First, work out how much we are going to push */
+    size_t to_push = sizeof(seL4_Word) * 2 + /* argc and null-terminating word */
+                     sizeof(dest_argv);      /* argv */
+    uintptr_t hypothetical_stack_pointer = initial_stack_pointer - to_push;
+    uintptr_t rounded_stack_pointer = ALIGN_DOWN(hypothetical_stack_pointer, STACK_CALL_ALIGNMENT);
+    ptrdiff_t stack_rounding = hypothetical_stack_pointer - rounded_stack_pointer;
+    initial_stack_pointer -= stack_rounding;
+
+    /* Null terminate arguments */
+    error = sel4utils_stack_write_constant(vspace, loadee_vspace, vka, 0, &initial_stack_pointer);
+    SERVER_GOTO_IF_ERR(error, "Failed to write stack\n");
+
+    /* write arguments */
+    error = sel4utils_stack_write(vspace, loadee_vspace, vka, dest_argv, sizeof(dest_argv), &initial_stack_pointer);
+    SERVER_GOTO_IF_ERR(error, "Failed to write stack\n");
+
+    /* Push argument count */
+    error = sel4utils_stack_write_constant(vspace, loadee_vspace, vka, argc, &initial_stack_pointer);
+    SERVER_GOTO_IF_ERR(error, "Failed to write stack\n");
+
+    *ret_init_stack = (void *)initial_stack_pointer;
+
+err_goto:
+    return error;
 }

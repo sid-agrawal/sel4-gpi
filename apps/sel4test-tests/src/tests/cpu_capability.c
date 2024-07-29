@@ -34,34 +34,17 @@ extern void _start(void);
         printf("%s(): " msg "\n", __func__, ##__VA_ARGS__); \
     } while (0)
 
-static void test_thread(int argc, char **argv)
+static void osm_thread(int argc, char **argv)
 {
-    printf("hello again world! argc: %d\n", argc);
+    printf("Made it to osm_thread, argc: %d\n", argc);
     if (argc > 0)
     {
-        printf("%lX\n", (uint64_t)argv[0]);
-        printf("%lX\n", (uint64_t)argv[1]);
+        for (int i = 0; i < argc; i++)
+        {
+            printf("%lX\n", atol(argv[i]));
+        }
     }
-    // bool is_osm_thread = (bool)arg0;
-    // printf("In test thread, OSM thread? %d, %s: %lX, arg2: %lX\n",
-    //        is_osm_thread,
-    //        is_osm_thread ? "CPU" : "TCB",
-    //        (uint64_t)arg1,
-    //        (uint64_t)arg2);
-    // printf("goodbye!\n");
-
-    // if (is_osm_thread)
-    // {
-    //     // cpu_client_context_t self_cpu = sel4gpi_get_cpu_conn();
-    //     // cpu_client_suspend(&self_cpu);
-    //     pd_client_context_t self_pd = sel4gpi_get_pd_conn();
-    //     pd_client_exit(&self_pd, 0);
-    // }
-    // else
-    // {
-    //     seL4_CPtr tcb = (seL4_CPtr)arg1;
-    //     seL4_TCB_Suspend(tcb);
-    // }
+    printf("goodbye from osm_thread!\n");
 }
 
 static void sel4utils_thread(void *arg0, void *arg1, void *ipc_buf)
@@ -106,11 +89,11 @@ int test_osm_threads(env_t env)
     printf("------------------STARTING: %s------------------\n", __func__);
 
     sel4gpi_runnable_t runnable = {0};
-    pd_config_t *cfg = sel4gpi_configure_thread(_start, seL4_CapNull, &runnable);
+    pd_config_t *cfg = sel4gpi_configure_thread(osm_thread, seL4_CapNull, &runnable);
     test_assert(cfg != NULL);
 
-    seL4_Word argv[2] = {0xa, test_thread};
-    error = sel4gpi_prepare_pd(cfg, &runnable, 2, argv);
+    seL4_Word argv = 0xa;
+    error = sel4gpi_prepare_pd(cfg, &runnable, 1, &argv);
     test_assert(error == 0);
 
     error = sel4gpi_start_pd(&runnable);

@@ -167,9 +167,10 @@ int cpu_set_local_context(cpu_t *cpu, void *entry_point,
  * @param cpu the target CPU
  * @param entry_point address of instruction to start execution at
  * @param init_stack the starting position in the stack (w.r.t CPU's binded ADS)
+ * @param arg1 OPTIONAL: value to set in the second argument register (the first is for something else)
  * @return int returns 0 on success, 1 on failure
  */
-int cpu_set_remote_context(cpu_t *cpu, void *entry_point, void *init_stack);
+int cpu_set_remote_context(cpu_t *cpu, void *entry_point, void *init_stack, seL4_Word arg1);
 
 /**
  * @brief sets the CPU object's registers to the given kernel entry point

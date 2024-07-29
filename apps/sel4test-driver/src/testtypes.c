@@ -634,7 +634,9 @@ void osm_tear_down(uintptr_t e)
     int error;
     driver_env_t env = (driver_env_t)e;
     cpu_component_stop(env->test_cpu->id);
+    sync_mutex_lock(get_gpi_server()->mx);
     error = pd_component_terminate(env->test_pd->id);
+    sync_mutex_unlock(get_gpi_server()->mx);
     assert(error == 0);
 }
 

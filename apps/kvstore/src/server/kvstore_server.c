@@ -218,14 +218,19 @@ main_exit:
     seL4_Send(parent_ep_conn.raw_endpoint, tag);
 }
 
-static void kvstore_server_main_thread(void *arg0, void *arg1, void *arg2)
+static void kvstore_server_main_thread(int argc, char **argv)
 {
-    seL4_CPtr parent_ep = (seL4_CPtr)arg0;
-    printf("kvstore-server: in thread, parent ep (%lu) \n", parent_ep);
+    if (argc == 0)
+    {
+        printf("kvstore-server, no arguments given\n");
+    }
+    else
+    {
+        seL4_CPtr parent_ep = (seL4_CPtr)atol(argv[0]);
+        printf("kvstore-server: in thread, parent ep (%lu) \n", parent_ep);
 
-    printf("arg0 %p, arg1 %p arg2 %p\n", arg0, arg1, arg2);
-
-    kvstore_server_main(parent_ep);
+        kvstore_server_main(parent_ep);
+    }
 }
 
 int kvstore_server_start_thread(seL4_CPtr *kvstore_ep)
