@@ -76,7 +76,7 @@ int start_resource_server_pd_args(gpi_cap_t rde_type,
     }
 
     // By default, resource servers need to be able to create EPs
-    sel4gpi_add_rde_config(cfg, GPICAP_TYPE_EP, RESSPC_ID_NULL);
+    sel4gpi_add_rde_config(cfg, GPICAP_TYPE_EP, BADGE_SPACE_ID_NULL);
 
     // Setup the args
     int argc = 2 + argc_input;

@@ -27,7 +27,7 @@ void resource_types_initialize(void)
 {
     registry = &get_gpi_server()->resource_types;
 
-    resource_registry_initialize(registry, NULL, NULL);
+    resource_registry_initialize(registry, NULL, NULL, BADGE_MAX_CAP_TYPE);
 
     // Insert the core cap types to the registry with their names
     insert_resource_type(GPICAP_TYPE_NONE, "NONE");

@@ -33,6 +33,7 @@ typedef struct _resource_registry_node
 typedef struct _resource_registry
 {
     resource_registry_node_t *head; ///< Hash table of registry nodes
+    uint64_t max_object_id;         ///< Maximum ID to assign for an object in the registry
     uint64_t id_counter;            ///< Next ID to assign for an object in the registry
 
     void (*on_delete)(resource_registry_node_t *, void *); ///< Function to be called before a node is deleted
@@ -53,7 +54,8 @@ typedef struct _resource_registry
  */
 void resource_registry_initialize(resource_registry_t *registry,
                                   void (*on_delete)(resource_registry_node_t *, void *),
-                                  void *on_delete_arg);
+                                  void *on_delete_arg,
+                                  uint64_t max_object_id);
 
 /**
  * Insert a new node to the registry

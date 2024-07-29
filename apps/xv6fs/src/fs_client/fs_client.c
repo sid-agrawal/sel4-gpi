@@ -156,7 +156,7 @@ xv6fs_client_init(void)
   int error;
 
   get_xv6fs_client()->file_cap_type = sel4gpi_get_resource_type_code(FILE_RESOURCE_TYPE_NAME);
-  xv6fs_client_set_namespace(RESSPC_ID_NULL);
+  xv6fs_client_set_namespace(BADGE_SPACE_ID_NULL);
 
   /* Allocate the shared memory object */
   get_xv6fs_client()->shared_mem = malloc(sizeof(mo_client_context_t));

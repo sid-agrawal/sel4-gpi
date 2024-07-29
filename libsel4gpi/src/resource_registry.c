@@ -14,17 +14,20 @@
 
 void resource_registry_initialize(resource_registry_t *registry,
                                          void (*on_delete)(resource_registry_node_t *, void *),
-                                         void *on_delete_arg)
+                                         void *on_delete_arg,
+                                         uint64_t max_object_id)
 {
     registry->head = NULL;
     registry->on_delete = on_delete;
     registry->on_delete_arg = on_delete_arg;
-    registry->id_counter = 1;
+    registry->id_counter = 0;
+    registry->max_object_id = max_object_id;
 }
 
 void resource_registry_insert(resource_registry_t *registry, resource_registry_node_t *node)
 {
     node->count = 1;
+    assert(node->object_id <= registry->max_object_id);
     HASH_ADD(hh, registry->head, object_id, sizeof(node->object_id), node);
 }
 
@@ -69,24 +72,26 @@ void resource_registry_dec(resource_registry_t *registry, resource_registry_node
 uint64_t resource_registry_insert_new_id(resource_registry_t *registry, resource_registry_node_t *node)
 {
     // Find a free ID
-    uint64_t new_id = registry->id_counter++;
+    resource_registry_node_t *test_node = NULL;
+    uint64_t new_id, start_id = registry->id_counter;
 
-    resource_registry_node_t *test_node;
-    HASH_FIND(hh, registry->head, &new_id, sizeof(new_id), test_node);
-
-    // While a node exists with this ID, try another
-    while (test_node != NULL)
+    do
     {
-        new_id = registry->id_counter++;
+        registry->id_counter++;
+        new_id = registry->id_counter;
 
-        if (new_id == 0)
-        {
-            // If ID is zero, we have checked every possible ID
-            gpi_panic("Out of IDs for resource server registry", 1);
+        if (new_id > registry->max_object_id) {
+            // We reached the maximum ID, wrap around to zero and check for a free ID
+            new_id = registry->id_counter = 1;
+        } else if (new_id == start_id) {
+            // We have checked every possible ID
+            gpi_panic("Out of IDs for resource server registry", registry->max_object_id);
         }
 
         HASH_FIND(hh, registry->head, &new_id, sizeof(new_id), test_node);
-    }
+
+        // While a node exists with this ID, try another
+    } while (test_node != NULL);
 
     node->object_id = new_id;
     resource_registry_insert(registry, node);

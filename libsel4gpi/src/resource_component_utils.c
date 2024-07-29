@@ -44,7 +44,9 @@ int resource_component_initialize(
     component->server_ep = server_ep;
     sel4gpi_rpc_env_init(&component->rpc_env, request_msgdesc, reply_msgdesc);
 
-    resource_registry_initialize(&component->registry, on_registry_delete, NULL);
+    // (XXX) Arya: This option should probably be moved outside of resource_component_utils
+    uint64_t max_obj_id = resource_type == GPICAP_TYPE_RESSPC ? BADGE_SPACE_ID_NULL - 1 : BADGE_OBJ_ID_NULL - 1;
+    resource_registry_initialize(&component->registry, on_registry_delete, NULL, max_obj_id);
 
     OSDB_PRINTF("Initialized resource component %s\n", cap_type_to_str(resource_type));
 }
@@ -303,7 +305,7 @@ seL4_CPtr resource_component_make_badged_ep_custom(vka_t *src_vka,
 }
 
 seL4_CPtr resource_component_make_badged_ep(vka_t *src_vka, vka_t *dst_vka, seL4_CPtr src_ep,
-                                            gpi_cap_t resource_type, gpi_space_id_t space_id, 
+                                            gpi_cap_t resource_type, gpi_space_id_t space_id,
                                             gpi_obj_id_t object_id, gpi_obj_id_t client_id)
 {
     int error = 0;

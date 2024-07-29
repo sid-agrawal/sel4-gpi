@@ -100,7 +100,7 @@ gpi_obj_id_t sel4gpi_get_default_space_id(int type);
 /**
  * Get an osmosis RDE from the env
  * Tries to find the RDE for the given type and resource space id
- * If the given space id == RESSPC_ID_NULL, this is identical to calling sel4gpi_get_rde(type)
+ * If the given space id == BADGE_SPACE_ID_NULL, this is identical to calling sel4gpi_get_rde(type)
  *
  * @param space_id resource space ID to find
  * @param type type of the RDE

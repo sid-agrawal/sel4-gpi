@@ -193,7 +193,7 @@ static int pd_rde_find_idx(pd_t *pd,
     // search within the entries for this type and space id
     for (int i = 0; i < MAX_NS_PER_RDE; i++)
     {
-        if (space_id == RESSPC_ID_NULL && pd->shared_data->rde[type][i].type.type == type)
+        if (space_id == BADGE_SPACE_ID_NULL && pd->shared_data->rde[type][i].type.type == type)
         {
             // Just return the first entry we find if given a null space ID
             idx = i;
@@ -332,7 +332,7 @@ static int pd_remove_rde_by_idx(pd_t *pd, rde_type_t type, int idx)
     OSDB_PRINTF("Removed RDE of type %s, space %u from PD (%u)\n", cap_type_to_str(type.type), space_id, pd->id);
 
     // Clear the entry
-    pd->shared_data->rde[type.type][idx].space_id = RESSPC_ID_NULL;
+    pd->shared_data->rde[type.type][idx].space_id = BADGE_SPACE_ID_NULL;
     pd->shared_data->rde[type.type][idx].type.type = GPICAP_TYPE_NONE;
     pd->shared_data->rde[type.type][idx].slot_in_RT = seL4_CapNull;
     pd->shared_data->rde[type.type][idx].slot_in_PD = seL4_CapNull;
@@ -358,14 +358,14 @@ int pd_remove_rde(pd_t *pd,
     {
         osmosis_rde_t rde = pd->shared_data->rde[type.type][i];
 
-        if (rde.type.type == type.type && (rde.space_id == space_id || space_id == RESSPC_ID_NULL))
+        if (rde.type.type == type.type && (rde.space_id == space_id || space_id == BADGE_SPACE_ID_NULL))
         {
             found_entry = true;
 
             error = pd_remove_rde_by_idx(pd, type, i);
             SERVER_GOTO_IF_ERR(error, "Failed to remove RDE[%u][%u] from PD (%u)\n", type.type, i, pd->id);
 
-            if (space_id != RESSPC_ID_NULL)
+            if (space_id != BADGE_SPACE_ID_NULL)
             {
                 break;
             }
@@ -505,7 +505,8 @@ err_goto:
 
 void pd_initialize_hold_registry(pd_t *pd)
 {
-    resource_registry_initialize(&pd->hold_registry, pd_held_resource_on_delete, (void *)pd);
+    // Max ID for the hold registry is the BADGE_MAX - 1 because the keys are badges
+    resource_registry_initialize(&pd->hold_registry, pd_held_resource_on_delete, (void *)pd, BADGE_MAX - 1);
 }
 
 int pd_new(pd_t *pd,

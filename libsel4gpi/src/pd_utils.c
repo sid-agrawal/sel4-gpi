@@ -94,7 +94,7 @@ seL4_CPtr sel4gpi_get_rde_by_space_id(gpi_space_id_t space_id, gpi_cap_t type)
     assert(type != GPICAP_TYPE_NONE && type != GPICAP_TYPE_MAX);
     osm_pd_shared_data_t *shared_data = ((osm_pd_shared_data_t *)sel4runtime_get_osm_shared_data());
 
-    if (space_id == RESSPC_ID_NULL)
+    if (space_id == BADGE_SPACE_ID_NULL)
     {
         return sel4gpi_get_rde(type);
     }

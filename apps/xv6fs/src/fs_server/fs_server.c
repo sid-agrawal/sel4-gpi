@@ -237,8 +237,10 @@ int xv6fs_init()
   fsinit(ROOTDEV);
 
   /* Initialize the registries */
-  resource_registry_initialize(&get_xv6fs_server()->file_registry, file_registry_entry_on_delete, NULL);
-  resource_registry_initialize(&get_xv6fs_server()->ns_registry, ns_registry_entry_on_delete, NULL);
+  resource_registry_initialize(&get_xv6fs_server()->file_registry, file_registry_entry_on_delete,
+                               NULL, BADGE_OBJ_ID_NULL - 1);
+  resource_registry_initialize(&get_xv6fs_server()->ns_registry, ns_registry_entry_on_delete,
+                               NULL, BADGE_SPACE_ID_NULL - 1);
 
   XV6FS_PRINTF("Initialized file system\n");
 

@@ -25,9 +25,6 @@
 // of resource space
 #define RESSPC_SPACE_ID 0x1
 
-// Null resource space ID
-#define RESSPC_ID_NULL 0xFF
-
 /* Per-space context maintained by the server. */
 typedef struct _resspc_component_registry_entry
 {

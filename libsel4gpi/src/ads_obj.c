@@ -91,8 +91,8 @@ int ads_initialize(ads_t *ads)
     int error = 0;
 
     // Initialize VMR registry
-    resource_registry_initialize(&ads->attach_registry, on_attach_registry_delete, (void *)ads);
-    resource_registry_initialize(&ads->attach_id_to_vaddr_map, NULL, NULL);
+    resource_registry_initialize(&ads->attach_registry, on_attach_registry_delete, (void *)ads, BADGE_MAX - 1);
+    resource_registry_initialize(&ads->attach_id_to_vaddr_map, NULL, NULL, BADGE_OBJ_ID_NULL - 1);
 
     /* The root task holds the ADS by default */
     error = pd_add_resource_by_id(get_gpi_server()->rt_pd_id,
@@ -250,7 +250,7 @@ attach_node_t *ads_get_res_by_id(ads_t *ads, gpi_obj_id_t object_id)
 {
     attach_node_map_t *map_entry = (attach_node_map_t *)
         resource_registry_get_by_id(&ads->attach_id_to_vaddr_map, object_id);
-        
+
     if (map_entry == NULL)
     {
         return NULL;

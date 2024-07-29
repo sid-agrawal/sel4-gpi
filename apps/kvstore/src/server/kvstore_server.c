@@ -241,7 +241,7 @@ int kvstore_server_start_thread(seL4_CPtr *kvstore_ep)
     GOTO_IF_COND(cfg == NULL, "Failed to generate a thread config\n");
 
     /* allow KVstore to allocate new EPs */
-    sel4gpi_add_rde_config(cfg, GPICAP_TYPE_EP, RESSPC_ID_NULL);
+    sel4gpi_add_rde_config(cfg, GPICAP_TYPE_EP, BADGE_SPACE_ID_NULL);
 
     /* temp EP */
     ep_client_context_t ep_conn;

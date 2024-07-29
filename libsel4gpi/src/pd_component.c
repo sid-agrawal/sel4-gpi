@@ -1049,6 +1049,7 @@ void forge_pd_for_root_task(gpi_obj_id_t rt_id)
     rt_entry->pd.id = rt_id;
     rt_entry->pd.pd_vka = get_gpi_server()->server_vka;
     resource_registry_insert(&get_pd_component()->registry, (resource_registry_node_t *)rt_entry);
+    pd_initialize_hold_registry(&rt_entry->pd);
 }
 
 int pd_add_resource_by_id(gpi_obj_id_t pd_id,

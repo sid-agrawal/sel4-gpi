@@ -1120,13 +1120,13 @@ static int internal_benchmark_cleanup_toy_servers(env_t env, hello_cleanup_mode_
     gpi_cap_t toy_db_type = sel4gpi_get_resource_type_code(TOY_DB_SERVER_RESOURCE_TYPE);
     pd_client_context_t pd_conn = sel4gpi_get_pd_conn();
 
-    error = pd_client_remove_rde(&pd_conn, toy_block_type, RESSPC_ID_NULL);
+    error = pd_client_remove_rde(&pd_conn, toy_block_type, BADGE_SPACE_ID_NULL);
     test_assert(error == 0);
 
-    error = pd_client_remove_rde(&pd_conn, toy_file_type, RESSPC_ID_NULL);
+    error = pd_client_remove_rde(&pd_conn, toy_file_type, BADGE_SPACE_ID_NULL);
     test_assert(error == 0);
 
-    error = pd_client_remove_rde(&pd_conn, toy_db_type, RESSPC_ID_NULL);
+    error = pd_client_remove_rde(&pd_conn, toy_db_type, BADGE_SPACE_ID_NULL);
     test_assert(error == 0);
 
     // (XXX) Arya: whether or not to wait should be another option
@@ -1307,10 +1307,10 @@ static int internal_benchmark_cleanup(env_t env, cleanup_scenario_server_t serve
     gpi_cap_t file_type = sel4gpi_get_resource_type_code(FILE_RESOURCE_TYPE_NAME);
     pd_client_context_t pd_conn = sel4gpi_get_pd_conn();
 
-    error = pd_client_remove_rde(&pd_conn, block_type, RESSPC_ID_NULL);
+    error = pd_client_remove_rde(&pd_conn, block_type, BADGE_SPACE_ID_NULL);
     test_assert(error == 0);
 
-    error = pd_client_remove_rde(&pd_conn, file_type, RESSPC_ID_NULL);
+    error = pd_client_remove_rde(&pd_conn, file_type, BADGE_SPACE_ID_NULL);
     test_assert(error == 0);
 
     // (XXX) Arya: whether or not to wait should be another option

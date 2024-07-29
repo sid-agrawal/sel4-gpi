@@ -340,7 +340,7 @@ int pd_add_rde(pd_t *pd,
  * @param pd The target PD to remove an RDE from
  * @param type the type of the RDE
  * @param space_id the resource space of this RDE
- *                 if RESSPC_ID_NULL, this will remove *all* entries of the given type
+ *                 if BADGE_SPACE_ID_NULL, this will remove *all* entries of the given type
  * @return 0 on success, error otherwise
  */
 int pd_remove_rde(pd_t *pd,
@@ -354,7 +354,7 @@ int pd_remove_rde(pd_t *pd,
  *
  * @param pd the target PD
  * @param type The RDE type
- * @param space_id The space id, or RESSPC_ID_NULL for the default
+ * @param space_id The space id, or BADGE_SPACE_ID_NULL for the default
  * @return The seL4_CPtr of the RDE in the current cspace,
  *         or seL4_CapNull if not found
  */

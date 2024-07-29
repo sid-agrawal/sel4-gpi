@@ -15,9 +15,15 @@
 #include <sel4/sel4.h>
 #include <sel4gpi/resource_types.h>
 
-#define BADGE_OBJ_ID_NULL 0xfffff
-#define MAX_BADGE_STR_SIZE 512
-#define NOTIF_BADGE 0xffffffffffffffff // Badge value reserved for RT->PD notifications
+#define BADGE_MAX_CAP_TYPE 0xFF
+#define BADGE_MAX_SPACE_ID 0xFF
+#define BADGE_MAX_OBJ_ID 0xFFFFF
+#define BADGE_MAX_CLIENT_ID 0xFFFFF
+#define BADGE_MAX 0xFFFFFFFFFFFFFFFF
+
+#define NOTIF_BADGE BADGE_MAX // Badge value reserved for RT->PD notifications
+#define BADGE_OBJ_ID_NULL BADGE_MAX_OBJ_ID
+#define BADGE_SPACE_ID_NULL BADGE_MAX_SPACE_ID
 
 // requires that SERVER_ID and DEBUG_ID are defined
 #define BADGE_PRINT(badge)                                                                 \
@@ -25,10 +31,10 @@
     {                                                                                      \
         OSDB_PRINTF_2("BG: %lx\t", (badge));                                               \
         OSDB_PRINTF_2("CapType: %s\t", cap_type_to_str(get_cap_type_from_badge((badge)))); \
-        OSDB_PRINTF_2("Perms: %u\t", get_perms_from_badge((badge)));                      \
-        OSDB_PRINTF_2("SpaceID: %u\t", get_space_id_from_badge((badge)));                 \
-        OSDB_PRINTF_2("CID: %u\t", get_client_id_from_badge((badge)));                    \
-        OSDB_PRINTF_2("OID: %u\n", get_object_id_from_badge((badge)));                    \
+        OSDB_PRINTF_2("Perms: %u\t", get_perms_from_badge((badge)));                       \
+        OSDB_PRINTF_2("SpaceID: %u\t", get_space_id_from_badge((badge)));                  \
+        OSDB_PRINTF_2("CID: %u\t", get_client_id_from_badge((badge)));                     \
+        OSDB_PRINTF_2("OID: %u\n", get_object_id_from_badge((badge)));                     \
     } while (0)
 
 /*

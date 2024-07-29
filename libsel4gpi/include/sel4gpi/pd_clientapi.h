@@ -80,7 +80,7 @@ int pd_client_send_core_cap(pd_client_context_t *conn,
  *
  * @param target_pd the PD to share the RDE with
  * @param server_type resource type of the RDE to share
- * @param space_id resource space to share (optional, set to RESSPC_ID_NULL to share this PD's default space)
+ * @param space_id resource space to share (optional, set to BADGE_SPACE_ID_NULL to share this PD's default space)
  * @return int 0 on success, -1 on failure.
  */
 int pd_client_share_rde(pd_client_context_t *target_pd,
@@ -242,7 +242,7 @@ void pd_client_exit(pd_client_context_t *conn, int code);
  *
  * @param conn the target PD's connection object
  * @param type the type of RDE to remove
- * @param space_id the space ID of the RDE to remove, or RESSPC_ID_NULL to remove all RDEs of the given type
+ * @param space_id the space ID of the RDE to remove, or BADGE_SPACE_ID_NULL to remove all RDEs of the given type
  * @return 0 on success, error otherwise
  */
 int pd_client_remove_rde(pd_client_context_t *conn, gpi_cap_t type, gpi_space_id_t space_id);
