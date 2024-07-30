@@ -53,4 +53,6 @@ target_link_libraries(sel4gpi
 target_compile_options(sel4gpi PUBLIC 
     "-D${GPIServerDef}" 
     "-DGPI_CLEANUP_PD_DEPTH=${GPIPDDeletionDepth}"
-    "-DGPI_CLEANUP_RS_DEPTH=${GPIRSDeletionDepth}")
+    "-DGPI_CLEANUP_RS_DEPTH=${GPIRSDeletionDepth}"
+    # "-fanalyzer"
+    )

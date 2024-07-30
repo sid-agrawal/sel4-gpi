@@ -456,7 +456,10 @@ err_goto:
  */
 static int forge_ads_attachment_from_res(ads_t *ads, sel4utils_res_t *res, gpi_obj_id_t client_pd_id)
 {
+    assert(ads != NULL);
+    assert(res != NULL);
     int error = 0;
+
     /* Get the caps in the reservation */
     uint32_t num_frames = (res->end - res->start) / PAGE_SIZE_4K;
     seL4_CPtr *frame_caps = calloc(num_frames, sizeof(seL4_CPtr));
@@ -471,38 +474,37 @@ static int forge_ads_attachment_from_res(ads_t *ads, sel4utils_res_t *res, gpi_o
         i++;
     }
 
-    /* This way, we can call forge_ads_cap_from_vspace again and again */
-    // (XXX) Arya: is this check necessary?
-    if (res->mo_ref == NULL)
+    OSDB_PRINTF("Forging MO/attach for reservation [%p,%p]\n", (void *)res->start, (void *)res->end);
+
+    // (XXX) Arya: This may have issues if the region is not mapped to physical pages everywhere
+    seL4_CPtr cap_ret;
+    mo_t *mo_ret;
+    error = forge_mo_cap_from_frames(frame_caps,
+                                     num_frames,
+                                     client_pd_id,
+                                     &cap_ret,
+                                     &mo_ret);
+    SERVER_GOTO_IF_ERR(error, "Failed to forge MO cap while forging ADS attach\n");
+
+    res->mo_ref = (void *)mo_ret;
+
+    // Add the attach node for this region
+    error = ads_forge_attach(ads, res, res->mo_ref);
+    SERVER_GOTO_IF_ERR(error, "Failed to forge ADS attach\n");
+
+    // Since the root task "holds" these MOs, decrement the refcount
+    // The refcount then will only be 1, for the attachment to the forged ADS
+    if (client_pd_id == get_gpi_server()->rt_pd_id)
     {
-        OSDB_PRINTF("Forging MO/attach for reservation [%p,%p]\n", (void *)res->start, (void *)res->end);
-
-        // (XXX) Arya: This may have issues if the region is not mapped to physical pages everywhere
-        seL4_CPtr cap_ret;
-        mo_t *mo_ret;
-        error = forge_mo_cap_from_frames(frame_caps,
-                                         num_frames,
-                                         client_pd_id,
-                                         &cap_ret,
-                                         &mo_ret);
-        SERVER_GOTO_IF_ERR(error, "Failed to forge MO cap while forging ADS attach\n");
-
-        res->mo_ref = (void *)mo_ret;
-
-        // Add the attach node for this region
-        error = ads_forge_attach(ads, res, res->mo_ref);
-        SERVER_GOTO_IF_ERR(error, "Failed to forge ADS attach\n");
-
-        // Since the root task "holds" these MOs, decrement the refcount
-        // The refcount then will only be 1, for the attachment to the forged ADS
-        if (client_pd_id == get_gpi_server()->rt_pd_id)
-        {
-            error = resource_component_dec(get_mo_component(), mo_ret->id);
-            SERVER_GOTO_IF_ERR(error, "Failed to decrement refcount of MO\n");
-        }
+        error = resource_component_dec(get_mo_component(), mo_ret->id);
+        SERVER_GOTO_IF_ERR(error, "Failed to decrement refcount of MO\n");
     }
 
 err_goto:
+    if (frame_caps) {
+        free(frame_caps);
+    }
+    
     return error;
 }
 

@@ -1154,6 +1154,7 @@ int pd_component_space_cleanup(gpi_obj_id_t pd_id, gpi_cap_t space_type,
         {
             // Notify the server that its space is being deleted
             pd_work_entry_t *work_entry = calloc(1, sizeof(pd_work_entry_t));
+            SERVER_GOTO_IF_COND(work_entry == NULL, "Failed to allocate work entry node\n");
             work_entry->res_id.type = space_type;
             work_entry->res_id.space_id = space_id;
             work_entry->res_id.object_id = BADGE_OBJ_ID_NULL;

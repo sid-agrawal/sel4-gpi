@@ -554,6 +554,7 @@ void osm_set_up(uintptr_t e)
     /* Set the benchmark IPC endpoint, same as the PD ep */
     env->bench_endpoint_in_test = pd->shared_data->pd_conn.ep;
 
+    /* Set up the timer */
     cspacepath_t timer_ntfn_in_PD = {0};
     if (config_set(CONFIG_HAVE_TIMER))
     {

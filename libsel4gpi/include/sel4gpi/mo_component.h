@@ -49,7 +49,7 @@ resource_component_context_t *get_mo_component(void);
  * @brief forges an MO resource given the list of frames.
  * This is used when forging ADS attachments to root task only.
  *
- * @param frame_caps the frames belonging to the MO
+ * @param frame_caps the frames belonging to the MO, will be copied
  * @param num_pages total number of pages
  * @param client_pd_id the PD which holds the MO
  * @param cap_ret returns the MO cap

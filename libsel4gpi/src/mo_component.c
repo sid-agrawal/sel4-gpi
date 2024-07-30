@@ -229,6 +229,7 @@ int forge_mo_cap_from_frames(seL4_CPtr *frame_caps,
     OSDB_PRINTF("Forging MO cap from frames\n");
 
     assert(frame_caps != NULL);
+    assert(mo_ret != NULL);
 
     int error = 0;
     mo_component_registry_entry_t *new_entry;

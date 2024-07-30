@@ -445,9 +445,11 @@ void sel4test_run_tests(struct driver_env *e)
                     test_types[tt]->tear_down((uintptr_t)e);
                 }
 
-#ifdef GPI_SERVER_ENABLED
+#ifdef GPI_SERVER_ENABLED 
+#if CONFIG_DEBUG_BUILD
                 // Print remaining resources, to see if something exists that should not
                 gpi_debug_print_resources();
+#endif
 #endif
 
                 sel4test_end_test(result);

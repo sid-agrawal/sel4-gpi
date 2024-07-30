@@ -67,23 +67,27 @@ static void on_attach_registry_delete(resource_registry_node_t *node_gen, void *
                               node->n_frames, node->page_bits, VSPACE_PRESERVE);
 
         // Free the frame caps (duplicated for this attach)
-        for (int i = 0; i < node->n_frames; i++)
+        if (node->frame_caps)
         {
-            cspacepath_t path;
-            vka_cspace_make_path(get_ads_component()->server_vka, node->frame_caps[i], &path);
-            vka_cnode_delete(&path);
-            vka_cspace_free_path(get_ads_component()->server_vka, path);
-        }
+            for (int i = 0; i < node->n_frames; i++)
+            {
+                cspacepath_t path;
+                vka_cspace_make_path(get_ads_component()->server_vka, node->frame_caps[i], &path);
+                vka_cnode_delete(&path);
+                vka_cspace_free_path(get_ads_component()->server_vka, path);
+            }
 
-        // (XXX) Arya: IMPORTANT
-        // Something is broken with morecore when I free this
-        free(node->frame_caps);
+            free(node->frame_caps);
+        }
 
         // Decrement the refcount of the MO
         // It is important to do this after freeing the caps, since if the MO is freed,
         // it will return the frames to the VKA, and the VKA expects that there are no copies
         resource_component_dec(get_mo_component(), node->mo_id);
     }
+
+    // Delete the corresponding map entry
+    resource_registry_delete(&ads->attach_id_to_vaddr_map, (resource_registry_node_t *) node->map_entry);
 }
 
 int ads_initialize(ads_t *ads)
@@ -110,27 +114,27 @@ int ads_new(ads_t *ads,
             void *arg0)
 {
     int error = 0;
+    vka_object_t *vspace_root_object = NULL;
+    sel4utils_alloc_data_t *alloc_data = NULL;
 
     // Allocate a vspace
     ads->vspace = calloc(1, sizeof(vspace_t));
     SERVER_GOTO_IF_COND(ads->vspace == NULL, "Failed to allocate vspace\n");
-
     vspace_t *new_vspace = ads->vspace;
-    assert(new_vspace != NULL);
 
     // Allocate process structure for cookies
     ads->process_for_cookies = calloc(1, sizeof(sel4utils_process_t));
     SERVER_GOTO_IF_COND(ads->process_for_cookies == NULL, "Failed to allocate process struct for cookies in ads_new\n");
 
     // Give vspace root
-    vka_object_t *vspace_root_object = calloc(1, sizeof(vka_object_t));
-    assert(vspace_root_object != NULL);
+    vspace_root_object = calloc(1, sizeof(vka_object_t));
+    SERVER_GOTO_IF_COND(vspace_root_object == NULL, "Failed to allocate vspace root object\n");
 
     error = vka_alloc_vspace_root(vka, vspace_root_object);
     SERVER_GOTO_IF_ERR(error, "Failed to allocate page directory for new process\n");
 
     // Allocate alloc data
-    sel4utils_alloc_data_t *alloc_data = calloc(1, sizeof(sel4utils_alloc_data_t));
+    alloc_data = calloc(1, sizeof(sel4utils_alloc_data_t));
     SERVER_GOTO_IF_COND(alloc_data == NULL, "Failed to allocate memory for alloc data\n");
 
     // Assign an asid pool
@@ -200,8 +204,22 @@ int ads_new(ads_t *ads,
     return error;
 
 err_goto:
-    free(alloc_data);
-    free(ads->vspace);
+    if (ads->vspace) {
+        free(ads->vspace);
+    }
+    
+    if (ads->process_for_cookies) {
+        free(ads->process_for_cookies);
+    } 
+
+    if (vspace_root_object) {
+        vka_free_object(vka, vspace_root_object);
+    }
+
+    if (alloc_data) {
+        free(alloc_data);
+    }
+
     return error;
 }
 
@@ -214,6 +232,9 @@ int ads_reserve(ads_t *ads,
                 seL4_CapRights_t rights,
                 attach_node_t **ret_node)
 {
+    assert(ads != NULL);
+    assert(ret_node != NULL);
+
     int error = 0;
 
     // (XXX) Arya: should shift this option to client api
@@ -246,9 +267,9 @@ int ads_reserve(ads_t *ads,
     sel4utils_res->type = vmr_type;
 
     /* Track the VMR in registry */
+    bool nodes_inserted = false;
     attach_node_t *attach_node = calloc(1, sizeof(attach_node_t));
     attach_node_map_t *attach_node_map_entry = calloc(1, sizeof(attach_node_map_t));
-
     SERVER_GOTO_IF_COND(attach_node == NULL || attach_node_map_entry == NULL,
                         "Failed to allocate registry entry for ADS reservation.\n");
 
@@ -268,6 +289,7 @@ int ads_reserve(ads_t *ads,
     attach_node->cacheable = cacheable;
     attach_node->rights = rights;
     resource_registry_insert(&ads->attach_registry, (resource_registry_node_t *)attach_node);
+    nodes_inserted = true;
 
     // The root task holds the VMR by default
     gpi_obj_id_t vmr_id = attach_node_map_entry->gen.object_id;
@@ -278,7 +300,21 @@ int ads_reserve(ads_t *ads,
 
     *ret_node = attach_node;
 
+    return error;
+
 err_goto:
+    if (nodes_inserted) {
+        resource_registry_delete(&ads->attach_registry, (resource_registry_node_t *)attach_node);
+    } else {
+        if (attach_node) {
+            free(attach_node);
+        }
+
+        if (attach_node_map_entry) {
+            free(attach_node_map_entry);
+        }
+    }
+    
     return error;
 }
 
@@ -468,7 +504,17 @@ int ads_forge_attach(ads_t *ads, sel4utils_res_t *res, mo_t *mo)
     error = resource_component_inc(get_mo_component(), mo->id);
     SERVER_GOTO_IF_ERR(error, "Failed to increment refcount of MO\n");
 
+    return error;
+
 err_goto:
+    if (attach_node) {
+        free(attach_node);
+    }
+
+    if (attach_node_map_entry) {
+        free(attach_node_map_entry);
+    }
+    
     return error;
 }
 
@@ -489,7 +535,6 @@ int ads_rm(ads_t *ads, vka_t *vka, void *vaddr)
     }
 
     // Remove the attach node
-    resource_registry_delete(&ads->attach_id_to_vaddr_map, (resource_registry_node_t *)node->map_entry);
     resource_registry_delete(&ads->attach_registry, (resource_registry_node_t *)node);
 
 err_goto:
@@ -697,7 +742,6 @@ void ads_destroy(ads_t *ads)
     HASH_ITER(hh, ads->attach_registry.head, current, tmp)
     {
         attach_node_t *node = (attach_node_t *)current;
-        resource_registry_delete(&ads->attach_id_to_vaddr_map, (resource_registry_node_t *)node->map_entry);
         resource_registry_delete(&ads->attach_registry, current);
     }
 

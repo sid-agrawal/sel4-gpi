@@ -296,6 +296,7 @@ void xv6fs_request_handler(void *msg_p,
 
       // Bookkeeping the NS
       fs_namespace_entry_t *ns_entry = malloc(sizeof(fs_namespace_entry_t));
+      CHECK_ERROR_GOTO(ns_entry == NULL, "Failed to malloc a new namespace struct\n", FsError_UNKNOWN, done);
       ns_entry->gen.object_id = ns_id;
       ns_entry->res_space_conn = resspc_conn;
       make_ns_prefix(ns_entry->ns_prefix, resspc_conn.id);
@@ -350,6 +351,7 @@ void xv6fs_request_handler(void *msg_p,
       {
         XV6FS_PRINTF("File not previously open, make new registry entry\n");
         reg_entry = malloc(sizeof(file_registry_entry_t));
+        CHECK_ERROR_GOTO(reg_entry == NULL, "Failed to malloc a new registry entry\n", FsError_UNKNOWN, done);
         reg_entry->gen.object_id = file->id;
         reg_entry->file = file;
         resource_registry_insert(&get_xv6fs_server()->file_registry, (resource_registry_node_t *)reg_entry);

@@ -17,6 +17,8 @@ void resource_registry_initialize(resource_registry_t *registry,
                                          void *on_delete_arg,
                                          uint64_t max_object_id)
 {
+    assert(registry != NULL);
+
     registry->head = NULL;
     registry->on_delete = on_delete;
     registry->on_delete_arg = on_delete_arg;
@@ -26,6 +28,9 @@ void resource_registry_initialize(resource_registry_t *registry,
 
 void resource_registry_insert(resource_registry_t *registry, resource_registry_node_t *node)
 {
+    assert(registry != NULL);
+    assert(node != NULL);
+
     node->count = 1;
     assert(node->object_id <= registry->max_object_id);
     HASH_ADD(hh, registry->head, object_id, sizeof(node->object_id), node);
@@ -33,6 +38,8 @@ void resource_registry_insert(resource_registry_t *registry, resource_registry_n
 
 resource_registry_node_t *resource_registry_get_by_id(resource_registry_t *registry, uint64_t object_id)
 {
+    assert(registry != NULL);
+
     resource_registry_node_t *node;
     HASH_FIND(hh, registry->head, &object_id, sizeof(object_id), node);
     return node;
@@ -40,11 +47,16 @@ resource_registry_node_t *resource_registry_get_by_id(resource_registry_t *regis
 
 resource_registry_node_t *resource_registry_get_by_badge(resource_registry_t *registry, seL4_Word badge)
 {
+    assert(registry != NULL);
+
     resource_registry_get_by_id(registry, get_object_id_from_badge(badge));
 }
 
 void resource_registry_delete(resource_registry_t *registry, resource_registry_node_t *node)
 {
+    assert(registry != NULL);
+    assert(node != NULL);
+
     if (registry->on_delete)
     {
         registry->on_delete(node, registry->on_delete_arg);
@@ -56,11 +68,17 @@ void resource_registry_delete(resource_registry_t *registry, resource_registry_n
 
 void resource_registry_inc(resource_registry_t *registry, resource_registry_node_t *node)
 {
+    assert(registry != NULL);
+    assert(node != NULL);
+
     node->count++;
 }
 
 void resource_registry_dec(resource_registry_t *registry, resource_registry_node_t *node)
 {
+    assert(registry != NULL);
+    assert(node != NULL);
+
     node->count--;
 
     if (node->count == 0)
@@ -71,6 +89,9 @@ void resource_registry_dec(resource_registry_t *registry, resource_registry_node
 
 uint64_t resource_registry_insert_new_id(resource_registry_t *registry, resource_registry_node_t *node)
 {
+    assert(registry != NULL);
+    assert(node != NULL);
+    
     // Find a free ID
     resource_registry_node_t *test_node = NULL;
     uint64_t new_id, start_id = registry->id_counter;

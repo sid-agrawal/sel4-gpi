@@ -57,6 +57,9 @@ pd_config_t *sel4gpi_configure_process(const char *image_name,
                                        int heap_pages,
                                        sel4gpi_runnable_t *ret_runnable)
 {
+    assert(image_name != NULL);
+    assert(ret_runnable != NULL);
+
     int error = 0;
     PD_CREATION_PRINT("Configuring new process with image: %s\n", image_name);
     pd_config_t *proc_cfg = NULL;
@@ -77,6 +80,7 @@ pd_config_t *sel4gpi_configure_process(const char *image_name,
     /* new PD */
     error = pd_component_client_connect(pd_rde, &osm_data_mo, &ret_runnable->pd);
     GOTO_IF_ERR(error, "Failed to create new PD\n");
+
     /* new ADS*/
     seL4_CPtr ads_rde = sel4gpi_get_rde(GPICAP_TYPE_ADS);
     GOTO_IF_COND(ads_rde == seL4_CapNull, "Can't make new ADS, no ADS RDE\n");
@@ -96,13 +100,23 @@ pd_config_t *sel4gpi_configure_process(const char *image_name,
 
     // give the process its VMR RDE
     rde_config_t *vmr_rde_cfg = calloc(1, sizeof(rde_config_t));
+    assert(vmr_rde_cfg != NULL);
     vmr_rde_cfg->space_id = ret_runnable->ads.id;
     vmr_rde_cfg->type = GPICAP_TYPE_VMR;
 
     linked_list_insert(proc_cfg->rde_cfg, vmr_rde_cfg);
 
-err_goto:
     return proc_cfg;
+
+err_goto:
+    if (proc_cfg)
+    {
+        free(proc_cfg);
+    }
+
+    // Not cleaning up elements that may have been allocated, they will be left in ret_runnable
+
+    return NULL;
 }
 
 pd_config_t *sel4gpi_configure_thread(void *thread_fn, ep_client_context_t *fault_ep, sel4gpi_runnable_t *ret_runnable)
@@ -353,6 +367,10 @@ static vmr_config_t *find_vmr_cfg_by_type(ads_config_t *cfg, sel4utils_reservati
 
 int sel4gpi_prepare_pd(pd_config_t *cfg, sel4gpi_runnable_t *runnable, int argc, seL4_Word *args)
 {
+    assert(cfg != NULL);
+    assert(runnable != NULL);
+    assert(argc == 0 || args != NULL);
+
     int error;
 
     GOTO_IF_COND(cfg == NULL || &runnable->pd == NULL, "Either no PD config given or PD to configure does not exist\n");
@@ -367,6 +385,8 @@ int sel4gpi_prepare_pd(pd_config_t *cfg, sel4gpi_runnable_t *runnable, int argc,
 
     error = sel4gpi_ads_configure(&cfg->ads_cfg, runnable, &cfg->osm_data_mo, &runtime_context);
     GOTO_IF_ERR(error, "Failed to configure ADS\n");
+    assert(runtime_context.stack_cfg != NULL);
+    assert(runtime_context.ipc_buf_cfg != NULL);
 
     error = rde_configure(cfg, runnable);
     GOTO_IF_ERR(error, "Failed to configure RDEs\n");
@@ -434,6 +454,7 @@ int sel4gpi_prepare_pd(pd_config_t *cfg, sel4gpi_runnable_t *runnable, int argc,
         entry_point = _start;
 
         args_cp = calloc(argc + 1, sizeof(seL4_Word));
+        assert(args_cp != NULL);
         args_cp[0] = (seL4_Word)runtime_context.entry_point;
         for (int i = 0; i < argc; i++)
         {
@@ -493,12 +514,14 @@ pd_config_t *sel4gpi_generate_proc_config(const char *image_name, size_t stack_p
                                           size_t heap_pages, mo_client_context_t *osm_data_mo)
 {
     pd_config_t *proc_cfg = calloc(1, sizeof(pd_config_t));
+    assert(proc_cfg != NULL);
     proc_cfg->ads_cfg.image_name = image_name;
     proc_cfg->osm_data_mo = *osm_data_mo;
 
     proc_cfg->ads_cfg.vmr_cfgs = linked_list_new();
     int n_cfgs = 0;
     vmr_config_t *heap_vmr = calloc(1, sizeof(vmr_config_t));
+    assert(heap_vmr != NULL);
     heap_vmr->start = (void *)PD_HEAP_LOC;
     heap_vmr->type = SEL4UTILS_RES_TYPE_HEAP;
     heap_vmr->region_pages = heap_pages;
@@ -506,17 +529,20 @@ pd_config_t *sel4gpi_generate_proc_config(const char *image_name, size_t stack_p
     n_cfgs++;
 
     vmr_config_t *code_vmr = calloc(1, sizeof(vmr_config_t));
+    assert(code_vmr != NULL);
     code_vmr->type = SEL4UTILS_RES_TYPE_CODE;
     code_vmr->share_mode = GPI_DISJOINT;
     n_cfgs++;
 
     vmr_config_t *stack_vmr = calloc(1, sizeof(vmr_config_t));
+    assert(stack_vmr != NULL);
     stack_vmr->type = SEL4UTILS_RES_TYPE_STACK;
     stack_vmr->share_mode = GPI_DISJOINT;
     stack_vmr->region_pages = stack_pages;
     n_cfgs++;
 
     vmr_config_t *ipc_buf_vmr = calloc(1, sizeof(vmr_config_t));
+    assert(ipc_buf_vmr != NULL);
     ipc_buf_vmr->type = SEL4UTILS_RES_TYPE_IPC_BUF;
     ipc_buf_vmr->share_mode = GPI_DISJOINT;
     ipc_buf_vmr->region_pages = 1;
@@ -528,11 +554,13 @@ pd_config_t *sel4gpi_generate_proc_config(const char *image_name, size_t stack_p
 
     int n_rde_cfgs = 0;
     rde_config_t *mo_rde_cfg = calloc(1, sizeof(rde_config_t));
+    assert(mo_rde_cfg != NULL);
     mo_rde_cfg->space_id = BADGE_SPACE_ID_NULL;
     mo_rde_cfg->type = GPICAP_TYPE_MO;
     n_rde_cfgs++;
 
     rde_config_t *resspc_rde_cfg = calloc(1, sizeof(rde_config_t));
+    assert(resspc_rde_cfg != NULL);
     resspc_rde_cfg->space_id = BADGE_SPACE_ID_NULL;
     resspc_rde_cfg->type = GPICAP_TYPE_RESSPC;
     n_rde_cfgs++;
@@ -547,6 +575,7 @@ pd_config_t *sel4gpi_generate_thread_config(void *thread_fn,
                                             mo_client_context_t *osm_data_mo)
 {
     pd_config_t *thread_cfg = calloc(1, sizeof(pd_config_t));
+    assert(thread_cfg != NULL);
     if (fault_ep)
     {
         thread_cfg->fault_ep = *fault_ep;
@@ -557,12 +586,14 @@ pd_config_t *sel4gpi_generate_thread_config(void *thread_fn,
 
     int n_cfgs = 0;
     vmr_config_t *stack_cfg = calloc(1, sizeof(vmr_config_t));
+    assert(stack_cfg != NULL);
     stack_cfg->type = SEL4UTILS_RES_TYPE_STACK;
     stack_cfg->share_mode = GPI_DISJOINT;
     stack_cfg->region_pages = DEFAULT_STACK_PAGES;
     n_cfgs++;
 
     vmr_config_t *ipc_buf_cfg = calloc(1, sizeof(vmr_config_t));
+    assert(ipc_buf_cfg != NULL);
     ipc_buf_cfg->type = SEL4UTILS_RES_TYPE_IPC_BUF;
     ipc_buf_cfg->share_mode = GPI_DISJOINT;
     ipc_buf_cfg->region_pages = 1;
@@ -580,6 +611,7 @@ pd_config_t *sel4gpi_generate_thread_config(void *thread_fn,
             if (shared_data->rde[i][j].type.type != GPICAP_TYPE_NONE)
             {
                 rde_config_t *rde = calloc(1, sizeof(rde_config_t));
+                assert(rde != NULL);
                 rde->type = shared_data->rde[i][j].type.type;
                 rde->space_id = shared_data->rde[i][j].space_id;
                 linked_list_insert(thread_cfg->rde_cfg, rde);
@@ -638,6 +670,7 @@ char *sel4gpi_share_degree_to_str(gpi_share_degree_t share_deg)
 void sel4gpi_add_rde_config(pd_config_t *cfg, gpi_cap_t rde_type, gpi_space_id_t space_id)
 {
     rde_config_t *new_rde_cfg = calloc(1, sizeof(rde_config_t));
+    assert(new_rde_cfg != NULL);
     if (!new_rde_cfg)
     {
         UNCONDITIONAL_WARN("Malloc failed!\n");
@@ -667,6 +700,7 @@ void sel4gpi_add_vmr_config(ads_config_t *cfg,
         }
 
         vmr_config_t *new_vmr_cfg = calloc(1, sizeof(vmr_config_t));
+        assert(new_vmr_cfg != NULL);
         new_vmr_cfg->share_mode = share_mode;
         new_vmr_cfg->type = type;
         new_vmr_cfg->start = start;

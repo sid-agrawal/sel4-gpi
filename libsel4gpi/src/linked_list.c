@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <stdarg.h>
 #include <stdbool.h>
+#include <assert.h>
 #include <sel4gpi/linked_list.h>
 
 void linked_list_insert_many(linked_list_t *list, int count, ...)
@@ -20,6 +21,8 @@ void linked_list_insert(linked_list_t *list, void *data)
     if (list)
     {
         linked_list_node_t *new_node = calloc(1, sizeof(linked_list_node_t));
+        assert(new_node != NULL);
+        
         new_node->data = data;
 
         if (!list->head)
@@ -85,7 +88,9 @@ void *linked_list_get_at_idx(linked_list_t *list, size_t idx)
 
 linked_list_t *linked_list_new(void)
 {
-    return calloc(1, sizeof(linked_list_t));
+    linked_list_t *list = calloc(1, sizeof(linked_list_t));
+    assert(list != NULL);
+    return list;
 }
 
 void linked_list_destroy(linked_list_t *list, bool free_data)

@@ -55,6 +55,8 @@ static int pd_dump_internal(pd_t *pd, model_state_t *ms);
 int pd_add_resource(pd_t *pd, gpi_res_id_t res_id,
                     seL4_CPtr slot_in_RT, seL4_CPtr slot_in_PD, seL4_CPtr slot_in_serverPD)
 {
+    int error = 0;
+
     // Unique resource ID is the badge with the following fields: type, space_id, res_id
     gpi_badge_t compact_id = compact_res_id(res_id.type, res_id.space_id, res_id.object_id);
     pd_hold_node_t *node = (pd_hold_node_t *)resource_registry_get_by_id(&pd->hold_registry, compact_id);
@@ -70,6 +72,8 @@ int pd_add_resource(pd_t *pd, gpi_res_id_t res_id,
     else
     {
         node = calloc(1, sizeof(pd_hold_node_t));
+        SERVER_GOTO_IF_COND(node == NULL, "Failed to allocate hold node for PD\n");
+
         node->res_id = res_id;
         node->slot_in_RT_Debug = slot_in_RT;
         node->slot_in_PD_Debug = slot_in_PD;
@@ -79,7 +83,8 @@ int pd_add_resource(pd_t *pd, gpi_res_id_t res_id,
         resource_registry_insert(&pd->hold_registry, (resource_registry_node_t *)node);
     }
 
-    return 0;
+err_goto:
+    return error;
 }
 
 /**
@@ -489,6 +494,7 @@ pd_held_resource_on_delete(resource_registry_node_t *node_gen, void *pd_v)
 
         // Queue the "free" operation for the resource manager
         pd_work_entry_t *work_entry = calloc(1, sizeof(pd_work_entry_t));
+        SERVER_GOTO_IF_COND(work_entry == NULL, "Failed to allocate work entry node\n");
         work_entry->res_id = node->res_id;
 
         pd_component_queue_free_work(manager_pd_data, work_entry);
@@ -639,7 +645,10 @@ void pd_destroy(pd_t *pd, vka_t *server_vka, vspace_t *server_vspace)
     error = ads_component_remove_from_rt((void *)pd->shared_data);
     SERVER_GOTO_IF_ERR(error, "Failed to remove PD's init data from RT\n");
 
-    // The PD's VKA/allocator are destroyed with allocator_mem_pool
+    /* Free the VKA */
+    free(pd->pd_vka);
+    free(pd->allocman_cspace);
+    // The PD's allocator memory is destroyed with allocator_mem_pool
 
     // Initialize a resource space sweep
     error = resspc_component_sweep();
@@ -692,12 +701,15 @@ int pd_bootstrap_allocator(pd_t *pd,
                            size_t guard_bits)
 {
     int error;
-    cspace_single_level_t *cspace = calloc(1, sizeof(cspace_single_level_t));
+
+    pd->allocman_cspace = calloc(1, sizeof(cspace_single_level_t));
+    SERVER_GOTO_IF_COND(pd->allocman_cspace == NULL, "Failed to alloc cspace struct for PD's allocator\n");
+
     allocman_t *allocator = bootstrap_create_allocman(PD_ALLOCATOR_STATIC_POOL_SIZE,
                                                       pd->allocator_mem_pool);
 
     error = cspace_single_level_create(allocator,
-                                       cspace,
+                                       pd->allocman_cspace,
                                        (struct cspace_single_level_config){
                                            .cnode = root, .cnode_size_bits = size_bits,
                                            //.cnode_guard_bits = seL4_WordBits - pd->cspace_size_bits,
@@ -711,7 +723,7 @@ int pd_bootstrap_allocator(pd_t *pd,
         return -1;
     }
 
-    error = allocman_attach_cspace(allocator, cspace_single_level_make_interface(cspace));
+    error = allocman_attach_cspace(allocator, cspace_single_level_make_interface(pd->allocman_cspace));
     if (error != seL4_NoError)
     {
         OSDB_PRINTF("%s: Failed to attach cspace to allocman for PD id %u.\n",
@@ -720,10 +732,12 @@ int pd_bootstrap_allocator(pd_t *pd,
     }
 
     pd->pd_vka = calloc(1, sizeof(vka_t));
-    assert(pd->pd_vka != NULL);
+    SERVER_GOTO_IF_COND(pd->pd_vka == NULL, "Failed to alloc vka struct for PD's allocator\n");
 
     allocman_make_vka(pd->pd_vka, allocator);
-    return 0;
+
+err_goto:
+    return error;
 }
 
 static int pd_setup_cspace(pd_t *pd, vka_t *vka)
@@ -1008,6 +1022,7 @@ static int res_dump(pd_t *pd, model_state_t *ms, pd_hold_node_t *current_cap, gp
             {
                 // Only need to request resource relations if the resources can map to anything
                 pd_work_entry_t *work_node = calloc(1, sizeof(gpi_res_id_t));
+                SERVER_GOTO_IF_COND(work_node == NULL, "Failed to allocate work entry node\n");
                 work_node->res_id = current_cap->res_id;
                 work_node->client_pd_id = pd->id;
 
@@ -1074,6 +1089,7 @@ static int pd_dump_internal(pd_t *pd, model_state_t *ms)
 
                     /* Request info about the resource space */
                     pd_work_entry_t *work_node = calloc(1, sizeof(gpi_res_id_t));
+                    SERVER_GOTO_IF_COND(work_node == NULL, "Failed to allocate work entry node\n");
                     work_node->res_id.type = rde.type.type;
                     work_node->res_id.space_id = rde.space_id;
                     work_node->res_id.object_id = BADGE_OBJ_ID_NULL;
@@ -1184,6 +1200,9 @@ void pd_debug_print_held(pd_t *pd)
 
 inline void pd_set_name(pd_t *pd, char *image_name)
 {
+    assert(pd != NULL);
+    assert(image_name != NULL);
+    
     if (pd->name)
     {
         free(pd->name);

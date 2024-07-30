@@ -22,6 +22,7 @@
 #include <vka/object.h>
 #include <vspace/vspace.h>
 #include <utils/uthash.h>
+#include <allocman/bootstrap.h>
 
 #include <sel4gpi/badge_usage.h>
 #include <sel4gpi/cap_tracking.h>
@@ -130,7 +131,8 @@ typedef struct _pd
     seL4_Word pagesz;
 
     /* Fields for all PDs */
-    vka_object_t cspace;                                    ///< Root CNode of for the PD
+    vka_object_t cspace;                                    ///< Root CNode for the PD
+    cspace_single_level_t *allocman_cspace;                 ///< Struct for allocman to use the cspace
     vka_object_t notification;                              ///< Notification for RT->PD communication,
                                                             ///< should be bound to CPU
     seL4_CPtr badged_notification;                          ///< Badged version of notification, RT uses this one
