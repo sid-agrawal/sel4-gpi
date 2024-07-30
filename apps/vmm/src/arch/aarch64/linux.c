@@ -3,12 +3,11 @@
  *
  * SPDX-License-Identifier: BSD-2-Clause
  */
-
+#include <sel4utils/util.h>
 #include <vmm-common/dtb.h>
 #include <vmm-common/linux.h>
 #include <assert.h>
 #include <string.h>
-#include <utils/zf_log.h>
 
 uintptr_t linux_setup_images(uintptr_t ram_start,
                              uintptr_t kernel,

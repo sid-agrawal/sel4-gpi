@@ -11,7 +11,7 @@
 #include <stdbool.h>
 #include <assert.h>
 #include <utils/arith.h>
-#include <utils/zf_log.h>
+#include <sel4utils/util.h>
 #include <vmm-common/vmm_common.h>
 #include <sel4test-vmm/virq.h>
 

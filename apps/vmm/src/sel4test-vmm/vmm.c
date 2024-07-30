@@ -22,6 +22,7 @@
 #include <sel4utils/process.h>
 #include <vmm-common/vmm_common.h>
 #include <vmm-common/linux.h>
+#include <vmm-common/fault_common.h>
 #include <sel4test-vmm/guest.h>
 #include <sel4test-vmm/virq.h>
 #include <sel4test-vmm/vmm.h>
@@ -197,7 +198,7 @@ static int start_handler_threads(vka_t *vka, vspace_t *vspace, simple_t *simple,
     error = sel4utils_configure_thread_config(vka, vspace, vspace, t_cfg, &fault_thread);
     GOTO_IF_ERR(error, "Failed to configure thread\n");
 
-    error = sel4utils_start_thread(&fault_thread, handle_fault, NULL, NULL, 1);
+    error = sel4utils_start_thread(&fault_thread, (sel4utils_thread_entry_fn)handle_fault, NULL, NULL, 1);
     GOTO_IF_ERR(error, "Failed to start thread\n");
 
     sel4utils_thread_t interrupt_thread;
@@ -207,7 +208,7 @@ static int start_handler_threads(vka_t *vka, vspace_t *vspace, simple_t *simple,
     error = seL4_TCB_BindNotification(interrupt_thread.tcb.cptr, vmon_ctxt.irq_ntfn.cptr);
     GOTO_IF_ERR(error, "seL4_Error: %d, Failed to bind IRQ handling notification to interrupt handling thread\n", error);
 
-    error = sel4utils_start_thread(&interrupt_thread, handle_interrupt, NULL, NULL, 1);
+    error = sel4utils_start_thread(&interrupt_thread, (sel4utils_thread_entry_fn)handle_interrupt, NULL, NULL, 1);
 err_goto:
     return error;
 }
@@ -320,10 +321,10 @@ uint32_t sel4test_new_guest(void)
 
     error = seL4_TCB_Configure(vm->tcb.cptr, vm->fault_ep, vm->cspace.cptr, cnode_guard, vm->vspace_root.cptr,
                                0, (seL4_Word)ipc_buf, ipc_buf_frame);
-    GOTO_IF_ERR(error, "Failed to configure TCB, seL4_Error: %ld\n", error);
+    GOTO_IF_ERR(error, "Failed to configure TCB, seL4_Error: %d\n", error);
 
     error = seL4_TCB_SetSchedParams(vm->tcb.cptr, simple_get_tcb(vmon_ctxt.simple), seL4_MaxPrio - 1, seL4_MaxPrio - 1);
-    GOTO_IF_ERR(error, "Failed to set TCB priority, seL4_Error: %ld\n", error);
+    GOTO_IF_ERR(error, "Failed to set TCB priority, seL4_Error: %d\n", error);
 
 #ifdef CONFIG_DEBUG_BUILD
     char vm_name[MAX_VM_NAME_LEN];
@@ -334,7 +335,7 @@ uint32_t sel4test_new_guest(void)
     reservation_t res;
 
     /* GIC vCPU interface region */
-    VMM_PRINT("Mapping GIC interface - seL4: %lx, linux: %lx\n", GIC_PADDR, LINUX_GIC_PADDR);
+    VMM_PRINT("Mapping GIC interface - seL4: %x, linux: %x\n", GIC_PADDR, LINUX_GIC_PADDR);
     error = vka_alloc_frame_at(vka, seL4_PageBits, (uintptr_t)GIC_PADDR, &vm->gic_vcpu_frame);
     GOTO_IF_ERR(error, "Failed to allocate GIC vCPU frame");
 
@@ -346,7 +347,7 @@ uint32_t sel4test_new_guest(void)
     /* map in serial device region */
     vm->n_dev_frames = 1;
     vm->dev_frames = calloc(1, sizeof(vka_object_t));
-    error = setup_dev_frames(vka, vm, 1, (void *)SERIAL_PADDR, 0);
+    error = setup_dev_frames(vka, vm, 1, SERIAL_PADDR, 0);
     GOTO_IF_ERR(error, "Failed to map serial device to VM");
 #elif BOARD_odroidc4
     /* Bus 1 and 2 span 2MB, and Bus 3 spans 1 MB
@@ -358,18 +359,18 @@ uint32_t sel4test_new_guest(void)
     /* BUS 1 */
     size_t num_pages = BYTES_TO_4K_PAGES(MiB_TO_BYTES(2));
     size_t dev_frame_idx = 0;
-    error = setup_dev_frames(vka, vm, num_pages, (void *)ODROID_BUS1, dev_frame_idx);
+    error = setup_dev_frames(vka, vm, num_pages, ODROID_BUS1, dev_frame_idx);
     GOTO_IF_ERR(error, "Failed to setup bus region 0x%lx\n", ODROID_BUS1);
 
     /* BUS 2 */
     dev_frame_idx += num_pages;
-    error = setup_dev_frames(vka, vm, num_pages, (void *)ODROID_BUS2, dev_frame_idx);
+    error = setup_dev_frames(vka, vm, num_pages, ODROID_BUS2, dev_frame_idx);
     GOTO_IF_ERR(error, "Failed to setup bus region 0x%lx\n", ODROID_BUS2);
 
     /* BUS 3 */
     num_pages = BYTES_TO_4K_PAGES(MiB_TO_BYTES(1));
     dev_frame_idx += num_pages;
-    error = setup_dev_frames(vka, vm, num_pages, (void *)ODROID_BUS3, dev_frame_idx);
+    error = setup_dev_frames(vka, vm, num_pages, ODROID_BUS3, dev_frame_idx);
     GOTO_IF_ERR(error, "Failed to setup bus region 0x%lx\n", ODROID_BUS3);
 #endif
     /* guest ram */
@@ -430,7 +431,7 @@ uint32_t sel4test_new_guest(void)
 
     uintptr_t guest_dtb_curr_vspace = (uintptr_t)guest_ram_curr_vspace + ((uintptr_t)GUEST_DTB_VADDR - (uintptr_t)GUEST_RAM_VADDR);
     uintptr_t guest_initrd_curr_vspace = (uintptr_t)guest_ram_curr_vspace + ((uintptr_t)GUEST_INIT_RAM_DISK_VADDR - (uintptr_t)GUEST_RAM_VADDR);
-    VMM_PRINT("guest ram: %lx, dtb: %lx initrd: %lx\n", guest_ram_curr_vspace, guest_dtb_curr_vspace, guest_initrd_curr_vspace);
+    VMM_PRINT("guest ram: %p, dtb: %lx, initrd: %lx\n", guest_ram_curr_vspace, guest_dtb_curr_vspace, guest_initrd_curr_vspace);
 
     uintptr_t kernel_pc_curr_vspace = linux_setup_images((uintptr_t)guest_ram_curr_vspace,
                                                          (uintptr_t)_guest_kernel_image,

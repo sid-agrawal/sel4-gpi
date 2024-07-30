@@ -236,7 +236,7 @@ static bool vgic_dist_set_pending_irq(seL4_CPtr vcpu, vgic_t *vgic, size_t vcpu_
         return true;
     }
 
-    VMM_PRINTV("VCPU ID: %d Pending set: Inject IRQ from pending set (%d)\n", vcpu_id, irq);
+    VMM_PRINTV("VCPU ID: %zu Pending set: Inject IRQ from pending set (%d)\n", vcpu_id, irq);
     set_pending(dist, virq_data->virq, true, vcpu_id);
 
     /* Enqueueing an IRQ and dequeueing it right after makes little sense

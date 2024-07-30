@@ -137,7 +137,7 @@ bool handle_smc(uint32_t vcpu_id, seL4_UserContext *regs, uint32_t hsr)
         ZF_LOGE("Unhandled SMC: standard service call %lu\n", fn_number);
         break;
     default:
-        ZF_LOGE("Unhandled SMC: unknown value service: 0x%lx, function number: 0x%lx\n", service, fn_number);
+        ZF_LOGE("Unhandled SMC: unknown value service: 0x%x, function number: 0x%zu\n", service, fn_number);
         break;
     }
 

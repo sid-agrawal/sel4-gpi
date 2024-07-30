@@ -434,7 +434,7 @@ int sel4gpi_prepare_pd(pd_config_t *cfg, sel4gpi_runnable_t *runnable, int argc,
         entry_point = _start;
 
         args_cp = calloc(argc + 1, sizeof(seL4_Word));
-        args_cp[0] = runtime_context.entry_point;
+        args_cp[0] = (seL4_Word)runtime_context.entry_point;
         for (int i = 0; i < argc; i++)
         {
             args_cp[i + 1] = args[i];
@@ -457,7 +457,7 @@ int sel4gpi_prepare_pd(pd_config_t *cfg, sel4gpi_runnable_t *runnable, int argc,
 
     // FATAL_IF_ERR(1, "AAA\n");
 
-    PD_CREATION_PRINT("Configuring CPU Object, fault_ep: %lx entry: %lx\n",
+    PD_CREATION_PRINT("Configuring CPU Object, fault_ep: %lx entry: %p\n",
                       fault_ep_in_PD.raw_endpoint, entry_point);
     error = cpu_client_config(&runnable->cpu,
                               &runnable->ads,

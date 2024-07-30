@@ -2,7 +2,7 @@
 #pragma once
 
 #include <stdint.h>
-
+#include <stdio.h>
 #include <sel4/sel4.h>
 
 /* Resource Server Debug topics

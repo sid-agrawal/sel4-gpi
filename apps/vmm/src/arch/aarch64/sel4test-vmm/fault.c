@@ -284,7 +284,7 @@ bool fault_handle_vppi_event(vm_context_t *vm)
     if (!success)
     {
         // @ivanv, make a note that when having a lot of printing on it can cause this error
-        VMM_PRINTERR("VPPI IRQ %lu dropped on VM %ld\n", ppi_irq, vm->id);
+        VMM_PRINTERR("VPPI IRQ %lu dropped on VM %u\n", ppi_irq, vm->id);
         // Acknowledge to unmask it as our guest will not use the interrupt
         seL4_Error err = seL4_ARM_VCPU_AckVPPI(vm->vcpu.cptr, ppi_irq);
         if (err)
