@@ -18,6 +18,7 @@ message EpForgeMessage {
 };
 
 message EpMessage {
+    uint64 magic = 100;
     oneof msg {
         EpAllocMessage alloc = 1;
         EpGetMessage get = 2;

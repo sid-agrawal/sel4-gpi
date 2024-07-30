@@ -40,6 +40,7 @@ int pd_component_client_connect(seL4_CPtr server_ep,
     int error = 0;
 
     PdMessage msg = {
+        .magic = PD_RPC_MAGIC,
         .which_msg = PdMessage_alloc_tag,
         .msg = {0},
     };
@@ -67,6 +68,7 @@ int pd_client_terminate(pd_client_context_t *conn)
     int error = 0;
 
     PdMessage msg = {
+        .magic = PD_RPC_MAGIC,
         .which_msg = PdMessage_terminate_tag,
     };
 
@@ -88,6 +90,7 @@ int pd_client_dump(pd_client_context_t *conn,
     int error = 0;
 
     PdMessage msg = {
+        .magic = PD_RPC_MAGIC,
         .which_msg = PdMessage_dump_tag,
         // (XXX) Arya: not currently sending buffer, just printing state in the RT
     };
@@ -108,6 +111,7 @@ static int send_cap_req(pd_client_context_t *conn, seL4_CPtr cap_to_send, seL4_C
     int error = 0;
 
     PdMessage msg = {
+        .magic = PD_RPC_MAGIC,
         .which_msg = PdMessage_send_cap_tag,
         .msg.send_cap = {
             .is_core_cap = is_core,
@@ -151,6 +155,7 @@ int pd_client_next_slot(pd_client_context_t *conn,
     int error = 0;
 
     PdMessage msg = {
+        .magic = PD_RPC_MAGIC,
         .which_msg = PdMessage_next_slot_tag,
     };
 
@@ -176,6 +181,7 @@ int pd_client_free_slot(pd_client_context_t *conn,
     int error = 0;
 
     PdMessage msg = {
+        .magic = PD_RPC_MAGIC,
         .which_msg = PdMessage_free_slot_tag,
     };
 
@@ -196,6 +202,7 @@ int pd_client_clear_slot(pd_client_context_t *conn,
     int error = 0;
 
     PdMessage msg = {
+        .magic = PD_RPC_MAGIC,
         .which_msg = PdMessage_clear_slot_tag,
         .msg.clear_slot = {
             .slot = slot,
@@ -219,6 +226,7 @@ int pd_client_share_rde(pd_client_context_t *target_pd,
     int error = 0;
 
     PdMessage msg = {
+        .magic = PD_RPC_MAGIC,
         .which_msg = PdMessage_share_rde_tag,
         .msg.share_rde = {
             .res_type = cap_type,
@@ -246,6 +254,7 @@ int pd_client_give_resource(pd_client_context_t *conn,
     int error = 0;
 
     PdMessage msg = {
+        .magic = PD_RPC_MAGIC,
         .which_msg = PdMessage_give_resource_tag,
         .msg.give_resource = {
             .space_id = res_space_id,
@@ -277,6 +286,7 @@ int pd_client_map_resource(pd_client_context_t *conn,
     int error = 0;
 
     PdMessage msg = {
+        .magic = PD_RPC_MAGIC,
         .which_msg = PdMessage_map_resource_tag,
         .msg.map_resource = {
             .src_resource = src_res_id,
@@ -300,6 +310,7 @@ int pd_client_get_work(pd_client_context_t *conn, PdWorkReturnMessage *work)
     int error = 0;
 
     PdMessage msg = {
+        .magic = PD_RPC_MAGIC,
         .which_msg = PdMessage_get_work_tag,
     };
 
@@ -324,6 +335,7 @@ int pd_client_send_subgraph(pd_client_context_t *conn, mo_client_context_t *mo_c
     int error = 0;
 
     PdMessage msg = {
+        .magic = PD_RPC_MAGIC,
         .which_msg = PdMessage_send_subgraph_tag,
         .msg.send_subgraph = {
             .has_data = has_data,
@@ -355,6 +367,7 @@ int pd_client_finish_work(pd_client_context_t *conn, int n_requests)
     int error = 0;
 
     PdMessage msg = {
+        .magic = PD_RPC_MAGIC,
         .which_msg = PdMessage_finish_work_tag,
         .msg.finish_work = {
             .n_requests = n_requests,
@@ -377,6 +390,7 @@ void pd_client_exit(pd_client_context_t *conn, int code)
     int error = 0;
 
     PdMessage msg = {
+        .magic = PD_RPC_MAGIC,
         .which_msg = PdMessage_exit_tag,
         .msg.exit = {
             .exit_code = code,
@@ -398,6 +412,7 @@ int pd_client_remove_rde(pd_client_context_t *conn, gpi_cap_t type, gpi_space_id
     int error = 0;
 
     PdMessage msg = {
+        .magic = PD_RPC_MAGIC,
         .which_msg = PdMessage_remove_rde_tag,
         .msg.remove_rde = {
             .res_type = type,
@@ -420,6 +435,7 @@ int pd_client_bench_ipc(pd_client_context_t *conn, seL4_CPtr dummy_send_cap, boo
     int error = 0;
 
     PdMessage msg = {
+        .magic = PD_RPC_MAGIC,
         .which_msg = PdMessage_bench_ipc_tag,
         .msg.bench_ipc = {
             .do_cap_transfer = cap_transfer,
@@ -460,6 +476,7 @@ int pd_client_runtime_setup(pd_client_context_t *target_pd,
     GOTO_IF_COND(argc > PD_MAX_ARGC, "Cannot setup PD with more than %d arguments\n", PD_MAX_ARGC);
 
     PdMessage msg = {
+        .magic = PD_RPC_MAGIC,
         .which_msg = PdMessage_setup_tag,
         .msg.setup = {
             .entry_point = (uint64_t)entry_point,
@@ -489,6 +506,7 @@ int pd_client_share_resource_by_type(pd_client_context_t *src_pd, pd_client_cont
     int error = 0;
 
     PdMessage msg = {
+        .magic = PD_RPC_MAGIC,
         .which_msg = PdMessage_share_res_type_tag,
         .msg.share_res_type = {
             .res_type = res_type,
@@ -511,6 +529,7 @@ int pd_client_set_name(pd_client_context_t *conn, char *name)
     int error = 0;
 
     PdMessage msg = {
+        .magic = PD_RPC_MAGIC,
         .which_msg = PdMessage_set_name_tag,
     };
 

@@ -25,6 +25,7 @@
  * server thread.
  */
 
+#define MO_RPC_MAGIC 0x4d4f
 #define MOSERVS "MOServ Component: "
 #define MOSERVC "MOServ Client   : "
 

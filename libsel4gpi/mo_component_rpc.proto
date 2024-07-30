@@ -16,6 +16,7 @@ message MoDisconnectMessage {
 }
 
 message MoMessage {
+    uint64 magic = 100;
     oneof msg {
         MoAllocMessage alloc = 1;
         MoDisconnectMessage disconnect = 2;

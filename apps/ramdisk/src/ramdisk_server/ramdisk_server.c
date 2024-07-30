@@ -245,6 +245,11 @@ void ramdisk_request_handler(
     RamdiskReturnMessage *reply_msg = (RamdiskReturnMessage *)msg_reply_p;
     reply_msg->which_msg = RamdiskReturnMessage_basic_tag;
 
+    CHECK_ERROR_GOTO(msg->magic != RD_RPC_MAGIC,
+                     "Ramdisk server received message with incorrect magic number\n",
+                     RamdiskError_UNKNOWN,
+                     done);
+
     // Get info from badge
     gpi_obj_id_t client_id = get_client_id_from_badge(sender_badge);
     gpi_obj_id_t obj_id = get_object_id_from_badge(sender_badge);
@@ -361,7 +366,7 @@ void ramdisk_request_handler(
             // Revoke the resource from the client
             error = resspc_client_revoke_resource(&get_ramdisk_server()->gen.default_space, obj_id, client_id);
             CHECK_ERROR_GOTO(error, "Failed to revoke resource from client", RamdiskError_UNKNOWN, done);
-            
+
             break;
         default:
             RAMDISK_PRINTF("Op is %d\n", msg->op);

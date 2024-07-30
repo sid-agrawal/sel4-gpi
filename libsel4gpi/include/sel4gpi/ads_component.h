@@ -23,6 +23,7 @@
  * server thread.
  */
 
+#define ADS_RPC_MAGIC 0x414453
 #define ADSSERVS "ADSServ Component: "
 #define ADSSERVC "ADSServ Client   : "
 

@@ -29,6 +29,7 @@ int ep_component_client_connect(seL4_CPtr server_ep_cap, ep_client_context_t *re
     int error = 0;
 
     EpMessage msg = {
+        .magic = EP_RPC_MAGIC,
         .which_msg = EpMessage_alloc_tag,
     };
 
@@ -54,6 +55,7 @@ static int get_raw_endpoint(ep_client_context_t *ep_conn, pd_client_context_t *t
     int error = 0;
 
     EpMessage msg = {
+        .magic = EP_RPC_MAGIC,
         .which_msg = EpMessage_get_tag,
         .msg.get = {
             .for_other_PD = target_PD != NULL,
@@ -117,6 +119,7 @@ int ep_client_forge(seL4_CPtr server_ep_cap, seL4_CPtr ep_to_forge, ep_client_co
     int error = 0;
 
     EpMessage msg = {
+        .magic = EP_RPC_MAGIC,
         .which_msg = EpMessage_forge_tag,
     };
 

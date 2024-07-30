@@ -38,6 +38,7 @@ int resspc_client_connect(seL4_CPtr server_ep,
     int error = 0;
 
     ResSpcMessage msg = {
+        .magic = RESSPC_RPC_MAGIC,
         .which_msg = ResSpcMessage_alloc_tag,
         .msg.alloc = {
             .client_id = client_id,
@@ -71,6 +72,7 @@ int resspc_client_map_space(resspc_client_context_t *conn,
     int error = 0;
 
     ResSpcMessage msg = {
+        .magic = RESSPC_RPC_MAGIC,
         .which_msg = ResSpcMessage_map_tag,
         .msg.map = {
             .space_id = space_id,
@@ -94,6 +96,7 @@ int resspc_client_create_resource(resspc_client_context_t *conn,
     int error = 0;
 
     ResSpcMessage msg = {
+        .magic = RESSPC_RPC_MAGIC,
         .which_msg = ResSpcMessage_create_resource_tag,
         .msg.create_resource = {
             .resource_id = resource_id,
@@ -117,6 +120,7 @@ int resspc_client_delete_resource(resspc_client_context_t *conn,
     int error = 0;
 
     ResSpcMessage msg = {
+        .magic = RESSPC_RPC_MAGIC,
         .which_msg = ResSpcMessage_delete_resource_tag,
         .msg.delete_resource = {
             .resource_id = resource_id,
@@ -141,6 +145,7 @@ int resspc_client_revoke_resource(resspc_client_context_t *conn,
     int error = 0;
 
     ResSpcMessage msg = {
+        .magic = RESSPC_RPC_MAGIC,
         .which_msg = ResSpcMessage_revoke_resource_tag,
         .msg.revoke_resource = {
             .resource_id = resource_id,
@@ -164,6 +169,7 @@ int resspc_client_destroy(resspc_client_context_t *conn)
     int error = 0;
 
     ResSpcMessage msg = {
+        .magic = RESSPC_RPC_MAGIC,
         .which_msg = ResSpcMessage_destroy_tag,
     };
 

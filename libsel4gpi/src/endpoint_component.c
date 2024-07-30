@@ -210,6 +210,9 @@ static void ep_component_handle(void *msg_p,
     EpMessage *msg = (EpMessage *)msg_p;
     EpReturnMessage *reply_msg = (EpReturnMessage *)reply_msg_p;
 
+    SERVER_GOTO_IF_COND(msg->magic != EP_RPC_MAGIC,
+                        "EP component received message with incorrect magic number %lx\n", msg->magic);
+
     SERVER_GOTO_IF_COND(get_object_id_from_badge(sender_badge) == BADGE_OBJ_ID_NULL &&
                             msg->which_msg != EpMessage_alloc_tag &&
                             msg->which_msg != EpMessage_forge_tag,

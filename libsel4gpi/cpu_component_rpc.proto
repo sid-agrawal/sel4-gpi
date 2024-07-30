@@ -44,6 +44,7 @@ message CpuDisconnectMessage {
 };
 
 message CpuMessage {
+    uint64 magic = 100;
     oneof msg {
         CpuAllocMessage alloc = 1;
         CpuChangeVspaceMessage change_vspace = 2;

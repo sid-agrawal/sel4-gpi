@@ -101,6 +101,7 @@ message PdFinishWorkMessage {
 
 /* message type for all PD component request messages */
 message PdMessage {
+    uint64 magic = 100;
     oneof msg {
         PdAllocMessage alloc = 1;
         PdTerminateMessage terminate = 2;

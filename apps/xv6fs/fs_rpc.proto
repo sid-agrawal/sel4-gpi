@@ -50,6 +50,7 @@ message FsDeleteNamespaceMessage {
 
 /* message type for all ramdisk request messages */
 message FsMessage {
+    uint64 magic = 100;
     oneof msg {
         FsCreateMessage create = 1;
         FsLinkMessage link = 2;

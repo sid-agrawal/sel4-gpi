@@ -22,6 +22,7 @@
 #include <sel4utils/thread.h>
 #include <sel4gpi/resource_space_component.h>
 
+#define EP_RPC_MAGIC 0x4550
 #define EPSERVS "EPServ Component: "
 #define EPSERVC "EPServ Client   : "
 

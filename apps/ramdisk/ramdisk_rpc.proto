@@ -17,6 +17,7 @@ enum RamdiskAction {
 
 /* message type for all ramdisk request messages */
 message RamdiskMessage {
+    uint64 magic = 100;
     RamdiskAction op = 1;
 };
 

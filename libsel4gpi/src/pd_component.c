@@ -867,7 +867,8 @@ static void handle_finish_work_req(seL4_Word sender_badge, PdFinishWorkMessage *
     // (XXX) Arya: doesn't do any authentication, or check if we actually needed this piece
     // For simplicity, just decrement the counter of "remaining pieces"
 
-    if (!get_gpi_server()->pending_termination) {
+    if (!get_gpi_server()->pending_termination)
+    {
         // Nothing to do, but all is well
         goto err_goto;
     }
@@ -935,6 +936,9 @@ static void pd_component_handle(void *msg_p,
     int error = 0; // unused, to appease the error handling macros
     PdMessage *msg = (PdMessage *)msg_p;
     PdReturnMessage *reply_msg = (PdReturnMessage *)reply_msg_p;
+
+    SERVER_GOTO_IF_COND(msg->magic != PD_RPC_MAGIC,
+                        "PD component received message with incorrect magic number %lx\n", msg->magic);
 
     if (get_object_id_from_badge(sender_badge) == BADGE_OBJ_ID_NULL)
     {

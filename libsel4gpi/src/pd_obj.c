@@ -138,7 +138,9 @@ static void pd_remove_resource_internal(pd_t *pd, resource_registry_node_t *hold
             OSDB_PRINTERR("Failed to delete resource from PD(%u)\n", pd->id);
         }
 
-        pd->pd_vka->cspace_free(pd->pd_vka->data, cap);
+        // (XXX) Arya: choosing not to free slots so that the PD doesn't 
+        // accidentally use a new resource in the same slot
+        // pd->pd_vka->cspace_free(pd->pd_vka->data, cap);
     }
 
     // Remove the node
@@ -1202,7 +1204,7 @@ inline void pd_set_name(pd_t *pd, char *image_name)
 {
     assert(pd != NULL);
     assert(image_name != NULL);
-    
+
     if (pd->name)
     {
         free(pd->name);

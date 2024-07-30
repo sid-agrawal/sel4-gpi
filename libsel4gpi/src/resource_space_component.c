@@ -409,6 +409,9 @@ static void resspc_component_handle(void *msg_p,
     ResSpcMessage *msg = (ResSpcMessage *)msg_p;
     ResSpcReturnMessage *reply_msg = (ResSpcReturnMessage *)reply_msg_p;
 
+    SERVER_GOTO_IF_COND(msg->magic != RESSPC_RPC_MAGIC,
+                        "RESSPC component received message with incorrect magic number %lx\n", msg->magic);
+
     if (get_object_id_from_badge(sender_badge) == BADGE_OBJ_ID_NULL)
     {
         SERVER_GOTO_IF_COND(msg->which_msg != ResSpcMessage_alloc_tag,

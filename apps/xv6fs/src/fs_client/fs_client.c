@@ -223,6 +223,7 @@ int xv6fs_client_link_file(seL4_CPtr file, const char *pathname)
   seL4_CPtr caps[1] = {file};
 
   FsMessage msg = {
+      .magic = FS_RPC_MAGIC,
       .which_msg = FsMessage_link_tag};
   strncpy(msg.msg.link.path, pathname, MAXPATH);
 
@@ -249,6 +250,7 @@ static int xv6fs_libc_open(const char *pathname, int flags, int modes)
 
   // Send IPC to fs server
   FsMessage msg = {
+      .magic = FS_RPC_MAGIC,
       .which_msg = FsMessage_create_tag,
       .msg.create = {
           .flags = flags,
@@ -311,6 +313,7 @@ static int xv6fs_libc_pread(int fd, void *buf, int count, int offset)
   seL4_CPtr caps[1] = {get_xv6fs_client()->shared_mem->ep};
 
   FsMessage msg = {
+      .magic = FS_RPC_MAGIC,
       .which_msg = FsMessage_read_tag,
       .msg.read = {
           .n = count,
@@ -395,6 +398,7 @@ static int xv6fs_libc_write(int fd, const void *buf, int count)
   seL4_CPtr caps[1] = {get_xv6fs_client()->shared_mem->ep};
 
   FsMessage msg = {
+      .magic = FS_RPC_MAGIC,
       .which_msg = FsMessage_write_tag,
       .msg.write = {
           .n = count,
@@ -443,6 +447,7 @@ static int xv6fs_libc_close(int fd)
 
   // Send IPC to fs server
   FsMessage msg = {
+      .magic = FS_RPC_MAGIC,
       .which_msg = FsMessage_close_tag,
   };
 
@@ -520,6 +525,7 @@ int xv6fs_libc_fstat(int fd, struct stat *buf)
   seL4_CPtr caps[1] = {get_xv6fs_client()->shared_mem->ep};
 
   FsMessage msg = {
+      .magic = FS_RPC_MAGIC,
       .which_msg = FsMessage_stat_tag,
   };
 
@@ -635,6 +641,7 @@ static int xv6fs_libc_unlink(const char *pathname)
 
   // Send IPC to fs server
   FsMessage msg = {
+      .magic = FS_RPC_MAGIC,
       .which_msg = FsMessage_unlink_tag,
   };
   strncpy(msg.msg.unlink.path, pathname, MAXPATH);
@@ -706,6 +713,7 @@ int xv6fs_client_new_ns(gpi_space_id_t *ns_id)
   XV6FS_PRINTF("Requesting new namespace from server ep\n");
 
   FsMessage msg = {
+      .magic = FS_RPC_MAGIC,
       .which_msg = FsMessage_ns_tag,
   };
 
@@ -727,6 +735,7 @@ int xv6fs_client_delete_ns(seL4_CPtr ns_ep)
   XV6FS_PRINTF("Requesting new namespace from server ep\n");
 
   FsMessage msg = {
+      .magic = FS_RPC_MAGIC,
       .which_msg = FsMessage_delete_ns_tag,
   };
 

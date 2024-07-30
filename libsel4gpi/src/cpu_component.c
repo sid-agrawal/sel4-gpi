@@ -143,7 +143,7 @@ int cpu_component_configure(cpu_t *cpu,
                               get_cpu_component()->server_vka,
                               ads->vspace,
                               cspace_root,
-                              (uint64_t) cnode_guard,
+                              (uint64_t)cnode_guard,
                               fault_ep,
                               ipc_buf_frame,
                               ipc_buf_addr);
@@ -193,10 +193,10 @@ static void handle_config_req(seL4_Word sender_badge,
         &cpu_data->cpu,
         &ads_data->ads,
         &pd_data->pd,
-        (uint64_t) msg->cnode_guard,
+        (uint64_t)msg->cnode_guard,
         msg->fault_ep_cap,
         &ipc_mo_data->mo,
-        (void *) msg->ipc_buf_addr);
+        (void *)msg->ipc_buf_addr);
 
 err_goto:
     reply_msg->which_msg = CpuReturnMessage_basic_tag;
@@ -378,6 +378,9 @@ static void cpu_component_handle(void *msg_p,
     int error = 0; // unused, to appease the error handling macros
     CpuMessage *msg = (CpuMessage *)msg_p;
     CpuReturnMessage *reply_msg = (CpuReturnMessage *)reply_msg_p;
+
+    SERVER_GOTO_IF_COND(msg->magic != CPU_RPC_MAGIC,
+                        "CPU component received message with incorrect magic number %lx\n", msg->magic);
 
     if (get_object_id_from_badge(sender_badge) == BADGE_OBJ_ID_NULL)
     {

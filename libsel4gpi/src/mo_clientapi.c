@@ -35,6 +35,7 @@ static int mo_connect(seL4_CPtr server_ep_cap,
     int error = 0;
 
     MoMessage msg = {
+        .magic = MO_RPC_MAGIC,
         .which_msg = MoMessage_alloc_tag,
         .msg.alloc = {
             .num_pages = num_pages,
@@ -81,6 +82,7 @@ int mo_component_client_disconnect(mo_client_context_t *conn)
     int error = 0;
 
     MoMessage msg = {
+        .magic = MO_RPC_MAGIC,
         .which_msg = MoMessage_disconnect_tag,
     };
 

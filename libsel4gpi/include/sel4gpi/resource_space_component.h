@@ -18,6 +18,7 @@
  * server thread.
  */
 
+#define RESSPC_RPC_MAGIC 0x535043
 #define RESSPC_SERVS "ResSpace Component: "
 #define RESSPC_SERVC "ResSpace Client   : "
 

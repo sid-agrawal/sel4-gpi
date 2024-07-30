@@ -34,6 +34,7 @@ int cpu_component_client_connect(seL4_CPtr server_ep_cap,
     int error = 0;
 
     CpuMessage msg = {
+        .magic = CPU_RPC_MAGIC,
         .which_msg = CpuMessage_alloc_tag,
     };
 
@@ -59,6 +60,7 @@ int cpu_component_client_disconnect(cpu_client_context_t *conn)
     int error = 0;
 
     CpuMessage msg = {
+        .magic = CPU_RPC_MAGIC,
         .which_msg = CpuMessage_disconnect_tag,
     };
 
@@ -84,6 +86,7 @@ int cpu_client_config(cpu_client_context_t *cpu,
     int error = 0;
 
     CpuMessage msg = {
+        .magic = CPU_RPC_MAGIC,
         .which_msg = CpuMessage_config_tag,
         .msg.config = {
             .cnode_guard = cnode_guard,
@@ -122,6 +125,7 @@ int cpu_client_change_vspace(cpu_client_context_t *conn,
     int error = 0;
 
     CpuMessage msg = {
+        .magic = CPU_RPC_MAGIC,
         .which_msg = CpuMessage_change_vspace_tag,
     };
 
@@ -141,6 +145,7 @@ int cpu_client_start(cpu_client_context_t *conn)
     int error = 0;
 
     CpuMessage msg = {
+        .magic = CPU_RPC_MAGIC,
         .which_msg = CpuMessage_start_tag,
     };
 
@@ -160,6 +165,7 @@ int cpu_client_elevate_privileges(cpu_client_context_t *conn)
     int error = 0;
 
     CpuMessage msg = {
+        .magic = CPU_RPC_MAGIC,
         .which_msg = CpuMessage_elevate_privilege_tag,
     };
 
@@ -179,6 +185,7 @@ int cpu_client_set_tls_base(cpu_client_context_t *cpu, void *tls_base)
     int error = 0;
 
     CpuMessage msg = {
+        .magic = CPU_RPC_MAGIC,
         .which_msg = CpuMessage_tls_base_tag,
         .msg.tls_base = {
             .tls_base_addr = (uint64_t)tls_base,
@@ -200,6 +207,7 @@ int cpu_client_suspend(cpu_client_context_t *cpu)
     int error = 0;
 
     CpuMessage msg = {
+        .magic = CPU_RPC_MAGIC,
         .which_msg = CpuMessage_suspend_tag,
     };
 
@@ -222,6 +230,7 @@ int cpu_client_read_registers(cpu_client_context_t *cpu, seL4_UserContext *regs)
     int error = 0;
 
     CpuMessage msg = {
+        .magic = CPU_RPC_MAGIC,
         .which_msg = CpuMessage_read_reg_tag,
     };
 

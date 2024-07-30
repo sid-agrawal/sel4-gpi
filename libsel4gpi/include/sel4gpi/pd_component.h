@@ -26,6 +26,8 @@
  * server thread.
  */
 
+#define PD_RPC_MAGIC 0x5044
+
 #define PDSERVS "PDServ Component: "
 #define PDSERVC "PDServ Client   : "
 

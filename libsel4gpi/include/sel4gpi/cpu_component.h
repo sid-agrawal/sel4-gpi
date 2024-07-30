@@ -26,6 +26,7 @@
  * server thread.
  */
 
+#define CPU_RPC_MAGIC 0x435055
 #define CPUSERVS "CPUServ Component: "
 #define CPUSERVC "CPUServ Client   : "
 

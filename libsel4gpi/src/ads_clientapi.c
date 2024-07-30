@@ -36,6 +36,7 @@ int ads_component_client_connect(seL4_CPtr server_ep_cap,
     int error = 0;
 
     AdsMessage msg = {
+        .magic = ADS_RPC_MAGIC,
         .which_msg = AdsMessage_alloc_tag,
     };
 
@@ -61,6 +62,7 @@ int ads_client_disconnect(ads_client_context_t *conn)
     int error = 0;
 
     AdsMessage msg = {
+        .magic = ADS_RPC_MAGIC,
         .which_msg = AdsMessage_disconnect_tag,
     };
 
@@ -84,6 +86,7 @@ int ads_client_attach(ads_client_context_t *conn,
     int error = 0;
 
     AdsMessage msg = {
+        .magic = ADS_RPC_MAGIC,
         .which_msg = AdsMessage_attach_tag,
         .msg.attach = {
             .vaddr = (uint64_t)vaddr,
@@ -117,6 +120,7 @@ int ads_client_reserve(ads_client_context_t *conn,
     int error = 0;
 
     AdsMessage msg = {
+        .magic = ADS_RPC_MAGIC,
         .which_msg = AdsMessage_reserve_tag,
         .msg.reserve = {
             .vaddr = (uint64_t)vaddr,
@@ -149,6 +153,7 @@ int ads_client_attach_to_reserve(ads_vmr_context_t *reservation,
     int error = 0;
 
     AdsMessage msg = {
+        .magic = ADS_RPC_MAGIC,
         .which_msg = AdsMessage_attach_reserve_tag,
         .msg.attach_reserve = {
             .offset = offset,
@@ -170,6 +175,7 @@ int ads_client_rm(ads_client_context_t *conn, void *vaddr)
     int error = 0;
 
     AdsMessage msg = {
+        .magic = ADS_RPC_MAGIC,
         .which_msg = AdsMessage_remove_tag,
         .msg.remove = {
             .vaddr = (uint64_t)vaddr,
@@ -196,6 +202,7 @@ int ads_client_shallow_copy(ads_client_context_t *src_ads, ads_client_context_t 
     int error = 0;
 
     AdsMessage msg = {
+        .magic = ADS_RPC_MAGIC,
         .which_msg = AdsMessage_shallow_copy_tag,
         .msg.shallow_copy = {
             .pages = vmr_cfg->region_pages,
@@ -221,6 +228,7 @@ int ads_client_get_reservation(ads_client_context_t *ads, sel4utils_reservation_
     int error = 0;
 
     AdsMessage msg = {
+        .magic = ADS_RPC_MAGIC,
         .which_msg = AdsMessage_get_res_tag,
         .msg.get_res = {
             .type = res_type,
@@ -272,6 +280,7 @@ int ads_client_load_elf(ads_client_context_t *loadee_ads,
     int error = 0;
 
     AdsMessage msg = {
+        .magic = ADS_RPC_MAGIC,
         .which_msg = AdsMessage_load_elf_tag,
     };
 

@@ -554,6 +554,9 @@ static void ads_component_handle(void *msg_p,
     AdsMessage *msg = (AdsMessage *)msg_p;
     AdsReturnMessage *reply_msg = (AdsReturnMessage *)reply_msg_p;
 
+    SERVER_GOTO_IF_COND(msg->magic != ADS_RPC_MAGIC,
+                        "ADS component received message with incorrect magic number %lx\n", msg->magic);
+
     if (get_object_id_from_badge(sender_badge) == BADGE_OBJ_ID_NULL &&
         get_space_id_from_badge(sender_badge) == get_ads_component()->space_id)
     {

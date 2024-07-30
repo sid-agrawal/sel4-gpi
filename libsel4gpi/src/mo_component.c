@@ -157,6 +157,9 @@ static void mo_component_handle(void *msg_p,
     MoMessage *msg = (MoMessage *)msg_p;
     MoReturnMessage *reply_msg = (MoReturnMessage *)reply_msg_p;
 
+    SERVER_GOTO_IF_COND(msg->magic != MO_RPC_MAGIC,
+                        "MO component received message with incorrect magic number %lx\n", msg->magic);
+
     if (get_object_id_from_badge(sender_badge) == BADGE_OBJ_ID_NULL)
     {
         SERVER_GOTO_IF_COND(msg->which_msg != MoMessage_alloc_tag,

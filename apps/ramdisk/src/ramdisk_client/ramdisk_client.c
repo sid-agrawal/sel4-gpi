@@ -68,6 +68,7 @@ int ramdisk_client_bind(seL4_CPtr server_ep_cap,
     int error;
 
     RamdiskMessage request = {
+        .magic = RD_RPC_MAGIC,
         .op = RamdiskAction_BIND};
 
     RamdiskReturnMessage reply;
@@ -82,6 +83,7 @@ int ramdisk_client_unbind(seL4_CPtr server_ep_cap)
     int error;
 
     RamdiskMessage request = {
+        .magic = RD_RPC_MAGIC,
         .op = RamdiskAction_UNBIND};
 
     RamdiskReturnMessage reply;
@@ -97,6 +99,7 @@ int ramdisk_client_alloc_block(seL4_CPtr server_ep_cap,
     int error;
 
     RamdiskMessage request = {
+        .magic = RD_RPC_MAGIC,
         .op = RamdiskAction_ALLOC};
 
     RamdiskReturnMessage reply;
@@ -120,6 +123,7 @@ int ramdisk_client_free_block(ramdisk_client_context_t *conn)
     int error;
 
     RamdiskMessage request = {
+        .magic = RD_RPC_MAGIC,
         .op = RamdiskAction_FREE};
 
     RamdiskReturnMessage reply;
@@ -134,6 +138,7 @@ int ramdisk_client_read(ramdisk_client_context_t *conn)
     int error;
 
     RamdiskMessage request = {
+        .magic = RD_RPC_MAGIC,
         .op = RamdiskAction_READ};
 
     RamdiskReturnMessage reply;
@@ -148,6 +153,7 @@ int ramdisk_client_write(ramdisk_client_context_t *conn)
     int error;
 
     RamdiskMessage request = {
+        .magic = RD_RPC_MAGIC,
         .op = RamdiskAction_WRITE};
 
     RamdiskReturnMessage reply;

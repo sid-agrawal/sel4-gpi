@@ -33,6 +33,7 @@ message ResSpcRevokeResourceMessage {
 }
 
 message ResSpcMessage {
+    uint64 magic = 100;
     oneof msg {
         ResSpcAllocMessage alloc = 1;
         ResSpcMapMessage map = 2;

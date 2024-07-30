@@ -259,6 +259,11 @@ void xv6fs_request_handler(void *msg_p,
   FsReturnMessage *reply_msg = (FsReturnMessage *)msg_reply_p;
   reply_msg->which_msg = FsReturnMessage_basic_tag;
 
+  CHECK_ERROR_GOTO(msg->magic != FS_RPC_MAGIC,
+                   "FS server received message with incorrect magic number\n",
+                   FsError_UNKNOWN,
+                   done);
+
   // Get info from badge
   gpi_obj_id_t client_id = get_client_id_from_badge(sender_badge);
   gpi_obj_id_t obj_id = get_object_id_from_badge(sender_badge);
