@@ -205,6 +205,17 @@ void cpu_destroy(cpu_t *cpu)
         cpu->ipc_buf_mo = 0;
     }
 
+    if (cpu->binded_ads_id)
+    {
+        error = resource_component_dec(get_ads_component(), cpu->binded_ads_id);
+
+        if (error)
+        {
+            OSDB_PRINTERR("Failed to decrement refcount of old ADS (%u)\n", cpu->binded_ads_id);
+        }
+        cpu->binded_ads_id = 0;
+    }
+
     if (cpu->vcpu.cptr != seL4_CapNull)
     {
         vka_free_object(get_cpu_component()->server_vka, &cpu->vcpu);

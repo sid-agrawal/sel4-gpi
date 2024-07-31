@@ -105,6 +105,7 @@ typedef struct _osm_pd_shared_data
     pd_client_context_t pd_conn;   ///< Connection to the PD's own PD resource
     ads_client_context_t ads_conn; ///< Connection to the PD's own ADS resource
     cpu_client_context_t cpu_conn; ///< Connection to the PD's own CPU resource
+    ep_client_context_t fault_ep_conn; ///< Endpoint to PD's fault handler
 
     seL4_CPtr cspace_root; ///< PD's cspace
 

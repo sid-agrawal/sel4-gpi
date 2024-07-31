@@ -52,18 +52,11 @@ err_goto:
     return NULL;
 }
 
-pd_config_t *sel4gpi_configure_process(const char *image_name,
-                                       int stack_pages,
-                                       int heap_pages,
-                                       sel4gpi_runnable_t *ret_runnable)
+pd_config_t *sel4gpi_new_runnable(bool new_ads, bool new_cpu, sel4gpi_runnable_t *ret_runnable)
 {
-    assert(image_name != NULL);
     assert(ret_runnable != NULL);
 
     int error = 0;
-    PD_CREATION_PRINT("Configuring new process with image: %s\n", image_name);
-    pd_config_t *proc_cfg = NULL;
-
     seL4_CPtr pd_rde = sel4gpi_get_rde(GPICAP_TYPE_PD);
     GOTO_IF_COND(pd_rde == seL4_CapNull, "No PD RDE\n");
 
@@ -81,22 +74,48 @@ pd_config_t *sel4gpi_configure_process(const char *image_name,
     error = pd_component_client_connect(pd_rde, &osm_data_mo, &ret_runnable->pd);
     GOTO_IF_ERR(error, "Failed to create new PD\n");
 
-    /* new ADS*/
-    seL4_CPtr ads_rde = sel4gpi_get_rde(GPICAP_TYPE_ADS);
-    GOTO_IF_COND(ads_rde == seL4_CapNull, "Can't make new ADS, no ADS RDE\n");
+    if (new_ads)
+    {
+        /* new ADS*/
+        seL4_CPtr ads_rde = sel4gpi_get_rde(GPICAP_TYPE_ADS);
+        GOTO_IF_COND(ads_rde == seL4_CapNull, "Can't make new ADS, no ADS RDE\n");
 
-    error = ads_component_client_connect(ads_rde, &ret_runnable->ads);
-    GOTO_IF_ERR(error, "failed to allocate a new ADS");
+        error = ads_component_client_connect(ads_rde, &ret_runnable->ads);
+        GOTO_IF_ERR(error, "failed to allocate a new ADS");
+    }
 
-    /* new CPU */
-    seL4_CPtr cpu_rde = sel4gpi_get_rde(GPICAP_TYPE_CPU);
-    GOTO_IF_COND(cpu_rde == seL4_CapNull, "No CPU RDE\n");
+    if (new_cpu)
+    {
+        /* new CPU */
+        seL4_CPtr cpu_rde = sel4gpi_get_rde(GPICAP_TYPE_CPU);
+        GOTO_IF_COND(cpu_rde == seL4_CapNull, "No CPU RDE\n");
 
-    error = cpu_component_client_connect(cpu_rde, &ret_runnable->cpu);
-    GOTO_IF_ERR(error, "failed to allocate a new CPU");
+        error = cpu_component_client_connect(cpu_rde, &ret_runnable->cpu);
+        GOTO_IF_ERR(error, "failed to allocate a new CPU");
+    }
 
-    proc_cfg = sel4gpi_generate_proc_config(image_name, DEFAULT_STACK_PAGES, DEFAULT_HEAP_PAGES, &osm_data_mo);
-    GOTO_IF_COND(proc_cfg == NULL, "failed to generate config\n");
+    pd_config_t *cfg = calloc(1, sizeof(pd_config_t));
+    cfg->osm_data_mo = osm_data_mo;
+
+    return cfg;
+
+err_goto:
+    return NULL;
+}
+
+pd_config_t *sel4gpi_configure_process(const char *image_name,
+                                       int stack_pages,
+                                       int heap_pages,
+                                       sel4gpi_runnable_t *ret_runnable)
+{
+    int error = 0;
+    assert(image_name != NULL);
+    PD_CREATION_PRINT("Configuring new process with image: %s\n", image_name);
+
+    pd_config_t *proc_cfg = sel4gpi_new_runnable(true, true, ret_runnable);
+    GOTO_IF_COND(proc_cfg == NULL, "Failed to allocated components needed for execution\n");
+
+    sel4gpi_generate_proc_config(proc_cfg, image_name, DEFAULT_STACK_PAGES, DEFAULT_HEAP_PAGES);
 
     // give the process its VMR RDE
     rde_config_t *vmr_rde_cfg = calloc(1, sizeof(rde_config_t));
@@ -123,64 +142,25 @@ pd_config_t *sel4gpi_configure_thread(void *thread_fn, ep_client_context_t *faul
 {
     PD_CREATION_PRINT("Configuring new thread\n");
     int error = 0;
-    pd_config_t *cfg = NULL;
-    seL4_CPtr pd_rde = sel4gpi_get_rde(GPICAP_TYPE_PD);
-    GOTO_IF_COND(pd_rde == seL4_CapNull, "No PD RDE\n");
 
-    seL4_CPtr mo_rde = sel4gpi_get_rde(GPICAP_TYPE_MO);
-    GOTO_IF_COND(mo_rde == seL4_CapNull, "No MO RDE\n");
-
-    pd_client_context_t self_pd_conn = sel4gpi_get_pd_conn();
-
-    /* new PD */
-    mo_client_context_t osm_data_mo;
-    error = mo_component_client_connect(mo_rde, 1, MO_PAGE_BITS, &osm_data_mo);
-    GOTO_IF_ERR(error, "Failed to allocat OSmosis data MO\n");
-
-    error = pd_component_client_connect(pd_rde, &osm_data_mo, &ret_runnable->pd);
-    GOTO_IF_ERR(error, "Failed to create new PD\n");
-
-    /* use same ADS */
+    pd_config_t *cfg = sel4gpi_new_runnable(false, true, ret_runnable);
+    GOTO_IF_COND(cfg == NULL, "Failed to allocated components needed for execution\n");
     ret_runnable->ads = sel4gpi_get_ads_conn();
 
-    /* new CPU */
-    seL4_CPtr cpu_rde = sel4gpi_get_rde(GPICAP_TYPE_CPU);
-    GOTO_IF_COND(cpu_rde == seL4_CapNull, "No CPU RDE\n");
-
-    error = cpu_component_client_connect(cpu_rde, &ret_runnable->cpu);
-    GOTO_IF_ERR(error, "failed to allocate a new CPU");
-
-    cfg = sel4gpi_generate_thread_config(thread_fn, fault_ep, &osm_data_mo);
+    sel4gpi_generate_thread_config(cfg, thread_fn, fault_ep);
 
 err_goto:
     return cfg;
 }
 
-/**
- * @brief given the local stack, set up the TLS for it.
- *
- * @param dest_stack address of the top of dest_stack in the current ADS
- * @param stack_pages number of pages in the stack (NOT including guard)
- * @param ipc_buffer_addr address of the ipc buffer (OPTIONAL)
- * @param osm_shared_data address of the osm_pd_shared_data_t struct
- * @param ret_sp returns the stack pointer after alignment
- * @param ret_tp returns the thread pointer after writing to the TLS
- * @return int returns 0 on success, 1 on failure
- */
-static int setup_tls_in_stack(void *dest_stack,
-                              size_t stack_pages,
-                              void *ipc_buffer_addr,
-                              void *osm_shared_data,
-                              void **ret_sp,
-                              void **ret_tp)
+static void write_tls_values(uintptr_t stack_top,
+                             void *ipc_buffer_addr,
+                             void *osm_shared_data,
+                             uintptr_t *ret_tls_base,
+                             uintptr_t *ret_tp)
 {
-    int error = 0;
     size_t tls_size = sel4runtime_get_tls_size();
-    /* make sure we're not going to use too much of the stack */
-    GOTO_IF_COND(tls_size > stack_pages * PAGE_SIZE_4K / 8,
-                 "TLS would use more than 1/8th of the application stack %zu/%zu", tls_size, stack_pages);
-
-    uintptr_t tls_base = (uintptr_t)dest_stack - tls_size;
+    uintptr_t tls_base = stack_top - tls_size;
     uintptr_t tp = (uintptr_t)sel4runtime_write_tls_image((void *)tls_base);
 
     if (ipc_buffer_addr)
@@ -191,12 +171,69 @@ static int setup_tls_in_stack(void *dest_stack,
 
     sel4runtime_set_tls_variable(tp, __sel4gpi_osm_data, osm_shared_data);
 
-    *ret_sp = (void *)ALIGN_DOWN(tls_base, STACK_CALL_ALIGNMENT);
-    *ret_tp = (void *)tp;
+    *ret_tls_base = tls_base;
+    *ret_tp = tp;
+}
 
-    PD_CREATION_PRINT("initial stack: %p, tls base: %lx, tp: %lx, ipc_buf: %p\n",
-                      dest_stack, tls_base, tp, ipc_buffer_addr);
+/**
+ * @brief given belonging to an ADS with the same code segment as the current one,
+ * set up the TLS for it. If the given ADS is a different one, the stack
+ * will be mapped into the current one, then unmapped.
+ *
+ * @param target_ads the ADS which the stack will execute in
+ * @param runtime_ctxt the runtime addresses and MOs determined during ADS configuration
+ * @param ret_sp returns the stack pointer after alignment
+ * @param ret_tp returns the thread pointer after writing to the TLS
+ * @return int returns 0 on success, 1 on failure
+ */
+static int setup_tls_in_stack(ads_client_context_t *target_ads,
+                              runtime_context_t *runtime_ctxt,
+                              void **ret_sp,
+                              void **ret_tp)
+{
+    int error = 0;
+    size_t stack_pages = runtime_ctxt->stack_cfg->region_pages;
+    size_t tls_size = sel4runtime_get_tls_size();
+
+    GOTO_IF_COND(stack_pages == 0, "Stack VMR page count needed\n");
+    GOTO_IF_COND(runtime_ctxt->stack_cfg->start == NULL, "No stack region exists to write TLS\n");
+    /* make sure we're not going to use too much of the stack */
+    GOTO_IF_COND(tls_size > stack_pages * PAGE_SIZE_4K / 8,
+                 "TLS would use more than 1/8th of the application stack %zu/%zu", tls_size, stack_pages);
+
+    uintptr_t curr_sp, tls_base, tp = 0;
+    if (target_ads->id != sel4gpi_get_binded_ads_id())
+    {
+        ads_client_context_t vmr_rde = sel4gpi_get_bound_vmr_rde();
+        void *local_stack_bottom = NULL;
+        error = ads_client_attach(&vmr_rde, NULL, &runtime_ctxt->stack_cfg->mo,
+                                  SEL4UTILS_RES_TYPE_GENERIC, &local_stack_bottom);
+        GOTO_IF_ERR(error, "Failed to map remote stack into current ADS\n");
+
+        uintptr_t remote_tls_base, remote_tp, local_stack_top = 0;
+
+        // set stack pointer to the top
+        curr_sp = (uintptr_t)local_stack_bottom + stack_pages * SIZE_BITS_TO_BYTES(MO_PAGE_BITS);
+        local_stack_top = curr_sp;
+        write_tls_values(curr_sp, runtime_ctxt->ipc_buf_cfg->start, runtime_ctxt->osm_data, &tls_base, &tp);
+
+        remote_tls_base = (uintptr_t)runtime_ctxt->stack_cfg->start - (local_stack_top - tls_base);
+        remote_tp = (uintptr_t)runtime_ctxt->stack_cfg->start - (local_stack_top - tp);
+        *ret_sp = (void *)ALIGN_DOWN(remote_tls_base, STACK_CALL_ALIGNMENT);
+        *ret_tp = (void *)remote_tp;
+
+        ads_client_rm(&vmr_rde, local_stack_bottom);
+    }
+    else
+    {
+        curr_sp = (uintptr_t)runtime_ctxt->stack_cfg->start;
+        write_tls_values(curr_sp, runtime_ctxt->ipc_buf_cfg->start, runtime_ctxt->osm_data, &tls_base, &tp);
+        *ret_sp = (void *)ALIGN_DOWN(tls_base, STACK_CALL_ALIGNMENT);
+        *ret_tp = (void *)tp;
+    }
+
 err_goto:
+
     return error;
 }
 
@@ -238,16 +275,20 @@ int sel4gpi_ads_configure(ads_config_t *cfg,
                 /* shallow copying when we're in the same ADS doesn't make sense */
                 if (current_ads_id != runnable->ads.id)
                 {
-                    PD_CREATION_PRINT("%s VMR (%s) with %lu pages at %p\n",
-                                      sel4gpi_share_degree_to_str(vmr->share_mode),
-                                      human_readable_va_res_type(vmr->type),
-                                      vmr->region_pages, vmr->start);
                     error = ads_client_shallow_copy(&self_ads_conn, &runnable->ads, vmr);
                     GOTO_IF_ERR(error, "Failed to copy VMR (%p)\n", vmr->start);
+                    PD_CREATION_PRINT("%s VMR (%s)\n",
+                                      sel4gpi_share_degree_to_str(vmr->share_mode),
+                                      human_readable_va_res_type(vmr->type));
+                    if (vmr->start != NULL && vmr->region_pages > 0)
+                    {
+                        PD_CREATION_PRINT_2("with %lu pages at %p\n",
+                                            vmr->region_pages, vmr->start);
+                    }
                 }
                 break;
             case GPI_DISJOINT:
-                // If an MO is provided for stack and code regions, they will not be set up below
+                // If an MO is provided for stack and code regions, they will not be allocated like below
                 if (vmr->mo.ep != seL4_CapNull)
                 {
                     PD_CREATION_PRINT("Attaching provided MO for a %s VMR\n", human_readable_va_res_type(vmr->type));
@@ -279,10 +320,6 @@ int sel4gpi_ads_configure(ads_config_t *cfg,
                     vmr->start = stack;
                     vmr->mo = mo;
 
-                    if (ret_runtime_context)
-                    {
-                        ret_runtime_context->stack_cfg = vmr;
-                    }
                     GOTO_IF_ERR(stack == NULL, "failed to allocate a new stack");
                 }
                 else
@@ -297,20 +334,28 @@ int sel4gpi_ads_configure(ads_config_t *cfg,
 
                     vmr->start = vmr_addr;
                     vmr->mo = mo;
-
-                    if (vmr->type == SEL4UTILS_RES_TYPE_IPC_BUF)
-                    {
-                        if (ret_runtime_context)
-                        {
-                            ret_runtime_context->ipc_buf_cfg = vmr;
-                        }
-                    }
                 }
 
                 break;
             default:
                 GOTO_IF_COND(1, "Invalid sharing degree specified (%u) for VMR (%p)\n", vmr->share_mode, vmr->start);
                 break;
+            }
+
+            // (XXX) Linh: if any of these were shallow copied, we won't have the underlying MO to later do
+            //             any setup (e.g. TLS writing, CPU config), but it's likely an invalid config for
+            //             these regions to be shallow-copied, and using separate CPU objects
+            if (ret_runtime_context)
+            {
+                if (vmr->type == SEL4UTILS_RES_TYPE_IPC_BUF)
+                {
+                    ret_runtime_context->ipc_buf_cfg = vmr;
+                }
+
+                if (vmr->type == SEL4UTILS_RES_TYPE_STACK)
+                {
+                    ret_runtime_context->stack_cfg = vmr;
+                }
             }
         }
     }
@@ -423,16 +468,15 @@ int sel4gpi_prepare_pd(pd_config_t *cfg, sel4gpi_runnable_t *runnable, int argc,
     }
 
     ep_client_context_t fault_ep_in_PD = {0};
-    error = pd_client_send_cap(&runnable->pd,
-                               cfg->fault_ep.ep,
-                               &fault_ep_in_PD.ep);
+    error = pd_client_send_core_cap(&runnable->pd,
+                                    cfg->fault_ep.ep,
+                                    &fault_ep_in_PD.ep);
     GOTO_IF_ERR(error, "Failed to send fault EP to PD\n");
 
     error = ep_client_get_raw_endpoint_in_PD(&runnable->pd, &cfg->fault_ep, &fault_ep_in_PD.raw_endpoint);
     GOTO_IF_ERR(error, "Failed to get raw EP in target PD's CSpace\n");
     PD_CREATION_PRINT("Sent fault EP to PD in slot 0x%lx\n", fault_ep_in_PD.raw_endpoint);
 
-    // vmr_config_t *code_segment_cfg = find_vmr_cfg_by_type(&cfg->ads_cfg, SEL4UTILS_RES_TYPE_CODE);
     void *init_stack_ptr = runtime_context.stack_cfg->start;
     void *entry_point = runtime_context.entry_point;
     seL4_Word *args_cp = args;
@@ -441,10 +485,8 @@ int sel4gpi_prepare_pd(pd_config_t *cfg, sel4gpi_runnable_t *runnable, int argc,
     {
         PD_CREATION_PRINT("C Runtime already initialized, setup the TLS ourselves\n");
         void *tp = NULL;
-        error = setup_tls_in_stack(runtime_context.stack_cfg->start,
-                                   runtime_context.stack_cfg->region_pages,
-                                   runtime_context.ipc_buf_cfg->start,
-                                   runtime_context.osm_data,
+        error = setup_tls_in_stack(&runnable->ads,
+                                   &runtime_context,
                                    &init_stack_ptr, &tp);
         GOTO_IF_ERR(error, "failed to write TLS\n");
 
@@ -453,6 +495,8 @@ int sel4gpi_prepare_pd(pd_config_t *cfg, sel4gpi_runnable_t *runnable, int argc,
 
         entry_point = _start;
 
+        // use the first argument for the user-given entry point,
+        // since we're setting the PC to the generic `_start` entry
         args_cp = calloc(argc + 1, sizeof(seL4_Word));
         assert(args_cp != NULL);
         args_cp[0] = (seL4_Word)runtime_context.entry_point;
@@ -473,10 +517,6 @@ int sel4gpi_prepare_pd(pd_config_t *cfg, sel4gpi_runnable_t *runnable, int argc,
                                     runtime_context.ipc_buf_cfg->start,
                                     runtime_context.osm_data);
     GOTO_IF_ERR(error, "failed to prepare runtime");
-
-    // debug_print_mem_at(init_stack_ptr - 128, 256);
-
-    // FATAL_IF_ERR(1, "AAA\n");
 
     PD_CREATION_PRINT("Configuring CPU Object, fault_ep: %lx entry: %p\n",
                       fault_ep_in_PD.raw_endpoint, entry_point);
@@ -510,13 +550,9 @@ err_goto:
     return error;
 }
 
-pd_config_t *sel4gpi_generate_proc_config(const char *image_name, size_t stack_pages,
-                                          size_t heap_pages, mo_client_context_t *osm_data_mo)
+void sel4gpi_generate_proc_config(pd_config_t *proc_cfg, const char *image_name, size_t stack_pages, size_t heap_pages)
 {
-    pd_config_t *proc_cfg = calloc(1, sizeof(pd_config_t));
-    assert(proc_cfg != NULL);
     proc_cfg->ads_cfg.image_name = image_name;
-    proc_cfg->osm_data_mo = *osm_data_mo;
 
     proc_cfg->ads_cfg.vmr_cfgs = linked_list_new();
     int n_cfgs = 0;
@@ -566,21 +602,37 @@ pd_config_t *sel4gpi_generate_proc_config(const char *image_name, size_t stack_p
     n_rde_cfgs++;
 
     linked_list_insert_many(proc_cfg->rde_cfg, n_rde_cfgs, mo_rde_cfg, resspc_rde_cfg);
-
-    return proc_cfg;
 }
 
-pd_config_t *sel4gpi_generate_thread_config(void *thread_fn,
-                                            ep_client_context_t *fault_ep,
-                                            mo_client_context_t *osm_data_mo)
+void sel4gpi_config_pd_share_all_rdes(pd_config_t *cfg)
 {
-    pd_config_t *thread_cfg = calloc(1, sizeof(pd_config_t));
-    assert(thread_cfg != NULL);
+    osm_pd_shared_data_t *shared_data = ((osm_pd_shared_data_t *)sel4runtime_get_osm_shared_data());
+
+    if (!cfg->rde_cfg)
+    {
+        cfg->rde_cfg = linked_list_new();
+    }
+
+    for (int i = GPICAP_TYPE_NONE + 1; i < GPICAP_TYPE_MAX; i++)
+    {
+        for (int j = 0; j < MAX_NS_PER_RDE; j++)
+        {
+            if (shared_data->rde[i][j].type.type != GPICAP_TYPE_NONE)
+            {
+                rde_config_t *rde = calloc(1, sizeof(rde_config_t));
+                sel4gpi_add_rde_config(cfg, shared_data->rde[i][j].type.type, shared_data->rde[i][j].space_id);
+                // linked_list_insert(cfg->rde_cfg, rde);
+            }
+        }
+    }
+}
+
+void sel4gpi_generate_thread_config(pd_config_t *thread_cfg, void *thread_fn, ep_client_context_t *fault_ep)
+{
     if (fault_ep)
     {
         thread_cfg->fault_ep = *fault_ep;
     }
-    thread_cfg->osm_data_mo = *osm_data_mo;
     thread_cfg->ads_cfg.entry_point = thread_fn;
     thread_cfg->ads_cfg.vmr_cfgs = linked_list_new();
 
@@ -602,48 +654,24 @@ pd_config_t *sel4gpi_generate_thread_config(void *thread_fn,
     linked_list_insert_many(thread_cfg->ads_cfg.vmr_cfgs, n_cfgs, stack_cfg, ipc_buf_cfg);
 
     // give the thread PD all of our current RDEs
-    osm_pd_shared_data_t *shared_data = ((osm_pd_shared_data_t *)sel4runtime_get_osm_shared_data());
-    thread_cfg->rde_cfg = linked_list_new();
-    for (int i = GPICAP_TYPE_NONE + 1; i < GPICAP_TYPE_MAX; i++)
-    {
-        for (int j = 0; j < MAX_NS_PER_RDE; j++)
-        {
-            if (shared_data->rde[i][j].type.type != GPICAP_TYPE_NONE)
-            {
-                rde_config_t *rde = calloc(1, sizeof(rde_config_t));
-                assert(rde != NULL);
-                rde->type = shared_data->rde[i][j].type.type;
-                rde->space_id = shared_data->rde[i][j].space_id;
-                linked_list_insert(thread_cfg->rde_cfg, rde);
-            }
-        }
-    }
+    sel4gpi_config_pd_share_all_rdes(thread_cfg);
 
     // since we're sharing address spaces, transfer all MO caps to the thread PD
-    thread_cfg->gpi_res_type_cfg = linked_list_new();
-    linked_list_insert(thread_cfg->gpi_res_type_cfg, (void *)GPICAP_TYPE_MO);
-
-    return thread_cfg;
+    sel4gpi_add_res_type_config(thread_cfg, GPICAP_TYPE_MO);
+    // thread_cfg->gpi_res_type_cfg = linked_list_new();
+    // linked_list_insert(thread_cfg->gpi_res_type_cfg, (void *)GPICAP_TYPE_MO);
 }
 
 void sel4gpi_config_destroy(pd_config_t *cfg)
 {
     if (cfg->ads_cfg.vmr_cfgs)
     {
-        for (linked_list_node_t *curr = cfg->ads_cfg.vmr_cfgs->head; curr != NULL; curr = curr->next)
-        {
-            free((vmr_config_t *)curr->data);
-        }
-        linked_list_destroy(cfg->ads_cfg.vmr_cfgs, false);
+        linked_list_destroy(cfg->ads_cfg.vmr_cfgs, true);
     }
 
     if (cfg->rde_cfg)
     {
-        for (linked_list_node_t *curr = cfg->rde_cfg->head; curr != NULL; curr = curr->next)
-        {
-            free((rde_config_t *)curr->data);
-        }
-        linked_list_destroy(cfg->rde_cfg, false);
+        linked_list_destroy(cfg->rde_cfg, true);
     }
 
     if (cfg->gpi_res_type_cfg)
@@ -669,18 +697,25 @@ char *sel4gpi_share_degree_to_str(gpi_share_degree_t share_deg)
 
 void sel4gpi_add_rde_config(pd_config_t *cfg, gpi_cap_t rde_type, gpi_space_id_t space_id)
 {
-    rde_config_t *new_rde_cfg = calloc(1, sizeof(rde_config_t));
-    assert(new_rde_cfg != NULL);
-    if (!new_rde_cfg)
+    if (cfg)
     {
-        UNCONDITIONAL_WARN("Malloc failed!\n");
-        return;
+        if (!cfg->rde_cfg)
+        {
+            cfg->rde_cfg = linked_list_new();
+        }
+
+        rde_config_t *new_rde_cfg = calloc(1, sizeof(rde_config_t));
+        if (!new_rde_cfg)
+        {
+            UNCONDITIONAL_WARN("Malloc failed!\n");
+            return;
+        }
+
+        new_rde_cfg->space_id = space_id;
+        new_rde_cfg->type = rde_type;
+
+        linked_list_insert(cfg->rde_cfg, new_rde_cfg);
     }
-
-    new_rde_cfg->space_id = space_id;
-    new_rde_cfg->type = rde_type;
-
-    linked_list_insert(cfg->rde_cfg, new_rde_cfg);
 }
 
 void sel4gpi_add_vmr_config(ads_config_t *cfg,
@@ -714,5 +749,18 @@ void sel4gpi_add_vmr_config(ads_config_t *cfg,
         }
 
         linked_list_insert(cfg->vmr_cfgs, new_vmr_cfg);
+    }
+}
+
+void sel4gpi_add_res_type_config(pd_config_t *cfg, gpi_cap_t resource_type)
+{
+    if (cfg)
+    {
+        if (!cfg->gpi_res_type_cfg)
+        {
+            cfg->gpi_res_type_cfg = linked_list_new();
+        }
+
+        linked_list_insert(cfg->gpi_res_type_cfg, (void *)resource_type);
     }
 }

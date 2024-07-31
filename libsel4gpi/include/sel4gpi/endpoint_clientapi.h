@@ -45,8 +45,7 @@ typedef struct _ep_client_context
 int ep_component_client_connect(seL4_CPtr server_ep_cap, ep_client_context_t *ret_conn);
 
 /**
- * @brief Retrieves the raw, underlying endpoint of an endpoint context in the CSpace of the
- * given target PD. This was mainly added as a workaround for cpu_client_config()
+ * @brief Retrieves the raw, underlying endpoint of an endpoint context in the CSpace of the given target PD.
  *
  * @param target_PD the target PD to get the EP slot from
  * @param ep_conn the EP context held by the **current** PD (NOT the target)

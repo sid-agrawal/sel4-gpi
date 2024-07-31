@@ -1219,11 +1219,14 @@ int pd_set_core_cap(pd_t *pd, seL4_Word core_cap_badge, seL4_CPtr core_cap)
     gpi_cap_t cap_type = get_cap_type_from_badge(core_cap_badge);
     gpi_obj_id_t cap_id = get_object_id_from_badge(core_cap_badge);
     OSDB_PRINTF("Setting PD%u's OSmosis %s cap\n", pd->id, cap_type_to_str(cap_type));
+    resource_component_context_t *server_component = NULL;
+    gpi_obj_id_t old_cap_id = 0;
 
     switch (cap_type)
     {
     case GPICAP_TYPE_ADS:
-        resource_component_inc(get_ads_component(), cap_id);
+        server_component = get_ads_component();
+        old_cap_id = pd->shared_data->ads_conn.id;
         pd->shared_data->ads_conn.id = cap_id;
         pd->shared_data->ads_conn.ep = core_cap;
         break;
@@ -1232,13 +1235,29 @@ int pd_set_core_cap(pd_t *pd, seL4_Word core_cap_badge, seL4_CPtr core_cap)
         pd->shared_data->pd_conn.ep = core_cap;
         break;
     case GPICAP_TYPE_CPU:
-        resource_component_inc(get_cpu_component(), cap_id);
+        server_component = get_cpu_component();
+        old_cap_id = pd->shared_data->cpu_conn.id;
         pd->shared_data->cpu_conn.id = cap_id;
         pd->shared_data->cpu_conn.ep = core_cap;
+        break;
+    case GPICAP_TYPE_EP:
+        // (XXX) Linh: there's no way to figure out what the old fault EP's ID was,
+        //             so that we can decrease the refcount, we'll just assume for now that
+        //             the EP cap will never be overwritten
+        SERVER_GOTO_IF_COND(pd->shared_data->fault_ep_conn.ep != seL4_CapNull,
+                            "Cannot overwrite PD's current fault handler\n");
+        server_component = get_ep_component();
+        pd->shared_data->fault_ep_conn.ep = core_cap;
         break;
     default:
         SERVER_GOTO_IF_COND(1, "Trying to set PD OSmosis data with invalid cap\n");
         break;
+    }
+
+    // refcount for the new cap should've been increased by the caller
+    if (old_cap_id > 0)
+    {
+        resource_component_dec(server_component, old_cap_id);
     }
 
 err_goto:

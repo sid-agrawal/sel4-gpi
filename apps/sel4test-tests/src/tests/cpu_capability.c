@@ -27,6 +27,7 @@
 
 extern __thread void *__sel4gpi_osm_data;
 extern void _start(void);
+extern char *morecore_area;
 
 #define TEST_LOG(msg, ...)                                  \
     do                                                      \
@@ -103,7 +104,7 @@ int test_osm_threads(env_t env)
     sel4gpi_config_destroy(cfg);
 
 #if EXTRACT_MODEL
-    pd_client_dump(&test_pd_os_cap, NULL, 0);
+    pd_client_dump(&runnable.pd, NULL, 0);
 #endif
     return sel4test_get_result();
 }
@@ -111,4 +112,40 @@ int test_osm_threads(env_t env)
 DEFINE_TEST_OSM(GPITH002,
                 "Test Multiple Threads in PD",
                 test_osm_threads,
+                true);
+
+int test_threads_isolated_stack(env_t env)
+{
+    int error;
+    printf("------------------STARTING: %s------------------\n", __func__);
+
+    sel4gpi_runnable_t runnable = {0};
+    pd_config_t *cfg = sel4gpi_configure_process("hello_isolated_threads", DEFAULT_STACK_PAGES,
+                                                 DEFAULT_HEAP_PAGES, &runnable);
+
+    sel4gpi_add_rde_config(cfg, GPICAP_TYPE_PD, BADGE_SPACE_ID_NULL);
+    sel4gpi_add_rde_config(cfg, GPICAP_TYPE_ADS, BADGE_SPACE_ID_NULL);
+    sel4gpi_add_rde_config(cfg, GPICAP_TYPE_CPU, BADGE_SPACE_ID_NULL);
+    sel4gpi_add_rde_config(cfg, GPICAP_TYPE_EP, BADGE_SPACE_ID_NULL);
+
+    error = sel4gpi_prepare_pd(cfg, &runnable, 0, NULL);
+    test_error_eq(error, 0);
+
+    error = sel4gpi_start_pd(&runnable);
+    test_error_eq(error, 0);
+
+    /* wait for PD to notify completion */
+    seL4_Recv(cfg->fault_ep.raw_endpoint, NULL);
+    printf("exiting %s\n", __func__);
+    sel4gpi_config_destroy(cfg);
+
+#if EXTRACT_MODEL
+    pd_client_dump(&runnable.pd, NULL, 0);
+#endif
+    return sel4test_get_result();
+}
+
+DEFINE_TEST_OSM(GPITH003,
+                "Test threads with isolated stacks",
+                test_threads_isolated_stack,
                 true);

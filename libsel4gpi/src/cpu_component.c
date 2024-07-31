@@ -126,7 +126,7 @@ int cpu_component_configure(cpu_t *cpu,
     /* Get the frame from the IPC buf MO */
     seL4_CPtr ipc_buf_frame = ipc_buf_mo == NULL ? seL4_CapNull : ipc_buf_mo->frame_caps_in_root_task[0];
 
-    /* Update the IPC buf refcount */
+    /* Update the IPC buf refcount if it's being replaced with a new IPC buffer */
     if (cpu->ipc_buf_mo)
     {
         error = resource_component_dec(get_mo_component(), cpu->ipc_buf_mo);
@@ -134,9 +134,21 @@ int cpu_component_configure(cpu_t *cpu,
         cpu->ipc_buf_mo = 0;
     }
 
-    error = resource_component_inc(get_mo_component(), ipc_buf_mo->id);
-    SERVER_GOTO_IF_ERR(error, "Failed to increment refcount of IPC buf mo (%u)\n", ipc_buf_mo->id);
-    cpu->ipc_buf_mo = ipc_buf_mo->id;
+    if (ipc_buf_mo)
+    {
+        error = resource_component_inc(get_mo_component(), ipc_buf_mo->id);
+        SERVER_GOTO_IF_ERR(error, "Failed to increment refcount of IPC buf mo (%u)\n", ipc_buf_mo->id);
+        cpu->ipc_buf_mo = ipc_buf_mo->id;
+    }
+
+    if (cpu->binded_ads_id)
+    {
+        error = resource_component_dec(get_ads_component(), cpu->binded_ads_id);
+        SERVER_GOTO_IF_ERR(error, "Failed to decrement refcount of old ADS (%u)\n", cpu->binded_ads_id);
+        cpu->binded_ads_id = 0;
+    }
+
+    resource_component_inc(get_ads_component(), ads->id);
 
     /* Configure the vspace */
     error = cpu_config_vspace(cpu,
@@ -195,7 +207,7 @@ static void handle_config_req(seL4_Word sender_badge,
         &pd_data->pd,
         (uint64_t)msg->cnode_guard,
         msg->fault_ep_cap,
-        &ipc_mo_data->mo,
+        ipc_mo_data == NULL ? NULL : &ipc_mo_data->mo,
         (void *)msg->ipc_buf_addr);
 
 err_goto:

@@ -48,6 +48,11 @@ ads_client_context_t sel4gpi_get_ads_conn(void);
 cpu_client_context_t sel4gpi_get_cpu_conn(void);
 
 /**
+ * Get the endpoint to the current PD's fault handler
+ */
+ep_client_context_t sel4gpi_get_fault_ep_conn(void);
+
+/**
  * Get the ID of the currently bound ADS
  */
 gpi_obj_id_t sel4gpi_get_binded_ads_id(void);

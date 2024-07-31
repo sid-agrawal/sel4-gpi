@@ -33,6 +33,12 @@
     {                                                                   \
         printf(COLORIZE("%s():\t", BLUE) msg, __func__, ##__VA_ARGS__); \
     } while (0)
+
+#define PD_CREATION_PRINT_2(msg, ...) \
+    do                                \
+    {                                 \
+        printf(msg, ##__VA_ARGS__);   \
+    } while (0)
 #else
 #define PD_CREATION_PRINT(...)
 #endif // PD_CREATION_DBG
@@ -68,14 +74,12 @@ typedef enum _gpi_share_degree
  * | type         | required   | required     |                                         |
  * | start        | required   | optional     | any available vaddr                     |
  * | dest_start   | optional   | ignored      | `start`                                 |
- * | region_pages | required^1 | required^2   |                                         |
+ * | region_pages | required^1 | required     |                                         |
  * | page_bits    | ignored    | optional     | 4K pages (ARM specific)                 |
  * | mo           | ignored    | optional     | new MO will be allocated                |
  * +--------------+------------+--------------+-----------------------------------------+
  * 1 = optional if type != SHARED_FRAMES or GENERIC, the VMR will be searched
  *     for by type, and info will be taken from the found VMR
- * 2 = ignored if an MO is provided (the page count of the MO will be used)
- *
  */
 typedef struct _vmr_config
 {
@@ -96,14 +100,10 @@ typedef struct _vmr_config
  */
 typedef struct _runtime_context
 {
-    // void *stack;                    ///< address of bottom of the stack
-    // void *ipc_buf;                  ///< address of the IPC buffer
     void *entry_point;              ///< address to PD entry point
     void *osm_data;                 ///< address to PD's OSmosis data
-    // mo_client_context_t stack_mo;   ///< MO for the stack
-    // mo_client_context_t ipc_buf_mo; ///< MO for the IPC buffer
-    vmr_config_t *stack_cfg;
-    vmr_config_t *ipc_buf_cfg;
+    vmr_config_t *stack_cfg;        ///< VMR config describing the stack region
+    vmr_config_t *ipc_buf_cfg;      ///< VMR config describing the IPC buffer region
     bool loaded_elf; ///< ELF was loaded for this runtime
 } runtime_context_t;
 
@@ -150,12 +150,22 @@ typedef struct _pd_config
 } pd_config_t;
 
 /**
+ * @brief creates components for exeuction: a new PD with an OSM shared data frame, and optionally new ADSes or CPUs.
+ *
+ * @param new_ads if true, creates a new ADS
+ * @param new_cpu if true, creates a new CPU
+ * @param[out] ret_runnable returns a filled in runnable with the PD, ADS, CPU contexts
+ * @return pd_config_t* a mostly empty PD config, with only the OSmosis shared data MO filled in
+ */
+pd_config_t *sel4gpi_new_runnable(bool new_ads, bool new_cpu, sel4gpi_runnable_t *ret_runnable);
+
+/**
  * @brief creates a new PD, ADS, CPU and generates a configuration that can start a process
  *
  * @param image_name ELF image for the process
  * @param stack_pages size of stack, in pages
  * @param heap_pages size of heap, in pages
- * @param ret_runnable returns a filled in runnable with the PD, ADS, CPU contexts
+ * @param[out] ret_runnable returns a filled in runnable with the PD, ADS, CPU contexts
  * @return pd_config_t* returns the PD configuration, NULL on failure. Caller is responsbile for freeing the config.
  */
 pd_config_t *sel4gpi_configure_process(const char *image_name,
@@ -195,27 +205,30 @@ int sel4gpi_start_pd(sel4gpi_runnable_t *runnable);
 
 /* helpers to get commonly used PD configurations */
 /**
- * @brief generates a PD configuration that describes a process
+ * @brief populates a config with PD options that describe a process
  *
+ * @param proc_cfg PD config to populate
  * @param image_name the name of the process's image
  * @param stack_pages size of the stack, in pages
  * @param heap_pages size of the heap, in pages
- * @param osm_data_mo the MO for holding OSmosis data
- * @return pd_config_t* returns a filled in config struct, caller is responsbile for freeing
  */
-pd_config_t *sel4gpi_generate_proc_config(const char *image_name, size_t stack_pages,
-                                          size_t heap_pages, mo_client_context_t *osm_data_mo);
+void sel4gpi_generate_proc_config(pd_config_t *proc_cfg, const char *image_name, size_t stack_pages, size_t heap_pages);
 
 /**
- * @brief generates a PD configuration that describes a thread
+ * @brief populates a config with PD options that describes a thread
  *
+ * @param thread_cfg PD config to populate
  * @param thread_fn the thread's entry function
  * @param fault_ep the tracked fault endpoint for the thread (OPTIONAL, if not specified, a new one will be allocated)
- * @param osm_data_mo the MO for holding OSmosis data
- * @return pd_config_t*
  */
-pd_config_t *sel4gpi_generate_thread_config(void *thread_fn, ep_client_context_t *fault_ep,
-                                            mo_client_context_t *osm_data_mo);
+void sel4gpi_generate_thread_config(pd_config_t *thread_cfg, void *thread_fn, ep_client_context_t *fault_ep);
+
+/**
+ * @brief adds all RDEs existing in the current PD to the given PD config
+ *
+ * @param cfg PD config to populate
+ */
+void sel4gpi_config_pd_share_all_rdes(pd_config_t *cfg);
 
 /**
  * @brief frees all memory used by a config and the config itself
@@ -268,7 +281,7 @@ void sel4gpi_add_rde_config(pd_config_t *cfg, gpi_cap_t rde_type, gpi_space_id_t
  * @param cfg the ADS config, if no VMR config list was already created, will make a new one
  * @param share_mode sharing type - will determine whether the below arguments are necessary
  * @param type the sel4utils_reservation_type_t of the VMR
- * @param start start address of the VMR (in the current ADS)
+ * @param start  OPTIONAL start address of the VMR (in the current ADS)
  * @param dest_start OPTIONAL start address of the VMR (in the destination ADS)
  * @param region_pages OPTIONAL number of pages in the VMR
  * @param page_bits OPTIONAL size of an individual page
@@ -292,3 +305,13 @@ void sel4gpi_add_vmr_config(ads_config_t *cfg,
  * @return the top of the stack in the given ADS
  */
 void *sel4gpi_new_sized_stack(ads_client_context_t *ads, size_t n_pages, mo_client_context_t *ret_mo);
+
+/**
+ * @brief Convenience function for configuring a new resource type to share with a PD
+ * All resources of the given type will be shared with the PD created by this config
+ * Will malloc a new config list node, which gets freed during sel4gpi_config_destroy
+ *
+ * @param cfg PD config to populate
+ * @param resource_type the resource type to share
+ */
+void sel4gpi_add_res_type_config(pd_config_t *cfg, gpi_cap_t resource_type);

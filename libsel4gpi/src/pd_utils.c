@@ -29,6 +29,12 @@ cpu_client_context_t sel4gpi_get_cpu_conn(void)
     return conn;
 }
 
+ep_client_context_t sel4gpi_get_fault_ep_conn(void)
+{
+    ep_client_context_t conn = ((osm_pd_shared_data_t *)sel4runtime_get_osm_shared_data())->fault_ep_conn;
+    return conn;
+}
+
 gpi_obj_id_t sel4gpi_get_binded_ads_id(void)
 {
     gpi_obj_id_t id = ((osm_pd_shared_data_t *)sel4runtime_get_osm_shared_data())->ads_conn.id;

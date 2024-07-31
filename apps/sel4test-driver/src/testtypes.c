@@ -360,9 +360,9 @@ test_result_t basic_run_test(struct testcase *test, uintptr_t e)
     char *argv[argc];
     sel4utils_create_word_args(string_args, argv, argc,
                                BASIC,
+                               env->bench_endpoint_in_test,
                                env->endpoint_in_test,
-                               env->init_vaddr,
-                               env->bench_endpoint_in_test);
+                               env->init_vaddr);
 
     int num_res;
 
@@ -540,10 +540,13 @@ void osm_set_up(uintptr_t e)
 
     // Create the fault endpoint
     ep_t *ep;
-    seL4_CPtr fault_ep_resource_in_test;
-    error = ep_component_allocate(pd->id, &env->endpoint_in_test, &fault_ep_resource_in_test, &ep);
+    ep_client_context_t test_pd_fault_ep = {0};
+    error = ep_component_allocate(pd->id, &test_pd_fault_ep.raw_endpoint,
+                                  &test_pd_fault_ep.ep, &ep);
     assert(error == 0);
+    env->endpoint_in_test = test_pd_fault_ep.raw_endpoint;
     env->endpoint_in_driver = ep->endpoint_in_RT.cptr;
+    pd->shared_data->fault_ep_conn = test_pd_fault_ep;
 
     // Configure the CPU
     error = cpu_component_configure(cpu, ads, pd,
@@ -571,8 +574,8 @@ void osm_set_up(uintptr_t e)
     }
 
     // Configure the PD runtime
-    int argc = 4;
-    seL4_Word args[4] = {OSM, env->endpoint_in_test, timer_ntfn_in_PD.capPtr, env->bench_endpoint_in_test};
+    int argc = 3;
+    seL4_Word args[3] = {OSM, env->bench_endpoint_in_test, timer_ntfn_in_PD.capPtr};
 
     error = pd_component_runtime_setup(pd, ads, cpu,
                                        argc, args,
