@@ -97,6 +97,12 @@ typedef struct _pd_hold_node
 
 } pd_hold_node_t;
 
+typedef struct _pd_link_node
+{
+    resource_registry_node_t gen;
+    gpi_obj_id_t linked_pd_id;
+} pd_link_node_t;
+
 /**
  * The data given to initialize a new Osmosis PD
  */
@@ -143,6 +149,8 @@ typedef struct _pd
     vka_t *pd_vka;                                          ///< Allocator for the PD's cspace
     char allocator_mem_pool[PD_ALLOCATOR_STATIC_POOL_SIZE]; ///< Memory pool to bootstrap the PD's VKA
     resource_registry_t hold_registry;                      ///< Registry of PD's resources
+    resource_registry_t linked_registry;                    ///< Registry of PDs which are linked to this one
+                                                            ///< Destruction of this PD will destroy all linked PDs
 
     gpi_obj_id_t shared_data_mo_id;          ///< Shared data is mapped to PD and includes RDE, etc.
     osm_pd_shared_data_t *shared_data;       ///< RT vaddr of the shared data
@@ -151,6 +159,7 @@ typedef struct _pd
     /* other general PD metadata */
     int exit_code;      ///< Value of PD's exit code
     bool deleting;      ///< Set to true while the PD is being deleted
+    bool to_delete;     ///< true if PD is marked for deletion
     int deletion_depth; ///< If the PD is being deleted as a result of another PD, this is the recursive depth
 } pd_t;
 
@@ -276,7 +285,9 @@ int pd_add_resource(pd_t *pd,
 int pd_remove_resource(pd_t *pd,
                        gpi_res_id_t res_id);
 /**
- * @brief Adds all resources specified in the given list to a PD
+ * @brief Adds all resources specified in the given list to a PD.
+ * (XXX) Linh: currently can only refcount RT components. Resources from Non-RT servers
+ * can be badged into the PD, but the resource server will not know about it
  *
  * @param pd the target PD
  * @param resources resources to add to the PD
@@ -414,9 +425,27 @@ int pd_set_core_cap(pd_t *pd, seL4_Word core_cap_badge, seL4_CPtr core_cap);
 void pd_make_path(pd_t *pd, seL4_CPtr cap, cspacepath_t *path);
 
 /**
- * @brief Workaround function to initialize the hold registry of a PD
+ * @brief Workaround function to initialize the hold and link registries of a PD
  * from outside the PD component. Currently only used for test PD forging.
  *
  * @param pd the PD to initialize
  */
-void pd_initialize_hold_registry(pd_t *pd);
+void pd_initialize_registries(pd_t *pd);
+
+/**
+ * @brief Add a child PD as a link to the given PD. Linked children
+ * are terminated when the parent PD is destroyed
+ *
+ * @param pd the PD object
+ * @param linked_pd_id ID of the child PD to link
+ * @return int 0 on success, otherwise on failure
+ */
+int pd_add_linkage(pd_t *pd, gpi_obj_id_t linked_pd_id);
+
+/**
+ * @brief iterates through a PDs linked children and marks each
+ * of them for destruction
+ *
+ * @param pd the PD object
+ */
+void pd_mark_linked_for_deletion(pd_t *pd);

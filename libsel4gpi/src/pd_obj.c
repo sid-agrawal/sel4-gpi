@@ -394,7 +394,9 @@ linked_list_t *pd_get_resources_of_type(pd_t *pd, gpi_cap_t type)
 {
     linked_list_t *found = linked_list_new();
 
-    for (pd_hold_node_t *current_cap = (pd_hold_node_t *)pd->hold_registry.head; current_cap != NULL; current_cap = (pd_hold_node_t *)current_cap->gen.hh.next)
+    for (pd_hold_node_t *current_cap = (pd_hold_node_t *)pd->hold_registry.head;
+         current_cap != NULL;
+         current_cap = (pd_hold_node_t *)current_cap->gen.hh.next)
     {
         if (current_cap->res_id.type == type)
         {
@@ -408,7 +410,6 @@ linked_list_t *pd_get_resources_of_type(pd_t *pd, gpi_cap_t type)
 int pd_bulk_add_resource(pd_t *pd, linked_list_t *resources)
 {
     int error = 0;
-    int in_error = 0;
     pd_hold_node_t *res;
     for (linked_list_node_t *curr = resources->head; curr != NULL; curr = curr->next)
     {
@@ -419,19 +420,23 @@ int pd_bulk_add_resource(pd_t *pd, linked_list_t *resources)
             resource_space_data->space.server_ep, resource_space_data->space.resource_type,
             res->res_id.space_id, res->res_id.object_id, pd->id);
 
-        WARN_IF_COND(in_error, "Could not mint resource endpoint\n");
-        error = error || in_error;
+        GOTO_IF_COND(copied_res == seL4_CapNull, "Failed to copy %s_%u_%u to PD%d\n",
+                     cap_type_to_str(res->res_id.type), res->res_id.space_id, res->res_id.object_id, pd->id);
 
-        if (!in_error)
+        error = pd_add_resource(pd, res->res_id, res->slot_in_RT_Debug,
+                                copied_res, res->slot_in_ServerPD_Debug);
+
+        WARN_IF_COND(error, "failed to add resource (type: %s, space_id: %u) to PD %u\n",
+                     cap_type_to_str(res->res_id.type), res->res_id.space_id, pd->id);
+
+        if (res->res_id.type > GPICAP_TYPE_NONE && res->res_id.type < GPICAP_TYPE_MAX)
         {
-            in_error = pd_add_resource(pd, res->res_id, res->slot_in_RT_Debug,
-                                       copied_res, res->slot_in_ServerPD_Debug);
-            WARN_IF_COND(in_error, "failed to add resource (type: %s, space_id: %u) to PD %u\n",
-                         cap_type_to_str(res->res_id.type), res->res_id.space_id, pd->id);
-            error = error || in_error;
+            resource_component_context_t *component = resource_component_get_context_from_type(res->res_id.type);
+            resource_component_inc(component, res->res_id.object_id);
         }
     }
 
+err_goto:
     return error;
 }
 
@@ -442,14 +447,14 @@ pd_held_resource_on_delete(resource_registry_node_t *node_gen, void *pd_v)
     pd_hold_node_t *node = (pd_hold_node_t *)node_gen;
     pd_t *pd = (pd_t *)pd_v;
 
-    OSDB_PRINTF("Freeing resource %s_%u_%u from PD (%u)\n",
-                cap_type_to_str(node->res_id.type), node->res_id.space_id, node->res_id.object_id,
-                pd->id);
-
     if (pd->id == get_gpi_server()->rt_pd_id) {
         // The root task doesn't keep refcounts, nothing to do here
         return;
     }
+
+    OSDB_PRINTF("Freeing resource %s_%u_%u from PD (%u)\n",
+                cap_type_to_str(node->res_id.type), node->res_id.space_id, node->res_id.object_id,
+                pd->id);
 
     // If the resource is a core resource, free it directly
     // Decrement the registry entry's count, and if it reaches zero, the resource will be freed
@@ -516,10 +521,36 @@ err_goto:
     }
 }
 
-void pd_initialize_hold_registry(pd_t *pd)
+static void pd_linkage_on_delete(resource_registry_node_t *node_gen, void *pd_v)
+{
+    /*
+     * Only mark PDs for deletion when a linkage is deleted, which will later be destroyed during
+     * pd_component_sweep(). We do this because destroying a PD on linkage deletion can trigger a
+     * huge recursive waterfall of destructing PDs, which in turn destroys resource spaces
+     *
+     * Additionally, other conditions can be checked here for whether a linked PD should be marked for
+     * deletion (e.g. a metric calculation)
+     */
+    pd_link_node_t *linked_pd = (pd_link_node_t *)node_gen;
+    OSDB_PRINTF("Marking linked PD%d for deletion\n", linked_pd->linked_pd_id);
+    pd_component_registry_entry_t *pd_data = pd_component_registry_get_entry_by_id(linked_pd->linked_pd_id);
+    if (pd_data == NULL)
+    {
+        OSDB_PRINTWARN("Cannot find linked PD%u's data. This might be OK if the PD has already exited\n",
+                       linked_pd->linked_pd_id);
+        return;
+    }
+    pd_data->pd.to_delete = true;
+
+    // also mark the linked PD's own linkages to be deleted
+    pd_mark_linked_for_deletion(&pd_data->pd);
+}
+
+void pd_initialize_registries(pd_t *pd)
 {
     // Max ID for the hold registry is the BADGE_MAX - 1 because the keys are badges
     resource_registry_initialize(&pd->hold_registry, pd_held_resource_on_delete, (void *)pd, BADGE_MAX - 1);
+    resource_registry_initialize(&pd->linked_registry, pd_linkage_on_delete, (void *)pd, BADGE_MAX - 1);
 }
 
 int pd_new(pd_t *pd,
@@ -537,7 +568,7 @@ int pd_new(pd_t *pd,
     SERVER_GOTO_IF_ERR(error, "Failed to attach init data MO to RT\n");
 
     // Initialize the hold registry
-    pd_initialize_hold_registry(pd);
+    pd_initialize_registries(pd);
 
     // Setup init data
     pd->shared_data->rde_count = 0;
@@ -647,6 +678,8 @@ void pd_destroy(pd_t *pd, vka_t *server_vka, vspace_t *server_vspace)
         resource_registry_delete(&pd->hold_registry, current);
     }
 
+    pd_mark_linked_for_deletion(pd);
+
     // free the MO for init data
     // the MO will be destroyed once all references are removed
     error = ads_component_remove_from_rt((void *)pd->shared_data);
@@ -658,8 +691,9 @@ void pd_destroy(pd_t *pd, vka_t *server_vka, vspace_t *server_vspace)
     // The PD's allocator memory is destroyed with allocator_mem_pool
 
     // Initialize a resource space sweep
-    error = resspc_component_sweep();
-    SERVER_GOTO_IF_ERR(error, "Failed to sweep resource spaces after PD destroy\n");
+    resspc_component_sweep();
+
+    pd_component_sweep();
 
     // Remove this PD from any other PDs that hold it
     error = pd_component_resource_cleanup(make_res_id(GPICAP_TYPE_PD, get_pd_component()->space_id, pd_id));
@@ -857,7 +891,7 @@ int pd_send_cap(pd_t *to_pd,
         }
         break;
     default:
-        // (XXX) Linh: what happens when we send non-core GPI caps?
+        // (XXX) Linh: No implementation for sending non-RT resources to other PDs yet
         should_mint = false;
         break;
     }
@@ -1272,4 +1306,41 @@ err_goto:
 void pd_make_path(pd_t *pd, seL4_CPtr cap, cspacepath_t *path)
 {
     vka_cspace_make_path(pd->pd_vka, cap, path);
+}
+
+int pd_add_linkage(pd_t *pd, gpi_obj_id_t linked_pd_id)
+{
+    int error = 0;
+    pd_link_node_t *linkage = (pd_link_node_t *)
+        resource_registry_get_by_id(&pd->linked_registry, (uint64_t)linked_pd_id);
+
+    if (linkage)
+    {
+        OSDB_PRINT_VERBOSE("PD%d already linked with PD%d\n", pd->id, linked_pd_id);
+        return 0;
+    }
+
+    OSDB_PRINTF("Linking PD%d with PD%d\n", pd->id, linked_pd_id);
+    linkage = calloc(1, sizeof(pd_link_node_t));
+    linkage->linked_pd_id = linked_pd_id;
+    resource_registry_insert(&pd->linked_registry, (resource_registry_node_t *)linkage);
+
+    return error;
+}
+
+void pd_mark_linked_for_deletion(pd_t *pd)
+{
+    if (pd->linked_registry.head)
+    {
+        OSDB_PRINT_VERBOSE("PD%u has %u linked children\n", pd->id, pd->linked_registry.head->count);
+        resource_registry_node_t *current, *tmp;
+        HASH_ITER(hh, pd->linked_registry.head, current, tmp)
+        {
+            resource_registry_delete(&pd->linked_registry, current);
+        }
+    }
+    else
+    {
+        OSDB_PRINT_VERBOSE("PD%u has no linked children\n", pd->id);
+    }
 }

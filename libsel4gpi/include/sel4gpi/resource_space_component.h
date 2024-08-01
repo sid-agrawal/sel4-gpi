@@ -94,10 +94,8 @@ int resspc_component_mark_delete(gpi_space_id_t spc_id, bool execute_cleanup_pol
 
 /**
  * Sweep any resource spaces marked for deletion
- *
- * @return 0 on success, error otherwise
  */
-int resspc_component_sweep(void);
+void resspc_component_sweep(void);
 
 /**
  * Add any relations of a given space to the model state

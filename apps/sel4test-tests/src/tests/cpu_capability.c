@@ -45,7 +45,10 @@ static void osm_thread(int argc, char **argv)
             printf("%lX\n", atol(argv[i]));
         }
     }
-    printf("goodbye from osm_thread!\n");
+
+    // we will be terminated when our parent thread exits
+    while (1)
+        ;
 }
 
 static void sel4utils_thread(void *arg0, void *arg1, void *ipc_buf)
@@ -128,6 +131,7 @@ int test_threads_isolated_stack(env_t env)
     sel4gpi_add_rde_config(cfg, GPICAP_TYPE_CPU, BADGE_SPACE_ID_NULL);
     sel4gpi_add_rde_config(cfg, GPICAP_TYPE_EP, BADGE_SPACE_ID_NULL);
 
+    cfg->link_with_current = true;
     error = sel4gpi_prepare_pd(cfg, &runnable, 0, NULL);
     test_error_eq(error, 0);
 

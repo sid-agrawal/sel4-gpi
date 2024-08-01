@@ -245,6 +245,16 @@ void pd_client_exit(pd_client_context_t *conn, int code);
  */
 int pd_client_remove_rde(pd_client_context_t *conn, gpi_cap_t type, gpi_space_id_t space_id);
 
+/**
+ * @brief Create a link between the parent and child PDs. Linked children PD are
+ * terminated when the parent PD is destroyed
+ *
+ * @param parent the parent PD connection
+ * @param child the child PD connection
+ * @return 0 on success, error otherwise
+ */
+int pd_client_link_child(pd_client_context_t *parent, pd_client_context_t *child);
+
 /** MODEL EXTRACTION & BENCHMARKING **/
 
 /**

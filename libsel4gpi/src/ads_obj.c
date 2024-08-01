@@ -79,7 +79,6 @@ static void on_attach_registry_delete(resource_registry_node_t *node_gen, void *
 
             free(node->frame_caps);
         }
-
         // Decrement the refcount of the MO
         // It is important to do this after freeing the caps, since if the MO is freed,
         // it will return the frames to the VKA, and the VKA expects that there are no copies

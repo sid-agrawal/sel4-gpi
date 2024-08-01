@@ -146,6 +146,9 @@ typedef struct _pd_config
                                      ///< all resources of this type will be shared with the PD
                                      ///< currently does not differentiate between resource spaces
     bool elevated_cpu;               ///< whether the CPU should have elevated privileges
+    linked_list_t *linked_pds;       ///< list of children PDs to link with the created PD. Linked children PD will be
+                                     ///< terminated when the parent PD is destroyed
+    bool link_with_current;          ///< whether to link the created PD as a child of the current PD
     // ongoing: add configs for other resources here as needed
 } pd_config_t;
 

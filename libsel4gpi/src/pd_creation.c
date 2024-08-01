@@ -252,7 +252,7 @@ int sel4gpi_ads_configure(ads_config_t *cfg,
     if (osm_data_mo && osm_data_mo->ep != seL4_CapNull)
     {
         void *pd_osm_data;
-        error = ads_client_attach(&vmr_rde, NULL, osm_data_mo, SEL4UTILS_RES_TYPE_SHARED_FRAMES, &pd_osm_data);
+        error = ads_client_attach(&vmr_rde, NULL, osm_data_mo, SEL4UTILS_RES_TYPE_OSM_DATA, &pd_osm_data);
         GOTO_IF_ERR(error, "Failed to attach OSmosis data MO to PD's ADS\n");
 
         if (ret_runtime_context)
@@ -277,7 +277,7 @@ int sel4gpi_ads_configure(ads_config_t *cfg,
                 {
                     error = ads_client_shallow_copy(&self_ads_conn, &runnable->ads, vmr);
                     GOTO_IF_ERR(error, "Failed to copy VMR (%p)\n", vmr->start);
-                    PD_CREATION_PRINT("%s VMR (%s)\n",
+                    PD_CREATION_PRINT("%s VMR (%s)",
                                       sel4gpi_share_degree_to_str(vmr->share_mode),
                                       human_readable_va_res_type(vmr->type));
                     if (vmr->start != NULL && vmr->region_pages > 0)
@@ -285,6 +285,7 @@ int sel4gpi_ads_configure(ads_config_t *cfg,
                         PD_CREATION_PRINT_2("with %lu pages at %p\n",
                                             vmr->region_pages, vmr->start);
                     }
+                    PD_CREATION_PRINT_2("\n");
                 }
                 break;
             case GPI_DISJOINT:
@@ -477,6 +478,12 @@ int sel4gpi_prepare_pd(pd_config_t *cfg, sel4gpi_runnable_t *runnable, int argc,
     GOTO_IF_ERR(error, "Failed to get raw EP in target PD's CSpace\n");
     PD_CREATION_PRINT("Sent fault EP to PD in slot 0x%lx\n", fault_ep_in_PD.raw_endpoint);
 
+    if (cfg->link_with_current)
+    {
+        int link_err = pd_client_link_child(&self_pd_conn, &runnable->pd);
+        WARN_IF_COND(link_err, "Failed to link PD with current, it will not be terminated when current PD exits\n");
+    }
+
     void *init_stack_ptr = runtime_context.stack_cfg->start;
     void *entry_point = runtime_context.entry_point;
     seL4_Word *args_cp = args;
@@ -633,6 +640,7 @@ void sel4gpi_generate_thread_config(pd_config_t *thread_cfg, void *thread_fn, ep
     {
         thread_cfg->fault_ep = *fault_ep;
     }
+    thread_cfg->link_with_current = true;
     thread_cfg->ads_cfg.entry_point = thread_fn;
     thread_cfg->ads_cfg.vmr_cfgs = linked_list_new();
 
@@ -658,8 +666,6 @@ void sel4gpi_generate_thread_config(pd_config_t *thread_cfg, void *thread_fn, ep
 
     // since we're sharing address spaces, transfer all MO caps to the thread PD
     sel4gpi_add_res_type_config(thread_cfg, GPICAP_TYPE_MO);
-    // thread_cfg->gpi_res_type_cfg = linked_list_new();
-    // linked_list_insert(thread_cfg->gpi_res_type_cfg, (void *)GPICAP_TYPE_MO);
 }
 
 void sel4gpi_config_destroy(pd_config_t *cfg)

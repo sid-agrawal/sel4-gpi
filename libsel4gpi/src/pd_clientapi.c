@@ -521,6 +521,26 @@ int pd_client_share_resource_by_type(pd_client_context_t *src_pd, pd_client_cont
     return error;
 }
 
+int pd_client_link_child(pd_client_context_t *parent, pd_client_context_t *child)
+{
+    OSDB_PRINTF("Sending 'link child' request to PD component\n");
+
+    int error = 0;
+
+    PdMessage msg = {
+        .magic = PD_RPC_MAGIC,
+        .which_msg = PdMessage_link_child_tag,
+    };
+
+    PdReturnMessage ret_msg;
+
+    error = sel4gpi_rpc_call(&rpc_env, parent->ep, (void *)&msg,
+                             1, &child->ep, (void *)&ret_msg);
+    error |= ret_msg.errorCode;
+
+    return error;
+}
+
 #ifdef CONFIG_DEBUG_BUILD
 int pd_client_set_name(pd_client_context_t *conn, char *name)
 {

@@ -339,3 +339,26 @@ void resource_component_remove_from_rt(resource_component_context_t *context, gp
         OSDB_PRINTWARN("Failed to remove %s (%u) from rt\n", cap_type_to_str(context->resource_type), obj_id);
     }
 }
+
+resource_component_context_t *resource_component_get_context_from_type(gpi_cap_t type)
+{
+    switch (type)
+    {
+    case GPICAP_TYPE_ADS:
+    case GPICAP_TYPE_VMR:
+        return get_ads_component();
+    case GPICAP_TYPE_MO:
+        return get_mo_component();
+    case GPICAP_TYPE_CPU:
+    case GPICAP_TYPE_PCPU:
+        return get_cpu_component();
+    case GPICAP_TYPE_PD:
+        return get_pd_component();
+    case GPICAP_TYPE_EP:
+        return get_ep_component();
+    case GPICAP_TYPE_RESSPC:
+        return get_resspc_component();
+    default:
+        return NULL;
+    }
+}

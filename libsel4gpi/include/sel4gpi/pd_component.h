@@ -224,3 +224,8 @@ int pd_component_terminate(gpi_obj_id_t pd_id);
  * Create a special endpoint for benchmark IPC to root task
  */
 seL4_CPtr pd_component_create_ipc_bench_ep(void);
+
+/**
+ * @brief Sweeps through all existing PDs for ones marked for deletion, and delete them
+ */
+void pd_component_sweep(void);

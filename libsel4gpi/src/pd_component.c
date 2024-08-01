@@ -703,6 +703,8 @@ static void handle_share_resource_type_req(seL4_Word sender_badge,
                         "Invalid sharing of resources between the same PD (%u -> %u)\n",
                         src_pd_data->pd.id, dst_pd_data->pd.id);
 
+    // (XXX) Linh: currently only allow MOs to be bulk shared with another PD,
+    //             a use-case for sharing other RT resource types is unclear
     SERVER_GOTO_IF_COND(res_type != GPICAP_TYPE_MO && res_type < GPICAP_TYPE_seL4,
                         // (XXX) Arya: how to check for non-core resources?
                         "Sharing of resource type %s not permitted.\n",
@@ -926,6 +928,28 @@ err_goto:
 }
 #endif
 
+static void handle_link_child_req(seL4_Word sender_badge, PdLinkChildMessage *msg, PdReturnMessage *reply_msg)
+{
+    int error = 0;
+    OSDB_PRINTF("Got a 'link child' request from: ");
+    BADGE_PRINT(sender_badge);
+
+    /* Find the target PD */
+    pd_component_registry_entry_t *pd_data = pd_component_registry_get_entry_by_badge(sender_badge);
+    SERVER_GOTO_IF_COND(pd_data == NULL, "Failed to find PD (%u)\n", get_object_id_from_badge(sender_badge));
+
+    /* Find the child PD */
+    gpi_obj_id_t child_pd_id = get_object_id_from_badge(seL4_GetBadge(0));
+    pd_component_registry_entry_t *child_pd_data = pd_component_registry_get_entry_by_badge(seL4_GetBadge(0));
+    SERVER_GOTO_IF_COND(child_pd_data == NULL, "Failed to find PD (%u)\n", child_pd_id);
+
+    error = pd_add_linkage(&pd_data->pd, child_pd_id);
+
+err_goto:
+    reply_msg->which_msg = PdReturnMessage_basic_tag;
+    reply_msg->errorCode = error;
+}
+
 static void pd_component_handle(void *msg_p,
                                 seL4_Word sender_badge,
                                 seL4_CPtr received_cap,
@@ -1010,6 +1034,9 @@ static void pd_component_handle(void *msg_p,
             handle_set_name_req(sender_badge, &msg->msg.set_name, reply_msg);
             break;
 #endif
+        case PdMessage_link_child_tag:
+            handle_link_child_req(sender_badge, &msg->msg.link_child, reply_msg);
+            break;
         default:
             SERVER_GOTO_IF_COND(1, "Unknown request received: %u\n", msg->which_msg);
             break;
@@ -1067,7 +1094,7 @@ void forge_pd_for_root_task(gpi_obj_id_t rt_id)
     rt_entry->pd.id = rt_id;
     rt_entry->pd.pd_vka = get_gpi_server()->server_vka;
     resource_registry_insert(&get_pd_component()->registry, (resource_registry_node_t *)rt_entry);
-    pd_initialize_hold_registry(&rt_entry->pd);
+    pd_initialize_registries(&rt_entry->pd);
 }
 
 int pd_add_resource_by_id(gpi_obj_id_t pd_id,
@@ -1295,4 +1322,19 @@ seL4_CPtr pd_component_create_ipc_bench_ep(void)
     assert(slot != seL4_CapNull);
 
     return slot;
+}
+
+void pd_component_sweep(void)
+{
+    resource_registry_node_t *current, *temp;
+    HASH_ITER(hh, get_pd_component()->registry.head, current, temp)
+    {
+        pd_component_registry_entry_t *entry = (pd_component_registry_entry_t *)current;
+        if (entry->pd.to_delete && !entry->pd.deleting)
+        {
+            entry->pd.exit_code = PD_TERMINATED_CODE;
+            entry->pd.deletion_depth = 0; // This PD is the root of a deletion tree
+            resource_registry_delete(&get_pd_component()->registry, current);
+        }
+    }
 }

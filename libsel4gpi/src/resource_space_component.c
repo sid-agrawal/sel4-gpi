@@ -213,7 +213,7 @@ err_goto:
     return error;
 }
 
-int resspc_component_sweep(void)
+void resspc_component_sweep(void)
 {
     // Find any spaces marked for deletion, then delete them
     resource_registry_node_t *curr, *tmp;

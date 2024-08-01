@@ -99,6 +99,10 @@ message PdFinishWorkMessage {
     uint32 n_requests = 1;        /* the number of requests fulfilled by this message */
 };
 
+message PdLinkChildMessage {
+    /* No content */
+};
+
 /* message type for all PD component request messages */
 message PdMessage {
     uint64 magic = 100;
@@ -122,6 +126,7 @@ message PdMessage {
         PdMapResourceMessage map_resource = 17;
         PdSetNameMessage set_name = 18;
         PdFinishWorkMessage finish_work = 19;
+        PdLinkChildMessage link_child = 20;
     }
 };
 

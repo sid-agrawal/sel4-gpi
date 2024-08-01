@@ -86,6 +86,7 @@ int main(int argc, char **argv)
     sel4gpi_config_pd_share_all_rdes(cfg);
 
     cfg->ads_cfg.entry_point = isolated_thread;
+    cfg->link_with_current = true;
 
     /* test if the thread can access our stack */
     uint64_t *frame_addr = (uint64_t *)__builtin_frame_address(0);

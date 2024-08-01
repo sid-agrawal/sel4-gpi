@@ -252,3 +252,11 @@ seL4_CPtr resource_component_make_badged_ep(vka_t *src_vka, vka_t *dst_vka, seL4
  * @param obj_id ID of the resource in the component to remove from the root task
  */
 void resource_component_remove_from_rt(resource_component_context_t *context, gpi_obj_id_t obj_id);
+
+/**
+ * @brief Retrieves the Root Task resource component that manages given the type
+ *
+ * @param type the resource type
+ * @return resource_component_context_t* the resource component context, or NULL if no component exists
+ */
+resource_component_context_t *resource_component_get_context_from_type(gpi_cap_t type);
