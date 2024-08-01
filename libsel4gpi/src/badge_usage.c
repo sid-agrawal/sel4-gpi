@@ -17,10 +17,11 @@
 #include <sel4gpi/badge_usage.h>
 
 /*
- How we are using the badge.
- There are a total of 64 bits.
-63:56  8 bits for the type of cap.
-55:40 16 bits for permissions, as a bit mask.
+How we are using the badge.
+There are a total of 64 bits.
+63:56 8 bits for the type of cap.
+55:48 8 bits for permissions, as a bit mask.
+47:40 8 bits for the space ID
 39:20 20 bits for client ID
 19:0  20 bits for object ID
 */
@@ -40,13 +41,13 @@ gpi_badge_t set_cap_type_to_badge(gpi_badge_t badge, gpi_cap_t type)
     return (badge & 0x00FFFFFFFFFFFFFF) | shifted_type;
 }
 
-// Bits: 55:48 are for the permisions. Total of 16 bits, as a bit-mask so 16 permissions.
+// Bits: 55:48 are for the permisions. Total of 8 bits, as a bit-mask so 8 permissions.
 gpi_perms_t get_perms_from_badge(gpi_badge_t badge)
 {
     return (badge >> 48) & 0xFF;
 }
 
-// Bits: 55:48 are for the permisions. Total of 16 bits, as a bit-mask so 16 permissions.
+// Bits: 55:48 are for the permisions. Total of 8 bits, as a bit-mask so 8 permissions.
 gpi_badge_t set_perms_to_badge(gpi_badge_t badge, gpi_perms_t perms)
 {
     assert(perms <= 0xFF);

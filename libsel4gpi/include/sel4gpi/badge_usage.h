@@ -38,14 +38,13 @@
     } while (0)
 
 /*
- How we are using the badge.
- There are a total of 64 bits.
-63:56  8 bits for the type of cap.
+How we are using the badge.
+There are a total of 64 bits.
+63:56 8 bits for the type of cap.
 55:48 8 bits for permissions, as a bit mask.
-47:40 8 bits for the namespace ID
+47:40 8 bits for the space ID
 39:20 20 bits for client ID
-16:19 4 bits for server ID
-16:0  16 bits for object ID
+19:0  20 bits for object ID
 */
 
 typedef seL4_Word gpi_badge_t;
@@ -57,10 +56,10 @@ gpi_cap_t get_cap_type_from_badge(gpi_badge_t badge);
 // Bits: 63:56 are for the cap type. Total of 8 bits, so 255 types.
 gpi_badge_t set_cap_type_to_badge(gpi_badge_t badge, gpi_cap_t type);
 
-// Bits: 55:40 are for the permisions. Total of 16 bits, as a bit-mask so 16 permissions.
+// Bits: 55:40 are for the permisions. Total of 8 bits, as a bit-mask so 8 permissions.
 gpi_perms_t get_perms_from_badge(gpi_badge_t badge);
 
-// Bits: 55:40 are for the permisions. Total of 16 bits, as a bit-mask so 16 permissions.
+// Bits: 55:40 are for the permisions. Total of 8 bits, as a bit-mask so 8 permissions.
 gpi_badge_t set_perms_to_badge(gpi_badge_t badge, gpi_perms_t perms);
 
 // Bits: 47:40 are for the resource space ID. Total of 8 bits, so 255 resource spaces
