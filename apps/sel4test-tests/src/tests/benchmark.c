@@ -816,14 +816,19 @@ static int benchmark_fs(env_t env)
 
     benchmark_print_result(fs_open_end - fs_open_start);
 
+    /* Remove RDEs from test process so that it won't be cleaned up by recursive cleanup */
+    error = pd_client_remove_rde(&pd_conn, sel4gpi_get_resource_type_code(BLOCK_RESOURCE_TYPE_NAME), BADGE_SPACE_ID_NULL);
+    test_assert(error == 0);
+
+    error = pd_client_remove_rde(&pd_conn, sel4gpi_get_resource_type_code(FILE_RESOURCE_TYPE_NAME), BADGE_SPACE_ID_NULL);
+    test_assert(error == 0);
+
     // Terminate PDs
     pd_client_context_t fs_context = {.ep = fs_pd_cap};
-    error = pd_client_terminate(&fs_context);
-    test_error_eq(error, 0);
+    WARN_IF_ERR(pd_client_terminate(&fs_context), "Couldn't terminate FS PD");
 
     pd_client_context_t ramdisk_context = {.ep = ramdisk_pd_cap};
-    error = pd_client_terminate(&ramdisk_context);
-    test_error_eq(error, 0);
+    WARN_IF_ERR(pd_client_terminate(&ramdisk_context), "Couldn't terminate ramdisk PD");
 
     sel4bench_destroy();
     return sel4test_get_result();

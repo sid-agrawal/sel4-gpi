@@ -6,6 +6,7 @@
 #include <sel4test/macros.h>
 #include "../test.h"
 #include "../helpers.h"
+#include "test_shared.h"
 #include <vka/capops.h>
 
 #include <sel4gpi/pd_utils.h>
@@ -274,16 +275,21 @@ int test_sqlite(env_t env)
     error = sqlite3_shutdown();
     test_assert(error == SQLITE_OK);
 
+    /* Remove RDEs from test process so that it won't be cleaned up by recursive cleanup */
+    error = pd_client_remove_rde(&pd_conn, sel4gpi_get_resource_type_code(BLOCK_RESOURCE_TYPE_NAME), BADGE_SPACE_ID_NULL);
+    test_assert(error == 0);
+
+    error = pd_client_remove_rde(&pd_conn, sel4gpi_get_resource_type_code(FILE_RESOURCE_TYPE_NAME), BADGE_SPACE_ID_NULL);
+    test_assert(error == 0);
+
     // Cleanup servers
     pd_client_context_t fs_pd_conn;
     fs_pd_conn.ep = fs_pd_cap;
-    error = pd_client_terminate(&fs_pd_conn);
-    test_assert(error == 0);
+    WARN_IF_ERR(pd_client_terminate(&fs_pd_conn), "Couldn't terminate FS PD");
 
     pd_client_context_t ramdisk_pd_conn;
     ramdisk_pd_conn.ep = ramdisk_pd_cap;
-    error = pd_client_terminate(&ramdisk_pd_conn);
-    test_assert(error == 0);
+    WARN_IF_ERR(pd_client_terminate(&ramdisk_pd_conn), "Couldn't terminate Ramdisk PD");
 
     printf("------------------ENDING: %s------------------\n", __func__);
     return sel4test_get_result();

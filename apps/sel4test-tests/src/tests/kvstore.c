@@ -7,6 +7,7 @@
 #include <sel4test/macros.h>
 #include "../test.h"
 #include "../helpers.h"
+#include "test_shared.h"
 
 #include <sel4gpi/ads_clientapi.h>
 #include <sel4gpi/pd_utils.h>
@@ -24,6 +25,7 @@ static ep_client_context_t self_ep;
 
 static gpi_space_id_t ramdisk_id;
 static pd_client_context_t ramdisk_pd;
+static gpi_cap_t ramdisk_cap_type;
 static gpi_space_id_t fs_id;
 static pd_client_context_t fs_pd;
 static gpi_space_id_t fs_2_id;
@@ -59,23 +61,30 @@ static int setup(env_t env)
 
     /* Start ramdisk server process */
     error = start_ramdisk_pd(&ramdisk_pd.ep, &ramdisk_id);
+    ramdisk_cap_type = sel4gpi_get_resource_type_code(BLOCK_RESOURCE_TYPE_NAME);
     test_assert(error == 0);
 
     /* Start FS server process */
     error = start_xv6fs_pd(ramdisk_id, &fs_pd.ep, &fs_id);
+    file_cap_type = sel4gpi_get_resource_type_code(FILE_RESOURCE_TYPE_NAME);
     test_assert(error == 0);
 
     error = xv6fs_client_init();
     test_assert(error == 0);
 
-    /* Add FS ep to RDE */
-    file_cap_type = sel4gpi_get_resource_type_code(FILE_RESOURCE_TYPE_NAME);
-    seL4_CPtr fs_client_ep = sel4gpi_get_rde(file_cap_type);
-
     /* Create EP to listen for test results */
     error = sel4gpi_alloc_endpoint(&self_ep);
     test_assert(error == 0);
 
+    return error;
+}
+
+/* Remove RDEs from test process so that it won't be cleaned up by recursive cleanup */
+static int remove_RDEs()
+{
+    int error = 0;
+    error = pd_client_remove_rde(&pd_conn, ramdisk_cap_type, BADGE_SPACE_ID_NULL);
+    error |= pd_client_remove_rde(&pd_conn, file_cap_type, BADGE_SPACE_ID_NULL);
     return error;
 }
 
@@ -219,6 +228,8 @@ int test_kvstore_lib_in_same_pd(env_t env)
     pd_client_context_t hello_pd;
     error = start_hello_kvstore(SAME_THREAD, 0, &hello_pd, BADGE_SPACE_ID_NULL);
 
+    test_error_eq(remove_RDEs(), 0);
+
     /* Wait for test result */
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0, 0);
     tag = seL4_Recv(self_ep.raw_endpoint, NULL);
@@ -228,12 +239,9 @@ int test_kvstore_lib_in_same_pd(env_t env)
     dump_model();
 
     /* Cleanup servers */
-    error = pd_client_terminate(&hello_pd);
-    test_assert(error == 0);
-    error = pd_client_terminate(&fs_pd);
-    test_assert(error == 0);
-    error = pd_client_terminate(&ramdisk_pd);
-    test_assert(error == 0);
+    WARN_IF_ERR(pd_client_terminate(&hello_pd), "Couldn't terminate hello PD");
+    WARN_IF_ERR(pd_client_terminate(&fs_pd), "Couldn't terminate FS PD");
+    WARN_IF_ERR(pd_client_terminate(&ramdisk_pd), "Couldn't terminate Ramdisk PD");
 
     printf("------------------ENDING: %s------------------\n", __func__);
     return sel4test_get_result();
@@ -259,6 +267,8 @@ int test_kvstore_lib_in_diff_pd(env_t env)
     pd_client_context_t hello_pd;
     error = start_hello_kvstore(SEPARATE_PROC, kvstore_ep, &hello_pd, BADGE_SPACE_ID_NULL);
 
+    test_error_eq(remove_RDEs(), 0);
+
     /* Wait for test result */
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0, 0);
     tag = seL4_Recv(self_ep.raw_endpoint, NULL);
@@ -268,14 +278,10 @@ int test_kvstore_lib_in_diff_pd(env_t env)
     dump_model();
 
     /* Cleanup servers */
-    error = pd_client_terminate(&hello_pd);
-    test_assert(error == 0);
-    error = pd_client_terminate(&kvstore_pd);
-    test_assert(error == 0);
-    error = pd_client_terminate(&fs_pd);
-    test_assert(error == 0);
-    error = pd_client_terminate(&ramdisk_pd);
-    test_assert(error == 0);
+    WARN_IF_ERR(pd_client_terminate(&hello_pd), "Couldn't terminate hello PD");
+    WARN_IF_ERR(pd_client_terminate(&kvstore_pd), "Couldn't terminate kvstore PD");
+    WARN_IF_ERR(pd_client_terminate(&fs_pd), "Couldn't terminate FS PD");
+    WARN_IF_ERR(pd_client_terminate(&ramdisk_pd), "Couldn't terminate Ramdisk PD");
 
     printf("------------------ENDING: %s------------------\n", __func__);
     return sel4test_get_result();
@@ -312,6 +318,8 @@ int test_kvstore_diff_namespace(env_t env)
     error = start_hello_kvstore(SEPARATE_PROC, kvstore_ep, &hello_pd, nsid_2);
     test_assert(error == 0);
 
+    test_error_eq(remove_RDEs(), 0);
+
     /* Wait for test result */
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0, 0);
     tag = seL4_Recv(self_ep.raw_endpoint, NULL);
@@ -321,14 +329,10 @@ int test_kvstore_diff_namespace(env_t env)
     dump_model();
 
     /* Cleanup PDs */
-    error = pd_client_terminate(&hello_pd);
-    test_assert(error == 0);
-    error = pd_client_terminate(&kvstore_pd);
-    test_assert(error == 0);
-    error = pd_client_terminate(&fs_pd);
-    test_assert(error == 0);
-    error = pd_client_terminate(&ramdisk_pd);
-    test_assert(error == 0);
+    WARN_IF_ERR(pd_client_terminate(&hello_pd), "Couldn't terminate hello PD");
+    WARN_IF_ERR(pd_client_terminate(&kvstore_pd), "Couldn't terminate kvstore PD");
+    WARN_IF_ERR(pd_client_terminate(&fs_pd), "Couldn't terminate FS PD");
+    WARN_IF_ERR(pd_client_terminate(&ramdisk_pd), "Couldn't terminate Ramdisk PD");
 
     printf("------------------ENDING: %s------------------\n", __func__);
     return sel4test_get_result();
@@ -359,6 +363,8 @@ int test_kvstore_diff_fs(env_t env)
     error = start_hello_kvstore(SEPARATE_PROC, kvstore_ep, &hello_pd, fs_2_id);
     test_assert(error == 0);
 
+    test_error_eq(remove_RDEs(), 0);
+
     /* Wait for test result */
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0, 0);
     tag = seL4_Recv(self_ep.raw_endpoint, NULL);
@@ -368,16 +374,11 @@ int test_kvstore_diff_fs(env_t env)
     dump_model();
 
     /* Cleanup PDs */
-    error = pd_client_terminate(&hello_pd);
-    test_assert(error == 0);
-    error = pd_client_terminate(&kvstore_pd);
-    test_assert(error == 0);
-    error = pd_client_terminate(&fs_pd);
-    test_assert(error == 0);
-    error = pd_client_terminate(&fs_2_pd);
-    test_assert(error == 0);
-    error = pd_client_terminate(&ramdisk_pd);
-    test_assert(error == 0);
+    WARN_IF_ERR(pd_client_terminate(&hello_pd), "Couldn't terminate hello PD");
+    WARN_IF_ERR(pd_client_terminate(&kvstore_pd), "Couldn't terminate kvstore PD");
+    WARN_IF_ERR(pd_client_terminate(&fs_pd), "Couldn't terminate FS 1 PD");
+    WARN_IF_ERR(pd_client_terminate(&fs_2_pd), "Couldn't terminate FS 2 PD");
+    WARN_IF_ERR(pd_client_terminate(&ramdisk_pd), "Couldn't terminate Ramdisk PD");
 
     printf("------------------ENDING: %s------------------\n", __func__);
     return sel4test_get_result();
@@ -397,6 +398,8 @@ int test_kvstore_lib_same_pd_diff_ads(env_t env)
     pd_client_context_t hello_pd;
     error = start_hello_kvstore(SEPARATE_ADS, 0, &hello_pd, BADGE_SPACE_ID_NULL);
 
+    test_error_eq(remove_RDEs(), 0);
+
     /* Wait for test result */
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0, 0);
     tag = seL4_Recv(self_ep.raw_endpoint, NULL);
@@ -406,12 +409,9 @@ int test_kvstore_lib_same_pd_diff_ads(env_t env)
     dump_model();
 
     /* Cleanup PDs */
-    error = pd_client_terminate(&hello_pd);
-    test_assert(error == 0);
-    error = pd_client_terminate(&fs_pd);
-    test_assert(error == 0);
-    error = pd_client_terminate(&ramdisk_pd);
-    test_assert(error == 0);
+    WARN_IF_ERR(pd_client_terminate(&hello_pd), "Couldn't terminate hello PD");
+    WARN_IF_ERR(pd_client_terminate(&fs_pd), "Couldn't terminate FS 1 PD");
+    WARN_IF_ERR(pd_client_terminate(&ramdisk_pd), "Couldn't terminate Ramdisk PD");
 
     printf("------------------ENDING: %s------------------\n", __func__);
     return sel4test_get_result();
@@ -431,11 +431,7 @@ int test_kvstore_diff_threads(env_t env)
     pd_client_context_t hello_pd;
     error = start_hello_kvstore(SEPARATE_THREAD, 0, &hello_pd, BADGE_SPACE_ID_NULL);
 
-    /**
-     * We don't actually destroy the second thread because we don't start it as a PD here
-     * Then not all of its resources are destroyed
-     * Once fixed, we can properly destroy both PDs
-     */
+    test_error_eq(remove_RDEs(), 0);
 
     /* Wait for test result */
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0, 0);
@@ -446,12 +442,9 @@ int test_kvstore_diff_threads(env_t env)
     dump_model();
 
     /* Cleanup PDs */
-    error = pd_client_terminate(&hello_pd);
-    test_assert(error == 0);
-    error = pd_client_terminate(&fs_pd);
-    test_assert(error == 0);
-    error = pd_client_terminate(&ramdisk_pd);
-    test_assert(error == 0);
+    WARN_IF_ERR(pd_client_terminate(&hello_pd), "Couldn't terminate hello PD");
+    WARN_IF_ERR(pd_client_terminate(&fs_pd), "Couldn't terminate FS 1 PD");
+    WARN_IF_ERR(pd_client_terminate(&ramdisk_pd), "Couldn't terminate Ramdisk PD");
 
     printf("------------------ENDING: %s------------------\n", __func__);
     return sel4test_get_result();
@@ -493,6 +486,8 @@ int test_kvstore_two_sets(env_t env)
     error = seL4_MessageInfo_get_label(tag);
     test_assert(error == 0);
 
+    test_error_eq(remove_RDEs(), 0);
+
     /* Wait for test result 2 */
     tag = seL4_Recv(self_ep.raw_endpoint, NULL);
     error = seL4_MessageInfo_get_label(tag);
@@ -501,18 +496,13 @@ int test_kvstore_two_sets(env_t env)
     dump_model();
 
     /* Cleanup PDs */
-    error = pd_client_terminate(&hello_pd_1);
-    test_assert(error == 0);
-    error = pd_client_terminate(&hello_pd_2);
-    test_assert(error == 0);
-    error = pd_client_terminate(&kvstore_pd_1);
-    test_assert(error == 0);
-    error = pd_client_terminate(&kvstore_pd_2);
-    test_assert(error == 0);
-    error = pd_client_terminate(&fs_pd);
-    test_assert(error == 0);
-    error = pd_client_terminate(&ramdisk_pd);
-    test_assert(error == 0);
+    WARN_IF_ERR(pd_client_terminate(&hello_pd_1), "Couldn't terminate hello 1 PD");
+    WARN_IF_ERR(pd_client_terminate(&hello_pd_2), "Couldn't terminate hello 2 PD");
+    WARN_IF_ERR(pd_client_terminate(&kvstore_pd_1), "Couldn't terminate kvstore 1 PD");
+    WARN_IF_ERR(pd_client_terminate(&kvstore_pd_2), "Couldn't terminate kvstore 2 PD");
+    WARN_IF_ERR(pd_client_terminate(&fs_pd), "Couldn't terminate FS 1 PD");
+    WARN_IF_ERR(pd_client_terminate(&fs_2_pd), "Couldn't terminate FS 2 PD");
+    WARN_IF_ERR(pd_client_terminate(&ramdisk_pd), "Couldn't terminate Ramdisk PD");
 
     printf("------------------ENDING: %s------------------\n", __func__);
     return sel4test_get_result();
@@ -548,6 +538,8 @@ int test_kvstore_lib_in_diff_pd_crash(env_t env)
     pd_client_context_t hello_pd;
     error = start_hello_kvstore(SEPARATE_PROC, kvstore_ep, &hello_pd, nsid_2);
 
+    test_error_eq(remove_RDEs(), 0);
+
     /* Wait for test result */
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0, 0);
     tag = seL4_Recv(self_ep.raw_endpoint, NULL);
@@ -564,12 +556,9 @@ int test_kvstore_lib_in_diff_pd_crash(env_t env)
     dump_model();
 
     /* Cleanup servers */
-    error = pd_client_terminate(&hello_pd);
-    test_assert(error == 0);
-    error = pd_client_terminate(&kvstore_pd);
-    test_assert(error == 0);
-    error = pd_client_terminate(&fs_pd);
-    test_assert(error == 0);
+    WARN_IF_ERR(pd_client_terminate(&hello_pd), "Couldn't terminate hello PD");
+    WARN_IF_ERR(pd_client_terminate(&kvstore_pd), "Couldn't terminate kvstore PD");
+    WARN_IF_ERR(pd_client_terminate(&fs_pd), "Couldn't terminate FS PD");
 
     printf("------------------ENDING: %s------------------\n", __func__);
     return sel4test_get_result();

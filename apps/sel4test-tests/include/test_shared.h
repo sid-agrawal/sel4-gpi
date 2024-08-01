@@ -6,6 +6,17 @@
  * @file Define some functions shared between tests
  */
 
+// Use to warn of an error that does not necessarily mean test failure
+// This is often used for terminating PDs that may have been cleaned up already
+#define WARN_IF_ERR(error, msg)        \
+    do                                 \
+    {                                  \
+        if (error)                     \
+        {                              \
+            printf("WARN: %s\n", msg); \
+        }                              \
+    } while (0)
+
 /** BENCHMARKS **/
 
 /**

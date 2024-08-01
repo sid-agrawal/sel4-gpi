@@ -9,6 +9,7 @@
 #include <sel4gpi/debug.h>
 #include "../test.h"
 #include "../helpers.h"
+#include "test_shared.h"
 #include <sel4bench/arch/sel4bench.h>
 
 #include <sel4gpi/ads_clientapi.h>
@@ -141,11 +142,15 @@ int test_ramdisk(env_t env)
 #if EXTRACT_MODEL
     error = pd_client_dump(&pd_conn, NULL, 0);
 #endif
+
+    /* Remove RDEs from test process so that it won't be cleaned up by recursive cleanup */
+    error = pd_client_remove_rde(&pd_conn, sel4gpi_get_resource_type_code(BLOCK_RESOURCE_TYPE_NAME), BADGE_SPACE_ID_NULL);
+    test_assert(error == 0);
+
     // Cleanup server
     pd_client_context_t ramdisk_pd_conn;
     ramdisk_pd_conn.ep = ramdisk_pd_cap;
-    error = pd_client_terminate(&ramdisk_pd_conn);
-    test_assert(error == 0);
+    WARN_IF_ERR(pd_client_terminate(&ramdisk_pd_conn), "Couldn't terminate Ramdisk PD");
 
     printf("------------------ENDING: %s------------------\n", __func__);
     return sel4test_get_result();
