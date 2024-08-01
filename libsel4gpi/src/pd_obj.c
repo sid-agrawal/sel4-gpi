@@ -446,6 +446,11 @@ pd_held_resource_on_delete(resource_registry_node_t *node_gen, void *pd_v)
                 cap_type_to_str(node->res_id.type), node->res_id.space_id, node->res_id.object_id,
                 pd->id);
 
+    if (pd->id == get_gpi_server()->rt_pd_id) {
+        // The root task doesn't keep refcounts, nothing to do here
+        return;
+    }
+
     // If the resource is a core resource, free it directly
     // Decrement the registry entry's count, and if it reaches zero, the resource will be freed
     switch (node->res_id.type)
