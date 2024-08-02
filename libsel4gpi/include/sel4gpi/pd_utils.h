@@ -17,7 +17,6 @@
 #define PD_CAP_ROOT SEL4UTILS_CNODE_SLOT
 #define PD_CAP_DEPTH seL4_WordBits
 #define PD_CSPACE_SIZE_BITS 17
-#define EXTRACT_MODEL false
 
 /* OSmosis data on the TLS */
 extern __thread void *__sel4gpi_osm_data;

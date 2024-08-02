@@ -24,8 +24,8 @@
 #include <utils/uthash.h>
 #include <sel4gpi/pd_utils.h>
 #include <sel4gpi/pd_creation.h>
-
 #include <sel4runtime.h>
+#include "test_shared.h"
 
 #define TEST_LOG(msg, ...)                                  \
     do                                                      \
@@ -69,10 +69,9 @@ int test_new_process_osmosis_shmem(env_t env)
     error = pd_client_send_cap(&runnable.pd, shared_mo.ep, &slot);
     test_error_eq(error, 0);
 
-#if EXTRACT_MODEL
-    error = pd_client_dump(&runnable.pd, NULL, 0);
-    test_assert(error == 0);
-#endif
+    // Print model state
+    pd_client_context_t pd_conn = sel4gpi_get_pd_conn();
+    extract_model(&pd_conn);
 
     seL4_SetMR(0, slot);
     tag = seL4_MessageInfo_new(0, 0, 0, 1);

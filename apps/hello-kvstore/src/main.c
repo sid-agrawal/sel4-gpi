@@ -153,11 +153,6 @@ int main(int argc, char **argv)
 main_exit:
     /* notify parent of test result */
 
-#if EXTRACT_MODEL
-    pd_client_context_t self_pd = sel4gpi_get_pd_conn();
-    error = pd_client_dump(&self_pd, NULL, 0);
-    CHECK_ERROR(error, "Failed to extract model state\n");
-#endif
     printf("hello-kvstore: Exiting, notifying parent of test result: %u\n", error);
     tag = seL4_MessageInfo_new(error, 0, 0, 0);
     seL4_Send(parent_ep.raw_endpoint, tag);

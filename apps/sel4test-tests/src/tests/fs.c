@@ -271,10 +271,7 @@ int test_fs(env_t env)
     f = open(TEST_FNAME_3, O_RDWR);
     test_assert(f == -1);
 
-    // Print whole-pd model state
-#if EXTRACT_MODEL
-    error = pd_client_dump(&pd_conn, NULL, 0);
-#endif
+    extract_model(&pd_conn);
 
     /* Remove RDEs from test process so that it won't be cleaned up by recursive cleanup */
     error = pd_client_remove_rde(&pd_conn, sel4gpi_get_resource_type_code(BLOCK_RESOURCE_TYPE_NAME), BADGE_SPACE_ID_NULL);
@@ -425,6 +422,8 @@ int test_multiple_fs(env_t env)
     error = basic_fs_test();
     test_assert(error == 0);
 
+    extract_model(&pd_conn);
+
     /* Remove RDEs from test process so that it won't be cleaned up by recursive cleanup */
     error = pd_client_remove_rde(&pd_conn, sel4gpi_get_resource_type_code(BLOCK_RESOURCE_TYPE_NAME), BADGE_SPACE_ID_NULL);
     test_assert(error == 0);
@@ -444,11 +443,6 @@ int test_multiple_fs(env_t env)
     pd_client_context_t ramdisk_pd_conn;
     ramdisk_pd_conn.ep = ramdisk_pd_cap;
     WARN_IF_ERR(pd_client_terminate(&ramdisk_pd_conn), "Couldn't terminate ramdisk PD");
-
-    // Print whole-pd model state
-#if EXTRACT_MODEL
-    error = pd_client_dump(&pd_conn, NULL, 0);
-#endif
 
     printf("------------------ENDING: %s------------------\n", __func__);
     return sel4test_get_result();

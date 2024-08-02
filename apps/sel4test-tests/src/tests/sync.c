@@ -19,6 +19,7 @@
 #include <sel4gpi/pd_utils.h>
 #include <sel4gpi/pd_creation.h>
 #include <sel4gpi/resource_server_clientapi.h>
+#include "test_shared.h"
 
 /**
  * @file
@@ -191,6 +192,9 @@ int test_mutex(env_t env)
     // Second to finish
     tag = seL4_Recv(self_ep.raw_endpoint, NULL);
     int error2 = seL4_MessageInfo_get_label(tag);
+
+    // Print model state
+    extract_model(&pd_conn);
 
     // Cleanup both, ignore errors
     pd_client_terminate(&sync_pd_1.runnable.pd);

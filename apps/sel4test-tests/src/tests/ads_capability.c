@@ -18,6 +18,7 @@
 #include <sel4gpi/mo_component.h>
 #include <sel4gpi/debug.h>
 #include <sel4gpi/pd_utils.h>
+#include "test_shared.h"
 
 int test_ads_attach(env_t env)
 {
@@ -51,6 +52,10 @@ int test_ads_attach(env_t env)
         printf("MO[%u]: %u\n", i, ((char *)ret_vaddr)[i * PAGE_SIZE_4K]);
     }
     printf("Finished reading the new MO: %p\n", ret_vaddr);
+
+    // Print model state
+    pd_client_context_t pd_conn = sel4gpi_get_pd_conn();
+    extract_model(&pd_conn);
 
     return sel4test_get_result();
 }
@@ -90,6 +95,10 @@ int test_ads_rm(env_t env)
     // uncomment the following line to check, it should cause a page fault
     // printf("There should be a page fault after this...");
     // printf("MO: %u\n", ((char *)ret_vaddr)[0]);
+
+    // Print model state
+    pd_client_context_t pd_conn = sel4gpi_get_pd_conn();
+    extract_model(&pd_conn);
 
     return sel4test_get_result();
 }
@@ -135,6 +144,10 @@ int ads_create_many_osm(env_t env)
         // Remove RDE to avoid hitting resource directory size limit
         pd_client_remove_rde(&self_pd, GPICAP_TYPE_VMR, ads.id);
     }
+
+    // Print model state
+    pd_client_context_t pd_conn = sel4gpi_get_pd_conn();
+    extract_model(&pd_conn);
 
     return sel4test_get_result();
 }

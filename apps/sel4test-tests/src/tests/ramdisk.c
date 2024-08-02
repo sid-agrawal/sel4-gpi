@@ -139,9 +139,7 @@ int test_ramdisk(env_t env)
     test_assert(error == seL4_NoError);
 
     // Print whole-pd model state
-#if EXTRACT_MODEL
-    error = pd_client_dump(&pd_conn, NULL, 0);
-#endif
+    extract_model(&pd_conn);
 
     /* Remove RDEs from test process so that it won't be cleaned up by recursive cleanup */
     error = pd_client_remove_rde(&pd_conn, sel4gpi_get_resource_type_code(BLOCK_RESOURCE_TYPE_NAME), BADGE_SPACE_ID_NULL);

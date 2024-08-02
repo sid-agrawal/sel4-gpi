@@ -40,14 +40,6 @@ typedef enum _kvstore_mode
     SEPARATE_PROC
 } kvstore_mode_t;
 
-static void dump_model()
-{
-#if EXTRACT_MODEL
-    /* Print model state */
-    pd_client_dump(&pd_conn, NULL, 0);
-#endif
-}
-
 // Setup before all tests
 static int setup(env_t env)
 {
@@ -236,7 +228,7 @@ int test_kvstore_lib_in_same_pd(env_t env)
     error = seL4_MessageInfo_get_label(tag);
     test_assert(error == 0);
 
-    dump_model();
+    extract_model(&pd_conn);
 
     /* Cleanup servers */
     WARN_IF_ERR(pd_client_terminate(&hello_pd), "Couldn't terminate hello PD");
@@ -275,7 +267,7 @@ int test_kvstore_lib_in_diff_pd(env_t env)
     error = seL4_MessageInfo_get_label(tag);
     test_assert(error == 0);
 
-    dump_model();
+    extract_model(&pd_conn);
 
     /* Cleanup servers */
     WARN_IF_ERR(pd_client_terminate(&hello_pd), "Couldn't terminate hello PD");
@@ -326,7 +318,7 @@ int test_kvstore_diff_namespace(env_t env)
     error = seL4_MessageInfo_get_label(tag);
     test_assert(error == 0);
 
-    dump_model();
+    extract_model(&pd_conn);
 
     /* Cleanup PDs */
     WARN_IF_ERR(pd_client_terminate(&hello_pd), "Couldn't terminate hello PD");
@@ -371,7 +363,7 @@ int test_kvstore_diff_fs(env_t env)
     error = seL4_MessageInfo_get_label(tag);
     test_assert(error == 0);
 
-    dump_model();
+    extract_model(&pd_conn);
 
     /* Cleanup PDs */
     WARN_IF_ERR(pd_client_terminate(&hello_pd), "Couldn't terminate hello PD");
@@ -406,7 +398,7 @@ int test_kvstore_lib_same_pd_diff_ads(env_t env)
     error = seL4_MessageInfo_get_label(tag);
     test_assert(error == 0);
 
-    dump_model();
+    extract_model(&pd_conn);
 
     /* Cleanup PDs */
     WARN_IF_ERR(pd_client_terminate(&hello_pd), "Couldn't terminate hello PD");
@@ -439,7 +431,7 @@ int test_kvstore_diff_threads(env_t env)
     error = seL4_MessageInfo_get_label(tag);
     test_assert(error == 0);
 
-    dump_model();
+    extract_model(&pd_conn);
 
     /* Cleanup PDs */
     WARN_IF_ERR(pd_client_terminate(&hello_pd), "Couldn't terminate hello PD");
@@ -493,7 +485,7 @@ int test_kvstore_two_sets(env_t env)
     error = seL4_MessageInfo_get_label(tag);
     test_assert(error == 0);
 
-    dump_model();
+    extract_model(&pd_conn);
 
     /* Cleanup PDs */
     WARN_IF_ERR(pd_client_terminate(&hello_pd_1), "Couldn't terminate hello 1 PD");
@@ -546,14 +538,14 @@ int test_kvstore_lib_in_diff_pd_crash(env_t env)
     error = seL4_MessageInfo_get_label(tag);
     test_assert(error == 0);
 
-    dump_model();
+    extract_model(&pd_conn);
 
     /* Crash the ramdisk */
     printf("Crashing the ramdisk\n");
     error = pd_client_terminate(&ramdisk_pd);
     test_assert(error == 0);
 
-    dump_model();
+    extract_model(&pd_conn);
 
     /* Cleanup servers */
     WARN_IF_ERR(pd_client_terminate(&hello_pd), "Couldn't terminate hello PD");

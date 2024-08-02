@@ -119,8 +119,6 @@ typedef struct _osm_pd_shared_data
     osmosis_rde_t rde[GPICAP_TYPE_MAX][MAX_NS_PER_RDE];              ///< Resource directory
     uint64_t rde_count;
 
-    gpi_obj_id_t current_client_id; ///< Resource server sets this field while processing a client request
-                                    ///< If the server crashes before it finishes, the client will also be killed
     seL4_CPtr reply_cap;            ///< For resource servers, store the reply cap of the
                                     ///< request that is currently being processed
     char test_name[TEST_NAME_MAX];  ///< For a test process, the name of the test to run

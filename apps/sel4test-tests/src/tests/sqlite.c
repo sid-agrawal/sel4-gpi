@@ -271,6 +271,9 @@ int test_sqlite(env_t env)
     error = sqlite3_close(db2);
     test_assert(error == SQLITE_OK);
 
+    // Print model state
+    extract_model(&pd_conn);
+
     // Shut down sqlite
     error = sqlite3_shutdown();
     test_assert(error == SQLITE_OK);

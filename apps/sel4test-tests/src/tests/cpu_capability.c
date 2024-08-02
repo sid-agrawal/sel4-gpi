@@ -24,6 +24,7 @@
 #include <sel4gpi/pd_utils.h>
 #include <sel4gpi/pd_creation.h>
 #include <sel4runtime.h>
+#include "test_shared.h"
 
 extern __thread void *__sel4gpi_osm_data;
 extern void _start(void);
@@ -106,9 +107,10 @@ int test_osm_threads(env_t env)
     sel4test_sleep(env, 5 * MILLISECOND);
     sel4gpi_config_destroy(cfg);
 
-#if EXTRACT_MODEL
-    pd_client_dump(&runnable.pd, NULL, 0);
-#endif
+    // Print model state
+    pd_client_context_t pd_conn = sel4gpi_get_pd_conn();
+    extract_model(&pd_conn);
+    
     return sel4test_get_result();
 }
 
@@ -143,9 +145,10 @@ int test_threads_isolated_stack(env_t env)
     printf("exiting %s\n", __func__);
     sel4gpi_config_destroy(cfg);
 
-#if EXTRACT_MODEL
-    pd_client_dump(&runnable.pd, NULL, 0);
-#endif
+    // Print model state
+    pd_client_context_t pd_conn = sel4gpi_get_pd_conn();
+    extract_model(&pd_conn);
+
     return sel4test_get_result();
 }
 

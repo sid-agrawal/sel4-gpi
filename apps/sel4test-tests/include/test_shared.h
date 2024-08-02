@@ -17,6 +17,11 @@
         }                              \
     } while (0)
 
+/**
+ * If model extraction is enabled, extract the whole model state
+ */
+void extract_model(pd_client_context_t *pd_conn);
+
 /** BENCHMARKS **/
 
 /**

@@ -221,24 +221,19 @@ int test_cleanup_policy_1(env_t env)
         error = seL4_MessageInfo_get_label(tag);
         test_assert(error == 0);
     }
-#if EXTRACT_MODEL
-    /* Print model state before crash */
+
+    // Print model state
     printf("Dumping model state before crash\n");
-    error = pd_client_dump(&pd_conn, NULL, 0);
-    test_assert(error == 0);
-#endif
+    extract_model(&pd_conn);
 
-    /* Crash a PD */
-    printf("Crashing server PD\n");
-    error = pd_client_terminate(&hello_server_pd);
-    test_assert(error == 0);
+    // Print model state
+    pd_client_context_t pd_conn = sel4gpi_get_pd_conn();
+    extract_model(&pd_conn);
 
-#if EXTRACT_MODEL
-    /* Print model state after crash */
+    // Print model state
     printf("Dumping model state after crash\n");
-    error = pd_client_dump(&pd_conn, NULL, 0);
-    test_assert(error == 0);
-#endif
+    extract_model(&pd_conn);
+
     /* Cleanup PDs */
     error = pd_client_terminate(&hello_client_pd);
 
@@ -356,23 +351,20 @@ int test_cleanup_policy_2(env_t env)
         error = seL4_MessageInfo_get_label(tag);
         test_assert(error == 0);
     }
-#if EXTRACT_MODEL
-    /* Print model state before crash */
+
+    // Print model state
     printf("Dumping model state before crash\n");
-    error = pd_client_dump(&pd_conn, NULL, 0);
-    test_assert(error == 0);
-#endif
+    extract_model(&pd_conn);
+
     /* Crash a PD */
     printf("Crashing toy_block server PD\n");
     error = pd_client_terminate(&hello_server_toy_block_pd);
     test_assert(error == 0);
 
-#if EXTRACT_MODEL
-    /* Print model state after crash */
+    // Print model state
     printf("Dumping model state after crash\n");
-    error = pd_client_dump(&pd_conn, NULL, 0);
-    test_assert(error == 0);
-#endif
+    extract_model(&pd_conn);
+
     /* Cleanup PDs */
     error = pd_client_terminate(&hello_server_toy_file_pd);
 
@@ -487,25 +479,19 @@ int test_cleanup_policy_3(env_t env)
         test_assert(error == 0);
     }
 
-#if EXTRACT_MODEL
-    /* Print model state before crash */
+    // Print model state
     printf("Dumping model state before crash\n");
-    error = pd_client_dump(&pd_conn, NULL, 0);
-    test_assert(error == 0);
-#endif
+    extract_model(&pd_conn);
 
     /* Crash a PD */
     printf("Crashing toy_block server PD\n");
     error = pd_client_terminate(&hello_server_toy_block_pd);
     test_assert(error == 0);
 
-#if EXTRACT_MODEL
-    /* Print model state after crash */
+    // Print model state
     printf("Dumping model state after crash\n");
-    error = pd_client_dump(&pd_conn, NULL, 0);
-    test_assert(error == 0);
-#endif
-
+    extract_model(&pd_conn);
+    
     /* Cleanup PDs */
     error = pd_client_terminate(&hello_server_toy_file_pd);
 

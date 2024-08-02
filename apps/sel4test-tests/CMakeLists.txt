@@ -69,6 +69,14 @@ else()
     set(GPIBenchmarkDef "GPI_BENCHMARK_SINGLE")
 endif()
 
+set(GPIExtractModel OFF CACHE BOOL "If true, extract the model state during tests")
+
+if (GPIExtractModel)
+    set(GPIExtractModelDef "GPI_EXTRACT_MODEL")
+else()
+    set(GPIExtractModelDef "GPI_NO_EXTRACT")
+endif()
+
 target_link_libraries(
     sel4test-tests
     PUBLIC
@@ -95,4 +103,5 @@ target_link_libraries(
 )
 
 target_compile_options(sel4test-tests PUBLIC
-    "-D${GPIBenchmarkDef}")
+    "-D${GPIBenchmarkDef}"
+    "-D${GPIExtractModelDef}")
