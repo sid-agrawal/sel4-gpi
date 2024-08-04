@@ -86,7 +86,7 @@ static void on_attach_registry_delete(resource_registry_node_t *node_gen, void *
     }
 
     // Delete the corresponding map entry
-    resource_registry_delete(&ads->attach_id_to_vaddr_map, (resource_registry_node_t *) node->map_entry);
+    resource_registry_delete(&ads->attach_id_to_vaddr_map, (resource_registry_node_t *)node->map_entry);
 }
 
 int ads_initialize(ads_t *ads)
@@ -203,19 +203,23 @@ int ads_new(ads_t *ads,
     return error;
 
 err_goto:
-    if (ads->vspace) {
+    if (ads->vspace)
+    {
         free(ads->vspace);
     }
-    
-    if (ads->process_for_cookies) {
-        free(ads->process_for_cookies);
-    } 
 
-    if (vspace_root_object) {
+    if (ads->process_for_cookies)
+    {
+        free(ads->process_for_cookies);
+    }
+
+    if (vspace_root_object)
+    {
         vka_free_object(vka, vspace_root_object);
     }
 
-    if (alloc_data) {
+    if (alloc_data)
+    {
         free(alloc_data);
     }
 
@@ -302,18 +306,23 @@ int ads_reserve(ads_t *ads,
     return error;
 
 err_goto:
-    if (nodes_inserted) {
+    if (nodes_inserted)
+    {
         resource_registry_delete(&ads->attach_registry, (resource_registry_node_t *)attach_node);
-    } else {
-        if (attach_node) {
+    }
+    else
+    {
+        if (attach_node)
+        {
             free(attach_node);
         }
 
-        if (attach_node_map_entry) {
+        if (attach_node_map_entry)
+        {
             free(attach_node_map_entry);
         }
     }
-    
+
     return error;
 }
 
@@ -506,14 +515,16 @@ int ads_forge_attach(ads_t *ads, sel4utils_res_t *res, mo_t *mo)
     return error;
 
 err_goto:
-    if (attach_node) {
+    if (attach_node)
+    {
         free(attach_node);
     }
 
-    if (attach_node_map_entry) {
+    if (attach_node_map_entry)
+    {
         free(attach_node_map_entry);
     }
-    
+
     return error;
 }
 
@@ -553,6 +564,9 @@ gpi_model_node_t *ads_dump_rr(ads_t *ads, model_state_t *ms, gpi_model_node_t *p
     if (!ads_space_node)
     {
         ads_space_node = add_resource_space_node(ms, GPICAP_TYPE_ADS, ads->id, false);
+        gpi_model_node_t *mo_space_node = add_resource_space_node(ms, GPICAP_TYPE_MO,
+                                                                  get_mo_component()->space_id, false);
+        add_edge(ms, GPI_EDGE_TYPE_MAP, ads_space_node, mo_space_node);
     }
 
     if (!ads_space_node->extracted)
@@ -582,8 +596,9 @@ gpi_model_node_t *ads_dump_rr(ads_t *ads, model_state_t *ms, gpi_model_node_t *p
             /* Add the relation from VMR to MO node, if there is one */
             if (res->mo_attached)
             {
-                gpi_model_node_t *mo_node = get_resource_node(ms, make_res_id(GPICAP_TYPE_MO,
-                                                                              get_mo_component()->space_id, res->mo_id));
+                gpi_model_node_t *mo_node = get_resource_node(
+                    ms,
+                    make_res_id(GPICAP_TYPE_MO, get_mo_component()->space_id, res->mo_id));
 
                 if (!mo_node)
                 {

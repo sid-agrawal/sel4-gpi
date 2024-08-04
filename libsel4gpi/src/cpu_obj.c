@@ -69,7 +69,7 @@ int cpu_config_vspace(cpu_t *cpu,
                                cnode_guard,
                                vspace_root,
                                0, // domain
-                               (seL4_Word) ipc_buf_addr,
+                               (seL4_Word)ipc_buf_addr,
                                ipc_buffer_frame);
     SERVER_GOTO_IF_ERR(error, "Failed to configure TCB\n");
 
@@ -94,7 +94,7 @@ int cpu_change_vspace(cpu_t *cpu,
                                cpu->cspace_guard,
                                vspace_root,
                                0, // domain
-                               (seL4_Word) cpu->ipc_buf_addr,
+                               (seL4_Word)cpu->ipc_buf_addr,
                                cpu->ipc_frame_cap);
 
 err_goto:
@@ -132,8 +132,30 @@ gpi_model_node_t *cpu_dump_rr(cpu_t *cpu, model_state_t *ms, gpi_model_node_t *p
     gpi_model_node_t *root_node = get_root_node(ms);
 
     // Add the VCPU resource space
-    gpi_model_node_t *vcpu_space_node = add_resource_space_node(ms, GPICAP_TYPE_CPU,
-                                                                get_cpu_component()->space_id, false);
+    gpi_model_node_t *vcpu_space_node = get_resource_space_node(ms, GPICAP_TYPE_CPU,
+                                                                get_cpu_component()->space_id);
+
+    if (!vcpu_space_node)
+    {
+        vcpu_space_node = add_resource_space_node(ms, GPICAP_TYPE_CPU,
+                                                  get_cpu_component()->space_id, false);
+        add_edge(ms, GPI_EDGE_TYPE_HOLD, root_node, vcpu_space_node); // the RT holds this resource space
+    }
+
+    // Add the PCPU resource space
+    // This is a space that only exists in extraction
+    // Just reuse the vcpu space ID, since we know it is, and space IDs are only required to be unique per type,
+    // not globally
+    gpi_model_node_t *pcpu_space_node = get_resource_space_node(ms, GPICAP_TYPE_CPU,
+                                                                get_cpu_component()->space_id);
+
+    if (!pcpu_space_node)
+    {
+        pcpu_space_node = add_resource_space_node(ms, GPICAP_TYPE_CPU,
+                                                  get_cpu_component()->space_id, false);
+        add_edge(ms, GPI_EDGE_TYPE_HOLD, root_node, pcpu_space_node);      // the RT holds this resource space
+        add_edge(ms, GPI_EDGE_TYPE_MAP, vcpu_space_node, pcpu_space_node); // vcpu space maps to pcpu space
+    }
 
     /* Add the Virtual CPU node */
     gpi_res_id_t cpu_id = make_res_id(GPICAP_TYPE_CPU, get_cpu_component()->space_id, cpu->id);
@@ -164,7 +186,7 @@ gpi_model_node_t *cpu_dump_rr(cpu_t *cpu, model_state_t *ms, gpi_model_node_t *p
         gpi_model_node_t *cpu_core_node = add_resource_node(ms, make_res_id(GPICAP_TYPE_PCPU, 1, affinity), true);
         add_edge(ms, GPI_EDGE_TYPE_MAP, cpu_node, cpu_core_node);
         add_edge(ms, GPI_EDGE_TYPE_HOLD, root_node, cpu_core_node);
-        add_edge(ms, GPI_EDGE_TYPE_HOLD, root_node, vcpu_space_node); // the RT holds this resource space
+        add_edge(ms, GPI_EDGE_TYPE_SUBSET, cpu_core_node, pcpu_space_node);
 
         cpu_node->extracted = true;
 // (XXX) Arya: Do not actually show CPU->ADS arrow... do we need it?

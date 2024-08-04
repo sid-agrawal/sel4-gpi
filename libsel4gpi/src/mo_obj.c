@@ -106,8 +106,13 @@ gpi_model_node_t *mo_dump_rr(mo_t *mo, model_state_t *ms, gpi_model_node_t *pd_n
     gpi_model_node_t *root_node = get_root_node(ms);
 
     // Add the MO resource space
-    gpi_model_node_t *mo_space_node = add_resource_space_node(ms, GPICAP_TYPE_MO, get_mo_component()->space_id, false);
-    add_edge(ms, GPI_EDGE_TYPE_HOLD, root_node, mo_space_node); // the RT holds this resource space
+    gpi_model_node_t *mo_space_node = get_resource_space_node(ms, GPICAP_TYPE_MO, get_mo_component()->space_id);
+
+    if (!mo_space_node)
+    {
+        mo_space_node = add_resource_space_node(ms, GPICAP_TYPE_MO, get_mo_component()->space_id, false);
+        add_edge(ms, GPI_EDGE_TYPE_HOLD, root_node, mo_space_node); // the RT holds this resource space
+    }
 
     /* Add the MO node */
     gpi_res_id_t mo_id = make_res_id(GPICAP_TYPE_MO, get_mo_component()->space_id, mo->id);
@@ -119,7 +124,7 @@ gpi_model_node_t *mo_dump_rr(mo_t *mo, model_state_t *ms, gpi_model_node_t *pd_n
     }
 
     if (!mo_node->extracted)
-    {        
+    {
         add_edge(ms, GPI_EDGE_TYPE_HOLD, pd_node, mo_node);
         add_edge(ms, GPI_EDGE_TYPE_SUBSET, mo_node, mo_space_node);
 
