@@ -589,7 +589,7 @@ gpi_model_node_t *ads_dump_rr(ads_t *ads, model_state_t *ms, gpi_model_node_t *p
                 {
                     mo_node = add_resource_node(ms,
                                                 make_res_id(GPICAP_TYPE_MO, get_mo_component()->space_id, res->mo_id),
-                                                true);
+                                                false);
                     // mark the node to be dumped later on, since we've only added it here for the MAP edge
                 }
 

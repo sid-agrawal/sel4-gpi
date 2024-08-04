@@ -138,7 +138,7 @@ static void pd_remove_resource_internal(pd_t *pd, resource_registry_node_t *hold
             OSDB_PRINTERR("Failed to delete resource from PD(%u)\n", pd->id);
         }
 
-        // (XXX) Arya: choosing not to free slots so that the PD doesn't 
+        // (XXX) Arya: choosing not to free slots so that the PD doesn't
         // accidentally use a new resource in the same slot
         // pd->pd_vka->cspace_free(pd->pd_vka->data, cap);
     }
@@ -447,7 +447,8 @@ pd_held_resource_on_delete(resource_registry_node_t *node_gen, void *pd_v)
     pd_hold_node_t *node = (pd_hold_node_t *)node_gen;
     pd_t *pd = (pd_t *)pd_v;
 
-    if (pd->id == get_gpi_server()->rt_pd_id) {
+    if (pd->id == get_gpi_server()->rt_pd_id)
+    {
         // The root task doesn't keep refcounts, nothing to do here
         return;
     }

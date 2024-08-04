@@ -30,7 +30,7 @@ void resource_registry_insert(resource_registry_t *registry, resource_registry_n
 {
     assert(registry != NULL);
     assert(node != NULL);
-
+    
     node->count = 1;
     assert(node->object_id <= registry->max_object_id);
     HASH_ADD(hh, registry->head, object_id, sizeof(node->object_id), node);

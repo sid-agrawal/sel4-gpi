@@ -119,7 +119,7 @@ gpi_model_node_t *mo_dump_rr(mo_t *mo, model_state_t *ms, gpi_model_node_t *pd_n
     }
 
     if (!mo_node->extracted)
-    {
+    {        
         add_edge(ms, GPI_EDGE_TYPE_HOLD, pd_node, mo_node);
         add_edge(ms, GPI_EDGE_TYPE_SUBSET, mo_node, mo_space_node);
 

@@ -247,8 +247,9 @@ int sqlite_tests(void)
     assert(strcmp(list_head->next->vals[0], "string-20") == 0);
     free_sqlite_row_list();
 
-    /* Don't close so we can see the files in model state */
+    /* If doing extraction, don't close so we can see the files in model state */
 
+#ifndef GPI_EXTRACT_MODEL
     // Close the dbs
     error = sqlite3_close(db);
     assert(error == SQLITE_OK);
@@ -256,6 +257,7 @@ int sqlite_tests(void)
     // Shut down sqlite
     error = sqlite3_shutdown();
     assert(error == SQLITE_OK);
+#endif
 
     printf("---- SQLite tests pass ----\n");
 

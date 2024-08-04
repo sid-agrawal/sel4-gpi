@@ -308,7 +308,7 @@ static void handle_revoke_resource_request(seL4_Word sender_badge,
     OSDB_PRINTF("resource server %u revokes resource in space %u with ID %u from PD (%u)\n",
                 client_id, space_entry->space.id, object_id, msg->target_pd_id);
 
-    // Remove the resource from all PDs
+    // Remove the resource from the specified PD
     error = pd_remove_resource(&target_pd->pd,
                                make_res_id(resource_type, space_entry->space.id, object_id));
 

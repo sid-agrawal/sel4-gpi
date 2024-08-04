@@ -407,7 +407,7 @@ int ramdisk_work_handler(PdWorkReturnMessage *work)
             RAMDISK_PRINTF("Free blockno %d\n", blockno);
             free_block(blockno);
         }
-
+        
         error = pd_client_finish_work(&get_ramdisk_server()->gen.pd_conn, work->object_ids_count);
     }
     else if (op == PdWorkAction_DESTROY)

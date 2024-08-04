@@ -492,8 +492,7 @@ int test_kvstore_two_sets(env_t env)
     WARN_IF_ERR(pd_client_terminate(&hello_pd_2), "Couldn't terminate hello 2 PD");
     WARN_IF_ERR(pd_client_terminate(&kvstore_pd_1), "Couldn't terminate kvstore 1 PD");
     WARN_IF_ERR(pd_client_terminate(&kvstore_pd_2), "Couldn't terminate kvstore 2 PD");
-    WARN_IF_ERR(pd_client_terminate(&fs_pd), "Couldn't terminate FS 1 PD");
-    WARN_IF_ERR(pd_client_terminate(&fs_2_pd), "Couldn't terminate FS 2 PD");
+    WARN_IF_ERR(pd_client_terminate(&fs_pd), "Couldn't terminate FS PD");
     WARN_IF_ERR(pd_client_terminate(&ramdisk_pd), "Couldn't terminate Ramdisk PD");
 
     printf("------------------ENDING: %s------------------\n", __func__);

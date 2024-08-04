@@ -868,6 +868,8 @@ static void handle_finish_work_req(seL4_Word sender_badge, PdFinishWorkMessage *
 
     // (XXX) Arya: doesn't do any authentication, or check if we actually needed this piece
     // For simplicity, just decrement the counter of "remaining pieces"
+    // THIS LOGIC IS DEFINITELY WRONG
+    // If there was work in the queue before the termination was started, or work was added later...
 
     if (!get_gpi_server()->pending_termination)
     {
@@ -876,7 +878,16 @@ static void handle_finish_work_req(seL4_Word sender_badge, PdFinishWorkMessage *
     }
 
     // Update the pending termination counter
-    get_gpi_server()->pd_termination_n_missing -= msg->n_requests;
+    if (msg->n_requests > get_gpi_server()->pd_termination_n_missing)
+    {
+        OSDB_PRINTWARN("Got 'finished work request' for %d requests, expecting %d\n", msg->n_requests,
+                       get_gpi_server()->pd_termination_n_missing);
+        get_gpi_server()->pd_termination_n_missing = 0;
+    }
+    else
+    {
+        get_gpi_server()->pd_termination_n_missing -= msg->n_requests;
+    }
 
     /* Check if the cleanup is finished */
     if (get_gpi_server()->pd_termination_n_missing == 0)
@@ -899,7 +910,7 @@ static void handle_finish_work_req(seL4_Word sender_badge, PdFinishWorkMessage *
     }
     else
     {
-        OSDB_PRINTF("Current PD cleanup is still missing %u pieces\n", get_gpi_server()->model_extraction_n_missing);
+        OSDB_PRINTF("Current PD cleanup is still missing %u pieces\n", get_gpi_server()->pd_termination_n_missing);
     }
 
 err_goto:

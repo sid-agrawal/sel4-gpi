@@ -123,6 +123,28 @@ static void file_registry_entry_on_delete(resource_registry_node_t *node_gen, vo
 
   // Close the file in the FS
   xv6fs_sys_fileclose(node->file);
+
+  // Delete the resource from the global file space
+  int error;
+  gpi_obj_id_t inum = (gpi_obj_id_t)node->gen.object_id;
+  error = resspc_client_delete_resource(&get_xv6fs_server()->gen.default_space, inum);
+  CHECK_ERROR_GOTO(error, "Failed to delete file resource in global namespace", FsError_UNKNOWN, err_goto);
+
+  // Delete the file from any namespaces
+  resource_registry_node_t *curr, *tmp;
+  HASH_ITER(hh, get_xv6fs_server()->ns_registry.head, curr, tmp)
+  {
+    fs_namespace_entry_t *node = (fs_namespace_entry_t *)curr;
+
+    // (XXX) Arya: We do not track whether or not files exist in a namespace, so we just try deleting from all
+    error = resspc_client_delete_resource(&node->res_space_conn, inum);
+    CHECK_ERROR_GOTO(error, "Failed to delete file resource in namespace", FsError_UNKNOWN, err_goto);
+  }
+
+  return;
+
+err_goto:
+  ZF_LOGF("xv6fs Server: Failed to delete file %u\n", inum);
 }
 
 /*--- XV6FS SERVER ---*/
@@ -188,6 +210,30 @@ static int destroy_ns(gpi_space_id_t ns_id, bool notify_rt)
 
   // Clear then namespace from the registry
   resource_registry_delete(&get_xv6fs_server()->ns_registry, (resource_registry_node_t *)ns);
+
+err_goto:
+  return error;
+}
+
+/**
+ * Remove a deleted file from the registry and revoke from all namespaces
+ */
+static int delete_file(gpi_obj_id_t inum)
+{
+  int error = 0;
+
+  // Find the file in the global file registry
+  uint64_t inum_64 = inum & 0xFFFFFFFF;
+  file_registry_entry_t *reg_entry = (file_registry_entry_t *)resource_registry_get_by_id(
+      &get_xv6fs_server()->file_registry, inum_64);
+
+  if (reg_entry)
+  {
+    // Remove the file from registry
+    resource_registry_delete(&get_xv6fs_server()->file_registry, (resource_registry_node_t *)reg_entry);
+  }
+
+  // If there is no reg entry, then there is no resource to delete
 
 err_goto:
   return error;
@@ -484,22 +530,8 @@ void xv6fs_request_handler(void *msg_p,
       // If the unlink deleted the file, delete the file resource
       if (was_last_link)
       {
-        // Find the file in the registry
-        file_registry_entry_t *reg_entry =
-            (file_registry_entry_t *)resource_registry_get_by_badge(
-                &get_xv6fs_server()->file_registry,
-                sender_badge);
-
-        if (reg_entry)
-        {
-          // Remove the file from registry
-          resource_registry_delete(&get_xv6fs_server()->file_registry, (resource_registry_node_t *)reg_entry);
-
-          // Delete the resource
-          error = resspc_client_delete_resource(&get_xv6fs_server()->gen.default_space, (seL4_Word)inum);
-          CHECK_ERROR_GOTO(error, "Failed to delete file resource in global namespace", FsError_UNKNOWN, done);
-        }
-        // If there is no reg entry, then there is no resource to delete
+        error = delete_file(inum);
+        CHECK_ERROR_GOTO(error, "Failed to delete file", FsError_UNKNOWN, done);
       }
 
       break;
@@ -739,11 +771,11 @@ int xv6fs_work_handler(PdWorkReturnMessage *work)
       error = xv6fs_sys_walk(path, false, inums, &n_files);
       CHECK_ERROR_GOTO(error, "Failed to walk FS", FsError_UNKNOWN, err_goto);
 
-      // (XXX) Arya: A lot of this should be moved to PD component once we have resource spaces implemented
-
       /* Add the PD nodes */
       char client_pd_id_str[CSV_MAX_STRING_SIZE];
       get_pd_id(client_pd_id, client_pd_id_str);
+      char fs_pd_id_str[CSV_MAX_STRING_SIZE];
+      get_pd_id(sel4gpi_get_pd_conn().id, fs_pd_id_str);
 
       /* Add the file resource space node */
       char file_space_id[CSV_MAX_STRING_SIZE];
@@ -760,13 +792,22 @@ int xv6fs_work_handler(PdWorkReturnMessage *work)
       {
         XV6FS_PRINTF("Get RR for fileno %u\n", inums[i]);
 
-        /* Add the file resource node */
-        char file_id[CSV_MAX_STRING_SIZE];
-        get_resource_id(make_res_id(get_xv6fs_server()->gen.resource_type,
-                                    get_xv6fs_server()->gen.default_space.id,
-                                    inums[i]),
-                        file_id);
-        add_edge_by_id(model_state, GPI_EDGE_TYPE_HOLD, client_pd_id_str, file_id);
+// (XXX) Arya: we have to add all file resource nodes here, because the files may be closed,
+// so the root task wouldn't add them
+
+/* Add the file resource node */
+#if 1
+        gpi_model_node_t *file_node = add_resource_node(
+            model_state,
+            make_res_id(get_xv6fs_server()->gen.resource_type, get_xv6fs_server()->gen.default_space.id, inums[i]),
+            true);
+
+        /* Add the subset edge */
+        add_edge_by_id(model_state, GPI_EDGE_TYPE_SUBSET, file_node->id, file_space_id);
+
+        /* Add the hold edges */
+        add_edge_by_id(model_state, GPI_EDGE_TYPE_HOLD, client_pd_id_str, file_node->id);
+        add_edge_by_id(model_state, GPI_EDGE_TYPE_HOLD, fs_pd_id_str, file_node->id);
 
         /* Add relations for blocks */
         error = xv6fs_sys_inode_blocknos(inums[i], blocknos, n_blocknos, &n_blocknos);
@@ -780,8 +821,9 @@ int xv6fs_work_handler(PdWorkReturnMessage *work)
 
           char block_id_str[CSV_MAX_STRING_SIZE];
           get_resource_id(make_res_id(block_cap_type, block_space_id, block_id), block_id_str);
-          add_edge_by_id(model_state, GPI_EDGE_TYPE_MAP, file_id, block_id_str);
+          add_edge_by_id(model_state, GPI_EDGE_TYPE_MAP, file_node->id, block_id_str);
         }
+#endif
       }
 
       free(blocknos);
