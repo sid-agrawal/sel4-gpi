@@ -823,12 +823,16 @@ static int benchmark_fs(env_t env)
     error = pd_client_remove_rde(&pd_conn, sel4gpi_get_resource_type_code(FILE_RESOURCE_TYPE_NAME), BADGE_SPACE_ID_NULL);
     test_assert(error == 0);
 
+    // And remove the file for the same reason
+    error = close(f);
+    test_assert(error == 0);
+
     // Terminate PDs
     pd_client_context_t fs_context = {.ep = fs_pd_cap};
-    WARN_IF_ERR(pd_client_terminate(&fs_context), "Couldn't terminate FS PD");
+    test_error_eq(maybe_terminate_pd(&fs_context), 0);
 
     pd_client_context_t ramdisk_context = {.ep = ramdisk_pd_cap};
-    WARN_IF_ERR(pd_client_terminate(&ramdisk_context), "Couldn't terminate ramdisk PD");
+    test_error_eq(maybe_terminate_pd(&ramdisk_context), 0);
 
     sel4bench_destroy();
     return sel4test_get_result();
@@ -1060,8 +1064,7 @@ int benchmark_process_spawn_osm(env_t env)
     test_error_eq(error, 0);
 
     // Cleanup
-    error = pd_client_terminate(&pd);
-    // ignore error, if the PD already terminated
+    test_error_eq(maybe_terminate_pd(&pd), 0);
 
     sel4bench_destroy();
     return sel4test_get_result();
@@ -1183,72 +1186,13 @@ static int internal_benchmark_cleanup_toy_servers(env_t env, hello_cleanup_mode_
     benchmark_print_result(end - start);
 
     /* Cleanup other PDs */
-
-    if (server_to_crash != HELLO_CLEANUP_TOY_BLOCK_SERVER_MODE)
-    {
-        error = pd_client_terminate(&hello_server_toy_block_pd);
-
-        if (error != seL4_NoError)
-        {
-            printf("WARNING: Failed to cleanup hello-server-toy_block PD (%u), "
-                   "this may be expected if the cleanup policy already destroyed it. \n",
-                   hello_server_toy_block_pd.id);
-        }
-    }
-
-    if (server_to_crash != HELLO_CLEANUP_TOY_FILE_SERVER_MODE)
-    {
-        error = pd_client_terminate(&hello_server_toy_file_pd);
-
-        if (error != seL4_NoError)
-        {
-            printf("WARNING: Failed to cleanup hello-server-toy_file PD (%u), "
-                   "this may be expected if the cleanup policy already destroyed it. \n",
-                   hello_server_toy_file_pd.id);
-        }
-    }
-
-    if (server_to_crash != HELLO_CLEANUP_TOY_DB_SERVER_MODE)
-    {
-        error = pd_client_terminate(&hello_server_toy_db_pd);
-
-        if (error != seL4_NoError)
-        {
-            printf("WARNING: Failed to cleanup hello-server-toy_db PD (%u), "
-                   "this may be expected if the cleanup policy already destroyed it. \n",
-                   hello_server_toy_db_pd.id);
-        }
-    }
-
-    error = pd_client_terminate(&hello_client_toy_block_pd);
-
-    if (error != seL4_NoError)
-    {
-        printf("WARNING: Failed to cleanup hello-client-toy_block PD (%u), "
-               "this may be expected if the cleanup policy already destroyed it. \n",
-               hello_client_toy_block_pd.id);
-    }
-
-    error = pd_client_terminate(&hello_client_toy_file_pd);
-
-    if (error != seL4_NoError)
-    {
-        printf("WARNING: Failed to cleanup hello-client-toy_file PD (%u), "
-               "this may be expected if the cleanup policy already destroyed it. \n",
-               hello_client_toy_file_pd.id);
-    }
-
-    error = pd_client_terminate(&hello_client_toy_db_pd);
-
-    if (error != seL4_NoError)
-    {
-        printf("WARNING: Failed to cleanup hello-client-toy_db PD (%u), "
-               "this may be expected if the cleanup policy already destroyed it. \n",
-               hello_client_toy_db_pd.id);
-    }
-
-    error = pd_client_terminate(&hello_dummy_pd);
-    test_assert(error == 0);
+    test_error_eq(maybe_terminate_pd(&hello_server_toy_block_pd), 0);
+    test_error_eq(maybe_terminate_pd(&hello_server_toy_file_pd), 0);
+    test_error_eq(maybe_terminate_pd(&hello_server_toy_db_pd), 0);
+    test_error_eq(maybe_terminate_pd(&hello_client_toy_block_pd), 0);
+    test_error_eq(maybe_terminate_pd(&hello_client_toy_file_pd), 0);
+    test_error_eq(maybe_terminate_pd(&hello_client_toy_db_pd), 0);
+    test_error_eq(maybe_terminate_pd(&hello_dummy_pd), 0);
 
     sel4bench_destroy();
     return sel4test_get_result();
@@ -1359,48 +1303,10 @@ static int internal_benchmark_cleanup(env_t env, cleanup_scenario_server_t serve
     benchmark_print_result(end - start);
 
     /* Cleanup other PDs */
-
-    if (server_to_crash != CLEANUP_RAMDISK)
-    {
-        error = pd_client_terminate(&ramdisk_pd);
-
-        if (error != seL4_NoError)
-        {
-            printf("WARNING: Failed to cleanup ramdiskk PD (%u), "
-                   "this may be expected if the cleanup policy already destroyed it. \n",
-                   ramdisk_pd.id);
-        }
-    }
-
-    if (server_to_crash != CLEANUP_FS)
-    {
-        error = pd_client_terminate(&fs_pd);
-
-        if (error != seL4_NoError)
-        {
-            printf("WARNING: Failed to cleanup fs PD (%u), "
-                   "this may be expected if the cleanup policy already destroyed it. \n",
-                   fs_pd.id);
-        }
-    }
-
-    error = pd_client_terminate(&kvstore_client_pd);
-
-    if (error != seL4_NoError)
-    {
-        printf("WARNING: Failed to cleanup kvstore_client PD (%u), "
-               "this may be expected if the cleanup policy already destroyed it. \n",
-               kvstore_client_pd.id);
-    }
-
-    error = pd_client_terminate(&kvstore_server_pd);
-
-    if (error != seL4_NoError)
-    {
-        printf("WARNING: Failed to cleanup kvstore_server PD (%u), "
-               "this may be expected if the cleanup policy already destroyed it. \n",
-               kvstore_server_pd.id);
-    }
+    test_error_eq(maybe_terminate_pd(&ramdisk_pd), 0);
+    test_error_eq(maybe_terminate_pd(&fs_pd), 0);
+    test_error_eq(maybe_terminate_pd(&kvstore_client_pd), 0);
+    test_error_eq(maybe_terminate_pd(&kvstore_server_pd), 0);
 
     sel4bench_destroy();
     return sel4test_get_result();

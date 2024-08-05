@@ -408,7 +408,7 @@ int ramdisk_work_handler(PdWorkReturnMessage *work)
             free_block(blockno);
         }
         
-        error = pd_client_finish_work(&get_ramdisk_server()->gen.pd_conn, work->object_ids_count);
+        error = pd_client_finish_work(&get_ramdisk_server()->gen.pd_conn, work->object_ids_count, work->n_critical);
     }
     else if (op == PdWorkAction_DESTROY)
     {
@@ -448,7 +448,7 @@ int ramdisk_work_handler(PdWorkReturnMessage *work)
             }
         }
 
-        error = pd_client_finish_work(&get_ramdisk_server()->gen.pd_conn, work->object_ids_count);
+        error = pd_client_finish_work(&get_ramdisk_server()->gen.pd_conn, work->object_ids_count, work->n_critical);
     }
     else
     {

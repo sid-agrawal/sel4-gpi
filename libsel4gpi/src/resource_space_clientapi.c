@@ -21,6 +21,7 @@
 // Defined for utility printing macros
 #define DEBUG_ID RESSPC_DEBUG
 #define SERVER_ID RESSPC_SERVC
+#define DEFAULT_ERR ResSpcComponentError_UNKNOWN
 
 static sel4gpi_rpc_env_t rpc_env = {
     .request_desc = &ResSpcMessage_msg,
@@ -48,7 +49,7 @@ int resspc_client_connect(seL4_CPtr server_ep,
     assert(strlen(resource_type) < sizeof(msg.msg.alloc.type_name));
     strncpy(msg.msg.alloc.type_name, resource_type, sizeof(msg.msg.alloc.type_name));
 
-    ResSpcReturnMessage ret_msg;
+    ResSpcReturnMessage ret_msg = {0};
 
     error = sel4gpi_rpc_call(&rpc_env, server_ep, (void *)&msg,
                              1, &resource_server_ep->ep, (void *)&ret_msg);
@@ -79,7 +80,7 @@ int resspc_client_map_space(resspc_client_context_t *conn,
         },
     };
 
-    ResSpcReturnMessage ret_msg;
+    ResSpcReturnMessage ret_msg = {0};
 
     error = sel4gpi_rpc_call(&rpc_env, conn->ep, (void *)&msg,
                              0, NULL, (void *)&ret_msg);
@@ -103,7 +104,7 @@ int resspc_client_create_resource(resspc_client_context_t *conn,
         },
     };
 
-    ResSpcReturnMessage ret_msg;
+    ResSpcReturnMessage ret_msg = {0};
 
     error = sel4gpi_rpc_call(&rpc_env, conn->ep, (void *)&msg,
                              0, NULL, (void *)&ret_msg);
@@ -127,7 +128,7 @@ int resspc_client_delete_resource(resspc_client_context_t *conn,
         },
     };
 
-    ResSpcReturnMessage ret_msg;
+    ResSpcReturnMessage ret_msg = {0};
 
     error = sel4gpi_rpc_call(&rpc_env, conn->ep, (void *)&msg,
                              0, NULL, (void *)&ret_msg);
@@ -153,7 +154,7 @@ int resspc_client_revoke_resource(resspc_client_context_t *conn,
         },
     };
 
-    ResSpcReturnMessage ret_msg;
+    ResSpcReturnMessage ret_msg = {0};
 
     error = sel4gpi_rpc_call(&rpc_env, conn->ep, (void *)&msg,
                              0, NULL, (void *)&ret_msg);
@@ -173,7 +174,7 @@ int resspc_client_destroy(resspc_client_context_t *conn)
         .which_msg = ResSpcMessage_destroy_tag,
     };
 
-    ResSpcReturnMessage ret_msg;
+    ResSpcReturnMessage ret_msg = {0};
 
     error = sel4gpi_rpc_call(&rpc_env, conn->ep, (void *)&msg,
                              0, NULL, (void *)&ret_msg);

@@ -227,7 +227,7 @@ int xv6fs_client_link_file(seL4_CPtr file, const char *pathname)
       .which_msg = FsMessage_link_tag};
   strncpy(msg.msg.link.path, pathname, MAXPATH);
 
-  FsReturnMessage ret_msg;
+  FsReturnMessage ret_msg = {0};
 
   error = sel4gpi_rpc_call(&rpc_client, get_xv6fs_client()->server_ep, &msg, 1, caps, &ret_msg);
 
@@ -258,7 +258,7 @@ static int xv6fs_libc_open(const char *pathname, int flags, int modes)
       }};
   strncpy(msg.msg.create.path, pathname, MAXPATH);
 
-  FsReturnMessage ret_msg;
+  FsReturnMessage ret_msg = {0};
 
   error = sel4gpi_rpc_call(&rpc_client, get_xv6fs_client()->server_ep, &msg, 0, NULL, &ret_msg);
 
@@ -320,7 +320,7 @@ static int xv6fs_libc_pread(int fd, void *buf, int count, int offset)
           .offset = offset,
       }};
 
-  FsReturnMessage ret_msg;
+  FsReturnMessage ret_msg = {0};
 
   error = sel4gpi_rpc_call(&rpc_client, file->ep,
                            &msg, 1, caps, &ret_msg);
@@ -405,7 +405,7 @@ static int xv6fs_libc_write(int fd, const void *buf, int count)
           .offset = file->offset,
       }};
 
-  FsReturnMessage ret_msg;
+  FsReturnMessage ret_msg = {0};
 
   error = sel4gpi_rpc_call(&rpc_client, file->ep,
                            &msg, 1, caps, &ret_msg);
@@ -428,7 +428,7 @@ static int xv6fs_libc_write(int fd, const void *buf, int count)
 static int xv6fs_libc_close(int fd)
 {
   XV6FS_PRINTF("xv6fs_libc_close fd %d\n", fd);
-
+  
   int error = 0;
 
   // Check for /dev/null
@@ -451,7 +451,7 @@ static int xv6fs_libc_close(int fd)
       .which_msg = FsMessage_close_tag,
   };
 
-  FsReturnMessage ret_msg;
+  FsReturnMessage ret_msg = {0};
 
   error = sel4gpi_rpc_call(&rpc_client, file->ep,
                            &msg, 0, NULL, &ret_msg);
@@ -529,7 +529,7 @@ int xv6fs_libc_fstat(int fd, struct stat *buf)
       .which_msg = FsMessage_stat_tag,
   };
 
-  FsReturnMessage ret_msg;
+  FsReturnMessage ret_msg = {0};
 
   error = sel4gpi_rpc_call(&rpc_client, file->ep,
                            &msg, 1, caps, &ret_msg);
@@ -646,7 +646,7 @@ static int xv6fs_libc_unlink(const char *pathname)
   };
   strncpy(msg.msg.unlink.path, pathname, MAXPATH);
 
-  FsReturnMessage ret_msg;
+  FsReturnMessage ret_msg = {0};
 
   error = sel4gpi_rpc_call(&rpc_client, get_xv6fs_client()->server_ep, &msg, 0, NULL, &ret_msg);
 
@@ -717,7 +717,7 @@ int xv6fs_client_new_ns(gpi_space_id_t *ns_id)
       .which_msg = FsMessage_ns_tag,
   };
 
-  FsReturnMessage ret_msg;
+  FsReturnMessage ret_msg = {0};
 
   int error = sel4gpi_rpc_call(&rpc_client, get_xv6fs_client()->server_ep, (void *)&msg, 0, NULL, (void *)&ret_msg);
   error |= ret_msg.errorCode;
@@ -739,7 +739,7 @@ int xv6fs_client_delete_ns(seL4_CPtr ns_ep)
       .which_msg = FsMessage_delete_ns_tag,
   };
 
-  FsReturnMessage ret_msg;
+  FsReturnMessage ret_msg = {0};
 
   int error = sel4gpi_rpc_call(&rpc_client, ns_ep, (void *)&msg, 0, NULL, (void *)&ret_msg);
   error |= ret_msg.errorCode;

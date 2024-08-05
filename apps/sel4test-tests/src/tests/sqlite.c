@@ -288,11 +288,11 @@ int test_sqlite(env_t env)
     // Cleanup servers
     pd_client_context_t fs_pd_conn;
     fs_pd_conn.ep = fs_pd_cap;
-    WARN_IF_ERR(pd_client_terminate(&fs_pd_conn), "Couldn't terminate FS PD");
+    test_error_eq(maybe_terminate_pd(&fs_pd_conn), 0);
 
     pd_client_context_t ramdisk_pd_conn;
     ramdisk_pd_conn.ep = ramdisk_pd_cap;
-    WARN_IF_ERR(pd_client_terminate(&ramdisk_pd_conn), "Couldn't terminate Ramdisk PD");
+    test_error_eq(maybe_terminate_pd(&ramdisk_pd_conn), 0);
 
     printf("------------------ENDING: %s------------------\n", __func__);
     return sel4test_get_result();

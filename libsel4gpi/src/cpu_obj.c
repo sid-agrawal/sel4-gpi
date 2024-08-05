@@ -27,6 +27,7 @@
 // Defined for utility printing macros
 #define DEBUG_ID CPU_DEBUG
 #define SERVER_ID CPUSERVS
+#define DEFAULT_ERR CpuComponentError_UNKNOWN
 
 int cpu_start(cpu_t *cpu)
 {

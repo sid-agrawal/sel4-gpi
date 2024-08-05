@@ -37,6 +37,7 @@
 // Defined for utility printing macros
 #define DEBUG_ID MO_DEBUG
 #define SERVER_ID MOSERVS
+#define DEFAULT_ERR MoComponentError_UNKNOWN
 
 resource_component_context_t *get_mo_component(void)
 {

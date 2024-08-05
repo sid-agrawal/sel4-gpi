@@ -12,6 +12,7 @@
 
 #include <sel4gpi/ads_obj.h>
 #include <sel4gpi/resource_component_utils.h>
+#include <ads_component_rpc.pb.h>
 
 /** @file APIs for managing and interacting with the serial server thread.
  *

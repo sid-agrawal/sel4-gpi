@@ -20,6 +20,7 @@
 // Defined for utility printing macros
 #define DEBUG_ID CPU_DEBUG
 #define SERVER_ID CPUSERVC
+#define DEFAULT_ERR CpuComponentError_UNKNOWN
 
 static sel4gpi_rpc_env_t rpc_env = {
     .request_desc = &CpuMessage_msg,
@@ -38,7 +39,7 @@ int cpu_component_client_connect(seL4_CPtr server_ep_cap,
         .which_msg = CpuMessage_alloc_tag,
     };
 
-    CpuReturnMessage ret_msg;
+    CpuReturnMessage ret_msg = {0};
 
     error = sel4gpi_rpc_call(&rpc_env, server_ep_cap, (void *)&msg,
                              0, NULL, (void *)&ret_msg);
@@ -64,7 +65,7 @@ int cpu_component_client_disconnect(cpu_client_context_t *conn)
         .which_msg = CpuMessage_disconnect_tag,
     };
 
-    CpuReturnMessage ret_msg;
+    CpuReturnMessage ret_msg = {0};
 
     error = sel4gpi_rpc_call(&rpc_env, conn->ep, (void *)&msg,
                              0, NULL, (void *)&ret_msg);
@@ -94,7 +95,7 @@ int cpu_client_config(cpu_client_context_t *cpu,
             .ipc_buf_addr = (uint64_t)ipc_buf_addr,
         }};
 
-    CpuReturnMessage ret_msg;
+    CpuReturnMessage ret_msg = {0};
 
     if (ipc_buf_mo && ipc_buf_mo->ep != 0)
     {
@@ -129,7 +130,7 @@ int cpu_client_change_vspace(cpu_client_context_t *conn,
         .which_msg = CpuMessage_change_vspace_tag,
     };
 
-    CpuReturnMessage ret_msg;
+    CpuReturnMessage ret_msg = {0};
 
     error = sel4gpi_rpc_call(&rpc_env, conn->ep, (void *)&msg,
                              1, &ads_conn->ep, (void *)&ret_msg);
@@ -149,7 +150,7 @@ int cpu_client_start(cpu_client_context_t *conn)
         .which_msg = CpuMessage_start_tag,
     };
 
-    CpuReturnMessage ret_msg;
+    CpuReturnMessage ret_msg = {0};
 
     error = sel4gpi_rpc_call(&rpc_env, conn->ep, (void *)&msg,
                              0, NULL, (void *)&ret_msg);
@@ -169,7 +170,7 @@ int cpu_client_elevate_privileges(cpu_client_context_t *conn)
         .which_msg = CpuMessage_elevate_privilege_tag,
     };
 
-    CpuReturnMessage ret_msg;
+    CpuReturnMessage ret_msg = {0};
 
     error = sel4gpi_rpc_call(&rpc_env, conn->ep, (void *)&msg,
                              0, NULL, (void *)&ret_msg);
@@ -191,7 +192,7 @@ int cpu_client_set_tls_base(cpu_client_context_t *cpu, void *tls_base)
             .tls_base_addr = (uint64_t)tls_base,
         }};
 
-    CpuReturnMessage ret_msg;
+    CpuReturnMessage ret_msg = {0};
 
     error = sel4gpi_rpc_call(&rpc_env, cpu->ep, (void *)&msg,
                              0, NULL, (void *)&ret_msg);
@@ -211,7 +212,7 @@ int cpu_client_suspend(cpu_client_context_t *cpu)
         .which_msg = CpuMessage_suspend_tag,
     };
 
-    CpuReturnMessage ret_msg;
+    CpuReturnMessage ret_msg = {0};
 
     error = sel4gpi_rpc_call(&rpc_env, cpu->ep, (void *)&msg,
                              0, NULL, (void *)&ret_msg);
@@ -234,7 +235,7 @@ int cpu_client_read_registers(cpu_client_context_t *cpu, seL4_UserContext *regs)
         .which_msg = CpuMessage_read_reg_tag,
     };
 
-    CpuReturnMessage ret_msg;
+    CpuReturnMessage ret_msg = {0};
 
     seL4_CPtr caps[1] = {msg_mo.ep};
 

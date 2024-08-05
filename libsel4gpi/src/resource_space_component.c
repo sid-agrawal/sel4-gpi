@@ -30,6 +30,7 @@
 // Defined for utility printing macros
 #define DEBUG_ID RESSPC_DEBUG
 #define SERVER_ID RESSPC_SERVS
+#define DEFAULT_ERR ResSpcComponentError_UNKNOWN
 
 resource_component_context_t *get_resspc_component(void)
 {
@@ -102,7 +103,7 @@ static void on_resspc_registry_delete(resource_registry_node_t *node_gen, void *
 
     // Cleanup the resource space from PDs
     error = pd_component_space_cleanup(node->space.pd_id, node->space.resource_type,
-                                       node->space.id, node->space.cleanup_policy);
+                                       node->space.id, node->space.cleanup_policy, node->space.dont_notify);
     SERVER_GOTO_IF_ERR(error, "failed to cleanup PDs for deleted resource space (%u)\n", node->space.id);
 
     return;
@@ -370,6 +371,7 @@ static void handle_destroy_space_request(seL4_Word sender_badge,
 
     src_space_entry->space.to_delete = true;
     src_space_entry->space.cleanup_policy = false;
+    src_space_entry->space.dont_notify = true; 
     error = resource_component_delete(get_resspc_component(), spc_id);
 
 err_goto:
@@ -469,6 +471,7 @@ static int resspc_new(res_space_t *res_space,
     res_space->to_delete = false;
     res_space->deleting = false;
     res_space->deletion_depth = 0;
+    res_space->dont_notify = false;
 
     return error;
 }

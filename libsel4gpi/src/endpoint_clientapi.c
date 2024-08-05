@@ -16,6 +16,7 @@
 // Defined for utility printing macros
 #define DEBUG_ID EP_DEBUG
 #define SERVER_ID EPSERVC
+#define DEFAULT_ERR EpComponentError_UNKNOWN
 
 static sel4gpi_rpc_env_t rpc_env = {
     .request_desc = &EpMessage_msg,
@@ -33,7 +34,7 @@ int ep_component_client_connect(seL4_CPtr server_ep_cap, ep_client_context_t *re
         .which_msg = EpMessage_alloc_tag,
     };
 
-    EpReturnMessage ret_msg;
+    EpReturnMessage ret_msg = {0};
 
     error = sel4gpi_rpc_call(&rpc_env, server_ep_cap, (void *)&msg,
                              0, NULL, (void *)&ret_msg);
@@ -61,7 +62,7 @@ static int get_raw_endpoint(ep_client_context_t *ep_conn, pd_client_context_t *t
             .for_other_PD = target_PD != NULL,
         }};
 
-    EpReturnMessage ret_msg;
+    EpReturnMessage ret_msg = {0};
 
     if (target_PD)
     {
@@ -123,7 +124,7 @@ int ep_client_forge(seL4_CPtr server_ep_cap, seL4_CPtr ep_to_forge, ep_client_co
         .which_msg = EpMessage_forge_tag,
     };
 
-    EpReturnMessage ret_msg;
+    EpReturnMessage ret_msg = {0};
 
     error = sel4gpi_rpc_call(&rpc_env, server_ep_cap, (void *)&msg,
                              1, &ep_to_forge, (void *)&ret_msg);

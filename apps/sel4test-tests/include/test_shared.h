@@ -22,6 +22,15 @@
  */
 void extract_model(pd_client_context_t *pd_conn);
 
+/**
+ * Try to terminate a PD that may have already been cleaned up
+ * If the termination fails due to the PD already being cleaned up, just print a warning
+ * If there is another error, return the error
+ * 
+ * @param pd_conn the PD to maybe terminate
+ */
+int maybe_terminate_pd(pd_client_context_t *pd_conn);
+
 /** BENCHMARKS **/
 
 /**

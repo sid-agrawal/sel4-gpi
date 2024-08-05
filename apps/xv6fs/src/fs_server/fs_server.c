@@ -608,6 +608,27 @@ void xv6fs_request_handler(void *msg_p,
 
       /* Remove the ref in the registry entry */
       resource_registry_dec(&get_xv6fs_server()->file_registry, (resource_registry_node_t *)reg_entry);
+
+      /* Find the right namespace */
+      resspc_client_context_t *space_conn = &get_xv6fs_server()->gen.default_space;
+
+      if (ns_id != get_xv6fs_server()->gen.default_space.id)
+      {
+        fs_namespace_entry_t *ns = (fs_namespace_entry_t *)
+            resource_registry_get_by_id(&get_xv6fs_server()->ns_registry, ns_id);
+        if (ns == NULL)
+        {
+          XV6FS_PRINTF("Namespace did not exist\n");
+          error = FsError_NO_NS;
+          goto done;
+        }
+
+        space_conn = &ns->res_space_conn;
+      }
+
+      /* Remove the resource from the corresponding PD */
+      error = resspc_client_revoke_resource(space_conn, obj_id, client_id);
+      CHECK_ERROR_GOTO(error, "Failed to revoke closed file", error, done);
       break;
     case FsMessage_stat_tag:
       *need_new_recv_cap = true;
@@ -858,7 +879,7 @@ int xv6fs_work_handler(PdWorkReturnMessage *work)
       }
     }
 
-    error = pd_client_finish_work(&get_xv6fs_server()->gen.pd_conn, work->object_ids_count);
+    error = pd_client_finish_work(&get_xv6fs_server()->gen.pd_conn, work->object_ids_count, work->n_critical);
   }
   else if (op == PdWorkAction_DESTROY)
   {
@@ -912,7 +933,7 @@ int xv6fs_work_handler(PdWorkReturnMessage *work)
       }
     }
 
-    error = pd_client_finish_work(&get_xv6fs_server()->gen.pd_conn, work->object_ids_count);
+    error = pd_client_finish_work(&get_xv6fs_server()->gen.pd_conn, work->object_ids_count, work->n_critical);
   }
   else
   {

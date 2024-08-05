@@ -196,9 +196,9 @@ int test_mutex(env_t env)
     // Print model state
     extract_model(&pd_conn);
 
-    // Cleanup both, ignore errors
-    pd_client_terminate(&sync_pd_1.runnable.pd);
-    pd_client_terminate(&sync_pd_2.runnable.pd);
+    // Cleanup both
+    test_error_eq(maybe_terminate_pd(&sync_pd_1.runnable.pd), 0);
+    test_error_eq(maybe_terminate_pd(&sync_pd_2.runnable.pd), 0);
 
     test_assert(error1 == 0);
     test_assert(error2 == 0);

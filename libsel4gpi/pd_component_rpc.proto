@@ -2,8 +2,9 @@ syntax = "proto3";
 import 'nanopb.proto';
 
 enum PdComponentError {
-    NONE = 0;           /* no error */
-    UNKNOWN = 11;       /* (XXX) manually set to seL4_NumErrors */
+    NONE = 0;                    /* no error */
+    UNKNOWN = 11;                /* (XXX) manually set to seL4_NumErrors */
+    OPERATION_IN_PROGRESS = 12;  /* cannot fulfill request due to an ongoing operation */
 }
 
 enum PdWorkAction {
@@ -97,6 +98,7 @@ message PdSetNameMessage {
 
 message PdFinishWorkMessage {
     uint32 n_requests = 1;        /* the number of requests fulfilled by this message */
+    uint32 n_critical = 2;        /* the number of critical requests fulfilled by this message */
 };
 
 message PdLinkChildMessage {
@@ -139,6 +141,8 @@ message PdWorkReturnMessage {
     repeated uint32 space_ids = 2 [(nanopb).max_count = 16];            /* space ID for the work */
     repeated uint32 object_ids = 3 [(nanopb).max_count = 16];           /* object IDs for the work */
     repeated uint32 pd_ids = 4 [(nanopb).max_count = 16];               /* client PD ID for the work */
+    uint32 n_critical = 5;                                              /* number of critical operations 
+                                                                           for some pending global operation */
 }
 
 message PdAllocReturnMessage {

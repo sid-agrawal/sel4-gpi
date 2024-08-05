@@ -25,6 +25,7 @@
 // Defined for utility printing macros
 #define DEBUG_ID PD_DEBUG
 #define SERVER_ID PDSERVC
+#define DEFAULT_ERR PdComponentError_UNKNOWN
 
 static sel4gpi_rpc_env_t rpc_env = {
     .request_desc = &PdMessage_msg,
@@ -72,7 +73,7 @@ int pd_client_terminate(pd_client_context_t *conn)
         .which_msg = PdMessage_terminate_tag,
     };
 
-    PdReturnMessage ret_msg;
+    PdReturnMessage ret_msg = {0};
 
     error = sel4gpi_rpc_call(&rpc_env, conn->ep, (void *)&msg,
                              0, NULL, (void *)&ret_msg);
@@ -95,7 +96,7 @@ int pd_client_dump(pd_client_context_t *conn,
         // (XXX) Arya: not currently sending buffer, just printing state in the RT
     };
 
-    PdReturnMessage ret_msg;
+    PdReturnMessage ret_msg = {0};
 
     error = sel4gpi_rpc_call(&rpc_env, conn->ep, (void *)&msg,
                              0, NULL, (void *)&ret_msg);
@@ -117,7 +118,7 @@ static int send_cap_req(pd_client_context_t *conn, seL4_CPtr cap_to_send, seL4_C
             .is_core_cap = is_core,
         }};
 
-    PdReturnMessage ret_msg;
+    PdReturnMessage ret_msg = {0};
 
     error = sel4gpi_rpc_call(&rpc_env, conn->ep, (void *)&msg,
                              1, &cap_to_send, (void *)&ret_msg);
@@ -159,7 +160,7 @@ int pd_client_next_slot(pd_client_context_t *conn,
         .which_msg = PdMessage_next_slot_tag,
     };
 
-    PdReturnMessage ret_msg;
+    PdReturnMessage ret_msg = {0};
 
     error = sel4gpi_rpc_call(&rpc_env, conn->ep, (void *)&msg,
                              0, NULL, (void *)&ret_msg);
@@ -185,7 +186,7 @@ int pd_client_free_slot(pd_client_context_t *conn,
         .which_msg = PdMessage_free_slot_tag,
     };
 
-    PdReturnMessage ret_msg;
+    PdReturnMessage ret_msg = {0};
 
     error = sel4gpi_rpc_call(&rpc_env, conn->ep, (void *)&msg,
                              0, NULL, (void *)&ret_msg);
@@ -208,7 +209,7 @@ int pd_client_clear_slot(pd_client_context_t *conn,
             .slot = slot,
         }};
 
-    PdReturnMessage ret_msg;
+    PdReturnMessage ret_msg = {0};
 
     error = sel4gpi_rpc_call(&rpc_env, conn->ep, (void *)&msg,
                              0, NULL, (void *)&ret_msg);
@@ -233,7 +234,7 @@ int pd_client_share_rde(pd_client_context_t *target_pd,
             .space_id = space_id,
         }};
 
-    PdReturnMessage ret_msg;
+    PdReturnMessage ret_msg = {0};
 
     error = sel4gpi_rpc_call(&rpc_env, target_pd->ep, (void *)&msg,
                              0, NULL, (void *)&ret_msg);
@@ -262,7 +263,7 @@ int pd_client_give_resource(pd_client_context_t *conn,
             .object_id = resource_id,
         }};
 
-    PdReturnMessage ret_msg;
+    PdReturnMessage ret_msg = {0};
 
     error = sel4gpi_rpc_call(&rpc_env, conn->ep, (void *)&msg,
                              0, NULL, (void *)&ret_msg);
@@ -293,7 +294,7 @@ int pd_client_map_resource(pd_client_context_t *conn,
             .dest_resource = dest_res_id,
         }};
 
-    PdReturnMessage ret_msg;
+    PdReturnMessage ret_msg = {0};
 
     error = sel4gpi_rpc_call(&rpc_env, conn->ep, (void *)&msg,
                              0, NULL, (void *)&ret_msg);
@@ -314,7 +315,7 @@ int pd_client_get_work(pd_client_context_t *conn, PdWorkReturnMessage *work)
         .which_msg = PdMessage_get_work_tag,
     };
 
-    PdReturnMessage ret_msg;
+    PdReturnMessage ret_msg = {0};
 
     error = sel4gpi_rpc_call(&rpc_env, conn->ep, (void *)&msg,
                              0, NULL, (void *)&ret_msg);
@@ -342,7 +343,7 @@ int pd_client_send_subgraph(pd_client_context_t *conn, mo_client_context_t *mo_c
             .n_requests = n_requests,
         }};
 
-    PdReturnMessage ret_msg;
+    PdReturnMessage ret_msg = {0};
 
     if (has_data)
     {
@@ -360,7 +361,7 @@ int pd_client_send_subgraph(pd_client_context_t *conn, mo_client_context_t *mo_c
     return error;
 }
 
-int pd_client_finish_work(pd_client_context_t *conn, int n_requests)
+int pd_client_finish_work(pd_client_context_t *conn, int n_requests, int n_critical)
 {
     OSDB_PRINTF("Sending 'finish work' request to PD component\n");
 
@@ -371,9 +372,10 @@ int pd_client_finish_work(pd_client_context_t *conn, int n_requests)
         .which_msg = PdMessage_finish_work_tag,
         .msg.finish_work = {
             .n_requests = n_requests,
+            .n_critical = n_critical,
         }};
 
-    PdReturnMessage ret_msg;
+    PdReturnMessage ret_msg = {0};
 
     error = sel4gpi_rpc_call(&rpc_env, conn->ep, (void *)&msg,
                              0, NULL, (void *)&ret_msg);
@@ -396,7 +398,7 @@ void pd_client_exit(pd_client_context_t *conn, int code)
             .exit_code = code,
         }};
 
-    PdReturnMessage ret_msg;
+    PdReturnMessage ret_msg = {0};
 
     error = sel4gpi_rpc_call(&rpc_env, conn->ep, (void *)&msg,
                              0, NULL, (void *)&ret_msg);
@@ -419,7 +421,7 @@ int pd_client_remove_rde(pd_client_context_t *conn, gpi_cap_t type, gpi_space_id
             .space_id = space_id,
         }};
 
-    PdReturnMessage ret_msg;
+    PdReturnMessage ret_msg = {0};
 
     error = sel4gpi_rpc_call(&rpc_env, conn->ep, (void *)&msg,
                              0, NULL, (void *)&ret_msg);
@@ -441,7 +443,7 @@ int pd_client_bench_ipc(pd_client_context_t *conn, seL4_CPtr dummy_send_cap, boo
             .do_cap_transfer = cap_transfer,
         }};
 
-    PdReturnMessage ret_msg;
+    PdReturnMessage ret_msg = {0};
 
     if (cap_transfer)
     {
@@ -489,7 +491,7 @@ int pd_client_runtime_setup(pd_client_context_t *target_pd,
 
     seL4_CPtr caps[2] = {target_ads->ep, target_cpu->ep};
 
-    PdReturnMessage ret_msg;
+    PdReturnMessage ret_msg = {0};
 
     error = sel4gpi_rpc_call(&rpc_env, target_pd->ep, (void *)&msg,
                              2, caps, (void *)&ret_msg);
@@ -512,7 +514,7 @@ int pd_client_share_resource_by_type(pd_client_context_t *src_pd, pd_client_cont
             .res_type = res_type,
         }};
 
-    PdReturnMessage ret_msg;
+    PdReturnMessage ret_msg = {0};
 
     error = sel4gpi_rpc_call(&rpc_env, src_pd->ep, (void *)&msg,
                              1, &dest_pd->ep, (void *)&ret_msg);
@@ -532,7 +534,7 @@ int pd_client_link_child(pd_client_context_t *parent, pd_client_context_t *child
         .which_msg = PdMessage_link_child_tag,
     };
 
-    PdReturnMessage ret_msg;
+    PdReturnMessage ret_msg = {0};
 
     error = sel4gpi_rpc_call(&rpc_env, parent->ep, (void *)&msg,
                              1, &child->ep, (void *)&ret_msg);
@@ -556,7 +558,7 @@ int pd_client_set_name(pd_client_context_t *conn, char *name)
     assert(strlen(name) < sizeof(msg.msg.set_name.pd_name));
     strncpy(msg.msg.set_name.pd_name, name, sizeof(msg.msg.set_name.pd_name));
 
-    PdReturnMessage ret_msg;
+    PdReturnMessage ret_msg = {0};
 
     error = sel4gpi_rpc_call(&rpc_env, conn->ep, (void *)&msg,
                              0, NULL, (void *)&ret_msg);

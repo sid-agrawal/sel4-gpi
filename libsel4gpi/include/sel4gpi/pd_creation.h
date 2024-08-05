@@ -25,7 +25,7 @@
 #define DEFAULT_STACK_PAGES 16
 #define DEFAULT_HEAP_PAGES 100
 
-#define PD_CREATION_DBG 1
+#define PD_CREATION_DBG 0
 
 #ifdef PD_CREATION_DBG
 #define PD_CREATION_PRINT(msg, ...)                                     \

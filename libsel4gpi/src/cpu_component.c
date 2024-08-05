@@ -37,6 +37,7 @@
 // Defined for utility printing macros
 #define DEBUG_ID CPU_DEBUG
 #define SERVER_ID CPUSERVS
+#define DEFAULT_ERR CpuComponentError_UNKNOWN
 
 resource_component_context_t *get_cpu_component(void)
 {

@@ -272,7 +272,8 @@ int pd_add_resource(pd_t *pd,
                     seL4_CPtr slot_in_serverPD);
 
 /**
- * Remove a resource that the PD holds, also revoke / delete the cap in the PD's cspace
+ * Decrement the refcount of a resource that the PD holds
+ * If the refcount reaches zero, also revoke / delete the cap in the PD's cspace
  * Does nothing if the PD does not hold the resource
  *
  * @param pd
@@ -282,6 +283,19 @@ int pd_add_resource(pd_t *pd,
  */
 int pd_remove_resource(pd_t *pd,
                        gpi_res_id_t res_id);
+
+/**
+ * Immediately delete a resource that a PD holds, also revoke / delete the cap in the PD's cspace
+ * Does nothing if the PD does not hold the resource
+ *
+ * @param pd
+ * @param type the resource type
+ * @param res_id the resource to remove
+ * @return 0 on success, 1 otherwise
+ */
+int pd_delete_resource(pd_t *pd,
+                       gpi_res_id_t res_id);
+
 /**
  * @brief Adds all resources specified in the given list to a PD.
  * (XXX) Linh: currently can only refcount RT components. Resources from Non-RT servers

@@ -226,26 +226,18 @@ int test_cleanup_policy_1(env_t env)
     printf("Dumping model state before crash\n");
     extract_model(&pd_conn);
 
-    // Print model state
-    pd_client_context_t pd_conn = sel4gpi_get_pd_conn();
-    extract_model(&pd_conn);
+    // Crash hello server
+    printf("Crashing toy_block server PD\n");
+    error = pd_client_terminate(&hello_server_pd);
+    test_assert(error == 0);
 
     // Print model state
     printf("Dumping model state after crash\n");
     extract_model(&pd_conn);
 
     /* Cleanup PDs */
-    error = pd_client_terminate(&hello_client_pd);
-
-    if (error != seL4_NoError)
-    {
-        printf("WARNING: Failed to cleanup hello-client PD (%u), "
-               "this may be expected if the cleanup policy already destroyed it. \n",
-               hello_client_pd.id);
-    }
-
-    error = pd_client_terminate(&hello_dummy_pd);
-    test_assert(error == 0);
+    test_error_eq(maybe_terminate_pd(&hello_client_pd), 0);
+    test_error_eq(maybe_terminate_pd(&hello_dummy_pd), 0);
 
     printf("------------------ENDING: %s------------------\n", __func__);
     return sel4test_get_result();
@@ -366,35 +358,10 @@ int test_cleanup_policy_2(env_t env)
     extract_model(&pd_conn);
 
     /* Cleanup PDs */
-    error = pd_client_terminate(&hello_server_toy_file_pd);
-
-    if (error != seL4_NoError)
-    {
-        printf("WARNING: Failed to cleanup hello-server-toy_file PD (%u), "
-               "this may be expected if the cleanup policy already destroyed it. \n",
-               hello_server_toy_file_pd.id);
-    }
-
-    error = pd_client_terminate(&hello_client_toy_block_pd);
-
-    if (error != seL4_NoError)
-    {
-        printf("WARNING: Failed to cleanup hello-client-toy_block PD (%u), "
-               "this may be expected if the cleanup policy already destroyed it. \n",
-               hello_client_toy_block_pd.id);
-    }
-
-    error = pd_client_terminate(&hello_client_toy_file_pd);
-
-    if (error != seL4_NoError)
-    {
-        printf("WARNING: Failed to cleanup hello-client-toy_file PD (%u), "
-               "this may be expected if the cleanup policy already destroyed it. \n",
-               hello_client_toy_file_pd.id);
-    }
-
-    error = pd_client_terminate(&hello_dummy_pd);
-    test_assert(error == 0);
+    test_error_eq(maybe_terminate_pd(&hello_server_toy_file_pd), 0);
+    test_error_eq(maybe_terminate_pd(&hello_client_toy_file_pd), 0);
+    test_error_eq(maybe_terminate_pd(&hello_client_toy_block_pd), 0);
+    test_error_eq(maybe_terminate_pd(&hello_dummy_pd), 0);
 
     printf("------------------ENDING: %s------------------\n", __func__);
     return sel4test_get_result();
@@ -493,53 +460,12 @@ int test_cleanup_policy_3(env_t env)
     extract_model(&pd_conn);
     
     /* Cleanup PDs */
-    error = pd_client_terminate(&hello_server_toy_file_pd);
-
-    if (error != seL4_NoError)
-    {
-        printf("WARNING: Failed to cleanup hello-server-toy_file PD (%u), "
-               "this may be expected if the cleanup policy already destroyed it. \n",
-               hello_server_toy_file_pd.id);
-    }
-
-    error = pd_client_terminate(&hello_server_toy_db_pd);
-
-    if (error != seL4_NoError)
-    {
-        printf("WARNING: Failed to cleanup hello-server-toy_db PD (%u), "
-               "this may be expected if the cleanup policy already destroyed it. \n",
-               hello_server_toy_db_pd.id);
-    }
-
-    error = pd_client_terminate(&hello_client_toy_block_pd);
-
-    if (error != seL4_NoError)
-    {
-        printf("WARNING: Failed to cleanup hello-client-toy_block PD (%u), "
-               "this may be expected if the cleanup policy already destroyed it. \n",
-               hello_client_toy_block_pd.id);
-    }
-
-    error = pd_client_terminate(&hello_client_toy_file_pd);
-
-    if (error != seL4_NoError)
-    {
-        printf("WARNING: Failed to cleanup hello-client-toy_file PD (%u), "
-               "this may be expected if the cleanup policy already destroyed it. \n",
-               hello_client_toy_file_pd.id);
-    }
-
-    error = pd_client_terminate(&hello_client_toy_db_pd);
-
-    if (error != seL4_NoError)
-    {
-        printf("WARNING: Failed to cleanup hello-client-toy_db PD (%u), "
-               "this may be expected if the cleanup policy already destroyed it. \n",
-               hello_client_toy_db_pd.id);
-    }
-
-    error = pd_client_terminate(&hello_dummy_pd);
-    test_assert(error == 0);
+    test_error_eq(maybe_terminate_pd(&hello_server_toy_file_pd), 0);
+    test_error_eq(maybe_terminate_pd(&hello_server_toy_db_pd), 0);
+    test_error_eq(maybe_terminate_pd(&hello_client_toy_db_pd), 0);
+    test_error_eq(maybe_terminate_pd(&hello_client_toy_file_pd), 0);
+    test_error_eq(maybe_terminate_pd(&hello_client_toy_block_pd), 0);
+    test_error_eq(maybe_terminate_pd(&hello_dummy_pd), 0);
 
     printf("------------------ENDING: %s------------------\n", __func__);
     return sel4test_get_result();

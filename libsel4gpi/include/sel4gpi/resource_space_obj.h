@@ -18,4 +18,5 @@ typedef struct _res_space
     bool cleanup_policy;      ///< Marks a space that will execute a cleanup policy in the next sweep
     bool deleting;            ///< Marks a space that is in the process of being deleted
     int deletion_depth;       ///< Mark the depth of this resource space for cleanup policy
+    bool dont_notify;         ///< If true, skip notifying the resource server PD when the space is deleted
 } res_space_t;

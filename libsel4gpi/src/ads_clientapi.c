@@ -22,6 +22,7 @@
 // Defined for utility printing macros
 #define DEBUG_ID ADS_DEBUG
 #define SERVER_ID ADSSERVC
+#define DEFAULT_ERR AdsComponentError_UNKNOWN
 
 static sel4gpi_rpc_env_t rpc_env = {
     .request_desc = &AdsMessage_msg,
@@ -40,7 +41,7 @@ int ads_component_client_connect(seL4_CPtr server_ep_cap,
         .which_msg = AdsMessage_alloc_tag,
     };
 
-    AdsReturnMessage ret_msg;
+    AdsReturnMessage ret_msg = {0};
 
     error = sel4gpi_rpc_call(&rpc_env, server_ep_cap, (void *)&msg,
                              0, NULL, (void *)&ret_msg);
@@ -66,7 +67,7 @@ int ads_client_disconnect(ads_client_context_t *conn)
         .which_msg = AdsMessage_disconnect_tag,
     };
 
-    AdsReturnMessage ret_msg;
+    AdsReturnMessage ret_msg = {0};
 
     error = sel4gpi_rpc_call(&rpc_env, conn->ep, (void *)&msg,
                              0, NULL, (void *)&ret_msg);
@@ -93,7 +94,7 @@ int ads_client_attach(ads_client_context_t *conn,
             .type = vmr_type,
         }};
 
-    AdsReturnMessage ret_msg;
+    AdsReturnMessage ret_msg = {0};
 
     error = sel4gpi_rpc_call(&rpc_env, conn->ep, (void *)&msg,
                              1, &mo_cap->ep, (void *)&ret_msg);
@@ -129,7 +130,7 @@ int ads_client_reserve(ads_client_context_t *conn,
             .page_bits = page_bits,
         }};
 
-    AdsReturnMessage ret_msg;
+    AdsReturnMessage ret_msg = {0};
 
     error = sel4gpi_rpc_call(&rpc_env, conn->ep, (void *)&msg,
                              0, NULL, (void *)&ret_msg);
@@ -159,7 +160,7 @@ int ads_client_attach_to_reserve(ads_vmr_context_t *reservation,
             .offset = offset,
         }};
 
-    AdsReturnMessage ret_msg;
+    AdsReturnMessage ret_msg = {0};
 
     error = sel4gpi_rpc_call(&rpc_env, reservation->ep, (void *)&msg,
                              1, &mo->ep, (void *)&ret_msg);
@@ -181,7 +182,7 @@ int ads_client_rm(ads_client_context_t *conn, void *vaddr)
             .vaddr = (uint64_t)vaddr,
         }};
 
-    AdsReturnMessage ret_msg;
+    AdsReturnMessage ret_msg = {0};
 
     error = sel4gpi_rpc_call(&rpc_env, conn->ep, (void *)&msg,
                              0, NULL, (void *)&ret_msg);
@@ -211,7 +212,7 @@ int ads_client_shallow_copy(ads_client_context_t *src_ads, ads_client_context_t 
             .dest_vaddr = (uint64_t)vmr_cfg->dest_start,
         }};
 
-    AdsReturnMessage ret_msg;
+    AdsReturnMessage ret_msg = {0};
 
     error = sel4gpi_rpc_call(&rpc_env, src_ads->ep, (void *)&msg,
                              1, &dst_ads->ep, (void *)&ret_msg);
@@ -234,7 +235,7 @@ int ads_client_get_reservation(ads_client_context_t *ads, sel4utils_reservation_
             .type = res_type,
         }};
 
-    AdsReturnMessage ret_msg;
+    AdsReturnMessage ret_msg = {0};
 
     error = sel4gpi_rpc_call(&rpc_env, ads->ep, (void *)&msg,
                              0, NULL, (void *)&ret_msg);
@@ -287,7 +288,7 @@ int ads_client_load_elf(ads_client_context_t *loadee_ads,
     assert(strlen(image_name) < sizeof(msg.msg.load_elf.image_name));
     strncpy(msg.msg.load_elf.image_name, image_name, sizeof(msg.msg.load_elf.image_name));
 
-    AdsReturnMessage ret_msg;
+    AdsReturnMessage ret_msg = {0};
 
     error = sel4gpi_rpc_call(&rpc_env, loadee_ads->ep, (void *)&msg,
                              1, &loadee_pd->ep, (void *)&ret_msg);

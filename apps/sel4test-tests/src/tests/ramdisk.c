@@ -31,7 +31,7 @@ int test_ramdisk(env_t env)
 
     /* Initialize the ADS */
     ads_client_context_t ads_conn = sel4gpi_get_bound_vmr_rde();
-    
+
     /* Initialize the PD */
     pd_client_context_t pd_conn = sel4gpi_get_pd_conn();
 
@@ -103,6 +103,9 @@ int test_ramdisk(env_t env)
     test_assert(error == seL4_NoError);
     test_assert(strcmp(buf, TEST_STR_2) == 0);
 
+    error = ramdisk_client_free_block(&block2);
+    test_assert(error == seL4_NoError);
+
     // Write/read entire block
     memset(buf, 0x42, RAMDISK_BLOCK_SIZE);
 
@@ -114,6 +117,9 @@ int test_ramdisk(env_t env)
     test_assert(error == seL4_NoError);
     test_assert(buf[0] == 0x42);
     test_assert(buf[RAMDISK_BLOCK_SIZE - 1] == 0x42);
+
+    error = ramdisk_client_free_block(&block);
+    test_assert(error == seL4_NoError);
 
     // Allocate a number of blocks
     for (int i = 3; i <= 20; i++)
@@ -130,9 +136,10 @@ int test_ramdisk(env_t env)
         error = ramdisk_client_read(&block);
         test_assert(error == seL4_NoError);
         test_assert(buf[0] == i);
-    }
 
-    // TODO: test freeing blocks, if implemented
+        error = ramdisk_client_free_block(&block);
+        test_assert(error == seL4_NoError);
+    }
 
     // Unbind shared memory
     error = ramdisk_client_unbind(ramdisk_client_ep);
@@ -148,7 +155,7 @@ int test_ramdisk(env_t env)
     // Cleanup server
     pd_client_context_t ramdisk_pd_conn;
     ramdisk_pd_conn.ep = ramdisk_pd_cap;
-    WARN_IF_ERR(pd_client_terminate(&ramdisk_pd_conn), "Couldn't terminate Ramdisk PD");
+    test_error_eq(maybe_terminate_pd(&ramdisk_pd_conn), 0);
 
     printf("------------------ENDING: %s------------------\n", __func__);
     return sel4test_get_result();

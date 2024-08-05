@@ -21,6 +21,7 @@
 #include <vspace/vspace.h>
 #include <sel4utils/thread.h>
 #include <sel4gpi/resource_space_component.h>
+#include <ep_component_rpc.pb.h>
 
 #define EP_RPC_MAGIC 0x4550
 #define EPSERVS "EPServ Component: "

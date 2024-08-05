@@ -231,9 +231,9 @@ int test_kvstore_lib_in_same_pd(env_t env)
     extract_model(&pd_conn);
 
     /* Cleanup servers */
-    WARN_IF_ERR(pd_client_terminate(&hello_pd), "Couldn't terminate hello PD");
-    WARN_IF_ERR(pd_client_terminate(&fs_pd), "Couldn't terminate FS PD");
-    WARN_IF_ERR(pd_client_terminate(&ramdisk_pd), "Couldn't terminate Ramdisk PD");
+    test_error_eq(maybe_terminate_pd(&hello_pd), 0);
+    test_error_eq(maybe_terminate_pd(&fs_pd), 0);
+    test_error_eq(maybe_terminate_pd(&ramdisk_pd), 0);
 
     printf("------------------ENDING: %s------------------\n", __func__);
     return sel4test_get_result();
@@ -270,10 +270,10 @@ int test_kvstore_lib_in_diff_pd(env_t env)
     extract_model(&pd_conn);
 
     /* Cleanup servers */
-    WARN_IF_ERR(pd_client_terminate(&hello_pd), "Couldn't terminate hello PD");
-    WARN_IF_ERR(pd_client_terminate(&kvstore_pd), "Couldn't terminate kvstore PD");
-    WARN_IF_ERR(pd_client_terminate(&fs_pd), "Couldn't terminate FS PD");
-    WARN_IF_ERR(pd_client_terminate(&ramdisk_pd), "Couldn't terminate Ramdisk PD");
+    test_error_eq(maybe_terminate_pd(&hello_pd), 0);
+    test_error_eq(maybe_terminate_pd(&kvstore_pd), 0);
+    test_error_eq(maybe_terminate_pd(&fs_pd), 0);
+    test_error_eq(maybe_terminate_pd(&ramdisk_pd), 0);
 
     printf("------------------ENDING: %s------------------\n", __func__);
     return sel4test_get_result();
@@ -321,10 +321,10 @@ int test_kvstore_diff_namespace(env_t env)
     extract_model(&pd_conn);
 
     /* Cleanup PDs */
-    WARN_IF_ERR(pd_client_terminate(&hello_pd), "Couldn't terminate hello PD");
-    WARN_IF_ERR(pd_client_terminate(&kvstore_pd), "Couldn't terminate kvstore PD");
-    WARN_IF_ERR(pd_client_terminate(&fs_pd), "Couldn't terminate FS PD");
-    WARN_IF_ERR(pd_client_terminate(&ramdisk_pd), "Couldn't terminate Ramdisk PD");
+    test_error_eq(maybe_terminate_pd(&hello_pd), 0);
+    test_error_eq(maybe_terminate_pd(&kvstore_pd), 0);
+    test_error_eq(maybe_terminate_pd(&fs_pd), 0);
+    test_error_eq(maybe_terminate_pd(&ramdisk_pd), 0);
 
     printf("------------------ENDING: %s------------------\n", __func__);
     return sel4test_get_result();
@@ -366,11 +366,11 @@ int test_kvstore_diff_fs(env_t env)
     extract_model(&pd_conn);
 
     /* Cleanup PDs */
-    WARN_IF_ERR(pd_client_terminate(&hello_pd), "Couldn't terminate hello PD");
-    WARN_IF_ERR(pd_client_terminate(&kvstore_pd), "Couldn't terminate kvstore PD");
-    WARN_IF_ERR(pd_client_terminate(&fs_pd), "Couldn't terminate FS 1 PD");
-    WARN_IF_ERR(pd_client_terminate(&fs_2_pd), "Couldn't terminate FS 2 PD");
-    WARN_IF_ERR(pd_client_terminate(&ramdisk_pd), "Couldn't terminate Ramdisk PD");
+    test_error_eq(maybe_terminate_pd(&hello_pd), 0);
+    test_error_eq(maybe_terminate_pd(&kvstore_pd), 0);
+    test_error_eq(maybe_terminate_pd(&fs_pd), 0);
+    test_error_eq(maybe_terminate_pd(&fs_2_pd), 0);
+    test_error_eq(maybe_terminate_pd(&ramdisk_pd), 0);
 
     printf("------------------ENDING: %s------------------\n", __func__);
     return sel4test_get_result();
@@ -401,9 +401,9 @@ int test_kvstore_lib_same_pd_diff_ads(env_t env)
     extract_model(&pd_conn);
 
     /* Cleanup PDs */
-    WARN_IF_ERR(pd_client_terminate(&hello_pd), "Couldn't terminate hello PD");
-    WARN_IF_ERR(pd_client_terminate(&fs_pd), "Couldn't terminate FS 1 PD");
-    WARN_IF_ERR(pd_client_terminate(&ramdisk_pd), "Couldn't terminate Ramdisk PD");
+    test_error_eq(maybe_terminate_pd(&hello_pd), 0);
+    test_error_eq(maybe_terminate_pd(&fs_pd), 0);
+    test_error_eq(maybe_terminate_pd(&ramdisk_pd), 0);
 
     printf("------------------ENDING: %s------------------\n", __func__);
     return sel4test_get_result();
@@ -434,9 +434,9 @@ int test_kvstore_diff_threads(env_t env)
     extract_model(&pd_conn);
 
     /* Cleanup PDs */
-    WARN_IF_ERR(pd_client_terminate(&hello_pd), "Couldn't terminate hello PD");
-    WARN_IF_ERR(pd_client_terminate(&fs_pd), "Couldn't terminate FS 1 PD");
-    WARN_IF_ERR(pd_client_terminate(&ramdisk_pd), "Couldn't terminate Ramdisk PD");
+    test_error_eq(maybe_terminate_pd(&hello_pd), 0);
+    test_error_eq(maybe_terminate_pd(&fs_pd), 0);
+    test_error_eq(maybe_terminate_pd(&ramdisk_pd), 0);
 
     printf("------------------ENDING: %s------------------\n", __func__);
     return sel4test_get_result();
@@ -488,12 +488,12 @@ int test_kvstore_two_sets(env_t env)
     extract_model(&pd_conn);
 
     /* Cleanup PDs */
-    WARN_IF_ERR(pd_client_terminate(&hello_pd_1), "Couldn't terminate hello 1 PD");
-    WARN_IF_ERR(pd_client_terminate(&hello_pd_2), "Couldn't terminate hello 2 PD");
-    WARN_IF_ERR(pd_client_terminate(&kvstore_pd_1), "Couldn't terminate kvstore 1 PD");
-    WARN_IF_ERR(pd_client_terminate(&kvstore_pd_2), "Couldn't terminate kvstore 2 PD");
-    WARN_IF_ERR(pd_client_terminate(&fs_pd), "Couldn't terminate FS PD");
-    WARN_IF_ERR(pd_client_terminate(&ramdisk_pd), "Couldn't terminate Ramdisk PD");
+    test_error_eq(maybe_terminate_pd(&hello_pd_1), 0);
+    test_error_eq(maybe_terminate_pd(&hello_pd_2), 0);
+    test_error_eq(maybe_terminate_pd(&kvstore_pd_1), 0);
+    test_error_eq(maybe_terminate_pd(&kvstore_pd_2), 0);
+    test_error_eq(maybe_terminate_pd(&fs_pd), 0);
+    test_error_eq(maybe_terminate_pd(&ramdisk_pd), 0);
 
     printf("------------------ENDING: %s------------------\n", __func__);
     return sel4test_get_result();
@@ -547,9 +547,9 @@ int test_kvstore_lib_in_diff_pd_crash(env_t env)
     extract_model(&pd_conn);
 
     /* Cleanup servers */
-    WARN_IF_ERR(pd_client_terminate(&hello_pd), "Couldn't terminate hello PD");
-    WARN_IF_ERR(pd_client_terminate(&kvstore_pd), "Couldn't terminate kvstore PD");
-    WARN_IF_ERR(pd_client_terminate(&fs_pd), "Couldn't terminate FS PD");
+    test_error_eq(maybe_terminate_pd(&hello_pd), 0);
+    test_error_eq(maybe_terminate_pd(&kvstore_pd), 0);
+    test_error_eq(maybe_terminate_pd(&fs_pd), 0);
 
     printf("------------------ENDING: %s------------------\n", __func__);
     return sel4test_get_result();

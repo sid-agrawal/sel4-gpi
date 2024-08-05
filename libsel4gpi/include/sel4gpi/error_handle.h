@@ -13,7 +13,7 @@
  *
  * SERVER_GOTO_IF_COND
  * - Use within a resource server, to return an error tag
- * - The DEBUG_ID and SERVER_ID values must be defined
+ * - The DEBUG_ID, SERVER_ID, and DEFAULT_ERR values must be defined
  */
 
 #define UNCONDITIONAL_PRINTERR(msg, ...) \
@@ -83,7 +83,18 @@
         if ((c))                                                   \
         {                                                          \
             OSDB_PRINTERR("%s():\t" msg, __func__, ##__VA_ARGS__); \
-            error = 1;                                             \
+            error = DEFAULT_ERR;                                   \
+            goto err_goto;                                         \
+        }                                                          \
+    } while (0)
+
+#define SERVER_GOTO_IF_COND_2(c, err, msg, ...)                    \
+    do                                                             \
+    {                                                              \
+        if ((c))                                                   \
+        {                                                          \
+            OSDB_PRINTERR("%s():\t" msg, __func__, ##__VA_ARGS__); \
+            error = err;                                           \
             goto err_goto;                                         \
         }                                                          \
     } while (0)
@@ -96,7 +107,7 @@
         {                                                          \
             OSDB_PRINTERR("%s():\t" msg, __func__, ##__VA_ARGS__); \
             BADGE_PRINT((badge));                                  \
-            error = 1;                                             \
+            error = DEFAULT_ERR;                                   \
             goto err_goto;                                         \
         }                                                          \
     } while (0)

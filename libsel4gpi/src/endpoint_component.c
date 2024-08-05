@@ -23,6 +23,7 @@
 // Defined for utility printing macros
 #define DEBUG_ID EP_DEBUG
 #define SERVER_ID EPSERVS
+#define DEFAULT_ERR EpComponentError_UNKNOWN
 
 resource_component_context_t *get_ep_component(void)
 {

@@ -7,6 +7,7 @@
 #include <sel4gpi/resource_space_obj.h>
 #include <sel4gpi/endpoint_component.h>
 #include <sel4gpi/model_exporting.h>
+#include <resspc_component_rpc.pb.h>
 
 /** @file APIs for managing and interacting with the resource space component
  *

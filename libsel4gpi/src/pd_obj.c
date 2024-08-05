@@ -48,6 +48,7 @@ extern char _cpio_archive_end[];
 // Defined for utility printing macros
 #define DEBUG_ID PD_DEBUG
 #define SERVER_ID PDSERVS
+#define DEFAULT_ERR PdComponentError_UNKNOWN
 
 static int pd_setup_cspace(pd_t *pd, vka_t *vka);
 static int pd_dump_internal(pd_t *pd, model_state_t *ms);
@@ -68,6 +69,7 @@ int pd_add_resource(pd_t *pd, gpi_res_id_t res_id,
     {
         OSDB_PRINT_VERBOSE("Warning: adding resource with existing ID (%lx), do not insert again\n", compact_id);
         // BADGE_PRINT(res_node_id);
+        resource_registry_inc(&pd->hold_registry, (resource_registry_node_t *)node);
     }
     else
     {
@@ -87,66 +89,6 @@ err_goto:
     return error;
 }
 
-/**
- * Internal function to revoke a resource from a PD and remove the metadata
- */
-static void pd_remove_resource_internal(pd_t *pd, resource_registry_node_t *hold_node)
-{
-    int error = 0;
-
-    // Delete the capability
-    seL4_CPtr cap = ((pd_hold_node_t *)hold_node)->slot_in_PD_Debug;
-
-    if (cap == seL4_CapNull)
-    {
-        // This should only happen if the PD is the resource server for this resource
-        // Only check if we have warn messages enabled
-        if (pd->id != get_gpi_server()->rt_pd_id && OSDB_WARN >= OSDB_LEVEL)
-        {
-            gpi_space_id_t space_id = get_space_id_from_badge(hold_node->object_id);
-            pd_hold_node_t *node = (pd_hold_node_t *)hold_node;
-            resspc_component_registry_entry_t *space_entry = resource_space_get_entry_by_id(node->res_id.space_id);
-
-            if (space_entry->space.pd_id != pd->id)
-            {
-                OSDB_PRINTERR("Warning: remove resource %s_%u_%u from PD (%u), slot_in_PD is null!\n",
-                              cap_type_to_str(node->res_id.type),
-                              node->res_id.space_id, node->res_id.object_id,
-                              pd->id);
-            }
-        }
-    }
-    else
-    {
-        /**
-         * (XXX) Arya:
-         * If we revoke a badged endpoint, it will delete any copies of the badged endpoint
-         * Thus this will only delete copies of this resource within this PD, not any other badged endpoints
-         * made from the same, original raw endpoint.
-         */
-        cspacepath_t path;
-        vka_cspace_make_path(pd->pd_vka, cap, &path);
-        error = vka_cnode_revoke(&path);
-        if (error)
-        {
-            OSDB_PRINTERR("Failed to revoke resource from PD(%u)\n", pd->id);
-        }
-
-        error = vka_cnode_delete(&path);
-        if (error)
-        {
-            OSDB_PRINTERR("Failed to delete resource from PD(%u)\n", pd->id);
-        }
-
-        // (XXX) Arya: choosing not to free slots so that the PD doesn't
-        // accidentally use a new resource in the same slot
-        // pd->pd_vka->cspace_free(pd->pd_vka->data, cap);
-    }
-
-    // Remove the node
-    resource_registry_delete(&pd->hold_registry, hold_node);
-}
-
 int pd_remove_resource(pd_t *pd, gpi_res_id_t res_id)
 {
     // See if the resource exists, remove it if so
@@ -155,7 +97,21 @@ int pd_remove_resource(pd_t *pd, gpi_res_id_t res_id)
 
     if (node != NULL)
     {
-        pd_remove_resource_internal(pd, node);
+        resource_registry_dec(&pd->hold_registry, node);
+    }
+
+    return 0;
+}
+
+int pd_delete_resource(pd_t *pd, gpi_res_id_t res_id)
+{
+    // See if the resource exists, remove it if so
+    gpi_badge_t res_node_id = compact_res_id(res_id.type, res_id.space_id, res_id.object_id);
+    resource_registry_node_t *node = resource_registry_get_by_id(&pd->hold_registry, res_node_id);
+
+    if (node != NULL)
+    {
+        resource_registry_delete(&pd->hold_registry, node);
     }
 
     return 0;
@@ -178,13 +134,13 @@ bool pd_has_resources_in_space(pd_t *pd, gpi_space_id_t space_id)
 
 int pd_remove_resources_in_space(pd_t *pd, gpi_space_id_t space_id)
 {
-    // Search through the held resources, remove any belonging to the given space ID
+    // Search through the held resources, delete any belonging to the given space ID
     resource_registry_node_t *curr, *tmp;
     HASH_ITER(hh, pd->hold_registry.head, curr, tmp)
     {
         if (((pd_hold_node_t *)curr)->res_id.space_id == space_id)
         {
-            pd_remove_resource_internal(pd, curr);
+            resource_registry_delete(&pd->hold_registry, curr);
         }
     }
 
@@ -440,6 +396,61 @@ err_goto:
     return error;
 }
 
+static int pd_revoke_cap(pd_t *pd, pd_hold_node_t *hold_node)
+{
+    int error = 0;
+
+    // Delete the capability
+    seL4_CPtr cap = hold_node->slot_in_PD_Debug;
+
+    if (cap == seL4_CapNull)
+    {
+        // This should only happen if the PD is the resource server for this resource
+        // Only check if we have warn messages enabled
+        if (pd->id != get_gpi_server()->rt_pd_id && OSDB_WARN >= OSDB_LEVEL)
+        {
+            gpi_space_id_t space_id = hold_node->res_id.space_id;
+            resspc_component_registry_entry_t *space_entry = resource_space_get_entry_by_id(hold_node->res_id.space_id);
+
+            if (space_entry->space.pd_id != pd->id)
+            {
+                OSDB_PRINTERR("Warning: remove resource %s_%u_%u from PD (%u), slot_in_PD is null!\n",
+                              cap_type_to_str(hold_node->res_id.type),
+                              hold_node->res_id.space_id, hold_node->res_id.object_id,
+                              pd->id);
+            }
+        }
+    }
+    else
+    {
+        /**
+         * (XXX) Arya:
+         * If we revoke a badged endpoint, it will delete any copies of the badged endpoint
+         * Thus this will only delete copies of this resource within this PD, not any other badged endpoints
+         * made from the same, original raw endpoint.
+         */
+        cspacepath_t path;
+        vka_cspace_make_path(pd->pd_vka, cap, &path);
+        error = vka_cnode_revoke(&path);
+        if (error)
+        {
+            OSDB_PRINTERR("Failed to revoke resource from PD(%u)\n", pd->id);
+        }
+
+        error = vka_cnode_delete(&path);
+        if (error)
+        {
+            OSDB_PRINTERR("Failed to delete resource from PD(%u)\n", pd->id);
+        }
+
+        // (XXX) Arya: choosing not to free slots so that the PD doesn't
+        // accidentally use a new resource in the same slot
+        // pd->pd_vka->cspace_free(pd->pd_vka->data, cap);
+    }
+
+err_goto:
+    return error;
+}
 static void
 pd_held_resource_on_delete(resource_registry_node_t *node_gen, void *pd_v)
 {
@@ -456,6 +467,13 @@ pd_held_resource_on_delete(resource_registry_node_t *node_gen, void *pd_v)
     OSDB_PRINTF("Freeing resource %s_%u_%u from PD (%u)\n",
                 cap_type_to_str(node->res_id.type), node->res_id.space_id, node->res_id.object_id,
                 pd->id);
+
+    // If we aren't already destroying the PD, then revoke the cap
+    if (!pd->deleting)
+    {
+        error = pd_revoke_cap(pd, node);
+        SERVER_GOTO_IF_ERR(error, "failed to revoke cap from PD\n");
+    }
 
     // If the resource is a core resource, free it directly
     // Decrement the registry entry's count, and if it reaches zero, the resource will be freed
@@ -490,27 +508,33 @@ pd_held_resource_on_delete(resource_registry_node_t *node_gen, void *pd_v)
         SERVER_GOTO_IF_ERR(error, "failed to decrement EP resource\n");
         break;
     default:
-        // Otherwise, call the manager PD
-        resspc_component_registry_entry_t *space_data = resource_space_get_entry_by_id(node->res_id.space_id);
-        SERVER_GOTO_IF_COND(space_data == NULL, "couldn't find resource space (%u)\n", node->res_id.space_id);
+        // If the PD is being deleted, we need to notify the manager PD that the resource should be freed
+        // Othwerise, we assume the operation came from the manager PD, so we do not notify it
 
-        // If the space is deleted,
-        // or the manager PD is this PD itself,
-        // then there's no point in notifying the manager
-        if (space_data->space.to_delete || space_data->space.pd_id == pd->id)
+        if (pd->deleting)
         {
-            break;
+            // Otherwise, call the manager PD
+            resspc_component_registry_entry_t *space_data = resource_space_get_entry_by_id(node->res_id.space_id);
+            SERVER_GOTO_IF_COND(space_data == NULL, "couldn't find resource space (%u)\n", node->res_id.space_id);
+
+            // If the space is deleted,
+            // or the manager PD is this PD itself,
+            // then there's no point in notifying the manager
+            if (space_data->space.to_delete || space_data->space.pd_id == pd->id)
+            {
+                break;
+            }
+
+            // Find the manager PD
+            pd_component_registry_entry_t *manager_pd_data = pd_component_registry_get_entry_by_id(space_data->space.pd_id);
+
+            // Queue the "free" operation for the resource manager
+            pd_work_entry_t *work_entry = calloc(1, sizeof(pd_work_entry_t));
+            SERVER_GOTO_IF_COND(work_entry == NULL, "Failed to allocate work entry node\n");
+            work_entry->res_id = node->res_id;
+
+            pd_component_queue_free_work(manager_pd_data, work_entry);
         }
-
-        // Find the manager PD
-        pd_component_registry_entry_t *manager_pd_data = pd_component_registry_get_entry_by_id(space_data->space.pd_id);
-
-        // Queue the "free" operation for the resource manager
-        pd_work_entry_t *work_entry = calloc(1, sizeof(pd_work_entry_t));
-        SERVER_GOTO_IF_COND(work_entry == NULL, "Failed to allocate work entry node\n");
-        work_entry->res_id = node->res_id;
-
-        pd_component_queue_free_work(manager_pd_data, work_entry);
         break;
     }
 

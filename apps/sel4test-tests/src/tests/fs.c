@@ -185,6 +185,9 @@ int test_fs(env_t env)
     }
     free(write_buf);
 
+    error = close(f);
+    test_assert(error == 0);
+
     // Create a namespace
     gpi_space_id_t ns_id;
     error = xv6fs_client_new_ns(&ns_id);
@@ -258,6 +261,7 @@ int test_fs(env_t env)
     test_assert(error == 0);
 
     // Ensure the old NS no longer works
+    printf("Note: it is expected to see two 'Attempted to invoke a null cap' messages after this point\n");
     nbytes = write(f, buf, strlen(TEST_STR_3) + 1);
     test_assert(nbytes == -1);
 
@@ -283,11 +287,11 @@ int test_fs(env_t env)
     // Cleanup servers
     pd_client_context_t fs_pd_conn;
     fs_pd_conn.ep = fs_pd_cap;
-    WARN_IF_ERR(pd_client_terminate(&fs_pd_conn), "Couldn't terminate FS PD");
+    test_error_eq(maybe_terminate_pd(&fs_pd_conn), 0);
 
     pd_client_context_t ramdisk_pd_conn;
     ramdisk_pd_conn.ep = ramdisk_pd_cap;
-    WARN_IF_ERR(pd_client_terminate(&ramdisk_pd_conn), "Couldn't terminate ramdisk PD");
+    test_error_eq(maybe_terminate_pd(&ramdisk_pd_conn), 0);
 
     printf("------------------ENDING: %s------------------\n", __func__);
     return sel4test_get_result();
@@ -397,6 +401,10 @@ int test_multiple_fs(env_t env)
     error = basic_fs_test();
     test_assert(error == 0);
 
+    /* Remove RDEs from test process so that it won't be cleaned up by recursive cleanup */
+    error = pd_client_remove_rde(&pd_conn, sel4gpi_get_resource_type_code(FILE_RESOURCE_TYPE_NAME), BADGE_SPACE_ID_NULL);
+    test_assert(error == 0);
+
     // Destroy an FS and start another one
     // If the FS is configured to use half of the ramdisk, this test checks that blocks are being
     // reclaimed from the destroyed FS
@@ -430,19 +438,19 @@ int test_multiple_fs(env_t env)
 
     error = pd_client_remove_rde(&pd_conn, sel4gpi_get_resource_type_code(FILE_RESOURCE_TYPE_NAME), BADGE_SPACE_ID_NULL);
     test_assert(error == 0);
-    
+
     // Cleanup other servers
     pd_client_context_t fs_2_pd_conn;
     fs_2_pd_conn.ep = fs_2_pd_cap;
-    WARN_IF_ERR(pd_client_terminate(&fs_2_pd_conn), "Couldn't terminate FS 2 PD");
+    test_error_eq(maybe_terminate_pd(&fs_2_pd_conn), 0);
 
     pd_client_context_t fs_3_pd_conn;
     fs_3_pd_conn.ep = fs_3_pd_cap;
-    WARN_IF_ERR(pd_client_terminate(&fs_3_pd_conn), "Couldn't terminate FS 3 PD");
+    test_error_eq(maybe_terminate_pd(&fs_3_pd_conn), 0);
 
     pd_client_context_t ramdisk_pd_conn;
     ramdisk_pd_conn.ep = ramdisk_pd_cap;
-    WARN_IF_ERR(pd_client_terminate(&ramdisk_pd_conn), "Couldn't terminate ramdisk PD");
+    test_error_eq(maybe_terminate_pd(&ramdisk_pd_conn), 0);
 
     printf("------------------ENDING: %s------------------\n", __func__);
     return sel4test_get_result();

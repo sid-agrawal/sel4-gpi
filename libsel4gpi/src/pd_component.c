@@ -23,7 +23,7 @@
 #include <utils/ansi.h>
 #include <sel4utils/api.h>
 #include <sel4utils/strerror.h>
-
+#include <sel4runtime.h>
 #include <sel4gpi/pd_clientapi.h>
 #include <sel4gpi/pd_component.h>
 #include <sel4gpi/pd_obj.h>
@@ -37,12 +37,12 @@
 #include <sel4gpi/resource_space_component.h>
 #include <sel4gpi/endpoint_component.h>
 #include <sel4gpi/gpi_rpc.h>
-
-#include <sel4runtime.h>
+#include <pd_component_rpc.pb.h>
 
 // Defined for utility printing macros
 #define DEBUG_ID PD_DEBUG
 #define SERVER_ID PDSERVS
+#define DEFAULT_ERR PdComponentError_UNKNOWN
 
 // The RPC message structures
 static sel4gpi_rpc_env_t rpc_env = {
@@ -163,14 +163,16 @@ static void handle_terminate_req(seL4_Word sender_badge, PdTerminateMessage *msg
     *should_reply = true;
 
     /* Check if a PD cleanup is already in progress */
-    SERVER_GOTO_IF_COND(get_gpi_server()->pending_termination, "PD cleanup is already in progress\n");
+    SERVER_GOTO_IF_COND_2(get_gpi_server()->pending_termination,
+                          PdComponentError_OPERATION_IN_PROGRESS,
+                          "PD cleanup is already in progress\n");
 
     /* Find the client */
     pd_component_registry_entry_t *client_data = pd_component_registry_get_entry_by_badge(sender_badge);
     SERVER_GOTO_IF_COND(client_data == NULL, "Couldn't find PD (%u)\n", get_object_id_from_badge(sender_badge));
 
     /* Start the termination */
-    get_gpi_server()->pending_termination = true;
+    get_gpi_server()->starting_termination = true;
     error = pd_component_terminate(get_object_id_from_badge(sender_badge));
     SERVER_GOTO_IF_ERR(error, "PD termination failed\n");
 
@@ -183,13 +185,12 @@ static void handle_terminate_req(seL4_Word sender_badge, PdTerminateMessage *msg
         get_gpi_server()->pd_termination_reply = reply_path.capPtr;
 
         *should_reply = false;
-    }
-    else
-    {
-        get_gpi_server()->pending_termination = false;
+        get_gpi_server()->pending_termination = true;
     }
 
 err_goto:
+    get_gpi_server()->starting_termination = false;
+
     if (should_reply)
     {
         reply_msg->which_msg = PdReturnMessage_basic_tag;
@@ -292,7 +293,9 @@ static void handle_dump_cap_req(seL4_Word sender_badge, PdDumpMessage *msg,
     int error = 0;
 
     /* Check if a model extraction is already in progress */
-    SERVER_GOTO_IF_COND(get_gpi_server()->pending_extraction, "Model extraction is already in progress\n");
+    SERVER_GOTO_IF_COND_2(get_gpi_server()->pending_extraction,
+                          PdComponentError_OPERATION_IN_PROGRESS,
+                          "Model extraction is already in progress\n");
 
     /* Find the client */
     pd_component_registry_entry_t *client_data = pd_component_registry_get_entry_by_badge(sender_badge);
@@ -744,6 +747,7 @@ static void handle_get_work_req(seL4_Word sender_badge, PdGetWorkMessage *msg, P
 
     /* Return the next piece of work, if there is any */
     reply_msg->msg.work.action = PdWorkAction_NO_WORK;
+    reply_msg->msg.work.n_critical = 0;
     int n_object_ids = sizeof(reply_msg->msg.work.object_ids) / sizeof(reply_msg->msg.work.object_ids[0]);
 
     // Order gives the priority of different types of work
@@ -770,6 +774,7 @@ static void handle_get_work_req(seL4_Word sender_badge, PdGetWorkMessage *msg, P
                 reply_msg->msg.work.space_ids[j] = work_res->res_id.space_id;
                 reply_msg->msg.work.object_ids[j] = work_res->res_id.object_id;
                 reply_msg->msg.work.pd_ids[j] = work_res->client_pd_id;
+                reply_msg->msg.work.n_critical += work_res->is_critical ? 1 : 0;
                 free(work_res);
             }
 
@@ -866,27 +871,24 @@ static void handle_finish_work_req(seL4_Word sender_badge, PdFinishWorkMessage *
     OSDB_PRINTF("Got a 'finish work' message from: ");
     BADGE_PRINT(sender_badge);
 
-    // (XXX) Arya: doesn't do any authentication, or check if we actually needed this piece
-    // For simplicity, just decrement the counter of "remaining pieces"
-    // THIS LOGIC IS DEFINITELY WRONG
-    // If there was work in the queue before the termination was started, or work was added later...
-
     if (!get_gpi_server()->pending_termination)
     {
         // Nothing to do, but all is well
         goto err_goto;
     }
 
+    // (XXX) Arya: doesn't do any authentication, or check if the work is what we expected
+
     // Update the pending termination counter
-    if (msg->n_requests > get_gpi_server()->pd_termination_n_missing)
+    if (msg->n_critical > get_gpi_server()->pd_termination_n_missing)
     {
-        OSDB_PRINTWARN("Got 'finished work request' for %d requests, expecting %d\n", msg->n_requests,
+        OSDB_PRINTWARN("Got 'finished work request' for %d critical components, expecting %d\n", msg->n_critical,
                        get_gpi_server()->pd_termination_n_missing);
         get_gpi_server()->pd_termination_n_missing = 0;
     }
     else
     {
-        get_gpi_server()->pd_termination_n_missing -= msg->n_requests;
+        get_gpi_server()->pd_termination_n_missing -= msg->n_critical;
     }
 
     /* Check if the cleanup is finished */
@@ -1136,7 +1138,7 @@ int pd_component_remove_resource_from_rt(gpi_res_id_t res_id)
                         get_gpi_server()->rt_pd_id);
 
     // Remove the resource from it
-    error = pd_remove_resource(&pd_entry->pd, res_id);
+    error = pd_delete_resource(&pd_entry->pd, res_id);
 
 err_goto:
     return error;
@@ -1172,7 +1174,7 @@ err_goto:
 }
 
 int pd_component_space_cleanup(gpi_obj_id_t pd_id, gpi_cap_t space_type,
-                               gpi_space_id_t space_id, bool execute_cleanup_policy)
+                               gpi_space_id_t space_id, bool execute_cleanup_policy, bool dont_notify)
 {
     int error = 0;
 
@@ -1192,7 +1194,7 @@ int pd_component_space_cleanup(gpi_obj_id_t pd_id, gpi_cap_t space_type,
         SERVER_GOTO_IF_ERR(error, "failed to remove resource space (%u) resource from PD (%u)\n",
                            space_id, pd_id);
 
-        if (manager_data->pd.id != get_gpi_server()->rt_pd_id)
+        if (!dont_notify && manager_data->pd.id != get_gpi_server()->rt_pd_id)
         {
             // Notify the server that its space is being deleted
             pd_work_entry_t *work_entry = calloc(1, sizeof(pd_work_entry_t));
@@ -1291,9 +1293,14 @@ void pd_component_queue_destroy_work(pd_component_registry_entry_t *pd_entry, pd
 {
     assert(work != NULL);
 
-    if (get_gpi_server()->pending_termination)
+    if (get_gpi_server()->starting_termination)
     {
+        work->is_critical = true;
         get_gpi_server()->pd_termination_n_missing++;
+    }
+    else
+    {
+        work->is_critical = false;
     }
 
     // Add to the list
@@ -1307,9 +1314,14 @@ void pd_component_queue_free_work(pd_component_registry_entry_t *pd_entry, pd_wo
 {
     assert(work != NULL);
 
-    if (get_gpi_server()->pending_termination)
+    if (get_gpi_server()->starting_termination)
     {
+        work->is_critical = true;
         get_gpi_server()->pd_termination_n_missing++;
+    }
+    else
+    {
+        work->is_critical = false;
     }
 
     // Add to the list

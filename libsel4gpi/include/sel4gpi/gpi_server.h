@@ -113,6 +113,7 @@ typedef struct _gpi_server_context
 
     /* Track a pending PD termination */
     /* (XXX) Arya: For now, we can only do one PD termination at a time */
+    bool starting_termination;      ///< True if we are currently setting up a PD termination operation
     bool pending_termination;       ///< True if a PD termination is currently in progress
     seL4_CPtr pd_termination_reply; ///< The reply cap for the pending pd termination
     int pd_termination_n_missing;   ///< Number of missing replies before cleanup is complete

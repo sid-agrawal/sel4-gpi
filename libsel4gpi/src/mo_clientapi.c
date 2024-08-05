@@ -18,6 +18,7 @@
 // Defined for utility printing macros
 #define DEBUG_ID MO_DEBUG
 #define SERVER_ID MOSERVS
+#define DEFAULT_ERR MoComponentError_UNKNOWN
 
 static sel4gpi_rpc_env_t rpc_env = {
     .request_desc = &MoMessage_msg,
@@ -43,7 +44,7 @@ static int mo_connect(seL4_CPtr server_ep_cap,
             .phys_addr = paddr,
         }};
 
-    MoReturnMessage ret_msg;
+    MoReturnMessage ret_msg = {0};
 
     error = sel4gpi_rpc_call(&rpc_env, server_ep_cap, (void *)&msg,
                              0, NULL, (void *)&ret_msg);
@@ -86,7 +87,7 @@ int mo_component_client_disconnect(mo_client_context_t *conn)
         .which_msg = MoMessage_disconnect_tag,
     };
 
-    MoReturnMessage ret_msg;
+    MoReturnMessage ret_msg = {0};
 
     error = sel4gpi_rpc_call(&rpc_env, conn->ep, (void *)&msg,
                              0, NULL, (void *)&ret_msg);

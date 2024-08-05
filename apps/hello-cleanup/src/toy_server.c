@@ -175,12 +175,12 @@ int toy_work_handler(
     else if (op == PdWorkAction_FREE)
     {
         // Toy server does nothing
-        error = pd_client_finish_work(&get_toy_server()->gen.pd_conn, work->object_ids_count);
+        error = pd_client_finish_work(&get_toy_server()->gen.pd_conn, work->object_ids_count, work->n_critical);
     }
     else if (op == PdWorkAction_DESTROY)
     {
         // Toy server does nothing
-        error = pd_client_finish_work(&get_toy_server()->gen.pd_conn, work->object_ids_count);
+        error = pd_client_finish_work(&get_toy_server()->gen.pd_conn, work->object_ids_count, work->n_critical);
     }
     else
     {

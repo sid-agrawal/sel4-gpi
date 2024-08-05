@@ -40,6 +40,8 @@ typedef struct _pd_work_entry
     gpi_obj_id_t client_pd_id; ///< Identifier of the PD the work is for
                                ///< For model extraction: The client PD that held the resource we are extracting
                                ///< For resource free: Currently unused
+    bool is_critical;          ///< If true, this work is to be counted as essential for some pending operation
+                               ///< Eg. this work is to free something as part of a PD termination
 } pd_work_entry_t;
 
 // Registry of PDs maintained by the server
@@ -124,10 +126,12 @@ int pd_component_resource_cleanup(gpi_res_id_t res_id);
  * @param space_type type of the deleted resource space
  * @param space_id ID of the deleted resource space
  * @param execute_cleanup_policy if true, execute a cleanup policy for any PDs that still depend on the resource space
+ * @param dont_notify if true, skip notifying the resource server PD that this space was deleted
  * @return 0 on success, error otherwise
  */
 int pd_component_space_cleanup(gpi_obj_id_t pd_id, gpi_cap_t space_type,
-                               gpi_space_id_t space_id, bool execute_cleanup_policy);
+                               gpi_space_id_t space_id, bool execute_cleanup_policy,
+                               bool dont_notify);
 
 /**
  * Get a PD from the registry by ID

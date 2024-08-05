@@ -32,6 +32,7 @@
 // Defined for utility printing macros
 #define DEBUG_ID ADS_DEBUG
 #define SERVER_ID ADSSERVS
+#define DEFAULT_ERR AdsComponentError_UNKNOWN
 
 /* This is doesn't belong here but we need it */
 extern char _cpio_archive[];

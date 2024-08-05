@@ -37,6 +37,7 @@
 // Defined for utility printing macros
 #define DEBUG_ID ADS_DEBUG
 #define SERVER_ID ADSSERVS
+#define DEFAULT_ERR AdsComponentError_UNKNOWN
 
 static int forge_ads_attachments_from_vspace(ads_t *ads, gpi_obj_id_t client_pd_id);
 static int forge_ads_attachment_from_res(ads_t *ads, sel4utils_res_t *res, gpi_obj_id_t client_pd_id);

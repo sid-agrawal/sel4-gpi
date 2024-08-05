@@ -25,6 +25,7 @@
 
 #define DEBUG_ID MO_DEBUG
 #define SERVER_ID MOSERVS
+#define DEFAULT_ERR MoComponentError_UNKNOWN
 
 static int alloc_frames(vka_t *vka, mo_t *mo, uint32_t num_pages, size_t page_bits)
 {

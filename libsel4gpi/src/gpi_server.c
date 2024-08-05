@@ -32,6 +32,7 @@
 // Defined for utility printing macros
 #define DEBUG_ID GPI_DEBUG
 #define SERVER_ID GPISERVS
+#define DEFAULT_ERR 1
 
 // Default ID of the root task's PD
 #define RT_PD_ID 0

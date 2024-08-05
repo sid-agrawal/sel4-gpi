@@ -220,9 +220,11 @@ int pd_client_send_subgraph(pd_client_context_t *conn, mo_client_context_t *mo_c
  *
  * @param conn the resource server's pd connection
  * @param n_requests the number of requests that the PD is fulfilling
+ * @param n_critical the number of requests that the PD is fulfilling, and are critical to some
+ *                   pending global operation
  * @return 0 on success, error otherwise
  */
-int pd_client_finish_work(pd_client_context_t *conn, int n_requests);
+int pd_client_finish_work(pd_client_context_t *conn, int n_requests, int n_critical);
 
 /** OTHER FUNCTIONS FOR ACTIVE PDs **/
 

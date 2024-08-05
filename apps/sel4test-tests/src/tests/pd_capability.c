@@ -80,9 +80,7 @@ int test_new_process_osmosis_shmem(env_t env)
     sel4gpi_config_destroy(proc_cfg);
 
     // Cleanup the PD
-    // printf("Attempting to clean up PD, ignore error since the PD may have exited already\n");
-    // error = pd_client_terminate(&runnable.pd);
-    // Ignore error, PD may have exited before we terminate it
+    // test_error_eq(maybe_terminate_pd(&runnable.pd), 0);
 
     return sel4test_get_result();
 }

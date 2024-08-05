@@ -9,6 +9,7 @@
 
 #define DEBUG_ID GPI_DEBUG
 #define SERVER_ID GPISERVS
+#define DEFAULT_ERR 1
 
 // Generic buffer size for RPC messages, in bytes
 // Must be larger than any RPC message in the system
