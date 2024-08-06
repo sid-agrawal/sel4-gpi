@@ -12,9 +12,11 @@
 #include <sel4gpi/pd_creation.h>
 #include <sel4gpi/error_handle.h>
 #include <sel4runtime.h>
+#include <kvstore_server_rpc.pb.h>
 
 #define KVSTORE_DB_FILE_FORMAT "kvstore_%d.db"
 #define MAX_KVSTORE_DBS_IN_FS 10 // Maximum number of kvstores in one file system
+#define DEFAULT_KVSTORE_OBJ_ID 1
 
 static const char *kvstore_db_file = "/kvstore.db";
 static const char *create_table_cmd = "create table kvstore (key bigint unsigned not null primary key, val bigint unsigned);";
@@ -24,22 +26,21 @@ static const char *select_format = "select val from kvstore where key == %ld;";
 static sqlite3 *kvstore_db;
 static int cmdlen = 128;
 static char sql_cmd[128];
-static char db_filename[128];
 static char *errmsg = NULL;
+static kvstore_server_context_t kvstore_server = {0};
 
 static seL4_CPtr mcs_reply;
 
-#define CHECK_ERROR(check, msg, err) \
-    do                               \
-    {                                \
-        if ((check) != SQLITE_OK)    \
-        {                            \
-            ZF_LOGE("%s"             \
-                    ", %d.",         \
-                    msg,             \
-                    error);          \
-            return err;              \
-        }                            \
+#define CHECK_ERR_GOTO(check, msg, err) \
+    do                                  \
+    {                                   \
+        if ((check) != seL4_NoError)    \
+        {                               \
+            ZF_LOGE("%s",               \
+                    msg);               \
+            error = err;                \
+            goto err_goto;              \
+        }                               \
     } while (0);
 
 #define SQL_MAKE_CMD(format, ...)                               \
@@ -57,6 +58,11 @@ static seL4_CPtr mcs_reply;
         error = sqlite3_exec(sql_db, sql_cmd, sqlite_callback, NULL, &errmsg); \
         print_error(error, errmsg, sql_db);                                    \
     } while (0);
+
+kvstore_server_context_t *get_kvstore_server(void)
+{
+    return &kvstore_server;
+}
 
 static seL4_MessageInfo_t recv(seL4_CPtr ep, seL4_Word *sender_badge_ptr)
 {
@@ -82,7 +88,7 @@ static void print_error(int error, char *errmsg, sqlite3 *db)
 {
     if (error != SQLITE_OK)
     {
-        printf("SQL error in DB [%s]: %s\n", db_filename, errmsg);
+        printf("SQL error in DB [%s]: %s\n", get_kvstore_server()->db_filename, errmsg);
         sqlite3_free(errmsg);
         printf("sqlite3_exec error, extended errcode: %d\n", sqlite3_extended_errcode(db));
     }
@@ -111,13 +117,13 @@ int kvstore_server_init()
     /* Try a few filenames in case there is already a kvstore db */
     for (int i = 0; i < MAX_KVSTORE_DBS_IN_FS; i++)
     {
-        error = snprintf(db_filename, cmdlen, KVSTORE_DB_FILE_FORMAT, i);
+        error = snprintf(get_kvstore_server()->db_filename, cmdlen, KVSTORE_DB_FILE_FORMAT, i);
         assert(error != -1);
 
         // Check if the file exists
-        if (access(db_filename, F_OK))
+        if (access(get_kvstore_server()->db_filename, F_OK))
         {
-            KVSTORE_PRINTF("DB %s already exists, trying another name\n", db_filename);
+            KVSTORE_PRINTF("DB %s already exists, trying another name\n", get_kvstore_server()->db_filename);
         }
         else
         {
@@ -125,97 +131,217 @@ int kvstore_server_init()
         }
     }
 
-    KVSTORE_PRINTF("Creating DB %s\n", db_filename);
-    error = sqlite3_open(db_filename, &kvstore_db);
-    CHECK_ERROR(error, "failed to open kvstore db", KVSTORE_ERROR_UNKNOWN);
-    KVSTORE_PRINTF("Created DB %s\n", db_filename);
+    KVSTORE_PRINTF("Creating DB %s\n", get_kvstore_server()->db_filename);
+    error = sqlite3_open(get_kvstore_server()->db_filename, &kvstore_db);
+    CHECK_ERR_GOTO(error, "failed to open kvstore db", KvstoreError_UNKNOWN);
+    KVSTORE_PRINTF("Created DB %s\n", get_kvstore_server()->db_filename);
 
     SQL_EXEC(kvstore_db, create_table_cmd, NULL);
-    CHECK_ERROR(error, "failed to create kvstore table", KVSTORE_ERROR_UNKNOWN);
+    CHECK_ERR_GOTO(error, "failed to create kvstore table", KvstoreError_UNKNOWN);
     KVSTORE_PRINTF("Created table\n");
 
+err_goto:
     return error;
 }
 
-int kvstore_server_main(seL4_CPtr parent_ep)
+// Internal init function for resource server utils
+static int kvstore_init()
 {
-    int error;
-    seL4_MessageInfo_t tag;
-    seL4_CPtr badge;
+    int error = 0;
 
-    seL4_CPtr fs_ep = sel4gpi_get_rde(sel4gpi_get_resource_type_code(FILE_RESOURCE_TYPE_NAME));
-    ep_client_context_t parent_ep_conn = {.ep = parent_ep};
-    error = ep_client_get_raw_endpoint(&parent_ep_conn);
-    CHECK_ERROR(error, "Failed to retrieve parent EP\n", KVSTORE_ERROR_UNKNOWN);
-
-    printf("kvstore-server main: parent ep (%lu), fs ep(%lu) \n", parent_ep_conn.raw_endpoint, fs_ep);
-
-    pd_client_context_t pd_conn = sel4gpi_get_pd_conn();
-
-    /* initialize server */
     error = kvstore_server_init();
-    CHECK_ERROR(error, "failed to initialize kvstore server\n", KVSTORE_ERROR_UNKNOWN);
+    CHECK_ERR_GOTO(error, "failed to initialize kvstore files", KvstoreError_UNKNOWN);
 
-    /* allocate our own endpoint */
-    ep_client_context_t ep_conn;
-    error = sel4gpi_alloc_endpoint(&ep_conn);
-    CHECK_ERROR(error, "failed to allocate endpoint\n", KVSTORE_ERROR_UNKNOWN);
+    get_kvstore_server()->kvstore_obj_id = BADGE_OBJ_ID_NULL;
 
-    /* notify parent that we have started */
-    KVSTORE_PRINTF("Messaging parent process at slot %lu, sending ep (%lu)\n", 
-    parent_ep_conn.raw_endpoint, ep_conn.raw_endpoint);
-    tag = seL4_MessageInfo_new(0, 0, 1, 0);
-    seL4_SetCap(0, ep_conn.raw_endpoint);
-    seL4_Send(parent_ep_conn.raw_endpoint, tag);
+    error = resspc_client_map_space(
+        &get_kvstore_server()->gen.default_space,
+        sel4gpi_get_default_space_id(sel4gpi_get_resource_type_code(FILE_RESOURCE_TYPE_NAME)));
+    CHECK_ERR_GOTO(error, "failed to map kvstore space to file space", KvstoreError_UNKNOWN);
 
-    /* start serving requests */
-    while (1)
+err_goto:
+}
+
+static void kvstore_request_handler(void *msg_p,
+                                    void *msg_reply_p,
+                                    seL4_Word sender_badge,
+                                    seL4_CPtr cap, bool *need_new_recv_cap)
+{
+    int error = 0;
+    void *mo_vaddr;
+    *need_new_recv_cap = false;
+    KvstoreMessage *msg = (KvstoreMessage *)msg_p;
+    KvstoreReturnMessage *reply_msg = (KvstoreReturnMessage *)msg_reply_p;
+    reply_msg->which_msg = KvstoreReturnMessage_basic_tag;
+
+    CHECK_ERR_GOTO(msg->magic != KVSTORE_RPC_MAGIC,
+                   "KVstore server received message with incorrect magic number\n",
+                   KvstoreError_UNKNOWN);
+
+    // Get info from badge
+    gpi_obj_id_t client_id = get_client_id_from_badge(sender_badge);
+    gpi_obj_id_t obj_id = get_object_id_from_badge(sender_badge);
+    gpi_space_id_t ns_id = get_space_id_from_badge(sender_badge);
+    gpi_cap_t cap_type = get_cap_type_from_badge(sender_badge);
+
+    CHECK_ERR_GOTO(sender_badge == 0, "Got message on unbadged ep", KvstoreError_UNKNOWN);
+    CHECK_ERR_GOTO(cap_type != get_kvstore_server()->gen.resource_type, "Got invalid captype",
+                   KvstoreError_UNKNOWN);
+
+    // Handle the message
+    if (obj_id == BADGE_OBJ_ID_NULL)
+    { /* Handle Request Not Associated to Object */
+        KVSTORE_PRINTF("Received badged request with no object id\n");
+
+        char *pathname;
+
+        switch (msg->which_msg)
+        {
+        case KvstoreMessage_create_tag:
+            KVSTORE_PRINTF("Got create message from client %u\n", client_id);
+            // Give the client a resource to access the kvstore
+            // (XXX) Arya: This doesn't actually create a new kvstore because the server currently
+            // only supports a single kvstore
+
+            if (get_kvstore_server()->kvstore_obj_id == BADGE_OBJ_ID_NULL)
+            {
+                error = resource_server_create_resource(&get_kvstore_server()->gen,
+                                                        &get_kvstore_server()->gen.default_space,
+                                                        DEFAULT_KVSTORE_OBJ_ID);
+                CHECK_ERR_GOTO(error, "Failed to create the kvstore resource", KvstoreError_UNKNOWN);
+
+                get_kvstore_server()->kvstore_obj_id = DEFAULT_KVSTORE_OBJ_ID;
+            }
+
+            seL4_CPtr dest;
+            error = resource_server_give_resource(&get_kvstore_server()->gen,
+                                                  get_kvstore_server()->gen.default_space.id,
+                                                  get_kvstore_server()->kvstore_obj_id,
+                                                  client_id,
+                                                  &dest);
+            CHECK_ERR_GOTO(error, "Failed to give the kvstore resource", KvstoreError_UNKNOWN);
+
+            reply_msg->which_msg = KvstoreReturnMessage_alloc_tag;
+            reply_msg->msg.alloc.dest = dest;
+            break;
+        default:
+            CHECK_ERR_GOTO(1, "got invalid op on badged ep without obj id", KvstoreError_UNKNOWN);
+        }
+    }
+    else
     {
-        /* Receive a message */
-        KVSTORE_PRINTF("Ready to receive a message\n");
-        tag = recv(ep_conn.raw_endpoint, &badge);
-        int op = seL4_GetMR(KVMSGREG_FUNC);
-        KVSTORE_PRINTF("Received message\n");
+        /* Handle Request On Specific Resource */
+        KVSTORE_PRINTF("Received badged request with object id 0x%u\n", get_object_id_from_badge(sender_badge));
 
-        if (op == KV_FUNC_SET_REQ)
+        switch (msg->which_msg)
         {
-            seL4_Word key = seL4_GetMR(KVMSGREG_SET_REQ_KEY);
-            seL4_Word val = seL4_GetMR(KVMSGREG_SET_REQ_VAL);
+        case KvstoreMessage_set_tag:
+            error = kvstore_server_set(msg->msg.set.key, msg->msg.set.val);
+            break;
+        case KvstoreMessage_get_tag:
+            uint64_t val;
+            error = kvstore_server_get(msg->msg.get.key, &val);
 
-            error = kvstore_server_set(key, val);
-
-            // Restore state of message registers for reply
-            seL4_MessageInfo_ptr_set_length(&tag, KVMSGREG_SET_ACK_END);
-            seL4_MessageInfo_ptr_set_label(&tag, error);
-            seL4_SetMR(KVMSGREG_FUNC, KV_FUNC_SET_ACK);
+            reply_msg->which_msg = KvstoreReturnMessage_get_tag;
+            reply_msg->msg.get.val = val;
+            break;
+        default:
+            CHECK_ERR_GOTO(1, "got invalid op on badged ep with obj id", KvstoreError_UNKNOWN);
         }
-        else if (op == KV_FUNC_GET_REQ)
-        {
-            seL4_Word key = seL4_GetMR(KVMSGREG_GET_REQ_KEY);
-            seL4_Word val;
-
-            error = kvstore_server_get(key, &val);
-
-            // Restore state of message registers for reply
-            seL4_MessageInfo_ptr_set_length(&tag, KVMSGREG_GET_ACK_END);
-            seL4_MessageInfo_ptr_set_label(&tag, error);
-            seL4_SetMR(KVMSGREG_GET_ACK_VAL, val);
-            seL4_SetMR(KVMSGREG_FUNC, KV_FUNC_GET_ACK);
-        }
-        else
-        {
-            KVSTORE_PRINTF("Got invalid opcode (%d)\n", op);
-        }
-
-        /* Reply to message */
-        reply(tag);
     }
 
-main_exit:
-    /* notify parent that we have failed */
-    KVSTORE_PRINTF("Messaging parent process at slot %d, notifying of failure\n", (int)parent_ep_conn.raw_endpoint);
-    tag = seL4_MessageInfo_new(error, 0, 0, 0);
-    seL4_Send(parent_ep_conn.raw_endpoint, tag);
+err_goto:
+    reply_msg->errorCode = error;
+}
+
+static int kvstore_work_handler(PdWorkReturnMessage *work)
+{
+    int error = 0;
+    seL4_MessageInfo_t reply_tag = seL4_MessageInfo_new(0, 0, 0, 0);
+
+    int op = work->action;
+    if (op == PdWorkAction_EXTRACT)
+    {
+        KVSTORE_PRINTF("Got EXTRACT work from RT\n");
+
+        /* Initialize the model state */
+        mo_client_context_t mo;
+        model_state_t *model_state;
+        error = resource_server_extraction_setup(&get_kvstore_server()->gen, 4, &mo, &model_state);
+        CHECK_ERR_GOTO(error, "Failed to setup model extraction\n", KvstoreError_UNKNOWN);
+
+        for (int i = 0; i < work->object_ids_count; i++)
+        {
+            gpi_space_id_t space_id = work->space_ids[i];
+            gpi_obj_id_t fileno = work->object_ids[i];
+            gpi_obj_id_t client_pd_id = work->pd_ids[i];
+
+            if (fileno != BADGE_OBJ_ID_NULL)
+            {
+                /* File system only does extraction at a space-level, not at a file-level */
+                continue;
+            }
+        }
+
+        /* Send the result */
+        error = resource_server_extraction_finish(&get_kvstore_server()->gen, &mo, model_state, work->object_ids_count);
+        CHECK_ERR_GOTO(error, "Failed to finish model extraction\n", KvstoreError_UNKNOWN);
+    }
+    else if (op == PdWorkAction_FREE)
+    {
+        KVSTORE_PRINTF("Got FREE work from RT\n");
+        for (int i = 0; i < work->object_ids_count; i++)
+        {
+            // Actually don't do much when a file is freed, it's the same as file close
+            // We still want to keep it in the file system, but we can reduce the refcount
+            gpi_obj_id_t file_id = work->object_ids[i];
+        }
+
+        error = pd_client_finish_work(&get_kvstore_server()->gen.pd_conn, work->object_ids_count, work->n_critical);
+    }
+    else if (op == PdWorkAction_DESTROY)
+    {
+        KVSTORE_PRINTF("Got DESTROY work from RT\n");
+        for (int i = 0; i < work->object_ids_count; i++)
+        {
+            gpi_obj_id_t file_id = work->object_ids[i];
+            gpi_space_id_t space_id = work->space_ids[i];
+
+            if (file_id != BADGE_OBJ_ID_NULL)
+            {
+                // Destroy a particular file
+            }
+            else
+            {
+                // Destroy a whole space
+            }
+        }
+
+        error = pd_client_finish_work(&get_kvstore_server()->gen.pd_conn, work->object_ids_count, work->n_critical);
+    }
+    else
+    {
+        KVSTORE_PRINTF("Unknown work action\n");
+        error = 1;
+    }
+
+err_goto:
+    return error;
+}
+
+int kvstore_server_main(seL4_CPtr parent_ep, gpi_obj_id_t parent_pd_id)
+{
+    return resource_server_start(
+        &get_kvstore_server()->gen,
+        KVSTORE_RESOURCE_NAME,
+        kvstore_request_handler,
+        kvstore_work_handler,
+        parent_ep,
+        parent_pd_id,
+        kvstore_init,
+        FS_DEBUG_ENABLED,
+        &KvstoreMessage_msg,
+        &KvstoreReturnMessage_msg);
 }
 
 static void kvstore_server_main_thread(int argc, char **argv)
@@ -227,9 +353,10 @@ static void kvstore_server_main_thread(int argc, char **argv)
     else
     {
         seL4_CPtr parent_ep = (seL4_CPtr)atol(argv[0]);
-        printf("kvstore-server: in thread, parent ep (%lu) \n", parent_ep);
+        gpi_obj_id_t parent_pd_id = (seL4_CPtr)atol(argv[1]);
+        printf("kvstore-server: in thread, parent ep (%lu), parent ID (%u) \n", parent_ep, parent_pd_id);
 
-        kvstore_server_main(parent_ep);
+        kvstore_server_main(parent_ep, parent_pd_id);
     }
 }
 
@@ -251,30 +378,41 @@ int kvstore_server_start_thread(seL4_CPtr *kvstore_ep)
     /* temp EP */
     ep_client_context_t ep_conn;
     error = sel4gpi_alloc_endpoint(&ep_conn);
-    GOTO_IF_ERR(error, "failed to allocate ep\n");
+    CHECK_ERR_GOTO(error, "failed to allocate ep\n", KvstoreError_UNKNOWN);
 
     seL4_CPtr temp_ep_in_PD;
     pd_client_send_cap(&runnable.pd, ep_conn.ep, &temp_ep_in_PD);
 
-    error = sel4gpi_prepare_pd(cfg, &runnable, 1, (seL4_Word *)&temp_ep_in_PD);
-    GOTO_IF_ERR(error, "Failed to prepare PD\n");
+    /* prepare args */
+    int argc = 2;
+    gpi_obj_id_t self_pd_id = sel4gpi_get_pd_conn().id;
+    seL4_Word args[2] = {temp_ep_in_PD, self_pd_id};
+
+    /* start the PD */
+    error = sel4gpi_prepare_pd(cfg, &runnable, argc, args);
+    CHECK_ERR_GOTO(error, "Failed to prepare PD\n", KvstoreError_UNKNOWN);
 
     error = sel4gpi_start_pd(&runnable);
-    GOTO_IF_ERR(error, "Failed to start PD\n");
+    CHECK_ERR_GOTO(error, "Failed to start PD\n", KvstoreError_UNKNOWN);
 
-    seL4_CPtr receive_slot;
-    error = pd_client_next_slot(&self_pd_conn, &receive_slot);
-    seL4_SetCapReceivePath(PD_CAP_ROOT, receive_slot, PD_CAP_DEPTH);
-
+    /* wait for te thread to start */
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0, 0);
     tag = seL4_Recv(ep_conn.raw_endpoint, NULL);
     error = seL4_MessageInfo_get_label(tag);
-    CHECK_ERROR(error, "kvstore thread setup failed", KVSTORE_ERROR_UNKNOWN);
+    CHECK_ERR_GOTO(error, "kvstore thread setup failed", KvstoreError_UNKNOWN);
 
-    *kvstore_ep = receive_slot;
-    KVSTORE_PRINTF("Started thread, ep (%lu)\n", receive_slot);
+    /* get the kvstore EP from RDE */
+    gpi_cap_t kvstore_type_code = sel4gpi_get_resource_type_code(KVSTORE_RESOURCE_NAME);
+    CHECK_ERR_GOTO(kvstore_type_code == GPICAP_TYPE_NONE, "failed to get type code for kvstore", KvstoreError_UNKNOWN);
+    *kvstore_ep = sel4gpi_get_rde(kvstore_type_code);
+    CHECK_ERR_GOTO(*kvstore_ep == seL4_CapNull, "failed to get RDE for kvstore", KvstoreError_UNKNOWN);
+
+    KVSTORE_PRINTF("Started thread, ep (%lu)\n", *kvstore_ep);
 
     sel4gpi_config_destroy(cfg);
+
+    // (XXX) Arya: should clean up the temporary EP here
+    // At least, it will be freed when the PD termiantes
 
 err_goto:
     return error;
@@ -282,11 +420,13 @@ err_goto:
 
 int kvstore_server_set(seL4_Word key, seL4_Word value)
 {
-    KVSTORE_PRINTF("kvstore_server_set: key (%ld), value (%ld), %s\n", key, value, db_filename);
+    KVSTORE_PRINTF("kvstore_server_set: key (%ld), value (%ld), %s\n", key, value, get_kvstore_server()->db_filename);
 
     int error = seL4_NoError;
     SQL_EXEC(kvstore_db, insert_format, key, value);
-    CHECK_ERROR(error, "failed to insert pair to kvstore table", KVSTORE_ERROR_UNKNOWN);
+    CHECK_ERR_GOTO(error, "failed to insert pair to kvstore table", KvstoreError_UNKNOWN);
+
+err_goto:
     return error;
 }
 
@@ -299,7 +439,7 @@ int kvstore_server_get(seL4_Word key, seL4_Word *value)
 
     SQL_MAKE_CMD(select_format, key);
     error = sqlite3_prepare_v2(kvstore_db, sql_cmd, -1, &stmt, 0);
-    CHECK_ERROR(error, "failed to prepare sql cmd", KVSTORE_ERROR_UNKNOWN);
+    CHECK_ERR_GOTO(error, "failed to prepare sql cmd", KvstoreError_UNKNOWN);
 
     // Execute the statement (gets one row if it exists)
     int res = sqlite3_step(stmt);
@@ -307,17 +447,18 @@ int kvstore_server_get(seL4_Word key, seL4_Word *value)
     {
         // This means there was no data found for the key
         error = sqlite3_finalize(stmt);
-        CHECK_ERROR(error, "failed to finalize sql cmd", KVSTORE_ERROR_UNKNOWN);
-        return KVSTORE_ERROR_KEY;
+        CHECK_ERR_GOTO(error, "failed to finalize sql cmd", KvstoreError_UNKNOWN);
+        return KvstoreError_KEY;
     }
 
     // Retrieve value
     const char *val_s = (const char *)sqlite3_column_text(stmt, 0);
-    CHECK_ERROR(val_s == NULL, "failed to get value from row", KVSTORE_ERROR_KEY);
+    CHECK_ERR_GOTO(val_s == NULL, "failed to get value from row", KvstoreError_KEY);
 
     *value = atoi(val_s);
     error = sqlite3_finalize(stmt);
-    CHECK_ERROR(error, "failed to finalize sql cmd", KVSTORE_ERROR_UNKNOWN);
+    CHECK_ERR_GOTO(error, "failed to finalize sql cmd", KvstoreError_UNKNOWN);
 
+err_goto:
     return error;
 }

@@ -127,3 +127,8 @@ void sel4gpi_rpc_print_request(sel4gpi_rpc_env_t *env, void *msg)
 {
     pb_pretty_print(env->request_desc, msg);
 }
+
+void sel4gpi_rpc_print_reply(sel4gpi_rpc_env_t *env, void *msg)
+{
+    pb_pretty_print(env->reply_desc, msg);
+}

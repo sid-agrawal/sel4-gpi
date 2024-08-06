@@ -78,10 +78,32 @@ static void on_pd_registry_delete(resource_registry_node_t *node_gen, void *arg)
     pd_destroy(&node->pd, get_pd_component()->server_vka, get_pd_component()->server_vspace);
 
     // Clear any pending work
-    get_gpi_server()->model_extraction_n_missing -= node->pending_model_state->count;
-    linked_list_destroy(node->pending_destroy, true);
-    linked_list_destroy(node->pending_frees, true);
-    linked_list_destroy(node->pending_model_state, true);
+    linked_list_t *lists[3] = {node->pending_model_state, node->pending_destroy, node->pending_frees};
+    PdWorkAction work_types[3] = {PdWorkAction_EXTRACT, PdWorkAction_DESTROY, PdWorkAction_FREE};
+
+    pd_work_entry_t *work_res;
+    for (int i = 0; i < 3; i++)
+    {
+        while (lists[i]->count > 0)
+        {
+            linked_list_pop_head(lists[i], (void **)&work_res);
+
+            if (work_res->is_critical) {
+                if (work_types[i] == PdWorkAction_EXTRACT) {
+                    // (XXX) Arya: Maybe want to provide a warning here, that some model state may be lost
+                    get_gpi_server()->model_extraction_n_missing--;
+                } else {
+                    get_gpi_server()->pd_termination_n_missing--;
+                }
+            }
+            
+            free(work_res);
+        }
+    }
+
+    linked_list_destroy(node->pending_destroy, false);
+    linked_list_destroy(node->pending_frees, false);
+    linked_list_destroy(node->pending_model_state, false);
 }
 
 int pd_component_allocate(gpi_obj_id_t client_id, mo_t *init_data_mo, pd_t **ret_pd, seL4_CPtr *ret_cap)
@@ -179,6 +201,9 @@ static void handle_terminate_req(seL4_Word sender_badge, PdTerminateMessage *msg
     /* If we are waiting on missing pieces, bookkeep and don't reply yet */
     if (get_gpi_server()->pd_termination_n_missing > 0)
     {
+        OSDB_PRINTF("PD termination will continue asynchronously, missing %u pieces.\n",
+                    get_gpi_server()->pd_termination_n_missing);
+
         cspacepath_t reply_path;
         vka_cspace_alloc_path(get_pd_component()->server_vka, &reply_path);
         seL4_CNode_SaveCaller(reply_path.root, reply_path.capPtr, reply_path.capDepth);
@@ -782,6 +807,12 @@ static void handle_get_work_req(seL4_Word sender_badge, PdGetWorkMessage *msg, P
         }
     }
 
+#if OSDB_SERVER_PRINT_ALLOWED
+    OSDB_PRINTF("Returning work: ");
+    reply_msg->which_msg = PdReturnMessage_work_tag;
+    sel4gpi_rpc_print_reply(&get_pd_component()->rpc_env, (void *)reply_msg);
+#endif
+
 err_goto:
     reply_msg->which_msg = PdReturnMessage_work_tag;
     reply_msg->errorCode = error;
@@ -1203,6 +1234,8 @@ int pd_component_space_cleanup(gpi_obj_id_t pd_id, gpi_cap_t space_type,
             work_entry->res_id.space_id = space_id;
             work_entry->res_id.object_id = BADGE_OBJ_ID_NULL;
 
+            OSDB_PRINTF("Queue work: notify resource server (%u) of space deletion %s_%u.\n",
+                        manager_data->pd.id, cap_type_to_str(space_type), space_id);
             pd_component_queue_destroy_work(manager_data, work_entry);
         }
     }

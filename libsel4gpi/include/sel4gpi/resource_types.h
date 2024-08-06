@@ -4,6 +4,8 @@
 #include <sel4/sel4.h>
 
 #define RESOURCE_TYPE_MAX_STRING_SIZE 16
+#define RES_ID_PRINTF "%s_%u_%u"
+#define RES_ID_PRINT_ARGS(res_id) cap_type_to_str(res_id.type), res_id.space_id, res_id.object_id
 
 /**
  * Resource type is either:

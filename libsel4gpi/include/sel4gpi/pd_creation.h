@@ -270,7 +270,7 @@ int sel4gpi_ads_configure(ads_config_t *cfg,
  *
  * @param cfg an existing PD config for an unstarted PD
  * @param rde_type type of RDE to share
- * @param space_id resource space ID of the RDE
+ * @param space_id resource space ID of the RDE, or BADGE_SPACE_ID_NULL to use the default space
  */
 void sel4gpi_add_rde_config(pd_config_t *cfg, gpi_cap_t rde_type, gpi_space_id_t space_id);
 

@@ -15,6 +15,7 @@
 
 #include <ramdisk_client.h>
 #include <fs_client.h>
+#include <kvstore_shared.h>
 
 #define KVSTORE_SERVER_APP "kvstore_server"
 #define HELLO_KVSTORE_APP "hello_kvstore"
@@ -31,6 +32,7 @@ static pd_client_context_t fs_pd;
 static gpi_space_id_t fs_2_id;
 static pd_client_context_t fs_2_pd;
 static gpi_cap_t file_cap_type;
+static gpi_cap_t kvstore_cap_type;
 
 typedef enum _kvstore_mode
 {
@@ -91,49 +93,17 @@ static int start_kvstore_server(seL4_CPtr *kvstore_ep, gpi_space_id_t fs_nsid, p
 {
     int error;
 
-    sel4gpi_runnable_t runnable = {0};
-    pd_config_t *cfg = sel4gpi_configure_process(KVSTORE_SERVER_APP, DEFAULT_STACK_PAGES, DEFAULT_HEAP_PAGES, &runnable);
-    test_assert(cfg != NULL);
+    gpi_obj_id_t kvstore_id;
+    error = start_resource_server_pd(file_cap_type, fs_nsid, KVSTORE_SERVER_APP,
+                                     &kvstore_pd->ep, &kvstore_id);
 
-    *kvstore_pd = runnable.pd;
-
-    // Setup the hello PD's args
-    int argc = 1;
-    seL4_Word args[argc];
-
-    // Copy the parent ep
-    error = pd_client_send_cap(kvstore_pd, self_ep.ep, &args[0]);
-    test_assert(error == 0);
-
-    // Share an FS and EP RDE
-    sel4gpi_add_rde_config(cfg, file_cap_type, fs_nsid);
-    sel4gpi_add_rde_config(cfg, GPICAP_TYPE_EP, BADGE_SPACE_ID_NULL);
-
-    // Start it
-    error = sel4gpi_prepare_pd(cfg, &runnable, argc, args);
-    test_error_eq(error, 0);
-
-    error = sel4gpi_start_pd(&runnable);
-    test_error_eq(error, 0);
-
-    // Wait for it to finish starting
-    seL4_CPtr receive_slot;
-    error = pd_client_next_slot(&pd_conn, &receive_slot);
-    test_error_eq(error, 0);
-    test_assert(receive_slot != seL4_CapNull);
-
-    seL4_SetCapReceivePath(PD_CAP_ROOT, receive_slot, PD_CAP_DEPTH);
-    seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0, 0);
-    tag = seL4_Recv(self_ep.raw_endpoint, NULL);
-    int n_caps = seL4_MessageInfo_get_extraCaps(tag);
-    error = seL4_MessageInfo_get_label(tag);
-    test_assert(error == 0);
-    test_assert(n_caps == 1);
-
-    *kvstore_ep = receive_slot;
-
-    sel4gpi_config_destroy(cfg);
-    return 0;
+    /* get the kvstore EP from RDE */
+    kvstore_cap_type = sel4gpi_get_resource_type_code(KVSTORE_RESOURCE_NAME);
+    test_assert(kvstore_cap_type != GPICAP_TYPE_NONE);
+    *kvstore_ep = sel4gpi_get_rde(kvstore_cap_type);
+    test_assert(*kvstore_ep != seL4_CapNull);
+err_goto:
+    return error;
 }
 
 /**
@@ -152,7 +122,7 @@ static int start_hello_kvstore(kvstore_mode_t kvstore_mode,
     int error;
 
     // Setup the hello PD's args
-    int argc = 3;
+    int argc = 2;
     seL4_Word args[argc];
 
     sel4gpi_runnable_t runnable = {0};
@@ -165,17 +135,12 @@ static int start_hello_kvstore(kvstore_mode_t kvstore_mode,
     error = pd_client_send_cap(hello_pd, self_ep.ep, &args[0]);
     test_assert(error == 0);
 
-    args[2] = kvstore_mode;
+    args[1] = kvstore_mode;
 
     // Copy the kvstore ep, if applicable
     if (kvstore_mode == SEPARATE_PROC)
     {
-        error = pd_client_send_cap(hello_pd, kvstore_ep, &args[1]);
-        test_assert(error == 0);
-    }
-    else
-    {
-        args[1] = 0;
+        sel4gpi_add_rde_config(cfg, kvstore_cap_type, BADGE_SPACE_ID_NULL);
     }
 
     // Share an FS RDE

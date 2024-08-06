@@ -1,0 +1,50 @@
+syntax = "proto3";
+
+enum KvstoreError {
+    NONE = 0;                    /* no error */
+    UNKNOWN = 11;                /* (XXX) Arya: Manually set to the seL4_NumErrors */
+    KEY = 12;                    /* invalid key for kvstore */
+};
+
+message KvstoreCreateMessage {
+    /* No Content */
+};
+
+message KvstoreSetMessage {
+    uint64 key = 1;       /* key to set */
+    uint64 val = 2;       /* value to set */
+};
+
+message KvstoreGetMessage {
+    uint64 key = 1;       /* key to get */
+};
+
+message KvstoreMessage {
+    uint64 magic = 100;
+    oneof msg {
+        KvstoreCreateMessage create = 1;
+        KvstoreSetMessage set = 2;
+        KvstoreGetMessage get = 3;
+    }
+};
+
+message KvstoreAllocReturnMessage {
+    uint64 dest = 1;       /* slot containing the kvstore capability */
+};
+
+message KvstoreGetReturnMessage {
+    uint64 val = 1;       /* value from get */
+};
+
+message KvstoreBasicReturnMessage {
+    /* No content */
+};
+
+message KvstoreReturnMessage {
+    KvstoreError errorCode = 1;
+    oneof msg {
+        KvstoreBasicReturnMessage basic = 2;
+        KvstoreAllocReturnMessage alloc = 3;
+        KvstoreGetReturnMessage get = 4;
+    };
+};

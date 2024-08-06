@@ -99,6 +99,7 @@ target_link_libraries(
         ramdisk_client
         fs_client
         sqlite3
+        kvstore_client
     PRIVATE sel4test-driver_Config
 )
 

@@ -46,8 +46,9 @@ int main(int argc, char **argv)
     printf("kvstore main!\n");
 
     /* parse args */
-    assert(argc == 1);
+    assert(argc == 2);
     seL4_CPtr parent_ep = (seL4_CPtr)atol(argv[0]);
+    gpi_obj_id_t parent_pd_id = (gpi_obj_id_t)atol(argv[1]);
 
-    return kvstore_server_main(parent_ep);
+    return kvstore_server_main(parent_ep, parent_pd_id);
 }

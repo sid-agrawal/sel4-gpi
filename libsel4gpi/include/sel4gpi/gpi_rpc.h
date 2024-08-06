@@ -94,3 +94,11 @@ bool sel4gpi_rpc_check_caps_3(gpi_cap_t type1, gpi_cap_t type2, gpi_cap_t type3)
  * @param msg the message to print
  */
 void sel4gpi_rpc_print_request(sel4gpi_rpc_env_t *env, void *msg);
+
+/**
+ * Prints an RPC reply to standard output
+ *
+ * @param env the RPC env
+ * @param msg the message to print
+ */
+void sel4gpi_rpc_print_reply(sel4gpi_rpc_env_t *env, void *msg);

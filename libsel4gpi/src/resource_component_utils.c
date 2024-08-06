@@ -69,11 +69,10 @@ void resource_component_handle(resource_component_context_t *component,
     error = sel4gpi_rpc_recv(&component->rpc_env, (void *)rpc_msg_buf);
     assert(error == 0);
 
-    if (MESSAGE_DEBUG_ENABLED)
-    {
-        printf("Message to %s component: \n", cap_type_to_str(component->resource_type));
-        sel4gpi_rpc_print_request(&component->rpc_env, (void *)rpc_msg_buf);
-    }
+#if MESSAGE_DEBUG_ENABLED
+    printf("Message to %s component: \n", cap_type_to_str(component->resource_type));
+    sel4gpi_rpc_print_request(&component->rpc_env, (void *)rpc_msg_buf);
+#endif
 
     // Handle the message
     component->request_handler(

@@ -58,15 +58,16 @@ gpi_cap_t sel4gpi_get_resource_type_code(char *type_name)
         }
     }
 
-    // This is not good
-    return 0;
+    // The type name was not in the shared data
+    return GPICAP_TYPE_NONE;
 }
 
 char *sel4gpi_get_resource_type_name(gpi_cap_t type)
 {
     osm_pd_shared_data_t *shared_data = (osm_pd_shared_data_t *)sel4runtime_get_osm_shared_data();
 
-    if (type < 0 || type  > GPICAP_TYPE_MAX) {
+    if (type < 0 || type > GPICAP_TYPE_MAX)
+    {
         return "NONE";
     }
 
@@ -75,6 +76,11 @@ char *sel4gpi_get_resource_type_name(gpi_cap_t type)
 
 seL4_CPtr sel4gpi_get_rde(int type)
 {
+    if (type == GPICAP_TYPE_NONE)
+    {
+        return seL4_CapNull;
+    }
+    
     seL4_CPtr slot = ((osm_pd_shared_data_t *)sel4runtime_get_osm_shared_data())->rde[type][0].slot_in_PD;
     WARN_IF_COND(slot == seL4_CapNull, "Could not find RDE (type: %d) for PD (%u)\n", type, sel4gpi_get_pd_conn().id);
 

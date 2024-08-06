@@ -456,6 +456,7 @@ pd_held_resource_on_delete(resource_registry_node_t *node_gen, void *pd_v)
 {
     int error = 0;
     pd_hold_node_t *node = (pd_hold_node_t *)node_gen;
+    gpi_res_id_t res_id = node->res_id;
     pd_t *pd = (pd_t *)pd_v;
 
     if (pd->id == get_gpi_server()->rt_pd_id)
@@ -465,7 +466,7 @@ pd_held_resource_on_delete(resource_registry_node_t *node_gen, void *pd_v)
     }
 
     OSDB_PRINTF("Freeing resource %s_%u_%u from PD (%u)\n",
-                cap_type_to_str(node->res_id.type), node->res_id.space_id, node->res_id.object_id,
+                cap_type_to_str(res_id.type), res_id.space_id, res_id.object_id,
                 pd->id);
 
     // If we aren't already destroying the PD, then revoke the cap
@@ -477,18 +478,18 @@ pd_held_resource_on_delete(resource_registry_node_t *node_gen, void *pd_v)
 
     // If the resource is a core resource, free it directly
     // Decrement the registry entry's count, and if it reaches zero, the resource will be freed
-    switch (node->res_id.type)
+    switch (res_id.type)
     {
     case GPICAP_TYPE_ADS:
-        error = resource_component_dec(get_ads_component(), node->res_id.object_id);
+        error = resource_component_dec(get_ads_component(), res_id.object_id);
         SERVER_GOTO_IF_ERR(error, "failed to decrement ADS resource\n");
         break;
     case GPICAP_TYPE_CPU:
-        error = resource_component_dec(get_cpu_component(), node->res_id.object_id);
+        error = resource_component_dec(get_cpu_component(), res_id.object_id);
         SERVER_GOTO_IF_ERR(error, "failed to decrement CPU resource\n");
         break;
     case GPICAP_TYPE_MO:
-        error = resource_component_dec(get_mo_component(), node->res_id.object_id);
+        error = resource_component_dec(get_mo_component(), res_id.object_id);
         SERVER_GOTO_IF_ERR(error, "failed to decrement MO resource\n");
         break;
     case GPICAP_TYPE_PD:
@@ -497,14 +498,14 @@ pd_held_resource_on_delete(resource_registry_node_t *node_gen, void *pd_v)
         break;
     case GPICAP_TYPE_VMR:
         // NS ID is the ADS, res ID is the VMR
-        error = ads_component_rm_by_id(node->res_id.space_id, node->res_id.object_id);
+        error = ads_component_rm_by_id(res_id.space_id, res_id.object_id);
         break;
     case GPICAP_TYPE_RESSPC:
         // Wait to clean up resource spaces until later
-        error = resspc_component_mark_delete(node->res_id.object_id, pd->deletion_depth == 0);
+        error = resspc_component_mark_delete(res_id.object_id, pd->deletion_depth == 0);
         break;
     case GPICAP_TYPE_EP:
-        error = resource_component_dec(get_ep_component(), node->res_id.object_id);
+        error = resource_component_dec(get_ep_component(), res_id.object_id);
         SERVER_GOTO_IF_ERR(error, "failed to decrement EP resource\n");
         break;
     default:
@@ -514,8 +515,8 @@ pd_held_resource_on_delete(resource_registry_node_t *node_gen, void *pd_v)
         if (pd->deleting)
         {
             // Otherwise, call the manager PD
-            resspc_component_registry_entry_t *space_data = resource_space_get_entry_by_id(node->res_id.space_id);
-            SERVER_GOTO_IF_COND(space_data == NULL, "couldn't find resource space (%u)\n", node->res_id.space_id);
+            resspc_component_registry_entry_t *space_data = resource_space_get_entry_by_id(res_id.space_id);
+            SERVER_GOTO_IF_COND(space_data == NULL, "couldn't find resource space (%u)\n", res_id.space_id);
 
             // If the space is deleted,
             // or the manager PD is this PD itself,
@@ -531,8 +532,10 @@ pd_held_resource_on_delete(resource_registry_node_t *node_gen, void *pd_v)
             // Queue the "free" operation for the resource manager
             pd_work_entry_t *work_entry = calloc(1, sizeof(pd_work_entry_t));
             SERVER_GOTO_IF_COND(work_entry == NULL, "Failed to allocate work entry node\n");
-            work_entry->res_id = node->res_id;
+            work_entry->res_id = res_id;
 
+            OSDB_PRINTF("Queue work: notify resource server (%u) that resource " RES_ID_PRINTF " is freed from PD (%u).\n",
+                        manager_pd_data->pd.id, RES_ID_PRINT_ARGS(res_id), pd->id);
             pd_component_queue_free_work(manager_pd_data, work_entry);
         }
         break;
@@ -1092,6 +1095,8 @@ static int res_dump(pd_t *pd, model_state_t *ms, pd_hold_node_t *current_cap, gp
                 work_node->res_id = current_cap->res_id;
                 work_node->client_pd_id = pd->id;
 
+                OSDB_PRINTF("Queue work: get model subgraph for space %s_%u.\n",
+                            cap_type_to_str(space_entry->space.resource_type), space_entry->space.id);
                 pd_component_queue_model_extraction_work(manager_pd_entry, work_node);
             }
 
@@ -1161,6 +1166,8 @@ static int pd_dump_internal(pd_t *pd, model_state_t *ms)
                     work_node->res_id.object_id = BADGE_OBJ_ID_NULL;
                     work_node->client_pd_id = pd->id;
 
+                    OSDB_PRINTF("Queue work: get model subgraph for resource " RES_ID_PRINTF ".\n",
+                                RES_ID_PRINT_ARGS(work_node->res_id));
                     pd_component_queue_model_extraction_work(manager_pd_entry, work_node);
                 }
             }

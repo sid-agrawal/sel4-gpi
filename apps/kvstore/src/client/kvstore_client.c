@@ -15,8 +15,8 @@
 #include <kvstore_shared.h>
 #include <kvstore_client.h>
 #include <kvstore_server.h>
+#include <kvstore_server_rpc.pb.h>
 #include <fs_client.h>
-
 #include <malloc.h>
 
 static kvstore_mode_t mode;
@@ -25,6 +25,11 @@ static ads_client_context_t kvserv_ads;
 static ads_client_context_t client_ads_conn;
 static cpu_client_context_t self_cpu_conn;
 extern global_xv6fs_client_context_t xv6fs_client;
+
+static sel4gpi_rpc_env_t rpc_client = {
+    .request_desc = &KvstoreMessage_msg,
+    .reply_desc = &KvstoreReturnMessage_msg,
+};
 
 int kvstore_client_swap_ads_lib(void)
 {
@@ -164,19 +169,52 @@ int kvstore_client_configure(kvstore_mode_t kvstore_mode, seL4_CPtr ep)
     return error;
 }
 
-int kvstore_client_set(seL4_Word key, seL4_Word value)
+int kvstore_client_create_kvstore(seL4_CPtr *dest)
+{
+    seL4_Error error = 0;
+
+    if (mode == SEPARATE_PROC || mode == SEPARATE_THREAD)
+    {
+        KvstoreMessage request = {
+            .magic = KVSTORE_RPC_MAGIC,
+            .which_msg = KvstoreMessage_create_tag};
+
+        KvstoreReturnMessage reply = {0};
+
+        error = sel4gpi_rpc_call(&rpc_client, server_ep, &request, 0, NULL, &reply);
+
+        error |= reply.errorCode;
+
+        if (error == seL4_NoError) {
+            *dest = reply.msg.alloc.dest;
+        }
+    }
+    else {
+        // No need to create kvstore resource when using the same address space
+    }
+
+    return error;
+}
+
+int kvstore_client_set(seL4_CPtr kvstore_ep, seL4_Word key, seL4_Word value)
 {
     seL4_Error error;
 
     if (mode == SEPARATE_PROC || mode == SEPARATE_THREAD)
     {
-        /* Send IPC to server */
-        seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0, KVMSGREG_SET_REQ_END);
-        seL4_SetMR(KVMSGREG_FUNC, KV_FUNC_SET_REQ);
-        seL4_SetMR(KVMSGREG_SET_REQ_KEY, key);
-        seL4_SetMR(KVMSGREG_SET_REQ_VAL, value);
-        tag = seL4_Call(server_ep, tag);
-        error = seL4_MessageInfo_get_label(tag);
+        KvstoreMessage request = {
+            .magic = KVSTORE_RPC_MAGIC,
+            .which_msg = KvstoreMessage_set_tag,
+            .msg.set = {
+                .key = key,
+                .val = value,
+            }};
+
+        KvstoreReturnMessage reply = {0};
+
+        error = sel4gpi_rpc_call(&rpc_client, kvstore_ep, &request, 0, NULL, &reply);
+
+        error |= reply.errorCode;
     }
     else if (mode == SEPARATE_ADS)
     {
@@ -202,22 +240,27 @@ int kvstore_client_set(seL4_Word key, seL4_Word value)
     return error;
 }
 
-int kvstore_client_get(seL4_Word key, seL4_Word *value)
+int kvstore_client_get(seL4_CPtr kvstore_ep, seL4_Word key, seL4_Word *value)
 {
     seL4_Error error;
 
     if (mode == SEPARATE_PROC || mode == SEPARATE_THREAD)
     {
-        /* Send IPC to server */
-        seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0, KVMSGREG_GET_REQ_END);
-        seL4_SetMR(KVMSGREG_FUNC, KV_FUNC_GET_REQ);
-        seL4_SetMR(KVMSGREG_GET_REQ_KEY, key);
-        tag = seL4_Call(server_ep, tag);
-        error = seL4_MessageInfo_get_label(tag);
+        KvstoreMessage request = {
+            .magic = KVSTORE_RPC_MAGIC,
+            .which_msg = KvstoreMessage_get_tag,
+            .msg.set = {
+                .key = key,
+            }};
 
-        if (error == 0)
-        {
-            *value = seL4_GetMR(KVMSGREG_GET_ACK_VAL);
+        KvstoreReturnMessage reply = {0};
+
+        error = sel4gpi_rpc_call(&rpc_client, kvstore_ep, &request, 0, NULL, &reply);
+
+        error |= reply.errorCode;
+
+        if (error == seL4_NoError) {
+            *value = reply.msg.get.val;
         }
     }
     else if (mode == SEPARATE_ADS)
