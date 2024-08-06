@@ -1388,6 +1388,11 @@ void pd_component_sweep(void)
         pd_component_registry_entry_t *entry = (pd_component_registry_entry_t *)current;
         if (entry->pd.to_delete && !entry->pd.deleting)
         {
+            if (get_gpi_server()->test_proc_id == entry->pd.id)
+            {
+                gpi_panic("Trying to terminate the test process!", 1);
+            }
+
             entry->pd.exit_code = PD_TERMINATED_CODE;
             entry->pd.deletion_depth = 0; // This PD is the root of a deletion tree
             resource_registry_delete(&get_pd_component()->registry, current);

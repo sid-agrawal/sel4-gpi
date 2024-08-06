@@ -118,6 +118,8 @@ typedef struct _gpi_server_context
     seL4_CPtr pd_termination_reply; ///< The reply cap for the pending pd termination
     int pd_termination_n_missing;   ///< Number of missing replies before cleanup is complete
 
+    gpi_obj_id_t test_proc_id; ///< Use this to warn if we try to clean up the test process
+
     sync_mutex_t *mx; ///< mutex for synchronization between the test driver and GPI server
 } gpi_server_context_t;
 

@@ -608,6 +608,9 @@ void osm_set_up(uintptr_t e)
 
     rde_type_t ep_type = {.type = GPICAP_TYPE_EP};
     error = pd_add_rde(pd, ep_type, "EP", get_ep_component()->space_id, get_gpi_server()->server_ep_obj.cptr);
+
+    // Set the test PD
+    get_gpi_server()->test_proc_id = pd->id;
 }
 
 test_result_t osm_run_test(struct testcase *test, uintptr_t e)
