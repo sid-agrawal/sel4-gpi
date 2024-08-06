@@ -79,6 +79,7 @@ static int remove_RDEs()
     int error = 0;
     error = pd_client_remove_rde(&pd_conn, ramdisk_cap_type, BADGE_SPACE_ID_NULL);
     error |= pd_client_remove_rde(&pd_conn, file_cap_type, BADGE_SPACE_ID_NULL);
+    error |= pd_client_remove_rde(&pd_conn, kvstore_cap_type, BADGE_SPACE_ID_NULL);
     return error;
 }
 

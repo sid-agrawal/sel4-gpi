@@ -315,6 +315,12 @@ int pd_remove_rde(pd_t *pd,
     // Find the RDE entry in the structure
     bool found_entry = false;
 
+    if (type.type == GPICAP_TYPE_NONE)
+    {
+        // nothing to do
+        return 0;
+    }
+
     assert(type.type > 0 && type.type < GPICAP_TYPE_MAX);
 
     for (int i = 0; i < MAX_NS_PER_RDE; i++)
