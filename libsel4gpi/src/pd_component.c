@@ -1185,7 +1185,7 @@ int pd_component_resource_cleanup(gpi_res_id_t res_id)
     {
         pd_component_registry_entry_t *pd_entry = (pd_component_registry_entry_t *)curr;
 
-        if (pd_entry->pd.id == get_gpi_server()->rt_pd_id || pd_entry->pd.deleting)
+        if (pd_entry->pd.id == get_gpi_server()->rt_pd_id || pd_entry->pd.to_delete)
         {
             // Skip a PD currently being deleted
             continue;
@@ -1217,7 +1217,7 @@ int pd_component_space_cleanup(gpi_obj_id_t pd_id, gpi_cap_t space_type,
     int depth = manager_data->pd.deletion_depth;
 
     // Remove the space resource from the manager, if still live
-    if (!manager_data->pd.deleting)
+    if (!manager_data->pd.to_delete)
     {
         // Remove the resource space object
         gpi_res_id_t space_res_id = make_res_id(GPICAP_TYPE_RESSPC, get_resspc_component()->space_id, space_id);
@@ -1249,7 +1249,7 @@ int pd_component_space_cleanup(gpi_obj_id_t pd_id, gpi_cap_t space_type,
             pd_component_registry_entry_t *pd_entry = (pd_component_registry_entry_t *)curr;
             pd_t *pd = &pd_entry->pd;
 
-            if (pd->id == get_gpi_server()->rt_pd_id || pd->deleting)
+            if (pd->id == get_gpi_server()->rt_pd_id || pd->to_delete)
             {
                 // Skip the root task, or a PD currently being deleted
                 continue;
@@ -1268,8 +1268,8 @@ int pd_component_space_cleanup(gpi_obj_id_t pd_id, gpi_cap_t space_type,
                     // Set the deletion depth
                     pd->deletion_depth = depth + 1;
 
-                    // Remove the PD from registry, this will also destroy the PD
-                    resource_registry_delete(&get_pd_component()->registry, curr);
+                    // Mark for deletion
+                    pd->to_delete = true;
 
                     continue;
                 }
@@ -1284,7 +1284,7 @@ int pd_component_space_cleanup(gpi_obj_id_t pd_id, gpi_cap_t space_type,
         pd_component_registry_entry_t *pd_entry = (pd_component_registry_entry_t *)curr;
         pd_t *pd = &pd_entry->pd;
 
-        if (pd->id == get_gpi_server()->rt_pd_id || pd->deleting)
+        if (pd->id == get_gpi_server()->rt_pd_id || pd->to_delete)
         {
             // Skip the root task, or a PD currently being deleted
             continue;

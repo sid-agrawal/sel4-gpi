@@ -476,7 +476,7 @@ pd_held_resource_on_delete(resource_registry_node_t *node_gen, void *pd_v)
                 pd->id);
 
     // If we aren't already destroying the PD, then revoke the cap
-    if (!pd->deleting)
+    if (!pd->to_delete)
     {
         error = pd_revoke_cap(pd, node);
         SERVER_GOTO_IF_ERR(error, "failed to revoke cap from PD\n");
@@ -518,16 +518,16 @@ pd_held_resource_on_delete(resource_registry_node_t *node_gen, void *pd_v)
         // If the PD is being deleted, we need to notify the manager PD that the resource should be freed
         // Othwerise, we assume the operation came from the manager PD, so we do not notify it
 
-        if (pd->deleting)
+        if (pd->to_delete)
         {
             // Otherwise, call the manager PD
             resspc_component_registry_entry_t *space_data = resource_space_get_entry_by_id(res_id.space_id);
-            SERVER_GOTO_IF_COND(space_data == NULL, "couldn't find resource space (%u)\n", res_id.space_id);
+            //SERVER_GOTO_IF_COND(space_data == NULL, "couldn't find resource space (%u)\n", res_id.space_id);
 
             // If the space is deleted,
             // or the manager PD is this PD itself,
             // then there's no point in notifying the manager
-            if (space_data->space.to_delete || space_data->space.pd_id == pd->id)
+            if (space_data == NULL || space_data->space.to_delete || space_data->space.pd_id == pd->id)
             {
                 break;
             }
@@ -638,6 +638,7 @@ void pd_destroy(pd_t *pd, vka_t *server_vka, vspace_t *server_vspace)
     int pd_id = pd->id;
 
     OSDB_PRINTF("Destroying PD (%u, %s)\n", pd_id, pd->name);
+    pd->to_delete = true;
     pd->deleting = true;
 
     /* stop the PD's CPU, if not already stopped */
