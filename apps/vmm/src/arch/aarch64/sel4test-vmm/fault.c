@@ -444,8 +444,8 @@ bool fault_handle_vm_exception(vm_context_t *vm)
             bool is_write = fault_is_write(fsr);
             VMM_PRINTERR("unexpected memory fault on address: 0x%lx, FSR: 0x%lx, IP: 0x%lx, is_prefetch: %s, is_write: %s\n",
                          addr, fsr, ip, is_prefetch ? "true" : "false", is_write ? "true" : "false");
-            sel4debug_dump_registers(vm->tcb.cptr);
-            vcpu_print_regs(vm->vcpu.cptr);
+            // sel4debug_dump_registers(vm->tcb.cptr);
+            // vcpu_print_regs(vm->vcpu.cptr);
         }
         else
         {

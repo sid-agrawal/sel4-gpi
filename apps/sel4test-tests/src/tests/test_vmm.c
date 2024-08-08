@@ -16,6 +16,7 @@
 #include <stdio.h>
 #include <unistd.h>
 
+#include <sel4debug/register_dump.h>
 #include <sel4gpi/pd_clientapi.h>
 #include <sel4gpi/pd_utils.h>
 #include <sel4bench/arch/sel4bench.h>
@@ -40,7 +41,7 @@ int test_vmm_native(env_t env)
     while (1)
     {
         sel4test_sleep(env, 10UL * SECOND);
-        // seL4_Yield();
+        seL4_Yield();
     }
 #else
     printf("SEL4TEST_VMM is disabled\n");
@@ -78,5 +79,5 @@ int test_vmm_osm(env_t env)
 }
 
 // Disable these because they are WIP
-DEFINE_TEST(GPIVM001, "Test VMM that starts one Linux guest (native)", test_vmm_native, false)
+DEFINE_TEST(GPIVM001, "Test VMM that starts one Linux guest (native)", test_vmm_native, true)
 DEFINE_TEST_OSM(GPIVM002, "Test VMM that starts one Linux guest (osm)", test_vmm_osm, false)

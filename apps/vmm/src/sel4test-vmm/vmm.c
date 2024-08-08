@@ -28,6 +28,7 @@
 #include <sel4test-vmm/vmm.h>
 #include <sel4test-vmm/vcpu.h>
 #include <sel4test-vmm/fault.h>
+#include <sel4gpi/pd_utils.h>
 
 // @ivanv: ideally we would have none of these hardcoded values
 // initrd, ram size come from the DTB
@@ -96,6 +97,13 @@ extern char _guest_initrd_image[];
 extern char _guest_initrd_image_end[];
 
 static vmon_context_t vmon_ctxt;
+
+static bool page_fault(size_t vcpu_id, size_t offset, size_t fsr, seL4_UserContext *regs, void *data)
+{
+    VMM_PRINT("handling VMM fault, offset: %zu, fsr: %zu, pc: 0x%lx\n", offset, fsr, regs->pc);
+    // sel4debug_print_registers(regs);
+    return false;
+}
 
 static void serial_ack(size_t vcpu_id, int irq, void *cookie)
 {
@@ -426,25 +434,28 @@ uint32_t sel4test_new_guest(void)
     ZF_LOGF_IF(guest_ram_curr_vspace == NULL, "Failed to map guest RAM to VMM's vspace");
 
     size_t kernel_size = _guest_kernel_image_end - _guest_kernel_image;
-    size_t dtb_size = _guest_dtb_image_end - _guest_dtb_image;
-    size_t initrd_size = _guest_initrd_image_end - _guest_initrd_image;
+    printf("%zu\n", kernel_size);
+    memcpy((char *)(guest_ram_curr_vspace + 0x1000000), (char *)_guest_kernel_image, kernel_size);
+    // debug_print_mem_at(guest_ram_curr_vspace, 256);
+    // size_t dtb_size = _guest_dtb_image_end - _guest_dtb_image;
+    // size_t initrd_size = _guest_initrd_image_end - _guest_initrd_image;
 
-    uintptr_t guest_dtb_curr_vspace = (uintptr_t)guest_ram_curr_vspace + ((uintptr_t)GUEST_DTB_VADDR - (uintptr_t)GUEST_RAM_VADDR);
-    uintptr_t guest_initrd_curr_vspace = (uintptr_t)guest_ram_curr_vspace + ((uintptr_t)GUEST_INIT_RAM_DISK_VADDR - (uintptr_t)GUEST_RAM_VADDR);
-    VMM_PRINT("guest ram: %p, dtb: %lx, initrd: %lx\n", guest_ram_curr_vspace, guest_dtb_curr_vspace, guest_initrd_curr_vspace);
+    // uintptr_t guest_dtb_curr_vspace = (uintptr_t)guest_ram_curr_vspace + ((uintptr_t)GUEST_DTB_VADDR - (uintptr_t)GUEST_RAM_VADDR);
+    // uintptr_t guest_initrd_curr_vspace = (uintptr_t)guest_ram_curr_vspace + ((uintptr_t)GUEST_INIT_RAM_DISK_VADDR - (uintptr_t)GUEST_RAM_VADDR);
+    // VMM_PRINT("guest ram: %p, dtb: %lx, initrd: %lx\n", guest_ram_curr_vspace, guest_dtb_curr_vspace, guest_initrd_curr_vspace);
 
-    uintptr_t kernel_pc_curr_vspace = linux_setup_images((uintptr_t)guest_ram_curr_vspace,
-                                                         (uintptr_t)_guest_kernel_image,
-                                                         kernel_size,
-                                                         (uintptr_t)_guest_dtb_image,
-                                                         (uintptr_t)guest_dtb_curr_vspace,
-                                                         dtb_size,
-                                                         (uintptr_t)_guest_initrd_image,
-                                                         (uintptr_t)guest_initrd_curr_vspace,
-                                                         initrd_size);
+    // uintptr_t kernel_pc_curr_vspace = linux_setup_images((uintptr_t)guest_ram_curr_vspace,
+    //                                                      (uintptr_t)_guest_kernel_image,
+    //                                                      kernel_size,
+    //                                                      (uintptr_t)_guest_dtb_image,
+    //                                                      (uintptr_t)guest_dtb_curr_vspace,
+    //                                                      dtb_size,
+    //                                                      (uintptr_t)_guest_initrd_image,
+    //                                                      (uintptr_t)guest_initrd_curr_vspace,
+    //                                                      initrd_size);
 
-    uintptr_t kernel_pc_vm_vspace = (uintptr_t)GUEST_RAM_VADDR + (kernel_pc_curr_vspace - (uintptr_t)guest_ram_curr_vspace);
-    VMM_PRINT("kernel_pc_vm_vspace %lx\n", kernel_pc_vm_vspace);
+    // uintptr_t kernel_pc_vm_vspace = (uintptr_t)GUEST_RAM_VADDR + (kernel_pc_curr_vspace - (uintptr_t)guest_ram_curr_vspace);
+    // VMM_PRINT("kernel_pc_vm_vspace %lx\n", kernel_pc_vm_vspace);
 
     bool success = virq_controller_init(GUEST_VCPU_ID);
     GOTO_IF_COND(!success, "Failed to initialise emulated interrupt controller\n");
@@ -456,8 +467,8 @@ uint32_t sel4test_new_guest(void)
     /* Just in case there is already an interrupt available to handle, we ack it here. */
     serial_ack(GUEST_VCPU_ID, SERIAL_IRQ, (void *)vm);
 
-    success = guest_start(vm->tcb.cptr, (uintptr_t)kernel_pc_vm_vspace,
-                          (uintptr_t)GUEST_DTB_VADDR, (uintptr_t)GUEST_INIT_RAM_DISK_VADDR);
+    success = guest_start(vm->tcb.cptr, (uintptr_t)(GUEST_RAM_VADDR + 0x1000000),
+                          (uintptr_t)GUEST_RAM_VADDR, (uintptr_t)GUEST_INIT_RAM_DISK_VADDR);
     GOTO_IF_COND(!success, "Failed to start guest\n");
 
     vmon_ctxt.guests[guest_id] = vm;
@@ -481,5 +492,5 @@ err_goto:
         vspace_unmap_pages(vspace, guest_ram_curr_vspace, guest_ram_pages, seL4_LargePageBits, vka);
     }
 
-    return error ? 0 : guest_id;
+    return vm->tcb.cptr;
 }

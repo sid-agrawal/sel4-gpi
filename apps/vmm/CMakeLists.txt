@@ -7,11 +7,13 @@ if(KernelArchRiscV)
     set(arch arm)
 endif()
 
-set(VMMImplementation "sel4test-vmm" CACHE STRING "The VMM implemenation to use: either sel4test-vmm or osm-vmm")
+set(GPIVMMImplementation "sel4test-vmm" 
+    CACHE STRING 
+    "The VMM implemenation to use: either sel4test-vmm or osm-vmm")
 
-if (VMMImplementation STREQUAL "sel4test-vmm")
+if (GPIVMMImplementation STREQUAL "sel4test-vmm")
     set(VMMImplDef "SEL4TEST_VMM")
-elseif(VMMImplementation STREQUAL "osm-vmm")
+elseif(GPIVMMImplementation STREQUAL "osm-vmm")
     set(VMMImplDef "OSM_VMM")
 endif()
 
@@ -26,11 +28,6 @@ find_program(DTC_TOOL dtc)
     if("${DTC_TOOL}" STREQUAL "DTC_TOOL-NOTFOUND")
         message(FATAL_ERROR "Cannot find 'dtc' program.")
     endif()
-
-# find_program(LD_LINKER ld)
-#     if("${LD_LINKER}" STREQUAL "LD-LINKER-NOTFOUND")
-#         message(FATAL_ERROR "Cannot find 'ld' program.")
-#     endif()
 
 set(
     VmDTSPath "${CMAKE_CURRENT_SOURCE_DIR}/board/${KernelPlatVMM}/linux.dts"
@@ -54,17 +51,18 @@ file(
     GLOB
         deps
         src/*.c
-        src/${VMMImplementation}/*.c
+        src/${GPIVMMImplementation}/*.c
         src/arch/${KernelSel4Arch}/*.c
-        src/arch/${KernelSel4Arch}/${VMMImplementation}/*.c
-        src/arch/${KernelSel4Arch}/${VMMImplementation}/vgic/*.c
+        src/arch/${KernelSel4Arch}/${GPIVMMImplementation}/*.c
+        src/arch/${KernelSel4Arch}/${GPIVMMImplementation}/vgic/*.c
         src/arch/${KernelSel4Arch}/vgic/*.c
 )
 
 string(CONCAT package_guest_image_defs
-    "GUEST_KERNEL_IMAGE_PATH=\"${CMAKE_CURRENT_SOURCE_DIR}/board/${KernelPlatVMM}/linux\"\;"
+    "GUEST_KERNEL_IMAGE_PATH=\"${CMAKE_CURRENT_SOURCE_DIR}/board/${KernelPlatVMM}/bootimg.bin\"\;"
     "GUEST_DTB_IMAGE_PATH=\"${VmDTBPath}\"\;"
-    "GUEST_INITRD_IMAGE_PATH=\"${CMAKE_CURRENT_SOURCE_DIR}/board/${KernelPlatVMM}/rootfs.cpio.gz\"\;")
+    "GUEST_INITRD_IMAGE_PATH=\"${CMAKE_CURRENT_SOURCE_DIR}/board/${KernelPlatVMM}/rootfs.cpio.gz\"\;"
+)
 
 set_source_files_properties(
     tools/package_guest_images.S
@@ -76,14 +74,16 @@ set_source_files_properties(
 list(
     APPEND
     deps
-    ${VmDTBPath}
+    ${VmDTSPath}
     tools/package_guest_images.S
+    ${CMAKE_CURRENT_SOURCE_DIR}/board/${KernelPlatVMM}/bootimg.bin
 )
 
+# None of the platforms we have access to support VGIC v3
 list(
     REMOVE_ITEM
     deps
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/arch/${KernelSel4Arch}/${VMMImplementation}/vgic/vgic_v3.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/arch/${KernelSel4Arch}/${GPIVMMImplementation}/vgic/vgic_v3.c
 )
 
 # add_link_options("-fuse-ld=lld")
@@ -97,7 +97,7 @@ target_include_directories(
     PUBLIC 
         include
         arch/${KernelSel4Arch}
-        arch/${KernelSel4Arch}/${VMMImplementation}
+        arch/${KernelSel4Arch}/${GPIVMMImplementation}
 )
 
 target_link_libraries(

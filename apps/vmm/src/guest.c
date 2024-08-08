@@ -15,14 +15,14 @@ bool guest_start(seL4_CPtr tcb, uintptr_t kernel_pc, uintptr_t dtb, uintptr_t in
      */
     seL4_UserContext regs = {0};
     regs.x0 = dtb;
-    regs.spsr = 5; // PMODE_EL1h
+    regs.spsr = 0x9; // PMODE_EL1h
     regs.pc = kernel_pc;
     /* Write out all the TCB registers */
     seL4_Error err = seL4_TCB_WriteRegisters(
         tcb,
         false, // We'll explcitly start the guest below rather than in this call
         0,     // No flags
-        4,     // Writing to x0, pc, and spsr
+        3,     // Writing to x0, pc, and spsr
         &regs);
     assert(err == seL4_NoError);
     if (err != seL4_NoError)
