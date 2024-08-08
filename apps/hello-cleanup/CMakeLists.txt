@@ -33,20 +33,14 @@ target_include_directories(
         include 
 )
 
-# (XXX) Arya: probably not all of these are needed
 target_link_libraries(
     hello_cleanup
     PUBLIC
         sel4_autoconf
         muslc
-        sel4bench
         sel4
         sel4runtime
-        sel4allocman
-        sel4vka
-        sel4utils
         sel4muslcsys
         sel4gpi
         sel4nanopb
-    PRIVATE sel4test-driver_Config
 )

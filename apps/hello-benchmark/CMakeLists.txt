@@ -34,15 +34,7 @@ target_link_libraries(
         sel4bench
         sel4
         sel4runtime
-        sel4allocman
-        sel4vka
-        sel4utils
-        sel4rpc
-        sel4test
         sel4sync
         sel4muslcsys
-        sel4testsupport
         sel4gpi
-        sel4serialserver_tests
-    PRIVATE sel4test-driver_Config
 )
