@@ -29,6 +29,7 @@
 #include <sel4gpi/pd_obj.h>
 #include <sel4gpi/test_init_data.h>
 #include <sel4gpi/ads_clientapi.h>
+#include <sel4gpi/vmr_clientapi.h>
 #include <sel4gpi/gpi_server.h>
 #include <sel4gpi/badge_usage.h>
 #include <sel4gpi/debug.h>

@@ -11,6 +11,7 @@
 #include "test_shared.h"
 
 #include <sel4gpi/ads_clientapi.h>
+#include <sel4gpi/vmr_clientapi.h>
 #include <sel4gpi/pd_utils.h>
 
 #include <ramdisk_client.h>
@@ -32,7 +33,7 @@ int test_fs(env_t env)
     printf("------------------STARTING SETUP: %s------------------\n", __func__);
 
     /* Initialize the ADS */
-    ads_client_context_t ads_conn = sel4gpi_get_bound_vmr_rde();
+    seL4_CPtr vmr_rde = sel4gpi_get_bound_vmr_rde();
 
     /* Initialize the PD */
     pd_client_context_t pd_conn = sel4gpi_get_pd_conn();
@@ -66,11 +67,11 @@ int test_fs(env_t env)
 
     /* Attach MO to test's ADS */
     void *mo_vaddr;
-    error = ads_client_attach(&ads_conn,
-                              NULL,
-                              &mo_conn,
-                              SEL4UTILS_RES_TYPE_GENERIC,
-                              &mo_vaddr);
+    error = vmr_client_attach_no_reserve(vmr_rde,
+                                         NULL,
+                                         &mo_conn,
+                                         SEL4UTILS_RES_TYPE_GENERIC,
+                                         &mo_vaddr);
     test_assert(error == 0);
 
     // The libc fs ops should go to the xv6fs server
@@ -248,7 +249,7 @@ int test_fs(env_t env)
     test_assert(error == 0);
 
     error = close(f);
-    test_assert(error == 0); 
+    test_assert(error == 0);
 
     f = open(TEST_FNAME_3, O_RDWR);
     test_assert(f > 0);
@@ -342,8 +343,8 @@ int test_multiple_fs(env_t env)
     printf("------------------STARTING SETUP: %s------------------\n", __func__);
 
     /* Initialize the ADS */
-    ads_client_context_t ads_conn = sel4gpi_get_bound_vmr_rde();
-
+    seL4_CPtr vmr_rde = sel4gpi_get_bound_vmr_rde();
+    
     /* Initialize the PD */
     pd_client_context_t pd_conn = sel4gpi_get_pd_conn();
 
@@ -372,11 +373,11 @@ int test_multiple_fs(env_t env)
 
     /* Attach MO to test's ADS */
     void *mo_vaddr;
-    error = ads_client_attach(&ads_conn,
-                              NULL,
-                              &mo_conn,
-                              SEL4UTILS_RES_TYPE_GENERIC,
-                              &mo_vaddr);
+    error = vmr_client_attach_no_reserve(vmr_rde,
+                                         NULL,
+                                         &mo_conn,
+                                         SEL4UTILS_RES_TYPE_GENERIC,
+                                         &mo_vaddr);
     test_assert(error == 0);
 
     // The libc fs ops should go to the xv6fs server

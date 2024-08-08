@@ -10,26 +10,6 @@ message AdsAllocMessage {
     /* No content */
 };
 
-message AdsAttachMessage {
-    uint64 vaddr = 1;       /* requested address to attach at */
-    uint64 type = 2;        /* type of VMR reservation */
-};
-
-message AdsReserveMessage {
-    uint64 vaddr = 1;       /* requested address to reserve at */
-    uint64 type = 2;        /* type of VMR reservation */
-    uint64 size = 3;        /* size in bytes of the region to reserve */
-    uint32 page_bits = 4;   /* size bits of the pages to reserve */
-};
-
-message AdsAttachToReserveMessage {
-    uint64 offset = 1;       /* offset into the reservation to attach at */
-};
-
-message AdsRemoveMessage {
-    uint64 vaddr = 1;        /* start vaddr of the region to remove */
-};
-
 message AdsBindCpuMessage {
     /* No content */
 };
@@ -54,20 +34,50 @@ message AdsDisconnectMessage {
     /* no content */
 }
 
+message VmrReserveMessage {
+    uint64 vaddr = 1;       /* requested address to reserve at */
+    uint64 type = 2;        /* type of VMR reservation */
+    uint64 size = 3;        /* size in bytes of the region to reserve */
+    uint32 page_bits = 4;   /* size bits of the pages to reserve */
+};
+
+message VmrAttachMessage {
+    uint64 offset = 1;       /* offset into the reservation to attach at */
+};
+
+message VmrAttachNoReserveMessage {
+    uint64 vaddr = 1;       /* requested address to attach at */
+    uint64 type = 2;        /* type of VMR reservation */
+};
+
+message VmrDeleteMessage {
+     /* no content */
+};
+
+message VmrDeleteByVaddrMessage {
+    uint64 vaddr = 1;        /* start vaddr of the region to remove */
+};
+
+message VmrDisconnectMessage {
+    /* no content */
+};
+
 /* message type for all ADS component request messages */
 message AdsMessage {
     uint64 magic = 100;
     oneof msg {
         AdsAllocMessage alloc = 1;
-        AdsAttachMessage attach = 2;
-        AdsReserveMessage reserve = 3;
-        AdsAttachToReserveMessage attach_reserve = 4;
-        AdsRemoveMessage remove = 5;
-        AdsBindCpuMessage bind_cpu = 6;
-        AdsShallowCopyMessage shallow_copy = 7;
-        AdsGetReservationMessage get_res = 8;
-        AdsLoadElfMessage load_elf = 9;
-        AdsDisconnectMessage disconnect = 10;
+        AdsBindCpuMessage bind_cpu = 2;
+        AdsShallowCopyMessage shallow_copy = 3;
+        AdsGetReservationMessage get_res = 4;
+        AdsLoadElfMessage load_elf = 5;
+        AdsDisconnectMessage disconnect = 6;
+        VmrReserveMessage reserve = 10;
+        VmrAttachMessage attach = 11;
+        VmrDeleteMessage delete = 12;
+        VmrDisconnectMessage vmr_disconnect = 13;
+        VmrAttachNoReserveMessage attach_no_reserve = 14;
+        VmrDeleteByVaddrMessage delete_by_vaddr = 15;
     }
 };
 
@@ -81,15 +91,6 @@ message AdsAllocReturnMessage {
     uint32 id = 2;          /* ID of the new ADS */
 };
 
-message AdsAttachReturnMessage {
-    uint64 vaddr = 1;       /* address where memory was attached */
-};
-
-message AdsReserveReturnMessage {
-    uint64 vaddr = 1;       /* address where memory was attached */
-    uint64 slot = 2;        /* slot where the VMR cap was placed */
-};
-
 message AdsGetReservationReturnMessage {
     uint64 vaddr = 1;       /* virtual address of the found reservation */
     uint32 num_pages = 2;   /* number of pages in the reservation */
@@ -100,15 +101,24 @@ message AdsLoadElfReturnMessage {
     uint64 entry_point = 1; /* vaddr of the ELF's entry point in the ADS */
 };
 
+message VmrReserveReturnMessage {
+    uint64 vaddr = 1;       /* address where memory was attached */
+    uint64 slot = 2;        /* slot where the VMR cap was placed */
+};
+
+message VmrAttachNoReserveReturnMessage {
+    uint64 vaddr = 1;       /* address where memory was attached */
+};
+
 /* message type for all ADS Component return messages */
 message AdsReturnMessage {
     AdsComponentError errorCode = 1;
     oneof msg {
         AdsBasicReturnMessage basic = 2;
         AdsAllocReturnMessage alloc = 3;
-        AdsAttachReturnMessage attach = 4;
-        AdsReserveReturnMessage reserve = 5;
-        AdsGetReservationReturnMessage get_res = 6;
-        AdsLoadElfReturnMessage load_elf = 7;
+        AdsGetReservationReturnMessage get_res = 4;
+        AdsLoadElfReturnMessage load_elf = 5;
+        VmrReserveReturnMessage reserve = 6;
+        VmrAttachNoReserveReturnMessage attach_no_reserve = 7;
     };
 };

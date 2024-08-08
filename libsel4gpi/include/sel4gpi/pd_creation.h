@@ -302,12 +302,12 @@ void sel4gpi_add_vmr_config(ads_config_t *cfg,
 /**
  * @brief creates a new stack with num_pages in the given ADS, it will NOT be mapped to the current one.
  *        NOTE: no guard page is created
- * @param ads the ADS in which to create the stack
+ * @param vmr_rde endpoint to the VMR space to create the stack in
  * @param n_pages number of pages for the stack
  * @param[out] ret_mo OPTIONAL: returns the MO backing the stack
  * @return the top of the stack in the given ADS
  */
-void *sel4gpi_new_sized_stack(ads_client_context_t *ads, size_t n_pages, mo_client_context_t *ret_mo);
+void *sel4gpi_new_sized_stack(seL4_CPtr vmr_rde, size_t n_pages, mo_client_context_t *ret_mo);
 
 /**
  * @brief Convenience function for configuring a new resource type to share with a PD

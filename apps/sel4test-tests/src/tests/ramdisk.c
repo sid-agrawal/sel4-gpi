@@ -13,6 +13,7 @@
 #include <sel4bench/arch/sel4bench.h>
 
 #include <sel4gpi/ads_clientapi.h>
+#include <sel4gpi/vmr_clientapi.h>
 #include <sel4gpi/pd_clientapi.h>
 #include <sel4gpi/pd_obj.h>
 #include <sel4gpi/pd_utils.h>
@@ -30,7 +31,7 @@ int test_ramdisk(env_t env)
     printf("------------------STARTING SETUP: %s------------------\n", __func__);
 
     /* Initialize the ADS */
-    ads_client_context_t ads_conn = sel4gpi_get_bound_vmr_rde();
+    seL4_CPtr vmr_rde = sel4gpi_get_bound_vmr_rde();
 
     /* Initialize the PD */
     pd_client_context_t pd_conn = sel4gpi_get_pd_conn();
@@ -62,11 +63,11 @@ int test_ramdisk(env_t env)
     printf("------------------STARTING TESTS: %s------------------\n", __func__);
 
     /* Attach MO to test's ADS */
-    error = ads_client_attach(&ads_conn,
-                              NULL,
-                              &mo_conn,
-                              SEL4UTILS_RES_TYPE_SHARED_FRAMES,
-                              (void **)&buf);
+    error = vmr_client_attach_no_reserve(vmr_rde,
+                                         NULL,
+                                         &mo_conn,
+                                         SEL4UTILS_RES_TYPE_SHARED_FRAMES,
+                                         (void **)&buf);
     test_assert(error == 0);
 
     // Set up shared memory

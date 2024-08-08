@@ -8,6 +8,8 @@
 #include <vspace/vspace.h>
 
 #include <sel4gpi/ads_clientapi.h>
+#include <sel4gpi/vmr_clientapi.h>
+
 #include <sel4gpi/pd_clientapi.h>
 #include <sel4gpi/resource_server_utils.h>
 #include <sel4gpi/model_exporting.h>
@@ -50,7 +52,7 @@
         if ((check) != seL4_NoError)           \
         {                                      \
             ZF_LOGE(RAMDISK_S "%s: %s"         \
-                              ", %d.\n",         \
+                              ", %d.\n",       \
                     __func__,                  \
                     msg,                       \
                     check);                    \
@@ -207,11 +209,11 @@ int ramdisk_init()
     RAMDISK_PRINTF("Allocated ramdisk\n");
 
     /* Map the virtual disk */
-    error = ads_client_attach(&server->gen.ads_conn,
-                              NULL,
-                              server->ramdisk_mo,
-                              SEL4UTILS_RES_TYPE_GENERIC,
-                              &server->ramdisk_buf);
+    error = vmr_client_attach_no_reserve(server->gen.vmr_rde,
+                                         NULL,
+                                         server->ramdisk_mo,
+                                         SEL4UTILS_RES_TYPE_GENERIC,
+                                         &server->ramdisk_buf);
     CHECK_ERROR(error, "failed to map virtual disk");
     RAMDISK_PRINTF("Mapped ramdisk\n");
 
@@ -275,12 +277,15 @@ void ramdisk_request_handler(
             CHECK_ERROR_GOTO(error, "Failed to attach MO", error, done);
 
             get_ramdisk_server()->shared_mem[client_id] = mo_vaddr;
-            get_ramdisk_server()->shared_mem_caps[client_id] = cap;
+            
+            // No need to clear the cap, it will be cleared by the utils after the call
 
             // RAMDISK_PRINTF("Can access vaddr %p, val 0x%x\n", mo_vaddr, *((int *)mo_vaddr));
             break;
         case RamdiskAction_UNBIND:
             RAMDISK_PRINTF("Unbinding MO for client %u\n", client_id);
+
+            printf("TEMPA a\n");
 
             /* Remove shared mem from server ADS */
             mo_vaddr = get_ramdisk_server()->shared_mem[client_id];
@@ -289,8 +294,7 @@ void ramdisk_request_handler(
             CHECK_ERROR_GOTO(error, "Failed to unattach MO", error, done);
             get_ramdisk_server()->shared_mem[client_id] = NULL;
 
-            error = pd_client_free_slot(&get_ramdisk_server()->gen.pd_conn, 
-            get_ramdisk_server()->shared_mem_caps[client_id]);
+            printf("TEMPA b\n");
             CHECK_ERROR_GOTO(error, "Failed to free cap during unbind", error, done);
             break;
         case RamdiskAction_ALLOC:
@@ -411,7 +415,7 @@ int ramdisk_work_handler(PdWorkReturnMessage *work)
             RAMDISK_PRINTF("Free blockno %d\n", blockno);
             free_block(blockno);
         }
-        
+
         error = pd_client_finish_work(&get_ramdisk_server()->gen.pd_conn, work->object_ids_count, work->n_critical);
     }
     else if (op == PdWorkAction_DESTROY)
@@ -436,7 +440,7 @@ int ramdisk_work_handler(PdWorkReturnMessage *work)
                 /* Destroy the whole space */
 
                 // Free the ramdisk memory
-                error = ads_client_rm(&get_ramdisk_server()->gen.ads_conn, get_ramdisk_server()->ramdisk_buf);
+                error = vmr_client_delete_by_vaddr(get_ramdisk_server()->gen.vmr_rde, get_ramdisk_server()->ramdisk_buf);
                 CHECK_ERROR_GOTO(error, "Failed to free ramdisk memroy", RamdiskError_UNKNOWN, err_goto);
 
                 error = mo_component_client_disconnect(get_ramdisk_server()->ramdisk_mo);

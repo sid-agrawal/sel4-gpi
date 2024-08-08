@@ -29,7 +29,7 @@
 
 #define HELLO_SYNC_APP "hello_sync"
 
-static ads_client_context_t ads_conn;
+static seL4_CPtr vmr_rde;
 static pd_client_context_t pd_conn;
 static ep_client_context_t self_ep;
 
@@ -46,7 +46,7 @@ static int setup(env_t env)
     int error;
 
     /* Initialize the ADS */
-    ads_conn = sel4gpi_get_bound_vmr_rde();
+    vmr_rde = sel4gpi_get_bound_vmr_rde();
 
     /* Initialize the PD */
     pd_conn = sel4gpi_get_pd_conn();
@@ -100,9 +100,7 @@ static int initialize_hello(hello_mode_t mode, seL4_CPtr notif, mo_client_contex
 
     // Attach the MO
     void *mo_vaddr;
-    ads_client_context_t vmr_rde = {
-        .ep = sel4gpi_get_rde_by_space_id(context->runnable.ads.id, GPICAP_TYPE_VMR)};
-    error = ads_client_attach(&vmr_rde, NULL, mo, SEL4UTILS_RES_TYPE_SHARED_FRAMES, &mo_vaddr);
+    error = vmr_client_attach_no_reserve(vmr_rde, NULL, mo, SEL4UTILS_RES_TYPE_SHARED_FRAMES, &mo_vaddr);
     test_assert(error == 0);
 
     // Setup the hello PD's args

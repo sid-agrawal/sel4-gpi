@@ -537,13 +537,13 @@ static int benchmark_ads_attach_osm(ads_client_context_t *ads, mo_client_context
     int error;
     ccnt_t ads_attach_start;
     ccnt_t ads_attach_end;
-    ads_client_context_t vmr_rde = {.ep = sel4gpi_get_rde_by_space_id(ads->id, GPICAP_TYPE_VMR)};
+    seL4_CPtr vmr_rde = sel4gpi_get_bound_vmr_rde();
 
     TEST_LOG("\nADS ATTACH");
 
     // Attach the MO to the ADS
     SEL4BENCH_READ_CCNT(ads_attach_start);
-    error = ads_client_attach(&vmr_rde, NULL, mo, SEL4UTILS_RES_TYPE_GENERIC, mo_vaddr);
+    error = vmr_client_attach_no_reserve(vmr_rde, NULL, mo, SEL4UTILS_RES_TYPE_GENERIC, mo_vaddr);
     SEL4BENCH_READ_CCNT(ads_attach_end);
 
     test_error_eq(error, 0);
@@ -580,11 +580,11 @@ static int benchmark_ads_remove_osm(ads_client_context_t *ads, void *mo_vaddr)
     ccnt_t ads_remove_end;
     TEST_LOG("\nADS REMOVE");
 
-    ads_client_context_t vmr_rde = {.ep = sel4gpi_get_rde_by_space_id(ads->id, GPICAP_TYPE_VMR)};
+    seL4_CPtr vmr_rde = sel4gpi_get_bound_vmr_rde();
 
     // Remove the MO from the ADS
     SEL4BENCH_READ_CCNT(ads_remove_start);
-    error = ads_client_rm(&vmr_rde, mo_vaddr);
+    error = vmr_client_delete_by_vaddr(vmr_rde, mo_vaddr);
     SEL4BENCH_READ_CCNT(ads_remove_end);
 
     test_error_eq(error, 0);

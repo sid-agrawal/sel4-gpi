@@ -16,6 +16,7 @@
 #include <sel4test/test.h>
 #include <sel4gpi/bench_utils.h>
 #include <sel4gpi/pd_utils.h>
+#include <sel4gpi/vmr_clientapi.h>
 
 /* dummy global for libsel4muslcsys */
 char _cpio_archive[1];

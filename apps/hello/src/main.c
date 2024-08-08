@@ -19,16 +19,17 @@ char _cpio_archive_end[1];
 
 #include <sel4gpi/mo_clientapi.h>
 #include <sel4gpi/ads_clientapi.h>
+#include <sel4gpi/vmr_clientapi.h>
 #include <sel4gpi/pd_clientapi.h>
 #include <sel4gpi/pd_utils.h>
 #include <utils/ansi_color.h>
 
 /* Initialization for static morecore */
 #define APP_MALLOC_SIZE (PAGE_SIZE_4K)
-char *morecore_area = (char *) PD_HEAP_LOC;
+char *morecore_area = (char *)PD_HEAP_LOC;
 size_t morecore_size = APP_MALLOC_SIZE;
-uintptr_t morecore_base = (uintptr_t) PD_HEAP_LOC;
-uintptr_t morecore_top = (uintptr_t) (PD_HEAP_LOC + APP_MALLOC_SIZE);
+uintptr_t morecore_base = (uintptr_t)PD_HEAP_LOC;
+uintptr_t morecore_top = (uintptr_t)(PD_HEAP_LOC + APP_MALLOC_SIZE);
 extern __thread void *__sel4gpi_osm_data;
 
 void calculateSD(float data[], float *mean, float *sd,
@@ -41,11 +42,10 @@ int main(int argc, char **argv)
 
     int error;
 
-    ads_client_context_t ads_conn;
-    ads_conn.ep = sel4gpi_get_rde_by_space_id(sel4gpi_get_binded_ads_id(), GPICAP_TYPE_VMR);
+    seL4_CPtr vmr_rde = sel4gpi_get_bound_vmr_rde();
     pd_client_context_t pd_conn = sel4gpi_get_pd_conn();
 
-    printf("Hello: ADS_CAP: %lu\n", ads_conn.ep);
+    printf("Hello: ADS_CAP: %lu\n", vmr_rde);
     printf("Hello: PD_CAP: %lu\n", pd_conn.ep);
     // printf(COLORIZE("osm data: %p\n", CYAN), __sel4gpi_osm_data);
 
@@ -64,11 +64,11 @@ int main(int argc, char **argv)
     assert(error == 0);
 
     void *ret_vaddr;
-    error = ads_client_attach(&ads_conn,
-                              0, /*vaddr*/
-                              &mo_conn,
-                              SEL4UTILS_RES_TYPE_GENERIC,
-                              &ret_vaddr);
+    error = vmr_client_attach_no_reserve(vmr_rde,
+                                         0, /*vaddr*/
+                                         &mo_conn,
+                                         SEL4UTILS_RES_TYPE_GENERIC,
+                                         &ret_vaddr);
     assert(error == 0);
     printf("Attached to vaddr %p\n", ret_vaddr);
 
@@ -91,11 +91,11 @@ int main(int argc, char **argv)
         seL4_Word slot = seL4_GetMR(0);
 
         mo_conn.ep = (seL4_CPtr)slot;
-        error = ads_client_attach(&ads_conn,
-                                  0,
-                                  &mo_conn,
-                                  SEL4UTILS_RES_TYPE_GENERIC,
-                                  &ret_vaddr);
+        error = vmr_client_attach_no_reserve(vmr_rde,
+                                             0,
+                                             &mo_conn,
+                                             SEL4UTILS_RES_TYPE_GENERIC,
+                                             &ret_vaddr);
         assert(error == 0);
         printf("Attached given MO to vaddr %p\n", ret_vaddr);
 

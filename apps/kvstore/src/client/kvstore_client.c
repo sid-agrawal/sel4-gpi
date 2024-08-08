@@ -7,6 +7,7 @@
 #include <sel4gpi/pd_utils.h>
 #include <sel4utils/process.h>
 #include <sel4gpi/ads_clientapi.h>
+#include <sel4gpi/vmr_clientapi.h>
 #include <sel4gpi/pd_clientapi.h>
 #include <sel4gpi/error_handle.h>
 

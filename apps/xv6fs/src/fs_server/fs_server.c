@@ -15,6 +15,7 @@
 
 #include <sel4gpi/pd_utils.h>
 #include <sel4gpi/ads_clientapi.h>
+#include <sel4gpi/vmr_clientapi.h>
 #include <sel4gpi/pd_clientapi.h>
 #include <sel4gpi/resource_server_utils.h>
 #include <sel4gpi/resource_space_clientapi.h>
@@ -255,11 +256,11 @@ int xv6fs_init()
                                       server->shared_mem);
   CHECK_ERROR(error, "failed to allocate shared mem page");
 
-  error = ads_client_attach(&server->gen.ads_conn,
-                            NULL,
-                            server->shared_mem,
-                            SEL4UTILS_RES_TYPE_SHARED_FRAMES,
-                            &server->shared_mem_vaddr);
+  error = vmr_client_attach_no_reserve(server->gen.vmr_rde,
+                                       NULL,
+                                       server->shared_mem,
+                                       SEL4UTILS_RES_TYPE_SHARED_FRAMES,
+                                       &server->shared_mem_vaddr);
   CHECK_ERROR(error, "failed to map shared mem page");
 
   /* Initialize connection with ramdisk */

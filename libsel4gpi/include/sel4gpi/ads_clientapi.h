@@ -33,66 +33,6 @@ int ads_component_client_connect(seL4_CPtr server_ep_cap,
 int ads_client_disconnect(ads_client_context_t *conn);
 
 /**
- * Attach an MO to an ADS, and simultaneously reserve the VMR of the correct
- * size to attach to. The page size will be inferred from the MO
- *
- * @param conn the VMR RDE for the ADS to attach to
- * @param vaddr virtual address to attach at, can be NULL
- * @param mo_cap MO cap of the memory to attach
- * @param vmr_type the type of virtual memory (e.g. stack, heap, ipc buffer)
- * @param ret_vaddr virtual address where the MO was attached.
- * @return int 0 on success, 1 on failure.
- */
-int ads_client_attach(ads_client_context_t *conn,
-                      void *vaddr,
-                      mo_client_context_t *mo_cap,
-                      sel4utils_reservation_type_t vmr_type,
-                      void **ret_vaddr);
-
-/**
- * Reserve a VMR of an ADS
- *
- * @param conn client connection object to the ADS
- * @param vaddr requested reservation address (or NULL)
- * @param size size in bytes of the region to reserve
- * @param page_bits size of an individual page
- * @param vmr_type the type of virtual memory (e.g. stack, heap, ipc buffer)
- * @param[out] ret_conn returns the context for the reserved VMR
- * @param[out] ret_vaddr return virtual address where the MO was attached.
- * @return int 0 on success, 1 on failure
- */
-int ads_client_reserve(ads_client_context_t *conn,
-                       void *vaddr,
-                       size_t size,
-                       size_t page_bits,
-                       sel4utils_reservation_type_t vmr_type,
-                       ads_vmr_context_t *ret_conn,
-                       void **ret_vaddr);
-
-/**
- * Attach an MO to an ADS at a given VMR reservation
- *
- * @param reservation reservation to attach to
- * @param mo mo to attach
- * @param offset offset into the reservation to attach the MO
- * @return int 0 on success, 1 on failure.
- */
-int ads_client_attach_to_reserve(ads_vmr_context_t *reservation,
-                                 mo_client_context_t *mo,
-                                 size_t offset);
-/**
- * @brief
- * Remove a memory region from the ads.
- * Removes the entire reservation starting at the provided vaddr.
- * This operation is, in effect, a VMR delete.
- *
- * @param conn the VMR RDE connection
- * @param vaddr virtual address to remove
- * @return int 0 on success, 1 on failure.
- */
-int ads_client_rm(ads_client_context_t *conn, void *vaddr);
-
-/**
  * @brief Attach a given ads to to a given CPU cap.
  *
  * @param conn client connection object

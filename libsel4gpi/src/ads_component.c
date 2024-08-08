@@ -25,6 +25,7 @@
 #include <sel4utils/strerror.h>
 
 #include <sel4gpi/ads_clientapi.h>
+#include <sel4gpi/vmr_clientapi.h>
 #include <sel4gpi/ads_component.h>
 #include <sel4gpi/gpi_server.h>
 #include <sel4gpi/badge_usage.h>
@@ -156,8 +157,8 @@ err_goto:
     reply_msg->errorCode = error;
 }
 
-static void handle_reserve_req(seL4_Word sender_badge,
-                               AdsReserveMessage *msg, AdsReturnMessage *reply_msg)
+static void handle_vmr_reserve_req(seL4_Word sender_badge,
+                                   VmrReserveMessage *msg, AdsReturnMessage *reply_msg)
 {
     OSDB_PRINTF("Got ADS reserve request from %lx\n", sender_badge);
     int error = 0;
@@ -205,9 +206,9 @@ err_goto:
     reply_msg->errorCode = error;
 }
 
-static void handle_attach_req(seL4_Word sender_badge,
-                              AdsAttachMessage *msg, AdsReturnMessage *reply_msg,
-                              seL4_CPtr mo_cap)
+static void handle_vmr_attach_no_reserve_req(seL4_Word sender_badge,
+                                             VmrAttachNoReserveMessage *msg, AdsReturnMessage *reply_msg,
+                                             seL4_CPtr mo_cap)
 {
     OSDB_PRINTF("Got attach request from client badge: ");
     BADGE_PRINT(sender_badge);
@@ -230,16 +231,16 @@ static void handle_attach_req(seL4_Word sender_badge,
     OSDB_PRINTF("Successfully reserved an ads region (%s) at %p and attached MO (%u).\n",
                 human_readable_va_res_type(vmr_type), vaddr, mo_id);
 
-    reply_msg->msg.attach.vaddr = (uint64_t)vaddr;
+    reply_msg->msg.attach_no_reserve.vaddr = (uint64_t)vaddr;
 
 err_goto:
-    reply_msg->which_msg = AdsReturnMessage_attach_tag;
+    reply_msg->which_msg = AdsReturnMessage_attach_no_reserve_tag;
     reply_msg->errorCode = error;
 }
 
-static void handle_attach_to_reserve_req(seL4_Word sender_badge,
-                                         AdsAttachToReserveMessage *msg, AdsReturnMessage *reply_msg,
-                                         seL4_CPtr mo_cap)
+static void handle_vmr_attach_req(seL4_Word sender_badge,
+                                  VmrAttachMessage *msg, AdsReturnMessage *reply_msg,
+                                  seL4_CPtr mo_cap)
 {
     OSDB_PRINTF("Got attach-to-reserve request from client badge %lx.\n", sender_badge);
 
@@ -278,8 +279,8 @@ err_goto:
     reply_msg->errorCode = error;
 }
 
-static void handle_remove_req(seL4_Word sender_badge,
-                              AdsRemoveMessage *msg, AdsReturnMessage *reply_msg)
+static void handle_vmr_delete_by_vaddr_req(seL4_Word sender_badge,
+                                           VmrDeleteByVaddrMessage *msg, AdsReturnMessage *reply_msg)
 {
     OSDB_PRINTF("Got remove request from client badge %lx.\n", sender_badge);
 
@@ -289,6 +290,38 @@ static void handle_remove_req(seL4_Word sender_badge,
 
     /* Perform the removal */
     error = ads_component_rm_by_vaddr(ads_id, vaddr);
+
+err_goto:
+    reply_msg->which_msg = AdsReturnMessage_basic_tag;
+    reply_msg->errorCode = error;
+}
+
+static void handle_vmr_delete_req(seL4_Word sender_badge,
+                                  VmrDeleteMessage *msg, AdsReturnMessage *reply_msg)
+{
+    OSDB_PRINTF("Got vmr delete request from client badge %lx.\n", sender_badge);
+
+    int error = 0;
+    gpi_obj_id_t ads_id = get_space_id_from_badge(sender_badge);
+    gpi_obj_id_t vmr_id = get_object_id_from_badge(sender_badge);
+
+    /* Perform the removal */
+    error = ads_component_rm_by_id(ads_id, vmr_id);
+
+err_goto:
+    reply_msg->which_msg = AdsReturnMessage_basic_tag;
+    reply_msg->errorCode = error;
+}
+
+static void handle_vmr_disconnect_req(seL4_Word sender_badge,
+                                      VmrDisconnectMessage *msg, AdsReturnMessage *reply_msg)
+{
+    OSDB_PRINTF("Got vmr disconnect request from client badge %lx.\n", sender_badge);
+
+    int error = 0;
+    gpi_obj_id_t ads_id = get_space_id_from_badge(sender_badge);
+
+    assert(!"Not implemented\n");
 
 err_goto:
     reply_msg->which_msg = AdsReturnMessage_basic_tag;
@@ -502,10 +535,11 @@ static int forge_ads_attachment_from_res(ads_t *ads, sel4utils_res_t *res, gpi_o
     }
 
 err_goto:
-    if (frame_caps) {
+    if (frame_caps)
+    {
         free(frame_caps);
     }
-    
+
     return error;
 }
 
@@ -540,10 +574,68 @@ err_goto:
     return error;
 }
 
-/**
- * @brief The starting point for the ads server's thread.
- *
- */
+static void vmr_component_handle(void *msg_p,
+                                 seL4_Word sender_badge,
+                                 seL4_CPtr received_cap,
+                                 void *reply_msg_p,
+                                 bool *need_new_recv_cap,
+                                 bool *should_reply)
+{
+    int error = 0;
+    AdsMessage *msg = (AdsMessage *)msg_p;
+    AdsReturnMessage *reply_msg = (AdsReturnMessage *)reply_msg_p;
+
+    SERVER_GOTO_IF_COND(msg->magic != VMR_RPC_MAGIC,
+                        "VMR component received message with incorrect magic number %lx\n", msg->magic);
+
+    // Message for the VMR component
+    if (get_object_id_from_badge(sender_badge) == BADGE_OBJ_ID_NULL)
+    {
+        switch (msg->which_msg)
+        {
+        case AdsMessage_attach_no_reserve_tag:
+            handle_vmr_attach_no_reserve_req(sender_badge, &msg->msg.attach_no_reserve, reply_msg, received_cap);
+            *need_new_recv_cap = true;
+            break;
+        case AdsMessage_reserve_tag:
+            handle_vmr_reserve_req(sender_badge, &msg->msg.reserve, reply_msg);
+            break;
+        case AdsMessage_delete_by_vaddr_tag:
+            handle_vmr_delete_by_vaddr_req(sender_badge, &msg->msg.delete_by_vaddr, reply_msg);
+            break;
+        default:
+            SERVER_GOTO_IF_COND(1, "Unknown request received: %u\n", msg->which_msg);
+            break;
+        }
+    }
+    else
+    {
+        switch (msg->which_msg)
+        {
+        case AdsMessage_attach_tag:
+            handle_vmr_attach_req(sender_badge, &msg->msg.attach, reply_msg, received_cap);
+            *need_new_recv_cap = true;
+            break;
+        case AdsMessage_delete_tag:
+            handle_vmr_delete_req(sender_badge, &msg->msg.delete, reply_msg);
+            break;
+        case AdsMessage_disconnect_tag:
+            handle_vmr_disconnect_req(sender_badge, &msg->msg.vmr_disconnect, reply_msg);
+            break;
+        default:
+            SERVER_GOTO_IF_COND(1, "Unknown request received: %u\n", msg->which_msg);
+            break;
+        }
+    }
+
+    OSDB_PRINTF("Returning from VMR component with error code %u\n", reply_msg->errorCode);
+    return;
+
+err_goto:
+    OSDB_PRINTF("Returning from VMR component with error code %u\n", error);
+    reply_msg->errorCode = error;
+}
+
 static void ads_component_handle(void *msg_p,
                                  seL4_Word sender_badge,
                                  seL4_CPtr received_cap,
@@ -552,42 +644,38 @@ static void ads_component_handle(void *msg_p,
                                  bool *should_reply)
 {
     int error = 0; // unused, to appease the error handling macros
+
+    // Redirect VMR component messages
+    if (get_cap_type_from_badge(sender_badge) == GPICAP_TYPE_VMR)
+    {
+        vmr_component_handle(msg_p, sender_badge, received_cap, reply_msg_p, need_new_recv_cap, should_reply);
+        return;
+    }
+
+    // Handle ADS component messages
     AdsMessage *msg = (AdsMessage *)msg_p;
     AdsReturnMessage *reply_msg = (AdsReturnMessage *)reply_msg_p;
 
     SERVER_GOTO_IF_COND(msg->magic != ADS_RPC_MAGIC,
-                        "ADS component received message with incorrect magic number %lx\n", msg->magic);
+                        "VMR component received message with incorrect magic number %lx\n", msg->magic);
 
+    // Message for the ADS component
     if (get_object_id_from_badge(sender_badge) == BADGE_OBJ_ID_NULL &&
         get_space_id_from_badge(sender_badge) == get_ads_component()->space_id)
     {
         SERVER_GOTO_IF_COND(msg->which_msg != AdsMessage_alloc_tag,
-                            "Received invalid request on the allocation endpoint\n");
+                            "Received invalid request on the ADS allocation endpoint\n");
         handle_ads_allocation(sender_badge, reply_msg);
     }
     else
     {
         switch (msg->which_msg)
         {
-        case AdsMessage_attach_tag:
-            handle_attach_req(sender_badge, &msg->msg.attach, reply_msg, received_cap);
-            *need_new_recv_cap = true;
-            break;
-        case AdsMessage_remove_tag:
-            handle_remove_req(sender_badge, &msg->msg.remove, reply_msg);
-            break;
-        case AdsMessage_reserve_tag:
-            handle_reserve_req(sender_badge, &msg->msg.reserve, reply_msg);
-            break;
         case AdsMessage_shallow_copy_tag:
             handle_copy_req(sender_badge, &msg->msg.shallow_copy, reply_msg);
             break;
         case AdsMessage_load_elf_tag:
             handle_load_elf_request(sender_badge, &msg->msg.load_elf, reply_msg);
-            break;
-        case AdsMessage_attach_reserve_tag:
-            handle_attach_to_reserve_req(sender_badge, &msg->msg.attach_reserve, reply_msg, received_cap);
-            *need_new_recv_cap = true;
             break;
         case AdsMessage_get_res_tag:
             handle_get_res_request(sender_badge, &msg->msg.get_res, reply_msg);

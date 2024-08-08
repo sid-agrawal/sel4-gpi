@@ -1,5 +1,6 @@
 #include <sel4runtime.h>
 #include <sel4gpi/pd_clientapi.h>
+#include <sel4gpi/vmr_clientapi.h>
 #include <sel4gpi/mo_clientapi.h>
 #include <sel4gpi/error_handle.h>
 #include <sel4gpi/pd_utils.h>
@@ -80,18 +81,16 @@ seL4_CPtr sel4gpi_get_rde(int type)
     {
         return seL4_CapNull;
     }
-    
+
     seL4_CPtr slot = ((osm_pd_shared_data_t *)sel4runtime_get_osm_shared_data())->rde[type][0].slot_in_PD;
     WARN_IF_COND(slot == seL4_CapNull, "Could not find RDE (type: %d) for PD (%u)\n", type, sel4gpi_get_pd_conn().id);
 
     return slot;
 }
 
-ads_client_context_t sel4gpi_get_bound_vmr_rde()
+seL4_CPtr sel4gpi_get_bound_vmr_rde()
 {
-    ads_client_context_t ads_conn = {.ep = sel4gpi_get_rde_by_space_id(sel4gpi_get_binded_ads_id(), GPICAP_TYPE_VMR)};
-
-    return ads_conn;
+    return sel4gpi_get_rde_by_space_id(sel4gpi_get_binded_ads_id(), GPICAP_TYPE_VMR);
 }
 
 gpi_obj_id_t sel4gpi_get_default_space_id(int type)
@@ -202,7 +201,7 @@ void sel4gpi_set_exit_cb(void)
     sel4runtime_set_exit(sel4gpi_exit_cb);
 }
 
-static void *get_vmr(ads_client_context_t *vmr_rde,
+static void *get_vmr(seL4_CPtr vmr_rde,
                      int num_pages,
                      void *vaddr,
                      sel4utils_reservation_type_t vmr_type,
@@ -228,7 +227,7 @@ static void *get_vmr(ads_client_context_t *vmr_rde,
     }
     GOTO_IF_ERR(error, "failed to allocate MO\n");
     void *new_vaddr;
-    error = ads_client_attach(vmr_rde, vaddr, &mo, vmr_type, &new_vaddr);
+    error = vmr_client_attach_no_reserve(vmr_rde, vaddr, &mo, vmr_type, &new_vaddr);
     GOTO_IF_ERR(error, "failed to attach MO\n");
     WARN_IF_COND(vaddr && (new_vaddr != vaddr), "ADS attached vaddr (%p) differs from requested (%p)\n",
                  new_vaddr, vaddr);
@@ -246,13 +245,13 @@ err_goto:
     return NULL;
 }
 
-void *sel4gpi_get_vmr(ads_client_context_t *vmr_rde, int num_pages, void *vaddr,
+void *sel4gpi_get_vmr(seL4_CPtr vmr_rde, int num_pages, void *vaddr,
                       sel4utils_reservation_type_t vmr_type, size_t page_bits, mo_client_context_t *ret_mo)
 {
     return get_vmr(vmr_rde, num_pages, vaddr, vmr_type, page_bits, 0, ret_mo);
 }
 
-void *sel4gpi_get_vmr_at_paddr(ads_client_context_t *vmr_rde,
+void *sel4gpi_get_vmr_at_paddr(seL4_CPtr vmr_rde,
                                int num_pages,
                                void *vaddr,
                                sel4utils_reservation_type_t vmr_type,
@@ -263,11 +262,11 @@ void *sel4gpi_get_vmr_at_paddr(ads_client_context_t *vmr_rde,
     return get_vmr(vmr_rde, num_pages, vaddr, vmr_type, page_bits, paddr, ret_mo);
 }
 
-int sel4gpi_destroy_vmr(ads_client_context_t *vmr_rde, void *vaddr, mo_client_context_t *mo)
+int sel4gpi_destroy_vmr(seL4_CPtr vmr_rde, void *vaddr, mo_client_context_t *mo)
 {
     int error;
 
-    error = ads_client_rm(vmr_rde, vaddr);
+    error = vmr_client_delete_by_vaddr(vmr_rde, vaddr);
     GOTO_IF_ERR(error, "failed to remove MO from ADS\n");
 
     error = mo_component_client_disconnect(mo);
@@ -312,14 +311,14 @@ void debug_print_mem_at(void *start_addr, uint32_t range)
 int sel4gpi_copy_data_to_mo(void *vaddr, size_t size_bytes, mo_client_context_t *dest_mo)
 {
     int error = 0;
-    ads_client_context_t vmr_rde = sel4gpi_get_bound_vmr_rde();
+    seL4_CPtr vmr_rde = sel4gpi_get_bound_vmr_rde();
     void *dest_vaddr = NULL;
-    error = ads_client_attach(&vmr_rde, NULL, dest_mo, SEL4UTILS_RES_TYPE_GENERIC, &dest_vaddr);
+    error = vmr_client_attach_no_reserve(vmr_rde, NULL, dest_mo, SEL4UTILS_RES_TYPE_GENERIC, &dest_vaddr);
     GOTO_IF_COND(dest_vaddr == NULL || error, "Failed to attach dest MO to current ADS\n");
 
     memcpy(dest_vaddr, vaddr, size_bytes);
 
-    error = ads_client_rm(&vmr_rde, dest_vaddr);
+    error = vmr_client_delete_by_vaddr(vmr_rde, dest_vaddr);
     WARN_IF_COND(error, "Failed to detach VMR\n");
 
     return 0;

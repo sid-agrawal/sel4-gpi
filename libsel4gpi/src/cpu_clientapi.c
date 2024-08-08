@@ -223,9 +223,9 @@ int cpu_client_suspend(cpu_client_context_t *cpu)
 
 int cpu_client_read_registers(cpu_client_context_t *cpu, seL4_UserContext *regs)
 {
-    ads_client_context_t vmr_rde = sel4gpi_get_bound_vmr_rde();
+    seL4_CPtr vmr_rde = sel4gpi_get_bound_vmr_rde();
     mo_client_context_t msg_mo = {0};
-    void *shared_msg_vaddr = sel4gpi_get_vmr(&vmr_rde, 1, NULL, SEL4UTILS_RES_TYPE_SHARED_FRAMES, MO_PAGE_BITS, &msg_mo);
+    void *shared_msg_vaddr = sel4gpi_get_vmr(vmr_rde, 1, NULL, SEL4UTILS_RES_TYPE_SHARED_FRAMES, MO_PAGE_BITS, &msg_mo);
     OSDB_PRINTF("Sending read registers request to CPU component\n");
 
     int error = 0;
@@ -249,7 +249,7 @@ int cpu_client_read_registers(cpu_client_context_t *cpu, seL4_UserContext *regs)
         memcpy(regs, shared_msg_vaddr, sizeof(seL4_UserContext));
     }
 
-    int unmap_error = sel4gpi_destroy_vmr(&vmr_rde, shared_msg_vaddr, &msg_mo);
+    int unmap_error = sel4gpi_destroy_vmr(vmr_rde, shared_msg_vaddr, &msg_mo);
     SERVER_WARN_IF_COND(unmap_error, "Failed to destroy VMR and MO for message buffer\n");
 
     return error;

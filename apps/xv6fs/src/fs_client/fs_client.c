@@ -11,6 +11,7 @@
 #include <vspace/vspace.h>
 
 #include <sel4gpi/ads_clientapi.h>
+#include <sel4gpi/vmr_clientapi.h>
 #include <sel4gpi/mo_clientapi.h>
 #include <sel4gpi/pd_clientapi.h>
 #include <sel4gpi/resource_server_utils.h>
@@ -988,12 +989,12 @@ xv6fs_client_init(void)
                                       get_xv6fs_client()->shared_mem);
   CHECK_ERROR(error, "failed to allocate shared mem page");
 
-  ads_client_context_t vmr_rde = {.ep = sel4gpi_get_rde_by_space_id(sel4gpi_get_binded_ads_id(), GPICAP_TYPE_VMR)};
-  error = ads_client_attach(&vmr_rde,
-                            NULL,
-                            get_xv6fs_client()->shared_mem,
-                            SEL4UTILS_RES_TYPE_SHARED_FRAMES,
-                            &get_xv6fs_client()->shared_mem_vaddr);
+  seL4_CPtr vmr_rde = sel4gpi_get_bound_vmr_rde();
+  error = vmr_client_attach_no_reserve(vmr_rde,
+                                       NULL,
+                                       get_xv6fs_client()->shared_mem,
+                                       SEL4UTILS_RES_TYPE_SHARED_FRAMES,
+                                       &get_xv6fs_client()->shared_mem_vaddr);
   CHECK_ERROR(error, "failed to map shared mem page for fs client");
 
   /* Setup local FD data structure */

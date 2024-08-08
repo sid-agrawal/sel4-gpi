@@ -22,6 +22,7 @@ uintptr_t morecore_base = (uintptr_t) PD_HEAP_LOC;
 uintptr_t morecore_top = (uintptr_t) (PD_HEAP_LOC + APP_MALLOC_SIZE);
 
 #include <sel4gpi/pd_clientapi.h>
+#include <sel4gpi/vmr_clientapi.h>
 #include <fs_client.h>
 #include <kvstore_shared.h>
 #include <kvstore_server.h>

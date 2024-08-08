@@ -8,6 +8,7 @@
 #include <sel4test/test.h>
 
 #include <sel4gpi/ads_clientapi.h>
+#include <sel4gpi/vmr_clientapi.h>
 #include <sel4gpi/mo_clientapi.h>
 #include <sel4gpi/pd_clientapi.h>
 #include <sel4gpi/endpoint_clientapi.h>
@@ -67,7 +68,7 @@ typedef struct _resource_server_context
     seL4_CPtr mo_ep;               ///< MO request ep
     seL4_CPtr resspc_ep;           ///< Resource space request ep
     ep_client_context_t parent_ep; ///< Parent's EP, used to notify once started
-    ads_client_context_t ads_conn; ///< This PD's current ADS object
+    seL4_CPtr vmr_rde;             ///< VMR for the PD's current ADS
     pd_client_context_t pd_conn;   ///< This PD's PD object
     ep_client_context_t server_ep; ///< The server's own endpoint that it listens for requests on
 

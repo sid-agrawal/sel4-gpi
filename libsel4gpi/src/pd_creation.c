@@ -2,6 +2,7 @@
 #include <sel4gpi/pd_clientapi.h>
 #include <sel4gpi/mo_clientapi.h>
 #include <sel4gpi/ads_clientapi.h>
+#include <sel4gpi/vmr_clientapi.h>
 #include <sel4gpi/cpu_clientapi.h>
 #include <sel4gpi/resource_space_clientapi.h>
 #include <sel4gpi/resource_types.h>
@@ -11,7 +12,7 @@
 
 extern void _start(void);
 
-void *sel4gpi_new_sized_stack(ads_client_context_t *ads_rde, size_t n_pages, mo_client_context_t *ret_mo)
+void *sel4gpi_new_sized_stack(seL4_CPtr vmr_rde, size_t n_pages, mo_client_context_t *ret_mo)
 {
     int error = 0;
 
@@ -24,7 +25,7 @@ void *sel4gpi_new_sized_stack(ads_client_context_t *ads_rde, size_t n_pages, mo_
     void *vaddr;
     size_t res_size = (n_pages + 1) * (SIZE_BITS_TO_BYTES(MO_PAGE_BITS));
     ads_vmr_context_t reservation;
-    error = ads_client_reserve(ads_rde, NULL, res_size, MO_PAGE_BITS,
+    error = vmr_client_reserve(vmr_rde, NULL, res_size, MO_PAGE_BITS,
                                SEL4UTILS_RES_TYPE_STACK, &reservation, &vaddr);
     GOTO_IF_ERR(error, "failed to reserve VMR for stack\n");
 
@@ -35,7 +36,7 @@ void *sel4gpi_new_sized_stack(ads_client_context_t *ads_rde, size_t n_pages, mo_
 
     /* attach MO to ADS */
     size_t offset = SIZE_BITS_TO_BYTES(MO_PAGE_BITS);
-    error = ads_client_attach_to_reserve(&reservation, &mo, offset);
+    error = vmr_client_attach(&reservation, &mo, offset);
     GOTO_IF_ERR(error, "failed to attach MO to reserved stack\n");
 
     uintptr_t stack_top = (uintptr_t)vaddr + res_size;
@@ -204,10 +205,10 @@ static int setup_tls_in_stack(ads_client_context_t *target_ads,
     uintptr_t curr_sp, tls_base, tp = 0;
     if (target_ads->id != sel4gpi_get_binded_ads_id())
     {
-        ads_client_context_t vmr_rde = sel4gpi_get_bound_vmr_rde();
+        seL4_CPtr vmr_rde = sel4gpi_get_bound_vmr_rde();
         void *local_stack_bottom = NULL;
-        error = ads_client_attach(&vmr_rde, NULL, &runtime_ctxt->stack_cfg->mo,
-                                  SEL4UTILS_RES_TYPE_GENERIC, &local_stack_bottom);
+        error = vmr_client_attach_no_reserve(vmr_rde, NULL, &runtime_ctxt->stack_cfg->mo,
+                                             SEL4UTILS_RES_TYPE_GENERIC, &local_stack_bottom);
         GOTO_IF_ERR(error, "Failed to map remote stack into current ADS\n");
 
         uintptr_t remote_tls_base, remote_tp, local_stack_top = 0;
@@ -222,7 +223,7 @@ static int setup_tls_in_stack(ads_client_context_t *target_ads,
         *ret_sp = (void *)ALIGN_DOWN(remote_tls_base, STACK_CALL_ALIGNMENT);
         *ret_tp = (void *)remote_tp;
 
-        ads_client_rm(&vmr_rde, local_stack_bottom);
+        vmr_client_delete_by_vaddr(vmr_rde, local_stack_bottom);
     }
     else
     {
@@ -243,7 +244,7 @@ int sel4gpi_ads_configure(ads_config_t *cfg,
                           runtime_context_t *ret_runtime_context)
 {
     int error = 0;
-    ads_client_context_t vmr_rde = {.ep = sel4gpi_get_rde_by_space_id(runnable->ads.id, GPICAP_TYPE_VMR)};
+    seL4_CPtr vmr_rde = sel4gpi_get_rde_by_space_id(runnable->ads.id, GPICAP_TYPE_VMR);
 
     gpi_obj_id_t current_ads_id = sel4gpi_get_binded_ads_id();
     ads_client_context_t self_ads_conn = sel4gpi_get_ads_conn();
@@ -252,7 +253,7 @@ int sel4gpi_ads_configure(ads_config_t *cfg,
     if (osm_data_mo && osm_data_mo->ep != seL4_CapNull)
     {
         void *pd_osm_data;
-        error = ads_client_attach(&vmr_rde, NULL, osm_data_mo, SEL4UTILS_RES_TYPE_OSM_DATA, &pd_osm_data);
+        error = vmr_client_attach_no_reserve(vmr_rde, NULL, osm_data_mo, SEL4UTILS_RES_TYPE_OSM_DATA, &pd_osm_data);
         GOTO_IF_ERR(error, "Failed to attach OSmosis data MO to PD's ADS\n");
 
         if (ret_runtime_context)
@@ -294,7 +295,7 @@ int sel4gpi_ads_configure(ads_config_t *cfg,
                 {
                     PD_CREATION_PRINT("Attaching provided MO for a %s VMR\n", human_readable_va_res_type(vmr->type));
                     void *vmr_addr = NULL;
-                    error = ads_client_attach(&vmr_rde, vmr->start, &vmr->mo, vmr->type, &vmr_addr);
+                    error = vmr_client_attach_no_reserve(vmr_rde, vmr->start, &vmr->mo, vmr->type, &vmr_addr);
                     GOTO_IF_ERR(error, "Failed to attach MO to VMR\n");
                     vmr->start = vmr_addr;
                     // (XXX) Linh: should we also give ownership of this MO to the created PD?
@@ -316,7 +317,7 @@ int sel4gpi_ads_configure(ads_config_t *cfg,
                 {
                     PD_CREATION_PRINT("Allocating stack (%zu pages)\n", vmr->region_pages);
                     mo_client_context_t mo = {0};
-                    void *stack = sel4gpi_new_sized_stack(&vmr_rde, vmr->region_pages, &mo);
+                    void *stack = sel4gpi_new_sized_stack(vmr_rde, vmr->region_pages, &mo);
 
                     vmr->start = stack;
                     vmr->mo = mo;
@@ -328,7 +329,7 @@ int sel4gpi_ads_configure(ads_config_t *cfg,
                     PD_CREATION_PRINT("Allocating VMR (%s) with %lu pages at %p\n",
                                       human_readable_va_res_type(vmr->type), vmr->region_pages, vmr->start);
                     mo_client_context_t mo = {0};
-                    void *vmr_addr = sel4gpi_get_vmr(&vmr_rde, vmr->region_pages, vmr->start, vmr->type,
+                    void *vmr_addr = sel4gpi_get_vmr(vmr_rde, vmr->region_pages, vmr->start, vmr->type,
                                                      vmr->page_bits ? vmr->page_bits : MO_PAGE_BITS, &mo);
                     GOTO_IF_ERR(vmr_addr == NULL, "failed to allocate VMR (%s@%p)\n",
                                 human_readable_va_res_type(vmr->type), vmr->start);

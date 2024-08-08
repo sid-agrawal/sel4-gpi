@@ -27,6 +27,7 @@
 #include <sel4gpi/cpu_clientapi.h>
 #include <sel4gpi/cpu_component.h>
 #include <sel4gpi/ads_clientapi.h>
+#include <sel4gpi/vmr_clientapi.h>
 #include <sel4gpi/gpi_server.h>
 #include <sel4gpi/badge_usage.h>
 #include <sel4gpi/debug.h>

@@ -88,9 +88,9 @@ seL4_CPtr sel4gpi_get_rde(int type);
 /**
  * Get the VMR RDE for this PD's currently-bound ADS
  * 
- * Use this connection to request new VMR regions from the ADS
+ * Use this endpoint to request new VMR regions
  */
-ads_client_context_t sel4gpi_get_bound_vmr_rde(void);
+seL4_CPtr sel4gpi_get_bound_vmr_rde(void);
 
 /**
  * Get the resource space ID of the default RDE for the given type
@@ -149,14 +149,14 @@ void sel4gpi_set_exit_cb(void);
 /**
  * @brief obtains a new VMR by requesting an MO and then attaching it to the given ADS
  *
- * @param vmr_rde the ADS which the VMR belongs to
+ * @param vmr_rde RDE for the VMR space
  * @param num_pages number of pages
  * @param vaddr OPTIONAL, address in which the VMR should be mapped
  * @param vmr_type type of VMR, e.g. stack, heap, IPC buffer, etc.
  * @param[out] ret_mo OPTIONAL, returns a reference to the MO object for this VMR
  * @return virtual address of the VMR, if vaddr argument is specified, it should be the same (or NULL, on failure)
  */
-void *sel4gpi_get_vmr(ads_client_context_t *vmr_rde,
+void *sel4gpi_get_vmr(seL4_CPtr vmr_rde,
                       int num_pages,
                       void *vaddr,
                       sel4utils_reservation_type_t vmr_type,
@@ -167,7 +167,7 @@ void *sel4gpi_get_vmr(ads_client_context_t *vmr_rde,
  * @brief obtains a new VMR for an MO at a specific physical address.
  * For identity mapping, specify vaddr to be the same as paddr
  *
- * @param vmr_rde the ADS which the VMR belongs to
+ * @param vmr_rde RDE for the VMR space
  * @param num_pages number of pages
  * @param vaddr OPTIONAL, address in which the VMR should be mapped
  * @param vmr_type type of VMR, e.g. stack, heap, IPC buffer, etc.
@@ -176,7 +176,7 @@ void *sel4gpi_get_vmr(ads_client_context_t *vmr_rde,
  * @param[out] ret_mo OPTIONAL, returns a reference to the MO object for this VMR
  * @return virtual address of the VMR, if vaddr argument is specified, it should be the same (or NULL, on failure)
  */
-void *sel4gpi_get_vmr_at_paddr(ads_client_context_t *vmr_rde,
+void *sel4gpi_get_vmr_at_paddr(seL4_CPtr vmr_rde,
                                int num_pages,
                                void *vaddr,
                                sel4utils_reservation_type_t vmr_type,
@@ -187,12 +187,12 @@ void *sel4gpi_get_vmr_at_paddr(ads_client_context_t *vmr_rde,
 /**
  * Unattach an MO from the given ADS then destroy it
  *
- * @param vmr_rde the ADS where the MO is attached
+ * @param vmr_rde the RDE for the VMR space
  * @param vaddr the vaddr where the MO is attached
  * @param mo connection to the MO to destroy
  * @return 0 on success, error otherwise
  */
-int sel4gpi_destroy_vmr(ads_client_context_t *vmr_rde, void *vaddr, mo_client_context_t *mo);
+int sel4gpi_destroy_vmr(seL4_CPtr vmr_rde, void *vaddr, mo_client_context_t *mo);
 
 /**
  * @brief allocates a new tracked endpoint using the default EP RDE

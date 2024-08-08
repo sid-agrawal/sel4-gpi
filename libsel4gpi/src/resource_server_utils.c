@@ -69,7 +69,7 @@ int resource_server_start(resource_server_context_t *context,
     context->work_handler = work_handler;
     context->mo_ep = sel4gpi_get_rde(GPICAP_TYPE_MO);
     context->resspc_ep = sel4gpi_get_rde(GPICAP_TYPE_RESSPC);
-    context->ads_conn.ep = sel4gpi_get_rde_by_space_id(sel4gpi_get_binded_ads_id(), GPICAP_TYPE_VMR);
+    context->vmr_rde = sel4gpi_get_bound_vmr_rde();
     context->pd_conn = sel4gpi_get_pd_conn();
     context->parent_pd_id = parent_pd_id;
     context->init_fn = init_fn;
@@ -80,10 +80,10 @@ int resource_server_start(resource_server_context_t *context,
     error = ep_client_get_raw_endpoint(&context->parent_ep);
     CHECK_ERROR(error, "Failed to retrieve parent EP\n");
 
-    printf("Resource server ADS_CAP: %lu\n", context->ads_conn.ep);
-    printf("Resource server PD_CAP: %lu\n", context->pd_conn.ep);
-    printf("Resource server MO ep: %lu\n", context->mo_ep);
-    printf("Resource server RESSPC ep: %lu\n", context->resspc_ep);
+    RESOURCE_SERVER_PRINTF("Resource server VMR_RDE: %lu\n", context->vmr_rde);
+    RESOURCE_SERVER_PRINTF("Resource server PD_CAP: %lu\n", context->pd_conn.ep);
+    RESOURCE_SERVER_PRINTF("Resource server MO ep: %lu\n", context->mo_ep);
+    RESOURCE_SERVER_PRINTF("Resource server RESSPC ep: %lu\n", context->resspc_ep);
 
     /* Allocate the Endpoint that the server will be listening on. */
     error = sel4gpi_alloc_endpoint(&context->server_ep);
@@ -313,11 +313,11 @@ int resource_server_attach_mo(resource_server_context_t *context,
     CHECK_ERROR(mo_cap == 0, "client did not attach MO for read/write op");
 
     mo_conn.ep = mo_cap;
-    error = ads_client_attach(&context->ads_conn,
-                              NULL,
-                              &mo_conn,
-                              SEL4UTILS_RES_TYPE_GENERIC,
-                              vaddr);
+    error = vmr_client_attach_no_reserve(context->vmr_rde,
+                                         NULL,
+                                         &mo_conn,
+                                         SEL4UTILS_RES_TYPE_GENERIC,
+                                         vaddr);
     CHECK_ERROR(error, "failed to attach client's MO to ADS");
 
     return error;
@@ -333,9 +333,9 @@ int resource_server_unattach(resource_server_context_t *context,
     int error = 0;
 
     CHECK_ERROR(vaddr == NULL, "cannot unattach a NULL vaddr");
-
-    error = ads_client_rm(&context->ads_conn,
-                          vaddr);
+    
+    error = vmr_client_delete_by_vaddr(context->vmr_rde,
+                                       vaddr);
     CHECK_ERROR(error, "failed to unattach from ADS");
 
     return error;

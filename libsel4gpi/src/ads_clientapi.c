@@ -13,6 +13,7 @@
 #include <vka/capops.h>
 
 #include <sel4gpi/ads_clientapi.h>
+#include <sel4gpi/vmr_clientapi.h>
 #include <sel4gpi/badge_usage.h>
 #include <sel4gpi/debug.h>
 #include <sel4gpi/pd_utils.h>
@@ -66,121 +67,6 @@ int ads_client_disconnect(ads_client_context_t *conn)
         .magic = ADS_RPC_MAGIC,
         .which_msg = AdsMessage_disconnect_tag,
     };
-
-    AdsReturnMessage ret_msg = {0};
-
-    error = sel4gpi_rpc_call(&rpc_env, conn->ep, (void *)&msg,
-                             0, NULL, (void *)&ret_msg);
-    error |= ret_msg.errorCode;
-
-    return error;
-}
-
-int ads_client_attach(ads_client_context_t *conn,
-                      void *vaddr,
-                      mo_client_context_t *mo_cap,
-                      sel4utils_reservation_type_t vmr_type,
-                      void **ret_vaddr)
-{
-    OSDB_PRINTF("Sending attach request to ADS component\n");
-
-    int error = 0;
-
-    AdsMessage msg = {
-        .magic = ADS_RPC_MAGIC,
-        .which_msg = AdsMessage_attach_tag,
-        .msg.attach = {
-            .vaddr = (uint64_t)vaddr,
-            .type = vmr_type,
-        }};
-
-    AdsReturnMessage ret_msg = {0};
-
-    error = sel4gpi_rpc_call(&rpc_env, conn->ep, (void *)&msg,
-                             1, &mo_cap->ep, (void *)&ret_msg);
-    error |= ret_msg.errorCode;
-
-    if (!error)
-    {
-        *ret_vaddr = (void *)ret_msg.msg.attach.vaddr;
-    }
-
-    return error;
-}
-
-int ads_client_reserve(ads_client_context_t *conn,
-                       void *vaddr,
-                       size_t size,
-                       size_t page_bits,
-                       sel4utils_reservation_type_t vmr_type,
-                       ads_vmr_context_t *ret_conn,
-                       void **ret_vaddr)
-{
-    OSDB_PRINTF("Sending reserve request to ADS component\n");
-
-    int error = 0;
-
-    AdsMessage msg = {
-        .magic = ADS_RPC_MAGIC,
-        .which_msg = AdsMessage_reserve_tag,
-        .msg.reserve = {
-            .vaddr = (uint64_t)vaddr,
-            .type = vmr_type,
-            .size = size,
-            .page_bits = page_bits,
-        }};
-
-    AdsReturnMessage ret_msg = {0};
-
-    error = sel4gpi_rpc_call(&rpc_env, conn->ep, (void *)&msg,
-                             0, NULL, (void *)&ret_msg);
-    error |= ret_msg.errorCode;
-
-    if (!error)
-    {
-        *ret_vaddr = (void *)ret_msg.msg.reserve.vaddr;
-        ret_conn->ep = ret_msg.msg.reserve.slot;
-    }
-
-    return error;
-}
-
-int ads_client_attach_to_reserve(ads_vmr_context_t *reservation,
-                                 mo_client_context_t *mo,
-                                 size_t offset)
-{
-    OSDB_PRINTF("Sending attach-to-reserve request to ADS component\n");
-
-    int error = 0;
-
-    AdsMessage msg = {
-        .magic = ADS_RPC_MAGIC,
-        .which_msg = AdsMessage_attach_reserve_tag,
-        .msg.attach_reserve = {
-            .offset = offset,
-        }};
-
-    AdsReturnMessage ret_msg = {0};
-
-    error = sel4gpi_rpc_call(&rpc_env, reservation->ep, (void *)&msg,
-                             1, &mo->ep, (void *)&ret_msg);
-    error |= ret_msg.errorCode;
-
-    return error;
-}
-
-int ads_client_rm(ads_client_context_t *conn, void *vaddr)
-{
-    OSDB_PRINTF("Sending remove request to ADS component\n");
-
-    int error = 0;
-
-    AdsMessage msg = {
-        .magic = ADS_RPC_MAGIC,
-        .which_msg = AdsMessage_remove_tag,
-        .msg.remove = {
-            .vaddr = (uint64_t)vaddr,
-        }};
 
     AdsReturnMessage ret_msg = {0};
 

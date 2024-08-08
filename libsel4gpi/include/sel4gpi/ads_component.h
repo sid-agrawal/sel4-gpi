@@ -25,6 +25,8 @@
  */
 
 #define ADS_RPC_MAGIC 0x414453
+#define VMR_RPC_MAGIC 0x564d52
+
 #define ADSSERVS "ADSServ Component: "
 #define ADSSERVC "ADSServ Client   : "
 

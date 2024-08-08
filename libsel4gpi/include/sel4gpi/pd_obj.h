@@ -27,6 +27,7 @@
 #include <sel4gpi/badge_usage.h>
 #include <sel4gpi/cap_tracking.h>
 #include <sel4gpi/ads_clientapi.h>
+#include <sel4gpi/vmr_clientapi.h>
 #include <sel4gpi/cpu_obj.h>
 #include <sel4gpi/resource_registry.h>
 #include <sel4gpi/linked_list.h>

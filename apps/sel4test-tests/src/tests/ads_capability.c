@@ -12,6 +12,7 @@
 #include <stdio.h>
 
 #include <sel4gpi/ads_clientapi.h>
+#include <sel4gpi/vmr_clientapi.h>
 #include <sel4gpi/cpu_clientapi.h>
 #include <sel4gpi/pd_clientapi.h>
 #include <sel4gpi/mo_clientapi.h>
@@ -23,7 +24,7 @@
 int test_ads_attach(env_t env)
 {
     // Initialize the ADS
-    ads_client_context_t ads_conn = sel4gpi_get_bound_vmr_rde();
+    seL4_CPtr vmr_rde = sel4gpi_get_bound_vmr_rde();
 
     // allocate a new MO
     int n_pages = 5;
@@ -36,7 +37,7 @@ int test_ads_attach(env_t env)
 
     // attach the MO
     void *ret_vaddr;
-    error = ads_client_attach(&ads_conn,
+    error = vmr_client_attach_no_reserve(vmr_rde,
                               NULL,
                               &mo_conn,
                               SEL4UTILS_RES_TYPE_GENERIC,
@@ -64,7 +65,7 @@ DEFINE_TEST_OSM(GPIADS001, "Ensure the ads attach works", test_ads_attach, true)
 int test_ads_rm(env_t env)
 {
     // Initialize the ADS
-    ads_client_context_t ads_conn = sel4gpi_get_bound_vmr_rde();
+    seL4_CPtr vmr_rde = sel4gpi_get_bound_vmr_rde();
 
     // allocate a new MO
     int n_pages = 5;
@@ -77,7 +78,7 @@ int test_ads_rm(env_t env)
 
     // attach the MO
     void *ret_vaddr;
-    error = ads_client_attach(&ads_conn,
+    error = vmr_client_attach_no_reserve(vmr_rde,
                               NULL,
                               &mo_conn,
                               SEL4UTILS_RES_TYPE_GENERIC,
@@ -86,7 +87,7 @@ int test_ads_rm(env_t env)
     assert(ret_vaddr != NULL);
 
     // remove the MO
-    error = ads_client_rm(&ads_conn,
+    error = vmr_client_delete_by_vaddr(vmr_rde,
                           ret_vaddr);
 
     assert(error == 0);
@@ -278,7 +279,7 @@ int test_ads_stack_isolated_stack_die(env_t env)
 
     // TODO: Attach a new stack, this is done inside clinet_config for now.
     // stack_cap
-    // ads_client_attach()
+    // vmr_client_attach_no_reserve()
     // Attach a new stack
 
     // Allocate new CPU

@@ -149,7 +149,7 @@ int test_lwc(env_t env)
     /* create LWC the LWC has access to the key*/
     // int lwc_id = lwcCreate(env, key); /* copy the entire AS, say which func to run*/
 
-    ads_client_context_t conn = sel4gpi_get_bound_vmr_rde();
+    ads_client_context_t conn = sel4gpi_get_ads_conn();
     cpu_client_context_t cpu_conn = sel4gpi_get_cpu_conn();
 
     printf("Change to new VSpace \n");
