@@ -89,8 +89,6 @@ int cpu_change_vspace(cpu_t *cpu,
 
 /**
  * @brief Bind a notification object to a CPU
- * (XXX) Arya: I find it strange to do this operation on a CPU
- * I only added it here since it is a TCB operation
  *
  * @param cpu cpu object
  * @param notif the notification

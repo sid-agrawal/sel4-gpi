@@ -179,9 +179,10 @@ int ads_attach(ads_t *ads,
                sel4utils_reservation_type_t vmr_type);
 
 /**
- * Use to forge an ADS attach from a vspace attach
- * Will assume the page size is the same as the MO frames
- * (XXX) Arya: to be deprecated eventually
+ * Use to forge an ADS attach from a vspace attach.
+ * Will assume the page size is the same as the MO frames.
+ * 
+ * This function will not be deprecated, because it is used to forge the root task's ADS.
  *
  * @param ads ads object
  * @param res the sel4utils_res object

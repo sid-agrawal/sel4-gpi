@@ -190,13 +190,6 @@ gpi_model_node_t *cpu_dump_rr(cpu_t *cpu, model_state_t *ms, gpi_model_node_t *p
         add_edge(ms, GPI_EDGE_TYPE_SUBSET, cpu_core_node, pcpu_space_node);
 
         cpu_node->extracted = true;
-// (XXX) Arya: Do not actually show CPU->ADS arrow... do we need it?
-#if 0
-    // this isn't really an RR, but will be changed in the interp layer
-    char ads_res_id[CSV_MAX_STRING_SIZE];
-    make_res_id(ads_res_id, GPICAP_TYPE_ADS, cpu->binded_ads_id);
-    add_resource_depends_on(ms, cpu_res_id, ads_res_id, REL_TYPE_MAP);
-#endif
     }
 
     return cpu_node;

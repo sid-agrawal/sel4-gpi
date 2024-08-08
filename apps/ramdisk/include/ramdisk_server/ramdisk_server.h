@@ -43,6 +43,7 @@ typedef struct _ramdisk_server_context
 
     // Store per-client page for shared mem
     void *shared_mem[MAX_CLIENT_ID];
+    seL4_CPtr shared_mem_caps[MAX_CLIENT_ID];
 } ramdisk_server_context_t;
 
 /**

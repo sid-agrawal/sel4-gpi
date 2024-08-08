@@ -188,24 +188,6 @@ int resspc_component_mark_delete(gpi_space_id_t space_id, bool execute_cleanup_p
     resspc_component_registry_entry_t *space_entry = resource_space_get_entry_by_id(space_id);
     SERVER_GOTO_IF_COND(space_entry == NULL, "Couldn't find resource space (%u)\n", space_id);
 
-    // (XXX) Arya: We can't clean up the server endpoint because it might be used for another resource space
-    // This needs some more thought
-#if 0
-    // Cancel badged sends for this resspc
-    cspacepath_t server_ep_path;
-    pd_make_path(node->space.pd, node->space.server_ep, &server_ep_path);
-    error = seL4_CNode_CancelBadgedSends(server_ep_path.root, server_ep_path.capPtr, server_ep_path.capDepth);
-    SERVER_GOTO_IF_ERR(error, "Failed to cancel badged sends on resource space (%u)\n", space_id);
-
-    // Revoke the server EP
-    error = vka_cnode_revoke(&server_ep_path);
-    SERVER_GOTO_IF_ERR(error, "Failed to revoke endpoint for resource space (%u)\n", space_id);
-
-    // Delete the server EP
-    error = vka_cnode_delete(&server_ep_path);
-    SERVER_GOTO_IF_ERR(error, "Failed to revoke endpoint for resource space (%u)\n", space_id);
-#endif
-
     // Mark it for deletion
     space_entry->space.to_delete = true;
     space_entry->space.cleanup_policy = execute_cleanup_policy;

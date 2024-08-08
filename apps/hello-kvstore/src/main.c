@@ -172,7 +172,7 @@ main_exit:
 
     while (1)
     {
-        // (XXX) Arya: Do not exit, so we can dump the model state
+        // Do not exit, so we can dump the model state
     }
 
     return 0;

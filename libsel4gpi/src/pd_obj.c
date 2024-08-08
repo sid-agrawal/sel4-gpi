@@ -430,7 +430,6 @@ static int pd_revoke_cap(pd_t *pd, pd_hold_node_t *hold_node)
     else
     {
         /**
-         * (XXX) Arya:
          * If we revoke a badged endpoint, it will delete any copies of the badged endpoint
          * Thus this will only delete copies of this resource within this PD, not any other badged endpoints
          * made from the same, original raw endpoint.
@@ -449,8 +448,7 @@ static int pd_revoke_cap(pd_t *pd, pd_hold_node_t *hold_node)
             OSDB_PRINTERR("Failed to delete resource from PD(%u)\n", pd->id);
         }
 
-        // (XXX) Arya: choosing not to free slots so that the PD doesn't
-        // accidentally use a new resource in the same slot
+        // Choosing not to free slots so that the PD doesn't accidentally use a new resource in the same slot
         // pd->pd_vka->cspace_free(pd->pd_vka->data, cap);
     }
 
@@ -499,8 +497,8 @@ pd_held_resource_on_delete(resource_registry_node_t *node_gen, void *pd_v)
         SERVER_GOTO_IF_ERR(error, "failed to decrement MO resource\n");
         break;
     case GPICAP_TYPE_PD:
-        // (XXX) Arya: I think we do not want to destroy a PD when the refcount reaches zero
-        // If it dies on its own, then it will be destroyed
+        // We do not want to destroy a PD when the refcount reaches zero
+        // If it dies on its own, or is otherwise terminated, then it will be destroyed
         break;
     case GPICAP_TYPE_VMR:
         // NS ID is the ADS, res ID is the VMR
@@ -705,7 +703,6 @@ void pd_destroy(pd_t *pd, vka_t *server_vka, vspace_t *server_vspace)
     free(pd->name);
 
     // Hash table of holding resources
-    // (XXX) Arya: This can trigger sys_munmap which is not supported
     // This also triggers resource deletion, if this PD held the last copy
     resource_registry_node_t *current, *tmp;
     HASH_ITER(hh, pd->hold_registry.head, current, tmp)
@@ -761,7 +758,7 @@ int pd_free_slot(pd_t *pd,
                  seL4_CPtr slot)
 {
     /*
-    (XXX) Arya: Can't use vka_cspace_free because it tries to identify
+    Can't use vka_cspace_free because it tries to identify
     the cap based on the current cspace
     // vka_cspace_free(&pd->pd_vka, slot);
     */
@@ -1061,7 +1058,7 @@ static int res_dump(pd_t *pd, model_state_t *ms, pd_hold_node_t *current_cap, gp
         add_edge(ms, GPI_EDGE_TYPE_HOLD, pd_node, res_node);
         break;
     case GPICAP_TYPE_VMR:
-        // (XXX) Arya: Do not need to dump VMR, handled in ADS component
+        // Do not need to dump VMR, handled in ADS component
         break;
     case GPICAP_TYPE_EP:
         // Don't dump endpoints, as they aren't part of the model, and tracked only for cleanup purposes

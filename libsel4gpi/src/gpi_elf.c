@@ -54,7 +54,6 @@ static void copy_region(void *dest, const char *src, size_t src_file_size, size_
     }
 
     // Write zeroes for the remaining
-    // (XXX) Arya: should this always be zero?
     if (len > 0)
     {
         memset(dest, 0, len);
@@ -335,8 +334,6 @@ static int create_reservations(ads_t *loadee, size_t total_regions, sel4gpi_elf_
         attach_node_t *attach_node;
         void *requested_addr = anywhere ? NULL : regions[i].reservation_vstart;
         sel4utils_reservation_type_t type = regions[i].executable ? SEL4UTILS_RES_TYPE_CODE : SEL4UTILS_RES_TYPE_DATA;
-        // (XXX) Arya: get the reservation type
-        // (XXX) Arya: add the cache/rights rags
         int error = ads_reserve(loadee, regions[i].reservation_vstart, regions[i].reservation_pages, MO_PAGE_BITS,
                                 type, regions[i].cacheable, regions[i].rights, &regions[i].reservation);
 

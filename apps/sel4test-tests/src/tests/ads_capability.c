@@ -343,7 +343,6 @@ int test_ads_stack_isolated_stack_die(env_t env)
 DEFINE_TEST(GPIADS002, "Ensure that thread stack works", test_ads_stack_isolated_stack_die, true)
 #endif
 
-// (XXX) Arya: This was commented out before, not sure what it is for
 #if 0
 #include <time.h>
 typedef uint64_t timestamp_t;

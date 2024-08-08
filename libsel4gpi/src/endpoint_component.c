@@ -133,6 +133,31 @@ err_goto:
     reply_msg->errorCode = error;
 }
 
+static void handle_ep_disconnect(seL4_Word sender_badge, EpDisconnectMessage *msg, EpReturnMessage *reply_msg)
+{
+    int error = 0;
+    OSDB_PRINTF("Get disconnect endpoint request from: ");
+    BADGE_PRINT(sender_badge);
+
+    gpi_obj_id_t ep_id = get_object_id_from_badge(sender_badge);
+    gpi_obj_id_t client_id = get_object_id_from_badge(sender_badge);
+
+    /* Find the PD */
+    pd_component_registry_entry_t *pd_data =
+        pd_component_registry_get_entry_by_id(get_client_id_from_badge(sender_badge));
+    SERVER_GOTO_IF_COND(pd_data == NULL, "Couldn't find PD (%u)\n", client_id);
+
+    /* Remove the EP from the client PD */
+    error = pd_remove_resource(&pd_data->pd, make_res_id(GPICAP_TYPE_EP, get_ep_component()->space_id, ep_id));
+    SERVER_GOTO_IF_ERR(error, "Failed to remove endpoint (%u) from PD %u\n", ep_id, pd_data->pd.id);
+
+    // This will reduce the refcount of the EP, and then it will be deleted if necessary
+
+err_goto:
+    reply_msg->which_msg = EpReturnMessage_get_tag;
+    reply_msg->errorCode = error;
+}
+
 static void handle_get_raw_endpoint(seL4_Word sender_badge, EpGetMessage *msg, EpReturnMessage *reply_msg)
 {
     int error = 0;
@@ -223,6 +248,9 @@ static void ep_component_handle(void *msg_p,
     {
     case EpMessage_alloc_tag:
         handle_ep_allocation(sender_badge, &msg->msg.alloc, reply_msg);
+        break;
+    case EpMessage_disconnect_tag:
+        handle_ep_disconnect(sender_badge, &msg->msg.disconnect, reply_msg);
         break;
     case EpMessage_get_tag:
         handle_get_raw_endpoint(sender_badge, &msg->msg.get, reply_msg);

@@ -412,7 +412,7 @@ int kvstore_server_start_thread(seL4_CPtr *kvstore_ep)
     sel4gpi_config_destroy(cfg);
 
     // (XXX) Arya: should clean up the temporary EP here
-    // At least, it will be freed when the PD termiantes
+    // At least, it will be freed when the PD terminates
 
 err_goto:
     return error;

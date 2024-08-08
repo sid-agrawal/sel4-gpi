@@ -17,12 +17,17 @@ message EpForgeMessage {
    /* No content */
 };
 
+message EpDisconnectMessage {
+   /* No content */
+};
+
 message EpMessage {
     uint64 magic = 100;
     oneof msg {
         EpAllocMessage alloc = 1;
         EpGetMessage get = 2;
         EpForgeMessage forge = 3;
+        EpDisconnectMessage disconnect = 4;
     }
 };
 

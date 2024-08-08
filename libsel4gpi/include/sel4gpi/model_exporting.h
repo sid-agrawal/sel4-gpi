@@ -49,8 +49,6 @@ typedef struct _gpi_model_node
 
 typedef struct
 {
-    // (XXX) Arya: Include namespace here?
-
     gpi_edge_type_t type;           ///< Type of edge
     gpi_cap_t req_type;             ///< For request edges only, type of resource requested
     char from[CSV_MAX_STRING_SIZE]; ///< Name of the 'from' node

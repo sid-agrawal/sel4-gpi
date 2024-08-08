@@ -24,7 +24,6 @@ typedef struct _resource_registry_node
 {
     uint64_t object_id; ///< Unique ID within the registry
                         ///< The size is uint64_t since the registry *may* contain a non-gpi-object-ID
-                        ///< (XXX) Arya: should probably make sure the registry is only used with gpi object IDs
     uint32_t count;     ///< Reference count to this node
 
     UT_hash_handle hh;

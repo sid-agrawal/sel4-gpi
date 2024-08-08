@@ -49,6 +49,26 @@ int ep_component_client_connect(seL4_CPtr server_ep_cap, ep_client_context_t *re
     return error;
 }
 
+int ep_component_client_disconnect(ep_client_context_t *conn)
+{
+    OSDB_PRINTF("Sending connect request to endpoint component\n");
+
+    int error = 0;
+
+    EpMessage msg = {
+        .magic = EP_RPC_MAGIC,
+        .which_msg = EpMessage_disconnect_tag,
+    };
+
+    EpReturnMessage ret_msg = {0};
+
+    error = sel4gpi_rpc_call(&rpc_env, conn->ep, (void *)&msg,
+                             0, NULL, (void *)&ret_msg);
+    error |= ret_msg.errorCode;
+
+    return error;
+}
+
 static int get_raw_endpoint(ep_client_context_t *ep_conn, pd_client_context_t *target_PD, seL4_CPtr *raw_endpoint)
 {
     OSDB_PRINTF("Sending 'get raw endpoint' request to endpoint component\n");

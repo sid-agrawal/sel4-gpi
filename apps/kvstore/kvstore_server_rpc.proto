@@ -2,7 +2,7 @@ syntax = "proto3";
 
 enum KvstoreError {
     NONE = 0;                    /* no error */
-    UNKNOWN = 11;                /* (XXX) Arya: Manually set to the seL4_NumErrors */
+    UNKNOWN = 11;                /* Manually set to the seL4_NumErrors */
     KEY = 12;                    /* invalid key for kvstore */
 };
 

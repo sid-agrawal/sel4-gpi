@@ -61,7 +61,7 @@ static void on_attach_registry_delete(resource_registry_node_t *node_gen, void *
     if (node->mo_attached)
     {
         // Unmap the pages
-        // (XXX) Arya: I believe we want VSPACE_PRESERVE here
+        // We want VSPACE_PRESERVE here
         // Otherwise, sel4utils will attempt to free the frame caps and their corresponding untyped
         // Which we do not want, since the MO continues to exist
         sel4utils_unmap_pages(ads->vspace, node->vaddr + node->mo_offset,
@@ -578,9 +578,7 @@ gpi_model_node_t *ads_dump_rr(ads_t *ads, model_state_t *ms, gpi_model_node_t *p
         {
             /* Add the VMR node */
             // VMR is sometimes an implicit resource (eg. MO attached without reservation)
-            // (XXX) Linh: we are casting the vaddr to a 4-byte int, which may not be enough bytes to display it
-            //             we could increase the CSV string size to fit 8-byte object IDs
-            // (XXX) Arya: I am using attach ID instead of vaddr as the object ID now to avoid this issue
+            // We use the VMR's object ID (max 20 bits long) instead of vaddr
             gpi_model_node_t *vmr_node = add_resource_node(
                 ms,
                 make_res_id(GPICAP_TYPE_VMR, ads->id, (gpi_obj_id_t)res->map_entry->gen.object_id),
@@ -752,7 +750,6 @@ err_goto:
 void ads_destroy(ads_t *ads)
 {
     /* Destroy the hash tables of attach nodes */
-    // (XXX) Arya: This can trigger sys_munmap which is not supported
     resource_registry_node_t *current, *tmp;
     HASH_ITER(hh, ads->attach_registry.head, current, tmp)
     {
@@ -761,15 +758,6 @@ void ads_destroy(ads_t *ads)
     }
 
     /* tear down the vspace */
-
-    /**
-     * (XXX) Arya:
-     * If VKA is VSPACE_FREE instead of VSPACE_PRESERVE
-     * this will also free the forged MO regions like ELF region
-     *
-     * VSPACE_FREE does not currently work, it seems that some freed frame
-     * has another cap to it and causes the VKA to break
-     */
     vspace_tear_down(ads->vspace, VSPACE_FREE);
 
     /**

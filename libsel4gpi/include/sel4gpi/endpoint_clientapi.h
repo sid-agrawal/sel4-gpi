@@ -45,6 +45,14 @@ typedef struct _ep_client_context
 int ep_component_client_connect(seL4_CPtr server_ep_cap, ep_client_context_t *ret_conn);
 
 /**
+ * @brief Remove an endpoint resource from this PD
+ *
+ * @param conn EP connection object
+ * @return int 0 on success, 1 on failure.
+ */
+int ep_component_client_disconnect(ep_client_context_t *conn);
+
+/**
  * @brief Retrieves the raw, underlying endpoint of an endpoint context in the CSpace of the given target PD.
  *
  * @param target_PD the target PD to get the EP slot from

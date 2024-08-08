@@ -37,7 +37,7 @@ typedef struct _kvstore_server_context
     // Generic resource server context
     resource_server_context_t gen;
 
-    // (XXX) Arya: KVstore server currently only supports one kvstore]
+    // (XXX) Arya: KVstore server currently only supports one kvstore
     gpi_obj_id_t kvstore_obj_id;
     char db_filename[128]; ///< Name of the file storing the database
 } kvstore_server_context_t;

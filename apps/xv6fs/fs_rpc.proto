@@ -3,7 +3,7 @@ import 'nanopb.proto';
 
 enum FsError {
     NONE = 0;                    /* no error */
-    UNKNOWN = 11;                /* (XXX) Arya: Manually set to the seL4_NumErrors */
+    UNKNOWN = 11;                /* Manually set to the seL4_NumErrors */
     BADGE = 12;                  /* invalid badge provided */
     NO_FILE = 13;                /* the file does not exist */
     NO_NS = 14;                  /* the namespace does not exist */

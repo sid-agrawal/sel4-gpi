@@ -162,7 +162,6 @@ int cpu_component_configure(cpu_t *cpu,
                               ipc_buf_addr);
 
     /* Set the bound notification */
-    // (XXX) Arya: I'm not sure where this should go
     error = cpu_bind_notif(cpu, pd->notification.cptr);
     SERVER_GOTO_IF_ERR(error, "Failed to configure vspace for CPU (%u)\n", cpu->id);
 

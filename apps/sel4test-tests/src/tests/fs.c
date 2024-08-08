@@ -248,7 +248,7 @@ int test_fs(env_t env)
     test_assert(error == 0);
 
     error = close(f);
-    test_assert(error == 0); // (XXX) Arya: Note we cannot close the original file until it is linked
+    test_assert(error == 0); 
 
     f = open(TEST_FNAME_3, O_RDWR);
     test_assert(f > 0);

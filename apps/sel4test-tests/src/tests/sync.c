@@ -207,5 +207,5 @@ int test_mutex(env_t env)
     return sel4test_get_result();
 }
 
-// (XXX) Arya: This test doesn't work because it uses vka
+// This test doesn't work because it uses vka
 DEFINE_TEST_OSM(GPISYNC001, "Test a simple mutex", test_mutex, false)

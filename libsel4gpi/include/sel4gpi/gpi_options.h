@@ -28,7 +28,6 @@
  *  Any PDs with RDEs for the deleted resource space will have the RDE removed.
  *
  * CLEANUP_RESOURCE_SPACES_RECURSIVE: resource_space_depth -1, pd_depth 0
- *  (XXX) Arya: Not implemented
  *  Performs the same steps as PD_CLEANUP_MINIMAL, except it also recursively deletes any resources that mapped
  *  to other deleted resources.
  *

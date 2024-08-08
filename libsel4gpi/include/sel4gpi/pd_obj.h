@@ -66,19 +66,12 @@ typedef union rde_type
 // Tracks a request edge from a PD
 typedef struct osmosis_rde
 {
-    // The slot of the RDE cap as per seL4
-    seL4_Word slot_in_RT;
-    seL4_Word slot_in_PD;
+    seL4_Word slot_in_RT; ///< The raw capability this RDE is badged from
+                          ///< (XXX) Arya: I think we can remove this field
+    seL4_Word slot_in_PD; ///< Used to revoke RDE
 
-    /*
-        I think that type+id should be all we need
-        to find out when OSM resources are shared.
-        But let's keep track of slot_in* (above) for now.
-    */
-
-    /* RDE is for a particular resource space */
-    rde_type_t type; // (XXX) Arya: This may be redundant given the space id
-    gpi_space_id_t space_id;
+    rde_type_t type;         ///< RDE is for a particular resource type
+    gpi_space_id_t space_id; ///< And a particular resource space
 } osmosis_rde_t;
 
 // Tracks a resource that a PD holds
@@ -108,9 +101,9 @@ typedef struct _pd_link_node
  */
 typedef struct _osm_pd_shared_data
 {
-    pd_client_context_t pd_conn;   ///< Connection to the PD's own PD resource
-    ads_client_context_t ads_conn; ///< Connection to the PD's own ADS resource
-    cpu_client_context_t cpu_conn; ///< Connection to the PD's own CPU resource
+    pd_client_context_t pd_conn;       ///< Connection to the PD's own PD resource
+    ads_client_context_t ads_conn;     ///< Connection to the PD's own ADS resource
+    cpu_client_context_t cpu_conn;     ///< Connection to the PD's own CPU resource
     ep_client_context_t fault_ep_conn; ///< Endpoint to PD's fault handler
 
     seL4_CPtr cspace_root; ///< PD's cspace
@@ -119,10 +112,10 @@ typedef struct _osm_pd_shared_data
     osmosis_rde_t rde[GPICAP_TYPE_MAX][MAX_NS_PER_RDE];              ///< Resource directory
     uint64_t rde_count;
 
-    seL4_CPtr reply_cap;            ///< For resource servers, store the reply cap of the
-                                    ///< request that is currently being processed
-    char test_name[TEST_NAME_MAX];  ///< For a test process, the name of the test to run
-                                    ///< (XXX) Arya: Placed here for convenience, ideally would be in a separate frame
+    seL4_CPtr reply_cap;           ///< For resource servers, store the reply cap of the
+                                   ///< request that is currently being processed
+    char test_name[TEST_NAME_MAX]; ///< For a test process, the name of the test to run
+                                   ///< (XXX) Arya: Placed here for convenience, ideally would be in a separate frame
 } osm_pd_shared_data_t;
 
 typedef struct _pd
@@ -374,9 +367,7 @@ int pd_remove_rde(pd_t *pd,
                   gpi_space_id_t space_id);
 
 /**
- * Gets the entry of the PD's RDE corresponding
- * to the type and space id
- * (XXX) Arya: Maybe poor design that we need this at all
+ * Gets the entry of the PD's RDE corresponding to the type and space id
  *
  * @param pd the target PD
  * @param type The RDE type

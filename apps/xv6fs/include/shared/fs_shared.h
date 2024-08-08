@@ -7,7 +7,7 @@
 /* General file system configuration */
 #define FILE_RESOURCE_TYPE_NAME "FILE"
 #define FS_RPC_MAGIC 0x4653
-#define FS_DEBUG_ENABLED 0 // (XXX) Arya: Migrate to the GPI debug setting
+#define FS_DEBUG_ENABLED 0
 /* (XXX) Arya: Make size configurable, currently just allows 2 FS per ramdisk */
 #define FS_SIZE (RAMDISK_SIZE_BYTES / RAMDISK_BLOCK_SIZE) / 2 // Size of file system in blocks
 #define BSIZE RAMDISK_BLOCK_SIZE                              // Block size in bytes

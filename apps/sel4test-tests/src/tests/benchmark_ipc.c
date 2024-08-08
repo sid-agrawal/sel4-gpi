@@ -104,7 +104,6 @@ static int internal_benchmark_nanopb_ipc(env_t env, int n_iters, int long_msg, s
         }
 
         SEL4BENCH_READ_CCNT(call_start);
-        // (XXX) Arya: does not do cap transfer at the moment
         error = sel4rpc_call_with_caps(&env->rpc_client, &rpcMsg, 0, 0, 0, caps, n_caps);
         SEL4BENCH_READ_CCNT(call_end);
         test_error_eq(error, 0);
@@ -377,19 +376,6 @@ int benchmark_nanopb_ipc_cap_2_unwrapped_long(env_t env)
     seL4_CPtr caps[3] = {env->cspace_root, badged_ep_1, badged_ep_2};
     return internal_benchmark_nanopb_ipc(env, 1, 0, caps, 3);
 }
-
-// (XXX) Arya: TODO test many IPC in a row
-#if 0
-int benchmark_many_regular_ipc(env_t env)
-{
-    return internal_benchmark_regular_ipc(env, 50, 0, NULL, 0);
-}
-
-int benchmark_many_nanopb_ipc(env_t env)
-{
-    return internal_benchmark_nanopb_ipc(env, 50, 0, NULL, 0);
-}
-#endif
 
 #ifdef GPI_BENCHMARK_MULTIPLE
 DEFINE_TEST_WITH_TYPE_MULTIPLE(GPIBM100,

@@ -50,7 +50,7 @@
         if ((check) != seL4_NoError)           \
         {                                      \
             ZF_LOGE(RAMDISK_S "%s: %s"         \
-                              ", %d.",         \
+                              ", %d.\n",         \
                     __func__,                  \
                     msg,                       \
                     check);                    \
@@ -275,6 +275,7 @@ void ramdisk_request_handler(
             CHECK_ERROR_GOTO(error, "Failed to attach MO", error, done);
 
             get_ramdisk_server()->shared_mem[client_id] = mo_vaddr;
+            get_ramdisk_server()->shared_mem_caps[client_id] = cap;
 
             // RAMDISK_PRINTF("Can access vaddr %p, val 0x%x\n", mo_vaddr, *((int *)mo_vaddr));
             break;
@@ -286,8 +287,11 @@ void ramdisk_request_handler(
 
             error = resource_server_unattach(&get_ramdisk_server()->gen, mo_vaddr);
             CHECK_ERROR_GOTO(error, "Failed to unattach MO", error, done);
+            get_ramdisk_server()->shared_mem[client_id] = NULL;
 
-            // (XXX) Arya: Free the cap as well
+            error = pd_client_free_slot(&get_ramdisk_server()->gen.pd_conn, 
+            get_ramdisk_server()->shared_mem_caps[client_id]);
+            CHECK_ERROR_GOTO(error, "Failed to free cap during unbind", error, done);
             break;
         case RamdiskAction_ALLOC:
             // Assign a new block to this ep

@@ -91,7 +91,7 @@ int pd_add_resource_by_id(gpi_obj_id_t pd_id,
 #if TRACK_MAP_RELATIONS
 /***
  * Map one resource to another
- * (XXX) Arya: At the moment this does nothing but check that the mapping is valid
+ * At the moment this does nothing but check that the mapping is valid
  *
  * @param client_pd_id ID of the PD that is requesting the mapping
  * @param src_res_id the universal ID of the source resource
@@ -226,6 +226,7 @@ int pd_component_terminate(gpi_obj_id_t pd_id);
 
 /**
  * Create a special endpoint for benchmark IPC to root task
+ * (XXX) Arya: Currently unused, we are using the sel4rpc for benchmarking IPC
  */
 seL4_CPtr pd_component_create_ipc_bench_ep(void);
 

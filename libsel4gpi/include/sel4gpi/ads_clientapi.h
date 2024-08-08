@@ -84,7 +84,7 @@ int ads_client_attach_to_reserve(ads_vmr_context_t *reservation,
  * @brief
  * Remove a memory region from the ads.
  * Removes the entire reservation starting at the provided vaddr.
- * (XXX) Arya: This operation is really VMR delete
+ * This operation is, in effect, a VMR delete.
  *
  * @param conn the VMR RDE connection
  * @param vaddr virtual address to remove

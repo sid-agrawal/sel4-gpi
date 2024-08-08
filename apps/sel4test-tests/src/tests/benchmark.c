@@ -47,8 +47,6 @@
 
 static size_t cspace_size_bits = 17;
 
-// (XXX) Arya: Is it ok to include test_error_eq in the timings?
-
 void benchmark_init(env_t env)
 {
     sel4bench_init();
@@ -284,7 +282,7 @@ static int benchmark_pd_spawn_osm(pd_client_context_t *pd, seL4_CPtr *ep)
     TEST_LOG("\nPD SPAWN");
     SEL4BENCH_READ_CCNT(pd_create_start_time);
 
-    // (XXX) Arya: Don't include EP creation in timing for consistency with spawn_pd_sel4utils
+    // Don't include EP creation in timing for consistency with spawn_pd_sel4utils
     ep_client_context_t hello_ep;
     int error = ep_component_client_connect(sel4gpi_get_rde(GPICAP_TYPE_EP), &hello_ep);
     test_error_eq(error, 0);
@@ -921,13 +919,6 @@ int benchmark_basic_sel4utils(env_t env)
     error = benchmark_frame_free_sel4utils(env, &ipc_frame);
     test_error_eq(error, 0);
 
-    // (XXX) Arya: the deletion order is different for sel4utils vs osm
-    // For sel4utils it is CPU first, because the TCB needs to be deleted first, as it has copies of the other caps
-    // For OSmosis it is PD first, so that the refcounts of ADS/CPU will not reach zero,
-    // and we can delete them independently
-
-    // (XXX) Arya: need to revisit this, the tcb might be the last copy of these caps, maybe PD always first
-
     // PD delete
     error = benchmark_pd_delete_sel4utils(env, &cspace, &cspace_obj);
     test_error_eq(error, 0);
@@ -1141,7 +1132,6 @@ static int internal_benchmark_cleanup_toy_servers(env_t env, hello_cleanup_mode_
     error = pd_client_remove_rde(&pd_conn, toy_db_type, BADGE_SPACE_ID_NULL);
     test_assert(error == 0);
 
-    // (XXX) Arya: whether or not to wait should be another option
     /* Wait for clients to finish making requests */
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0, 0);
     for (int i = 0; i < 4; i++)
@@ -1252,8 +1242,7 @@ static int internal_benchmark_cleanup(env_t env, cleanup_scenario_server_t serve
     /* Start the PDs */
     pd_client_context_t ramdisk_pd, fs_pd, kvstore_server_pd, kvstore_client_pd;
 
-    // (XXX) Arya: Not implemented
-    assert(0);
+    assert(!"Not implemented");
 
     /* Remove RDEs from test process so that it won't be cleaned up by recursive cleanup */
     gpi_cap_t block_type = sel4gpi_get_resource_type_code(BLOCK_RESOURCE_TYPE_NAME);
@@ -1266,7 +1255,6 @@ static int internal_benchmark_cleanup(env_t env, cleanup_scenario_server_t serve
     error = pd_client_remove_rde(&pd_conn, file_type, BADGE_SPACE_ID_NULL);
     test_assert(error == 0);
 
-    // (XXX) Arya: whether or not to wait should be another option
     /* Wait for clients to finish making requests */
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0, 0);
     for (int i = 0; i < 4; i++)

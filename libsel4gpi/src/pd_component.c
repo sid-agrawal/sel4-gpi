@@ -478,8 +478,7 @@ static void handle_give_resource_req(seL4_Word sender_badge, PdGiveResourceMessa
     reply_msg->msg.give_resource.slot = dest;
 
     // Add the resource to the PD object
-    // (XXX) Arya: How to handle duplicate entries to the same resource?
-    // The hash table is keyed by resource ID
+    // The hash table is keyed by resource ID, and tracks duplicate entries vis refcount
     error = pd_add_resource(&recipient_data->pd,
                             make_res_id(resource_space_data->space.resource_type, space_id, resource_id),
                             seL4_CapNull, dest, seL4_CapNull);
@@ -734,7 +733,6 @@ static void handle_share_resource_type_req(seL4_Word sender_badge,
     // (XXX) Linh: currently only allow MOs to be bulk shared with another PD,
     //             a use-case for sharing other RT resource types is unclear
     SERVER_GOTO_IF_COND(res_type != GPICAP_TYPE_MO && res_type < GPICAP_TYPE_seL4,
-                        // (XXX) Arya: how to check for non-core resources?
                         "Sharing of resource type %s not permitted.\n",
                         cap_type_to_str(res_type));
 

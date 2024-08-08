@@ -114,9 +114,11 @@ xv6fs_client_context_t *fd_get(int fd)
 
 void fd_close(int fd)
 {
+  int error = 0;
+
   if (fd >= 0 && fd < FD_TABLE_SIZE)
   {
-    // (XXX) Arya: free the ep
+    // No need to free the old cap, it will be revoked by the file system
     fd_table[fd] = xv6fs_null_client_context;
   }
 }
@@ -699,7 +701,7 @@ static int xv6fs_libc_geteuid(void)
   XV6FS_PRINTF("xv6fs_libc_geteuid\n");
 
   // Do nothing
-  
+
   return 1;
 }
 
@@ -1027,7 +1029,7 @@ xv6fs_client_init(void)
   /* No-ops */
   muslcsys_install_syscall(__NR_fsync, xv6fs_muslcsys_fsync);
   muslcsys_install_syscall(__NR_fchmod, xv6fs_muslcsys_fchmod);
-  //muslcsys_install_syscall(__NR_chown, xv6fs_muslcsys_chown);
+  // muslcsys_install_syscall(__NR_chown, xv6fs_muslcsys_chown);
   muslcsys_install_syscall(__NR_geteuid, xv6fs_muslcsys_geteuid);
 
   return error;

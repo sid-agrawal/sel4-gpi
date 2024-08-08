@@ -135,7 +135,7 @@ static void file_registry_entry_on_delete(resource_registry_node_t *node_gen, vo
   {
     fs_namespace_entry_t *node = (fs_namespace_entry_t *)curr;
 
-    // (XXX) Arya: We do not track whether or not files exist in a namespace, so we just try deleting from all
+    // We do not track whether or not files exist in a namespace, so we just try deleting from all
     error = resspc_client_delete_resource(&node->res_space_conn, inum);
     CHECK_ERROR_GOTO(error, "Failed to delete file resource in namespace", FsError_UNKNOWN, err_goto);
   }
@@ -186,7 +186,7 @@ static int destroy_ns(gpi_space_id_t ns_id, bool notify_rt)
 {
   int error = 0;
 
-  // (XXX) Arya: Namespaces are a bit janky at the moment, we don't actually have resources within them,
+  // Namespaces are a bit janky at the moment, we don't actually have resources within them,
   // but just delete the corresponding directory
 
   // Find the namespace from the registry
@@ -416,7 +416,7 @@ void xv6fs_request_handler(void *msg_p,
         filedup(file);
       }
 
-      // (XXX) Arya: Some weirdness due to having namespaces of files instead of file objects
+      // Some weirdness due to having namespaces of files instead of file objects
       // Always create the resource, since it may not already exist within the namespace,
       // even if it exists in another namespace
 
@@ -706,7 +706,7 @@ void disk_rw(struct buf *b, int write)
 }
 
 /* Notifies the component when a new block is assigned to a file */
-// (XXX) Arya: what about releasing?
+// (XXX) Arya: If we used this, we would need to track unmapping as well
 void map_file_to_block(uint32_t file_id, uint32_t blockno)
 {
 #if TRACK_MAP_RELATIONS
@@ -805,14 +805,16 @@ int xv6fs_work_handler(PdWorkReturnMessage *work)
 
       /* Add nodes for all files and blocks */
       gpi_cap_t block_cap_type = sel4gpi_get_resource_type_code(BLOCK_RESOURCE_TYPE_NAME);
-      gpi_space_id_t block_space_id = get_xv6fs_server()->blocks[0].space_id; // (XXX) Arya: Assume only one block space
-      int n_blocknos = 100;                                                   // (XXX) Arya: assumes there are no more than 100 blocks per file
+      // (XXX) Arya: Assume only one block space
+      gpi_space_id_t block_space_id = get_xv6fs_server()->blocks[0].space_id;
+      int n_blocknos = 100;
+      // (XXX) Arya: assumes there are no more than 100 blocks per file
       int *blocknos = malloc(sizeof(int) * n_blocknos);
       for (int i = 0; i < n_files; i++)
       {
         XV6FS_PRINTF("Get RR for fileno %u\n", inums[i]);
 
-// (XXX) Arya: we have to add all file resource nodes here, because the files may be closed,
+// We have to add all file resource nodes here, because the files may be closed,
 // so the root task wouldn't add them
 
 /* Add the file resource node */

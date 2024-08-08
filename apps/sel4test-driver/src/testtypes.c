@@ -307,8 +307,6 @@ void basic_set_up(uintptr_t e)
     env->endpoint_in_test = sel4utils_copy_cap_to_process(&(env->test_process), &env->vka, env->test_process.fault_endpoint.cptr);
 
     /* get the benchmark IPC endpoint */
-    // (XXX) Arya: This used to communicate with GPI server, but now we do not start it for basic tests
-    // env->bench_endpoint_in_driver = pd_component_create_ipc_bench_ep();
     env->bench_endpoint_in_driver = env->test_process.fault_endpoint.cptr;
     env->bench_endpoint_in_test = sel4utils_copy_cap_to_process(&(env->test_process), &env->vka, env->bench_endpoint_in_driver);
 

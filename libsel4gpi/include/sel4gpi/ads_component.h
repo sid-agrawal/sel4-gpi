@@ -118,7 +118,6 @@ int ads_component_allocate(gpi_obj_id_t client_id, ads_t **ret_ads, seL4_CPtr *r
  *
  * @param ads the ADS to load the ELF into
  * @param target_pd the target PD that will be using this ADS
- *  (XXX) Arya: we may be able to remove this parameter
  * @param image_name the name of the image to load, must be in the cpio archive
  * @param entry_point returns the vaddr of the entry point in the ADS
  */

@@ -109,8 +109,9 @@ int start_resource_server_pd_args(gpi_cap_t rde_type,
     }
 
     // Cleanup temporary endpoint
-    // (XXX) Arya: why does this free cause future allocs to break?
-    // vka_free_object(vka, &ep_object);
+    error = ep_component_client_disconnect(&ep_conn);
+    CHECK_ERROR(error, "failed to delete temporary endpoint");
+
     sel4gpi_config_destroy(cfg);
 
     return 0;

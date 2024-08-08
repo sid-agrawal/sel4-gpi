@@ -77,6 +77,6 @@ int test_vmm_osm(env_t env)
     return sel4test_get_result();
 }
 
-// (XXX) Arya: Disable these because they are WIP
+// Disable these because they are WIP
 DEFINE_TEST(GPIVM001, "Test VMM that starts one Linux guest (native)", test_vmm_native, false)
 DEFINE_TEST_OSM(GPIVM002, "Test VMM that starts one Linux guest (osm)", test_vmm_osm, false)

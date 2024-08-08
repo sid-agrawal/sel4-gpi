@@ -152,7 +152,6 @@ int resource_component_allocate(resource_component_context_t *component,
         OSDB_PRINTF("Made badged EP for resource space\n");
     }
 
-    // (XXX) Arya:
     // Can't add a resource space resource to the root task since the PD component may not be initialized
     // These hold edges (from root task to core component resource spaces) will be reflected at extraction time
     if (!(client_id == get_gpi_server()->rt_pd_id && component->resource_type == GPICAP_TYPE_RESSPC))

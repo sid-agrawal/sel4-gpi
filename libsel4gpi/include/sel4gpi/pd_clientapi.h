@@ -39,9 +39,7 @@ int pd_component_client_connect(seL4_CPtr server_ep_cap,
  * @brief   Disconnect the pd client.
  * Destroys all internal metadata associated with the PD.
  * Kills the PD and executes the default cleanup policy.
- *
- * (XXX) Arya: Should this immediately delete the PD, or just decrement refcount?
- *
+ * *
  * @param conn
  * @return int 0 on success, -1 on failure.
  */
@@ -165,7 +163,6 @@ int pd_client_clear_slot(pd_client_context_t *conn,
  * To be called by a resource server when it allocates
  * a resource to another PD
  *
- * (XXX) Arya: Replace space/resource id with compact_res_id
  * @param conn the resource server's pd connection
  * @param res_space_id the resource space ID
  * @param recipient_id the recipient PD's ID
@@ -183,7 +180,6 @@ int pd_client_give_resource(pd_client_context_t *conn,
  * To be called by a resource server when it maps a resource to another resource
  * The server must be the managing PD of the source resource's resource space
  * The source resource's resource space must map to the destination resource's space
- * (XXX) Arya: WIP
  *
  * @param conn the resource server's pd connection
  * @param src_res_id the universal ID of the source resource (compact_res_id)
