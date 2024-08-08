@@ -4,6 +4,7 @@
 #include <stdarg.h>
 #include <fcntl.h>
 #include <errno.h>
+#include <sys/stat.h>
 
 #include <sel4/sel4.h>
 #include <sel4utils/process.h>
@@ -17,9 +18,9 @@
 #include <sel4gpi/gpi_rpc.h>
 #include <fs_rpc.pb.h>
 
-#include <libc_fs_helpers.h>
 #include <fs_shared.h>
 #include <fs_client.h>
+#include <muslcsys/vsyscall.h>
 
 #define FD_TABLE_SIZE 32
 #define FS_APP "fs_server"
@@ -121,7 +122,6 @@ void fd_close(int fd)
 }
 
 /* FS Client */
-static void init_global_libc_fs_ops(void);
 
 /* This must be publically accessible, for SpaceJMP example */
 global_xv6fs_client_context_t xv6fs_client;
@@ -140,48 +140,6 @@ int start_xv6fs_pd(gpi_space_id_t rd_id,
   CHECK_ERROR(error, "failed to start file resource server\n");
   XV6FS_PRINTF("Successfully started file system server\n");
   return 0;
-}
-
-seL4_Error
-xv6fs_client_init(void)
-{
-  XV6FS_PRINTF("Initializing client of FS server\n");
-
-  // Do not re-initialize
-  if (get_xv6fs_client()->shared_mem_vaddr != NULL)
-  {
-    return 0;
-  }
-
-  int error;
-
-  get_xv6fs_client()->file_cap_type = sel4gpi_get_resource_type_code(FILE_RESOURCE_TYPE_NAME);
-  xv6fs_client_set_namespace(BADGE_SPACE_ID_NULL);
-
-  /* Allocate the shared memory object */
-  get_xv6fs_client()->shared_mem = malloc(sizeof(mo_client_context_t));
-
-  error = mo_component_client_connect(sel4gpi_get_rde(GPICAP_TYPE_MO),
-                                      1,
-                                      MO_PAGE_BITS,
-                                      get_xv6fs_client()->shared_mem);
-  CHECK_ERROR(error, "failed to allocate shared mem page");
-
-  ads_client_context_t vmr_rde = {.ep = sel4gpi_get_rde_by_space_id(sel4gpi_get_binded_ads_id(), GPICAP_TYPE_VMR)};
-  error = ads_client_attach(&vmr_rde,
-                            NULL,
-                            get_xv6fs_client()->shared_mem,
-                            SEL4UTILS_RES_TYPE_SHARED_FRAMES,
-                            &get_xv6fs_client()->shared_mem_vaddr);
-  CHECK_ERROR(error, "failed to map shared mem page for fs client");
-
-  /* Setup local FD data structure */
-  fd_init();
-
-  /* Override libc fs ops */
-  init_global_libc_fs_ops();
-
-  return error;
 }
 
 int xv6fs_client_set_namespace(gpi_space_id_t ns_id)
@@ -428,7 +386,7 @@ static int xv6fs_libc_write(int fd, const void *buf, int count)
 static int xv6fs_libc_close(int fd)
 {
   XV6FS_PRINTF("xv6fs_libc_close fd %d\n", fd);
-  
+
   int error = 0;
 
   // Check for /dev/null
@@ -553,8 +511,7 @@ int xv6fs_libc_stat(const char *pathname, struct stat *buf)
   if (fd == -1)
   {
     XV6FS_PRINTF("xv6fs_libc_stat returning -1, file does not exist\n");
-    errno = ENOENT;
-    return -1;
+    return -ENOENT;
   }
 
   int error = xv6fs_libc_fstat(fd, buf);
@@ -691,21 +648,59 @@ static int xv6fs_libc_access(const char *pathname, int amode)
   return fd != -1;
 }
 
-static void init_global_libc_fs_ops(void)
+static int xv6fs_libc_faccessat(int dirfd, const char *filename, int amode, int flags)
 {
-  libc_fs_ops.open = xv6fs_libc_open;
-  libc_fs_ops.pread = xv6fs_libc_pread;
-  libc_fs_ops.read = xv6fs_libc_read;
-  libc_fs_ops.write = xv6fs_libc_write;
-  libc_fs_ops.close = xv6fs_libc_close;
-  libc_fs_ops.lseek = xv6fs_libc_lseek;
-  libc_fs_ops.stat = xv6fs_libc_stat;
-  libc_fs_ops.fstat = xv6fs_libc_fstat;
-  libc_fs_ops.getcwd = xv6fs_libc_getcwd;
-  libc_fs_ops.fcntl = xv6fs_libc_fcntl;
-  libc_fs_ops.unlink = xv6fs_libc_unlink;
-  libc_fs_ops.fcntl = xv6fs_libc_fcntl;
-  libc_fs_ops.access = xv6fs_libc_access;
+  XV6FS_PRINTF("xv6fs_libc_faccessat path %s, mode %d, flag %x\n", filename, mode, flags);
+
+  if (dirfd != AT_FDCWD)
+  {
+    ZF_LOGE("faccessat only supports relative path to the current working directory\n");
+    return -EINVAL;
+  }
+
+  if (flags != 0 && flags != AT_SYMLINK_NOFOLLOW)
+  {
+    ZF_LOGE("faccessat does not support flags 0x%x\n", flags);
+    return -EINVAL;
+  }
+
+  return xv6fs_libc_access(filename, amode);
+}
+
+static int xv6fs_libc_fsync(int fd)
+{
+  XV6FS_PRINTF("xv6fs_libc_fsync fd %d\n", fd);
+
+  // Do nothing
+
+  return 0;
+}
+
+static int xv6fs_libc_fchmod(int fd, mode_t mode)
+{
+  XV6FS_PRINTF("xv6fs_libc_fchmod fd %d mode %d\n", fd, mode);
+
+  // Do nothing
+
+  return 0;
+}
+
+static int xv6fs_libc_chown(const char *path, uid_t uid, gid_t gid)
+{
+  XV6FS_PRINTF("xv6fs_libc_chown path %s, uid %d, gid %d\n", path, uid, gid);
+
+  // Do nothing
+
+  return 0;
+}
+
+static int xv6fs_libc_geteuid(void)
+{
+  XV6FS_PRINTF("xv6fs_libc_geteuid\n");
+
+  // Do nothing
+  
+  return 1;
 }
 
 int xv6fs_client_new_ns(gpi_space_id_t *ns_id)
@@ -743,5 +738,297 @@ int xv6fs_client_delete_ns(seL4_CPtr ns_ep)
 
   int error = sel4gpi_rpc_call(&rpc_client, ns_ep, (void *)&msg, 0, NULL, (void *)&ret_msg);
   error |= ret_msg.errorCode;
+  return error;
+}
+
+/** ENTRY POINTS FOR MUSLC **/
+static long xv6fs_muslcsys_open(va_list ap)
+{
+  const char *pathname = va_arg(ap, const char *);
+  int flags = va_arg(ap, int);
+  mode_t mode = va_arg(ap, mode_t);
+
+  return xv6fs_libc_open(pathname, flags, mode);
+}
+
+static long xv6fs_muslcsys_openat(va_list ap)
+{
+  int dirfd = va_arg(ap, int);
+  const char *pathname = va_arg(ap, const char *);
+  int flags = va_arg(ap, int);
+  mode_t mode = va_arg(ap, mode_t);
+
+  if (dirfd != AT_FDCWD)
+  {
+    ZF_LOGE("Openat only supports relative path to the current working directory\n");
+    return -EINVAL;
+  }
+
+  return xv6fs_libc_open(pathname, flags, mode);
+}
+
+static long xv6fs_muslcsys_close(va_list ap)
+{
+  int fd = va_arg(ap, int);
+
+  return xv6fs_libc_close(fd);
+}
+
+/* Writev syscall implementation for muslc. Only implemented for stdin and stdout. */
+static long xv6fs_muslcsys_writev(va_list ap)
+{
+  ZF_LOGE("CellulOS FS does not support sys_writev\n");
+  return -1;
+}
+
+static long xv6fs_muslcsys_write(va_list ap)
+{
+
+  int fd = va_arg(ap, int);
+  void *buf = va_arg(ap, void *);
+  size_t count = va_arg(ap, size_t);
+
+  return xv6fs_libc_write(fd, buf, count);
+}
+
+static long xv6fs_muslcsys_readv(va_list ap)
+{
+  ZF_LOGE("CellulOS FS does not support sys_readv\n");
+  return -1;
+}
+
+static long xv6fs_muslcsys_read(va_list ap)
+{
+  int fd = va_arg(ap, int);
+  void *buf = va_arg(ap, void *);
+  size_t count = va_arg(ap, size_t);
+
+  return xv6fs_libc_read(fd, buf, count);
+}
+
+static long xv6fs_muslcsys_lseek(va_list ap)
+{
+  int fd = va_arg(ap, int);
+  off_t offset = va_arg(ap, off_t);
+  int whence = va_arg(ap, int);
+
+  return xv6fs_libc_lseek(fd, offset, whence);
+}
+
+static long xv6fs_muslcsys__llseek(va_list ap)
+{
+  ZF_LOGE("CellulOS FS does not support sys_llseek\n");
+  return -1;
+}
+
+static long xv6fs_muslcsys_access(va_list ap)
+{
+  const char *pathname = va_arg(ap, const char *);
+  int mode = va_arg(ap, int);
+
+  return xv6fs_libc_access(pathname, mode);
+}
+
+static long xv6fs_muslcsys_faccessat(va_list ap)
+{
+  int fd = va_arg(ap, int);
+  const char *pathname = va_arg(ap, const char *);
+  int mode = va_arg(ap, int);
+  int flags = va_arg(ap, int);
+
+  return xv6fs_libc_faccessat(fd, pathname, mode, flags);
+}
+
+static long xv6fs_muslcsys_stat(va_list ap)
+{
+  const char *path = va_arg(ap, const char *);
+  struct stat *buf = va_arg(ap, struct stat *);
+
+  return xv6fs_libc_stat(path, buf);
+}
+
+static long xv6fs_muslcsys_fstat(va_list ap)
+{
+  int fd = va_arg(ap, int);
+  struct stat *buf = va_arg(ap, struct stat *);
+
+  return xv6fs_libc_fstat(fd, buf);
+}
+
+static long xv6fs_muslcsys_fstatat(va_list ap)
+{
+  int dirfd = va_arg(ap, int);
+  char *path = va_arg(ap, char *);
+  struct stat *buf = va_arg(ap, struct stat *);
+  int flags = va_arg(ap, int);
+
+  if (dirfd != AT_FDCWD)
+  {
+    ZF_LOGE("Fstatat only supports relative path to the current working directory\n");
+    return -EINVAL;
+  }
+
+  if (flags != 0 && flags != AT_SYMLINK_NOFOLLOW)
+  {
+    ZF_LOGE("Fstatat does not support flags 0x%x\n", flags);
+    return -EINVAL;
+  }
+
+  return xv6fs_libc_stat(path, buf);
+}
+
+static long xv6fs_muslcsys_getcwd(va_list ap)
+{
+  char *buf = va_arg(ap, char *);
+  size_t size = va_arg(ap, size_t);
+
+  return xv6fs_libc_getcwd(buf, size) != NULL;
+}
+
+static long xv6fs_muslcsys_fcntl(va_list ap)
+{
+  int fd = va_arg(ap, int);
+  int cmd = va_arg(ap, int);
+  long arg = va_arg(ap, long);
+
+  return xv6fs_libc_fcntl(fd, cmd, arg);
+}
+
+static long xv6fs_muslcsys_unlink(va_list ap)
+{
+  const char *path = va_arg(ap, const char *);
+
+  return xv6fs_libc_unlink(path);
+}
+
+static long xv6fs_muslcsys_unlinkat(va_list ap)
+{
+  int dirfd = va_arg(ap, int);
+  const char *path = va_arg(ap, const char *);
+  int flags = va_arg(ap, int);
+
+  if (dirfd != AT_FDCWD)
+  {
+    ZF_LOGE("Unlinkat only supports relative path to the current working directory\n");
+    return -EINVAL;
+  }
+
+  if (flags != 0)
+  {
+    ZF_LOGE("Unlinkat does not support flags, but set to 0x%x\n", flags);
+    return -EINVAL;
+  }
+
+  return xv6fs_libc_unlink(path);
+}
+
+static long xv6fs_muslcsys_pread(va_list ap)
+{
+  int fd = va_arg(ap, int);
+  void *buf = va_arg(ap, void *);
+  size_t size = va_arg(ap, size_t);
+  off_t ofs = va_arg(ap, off_t);
+
+  return xv6fs_libc_pread(fd, buf, size, ofs);
+}
+
+static long xv6fs_muslcsys_fsync(va_list ap)
+{
+  int fd = va_arg(ap, int);
+
+  return xv6fs_libc_fsync(fd);
+}
+
+static long xv6fs_muslcsys_fchmod(va_list ap)
+{
+  int fd = va_arg(ap, int);
+  mode_t mode = va_arg(ap, mode_t);
+
+  return xv6fs_libc_fchmod(fd, mode);
+}
+
+static long xv6fs_muslcsys_chown(va_list ap)
+{
+  char *path = va_arg(ap, char *);
+  uid_t uid = va_arg(ap, uid_t);
+  gid_t gid = va_arg(ap, gid_t);
+
+  return xv6fs_libc_chown(path, uid, gid);
+}
+
+static long xv6fs_muslcsys_geteuid(va_list ap)
+{
+  return xv6fs_libc_geteuid();
+}
+
+seL4_Error
+xv6fs_client_init(void)
+{
+  XV6FS_PRINTF("Initializing client of FS server\n");
+
+  // Do not re-initialize
+  if (get_xv6fs_client()->shared_mem_vaddr != NULL)
+  {
+    return 0;
+  }
+
+  int error;
+
+  get_xv6fs_client()->file_cap_type = sel4gpi_get_resource_type_code(FILE_RESOURCE_TYPE_NAME);
+  xv6fs_client_set_namespace(BADGE_SPACE_ID_NULL);
+
+  /* Allocate the shared memory object */
+  get_xv6fs_client()->shared_mem = malloc(sizeof(mo_client_context_t));
+
+  error = mo_component_client_connect(sel4gpi_get_rde(GPICAP_TYPE_MO),
+                                      1,
+                                      MO_PAGE_BITS,
+                                      get_xv6fs_client()->shared_mem);
+  CHECK_ERROR(error, "failed to allocate shared mem page");
+
+  ads_client_context_t vmr_rde = {.ep = sel4gpi_get_rde_by_space_id(sel4gpi_get_binded_ads_id(), GPICAP_TYPE_VMR)};
+  error = ads_client_attach(&vmr_rde,
+                            NULL,
+                            get_xv6fs_client()->shared_mem,
+                            SEL4UTILS_RES_TYPE_SHARED_FRAMES,
+                            &get_xv6fs_client()->shared_mem_vaddr);
+  CHECK_ERROR(error, "failed to map shared mem page for fs client");
+
+  /* Setup local FD data structure */
+  fd_init();
+
+  /* Install the syscalls with sel4muslcsys */
+
+  /* Implemented functions */
+  muslcsys_install_syscall(__NR_write, xv6fs_muslcsys_write);
+#ifdef __NR_open
+  muslcsys_install_syscall(__NR_open, xv6fs_muslcsys_open);
+#endif
+#ifdef __NR_openat
+  muslcsys_install_syscall(__NR_openat, xv6fs_muslcsys_openat);
+#endif
+  muslcsys_install_syscall(__NR_close, xv6fs_muslcsys_close);
+  muslcsys_install_syscall(__NR_readv, xv6fs_muslcsys_readv);
+  muslcsys_install_syscall(__NR_read, xv6fs_muslcsys_read);
+#ifdef __NR_access
+  muslcsys_install_syscall(__NR_access, xv6fs_muslcsys_access);
+#endif
+#ifdef __NR_faccessat
+  muslcsys_install_syscall(__NR_faccessat, xv6fs_muslcsys_faccessat);
+#endif
+  muslcsys_install_syscall(__NR_fstatat, xv6fs_muslcsys_fstatat);
+  muslcsys_install_syscall(__NR_fstat, xv6fs_muslcsys_fstat);
+  muslcsys_install_syscall(__NR_getcwd, xv6fs_muslcsys_getcwd);
+  muslcsys_install_syscall(__NR_fcntl, xv6fs_muslcsys_fcntl);
+  muslcsys_install_syscall(__NR_unlinkat, xv6fs_muslcsys_unlinkat);
+  muslcsys_install_syscall(__NR_pread64, xv6fs_muslcsys_pread);
+  muslcsys_install_syscall(__NR_lseek, xv6fs_muslcsys_lseek);
+
+  /* No-ops */
+  muslcsys_install_syscall(__NR_fsync, xv6fs_muslcsys_fsync);
+  muslcsys_install_syscall(__NR_fchmod, xv6fs_muslcsys_fchmod);
+  //muslcsys_install_syscall(__NR_chown, xv6fs_muslcsys_chown);
+  muslcsys_install_syscall(__NR_geteuid, xv6fs_muslcsys_geteuid);
+
   return error;
 }

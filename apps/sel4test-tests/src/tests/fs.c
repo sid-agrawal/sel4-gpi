@@ -80,7 +80,9 @@ int test_fs(env_t env)
     int f = open(TEST_FNAME, O_CREAT | O_RDWR);
     test_assert(f > 0);
 
+    printf("TEMPA calling write\n");
     int nbytes = write(f, TEST_STR_1, strlen(TEST_STR_1) + 1);
+    printf("TEMPA called write\n");
     test_assert(nbytes == strlen(TEST_STR_1) + 1);
 
     error = close(f);

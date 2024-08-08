@@ -23,7 +23,6 @@
 #include <fs_rpc.pb.h>
 
 #include <ramdisk_client.h>
-#include <libc_fs_helpers.h>
 #include <fs_shared.h>
 #include <fs_server.h>
 #include <defs.h>
@@ -870,7 +869,7 @@ int xv6fs_work_handler(PdWorkReturnMessage *work)
       if (reg_entry == NULL)
       {
         // No-op if the file doesn't exist / isn't open
-        XV6FS_PRINTF("Received file (%u) to free, file isn't open\n");
+        XV6FS_PRINTF("Received file (%u) to free, file isn't open\n", file_id);
       }
       else
       {
@@ -900,7 +899,7 @@ int xv6fs_work_handler(PdWorkReturnMessage *work)
         if (reg_entry == NULL)
         {
           // No-op if the file doesn't exist / isn't open
-          XV6FS_PRINTF("Received file (%u) to free, file isn't open\n");
+          XV6FS_PRINTF("Received file (%u) to free, file isn't open\n", file_id);
         }
         else
         {
@@ -920,7 +919,7 @@ int xv6fs_work_handler(PdWorkReturnMessage *work)
 
             if (error)
             {
-              XV6FS_PRINTF("Warning: failed to free block %d, it may have already been deleted\n");
+              XV6FS_PRINTF("Warning: failed to free block %u, it may have already been deleted\n", i);
             }
           }
         }

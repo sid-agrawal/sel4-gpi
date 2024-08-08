@@ -20,7 +20,7 @@ file(GLOB client_deps src/fs_client/*.c)
 list(SORT client_deps)
 add_library(fs_client STATIC EXCLUDE_FROM_ALL ${client_deps} ${proto_srcs})
 target_include_directories(fs_client PUBLIC ${CMAKE_CURRENT_BINARY_DIR} include/fs_client include/shared)
-target_link_libraries(fs_client muslc sel4 utils sel4test sel4gpi ramdisk_client sel4nanopb)
+target_link_libraries(fs_client muslc sel4muslcsys sel4 utils sel4test sel4gpi ramdisk_client sel4nanopb)
 
 file(GLOB server_deps src/fs_server/*.c)
 list(SORT server_deps)
