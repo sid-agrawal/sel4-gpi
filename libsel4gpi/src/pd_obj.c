@@ -89,6 +89,43 @@ err_goto:
     return error;
 }
 
+static pd_hold_node_t *pd_get_resource(pd_t *pd, gpi_res_id_t res_id)
+{
+    int error = 0;
+
+    // Unique resource ID is the badge with the following fields: type, space_id, res_id
+    gpi_badge_t compact_id = compact_res_id(res_id.type, res_id.space_id, res_id.object_id);
+    return (pd_hold_node_t *)resource_registry_get_by_id(&pd->hold_registry, compact_id);
+}
+
+int pd_badge_and_add_resource(pd_t *pd, gpi_res_id_t res_id, seL4_CPtr raw_ep, seL4_CPtr *dest)
+{
+    int error = 0;
+    pd_hold_node_t *hold_node = pd_get_resource(pd, res_id);
+
+    if (hold_node != NULL)
+    {
+        // PD already has this resource, just add to increase refcount
+        *dest = hold_node->slot_in_PD_Debug;
+        error = pd_add_resource(pd, res_id, seL4_CapNull, seL4_CapNull, seL4_CapNull);
+    }
+    else
+    {
+        /* Create a new badged EP for the resource */
+        *dest = resource_component_make_badged_ep(get_pd_component()->server_vka, pd->pd_vka,
+                                                  raw_ep,
+                                                  res_id.type,
+                                                  res_id.space_id, res_id.object_id, pd->id);
+
+        // Add the resource to the PD object
+        // The hash table is keyed by resource ID, and tracks duplicate entries vis refcount
+        error = pd_add_resource(pd, res_id, seL4_CapNull, *dest, seL4_CapNull);
+    }
+
+err_goto:
+    return error;
+}
+
 int pd_remove_resource(pd_t *pd, gpi_res_id_t res_id)
 {
     // See if the resource exists, remove it if so
@@ -377,16 +414,9 @@ int pd_bulk_add_resource(pd_t *pd, linked_list_t *resources)
     {
         res = (pd_hold_node_t *)curr->data;
         resspc_component_registry_entry_t *resource_space_data = resource_space_get_entry_by_id(res->res_id.space_id);
-        seL4_CPtr copied_res = resource_component_make_badged_ep(
-            get_pd_component()->server_vka, pd->pd_vka,
-            resource_space_data->space.server_ep, resource_space_data->space.resource_type,
-            res->res_id.space_id, res->res_id.object_id, pd->id);
 
-        GOTO_IF_COND(copied_res == seL4_CapNull, "Failed to copy %s_%u_%u to PD%d\n",
-                     cap_type_to_str(res->res_id.type), res->res_id.space_id, res->res_id.object_id, pd->id);
-
-        error = pd_add_resource(pd, res->res_id, res->slot_in_RT_Debug,
-                                copied_res, res->slot_in_ServerPD_Debug);
+        seL4_CPtr dest; // We aren't doing anything with this yet
+        error = pd_badge_and_add_resource(pd, res->res_id, resource_space_data->space.server_ep, &dest);
 
         WARN_IF_COND(error, "failed to add resource (type: %s, space_id: %u) to PD %u\n",
                      cap_type_to_str(res->res_id.type), res->res_id.space_id, pd->id);
@@ -520,7 +550,7 @@ pd_held_resource_on_delete(resource_registry_node_t *node_gen, void *pd_v)
         {
             // Otherwise, call the manager PD
             resspc_component_registry_entry_t *space_data = resource_space_get_entry_by_id(res_id.space_id);
-            //SERVER_GOTO_IF_COND(space_data == NULL, "couldn't find resource space (%u)\n", res_id.space_id);
+            // SERVER_GOTO_IF_COND(space_data == NULL, "couldn't find resource space (%u)\n", res_id.space_id);
 
             // If the space is deleted,
             // or the manager PD is this PD itself,
@@ -930,34 +960,18 @@ int pd_send_cap(pd_t *to_pd,
 
     if (should_mint)
     {
-        seL4_CPtr new_cap = resource_component_make_badged_ep(server_vka,
-                                                              to_pd->pd_vka,
-                                                              server_src_cap,
-                                                              cap_type,
-                                                              get_space_id_from_badge(badge),
-                                                              get_object_id_from_badge(badge),
-                                                              to_pd->id);
+        gpi_res_id_t res_id = make_res_id(cap_type, get_space_id_from_badge(badge),
+                                          get_object_id_from_badge(badge));
+        seL4_CPtr new_cap;
+        error = pd_badge_and_add_resource(to_pd, res_id, server_src_cap, &new_cap);
 
-        SERVER_GOTO_IF_COND(new_cap == seL4_CapNull, "Failed to mint a new cap\n");
+        SERVER_GOTO_IF_COND(new_cap == seL4_CapNull, "Failed to mint a new resource to PD\n");
 
         if (update_core_cap)
         {
             error = pd_set_core_cap(to_pd, badge, new_cap);
             SERVER_WARN_IF_COND(error, "Warning: failed to set the cap in PD's OSmosis data\n");
         }
-
-        gpi_res_id_t res_id = {
-            .type = cap_type,
-            .space_id = get_space_id_from_badge(badge),
-            .object_id = get_object_id_from_badge(badge),
-        };
-
-        error = pd_add_resource(to_pd,
-                                res_id,
-                                server_src_cap,
-                                new_cap,
-                                server_src_cap);
-        SERVER_WARN_IF_COND(error, "Warning: Failed to add cap to PD's resources\n");
 
         if (slot)
         {

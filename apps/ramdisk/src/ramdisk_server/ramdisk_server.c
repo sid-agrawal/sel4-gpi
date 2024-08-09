@@ -285,8 +285,6 @@ void ramdisk_request_handler(
         case RamdiskAction_UNBIND:
             RAMDISK_PRINTF("Unbinding MO for client %u\n", client_id);
 
-            printf("TEMPA a\n");
-
             /* Remove shared mem from server ADS */
             mo_vaddr = get_ramdisk_server()->shared_mem[client_id];
 
@@ -294,7 +292,6 @@ void ramdisk_request_handler(
             CHECK_ERROR_GOTO(error, "Failed to unattach MO", error, done);
             get_ramdisk_server()->shared_mem[client_id] = NULL;
 
-            printf("TEMPA b\n");
             CHECK_ERROR_GOTO(error, "Failed to free cap during unbind", error, done);
             break;
         case RamdiskAction_ALLOC:

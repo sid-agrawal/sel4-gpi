@@ -89,15 +89,19 @@ static void on_pd_registry_delete(resource_registry_node_t *node_gen, void *arg)
         {
             linked_list_pop_head(lists[i], (void **)&work_res);
 
-            if (work_res->is_critical) {
-                if (work_types[i] == PdWorkAction_EXTRACT) {
+            if (work_res->is_critical)
+            {
+                if (work_types[i] == PdWorkAction_EXTRACT)
+                {
                     // (XXX) Arya: Maybe want to provide a warning here, that some model state may be lost
                     get_gpi_server()->model_extraction_n_missing--;
-                } else {
+                }
+                else
+                {
                     get_gpi_server()->pd_termination_n_missing--;
                 }
             }
-            
+
             free(work_res);
         }
     }
@@ -471,19 +475,15 @@ static void handle_give_resource_req(seL4_Word sender_badge, PdGiveResourceMessa
     OSDB_PRINT_VERBOSE("resource server %u gives resource in space %u with ID %u to client %u\n",
                        server_id, space_id, resource_id, recipient_id);
 
-    /* Create a new badged EP for the resource */
-    seL4_CPtr dest = resource_component_make_badged_ep(get_pd_component()->server_vka, recipient_data->pd.pd_vka,
-                                                       resource_space_data->space.server_ep,
-                                                       resource_space_data->space.resource_type,
-                                                       space_id, resource_id, recipient_id);
-    reply_msg->msg.give_resource.slot = dest;
+    /* Add the resource to the PD */
+    gpi_res_id_t res_id = make_res_id(resource_space_data->space.resource_type, space_id, resource_id);
+    seL4_CPtr dest;
+    error = pd_badge_and_add_resource(&recipient_data->pd, res_id,
+                                      resource_space_data->space.server_ep, &dest);
 
-    // Add the resource to the PD object
-    // The hash table is keyed by resource ID, and tracks duplicate entries vis refcount
-    error = pd_add_resource(&recipient_data->pd,
-                            make_res_id(resource_space_data->space.resource_type, space_id, resource_id),
-                            seL4_CapNull, dest, seL4_CapNull);
     SERVER_GOTO_IF_ERR(error, "Failed to add resource to PD (%u)\n", recipient_id);
+
+    reply_msg->msg.give_resource.slot = dest;
 
 err_goto:
     reply_msg->which_msg = PdReturnMessage_give_resource_tag;

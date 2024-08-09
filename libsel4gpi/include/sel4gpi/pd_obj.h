@@ -250,7 +250,7 @@ void print_pd_osm_rde_info(osmosis_rde_t *o);
 
 /**
  * Add a resource that the PD holds in metadata only, the resource isn't actually minted into the PD's cspace
- * Does not insert if the resource ID is a duplicate
+ * If this is a duplicate resource, the refcount is incremented.
  *
  * @param pd
  * @param res_id the resource to add
@@ -264,6 +264,18 @@ int pd_add_resource(pd_t *pd,
                     seL4_CPtr slot_in_RT,
                     seL4_CPtr slot_in_PD,
                     seL4_CPtr slot_in_serverPD);
+
+/**
+ * Add a resource to a PD's cspace and metadata. If the PD already has the resource,
+ * do not badge a new capability for it.
+ *
+ * @param pd
+ * @param res_id the resource to add
+ * @param raw_ep the raw endpoint of the resource's server
+ * @param dest slot of the resource in the PD's cspace
+ * @return 0 on success, 1 otherwise
+ */
+int pd_badge_and_add_resource(pd_t *pd, gpi_res_id_t res_id, seL4_CPtr raw_ep, seL4_CPtr *dest);
 
 /**
  * Decrement the refcount of a resource that the PD holds
