@@ -432,8 +432,6 @@ int sel4gpi_prepare_pd(pd_config_t *cfg, sel4gpi_runnable_t *runnable, int argc,
 
     error = sel4gpi_ads_configure(&cfg->ads_cfg, runnable, &cfg->osm_data_mo, &runtime_context);
     GOTO_IF_ERR(error, "Failed to configure ADS\n");
-    assert(runtime_context.stack_cfg != NULL);
-    assert(runtime_context.ipc_buf_cfg != NULL);
 
     error = rde_configure(cfg, runnable);
     GOTO_IF_ERR(error, "Failed to configure RDEs\n");
@@ -485,11 +483,15 @@ int sel4gpi_prepare_pd(pd_config_t *cfg, sel4gpi_runnable_t *runnable, int argc,
         WARN_IF_COND(link_err, "Failed to link PD with current, it will not be terminated when current PD exits\n");
     }
 
-    void *init_stack_ptr = runtime_context.stack_cfg->start;
+    void *init_stack_ptr = runtime_context.stack_cfg ? runtime_context.stack_cfg->start : NULL;
     void *entry_point = runtime_context.entry_point;
     seL4_Word *args_cp = args;
 
-    if (!runtime_context.loaded_elf)
+    if (cfg->elevated_cpu)
+    {
+        cpu_client_elevate_privileges(&runnable->cpu);
+    }
+    else if (!runtime_context.loaded_elf)
     {
         PD_CREATION_PRINT("C Runtime already initialized, setup the TLS ourselves\n");
         void *tp = NULL;
@@ -515,6 +517,8 @@ int sel4gpi_prepare_pd(pd_config_t *cfg, sel4gpi_runnable_t *runnable, int argc,
         argc++;
     }
 
+    void *ipc_buf_addr = runtime_context.ipc_buf_cfg ? runtime_context.ipc_buf_cfg->start : NULL;
+
     error = pd_client_runtime_setup(&runnable->pd,
                                     &runnable->ads,
                                     &runnable->cpu,
@@ -522,7 +526,7 @@ int sel4gpi_prepare_pd(pd_config_t *cfg, sel4gpi_runnable_t *runnable, int argc,
                                     argc,
                                     args_cp,
                                     entry_point,
-                                    runtime_context.ipc_buf_cfg->start,
+                                    ipc_buf_addr,
                                     runtime_context.osm_data);
     GOTO_IF_ERR(error, "failed to prepare runtime");
 
@@ -531,10 +535,10 @@ int sel4gpi_prepare_pd(pd_config_t *cfg, sel4gpi_runnable_t *runnable, int argc,
     error = cpu_client_config(&runnable->cpu,
                               &runnable->ads,
                               &runnable->pd,
-                              &runtime_context.ipc_buf_cfg->mo,
+                              ipc_buf_addr ? &runtime_context.ipc_buf_cfg->mo : NULL,
                               cnode_guard,
                               fault_ep_in_PD.raw_endpoint,
-                              runtime_context.ipc_buf_cfg->start);
+                              ipc_buf_addr);
     GOTO_IF_ERR(error, "failed to configure CPU\n");
 
 err_goto:

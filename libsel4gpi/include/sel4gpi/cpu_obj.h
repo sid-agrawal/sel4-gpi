@@ -23,6 +23,8 @@
 #include <sel4utils/process.h>
 #include <sel4gpi/model_exporting.h>
 
+#define SEL4_USER_CONTEXT_COUNT sizeof(seL4_UserContext) / sizeof(seL4_Word)
+
 typedef struct _cpu
 {
     gpi_obj_id_t id;
@@ -199,3 +201,14 @@ int cpu_elevate(cpu_t *cpu);
  * @return int 0 on success, other on failure
  */
 int cpu_read_registers(cpu_t *cpu, seL4_UserContext *regs);
+
+/**
+ * @brief Writes to the registers of a CPU. Does not store these values in the CPU object
+ *
+ * @param cpu the CPU object
+ * @param reg contents of the registers to write
+ * @param num_reg number of registers to write
+ * @param resume if true, will resume the CPU after writing
+ * @return int 0 on success, other on failure
+ */
+int cpu_write_registers(cpu_t *cpu, seL4_UserContext *regs, size_t num_reg, bool resume);

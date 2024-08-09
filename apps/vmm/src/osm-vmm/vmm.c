@@ -96,7 +96,7 @@ static void handle_fault(sel4gpi_runnable_t *vm, ep_client_context_t *fault_ep)
     {
         seL4_MessageInfo_t info = seL4_Recv(fault_ep->raw_endpoint, NULL);
         VMM_PRINT("fault: %s\n", fault_to_string(seL4_MessageInfo_get_label(info)));
-        fault_handle(&vm->cpu, &info);
+        // fault_handle(&vm->cpu, &info);
         // sel4debug_dump_registers(vm->tcb.cptr);
     }
 }
@@ -149,10 +149,10 @@ int new_guest(void)
     mo_client_context_t guest_ram_mo = {0};
 #ifdef BOARD_qemu_arm_virt
     // On QEMU, there is a special reserved region for VM guest RAM
-    void *guest_ram_curr_vspace = sel4gpi_get_vmr_at_paddr(&vmr_rde, guest_ram_pages, NULL, SEL4UTILS_RES_TYPE_GENERIC,
+    void *guest_ram_curr_vspace = sel4gpi_get_vmr_at_paddr(vmr_rde, guest_ram_pages, NULL, SEL4UTILS_RES_TYPE_GENERIC,
                                                            MO_LARGE_PAGE_BITS, GUEST_RAM_VADDR, &guest_ram_mo);
 #elif BOARD_odroidc4
-    void *guest_ram_curr_vspace = sel4gpi_get_vmr(&vmr_rde, guest_ram_pages, (void *)GUEST_RAM_VADDR, SEL4UTILS_RES_TYPE_GENERIC,
+    void *guest_ram_curr_vspace = sel4gpi_get_vmr(vmr_rde, guest_ram_pages, (void *)GUEST_RAM_VADDR, SEL4UTILS_RES_TYPE_GENERIC,
                                                   MO_LARGE_PAGE_BITS, &guest_ram_mo);
 #endif // BOARD_qemu_arm_virt
     GOTO_IF_COND(guest_ram_curr_vspace == NULL, "Failed to reserve region for guest RAM in current ADS\n");
@@ -258,7 +258,13 @@ int new_guest(void)
         }
     } */
 
-    error = sel4gpi_start_pd(&runnable);
+    seL4_UserContext regs = {0};
+    error = cpu_client_read_registers(&runnable.cpu, &regs);
+    assert(error == 0);
+
+    sel4debug_print_registers(&regs);
+
+    // error = sel4gpi_start_pd(&runnable);
 
     // pd_client_dump(&runnable.pd, NULL, 0);
 

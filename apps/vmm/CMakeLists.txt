@@ -53,13 +53,13 @@ file(
         src/*.c
         src/${GPIVMMImplementation}/*.c
         src/arch/${KernelSel4Arch}/*.c
-        src/arch/${KernelSel4Arch}/${GPIVMMImplementation}/*.c
-        src/arch/${KernelSel4Arch}/${GPIVMMImplementation}/vgic/*.c
-        src/arch/${KernelSel4Arch}/vgic/*.c
+        # src/arch/${KernelSel4Arch}/${GPIVMMImplementation}/*.c
+        # src/arch/${KernelSel4Arch}/${GPIVMMImplementation}/vgic/*.c
+        # src/arch/${KernelSel4Arch}/vgic/*.c
 )
 
 string(CONCAT package_guest_image_defs
-    "GUEST_KERNEL_IMAGE_PATH=\"${CMAKE_CURRENT_SOURCE_DIR}/board/${KernelPlatVMM}/bootimg.bin\"\;"
+    "GUEST_KERNEL_IMAGE_PATH=\"${CMAKE_CURRENT_SOURCE_DIR}/board/${KernelPlatVMM}/linux\"\;"
     "GUEST_DTB_IMAGE_PATH=\"${VmDTBPath}\"\;"
     "GUEST_INITRD_IMAGE_PATH=\"${CMAKE_CURRENT_SOURCE_DIR}/board/${KernelPlatVMM}/rootfs.cpio.gz\"\;"
 )

@@ -15,7 +15,7 @@ bool guest_start(seL4_CPtr tcb, uintptr_t kernel_pc, uintptr_t dtb, uintptr_t in
      */
     seL4_UserContext regs = {0};
     regs.x0 = dtb;
-    regs.spsr = 0x9; // PMODE_EL1h
+    regs.spsr = 0x5; // PMODE_EL1h
     regs.pc = kernel_pc;
     /* Write out all the TCB registers */
     seL4_Error err = seL4_TCB_WriteRegisters(

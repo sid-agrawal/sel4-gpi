@@ -271,7 +271,7 @@ int cpu_set_local_context(cpu_t *cpu, void *entry_point,
     error = sel4utils_arch_init_local_context(entry_point, arg0, arg1, arg2, init_stack, cpu->reg_ctx);
     SERVER_GOTO_IF_ERR(error, "failed to set CPU context\n");
 
-    error = seL4_TCB_WriteRegisters(cpu->tcb.cptr, 0, 0, sizeof(seL4_UserContext) / sizeof(seL4_Word), cpu->reg_ctx);
+    error = seL4_TCB_WriteRegisters(cpu->tcb.cptr, 0, 0, SEL4_USER_CONTEXT_COUNT, cpu->reg_ctx);
     SERVER_GOTO_IF_ERR(error, "failed to write TCB registers\n");
 err_goto:
     return error;
@@ -286,7 +286,7 @@ int cpu_set_remote_context(cpu_t *cpu, void *entry_point,
 
     sel4utils_set_arg1(cpu->reg_ctx, arg1);
 
-    error = seL4_TCB_WriteRegisters(cpu->tcb.cptr, 0, 0, sizeof(seL4_UserContext) / sizeof(seL4_Word), cpu->reg_ctx);
+    error = seL4_TCB_WriteRegisters(cpu->tcb.cptr, 0, 0, SEL4_USER_CONTEXT_COUNT, cpu->reg_ctx);
 
     SERVER_GOTO_IF_ERR(error, "failed to write TCB registers\n");
 
@@ -300,7 +300,7 @@ int cpu_set_guest_context(cpu_t *cpu, uintptr_t kernel_entry, uintptr_t kernel_d
     error = sel4utils_arch_init_context_guest(kernel_entry, kernel_dtb, cpu->reg_ctx);
     SERVER_GOTO_IF_ERR(error, "failed to set CPU context\n");
 
-    error = seL4_TCB_WriteRegisters(cpu->tcb.cptr, 0, 0, sizeof(seL4_UserContext) / sizeof(seL4_Word), cpu->reg_ctx);
+    error = seL4_TCB_WriteRegisters(cpu->tcb.cptr, 0, 0, SEL4_USER_CONTEXT_COUNT, cpu->reg_ctx);
     SERVER_GOTO_IF_ERR(error, "failed to write TCB registers\n");
 
 err_goto:
@@ -321,5 +321,18 @@ err_goto:
 
 int cpu_read_registers(cpu_t *cpu, seL4_UserContext *regs)
 {
-    return seL4_TCB_ReadRegisters(cpu->tcb.cptr, seL4_False, 0, sizeof(seL4_UserContext) / sizeof(seL4_Word), regs);
+    return seL4_TCB_ReadRegisters(cpu->tcb.cptr, seL4_False, 0, SEL4_USER_CONTEXT_COUNT, regs);
+}
+
+int cpu_write_registers(cpu_t *cpu, seL4_UserContext *regs, size_t num_reg, bool resume)
+{
+    int error = 0;
+    SERVER_GOTO_IF_COND(num_reg > SEL4_USER_CONTEXT_COUNT,
+                        "Cannot write more registers (%zu) than seL4_UserContext: %zu",
+                        num_reg, SEL4_USER_CONTEXT_COUNT);
+    OSDB_PRINTF("Writing %zu registers, %s CPU\n", num_reg, resume ? "resuming" : "stopping");
+    sel4debug_print_registers(regs);
+    return seL4_TCB_WriteRegisters(cpu->tcb.cptr, resume, 0, num_reg, regs);
+err_goto:
+    return 1;
 }

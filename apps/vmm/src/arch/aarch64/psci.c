@@ -9,8 +9,6 @@
 #include "psci.h"
 #include "smc.h"
 #include <sel4utils/util.h>
-#include <sel4test-vmm/fault.h>
-#include <sel4test-vmm/guest.h>
 #include <assert.h>
 #include <sel4gpi/debug.h>
 

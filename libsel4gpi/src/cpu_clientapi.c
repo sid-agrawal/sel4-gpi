@@ -16,6 +16,7 @@
 #include <sel4gpi/pd_utils.h>
 #include <sel4gpi/error_handle.h>
 #include <cpu_component_rpc.pb.h>
+#include <sel4debug/register_dump.h>
 
 // Defined for utility printing macros
 #define DEBUG_ID CPU_DEBUG
@@ -221,13 +222,34 @@ int cpu_client_suspend(cpu_client_context_t *cpu)
     return error;
 }
 
+int cpu_client_write_registers(cpu_client_context_t *cpu, seL4_UserContext *regs, size_t num_reg, bool resume)
+{
+    OSDB_PRINTF("Sending 'write registers' request to CPU component\n");
+    int error = 0;
+
+    CpuMessage msg = {
+        .magic = CPU_RPC_MAGIC,
+        .which_msg = CpuMessage_write_reg_tag,
+        .msg.write_reg = {
+            .resume = resume,
+            .reg_buf_count = num_reg,
+        },
+    };
+
+    memcpy(msg.msg.write_reg.reg_buf, (void *)regs, sizeof(seL4_Word) * num_reg);
+
+    CpuReturnMessage ret_msg = {0};
+
+    error = sel4gpi_rpc_call(&rpc_env, cpu->ep, (void *)&msg,
+                             0, NULL, (void *)&ret_msg);
+    error |= ret_msg.errorCode;
+
+    return error;
+}
+
 int cpu_client_read_registers(cpu_client_context_t *cpu, seL4_UserContext *regs)
 {
-    seL4_CPtr vmr_rde = sel4gpi_get_bound_vmr_rde();
-    mo_client_context_t msg_mo = {0};
-    void *shared_msg_vaddr = sel4gpi_get_vmr(vmr_rde, 1, NULL, SEL4UTILS_RES_TYPE_SHARED_FRAMES, MO_PAGE_BITS, &msg_mo);
     OSDB_PRINTF("Sending read registers request to CPU component\n");
-
     int error = 0;
 
     CpuMessage msg = {
@@ -237,20 +259,19 @@ int cpu_client_read_registers(cpu_client_context_t *cpu, seL4_UserContext *regs)
 
     CpuReturnMessage ret_msg = {0};
 
-    seL4_CPtr caps[1] = {msg_mo.ep};
-
-    printf("a\n");
     error = sel4gpi_rpc_call(&rpc_env, cpu->ep, (void *)&msg,
-                             1, caps, (void *)&ret_msg);
-    error |= ret_msg.errorCode;
-    printf("b\n");
+                             0, NULL, (void *)&ret_msg);
+
     if (!error)
     {
-        memcpy(regs, shared_msg_vaddr, sizeof(seL4_UserContext));
+        memcpy(regs, ret_msg.msg.read_reg.reg_buf, sizeof(seL4_Word) * ret_msg.msg.read_reg.reg_buf_count);
     }
 
-    int unmap_error = sel4gpi_destroy_vmr(vmr_rde, shared_msg_vaddr, &msg_mo);
-    SERVER_WARN_IF_COND(unmap_error, "Failed to destroy VMR and MO for message buffer\n");
+    error |= ret_msg.errorCode;
 
     return error;
+}
+
+int cpu_client_write_vcpu_reg(cpu_client_context_t *cpu, uint64_t reg, uint64_t value)
+{
 }

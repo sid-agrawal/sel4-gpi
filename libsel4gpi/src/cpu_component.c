@@ -34,6 +34,7 @@
 #include <sel4gpi/error_handle.h>
 #include <sel4gpi/gpi_rpc.h>
 #include <cpu_component_rpc.pb.h>
+#include <sel4debug/register_dump.h>
 
 // Defined for utility printing macros
 #define DEBUG_ID CPU_DEBUG
@@ -311,21 +312,14 @@ static void handle_read_registers_req(seL4_Word sender_badge, CpuReadRegistersMe
         resource_component_registry_get_by_badge(get_cpu_component(), sender_badge);
     SERVER_GOTO_IF_COND_BG(cpu_data == NULL, sender_badge, "Couldn't find CPU data\n");
 
-    mo_component_registry_entry_t *mo_data = (mo_component_registry_entry_t *)
-        resource_component_registry_get_by_badge(get_mo_component(), seL4_GetBadge(0));
-    SERVER_GOTO_IF_COND(mo_data == NULL, "Couldn't find MO data for shared buffer\n");
-
-    void *shared_mo_vaddr = NULL;
-    error = ads_component_attach_to_rt(mo_data->mo.id, &shared_mo_vaddr);
-    SERVER_GOTO_IF_COND(error || shared_mo_vaddr == NULL, "Failed to attach shared MO\n");
-
-    error = cpu_read_registers(&cpu_data->cpu, (seL4_UserContext *)shared_mo_vaddr);
-
-    int unmap_error = ads_component_remove_from_rt(shared_mo_vaddr);
-    SERVER_WARN_IF_COND(unmap_error, "Failed to unmap shared MO buffer from RT\n");
+    error = cpu_read_registers(&cpu_data->cpu, (seL4_UserContext *)reply_msg->msg.read_reg.reg_buf);
+    if (!error)
+    {
+        reply_msg->msg.read_reg.reg_buf_count = SEL4_USER_CONTEXT_COUNT;
+    }
 
 err_goto:
-    reply_msg->which_msg = CpuReturnMessage_basic_tag;
+    reply_msg->which_msg = CpuReturnMessage_read_reg_tag;
     reply_msg->errorCode = error;
 }
 
@@ -381,6 +375,23 @@ err_goto:
     reply_msg->errorCode = error;
 }
 
+static void handle_write_reg_req(seL4_Word sender_badge, CpuWriteRegistersMessage *msg, CpuReturnMessage *reply_msg)
+{
+    OSDB_PRINTF("Got write registers request from Client: ");
+    BADGE_PRINT(sender_badge);
+
+    int error = 0;
+    cpu_component_registry_entry_t *cpu_data = (cpu_component_registry_entry_t *)
+        resource_component_registry_get_by_badge(get_cpu_component(), sender_badge);
+    SERVER_GOTO_IF_COND_BG(cpu_data == NULL, sender_badge, "Couldn't find CPU from badge: ");
+
+    error = cpu_write_registers(&cpu_data->cpu, (seL4_UserContext *)msg->reg_buf, msg->reg_buf_count, msg->resume);
+
+err_goto:
+    reply_msg->which_msg = CpuReturnMessage_basic_tag;
+    reply_msg->errorCode = error;
+}
+
 static void cpu_component_handle(void *msg_p,
                                  seL4_Word sender_badge,
                                  seL4_CPtr received_cap,
@@ -420,6 +431,9 @@ static void cpu_component_handle(void *msg_p,
             break;
         case CpuMessage_elevate_privilege_tag:
             handle_elevate_req(sender_badge, &msg->msg.elevate_privilege, reply_msg);
+            break;
+        case CpuMessage_write_reg_tag:
+            handle_write_reg_req(sender_badge, &msg->msg.write_reg, reply_msg);
             break;
         case CpuMessage_read_reg_tag:
             handle_read_registers_req(sender_badge, &msg->msg.read_reg, reply_msg);

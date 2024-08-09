@@ -95,6 +95,17 @@ int cpu_client_change_vspace(cpu_client_context_t *conn,
 int cpu_client_elevate_privileges(cpu_client_context_t *conn);
 
 /**
+ * @brief write to the registers of a CPU
+ *
+ * @param conn the CPU context
+ * @param regs the register contents
+ * @param num_reg the number of registers to write
+ * @param resume if true, resumes the CPU after writing
+ * @return int 0 on success, other on failure
+ */
+int cpu_client_write_registers(cpu_client_context_t *cpu, seL4_UserContext *regs, size_t num_reg, bool resume);
+
+/**
  * @brief read the registers of a CPU
  *
  * @param conn the CPU context
@@ -103,7 +114,17 @@ int cpu_client_elevate_privileges(cpu_client_context_t *conn);
  */
 int cpu_client_read_registers(cpu_client_context_t *cpu, seL4_UserContext *regs);
 
-/* ======================================= CONVENIENCE FUNCTIONS (NOT PART OF FRAMEWORK) ================================================= */
+/**
+ * @brief write a VCPU register for the CPU
+ *
+ * @param cpu the CPU conext
+ * @param reg the register to write
+ * @param value value to write
+ * @return int 0 on success, other on failure
+ */
+int cpu_client_write_vcpu_reg(cpu_client_context_t *cpu, uint64_t reg, uint64_t value);
+
+/* CONVENIENCE FUNCTIONS */
 /**
  * @brief sets the TLS base for a CPU obj. The given address should be w.r.t the CPU's ADS
  *

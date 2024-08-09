@@ -1,4 +1,5 @@
 syntax = "proto3";
+import 'nanopb.proto';
 
 enum CpuComponentError {
     NONE = 0;           /* no error */
@@ -35,12 +36,22 @@ message CpuSuspendMessage {
     /* No content */
 };
 
+message CpuWriteRegistersMessage {
+    uint32 resume = 1;
+    repeated uint64 reg_buf = 2 [(nanopb).max_count = 36]; /* buffer for seL4_UserContext */
+};
+
 message CpuReadRegistersMessage {
     /* No content */
 };
 
 message CpuDisconnectMessage {
     /* No content */
+};
+
+message CpuWriteVcpuMessage {
+    uint64 reg = 1;
+    uint64 val = 2;
 };
 
 message CpuMessage {
@@ -53,8 +64,9 @@ message CpuMessage {
         CpuTlsBaseMessage tls_base = 5;
         CpuSuspendMessage suspend = 6;
         CpuConfigMessage config = 7;
-        CpuReadRegistersMessage read_reg = 8;
-        CpuDisconnectMessage disconnect = 9;
+        CpuWriteRegistersMessage write_reg = 8;
+        CpuReadRegistersMessage read_reg = 9;
+        CpuDisconnectMessage disconnect = 10;
     };
 };
 
@@ -68,11 +80,16 @@ message CpuBasicReturnMessage {
     /* No content */
 };
 
+message CpuReadRegistersReturnMessage {
+    repeated uint64 reg_buf = 1 [(nanopb).max_count = 36]; /* buffer for seL4_UserContext */
+}
+
 /* message type for all Cpu Component return messages */
 message CpuReturnMessage {
     CpuComponentError errorCode = 1;
     oneof msg {
         CpuBasicReturnMessage basic = 2;
         CpuAllocReturnMessage alloc = 3;
+        CpuReadRegistersReturnMessage read_reg = 4;
     };
 };
