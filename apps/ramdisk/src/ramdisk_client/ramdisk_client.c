@@ -50,12 +50,12 @@ static sel4gpi_rpc_env_t rpc_client = {
     .reply_desc = &RamdiskReturnMessage_msg,
 };
 
-int start_ramdisk_pd(seL4_CPtr *ramdisk_pd_cap,
+int start_ramdisk_pd(pd_client_context_t *ramdisk_pd,
                      gpi_obj_id_t *ramdisk_id)
 {
     int error;
     error = start_resource_server_pd(GPICAP_TYPE_NONE, 0, RAMDISK_APP,
-                                     ramdisk_pd_cap, ramdisk_id);
+                                     ramdisk_pd, ramdisk_id);
     CHECK_ERROR(error, "failed to start ramdisk server\n");
     RAMDISK_PRINTF("Successfully started ramdisk server, resource space ID is %d\n",
                    (int)*ramdisk_id);

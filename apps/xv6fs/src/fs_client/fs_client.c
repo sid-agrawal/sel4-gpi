@@ -135,11 +135,11 @@ global_xv6fs_client_context_t *get_xv6fs_client(void)
 }
 
 int start_xv6fs_pd(gpi_space_id_t rd_id,
-                   seL4_CPtr *fs_pd_cap,
+                   pd_client_context_t *fs_pd,
                    gpi_space_id_t *fs_id)
 {
   int error = start_resource_server_pd(sel4gpi_get_resource_type_code(BLOCK_RESOURCE_TYPE_NAME), rd_id,
-                                       FS_APP, fs_pd_cap, fs_id);
+                                       FS_APP, fs_pd, fs_id);
   CHECK_ERROR(error, "failed to start file resource server\n");
   XV6FS_PRINTF("Successfully started file system server\n");
   return 0;

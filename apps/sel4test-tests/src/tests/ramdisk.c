@@ -53,8 +53,8 @@ int test_ramdisk(env_t env)
 
     /* Start ramdisk server process */
     gpi_space_id_t ramdisk_id;
-    seL4_CPtr ramdisk_pd_cap;
-    error = start_ramdisk_pd(&ramdisk_pd_cap, &ramdisk_id);
+    pd_client_context_t ramdisk_pd;
+    error = start_ramdisk_pd(&ramdisk_pd, &ramdisk_id);
     test_assert(error == 0);
 
     /* Add the ramdisk to local RD */
@@ -154,9 +154,7 @@ int test_ramdisk(env_t env)
     test_assert(error == 0);
 
     // Cleanup server
-    pd_client_context_t ramdisk_pd_conn;
-    ramdisk_pd_conn.ep = ramdisk_pd_cap;
-    test_error_eq(maybe_terminate_pd(&ramdisk_pd_conn), 0);
+    test_error_eq(maybe_terminate_pd(&ramdisk_pd), 0);
 
     printf("------------------ENDING: %s------------------\n", __func__);
     return sel4test_get_result();

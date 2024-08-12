@@ -35,14 +35,6 @@ static pd_client_context_t fs_2_pd;
 static gpi_cap_t file_cap_type;
 static gpi_cap_t kvstore_cap_type;
 
-typedef enum _kvstore_mode
-{
-    SAME_THREAD,
-    SEPARATE_ADS,
-    SEPARATE_THREAD,
-    SEPARATE_PROC
-} kvstore_mode_t;
-
 // Setup before all tests
 static int setup(env_t env)
 {
@@ -55,12 +47,12 @@ static int setup(env_t env)
     pd_conn = sel4gpi_get_pd_conn();
 
     /* Start ramdisk server process */
-    error = start_ramdisk_pd(&ramdisk_pd.ep, &ramdisk_id);
+    error = start_ramdisk_pd(&ramdisk_pd, &ramdisk_id);
     ramdisk_cap_type = sel4gpi_get_resource_type_code(BLOCK_RESOURCE_TYPE_NAME);
     test_assert(error == 0);
 
     /* Start FS server process */
-    error = start_xv6fs_pd(ramdisk_id, &fs_pd.ep, &fs_id);
+    error = start_xv6fs_pd(ramdisk_id, &fs_pd, &fs_id);
     file_cap_type = sel4gpi_get_resource_type_code(FILE_RESOURCE_TYPE_NAME);
     test_assert(error == 0);
 
@@ -91,13 +83,13 @@ static int remove_RDEs()
  * @param fs_nsid namespace ID of fs to share
  * @param kvstore_pd  returns the pd resource for the kvstore process
  */
-static int start_kvstore_server(seL4_CPtr *kvstore_ep, gpi_space_id_t fs_nsid, pd_client_context_t *kvstore_pd)
+int start_kvstore_server(seL4_CPtr *kvstore_ep, gpi_space_id_t fs_nsid, pd_client_context_t *kvstore_pd)
 {
     int error;
 
     gpi_obj_id_t kvstore_id;
-    error = start_resource_server_pd(file_cap_type, fs_nsid, KVSTORE_SERVER_APP,
-                                     &kvstore_pd->ep, &kvstore_id);
+    error = start_resource_server_pd(sel4gpi_get_resource_type_code(FILE_RESOURCE_TYPE_NAME), fs_nsid,
+                                     KVSTORE_SERVER_APP, kvstore_pd, &kvstore_id);
 
     /* get the kvstore EP from RDE */
     kvstore_cap_type = sel4gpi_get_resource_type_code(KVSTORE_RESOURCE_NAME);
@@ -112,14 +104,16 @@ err_goto:
  * Starts the hello test process that accesses kvstore
  *
  * @param kvstore_mode the operating mode of the hello_kvstore app
+ * @param parent_ep test process ep to listen for test results
  * @param kvstore_ep ep to use for remote kvstore (optional)
  * @param hello_pd returns the pd resource for the hello process
  * @param fs_nsid namespace ID of fs to share
  */
-static int start_hello_kvstore(kvstore_mode_t kvstore_mode,
-                               seL4_CPtr kvstore_ep,
-                               pd_client_context_t *hello_pd,
-                               gpi_space_id_t fs_nsid)
+int start_hello_kvstore(kvstore_mode_t kvstore_mode,
+                        ep_client_context_t parent_ep,
+                        seL4_CPtr kvstore_ep,
+                        pd_client_context_t *hello_pd,
+                        gpi_space_id_t fs_nsid)
 {
     int error;
 
@@ -134,7 +128,7 @@ static int start_hello_kvstore(kvstore_mode_t kvstore_mode,
     *hello_pd = runnable.pd;
 
     // Copy the parent ep
-    error = pd_client_send_cap(hello_pd, self_ep.ep, &args[0]);
+    error = pd_client_send_cap(hello_pd, parent_ep.ep, &args[0]);
     test_assert(error == 0);
 
     args[1] = kvstore_mode;
@@ -146,7 +140,7 @@ static int start_hello_kvstore(kvstore_mode_t kvstore_mode,
     }
 
     // Share an FS RDE
-    sel4gpi_add_rde_config(cfg, file_cap_type, fs_nsid);
+    sel4gpi_add_rde_config(cfg, sel4gpi_get_resource_type_code(FILE_RESOURCE_TYPE_NAME), fs_nsid);
     test_assert(error == 0);
 
     // Share necessary RDEs to start threads
@@ -185,7 +179,7 @@ int test_kvstore_lib_in_same_pd(env_t env)
 
     /* Start the combined app/lib PD */
     pd_client_context_t hello_pd;
-    error = start_hello_kvstore(SAME_THREAD, 0, &hello_pd, BADGE_SPACE_ID_NULL);
+    error = start_hello_kvstore(SAME_THREAD, self_ep, 0, &hello_pd, BADGE_SPACE_ID_NULL);
 
     test_error_eq(remove_RDEs(), 0);
 
@@ -224,7 +218,7 @@ int test_kvstore_lib_in_diff_pd(env_t env)
 
     /* Start the app PD */
     pd_client_context_t hello_pd;
-    error = start_hello_kvstore(SEPARATE_PROC, kvstore_ep, &hello_pd, BADGE_SPACE_ID_NULL);
+    error = start_hello_kvstore(SEPARATE_PROC, self_ep, kvstore_ep, &hello_pd, BADGE_SPACE_ID_NULL);
 
     test_error_eq(remove_RDEs(), 0);
 
@@ -274,7 +268,7 @@ int test_kvstore_diff_namespace(env_t env)
 
     /* Start the app PD */
     pd_client_context_t hello_pd;
-    error = start_hello_kvstore(SEPARATE_PROC, kvstore_ep, &hello_pd, nsid_2);
+    error = start_hello_kvstore(SEPARATE_PROC, self_ep, kvstore_ep, &hello_pd, nsid_2);
     test_assert(error == 0);
 
     test_error_eq(remove_RDEs(), 0);
@@ -308,7 +302,7 @@ int test_kvstore_diff_fs(env_t env)
     test_assert(error == 0);
 
     /* Start second fs server process */
-    error = start_xv6fs_pd(ramdisk_id, &fs_2_pd.ep, &fs_2_id);
+    error = start_xv6fs_pd(ramdisk_id, &fs_2_pd, &fs_2_id);
     test_assert(error == 0);
 
     /* Start the kvstore PD */
@@ -319,7 +313,7 @@ int test_kvstore_diff_fs(env_t env)
 
     /* Start the app PD */
     pd_client_context_t hello_pd;
-    error = start_hello_kvstore(SEPARATE_PROC, kvstore_ep, &hello_pd, fs_2_id);
+    error = start_hello_kvstore(SEPARATE_PROC, self_ep, kvstore_ep, &hello_pd, fs_2_id);
     test_assert(error == 0);
 
     test_error_eq(remove_RDEs(), 0);
@@ -355,7 +349,7 @@ int test_kvstore_lib_same_pd_diff_ads(env_t env)
 
     // /* Start the combined app/lib PD */
     pd_client_context_t hello_pd;
-    error = start_hello_kvstore(SEPARATE_ADS, 0, &hello_pd, BADGE_SPACE_ID_NULL);
+    error = start_hello_kvstore(SEPARATE_ADS, self_ep, 0, &hello_pd, BADGE_SPACE_ID_NULL);
 
     test_error_eq(remove_RDEs(), 0);
 
@@ -388,7 +382,7 @@ int test_kvstore_diff_threads(env_t env)
 
     /* Start the combined app/lib PD */
     pd_client_context_t hello_pd;
-    error = start_hello_kvstore(SEPARATE_THREAD, 0, &hello_pd, BADGE_SPACE_ID_NULL);
+    error = start_hello_kvstore(SEPARATE_THREAD, self_ep, 0, &hello_pd, BADGE_SPACE_ID_NULL);
 
     test_error_eq(remove_RDEs(), 0);
 
@@ -433,11 +427,11 @@ int test_kvstore_two_sets(env_t env)
 
     /* Start the app PD 1 */
     pd_client_context_t hello_pd_1;
-    error = start_hello_kvstore(SEPARATE_PROC, kvstore_ep_1, &hello_pd_1, BADGE_SPACE_ID_NULL);
+    error = start_hello_kvstore(SEPARATE_PROC, self_ep, kvstore_ep_1, &hello_pd_1, BADGE_SPACE_ID_NULL);
 
     /* Start the app PD 2 */
     pd_client_context_t hello_pd_2;
-    error = start_hello_kvstore(SEPARATE_PROC, kvstore_ep_2, &hello_pd_2, BADGE_SPACE_ID_NULL);
+    error = start_hello_kvstore(SEPARATE_PROC, self_ep, kvstore_ep_2, &hello_pd_2, BADGE_SPACE_ID_NULL);
 
     /* Wait for test result 1 */
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0, 0);
@@ -494,7 +488,7 @@ int test_kvstore_lib_in_diff_pd_crash(env_t env)
 
     /* Start the app PD */
     pd_client_context_t hello_pd;
-    error = start_hello_kvstore(SEPARATE_PROC, kvstore_ep, &hello_pd, nsid_2);
+    error = start_hello_kvstore(SEPARATE_PROC, self_ep, kvstore_ep, &hello_pd, nsid_2);
 
     test_error_eq(remove_RDEs(), 0);
 

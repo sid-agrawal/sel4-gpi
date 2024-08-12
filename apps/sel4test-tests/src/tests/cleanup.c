@@ -82,7 +82,7 @@ int start_toy_cleanup_process(hello_cleanup_mode_t mode, uint32_t n_client_reque
         // Start the server with the resource server utility function
         error = start_resource_server_pd_args(0, 0, HELLO_CLEANUP_APP,
                                               (seL4_Word *)&mode, 1,
-                                              &hello_pd->ep, &toy_block_space_id);
+                                              hello_pd, &toy_block_space_id);
 
         test_assert(error == 0);
 
@@ -94,7 +94,7 @@ int start_toy_cleanup_process(hello_cleanup_mode_t mode, uint32_t n_client_reque
         // Start the server with the resource server utility function
         error = start_resource_server_pd_args(toy_block_type, toy_block_space_id, HELLO_CLEANUP_APP,
                                               (seL4_Word *)&mode, 1,
-                                              &hello_pd->ep, &toy_file_space_id);
+                                              hello_pd, &toy_file_space_id);
 
         test_assert(error == 0);
 
@@ -106,7 +106,7 @@ int start_toy_cleanup_process(hello_cleanup_mode_t mode, uint32_t n_client_reque
         // Start the server with the resource server utility function
         error = start_resource_server_pd_args(toy_file_type, toy_file_space_id, HELLO_CLEANUP_APP,
                                               (seL4_Word *)&mode, 1,
-                                              &hello_pd->ep, &toy_db_space_id);
+                                              hello_pd, &toy_db_space_id);
 
         test_assert(error == 0);
 

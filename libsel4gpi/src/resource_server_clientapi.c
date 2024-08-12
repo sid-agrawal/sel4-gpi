@@ -30,10 +30,10 @@
 int start_resource_server_pd(gpi_cap_t rde_type,
                              gpi_space_id_t rde_id,
                              char *image_name,
-                             seL4_CPtr *server_pd_cap,
+                             pd_client_context_t *server_pd,
                              gpi_space_id_t *space_id)
 {
-    return start_resource_server_pd_args(rde_type, rde_id, image_name, NULL, 0, server_pd_cap, space_id);
+    return start_resource_server_pd_args(rde_type, rde_id, image_name, NULL, 0, server_pd, space_id);
 }
 
 int start_resource_server_pd_args(gpi_cap_t rde_type,
@@ -41,7 +41,7 @@ int start_resource_server_pd_args(gpi_cap_t rde_type,
                                   char *image_name,
                                   seL4_Word *args_input,
                                   uint32_t argc_input,
-                                  seL4_CPtr *server_pd_cap,
+                                  pd_client_context_t *server_pd,
                                   gpi_space_id_t *space_id)
 {
     int error;
@@ -59,9 +59,9 @@ int start_resource_server_pd_args(gpi_cap_t rde_type,
     error = cfg == NULL;
     CHECK_ERROR(error, "failed to configure process");
 
-    if (server_pd_cap)
+    if (server_pd)
     {
-        *server_pd_cap = runnable.pd.ep;
+        *server_pd = runnable.pd;
     }
 
     // Copy the parent ep to the new PD

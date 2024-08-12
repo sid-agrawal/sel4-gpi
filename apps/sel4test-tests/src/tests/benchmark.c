@@ -31,6 +31,7 @@
 
 #include <fs_client.h>
 #include <ramdisk_client.h>
+#include <kvstore_client.h>
 #include "test_shared.h"
 
 // #define TEST_DEBUG
@@ -785,14 +786,14 @@ static int benchmark_fs(env_t env)
 
     /* Start ramdisk server process */
     gpi_obj_id_t ramdisk_id;
-    seL4_CPtr ramdisk_pd_cap;
-    error = start_ramdisk_pd(&ramdisk_pd_cap, &ramdisk_id);
+    pd_client_context_t ramdisk_pd;
+    error = start_ramdisk_pd(&ramdisk_pd, &ramdisk_id);
     test_assert(error == 0);
 
     /* Start fs server process */
     gpi_obj_id_t fs_id;
-    seL4_CPtr fs_pd_cap;
-    error = start_xv6fs_pd(ramdisk_id, &fs_pd_cap, &fs_id);
+    pd_client_context_t fs_pd;
+    error = start_xv6fs_pd(ramdisk_id, &fs_pd, &fs_id);
     test_assert(error == 0);
 
     // Get FS EP
@@ -826,11 +827,8 @@ static int benchmark_fs(env_t env)
     test_assert(error == 0);
 
     // Terminate PDs
-    pd_client_context_t fs_context = {.ep = fs_pd_cap};
-    test_error_eq(maybe_terminate_pd(&fs_context), 0);
-
-    pd_client_context_t ramdisk_context = {.ep = ramdisk_pd_cap};
-    test_error_eq(maybe_terminate_pd(&ramdisk_context), 0);
+    test_error_eq(maybe_terminate_pd(&fs_pd), 0);
+    test_error_eq(maybe_terminate_pd(&ramdisk_pd), 0);
 
     sel4bench_destroy();
     return sel4test_get_result();
@@ -1154,7 +1152,7 @@ static int internal_benchmark_cleanup_toy_servers(env_t env, hello_cleanup_mode_
     }
     else if (server_to_crash == HELLO_CLEANUP_TOY_FILE_SERVER_MODE)
     {
-        printf("Crashing toy_block_server PD\n");
+        printf("Crashing toy_file_server PD\n");
         SEL4BENCH_READ_CCNT(start);
         error = pd_client_terminate(&hello_server_toy_file_pd);
         SEL4BENCH_READ_CCNT(end);
@@ -1162,7 +1160,7 @@ static int internal_benchmark_cleanup_toy_servers(env_t env, hello_cleanup_mode_
     }
     else if (server_to_crash == HELLO_CLEANUP_TOY_DB_SERVER_MODE)
     {
-        printf("Crashing toy_block_server PD\n");
+        printf("Crashing toy_db_server PD\n");
         SEL4BENCH_READ_CCNT(start);
         error = pd_client_terminate(&hello_server_toy_db_pd);
         SEL4BENCH_READ_CCNT(end);
@@ -1215,7 +1213,8 @@ int benchmark_cleanup_toy_servers_3(env_t env)
 typedef enum _cleanup_scenario_server
 {
     CLEANUP_RAMDISK,
-    CLEANUP_FS
+    CLEANUP_FS,
+    CLEANUP_KVSTORE
 } cleanup_scenario_server_t;
 
 /**
@@ -1241,12 +1240,28 @@ static int internal_benchmark_cleanup(env_t env, cleanup_scenario_server_t serve
 
     /* Start the PDs */
     pd_client_context_t ramdisk_pd, fs_pd, kvstore_server_pd, kvstore_client_pd;
+    gpi_obj_id_t ramdisk_id, fs_id;
 
-    assert(!"Not implemented");
+    // Start ramdisk server process
+    error = start_ramdisk_pd(&ramdisk_pd, &ramdisk_id);
+    test_assert(error == 0);
+
+    // Start fs server process
+    error = start_xv6fs_pd(ramdisk_id, &fs_pd, &fs_id);
+    test_assert(error == 0);
+
+    /* Start the kvstore PD */
+    seL4_CPtr kvstore_ep;
+    error = start_kvstore_server(&kvstore_ep, BADGE_SPACE_ID_NULL, &kvstore_server_pd);
+    test_assert(error == 0);
+
+    /* Start the app PD */
+    error = start_hello_kvstore(SEPARATE_PROC, self_ep, kvstore_ep, &kvstore_client_pd, BADGE_SPACE_ID_NULL);
 
     /* Remove RDEs from test process so that it won't be cleaned up by recursive cleanup */
     gpi_cap_t block_type = sel4gpi_get_resource_type_code(BLOCK_RESOURCE_TYPE_NAME);
     gpi_cap_t file_type = sel4gpi_get_resource_type_code(FILE_RESOURCE_TYPE_NAME);
+    gpi_cap_t kvstore_type = sel4gpi_get_resource_type_code(KVSTORE_RESOURCE_NAME);
     pd_client_context_t pd_conn = sel4gpi_get_pd_conn();
 
     error = pd_client_remove_rde(&pd_conn, block_type, BADGE_SPACE_ID_NULL);
@@ -1255,9 +1270,12 @@ static int internal_benchmark_cleanup(env_t env, cleanup_scenario_server_t serve
     error = pd_client_remove_rde(&pd_conn, file_type, BADGE_SPACE_ID_NULL);
     test_assert(error == 0);
 
+    error = pd_client_remove_rde(&pd_conn, kvstore_type, BADGE_SPACE_ID_NULL);
+    test_assert(error == 0);
+
     /* Wait for clients to finish making requests */
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0, 0);
-    for (int i = 0; i < 4; i++)
+    for (int i = 0; i < 1; i++)
     {
         tag = seL4_Recv(self_ep.raw_endpoint, NULL);
         error = seL4_MessageInfo_get_label(tag);
@@ -1269,7 +1287,7 @@ static int internal_benchmark_cleanup(env_t env, cleanup_scenario_server_t serve
 
     if (server_to_crash == CLEANUP_RAMDISK)
     {
-        printf("Crashing toy_block_server PD\n");
+        printf("Crashing ramdisk PD\n");
         SEL4BENCH_READ_CCNT(start);
         error = pd_client_terminate(&ramdisk_pd);
         SEL4BENCH_READ_CCNT(end);
@@ -1277,9 +1295,17 @@ static int internal_benchmark_cleanup(env_t env, cleanup_scenario_server_t serve
     }
     else if (server_to_crash == CLEANUP_FS)
     {
-        printf("Crashing toy_block_server PD\n");
+        printf("Crashing fs PD\n");
         SEL4BENCH_READ_CCNT(start);
         error = pd_client_terminate(&fs_pd);
+        SEL4BENCH_READ_CCNT(end);
+        test_assert(error == 0);
+    }
+    else if (server_to_crash == CLEANUP_KVSTORE)
+    {
+        printf("Crashing kvstore PD\n");
+        SEL4BENCH_READ_CCNT(start);
+        error = pd_client_terminate(&kvstore_server_pd);
         SEL4BENCH_READ_CCNT(end);
         test_assert(error == 0);
     }
@@ -1308,6 +1334,11 @@ int benchmark_cleanup_ramdisk(env_t env)
 int benchmark_cleanup_fs(env_t env)
 {
     return internal_benchmark_cleanup(env, CLEANUP_FS);
+}
+
+int benchmark_cleanup_kvstore(env_t env)
+{
+    return internal_benchmark_cleanup(env, CLEANUP_KVSTORE);
 }
 
 #ifdef GPI_BENCHMARK_MULTIPLE
@@ -1360,7 +1391,7 @@ DEFINE_TEST_WITH_TYPE_MULTIPLE(GPIBM008,
                                OSM,
                                true);
 
-DEFINE_TEST_WITH_TYPE_MULTIPLE(GPIBM09,
+DEFINE_TEST_WITH_TYPE_MULTIPLE(GPIBM009,
                                "osm crash ramdisk server",
                                benchmark_cleanup_ramdisk,
                                OSM,
@@ -1369,6 +1400,12 @@ DEFINE_TEST_WITH_TYPE_MULTIPLE(GPIBM09,
 DEFINE_TEST_WITH_TYPE_MULTIPLE(GPIBM010,
                                "osm crash fs server",
                                benchmark_cleanup_fs,
+                               OSM,
+                               true)
+
+DEFINE_TEST_WITH_TYPE_MULTIPLE(GPIBM011,
+                               "osm crash kvstore server",
+                               benchmark_cleanup_kvstore,
                                OSM,
                                true)
 
@@ -1414,14 +1451,19 @@ DEFINE_TEST_OSM(GPIBM008,
                 benchmark_cleanup_toy_servers_3,
                 true);
 
-DEFINE_TEST(GPIBM09,
+DEFINE_TEST_OSM(GPIBM009,
             "osm crash ramdisk server",
             benchmark_cleanup_ramdisk,
-            false)
+            true)
 
-DEFINE_TEST(GPIBM010,
+DEFINE_TEST_OSM(GPIBM010,
             "osm crash fs server",
             benchmark_cleanup_fs,
-            false)
+            true)
+
+DEFINE_TEST_OSM(GPIBM011,
+            "osm crash kvstore server",
+            benchmark_cleanup_kvstore,
+            true)
 
 #endif

@@ -182,14 +182,14 @@ int test_sqlite(env_t env)
 
     /* Start ramdisk server process */
     gpi_space_id_t ramdisk_id;
-    seL4_CPtr ramdisk_pd_cap;
-    error = start_ramdisk_pd(&ramdisk_pd_cap, &ramdisk_id);
+    pd_client_context_t ramdisk_pd;
+    error = start_ramdisk_pd(&ramdisk_pd, &ramdisk_id);
     test_assert(error == 0);
 
     /* Start fs server process */
     gpi_space_id_t fs_id;
-    seL4_CPtr fs_pd_cap;
-    error = start_xv6fs_pd(ramdisk_id, &fs_pd_cap, &fs_id);
+    pd_client_context_t fs_pd;
+    error = start_xv6fs_pd(ramdisk_id, &fs_pd, &fs_id);
     test_assert(error == 0);
 
     // Add FS ep to RDE
@@ -286,13 +286,8 @@ int test_sqlite(env_t env)
     test_assert(error == 0);
 
     // Cleanup servers
-    pd_client_context_t fs_pd_conn;
-    fs_pd_conn.ep = fs_pd_cap;
-    test_error_eq(maybe_terminate_pd(&fs_pd_conn), 0);
-
-    pd_client_context_t ramdisk_pd_conn;
-    ramdisk_pd_conn.ep = ramdisk_pd_cap;
-    test_error_eq(maybe_terminate_pd(&ramdisk_pd_conn), 0);
+    test_error_eq(maybe_terminate_pd(&fs_pd), 0);
+    test_error_eq(maybe_terminate_pd(&ramdisk_pd), 0);
 
     printf("------------------ENDING: %s------------------\n", __func__);
     return sel4test_get_result();

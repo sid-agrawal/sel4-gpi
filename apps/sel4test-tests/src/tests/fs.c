@@ -49,14 +49,14 @@ int test_fs(env_t env)
 
     /* Start ramdisk server process */
     gpi_space_id_t ramdisk_id;
-    seL4_CPtr ramdisk_pd_cap;
-    error = start_ramdisk_pd(&ramdisk_pd_cap, &ramdisk_id);
+    pd_client_context_t ramdisk_pd;
+    error = start_ramdisk_pd(&ramdisk_pd, &ramdisk_id);
     test_assert(error == 0);
 
     /* Start fs server process */
     gpi_space_id_t fs_id;
-    seL4_CPtr fs_pd_cap;
-    error = start_xv6fs_pd(ramdisk_id, &fs_pd_cap, &fs_id);
+    pd_client_context_t fs_pd;
+    error = start_xv6fs_pd(ramdisk_id, &fs_pd, &fs_id);
     test_assert(error == 0);
 
     // Get the FS ep
@@ -286,13 +286,8 @@ int test_fs(env_t env)
     test_assert(error == 0);
 
     // Cleanup servers
-    pd_client_context_t fs_pd_conn;
-    fs_pd_conn.ep = fs_pd_cap;
-    test_error_eq(maybe_terminate_pd(&fs_pd_conn), 0);
-
-    pd_client_context_t ramdisk_pd_conn;
-    ramdisk_pd_conn.ep = ramdisk_pd_cap;
-    test_error_eq(maybe_terminate_pd(&ramdisk_pd_conn), 0);
+    test_error_eq(maybe_terminate_pd(&fs_pd), 0);
+    test_error_eq(maybe_terminate_pd(&ramdisk_pd), 0);
 
     printf("------------------ENDING: %s------------------\n", __func__);
     return sel4test_get_result();
@@ -357,16 +352,16 @@ int test_multiple_fs(env_t env)
 
     /* Start ramdisk server process */
     gpi_space_id_t ramdisk_id;
-    seL4_CPtr ramdisk_pd_cap;
-    error = start_ramdisk_pd(&ramdisk_pd_cap, &ramdisk_id);
+    pd_client_context_t ramdisk_pd;
+    error = start_ramdisk_pd(&ramdisk_pd, &ramdisk_id);
     test_assert(error == 0);
 
     printf("------------------STARTING TESTS: %s------------------\n", __func__);
 
     /* Start FS 1 */
     gpi_space_id_t fs_1_id;
-    seL4_CPtr fs_1_pd_cap;
-    error = start_xv6fs_pd(ramdisk_id, &fs_1_pd_cap, &fs_1_id);
+    pd_client_context_t fs_1_pd;
+    error = start_xv6fs_pd(ramdisk_id, &fs_1_pd, &fs_1_id);
     test_assert(error == 0);
 
     /* Attach MO to test's ADS */
@@ -387,8 +382,8 @@ int test_multiple_fs(env_t env)
 
     /* Start FS 2 */
     gpi_space_id_t fs_2_id;
-    seL4_CPtr fs_2_pd_cap;
-    error = start_xv6fs_pd(ramdisk_id, &fs_2_pd_cap, &fs_2_id);
+    pd_client_context_t fs_2_pd;
+    error = start_xv6fs_pd(ramdisk_id, &fs_2_pd, &fs_2_id);
     test_assert(error == 0);
 
     // Swap to using FS2
@@ -409,15 +404,13 @@ int test_multiple_fs(env_t env)
     // Destroy an FS and start another one
     // If the FS is configured to use half of the ramdisk, this test checks that blocks are being
     // reclaimed from the destroyed FS
-    pd_client_context_t fs_1_pd_conn;
-    fs_1_pd_conn.ep = fs_1_pd_cap;
-    error = pd_client_terminate(&fs_1_pd_conn);
+    error = pd_client_terminate(&fs_1_pd);
     test_assert(error == 0);
 
     /* Start FS 3 */
     gpi_space_id_t fs_3_id;
-    seL4_CPtr fs_3_pd_cap;
-    error = start_xv6fs_pd(ramdisk_id, &fs_3_pd_cap, &fs_3_id);
+    pd_client_context_t fs_3_pd;
+    error = start_xv6fs_pd(ramdisk_id, &fs_3_pd, &fs_3_id);
     test_assert(error == 0);
 
     // Swap to using FS3
@@ -441,17 +434,9 @@ int test_multiple_fs(env_t env)
     test_assert(error == 0);
 
     // Cleanup other servers
-    pd_client_context_t fs_2_pd_conn;
-    fs_2_pd_conn.ep = fs_2_pd_cap;
-    test_error_eq(maybe_terminate_pd(&fs_2_pd_conn), 0);
-
-    pd_client_context_t fs_3_pd_conn;
-    fs_3_pd_conn.ep = fs_3_pd_cap;
-    test_error_eq(maybe_terminate_pd(&fs_3_pd_conn), 0);
-
-    pd_client_context_t ramdisk_pd_conn;
-    ramdisk_pd_conn.ep = ramdisk_pd_cap;
-    test_error_eq(maybe_terminate_pd(&ramdisk_pd_conn), 0);
+    test_error_eq(maybe_terminate_pd(&fs_2_pd), 0);
+    test_error_eq(maybe_terminate_pd(&fs_3_pd), 0);
+    test_error_eq(maybe_terminate_pd(&ramdisk_pd), 0);
 
     printf("------------------ENDING: %s------------------\n", __func__);
     return sel4test_get_result();
