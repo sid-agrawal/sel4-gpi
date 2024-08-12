@@ -1341,8 +1341,6 @@ int benchmark_cleanup_kvstore(env_t env)
     return internal_benchmark_cleanup(env, CLEANUP_KVSTORE);
 }
 
-#ifdef GPI_BENCHMARK_MULTIPLE
-
 DEFINE_TEST_WITH_TYPE_MULTIPLE(GPIBM001,
                                "sel4utils basic bench",
                                benchmark_basic_sel4utils,
@@ -1408,62 +1406,3 @@ DEFINE_TEST_WITH_TYPE_MULTIPLE(GPIBM011,
                                benchmark_cleanup_kvstore,
                                OSM,
                                true)
-
-#else
-
-DEFINE_TEST(GPIBM001,
-            "sel4utils basic bench",
-            benchmark_basic_sel4utils,
-            true)
-
-DEFINE_TEST_OSM(GPIBM002,
-                "OSM basic bench",
-                benchmark_basic_osm,
-                true)
-
-DEFINE_TEST(GPIBM003,
-            "sel4utils bench process spawn / send cap",
-            benchmark_process_spawn_sel4utils,
-            true);
-
-DEFINE_TEST_OSM(GPIBM004,
-                "osm bench process spawn / send cap",
-                benchmark_process_spawn_osm,
-                true);
-
-DEFINE_TEST_OSM(GPIBM005,
-                "osm FILE create",
-                benchmark_fs,
-                true);
-
-DEFINE_TEST_OSM(GPIBM006,
-                "osm toy server cleanup, crash block server",
-                benchmark_cleanup_toy_servers_1,
-                true);
-
-DEFINE_TEST_OSM(GPIBM007,
-                "osm toy server cleanup, crash file server",
-                benchmark_cleanup_toy_servers_2,
-                true);
-
-DEFINE_TEST_OSM(GPIBM008,
-                "osm toy server cleanup, crash db server",
-                benchmark_cleanup_toy_servers_3,
-                true);
-
-DEFINE_TEST_OSM(GPIBM009,
-            "osm crash ramdisk server",
-            benchmark_cleanup_ramdisk,
-            true)
-
-DEFINE_TEST_OSM(GPIBM010,
-            "osm crash fs server",
-            benchmark_cleanup_fs,
-            true)
-
-DEFINE_TEST_OSM(GPIBM011,
-            "osm crash kvstore server",
-            benchmark_cleanup_kvstore,
-            true)
-
-#endif

@@ -61,13 +61,7 @@ set_property(
 )
 
 # Add cmake configuration options
-set(GPIBenchmarkMultiple OFF CACHE BOOL "If true, run benchmark tests multiple times")
-
-if (GPIBenchmarkMultiple)
-    set(GPIBenchmarkDef "GPI_BENCHMARK_MULTIPLE")
-else()
-    set(GPIBenchmarkDef "GPI_BENCHMARK_SINGLE")
-endif()
+set(GPIBenchmarkIterBits "0" CACHE STRING "Benchmarks will be run 2^n times")
 
 set(GPIExtractModel OFF CACHE BOOL "If true, extract the model state during tests")
 
@@ -104,5 +98,5 @@ target_link_libraries(
 )
 
 target_compile_options(sel4test-tests PUBLIC
-    "-D${GPIBenchmarkDef}"
+    "-DGPI_BENCHMARK_ITER_BITS=${GPIBenchmarkIterBits}"
     "-D${GPIExtractModelDef}")
