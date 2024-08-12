@@ -20,6 +20,7 @@
 
 static const char *kvstore_db_file = "/kvstore.db";
 static const char *create_table_cmd = "create table kvstore_%u (key bigint unsigned not null primary key, val bigint unsigned);";
+static const char *delete_table_cmd = "drop table kvstore_%u;";
 static const char *insert_format = "insert or replace into kvstore_%u(key, val) values (%ld, %ld);";
 static const char *select_format = "select val from kvstore_%u where key == %ld;";
 
@@ -103,8 +104,23 @@ static int sqlite_callback(void *listp, int argc, char **argv, char **azColName)
     return 0;
 }
 
-static int on_kvstore_registry_delete()
+static void on_kvstore_registry_delete(resource_registry_node_t *node, void *arg0)
 {
+    int error = 0;
+
+    // Delete table
+    SQL_EXEC(kvstore_db, delete_table_cmd, node->object_id);
+
+    if (error)
+    {
+        ZF_LOGE("Failed to delete kvstore table %lu\n", node->object_id);
+    }
+    else
+    {
+        KVSTORE_PRINTF("Deleted table %lu\n", node->object_id);
+    }
+
+    return;
 }
 
 int kvstore_server_init()
@@ -294,9 +310,15 @@ static int kvstore_work_handler(PdWorkReturnMessage *work)
         KVSTORE_PRINTF("Got FREE work from RT\n");
         for (int i = 0; i < work->object_ids_count; i++)
         {
-            // Actually don't do much when a file is freed, it's the same as file close
-            // We still want to keep it in the file system, but we can reduce the refcount
-            gpi_obj_id_t file_id = work->object_ids[i];
+            gpi_obj_id_t kvstore_id = work->object_ids[i];
+
+            // Find the node
+            resource_registry_node_t *node = resource_registry_get_by_id(&get_kvstore_server()->kvstore_registry,
+                                                                         kvstore_id);
+            CHECK_ERR_GOTO(node == NULL, "Couldn't find KVstore to free\n", KvstoreError_UNKNOWN);
+
+            // Free it
+            resource_registry_dec(&get_kvstore_server()->kvstore_registry, node);
         }
 
         error = pd_client_finish_work(&get_kvstore_server()->gen.pd_conn, work->object_ids_count, work->n_critical);
@@ -306,16 +328,32 @@ static int kvstore_work_handler(PdWorkReturnMessage *work)
         KVSTORE_PRINTF("Got DESTROY work from RT\n");
         for (int i = 0; i < work->object_ids_count; i++)
         {
-            gpi_obj_id_t file_id = work->object_ids[i];
+            gpi_obj_id_t kvstore_id = work->object_ids[i];
             gpi_space_id_t space_id = work->space_ids[i];
 
-            if (file_id != BADGE_OBJ_ID_NULL)
+            if (kvstore_id != BADGE_OBJ_ID_NULL)
             {
-                // Destroy a particular file
+                // Destroy a particular kvstore
+
+                // Find the node
+                resource_registry_node_t *node = resource_registry_get_by_id(&get_kvstore_server()->kvstore_registry,
+                                                                             kvstore_id);
+                CHECK_ERR_GOTO(node == NULL, "Couldn't find KVstore to free\n", KvstoreError_UNKNOWN);
+
+                // Destroy it
+                resource_registry_delete(&get_kvstore_server()->kvstore_registry, node);
             }
             else
             {
-                // Destroy a whole space
+                // Destroy the entire db
+                error = sqlite3_close(kvstore_db);
+                CHECK_ERR_GOTO(error, "Failed to close database\n", KvstoreError_UNKNOWN);
+
+                error = sqlite3_shutdown();
+                CHECK_ERR_GOTO(error, "Failed to shutdown sqlite\n", KvstoreError_UNKNOWN);
+
+                error = unlink(get_kvstore_server()->db_filename);
+                CHECK_ERR_GOTO(error, "Failed to unlink database file\n", KvstoreError_UNKNOWN);
             }
         }
 
@@ -421,7 +459,7 @@ err_goto:
 }
 
 int kvstore_create_store(gpi_obj_id_t *store_id)
-{    
+{
     int error = 0;
 
     // Insert to metadata
