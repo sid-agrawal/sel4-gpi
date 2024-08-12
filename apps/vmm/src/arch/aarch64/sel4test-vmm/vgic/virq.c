@@ -1,6 +1,6 @@
-#include "vgic/vgic.h"
-#include <vmm-common/vmm_common.h>
-#include <sel4test-vmm/virq.h>
+#include <vmm-common/vmm.h>
+#include <sel4test-vmm/vgic/virq.h>
+#include <sel4test-vmm/vgic/vgic.h>
 #include <utils/util.h>
 
 #define SGI_RESCHEDULE_IRQ 0

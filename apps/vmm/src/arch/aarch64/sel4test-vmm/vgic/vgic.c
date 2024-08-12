@@ -4,21 +4,13 @@
  *
  * SPDX-License-Identifier: BSD-2-Clause
  */
-#include "vgic/vgic.h"
-#include "vgic/virq.h"
 #include <utils/arith.h>
-#include <vmm-common/vmm_common.h>
+#include <vmm-common/vmm.h>
 #include <sel4test-vmm/fault.h>
-
-#if defined(GIC_V2)
-#include "vgic/vgic_v2.h"
-#elif defined(GIC_V3)
-#include "vgic/vgic_v3.h"
-#else
-#error "Unknown GIC version"
-#endif
-
-#include "vgic/vdist.h"
+#include <sel4test-vmm/vgic/vgic_v2.h>
+#include <sel4test-vmm/vgic/vdist.h>
+#include <sel4test-vmm/vgic/vgic.h>
+#include <sel4test-vmm/virq.h>
 
 /* The driver expects the VGIC state to be initialised before calling any of the driver functionality. */
 extern vgic_t vgic;

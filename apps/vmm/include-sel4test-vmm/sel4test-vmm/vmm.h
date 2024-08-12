@@ -7,13 +7,13 @@
 #include <sel4utils/vspace.h>
 #include <simple/simple.h>
 #include <sel4gpi/linked_list.h>
-#include <vmm-common/vmm_common.h>
+#include <vmm-common/vmm.h>
 
 /**
  * @brief Holds information about a VM for a
  * seL4-test VMM implementation
  */
-typedef struct _vm_context
+struct _vm_context
 {
     uint32_t id;       ///< an ID assigned by the VMM
     vka_object_t vcpu; ///< the vCPU, currently only allow guests to use 1 vCPU
@@ -27,7 +27,7 @@ typedef struct _vm_context
     vka_object_t *dev_frames;
     size_t n_dev_frames;
     vka_object_t gic_vcpu_frame;
-} vm_context_t;
+};
 
 typedef struct _vmon_context
 {

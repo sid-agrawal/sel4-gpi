@@ -5,7 +5,6 @@
  */
 #include <stddef.h>
 #include <stdint.h>
-#include "vgic/vgic.h"
 #include <vka/vka.h>
 #include <sel4/sel4.h>
 #include <vka/object.h>
@@ -20,14 +19,15 @@
 #include <sel4debug/register_dump.h>
 #include <sel4utils/thread.h>
 #include <sel4utils/process.h>
-#include <vmm-common/vmm_common.h>
+#include <vmm-common/vmm.h>
 #include <vmm-common/linux.h>
-#include <vmm-common/fault_common.h>
+#include <vmm-common/fault.h>
 #include <sel4test-vmm/guest.h>
 #include <sel4test-vmm/virq.h>
 #include <sel4test-vmm/vmm.h>
 #include <sel4test-vmm/vcpu.h>
 #include <sel4test-vmm/fault.h>
+#include <sel4test-vmm/vgic/vgic.h>
 #include <sel4gpi/pd_utils.h>
 
 // @ivanv: ideally we would have none of these hardcoded values
@@ -368,18 +368,18 @@ uint32_t sel4test_new_guest(void)
     size_t num_pages = BYTES_TO_4K_PAGES(MiB_TO_BYTES(2));
     size_t dev_frame_idx = 0;
     error = setup_dev_frames(vka, vm, num_pages, ODROID_BUS1, dev_frame_idx);
-    GOTO_IF_ERR(error, "Failed to setup bus region 0x%lx\n", ODROID_BUS1);
+    GOTO_IF_ERR(error, "Failed to setup bus region 0x%u\n", ODROID_BUS1);
 
     /* BUS 2 */
     dev_frame_idx += num_pages;
     error = setup_dev_frames(vka, vm, num_pages, ODROID_BUS2, dev_frame_idx);
-    GOTO_IF_ERR(error, "Failed to setup bus region 0x%lx\n", ODROID_BUS2);
+    GOTO_IF_ERR(error, "Failed to setup bus region 0x%u\n", ODROID_BUS2);
 
     /* BUS 3 */
     num_pages = BYTES_TO_4K_PAGES(MiB_TO_BYTES(1));
     dev_frame_idx += num_pages;
     error = setup_dev_frames(vka, vm, num_pages, ODROID_BUS3, dev_frame_idx);
-    GOTO_IF_ERR(error, "Failed to setup bus region 0x%lx\n", ODROID_BUS3);
+    GOTO_IF_ERR(error, "Failed to setup bus region 0x%u\n", ODROID_BUS3);
 #endif
     /* guest ram */
     size_t guest_ram_pages = BYTES_TO_SIZE_BITS_PAGES(GUEST_RAM_SIZE, seL4_LargePageBits);

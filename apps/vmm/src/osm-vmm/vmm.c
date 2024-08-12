@@ -14,6 +14,8 @@
 #include <sel4gpi/pd_utils.h>
 #include <sel4debug/register_dump.h>
 #include <osm-vmm/vmm.h>
+#include <osm-vmm/fault.h>
+#include <vmm-common/fault.h>
 #include <vmm-common/smoldtb.h>
 #include <vmm-common/linux.h>
 
@@ -106,7 +108,7 @@ static void dtb_on_error(const char *why)
     printf("DTB Parser error: %s\n", why);
 }
 
-int new_guest(void)
+uint32_t osm_new_guest(void)
 {
     int error = 0;
     pd_config_t *vm_cfg = calloc(1, sizeof(pd_config_t));

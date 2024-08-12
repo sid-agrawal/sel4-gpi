@@ -5,9 +5,12 @@
  * SPDX-License-Identifier: BSD-2-Clause
  */
 
-#include <vmm-common/vmm_common.h>
+#include <vmm-common/vmm.h>
+#include <vmm-common/fault.h>
 #include <sel4test-vmm/fault.h>
 #include <sel4test-vmm/vcpu.h>
+#include <sel4test-vmm/vgic/virq.h> 
+#include <sel4test-vmm/vgic/vgic.h> 
 
 /* GIC Distributor register access utilities */
 #define GIC_DIST_REGN(offset, reg) ((offset - reg) / sizeof(uint32_t))
@@ -637,7 +640,6 @@ static bool vgic_dist_reg_write(seL4_CPtr vcpu, seL4_CPtr tcb, size_t vcpu_id, v
         // @ivanv: Here we're making the assumption that there's only one vCPU, and
         // we're also blindly injectnig the given IRQ to that vCPU.
         // @ivanv: come back to this, do we have two writes to the TCB registers?
-        VMM_PRINT("pc: %lX\n", regs->pc);
         success = vgic_inject_irq(vcpu, vcpu_id, virq);
         assert(success);
         break;

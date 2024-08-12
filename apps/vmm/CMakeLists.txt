@@ -79,13 +79,6 @@ list(
     ${CMAKE_CURRENT_SOURCE_DIR}/board/${KernelPlatVMM}/bootimg.bin
 )
 
-# None of the platforms we have access to support VGIC v3
-list(
-    REMOVE_ITEM
-    deps
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/arch/${KernelSel4Arch}/${GPIVMMImplementation}/vgic/vgic_v3.c
-)
-
 # add_link_options("-fuse-ld=lld")
 
 # add_executable(vmm EXCLUDE_FROM_ALL ${deps})
@@ -96,8 +89,9 @@ target_include_directories(
     vmm
     PUBLIC 
         include
-        arch/${KernelSel4Arch}
-        arch/${KernelSel4Arch}/${GPIVMMImplementation}
+        include/arch/${KernelSel4Arch}
+        include-${GPIVMMImplementation}
+        include-${GPIVMMImplementation}/arch/${KernelSel4Arch}
 )
 
 target_link_libraries(

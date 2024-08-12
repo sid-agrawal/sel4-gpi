@@ -1,0 +1,41 @@
+#pragma once
+#include <stdint.h>
+#include <stdbool.h>
+#include <stddef.h>
+#include <sel4/sel4.h>
+#include <vmm-common/vmm.h>
+
+#define MAX_VM_EXCEPTION_HANDLERS 16
+
+typedef bool (*vm_exception_handler_t)(size_t vm_id, size_t offset, size_t fsr, seL4_UserContext *regs, void *data);
+
+struct vm_exception_handler
+{
+    uintptr_t base;
+    uintptr_t end;
+    vm_exception_handler_t callback;
+    void *data;
+};
+
+/* Fault-handling functions */
+bool fault_handle(vm_context_t *vm, seL4_MessageInfo_t *msg);
+
+bool fault_handle_vcpu_exception(vm_context_t *vm);
+bool fault_handle_vppi_event(vm_context_t *vm);
+bool fault_handle_user_exception(vm_context_t *vm);
+bool fault_handle_unknown_syscall(vm_context_t *vm);
+bool fault_handle_vm_exception(vm_context_t *vm);
+
+/* Take the fault label given by the kernel and convert it to a string. */
+char *fault_to_string(seL4_Word fault_label);
+bool fault_is_write(uint64_t fsr);
+bool fault_is_read(uint64_t fsr);
+uint64_t fault_emulate(seL4_UserContext *regs, uint64_t reg, uint64_t addr, uint64_t fsr, uint64_t reg_val);
+void fault_emulate_write(seL4_UserContext *regs, size_t addr, size_t fsr, size_t reg_val);
+uint64_t fault_get_data_mask(uint64_t addr, uint64_t fsr);
+uint64_t fault_get_data(seL4_UserContext *regs, uint64_t fsr);
+int get_rt(uint64_t fsr);
+seL4_Word *decode_rt(uint64_t reg, seL4_UserContext *regs);
+
+bool fault_register_vm_exception_handler(uintptr_t base, size_t size, vm_exception_handler_t callback, void *data);
+bool fault_handle_registered_vm_exceptions(size_t vcpu_id, uintptr_t addr, size_t fsr, seL4_UserContext *regs);

@@ -12,7 +12,7 @@
 #include <assert.h>
 #include <utils/arith.h>
 #include <sel4utils/util.h>
-#include <vmm-common/vmm_common.h>
+#include <vmm-common/vmm.h>
 #include <sel4test-vmm/virq.h>
 
 /* The ARM GIC architecture defines 16 SGIs (0 - 7 is recommended for non-secure

@@ -5,10 +5,10 @@
  * SPDX-License-Identifier: BSD-2-Clause
  */
 
-#include "smc.h"
-#include "psci.h"
+#include <vmm-common/smc.h>
+#include <vmm-common/psci.h>
 #include <assert.h>
-#include <vmm-common/vmm_common.h>
+#include <vmm-common/vmm.h>
 
 // Values in this file are taken from:
 // SMC CALLING CONVENTION

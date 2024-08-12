@@ -42,14 +42,12 @@
 
 #include <stdint.h>
 
-#include "vgic/vgic.h"
-#include "vgic/vgic_v2.h"
-#include "vgic/virq.h"
-#include "vgic/vdist.h"
+#include <sel4test-vmm/vgic/vgic.h>
+#include <sel4test-vmm/vgic/vgic_v2.h>
+#include <sel4test-vmm/vgic/virq.h>
+#include <sel4test-vmm/vgic/vdist.h>
 #include <utils/arith.h>
-// #include <sel4test-vmm/fault.h>
-// #include <sel4test-vmm/virq.h>
-#include <vmm-common/vmm_common.h>
+#include <vmm-common/vmm.h>
 
 vgic_t vgic;
 struct gic_dist_map dist;

@@ -6,8 +6,8 @@
  */
 
 #include <stdbool.h>
-#include "psci.h"
-#include "smc.h"
+#include <vmm-common/psci.h>
+#include <vmm-common/smc.h>
 #include <sel4utils/util.h>
 #include <assert.h>
 #include <sel4gpi/debug.h>

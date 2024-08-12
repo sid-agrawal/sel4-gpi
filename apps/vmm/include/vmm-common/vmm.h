@@ -36,3 +36,6 @@
 
 #define VMM_PRINTV(msg, ...) \
     OSDB_LVL_PRINT(OSDB_VERBOSE, VMM_DBG, COLORIZE("[VMM] %s():\t", WHITE) msg, __func__, ##__VA_ARGS__);
+
+struct _vm_context;
+typedef struct _vm_context vm_context_t;
