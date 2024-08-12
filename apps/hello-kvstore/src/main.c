@@ -32,6 +32,7 @@ uintptr_t morecore_base = (uintptr_t)PD_HEAP_LOC;
 uintptr_t morecore_top = (uintptr_t)(PD_HEAP_LOC + APP_MALLOC_SIZE);
 
 #define EXTRACT 0
+#define N_KVSTORES 5
 
 // (XXX) Linh: TO BE REMOVED: terrible hack for threads - only one thread can use the fs client at a time
 extern global_xv6fs_client_context_t xv6fs_client;
@@ -55,32 +56,38 @@ int kvstore_tests(void)
 
     printf("---- Begin KVstore tests ----\n");
 
+    for (int i = 0; i < N_KVSTORES; i++) {
     // Create a kvstore
     seL4_CPtr kvstore_ep; // Only used if, in this mode, the kvstore is an actual server with endpoint
-    error = kvstore_client_create_kvstore(&kvstore_ep);
+    gpi_obj_id_t kvstore_id;
+    error = kvstore_client_create_kvstore(&kvstore_ep, &kvstore_id);
     CHECK_ERROR(error, "Failed to create kvstore");
 
-    // Set and get one value
+    // Ensure there aren't already values
     key = 100;
     val = 42;
-    error = kvstore_client_set(kvstore_ep, key, val);
+    error = kvstore_client_get(kvstore_ep, kvstore_id, key, &val_ret);
+    CHECK_ERROR(error != KvstoreError_KEY, "Should have returned KvstoreError_KEY for invalid key\n");
+
+    // Set and get one value
+    error = kvstore_client_set(kvstore_ep, kvstore_id, key, val);
     CHECK_ERROR(error, "Failed to set a value");
 
-    error = kvstore_client_get(kvstore_ep, key, &val_ret);
+    error = kvstore_client_get(kvstore_ep, kvstore_id, key, &val_ret);
     CHECK_ERROR(error, "Failed to get a value");
     CHECK_ERROR(val != val_ret, "Get value is different from set");
 
     // Overwrite a value
     val = 555;
-    error = kvstore_client_set(kvstore_ep, key, val);
+    error = kvstore_client_set(kvstore_ep, kvstore_id, key, val);
     CHECK_ERROR(error, "Failed to set a value");
 
-    error = kvstore_client_get(kvstore_ep, key, &val_ret);
+    error = kvstore_client_get(kvstore_ep, kvstore_id, key, &val_ret);
     CHECK_ERROR(error, "Failed to get a value");
     CHECK_ERROR(val != val_ret, "Get value is different from set");
 
     // Get for an invalid key
-    error = kvstore_client_get(kvstore_ep, 1111, &val_ret);
+    error = kvstore_client_get(kvstore_ep, kvstore_id, 1111, &val_ret);
     CHECK_ERROR(error != KvstoreError_KEY, "Should have returned KvstoreError_KEY for invalid key\n");
 
     // Set and get many values
@@ -88,12 +95,13 @@ int kvstore_tests(void)
     {
         key = 1000 + i;
         val = 5000 + i;
-        error = kvstore_client_set(kvstore_ep, key, val);
+        error = kvstore_client_set(kvstore_ep, kvstore_id, key, val);
         CHECK_ERROR(error, "Failed to set a value");
 
-        error = kvstore_client_get(kvstore_ep, key, &val_ret);
+        error = kvstore_client_get(kvstore_ep, kvstore_id, key, &val_ret);
         CHECK_ERROR(error, "Failed to get a value");
         CHECK_ERROR(val != val_ret, "Get value is different from set");
+    }
     }
 
     printf("---- Finished KVstore tests ----\n");

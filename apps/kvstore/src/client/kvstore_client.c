@@ -170,7 +170,7 @@ int kvstore_client_configure(kvstore_mode_t kvstore_mode, seL4_CPtr ep)
     return error;
 }
 
-int kvstore_client_create_kvstore(seL4_CPtr *dest)
+int kvstore_client_create_kvstore(seL4_CPtr *dest, gpi_obj_id_t *store_id)
 {
     seL4_Error error = 0;
 
@@ -190,14 +190,29 @@ int kvstore_client_create_kvstore(seL4_CPtr *dest)
             *dest = reply.msg.alloc.dest;
         }
     }
+    else if (mode == SEPARATE_ADS)
+    {
+        error = cpu_client_change_vspace(&self_cpu_conn, &kvserv_ads);
+        if (error)
+        {
+            ZF_LOGE("failed to swap ADS to kvstore server");
+            return error;
+        }
+        error = kvstore_create_store(store_id);;
+        ZF_LOGE_IF(error, "kvstore_create_store failed");
+
+        // don't overwrite the error value from the actual server command
+        int swap_err = cpu_client_change_vspace(&self_cpu_conn, &client_ads_conn);
+        ZF_LOGF_IF(swap_err, "Failed to swap back to client ADS"); // fatal because we can't continue in the wrong ADS
+    }
     else {
-        // No need to create kvstore resource when using the same address space
+        return kvstore_create_store(store_id);
     }
 
     return error;
 }
 
-int kvstore_client_set(seL4_CPtr kvstore_ep, seL4_Word key, seL4_Word value)
+int kvstore_client_set(seL4_CPtr kvstore_ep, gpi_obj_id_t store_id, seL4_Word key, seL4_Word value)
 {
     seL4_Error error;
 
@@ -226,7 +241,7 @@ int kvstore_client_set(seL4_CPtr kvstore_ep, seL4_Word key, seL4_Word value)
             return error;
         }
 
-        error = kvstore_server_set(key, value);
+        error = kvstore_server_set(store_id, key, value);
         ZF_LOGE_IF(error, "kvstore_server_set failed");
 
         // don't overwrite the error value from the actual server command
@@ -235,13 +250,13 @@ int kvstore_client_set(seL4_CPtr kvstore_ep, seL4_Word key, seL4_Word value)
     }
     else
     {
-        error = kvstore_server_set(key, value);
+        error = kvstore_server_set(store_id, key, value);
     }
 
     return error;
 }
 
-int kvstore_client_get(seL4_CPtr kvstore_ep, seL4_Word key, seL4_Word *value)
+int kvstore_client_get(seL4_CPtr kvstore_ep, gpi_obj_id_t store_id, seL4_Word key, seL4_Word *value)
 {
     seL4_Error error;
 
@@ -272,7 +287,7 @@ int kvstore_client_get(seL4_CPtr kvstore_ep, seL4_Word key, seL4_Word *value)
             ZF_LOGE("failed to swap ADS to kvstore server");
             return error;
         }
-        error = kvstore_server_get(key, value);
+        error = kvstore_server_get(store_id, key, value);
         ZF_LOGE_IF(error, "kvstore_server_get failed");
 
         // don't overwrite the error value from the actual server command
@@ -281,7 +296,7 @@ int kvstore_client_get(seL4_CPtr kvstore_ep, seL4_Word key, seL4_Word *value)
     }
     else
     {
-        error = kvstore_server_get(key, value);
+        error = kvstore_server_get(store_id, key, value);
     }
 
     return error;

@@ -19,9 +19,9 @@
 #define DEFAULT_KVSTORE_OBJ_ID 1
 
 static const char *kvstore_db_file = "/kvstore.db";
-static const char *create_table_cmd = "create table kvstore (key bigint unsigned not null primary key, val bigint unsigned);";
-static const char *insert_format = "insert or replace into kvstore(key, val) values (%ld, %ld);";
-static const char *select_format = "select val from kvstore where key == %ld;";
+static const char *create_table_cmd = "create table kvstore_%u (key bigint unsigned not null primary key, val bigint unsigned);";
+static const char *insert_format = "insert or replace into kvstore_%u(key, val) values (%ld, %ld);";
+static const char *select_format = "select val from kvstore_%u where key == %ld;";
 
 static sqlite3 *kvstore_db;
 static int cmdlen = 128;
@@ -103,6 +103,10 @@ static int sqlite_callback(void *listp, int argc, char **argv, char **azColName)
     return 0;
 }
 
+static int on_kvstore_registry_delete()
+{
+}
+
 int kvstore_server_init()
 {
     KVSTORE_PRINTF("kvstore_server_init\n");
@@ -136,9 +140,9 @@ int kvstore_server_init()
     CHECK_ERR_GOTO(error, "failed to open kvstore db", KvstoreError_UNKNOWN);
     KVSTORE_PRINTF("Created DB %s\n", get_kvstore_server()->db_filename);
 
-    SQL_EXEC(kvstore_db, create_table_cmd, NULL);
-    CHECK_ERR_GOTO(error, "failed to create kvstore table", KvstoreError_UNKNOWN);
-    KVSTORE_PRINTF("Created table\n");
+    /* Initialize the registry */
+    resource_registry_initialize(&get_kvstore_server()->kvstore_registry, on_kvstore_registry_delete,
+                                 NULL, BADGE_MAX_OBJ_ID - 1);
 
 err_goto:
     return error;
@@ -151,8 +155,6 @@ static int kvstore_init()
 
     error = kvstore_server_init();
     CHECK_ERR_GOTO(error, "failed to initialize kvstore files", KvstoreError_UNKNOWN);
-
-    get_kvstore_server()->kvstore_obj_id = BADGE_OBJ_ID_NULL;
 
     error = resspc_client_map_space(
         &get_kvstore_server()->gen.default_space,
@@ -199,24 +201,23 @@ static void kvstore_request_handler(void *msg_p,
         {
         case KvstoreMessage_create_tag:
             KVSTORE_PRINTF("Got create message from client %u\n", client_id);
-            // Give the client a resource to access the kvstore
-            // (XXX) Arya: This doesn't actually create a new kvstore because the server currently
-            // only supports a single kvstore
 
-            if (get_kvstore_server()->kvstore_obj_id == BADGE_OBJ_ID_NULL)
-            {
-                error = resource_server_create_resource(&get_kvstore_server()->gen,
-                                                        &get_kvstore_server()->gen.default_space,
-                                                        DEFAULT_KVSTORE_OBJ_ID);
-                CHECK_ERR_GOTO(error, "Failed to create the kvstore resource", KvstoreError_UNKNOWN);
+            // Create a kvstore for the client
+            gpi_obj_id_t store_id;
+            error = kvstore_create_store(&store_id);
+            CHECK_ERR_GOTO(error, "Failed to create a new kvstore", KvstoreError_UNKNOWN);
 
-                get_kvstore_server()->kvstore_obj_id = DEFAULT_KVSTORE_OBJ_ID;
-            }
+            // Create the resource
+            error = resource_server_create_resource(&get_kvstore_server()->gen,
+                                                    &get_kvstore_server()->gen.default_space,
+                                                    store_id);
+            CHECK_ERR_GOTO(error, "Failed to create the kvstore resource", KvstoreError_UNKNOWN);
 
+            // Share the resource
             seL4_CPtr dest;
             error = resource_server_give_resource(&get_kvstore_server()->gen,
                                                   get_kvstore_server()->gen.default_space.id,
-                                                  get_kvstore_server()->kvstore_obj_id,
+                                                  store_id,
                                                   client_id,
                                                   &dest);
             CHECK_ERR_GOTO(error, "Failed to give the kvstore resource", KvstoreError_UNKNOWN);
@@ -231,16 +232,17 @@ static void kvstore_request_handler(void *msg_p,
     else
     {
         /* Handle Request On Specific Resource */
-        KVSTORE_PRINTF("Received badged request with object id 0x%u\n", get_object_id_from_badge(sender_badge));
+        gpi_obj_id_t store_id = get_object_id_from_badge(sender_badge);
+        KVSTORE_PRINTF("Received badged request with object id 0x%u\n", store_id);
 
         switch (msg->which_msg)
         {
         case KvstoreMessage_set_tag:
-            error = kvstore_server_set(msg->msg.set.key, msg->msg.set.val);
+            error = kvstore_server_set(store_id, msg->msg.set.key, msg->msg.set.val);
             break;
         case KvstoreMessage_get_tag:
             uint64_t val;
-            error = kvstore_server_get(msg->msg.get.key, &val);
+            error = kvstore_server_get(store_id, msg->msg.get.key, &val);
 
             reply_msg->which_msg = KvstoreReturnMessage_get_tag;
             reply_msg->msg.get.val = val;
@@ -418,26 +420,46 @@ err_goto:
     return error;
 }
 
-int kvstore_server_set(seL4_Word key, seL4_Word value)
+int kvstore_create_store(gpi_obj_id_t *store_id)
+{    
+    int error = 0;
+
+    // Insert to metadata
+    resource_registry_node_t *node = calloc(1, sizeof(resource_registry_node_t));
+    gpi_obj_id_t id = resource_registry_insert_new_id(&get_kvstore_server()->kvstore_registry, node);
+
+    // Create table
+    SQL_EXEC(kvstore_db, create_table_cmd, id);
+    CHECK_ERR_GOTO(error, "failed to create kvstore table", KvstoreError_UNKNOWN);
+    KVSTORE_PRINTF("Created table\n");
+
+    // Return the ID
+    *store_id = id;
+
+err_goto:
+    return error;
+}
+
+int kvstore_server_set(gpi_obj_id_t store_id, seL4_Word key, seL4_Word value)
 {
     KVSTORE_PRINTF("kvstore_server_set: key (%ld), value (%ld), %s\n", key, value, get_kvstore_server()->db_filename);
 
     int error = seL4_NoError;
-    SQL_EXEC(kvstore_db, insert_format, key, value);
+    SQL_EXEC(kvstore_db, insert_format, store_id, key, value);
     CHECK_ERR_GOTO(error, "failed to insert pair to kvstore table", KvstoreError_UNKNOWN);
 
 err_goto:
     return error;
 }
 
-int kvstore_server_get(seL4_Word key, seL4_Word *value)
+int kvstore_server_get(gpi_obj_id_t store_id, seL4_Word key, seL4_Word *value)
 {
     KVSTORE_PRINTF("kvstore_server_get: key (%ld)\n", key);
 
     int error = seL4_NoError;
     sqlite3_stmt *stmt;
 
-    SQL_MAKE_CMD(select_format, key);
+    SQL_MAKE_CMD(select_format, store_id, key);
     error = sqlite3_prepare_v2(kvstore_db, sql_cmd, -1, &stmt, 0);
     CHECK_ERR_GOTO(error, "failed to prepare sql cmd", KvstoreError_UNKNOWN);
 

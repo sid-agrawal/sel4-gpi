@@ -37,8 +37,7 @@ typedef struct _kvstore_server_context
     // Generic resource server context
     resource_server_context_t gen;
 
-    // (XXX) Arya: KVstore server currently only supports one kvstore
-    gpi_obj_id_t kvstore_obj_id;
+    resource_registry_t kvstore_registry; ///< Registry of kvstores (tables)
     char db_filename[128]; ///< Name of the file storing the database
 } kvstore_server_context_t;
 
@@ -58,22 +57,32 @@ int kvstore_server_start_thread(seL4_CPtr *kvstore_ep);
 int kvstore_server_main(seL4_CPtr parent_ep, gpi_obj_id_t parent_pd_id);
 
 /**
+ * @brief Create a new kvstore table
+ *
+ * @param store_id returns the store ID to refer to the store in set/get calls
+ * @return 0 on success, seL4 error otherwise
+ */
+int kvstore_create_store(gpi_obj_id_t *store_id);
+
+/**
  * @brief Put a key-value pair in the kv store
  * Overwrites any previous value stored for the key
  *
+ * @param store_id the kvstore to set, use the ID from kvstore_create_store
  * @param key Key to store
  * @param value Value to store
  * @return 0 on success, seL4 error otherwise
  */
-int kvstore_server_set(seL4_Word key, seL4_Word value);
+int kvstore_server_set(gpi_obj_id_t store_id, seL4_Word key, seL4_Word value);
 
 /**
  * @brief Get a value from the kv store
  *
+ * @param store_id the kvstore to set, use the ID from kvstore_create_store
  * @param key Key to search for
  * @param value Returns the value if the key is found
  * @return 0 on success,
  *         KvstoreError_KEY if the key does not exist,
  *         seL4 error otherwise
  */
-int kvstore_server_get(seL4_Word key, seL4_Word *value);
+int kvstore_server_get(gpi_obj_id_t store_id, seL4_Word key, seL4_Word *value);
