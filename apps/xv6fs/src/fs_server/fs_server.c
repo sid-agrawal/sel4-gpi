@@ -916,13 +916,27 @@ int xv6fs_work_handler(PdWorkReturnMessage *work)
         if (space_id == get_xv6fs_server()->gen.default_space.id)
         {
           // Destroy the entire file system, this is done by releasing the disk
-          for (int i = 0; i < FS_SIZE; i++)
-          {
-            error = ramdisk_client_free_block(&get_xv6fs_server()->blocks[i]);
 
-            if (error)
+          // Nothing to do if we can't access the disk
+          if (sel4gpi_can_request_type(BLOCK_RESOURCE_TYPE_NAME))
+          {
+
+            for (int i = 0; i < FS_SIZE; i++)
             {
-              XV6FS_PRINTF("Warning: failed to free block %u, it may have already been deleted\n", i);
+              error = ramdisk_client_free_block(&get_xv6fs_server()->blocks[i]);
+
+              if (error)
+              {
+                if (!sel4gpi_can_request_type(BLOCK_RESOURCE_TYPE_NAME))
+                {
+                  // We got an error because we no longer have access to the ramdisk
+                  break;
+                }
+                else
+                {
+                  CHECK_ERROR_GOTO(error, "Failed to free block\n", FsError_UNKNOWN, err_goto);
+                }
+              }
             }
           }
         }

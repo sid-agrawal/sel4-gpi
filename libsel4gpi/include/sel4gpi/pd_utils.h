@@ -77,6 +77,13 @@ gpi_cap_t sel4gpi_get_resource_type_code(char *type_name);
 char *sel4gpi_get_resource_type_name(gpi_cap_t type);
 
 /**
+ * Check if this PD has access to a resource server of the given type
+ * 
+ * @param type_name the text name of the resource type
+ */
+bool sel4gpi_can_request_type(char *type_name);
+
+/**
  * Get an osmosis RDE from the env
  * Returns the default resource space for the provided type
  *

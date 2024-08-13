@@ -75,6 +75,12 @@ char *sel4gpi_get_resource_type_name(gpi_cap_t type)
     return shared_data->type_names[type];
 }
 
+bool sel4gpi_can_request_type(char *type_name)
+{
+    gpi_cap_t cap_type = sel4gpi_get_resource_type_code(type_name);
+    return cap_type != GPICAP_TYPE_NONE && sel4gpi_get_rde(cap_type) != seL4_CapNull;
+}
+
 seL4_CPtr sel4gpi_get_rde(int type)
 {
     if (type == GPICAP_TYPE_NONE)

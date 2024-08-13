@@ -108,6 +108,12 @@ static void on_kvstore_registry_delete(resource_registry_node_t *node, void *arg
 {
     int error = 0;
 
+    if (!sel4gpi_can_request_type(FILE_RESOURCE_TYPE_NAME))
+    {
+        // Can't delete table because we no longer have access to the FS
+        return;
+    }
+
     // Delete table
     SQL_EXEC(kvstore_db, delete_table_cmd, node->object_id);
 
@@ -353,7 +359,15 @@ static int kvstore_work_handler(PdWorkReturnMessage *work)
                 CHECK_ERR_GOTO(error, "Failed to shutdown sqlite\n", KvstoreError_UNKNOWN);
 
                 error = unlink(get_kvstore_server()->db_filename);
-                CHECK_ERR_GOTO(error, "Failed to unlink database file\n", KvstoreError_UNKNOWN);
+
+                if (!sel4gpi_can_request_type(FILE_RESOURCE_TYPE_NAME))
+                {
+                    // Ignore unlink error because we no longer have access to the file server
+                }
+                else
+                {
+                    CHECK_ERR_GOTO(error, "Failed to unlink database file\n", KvstoreError_UNKNOWN);
+                }
             }
         }
 
