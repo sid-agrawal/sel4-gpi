@@ -1,4 +1,4 @@
-#include <vmm-common/smoldtb.h>
+#include <gpivmm/smoldtb.h>
 
 #define FDT_MAGIC 0xD00DFEED
 #define FDT_BEGIN_NODE 1

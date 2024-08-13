@@ -13,11 +13,10 @@
 #include <sel4gpi/pd_creation.h>
 #include <sel4gpi/pd_utils.h>
 #include <sel4debug/register_dump.h>
-#include <osm-vmm/vmm.h>
-#include <osm-vmm/fault.h>
-#include <vmm-common/fault.h>
-#include <vmm-common/smoldtb.h>
-#include <vmm-common/linux.h>
+#include <gpivmm/osm-vmm.h>
+#include <gpivmm/fault.h>
+#include <gpivmm/smoldtb.h>
+#include <gpivmm/linux.h>
 
 // @ivanv: ideally we would have none of these hardcoded values
 // initrd, ram size come from the DTB

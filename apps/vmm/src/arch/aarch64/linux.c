@@ -4,8 +4,8 @@
  * SPDX-License-Identifier: BSD-2-Clause
  */
 #include <sel4utils/util.h>
-#include <vmm-common/dtb.h>
-#include <vmm-common/linux.h>
+#include <gpivmm/dtb.h>
+#include <gpivmm/linux.h>
 #include <assert.h>
 #include <string.h>
 

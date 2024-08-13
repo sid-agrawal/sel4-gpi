@@ -90,8 +90,7 @@ target_include_directories(
     PUBLIC 
         include
         include/arch/${KernelSel4Arch}
-        include-${GPIVMMImplementation}
-        include-${GPIVMMImplementation}/arch/${KernelSel4Arch}
+        include/${GPIVMMImplementation}
 )
 
 target_link_libraries(

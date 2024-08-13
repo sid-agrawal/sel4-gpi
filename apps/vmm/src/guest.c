@@ -1,7 +1,7 @@
-#include <sel4test-vmm/vcpu.h>
-#include <sel4test-vmm/guest.h>
+#include <gpivmm/vcpu.h>
+#include <gpivmm/guest.h>
 #include <stdbool.h>
-#include <sel4test-vmm/vmm.h>
+#include <gpivmm/sel4test-vmm.h>
 #include <sel4utils/util.h>
 #include <vka/object.h>
 
@@ -22,7 +22,7 @@ bool guest_start(seL4_CPtr tcb, uintptr_t kernel_pc, uintptr_t dtb, uintptr_t in
         tcb,
         false, // We'll explcitly start the guest below rather than in this call
         0,     // No flags
-        3,     // Writing to x0, pc, and spsr
+        4,     // Writing to x0, pc, and spsr
         &regs);
     assert(err == seL4_NoError);
     if (err != seL4_NoError)

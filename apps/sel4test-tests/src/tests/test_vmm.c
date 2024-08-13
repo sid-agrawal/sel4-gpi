@@ -24,7 +24,7 @@
 #include <vka/capops.h>
 
 #if SEL4TEST_VMM
-#include <sel4test-vmm/vmm.h>
+#include <gpivmm/sel4test-vmm.h>
 int test_vmm_native(env_t env)
 {
     int error;
@@ -54,7 +54,7 @@ DEFINE_TEST(GPIVM001, "Test VMM that starts one Linux guest (native)", test_vmm_
 #endif
 
 #ifdef OSM_VMM
-#include <osm-vmm/vmm.h>
+#include <gpivmm/osm-vmm.h>
 
 int test_vmm_osm(env_t env)
 {
