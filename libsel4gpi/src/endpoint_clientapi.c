@@ -159,3 +159,35 @@ int ep_client_forge(seL4_CPtr server_ep_cap, seL4_CPtr ep_to_forge, ep_client_co
 
     return error;
 }
+
+int ep_client_badge(ep_client_context_t *ep_conn, pd_client_context_t *dest_pd,
+                    seL4_Word badge, bool is_core_cap, ep_client_context_t *ret_ep)
+{
+    OSDB_PRINTF("Sending 'badge' request to endpoint component\n");
+
+    int error = 0;
+
+    EpMessage msg = {
+        .magic = EP_RPC_MAGIC,
+        .which_msg = EpMessage_badge_tag,
+        .msg.badge = {
+            .badge = badge,
+            .is_core_cap = is_core_cap,
+        },
+    };
+
+    EpReturnMessage ret_msg = {0};
+
+    error = sel4gpi_rpc_call(&rpc_env, ep_conn->ep, (void *)&msg,
+                             1, &dest_pd->ep, (void *)&ret_msg);
+
+    error |= ret_msg.errorCode;
+
+    if (!error)
+    {
+        ret_ep->ep = ret_msg.msg.badge.tracked_slot;
+        ret_ep->raw_endpoint = ret_msg.msg.badge.raw_slot;
+    }
+
+    return error;
+}

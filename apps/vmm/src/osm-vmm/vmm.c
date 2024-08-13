@@ -18,68 +18,6 @@
 #include <gpivmm/smoldtb.h>
 #include <gpivmm/linux.h>
 
-// @ivanv: ideally we would have none of these hardcoded values
-// initrd, ram size come from the DTB
-// We can probably add a node for the DTB addr and then use that.
-// Part of the problem is that we might need multiple DTBs for the same example
-// e.g one DTB for VMM one, one DTB for VMM two. we should be able to hide all
-// of this in the build system to avoid doing any run-time DTB stuff.
-
-/*
- * As this is just an example, for simplicity we just make the size of the
- * guest's "RAM" the same for all platforms. For just booting Linux with a
- * simple user-space, 0x10000000 bytes (256MB) is plenty.
- */
-#define GUEST_RAM_SIZE 0x10000000
-
-#if defined(BOARD_qemu_arm_virt)
-#define GUEST_RAM_PADDR 0x40000000
-#define GUEST_RAM_VADDR 0x40000000
-#define GUEST_DTB_VADDR 0x4f000000
-#define GUEST_INIT_RAM_DISK_VADDR 0x4d700000
-#define SERIAL_PADDR 0x9000000
-#define GIC_PADDR 0x8040000
-#define LINUX_GIC_PADDR 0x8010000
-#elif defined(BOARD_rpi4b_hyp)
-#define GUEST_DTB_VADDR 0x2e000000
-#define GUEST_INIT_RAM_DISK_VADDR 0x2d700000
-#elif defined(BOARD_odroidc2_hyp)
-#define GUEST_DTB_VADDR 0x2f000000
-#define GUEST_INIT_RAM_DISK_VADDR 0x2d700000
-#elif defined(BOARD_odroidc4)
-#define GUEST_RAM_VADDR 0x20000000
-#define GUEST_DTB_VADDR 0x2f000000
-#define GUEST_INIT_RAM_DISK_VADDR 0x2d700000
-#define ODROID_BUS1 0xff600000
-#define ODROID_BUS2 0xff800000
-#define ODROID_BUS3 0xffd00000
-#define GIC_PADDR 0xffc06000
-#define LINUX_GIC_PADDR 0xffc02000
-#elif defined(BOARD_imx8mm_evk_hyp)
-#define GUEST_DTB_VADDR 0x4f000000
-#define GUEST_INIT_RAM_DISK_VADDR 0x4d700000
-#else
-#error Need to define guest kernel image address and DTB address
-#endif
-
-/* For simplicity we just enforce the serial IRQ channel number to be the same
- * across platforms. */
-#define SERIAL_IRQ_CH 1
-
-#if defined(BOARD_qemu_arm_virt)
-#define SERIAL_IRQ 33
-#elif defined(BOARD_odroidc2_hyp) || defined(BOARD_odroidc4)
-#define SERIAL_IRQ 225
-#elif defined(BOARD_rpi4b_hyp)
-#define SERIAL_IRQ 57
-#elif defined(BOARD_imx8mm_evk_hyp)
-#define SERIAL_IRQ 79
-#else
-#error Need to define serial interrupt
-#endif
-
-#define VM_CNODE_BITS 17
-
 /* Data for the guest's kernel image. */
 extern char _guest_kernel_image[];
 extern char _guest_kernel_image_end[];
@@ -90,15 +28,103 @@ extern char _guest_dtb_image_end[];
 extern char _guest_initrd_image[];
 extern char _guest_initrd_image_end[];
 
-static void handle_fault(sel4gpi_runnable_t *vm, ep_client_context_t *fault_ep)
+static vmon_context_t vmon_ctxt;
+
+seL4_CPtr vm_get_vcpu(vm_context_t *vm)
 {
-    VMM_PRINT("in handle_fault\n");
+    // return vm->vcpu.cptr;
+    return 0;
+}
+
+void vm_suspend(vm_context_t *vm)
+{
+    int err = cpu_client_suspend(&vm->runnable.cpu);
+    if (err)
+    {
+        VMM_PRINTERR("Failed to suspend VMM\n");
+    }
+}
+
+int vm_write_registers(vm_context_t *vm, bool resume, seL4_UserContext *regs, size_t num_regs)
+{
+    // seL4_Error err = seL4_TCB_WriteRegisters(vm->tcb.cptr, resume, 0, num_regs, regs);
+    // return err != seL4_NoError;
+    return 1;
+}
+
+int vm_read_registers(vm_context_t *vm, bool suspend, seL4_UserContext *regs, size_t num_regs)
+{
+    // seL4_Error err = seL4_TCB_ReadRegisters(vm->tcb.cptr, suspend, 0, num_regs, regs);
+    // return err != seL4_NoError;
+    return 1;
+}
+
+void vm_dump_registers(vm_context_t *vm)
+{
+    // sel4debug_dump_registers(vm->tcb.cptr);
+}
+
+void vm_dump_vcpu_registers(vm_context_t *vm)
+{
+    // vcpu_print_regs(vm->vcpu.cptr);
+}
+
+uint32_t vm_get_id(vm_context_t *vm)
+{
+    return vm->id;
+}
+
+static void serial_ack(vm_context_t *vm, int irq, void *cookie)
+{
+    /*
+     * For now we by default simply ack the serial IRQ, we have not
+     * come across a case yet where more than this needs to be done.
+     */
+    VMM_PRINT("Acking serial interrupt\n");
+    // seL4_Error error = seL4_IRQHandler_Ack(vmon_ctxt.serial_irq_handler);
+    // (XXX) Linh
+    int error = 1;
+    WARN_IF_COND(error, "Failed to ACK serial interrupt, seL4_Error: %d\n", error);
+}
+
+static void handle_fault(int argc, char **argv)
+{
+    // NOTE: we cannot access the fault EP from vmon_ctxt, as we're in a different
+    //       CSpace from the main thread
+    if (argc < 1)
+    {
+        VMM_PRINTERR("No fault EP to listen on, exiting\n");
+        return;
+    }
+
+    ep_client_context_t fault_listen_ep = {.ep = (seL4_CPtr)atol(argv[0])};
+    int error = ep_client_get_raw_endpoint(&fault_listen_ep);
+    if (error)
+    {
+        VMM_PRINTERR("Failed to get raw fault endpoint for listening, exiting\n");
+        return;
+    }
+
+    vm_context_t *vm = NULL;
+    seL4_Word badge = 0;
+    seL4_MessageInfo_t info = {0};
+    uint32_t vm_id = 0;
     while (1)
     {
-        seL4_MessageInfo_t info = seL4_Recv(fault_ep->raw_endpoint, NULL);
-        VMM_PRINT("fault: %s\n", fault_to_string(seL4_MessageInfo_get_label(info)));
-        // fault_handle(&vm->cpu, &info);
-        // sel4debug_dump_registers(vm->tcb.cptr);
+        info = seL4_Recv(fault_listen_ep.raw_endpoint, &badge);
+        vm_id = (uint32_t)badge;
+
+        if (vm_id == 0 || vm_id >= MAX_GUEST_COUNT)
+        {
+            VMM_PRINTERR("Fault received from invalid VM: %u\n", vm_id);
+            continue;
+        }
+
+        VMM_PRINTV("VM %u fault: %s\n", vm_id, fault_to_string(seL4_MessageInfo_get_label(info)));
+
+        vm = vmon_ctxt.guests[vm_id];
+        assert(vm != NULL);
+        // fault_handle(vm, &info);
     }
 }
 
@@ -107,9 +133,46 @@ static void dtb_on_error(const char *why)
     printf("DTB Parser error: %s\n", why);
 }
 
+int osm_vmm_init(void)
+{
+    int error = 0;
+
+    memset(&vmon_ctxt, 0, sizeof(vmon_context_t));
+    vmon_ctxt.guest_id_counter = 1;
+
+    error = vmm_init_virq(GUEST_VCPU_ID, &serial_ack);
+    GOTO_IF_ERR(error, "Failed to initialize VIRQ controller\n");
+
+    error = ep_component_client_connect(sel4gpi_get_rde(GPICAP_TYPE_EP), &vmon_ctxt.vm_fault_ep);
+    GOTO_IF_ERR(error, "Failed to allocate fault EP for VMM to listen on\n");
+
+    ep_client_context_t fault_handler_ep = sel4gpi_get_fault_ep_conn(); // this is the handler of the VMM's faults
+    pd_config_t *t_cfg = sel4gpi_configure_thread(handle_fault, &fault_handler_ep, &vmon_ctxt.fault_thread_runnable);
+    GOTO_IF_COND(t_cfg == NULL, "Couldn't allocate VMM's fault handler thread\n");
+
+    seL4_CPtr ep_in_thread;
+    error = pd_client_send_cap(&vmon_ctxt.fault_thread_runnable.pd, vmon_ctxt.vm_fault_ep.ep, &ep_in_thread);
+    GOTO_IF_ERR(error, "Failed to send fault listening EP to thread\n");
+
+    error = sel4gpi_prepare_pd(t_cfg, &vmon_ctxt.fault_thread_runnable, 1, (seL4_Word *)&ep_in_thread);
+    GOTO_IF_ERR(error, "Failed to prepare VMM's fault handler thread\n");
+
+    error = sel4gpi_start_pd(&vmon_ctxt.fault_thread_runnable);
+    GOTO_IF_ERR(error, "Failed to start VMM's fault handler thread\n");
+
+    // TODO IRQ bind
+
+err_goto:
+    return error;
+}
+
 uint32_t osm_new_guest(void)
 {
     int error = 0;
+    uint32_t guest_id = vmon_ctxt.guest_id_counter;
+    GOTO_IF_COND(vmon_ctxt.guest_id_counter >= MAX_GUEST_COUNT, "Maximum number of guests started\n");
+    vm_context_t *vm = calloc(1, sizeof(vm_context_t));
+
     pd_config_t *vm_cfg = calloc(1, sizeof(pd_config_t));
 
     seL4_CPtr pd_rde = sel4gpi_get_rde(GPICAP_TYPE_PD);
@@ -164,7 +227,7 @@ uint32_t osm_new_guest(void)
 
     uintptr_t guest_dtb_curr_vspace = (uintptr_t)guest_ram_curr_vspace + ((uintptr_t)GUEST_DTB_VADDR - (uintptr_t)GUEST_RAM_VADDR);
     uintptr_t guest_initrd_curr_vspace = (uintptr_t)guest_ram_curr_vspace + ((uintptr_t)GUEST_INIT_RAM_DISK_VADDR - (uintptr_t)GUEST_RAM_VADDR);
-    VMM_PRINT("guest ram: %lx, dtb: %lx initrd: %lx\n", guest_ram_curr_vspace, guest_dtb_curr_vspace, guest_initrd_curr_vspace);
+    VMM_PRINT("guest ram: %p, dtb: %lx initrd: %lx\n", guest_ram_curr_vspace, guest_dtb_curr_vspace, guest_initrd_curr_vspace);
 
     uintptr_t kernel_pc_curr_vspace = linux_setup_images((uintptr_t)guest_ram_curr_vspace,
                                                          (uintptr_t)_guest_kernel_image,
@@ -217,11 +280,8 @@ uint32_t osm_new_guest(void)
     sel4gpi_add_vmr_config(&vm_cfg->ads_cfg, GPI_DISJOINT, SEL4UTILS_RES_TYPE_GENERIC, (void *)GUEST_RAM_VADDR,
                            NULL, guest_ram_pages, MO_LARGE_PAGE_BITS, &guest_ram_mo);
 
-    ep_client_context_t fault_ep = {0};
-    error = ep_component_client_connect(sel4gpi_get_rde(GPICAP_TYPE_EP), &fault_ep);
-    GOTO_IF_ERR(error, "Failed to allocated fault EP\n");
-
-    vm_cfg->fault_ep = fault_ep;
+    vm_cfg->fault_ep = vmon_ctxt.vm_fault_ep;
+    vm_cfg->fault_ep_badge = guest_id;
 
     seL4_Word arg = GUEST_DTB_VADDR;
     error = sel4gpi_prepare_pd(vm_cfg, &runnable, 1, &arg);
@@ -259,20 +319,19 @@ uint32_t osm_new_guest(void)
         }
     } */
 
-    seL4_UserContext regs = {0};
-    error = cpu_client_read_registers(&runnable.cpu, &regs);
-    assert(error == 0);
+    /* Just in case there is already an interrupt available to handle, we ack it here. */
+    serial_ack(vm, SERIAL_IRQ, NULL);
 
-    sel4debug_print_registers(&regs);
-
-    // error = sel4gpi_start_pd(&runnable);
+    error = sel4gpi_start_pd(&runnable);
 
     // pd_client_dump(&runnable.pd, NULL, 0);
 
-    handle_fault(&runnable, &fault_ep);
+    vmon_ctxt.guests[guest_id] = vm;
+    vmon_ctxt.guest_id_counter++;
+    vm->id = guest_id;
 
 err_goto:
     sel4gpi_config_destroy(vm_cfg);
 
-    return error;
+    return error ? 0 : guest_id;
 }

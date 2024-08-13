@@ -13,11 +13,21 @@ struct _vm_context
 
 typedef struct _vmon_context
 {
-    seL4_IRQHandler serial_irq_handler;
-    ep_client_context_t vm_fault_ep;
-    uint32_t guest_id_counter; ///< the next free VM ID
+    ep_client_context_t vm_fault_ep;          ///< Listening endpoint for VM faults
+    sel4gpi_runnable_t fault_thread_runnable; ///< Runnable for fault handling thread
+    uint32_t guest_id_counter;                ///< the next free VM ID
     vm_context_t *guests[MAX_GUEST_COUNT];
 } vmon_context_t;
+
+/**
+ * @brief initializes the VMM
+ * - allocates an EP for VM fault handling
+ * - starts the thread for fault and IRQ handling
+ * - binds the VMM to the serial IRQ
+ *
+ * @return int 0 on success, other on error
+ */
+int osm_vmm_init(void);
 
 /**
  * @brief starts a new linux guest as a PD.

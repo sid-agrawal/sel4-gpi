@@ -98,7 +98,6 @@ int main(int argc, char **argv)
     test_assert(error == 0);
 
     /* wait for thread to complete */
-    seL4_Word type = seL4_DebugCapIdentify(cfg->fault_ep.raw_endpoint);
     seL4_MessageInfo_t info = seL4_Recv(cfg->fault_ep.raw_endpoint, NULL);
     if (seL4_MessageInfo_get_label(info))
     {

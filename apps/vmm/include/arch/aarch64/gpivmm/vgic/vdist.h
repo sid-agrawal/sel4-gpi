@@ -266,10 +266,8 @@ static bool vgic_dist_set_pending_irq(vm_context_t *vm, vgic_t *vgic, size_t vcp
 
 #if defined(GIC_V2)
     int group = 0;
-#elif defined(GIC_V3)
-    int group = 1;
 #else
-#error "Unknown GIC version"
+#error "Unsupported GIC version"
 #endif
 
     // @ivanv: I don't understand why GIC v2 is group 0 and GIC v3 is group 1.
@@ -421,20 +419,6 @@ static bool vgic_dist_reg_read(vm_context_t *vm, size_t vcpu_id, vgic_t *vgic, u
     case RANGE32(0xFC0, 0xFFB):
         base_reg = (uintptr_t) & (gic_dist->periph_id[0]);
         reg_ptr = (uint32_t *)(base_reg + (offset - 0xFC0));
-        reg = *reg_ptr;
-        break;
-#endif
-#if defined(GIC_V3)
-    // @ivanv: Understand and comment GICv3 specific stuff
-    case RANGE32(0x6100, 0x7F00):
-        base_reg = (uintptr_t) & (gic_dist->irouter[0]);
-        reg_ptr = (uint32_t *)(base_reg + (offset - 0x6100));
-        reg = *reg_ptr;
-        break;
-
-    case RANGE32(0xFFD0, 0xFFFC):
-        base_reg = (uintptr_t) & (gic_dist->pidrn[0]);
-        reg_ptr = (uint32_t *)(base_reg + (offset - 0xFFD0));
         reg = *reg_ptr;
         break;
 #endif
@@ -655,14 +639,6 @@ static bool vgic_dist_reg_write(vm_context_t *vm, size_t vcpu_id, vgic_t *vgic,
         // @ivanv: GICv2 specific, GICv3 has different range for impl defined registers.
         /* IMPLEMENTATION DEFINED registers. */
         break;
-#if defined(GIC_V3)
-    // @ivanv: explain GICv3 specific stuff, and also don't use the hardcoded valuees
-    case RANGE32(0x6100, 0x7F00):
-        // @ivanv revisit
-        // data = fault_get_data(fault);
-        // ZF_LOGF_IF(data, "bad dist: 0x%x 0x%x", offset, data);
-        break;
-#endif
     default:
         VMM_PRINTERR("Unknown register offset 0x%lx", offset);
         assert(0);

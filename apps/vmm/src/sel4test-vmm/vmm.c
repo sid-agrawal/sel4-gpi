@@ -22,7 +22,6 @@
 #include <gpivmm/vmm.h>
 #include <gpivmm/linux.h>
 #include <gpivmm/fault.h>
-#include <gpivmm/guest.h>
 #include <gpivmm/virq.h>
 #include <gpivmm/sel4test-vmm.h>
 #include <gpivmm/vcpu.h>
@@ -35,55 +34,6 @@
 // Part of the problem is that we might need multiple DTBs for the same example
 // e.g one DTB for VMM one, one DTB for VMM two. we should be able to hide all
 // of this in the build system to avoid doing any run-time DTB stuff.
-
-/*
- * As this is just an example, for simplicity we just make the size of the
- * guest's "RAM" the same for all platforms. For just booting Linux with a
- * simple user-space, 0x10000000 bytes (256MB) is plenty.
- */
-#define GUEST_RAM_SIZE 0x10000000
-
-#if defined(BOARD_qemu_arm_virt)
-#define GUEST_RAM_PADDR 0x40000000
-#define GUEST_RAM_VADDR 0x40000000
-#define GUEST_DTB_VADDR 0x4f000000
-#define GUEST_INIT_RAM_DISK_VADDR 0x4d700000
-#define SERIAL_PADDR 0x9000000
-#define GIC_PADDR 0x8040000
-#define LINUX_GIC_PADDR 0x8010000
-#elif defined(BOARD_rpi4b_hyp)
-#define GUEST_DTB_VADDR 0x2e000000
-#define GUEST_INIT_RAM_DISK_VADDR 0x2d700000
-#elif defined(BOARD_odroidc2_hyp)
-#define GUEST_DTB_VADDR 0x2f000000
-#define GUEST_INIT_RAM_DISK_VADDR 0x2d700000
-#elif defined(BOARD_odroidc4)
-#define GUEST_RAM_VADDR 0x20000000
-#define GUEST_DTB_VADDR 0x2f000000
-#define GUEST_INIT_RAM_DISK_VADDR 0x2d700000
-#define ODROID_BUS1 0xff600000
-#define ODROID_BUS2 0xff800000
-#define ODROID_BUS3 0xffd00000
-#define GIC_PADDR 0xffc06000
-#define LINUX_GIC_PADDR 0xffc02000
-#elif defined(BOARD_imx8mm_evk_hyp)
-#define GUEST_DTB_VADDR 0x4f000000
-#define GUEST_INIT_RAM_DISK_VADDR 0x4d700000
-#else
-#error Need to define guest kernel image address and DTB address
-#endif
-
-#if defined(BOARD_qemu_arm_virt)
-#define SERIAL_IRQ 33
-#elif defined(BOARD_odroidc2_hyp) || defined(BOARD_odroidc4)
-#define SERIAL_IRQ 225
-#elif defined(BOARD_rpi4b_hyp)
-#define SERIAL_IRQ 57
-#elif defined(BOARD_imx8mm_evk_hyp)
-#define SERIAL_IRQ 79
-#else
-#error Need to define serial interrupt
-#endif
 
 /* Data for the guest's kernel image. */
 extern char _guest_kernel_image[];
@@ -270,6 +220,9 @@ int sel4test_vmm_init(seL4_IRQHandler irq_handler,
     vmon_ctxt.simple = simple;
     vmon_ctxt.tcb = tcb;
     vmon_ctxt.guest_id_counter = 1;
+
+    error = vmm_init_virq(GUEST_VCPU_ID, &serial_ack);
+    GOTO_IF_ERR(error, "Failed to initialize VIRQ controller\n");
 
     /* fault endpoint */
     error = vka_alloc_endpoint(vka, &vmon_ctxt.vm_fault_ep);
@@ -486,21 +439,29 @@ uint32_t sel4test_new_guest(void)
                                                          initrd_size);
 
     uintptr_t kernel_pc_vm_vspace = (uintptr_t)GUEST_RAM_VADDR + (kernel_pc_curr_vspace - (uintptr_t)guest_ram_curr_vspace);
-    VMM_PRINT("kernel_pc_vm_vspace %lx\n", kernel_pc_vm_vspace);
 
-    bool success = virq_controller_init(GUEST_VCPU_ID);
-    GOTO_IF_COND(!success, "Failed to initialise emulated interrupt controller\n");
-
-    // @ivanv: Note that remove this line causes the VMM to fault if we
-    // actually get the interrupt. This should be avoided by making the VGIC driver more stable.
-    success = virq_register(GUEST_VCPU_ID, SERIAL_IRQ, &serial_ack, NULL);
-    WARN_IF_COND(!success, "Failed to register VIRQ handler\n");
     /* Just in case there is already an interrupt available to handle, we ack it here. */
-    serial_ack(GUEST_VCPU_ID, SERIAL_IRQ, NULL);
+    serial_ack(vm, SERIAL_IRQ, NULL);
 
-    success = guest_start(vm->tcb.cptr, (uintptr_t)GUEST_RAM_VADDR, (uintptr_t)GUEST_DTB_VADDR,
-                          (uintptr_t)GUEST_INIT_RAM_DISK_VADDR);
-    GOTO_IF_COND(!success, "Failed to start guest\n");
+    /*
+     * Set the TCB registers to what the virtual machine expects to be started with.
+     * You will note that this is currently Linux specific as we currently do not support
+     * any other kind of guest. However, even though the library is open to supporting other
+     * guests, there is no point in prematurely generalising this code.
+     */
+    seL4_UserContext regs = {0};
+    regs.x0 = (seL4_Word)GUEST_DTB_VADDR;
+    regs.spsr = 0x5; // PMODE_EL1h
+    regs.pc = (seL4_Word)GUEST_RAM_VADDR;
+    /* Write out all the TCB registers */
+    seL4_Error s_err = seL4_TCB_WriteRegisters(
+        vm->tcb.cptr,
+        true, // We'll explcitly start the guest below rather than in this call
+        0,    // No flags
+        4,    // Writing to x0, pc, and spsr
+        &regs);
+
+    GOTO_IF_COND(s_err != seL4_NoError, "Failed to start guest\n");
 
     vmon_ctxt.guests[guest_id] = vm;
     vmon_ctxt.guest_id_counter++;
@@ -523,5 +484,5 @@ err_goto:
         vspace_unmap_pages(vspace, guest_ram_curr_vspace, guest_ram_pages, seL4_LargePageBits, vka);
     }
 
-    return vm->tcb.cptr;
+    return error ? 0 : guest_id;
 }

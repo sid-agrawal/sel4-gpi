@@ -206,7 +206,7 @@ void resource_component_debug_print(resource_component_context_t *component);
  * @param dest empty cspacepath_t to fill in with destination slot
  * @param mint if true, the cap being transfered is an endpoint cap, and will be minted rather than copied
  * @param badge OPTIONAL a badge to mint onto the endpoint cap - only applies if mint = true,
- * @return int
+ * @return int 0 on success, 1 on failure
  */
 int resource_component_transfer_cap(vka_t *src_vka,
                                     vka_t *dst_vka,
@@ -214,18 +214,6 @@ int resource_component_transfer_cap(vka_t *src_vka,
                                     cspacepath_t *dest,
                                     bool mint,
                                     seL4_Word badge);
-
-/**
- * Creates a badged version of an endpoint with a custom badge given
- * Used for an arbitrary non-OSmosis endpoint
- *
- * @param src_vka vka for the source endpoint
- * @param dst_vka vka for the destination (or NULL, to use src vka for destination)
- * @param src_ep source endpoint to badge
- * @param custom_badge a custom given badge
- * @return the new resource's EP cap, null cap if failed
- */
-seL4_CPtr resource_component_make_badged_ep_custom(vka_t *src_vka, vka_t *dst_vka, seL4_CPtr src_ep, seL4_Word custom_badge);
 
 /**
  * Creates a badged version of an endpoint for a particular resource

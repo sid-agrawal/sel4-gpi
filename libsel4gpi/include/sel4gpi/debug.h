@@ -21,7 +21,7 @@
 #define MESSAGE_DEBUG_ENABLED 0 // Separate toggle, prints all RPC messages to root task
 
 // selectively enable component debug e.g. (PD_DEBUG | ADS_DEBUG)
-#define OSDB_TOPIC (ALL_DEBUG)
+#define OSDB_TOPIC (NO_DEBUG)
 
 /* Debug levels */
 #define OSDB_VERBOSE 1
@@ -31,7 +31,7 @@
 #define OSDB_BENCH 5
 
 /* Only messages of this level and higher will be printed */
-#define OSDB_LEVEL OSDB_BENCH
+#define OSDB_LEVEL OSDB_INFO
 
 /* Topic toggling condition for resource servers */
 #define OSDB_SERVER_PRINT_ALLOWED ((OSDB_TOPIC) & (DEBUG_ID))

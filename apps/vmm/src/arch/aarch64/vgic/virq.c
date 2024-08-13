@@ -24,8 +24,6 @@ bool virq_controller_init(size_t boot_vcpu_id)
     // @ivanv: todo, do this dynamically instead of compile time?
 #if defined(GIC_V2)
     ZF_LOGE("initialised virtual GICv2 driver");
-#elif defined(GIC_V3)
-    ZF_LOGE("initialised virtual GICv3 driver\n");
 #else
 #error "Unsupported GIC version"
 #endif

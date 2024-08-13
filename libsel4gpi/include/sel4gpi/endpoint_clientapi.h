@@ -45,6 +45,21 @@ typedef struct _ep_client_context
 int ep_component_client_connect(seL4_CPtr server_ep_cap, ep_client_context_t *ret_conn);
 
 /**
+ * @brief Badges an endpoint and places BOTH the tracked and raw endpoint in the specified PD.
+ * This badge is never stored by the endpoint component.  If dest_pd tries to retrieve the raw endpoint again,
+ * it will receive the UNBADGED version.
+ *
+ * @param ep_conn the EP to badge
+ * @param dest_pd the target PD to place the badged EP in
+ * @param badge badge to apply to the EP
+ * @param is_core_cap if true, will set the endpoint in dest_pd's shared OSmosis data
+ * @param[out] ret_ep OPTIONAL: returns both the raw and tracked endpoint slots in dest_pd
+ * @return int 0 on success, other on failure.
+ */
+int ep_client_badge(ep_client_context_t *ep_conn, pd_client_context_t *dest_pd,
+                    seL4_Word badge, bool is_core_cap, ep_client_context_t *ret_ep);
+
+/**
  * @brief Remove an endpoint resource from this PD
  *
  * @param conn EP connection object
@@ -54,6 +69,8 @@ int ep_component_client_disconnect(ep_client_context_t *conn);
 
 /**
  * @brief Retrieves the raw, underlying endpoint of an endpoint context in the CSpace of the given target PD.
+ * NOTE: If a PD calls this more than once, the raw endpoint will get copied multiple times into the target PDs CSpace,
+ * but these additional copies will NOT be tracked
  *
  * @param target_PD the target PD to get the EP slot from
  * @param ep_conn the EP context held by the **current** PD (NOT the target)
@@ -64,9 +81,12 @@ int ep_client_get_raw_endpoint_in_PD(pd_client_context_t *target_PD, ep_client_c
 
 /**
  * @brief retrieves the raw, underlying endpoint of an endpoint context for the current PD,
- * and fills it in the given context. This is used when a PD is sent a tracked endpoint,
+ * and fills it in the given context.
+ * This is used when a PD is sent a tracked endpoint,
  * it will receive only the badged version that allows communication with the EP component.
  * In order to listen on the actual endpoint, it needs to retrieve it via this API call.
+ * NOTE: If a PD calls this more than once, the raw endpoint will get copied multiple times into the PDs CSpace,
+ * but these additional copies will NOT be tracked
  *
  * @param ep_conn the endpoint context
  * @return int 0 on success, 1 on failure

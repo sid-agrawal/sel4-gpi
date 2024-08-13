@@ -61,8 +61,11 @@ int test_vmm_osm(env_t env)
     int error;
     printf("------------------STARTING: %s------------------\n", __func__);
 
-    error = new_guest();
+    error = osm_vmm_init();
     test_error_eq(error, 0);
+
+    uint32_t guest_id = osm_new_guest();
+    test_assert(guest_id != 0);
 
     while (1)
     {

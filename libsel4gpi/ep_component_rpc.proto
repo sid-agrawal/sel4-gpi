@@ -21,6 +21,11 @@ message EpDisconnectMessage {
    /* No content */
 };
 
+message EpBadgeMessage {
+    uint64 badge = 1;           /* badge to apply to the EP */
+    bool is_core_cap = 2;       /* whether the EP will be a core cap in the destination PD */
+}
+
 message EpMessage {
     uint64 magic = 100;
     oneof msg {
@@ -28,6 +33,7 @@ message EpMessage {
         EpGetMessage get = 2;
         EpForgeMessage forge = 3;
         EpDisconnectMessage disconnect = 4;
+        EpBadgeMessage badge = 5;
     }
 };
 
@@ -44,11 +50,17 @@ message EpGetReturnMessage {
     uint64 slot = 1;            /* slot containing the raw endpoint cap */
 };
 
+message EpBadgeReturnMessage {
+    uint64 tracked_slot = 1;    /* slot containing the endpoint handle cap */
+    uint64 raw_slot = 2;        /* slot containing the raw, badged endpoint cap */
+}
+
 message EpReturnMessage {
     EpComponentError errorCode = 1;
     oneof msg {
         EpBasicReturnMessage basic = 2;
         EpAllocReturnMessage alloc = 3;
         EpGetReturnMessage get = 4;
+        EpBadgeReturnMessage badge = 5;
     };
 };

@@ -39,8 +39,64 @@
 #define VMM_PRINTV(msg, ...) \
     OSDB_LVL_PRINT(OSDB_VERBOSE, VMM_DBG, COLORIZE("[VMM] %s():\t", WHITE) msg, __func__, ##__VA_ARGS__);
 
+// forward declare VM and VMM contexts, these are defined in implementation specific headers
 struct _vm_context;
 typedef struct _vm_context vm_context_t;
+
+struct _vmon_context;
+typedef struct _vmon_context vmon_context_t;
+
+// Device addresses
+
+/*
+ * As this is just an example, for simplicity we just make the size of the
+ * guest's "RAM" the same for all platforms. For just booting Linux with a
+ * simple user-space, 0x10000000 bytes (256MB) is plenty.
+ */
+#define GUEST_RAM_SIZE 0x10000000
+
+#if defined(BOARD_qemu_arm_virt)
+#define GUEST_RAM_PADDR 0x40000000
+#define GUEST_RAM_VADDR 0x40000000
+#define GUEST_DTB_VADDR 0x4f000000
+#define GUEST_INIT_RAM_DISK_VADDR 0x4d700000
+#define SERIAL_PADDR 0x9000000
+#define GIC_PADDR 0x8040000
+#define LINUX_GIC_PADDR 0x8010000
+#elif defined(BOARD_odroidc4)
+#define GUEST_RAM_VADDR 0x20000000
+#define GUEST_DTB_VADDR 0x2f000000
+#define GUEST_INIT_RAM_DISK_VADDR 0x2d700000
+#define ODROID_BUS1 0xff600000
+#define ODROID_BUS2 0xff800000
+#define ODROID_BUS3 0xffd00000
+#define GIC_PADDR 0xffc06000
+#define LINUX_GIC_PADDR 0xffc02000
+#else
+#error Need to define guest kernel image address and DTB address
+#endif
+
+#if defined(BOARD_qemu_arm_virt)
+#define SERIAL_IRQ 33
+#elif defined(BOARD_odroidc2_hyp) || defined(BOARD_odroidc4)
+#define SERIAL_IRQ 225
+#else
+#error Need to define serial interrupt
+#endif
+
+// ========================== Generic Helpers ==========================
+
+typedef void (*virq_ack_fn_t)(vm_context_t *vm, int irq, void *cookie);
+
+/**
+ * @brief Initializes VIRQ handling for a VCPU and registers an ACK function
+ * for serial device interrupts
+ *
+ * @param vcpu_id virtual processor ID
+ * @param serial_ack_fn the ACK function for serial interrupts
+ * @return int 0 on success, other on failure
+ */
+int vmm_init_virq(size_t vcpu_id, virq_ack_fn_t serial_ack_fn);
 
 // ========== Helpers that each implementation-type specifies ==========
 

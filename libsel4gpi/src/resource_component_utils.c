@@ -293,18 +293,6 @@ err_goto:
     return error;
 }
 
-seL4_CPtr resource_component_make_badged_ep_custom(vka_t *src_vka,
-                                                   vka_t *dst_vka,
-                                                   seL4_CPtr src_ep,
-                                                   seL4_Word custom_badge)
-{
-    cspacepath_t dest = {0};
-    int error = resource_component_transfer_cap(src_vka, dst_vka, src_ep, &dest, true, custom_badge);
-    WARN_IF_COND(error, "Could not make custom badged endpoint\n");
-
-    return dest.capPtr;
-}
-
 seL4_CPtr resource_component_make_badged_ep(vka_t *src_vka, vka_t *dst_vka, seL4_CPtr src_ep,
                                             gpi_cap_t resource_type, gpi_space_id_t space_id,
                                             gpi_obj_id_t object_id, gpi_obj_id_t client_id)

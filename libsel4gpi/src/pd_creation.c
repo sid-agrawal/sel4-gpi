@@ -468,13 +468,22 @@ int sel4gpi_prepare_pd(pd_config_t *cfg, sel4gpi_runnable_t *runnable, int argc,
     }
 
     ep_client_context_t fault_ep_in_PD = {0};
-    error = pd_client_send_core_cap(&runnable->pd,
-                                    cfg->fault_ep.ep,
-                                    &fault_ep_in_PD.ep);
-    GOTO_IF_ERR(error, "Failed to send fault EP to PD\n");
+    if (cfg->fault_ep_badge)
+    {
+        error = ep_client_badge(&cfg->fault_ep, &runnable->pd, cfg->fault_ep_badge, true, &fault_ep_in_PD);
+        GOTO_IF_ERR(error, "Failed to badge PD's fault EP\n");
+    }
+    else
+    {
+        error = pd_client_send_core_cap(&runnable->pd,
+                                        cfg->fault_ep.ep,
+                                        &fault_ep_in_PD.ep);
+        GOTO_IF_ERR(error, "Failed to send fault EP to PD\n");
 
-    error = ep_client_get_raw_endpoint_in_PD(&runnable->pd, &cfg->fault_ep, &fault_ep_in_PD.raw_endpoint);
-    GOTO_IF_ERR(error, "Failed to get raw EP in target PD's CSpace\n");
+        error = ep_client_get_raw_endpoint_in_PD(&runnable->pd, &cfg->fault_ep, &fault_ep_in_PD.raw_endpoint);
+        GOTO_IF_ERR(error, "Failed to get raw EP in target PD's CSpace\n");
+    }
+
     PD_CREATION_PRINT("Sent fault EP to PD in slot 0x%lx\n", fault_ep_in_PD.raw_endpoint);
 
     if (cfg->link_with_current)

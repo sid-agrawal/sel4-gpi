@@ -1375,15 +1375,17 @@ seL4_CPtr pd_component_create_ipc_bench_ep(void)
     // Make a special badged endpoint just for IPC benchmark request
     seL4_Word badge = gpi_new_badge(GPICAP_TYPE_PD, 0, 0, 0, 0);
 
-    seL4_CPtr slot = resource_component_make_badged_ep_custom(
-        get_pd_component()->server_vka,
-        get_pd_component()->server_vka,
-        get_gpi_server()->server_ep_obj.cptr,
-        badge);
+    cspacepath_t dest = {0};
+    int error = resource_component_transfer_cap(get_pd_component()->server_vka,
+                                                get_pd_component()->server_vka,
+                                                get_gpi_server()->server_ep_obj.cptr,
+                                                &dest,
+                                                true,
+                                                badge);
 
-    assert(slot != seL4_CapNull);
+    assert(dest.capPtr != seL4_CapNull && !error);
 
-    return slot;
+    return dest.capPtr;
 }
 
 void pd_component_sweep(void)

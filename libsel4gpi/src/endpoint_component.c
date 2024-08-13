@@ -225,6 +225,42 @@ err_goto:
     reply_msg->errorCode = error;
 }
 
+static void handle_badge_req(seL4_Word sender_badge, EpBadgeMessage *msg, EpReturnMessage *reply_msg)
+{
+    OSDB_PRINTF("Got EP badge request from: ");
+    BADGE_PRINT(sender_badge);
+
+    int error = 0;
+
+    ep_component_registry_entry_t *ep_data = (ep_component_registry_entry_t *)
+        resource_component_registry_get_by_badge(get_ep_component(), sender_badge);
+    SERVER_GOTO_IF_COND(ep_data == NULL, "Cannot find EP data\n");
+
+    pd_component_registry_entry_t *dest_pd_data = pd_component_registry_get_entry_by_badge(seL4_GetBadge(0));
+    SERVER_GOTO_IF_COND(dest_pd_data == NULL, "Couldn't find target PD (%u)\n",
+                        get_object_id_from_badge(seL4_GetBadge(0)));
+
+    seL4_CPtr tracked_ep_slot;
+    error = pd_send_cap(&dest_pd_data->pd, seL4_CapNull, sender_badge, &tracked_ep_slot, true, msg->is_core_cap);
+    SERVER_GOTO_IF_COND(error, "Failed to send tracked EP handle to PD (%u)\n", dest_pd_data->pd.id);
+
+    cspacepath_t dest = {0};
+    error = resource_component_transfer_cap(get_ep_component()->server_vka,
+                                            dest_pd_data->pd.pd_vka,
+                                            ep_data->ep.endpoint_in_RT.cptr,
+                                            &dest, true, msg->badge);
+
+    if (!error)
+    {
+        reply_msg->msg.badge.tracked_slot = tracked_ep_slot;
+        reply_msg->msg.badge.raw_slot = dest.capPtr;
+    }
+
+err_goto:
+    reply_msg->which_msg = EpReturnMessage_alloc_tag;
+    reply_msg->errorCode = error;
+}
+
 static void ep_component_handle(void *msg_p,
                                 seL4_Word sender_badge,
                                 seL4_CPtr received_cap,
@@ -259,6 +295,9 @@ static void ep_component_handle(void *msg_p,
     case EpMessage_forge_tag:
         handle_forge_req(sender_badge, &msg->msg.forge, reply_msg, received_cap);
         *need_new_recv_cap = true;
+        break;
+    case EpMessage_badge_tag:
+        handle_badge_req(sender_badge, &msg->msg.badge, reply_msg);
         break;
     default:
         SERVER_GOTO_IF_COND(1, "Unknown request received: %u\n", msg->which_msg);

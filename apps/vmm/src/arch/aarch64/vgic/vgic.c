@@ -43,10 +43,8 @@ bool fault_handle_vgic_maintenance(vm_context_t *vm, size_t vcpu_id)
 
 #if defined(GIC_V2)
     int group = 0;
-#elif defined(GIC_V3)
-    int group = 1;
 #else
-#error "Unknown GIC version"
+#error "Unsupported GIC version"
 #endif
 
     if (virq)
