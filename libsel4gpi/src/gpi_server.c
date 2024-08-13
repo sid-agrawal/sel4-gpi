@@ -228,6 +228,11 @@ void gpi_server_main()
     int error = 0;
     seL4_MessageInfo_t tag;
     cspacepath_t received_cap_path;
+
+#if BENCHMARK_GPI_SERVER
+    sel4bench_init();
+#endif
+
     BENCH_INIT;
 
     /* The Parent will seL4_Call() to us, the Server, right after spawning us.
