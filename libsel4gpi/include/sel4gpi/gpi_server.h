@@ -53,11 +53,12 @@
         SEL4BENCH_READ_CCNT(bench_start); \
     } while (0)
 
-#define END_BENCH(msg)                                                      \
-    do                                                                      \
-    {                                                                       \
-        SEL4BENCH_READ_CCNT(bench_end);                                     \
-        OSDB_PRINTBENCH("Time to %s: %lu\n", msg, bench_end - bench_start); \
+#define END_BENCH(msg)                                                \
+    do                                                                \
+    {                                                                 \
+        SEL4BENCH_READ_CCNT(bench_end);                               \
+        OSDB_PRINTBENCH("Nanobenchmark, time to %s\n", msg);          \
+        OSDB_PRINTBENCH("NANORESULT>%lu\n", bench_end - bench_start); \
     } while (0)
 
 #else

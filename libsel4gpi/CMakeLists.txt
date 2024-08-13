@@ -23,12 +23,19 @@ SEL4_GENERATE_PROTOBUF(proto_srcs proto_hdrs
 set(GPIServerEnabled ON CACHE BOOL "If true, run the GPI server")
 set(GPIPDDeletionDepth "0" CACHE STRING "PD deletion depth for cleanup policies")
 set(GPIRSDeletionDepth "0" CACHE STRING "Resource space deletion depth for cleanup policies")
+set(GPINanobenchEnabled OFF CACHE BOOL "If true, output nano-benchmarks")
 
 # Convert CMake options to defines
 if (GPIServerEnabled)
     set(GPIServerDef "GPI_SERVER_ENABLED")
 else()
     set(GPIServerDef "GPI_SERVER_DISABLED")
+endif()
+
+if (GPINanobenchEnabled)
+    set(GPINanobenchDef "GPI_NANOBENCH_ENABLED")
+else()
+    set(GPINanobenchDef "GPI_NANOBENCH_DISABLED")
 endif()
 
 file(GLOB deps src/*.c)
@@ -52,6 +59,7 @@ target_link_libraries(sel4gpi
 
 target_compile_options(sel4gpi PUBLIC 
     "-D${GPIServerDef}" 
+    "-D${GPINanobenchDef}" 
     "-DGPI_CLEANUP_PD_DEPTH=${GPIPDDeletionDepth}"
     "-DGPI_CLEANUP_RS_DEPTH=${GPIRSDeletionDepth}"
     # "-fanalyzer"

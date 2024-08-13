@@ -58,4 +58,4 @@
 /**
  * If true, outputs clock cycles for GPI server's message send/receive times
  */
-#define BENCHMARK_GPI_SERVER 0
+#define BENCHMARK_GPI_SERVER GPI_NANOBENCH_ENABLED

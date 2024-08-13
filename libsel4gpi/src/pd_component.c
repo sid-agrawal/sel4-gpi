@@ -78,11 +78,10 @@ static void on_pd_registry_delete(resource_registry_node_t *node_gen, void *arg)
     // Destroy PD
     pd_destroy(&node->pd, get_pd_component()->server_vka, get_pd_component()->server_vspace);
 
-// Clear any pending work
-#if BENCHMARK_GPI_SERVER
-    ccnt_t bench_start, bench_end;
-    SEL4BENCH_READ_CCNT(bench_start);
-#endif
+    // Clear any pending work
+    BENCH_INIT;
+    START_BENCH();
+
     linked_list_t *lists[3] = {node->pending_model_state, node->pending_destroy, node->pending_frees};
     PdWorkAction work_types[3] = {PdWorkAction_EXTRACT, PdWorkAction_DESTROY, PdWorkAction_FREE};
 
@@ -114,10 +113,7 @@ static void on_pd_registry_delete(resource_registry_node_t *node_gen, void *arg)
     linked_list_destroy(node->pending_frees, false);
     linked_list_destroy(node->pending_model_state, false);
 
-#if BENCHMARK_GPI_SERVER
-    SEL4BENCH_READ_CCNT(bench_end);
-    OSDB_PRINTBENCH("Time to clear pending work lists: %lu\n", bench_end - bench_start);
-#endif
+    END_BENCH("clear pending work lists");
 }
 
 int pd_component_allocate(gpi_obj_id_t client_id, mo_t *init_data_mo, pd_t **ret_pd, seL4_CPtr *ret_cap)
