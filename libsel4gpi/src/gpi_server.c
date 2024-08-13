@@ -228,6 +228,7 @@ void gpi_server_main()
     int error = 0;
     seL4_MessageInfo_t tag;
     cspacepath_t received_cap_path;
+    BENCH_INIT;
 
     /* The Parent will seL4_Call() to us, the Server, right after spawning us.
      * It will expect us to seL4_Reply() with an error status code - we will
@@ -270,6 +271,7 @@ void gpi_server_main()
 
         OSDB_PRINTF("Got message on EP with ");
         BADGE_PRINT(sender_badge);
+        BENCH_POINT("Received message");
 
         gpi_cap_t cap_type = get_cap_type_from_badge(sender_badge);
 
@@ -334,14 +336,13 @@ void gpi_debug_print_resources(void)
     printf(" - RT PD (%u)\n", get_gpi_server()->rt_pd_id);
     printf(" - RT ADS (%u)\n", get_gpi_server()->rt_ads_id);
 
-
     ads_component_registry_entry_t *ads_entry = (ads_component_registry_entry_t *)
         resource_component_registry_get_by_id(get_ads_component(), get_gpi_server()->rt_ads_id);
 
     for (resource_registry_node_t *node = ads_entry->ads.attach_registry.head; node != NULL; node = node->hh.next)
     {
         attach_node_t *attach_node = (attach_node_t *)node;
-        printf(" - RT MO (%u)\n", (int) attach_node->mo_id);
+        printf(" - RT MO (%u)\n", (int)attach_node->mo_id);
     }
     printf("\n\n");
 }

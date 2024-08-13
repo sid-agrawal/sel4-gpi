@@ -665,6 +665,9 @@ void pd_destroy(pd_t *pd, vka_t *server_vka, vspace_t *server_vspace)
     int error = 0;
     int pd_id = pd->id;
 
+    BENCH_INIT;
+    BENCH_POINT("Start destroying PD");
+
     OSDB_PRINTF("Destroying PD (%u, %s)\n", pd_id, pd->name);
     pd->to_delete = true;
     pd->deleting = true;
@@ -672,14 +675,17 @@ void pd_destroy(pd_t *pd, vka_t *server_vka, vspace_t *server_vspace)
     /* stop the PD's CPU, if not already stopped */
     if (pd->shared_data->cpu_conn.id)
     {
+        START_BENCH();
         error = cpu_component_stop(pd->shared_data->cpu_conn.id);
         SERVER_GOTO_IF_ERR(error, "Failed to stop CPU (%u) while destroying PD (%u)\n",
                            pd->shared_data->cpu_conn.id, pd_id);
+        END_BENCH("stop CPU while destroying PD");
     }
 
     /* Reply with an error to any client waiting on this PD */
     if (pd->shared_data->reply_cap != seL4_CapNull)
     {
+        START_BENCH();
         // Copy the reply cap to the RT cspace
         cspacepath_t reply_cap_path_in_pd;
         cspacepath_t reply_cap_path_in_rt;
@@ -694,6 +700,7 @@ void pd_destroy(pd_t *pd, vka_t *server_vka, vspace_t *server_vspace)
 
         seL4_MessageInfo_t reply_tag = seL4_MessageInfo_new(1, 0, 0, 0);
         seL4_Send(reply_cap_path_in_rt.capPtr, reply_tag);
+        END_BENCH("send reply message to client while destroying PD");
     }
 
     /* decrement the refcount of the PD's binded ADS and CPU */
@@ -701,14 +708,19 @@ void pd_destroy(pd_t *pd, vka_t *server_vka, vspace_t *server_vspace)
     // Then the TCB is destroyed, including the internal copies of IPC frame cap and fault endpoint cap
     if (pd->shared_data->cpu_conn.id)
     {
+        START_BENCH();
         resource_component_dec(get_cpu_component(), pd->shared_data->cpu_conn.id);
+        END_BENCH("dec CPU while destroying PD");
     }
     if (pd->shared_data->ads_conn.id)
     {
+        START_BENCH();
         resource_component_dec(get_ads_component(), pd->shared_data->ads_conn.id);
+        END_BENCH("dec ADS while destroying PD");
     }
 
     /* destroy the cnode */
+    START_BENCH();
     vka_t *vka = server_vka;
     cspacepath_t path;
     vka_cspace_make_path(vka, pd->cspace.cptr, &path);
@@ -716,13 +728,17 @@ void pd_destroy(pd_t *pd, vka_t *server_vka, vspace_t *server_vspace)
      * alive when we try to delete it */
     vka_cnode_revoke(&path);
     vka_free_object(vka, &pd->cspace);
+    END_BENCH("destroy cnode while destroying PD");
 
     /* destroy the notification object */
+    START_BENCH();
     vka_cspace_make_path(vka, pd->notification.cptr, &path);
     vka_cnode_revoke(&path);
     vka_free_object(vka, &pd->notification);
     vka_cspace_free(vka, pd->badged_notification);
+    END_BENCH("destroy notif while destroying PD");
 
+    START_BENCH();
     /* Free elf information */
     if (pd->elf_phdrs)
     {
@@ -731,35 +747,52 @@ void pd_destroy(pd_t *pd, vka_t *server_vka, vspace_t *server_vspace)
 
     /* Free image name */
     free(pd->name);
+    END_BENCH("free elf info while destroying PD");
 
     // Hash table of holding resources
     // This also triggers resource deletion, if this PD held the last copy
+    START_BENCH();
     resource_registry_node_t *current, *tmp;
     HASH_ITER(hh, pd->hold_registry.head, current, tmp)
     {
         resource_registry_delete(&pd->hold_registry, current);
     }
+    END_BENCH("cleanup hold registry while destroying PD");
 
+    // Mark for deletion any linked PD
+    START_BENCH();
     pd_mark_linked_for_deletion(pd);
+    END_BENCH("mark linked PD while destroying PD");
 
     // free the MO for init data
     // the MO will be destroyed once all references are removed
+    START_BENCH();
     error = ads_component_remove_from_rt((void *)pd->shared_data);
     SERVER_GOTO_IF_ERR(error, "Failed to remove PD's init data from RT\n");
+    END_BENCH("free init data MO while destroying PD");
 
     /* Free the VKA */
+    START_BENCH();
     free(pd->pd_vka);
     free(pd->allocman_cspace);
+    END_BENCH("free vka while destroying PD");
     // The PD's allocator memory is destroyed with allocator_mem_pool
 
     // Initialize a resource space sweep
+    START_BENCH();
     resspc_component_sweep();
-
+    END_BENCH("sweep resspc after destroying PD");
+    START_BENCH();
     pd_component_sweep();
+    END_BENCH("sweep PDs after destroying PD");
 
     // Remove this PD from any other PDs that hold it
+    START_BENCH();
     error = pd_component_resource_cleanup(make_res_id(GPICAP_TYPE_PD, get_pd_component()->space_id, pd_id));
     SERVER_GOTO_IF_ERR(error, "Failed to remove destroyed PD resource from other PDs\n");
+    END_BENCH("cleanup PD resource while destroying PD");
+
+    BENCH_POINT("Finish destroying PD");
 
 err_goto:
     return;

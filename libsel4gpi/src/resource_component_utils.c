@@ -62,6 +62,7 @@ void resource_component_handle(resource_component_context_t *component,
     int error = 0;
     bool needs_new_receive_slot = false;
     bool should_reply = true;
+    BENCH_INIT;
 
     char rpc_msg_buf[RPC_MSG_MAX_SIZE] = {0};
     char rpc_reply_buf[RPC_MSG_MAX_SIZE] = {0};
@@ -89,6 +90,7 @@ void resource_component_handle(resource_component_context_t *component,
         seL4_MessageInfo_t reply_tag;
         error = sel4gpi_rpc_reply(&component->rpc_env, (void *)rpc_reply_buf, &reply_tag);
         assert(error == 0);
+        BENCH_POINT("Replying to message");
         resource_component_reply(component, reply_tag);
     }
 

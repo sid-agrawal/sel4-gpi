@@ -1141,7 +1141,7 @@ static int internal_benchmark_cleanup_toy_servers(env_t env, hello_cleanup_mode_
 
     /* Crash a PD */
     ccnt_t start, end;
-
+    
     if (server_to_crash == HELLO_CLEANUP_TOY_BLOCK_SERVER_MODE)
     {
         printf("Crashing toy_block_server PD\n");
@@ -1171,6 +1171,8 @@ static int internal_benchmark_cleanup_toy_servers(env_t env, hello_cleanup_mode_
         // Invalid mode of server to crash
         test_assert(0);
     }
+
+    printf("Crash started at %lu, finished at %lu\n", start, end);
     benchmark_print_result(end - start);
 
     /* Cleanup other PDs */

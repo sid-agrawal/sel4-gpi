@@ -21,16 +21,17 @@
 #define MESSAGE_DEBUG_ENABLED 0 // Separate toggle, prints all RPC messages to root task
 
 // selectively enable component debug e.g. (PD_DEBUG | ADS_DEBUG)
-#define OSDB_TOPIC (NO_DEBUG)
+#define OSDB_TOPIC (ALL_DEBUG)
 
 /* Debug levels */
 #define OSDB_VERBOSE 1
 #define OSDB_INFO 2
 #define OSDB_WARN 3
 #define OSDB_ERROR 4
+#define OSDB_BENCH 5
 
 /* Only messages of this level and higher will be printed */
-#define OSDB_LEVEL OSDB_INFO
+#define OSDB_LEVEL OSDB_BENCH
 
 /* Topic toggling condition for resource servers */
 #define OSDB_SERVER_PRINT_ALLOWED ((OSDB_TOPIC) & (DEBUG_ID))
@@ -57,6 +58,8 @@
                                                COLORIZE("[ERROR] " SERVER_ID, RED) msg, ##__VA_ARGS__)
 #define OSDB_PRINTWARN(msg, ...) OSDB_LVL_PRINT(OSDB_WARN, OSDB_SERVER_PRINT_ALLOWED, \
                                                 COLORIZE("[WARNING] " SERVER_ID, YELLOW) msg, ##__VA_ARGS__)
+#define OSDB_PRINTBENCH(msg, ...) OSDB_LVL_PRINT(OSDB_BENCH, OSDB_SERVER_PRINT_ALLOWED, \
+                                                COLORIZE("[BENCH] " SERVER_ID, BLUE) msg, ##__VA_ARGS__)
 // prints without pre-pending SERVER_ID
 #define OSDB_PRINTF_2(msg, ...) OSDB_LVL_PRINT(OSDB_INFO, OSDB_SERVER_PRINT_ALLOWED, msg, ##__VA_ARGS__)
 

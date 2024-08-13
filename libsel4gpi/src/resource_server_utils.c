@@ -15,6 +15,10 @@
 #include <sel4gpi/resource_server_utils.h>
 #include <pb_print.h>
 
+#if BENCHMARK_RESOURCE_SERVER
+#include <sel4bench/arch/sel4bench.h>
+#endif
+
 /** @file
  * Utility functions for non-RT PDs that serve GPI resources
  */
@@ -152,6 +156,10 @@ int resource_server_main(void *context_v)
     received_cap_path.root = PD_CAP_ROOT;
     received_cap_path.capDepth = PD_CAP_DEPTH;
 
+#if BENCHMARK_RESOURCE_SERVER
+    sel4bench_init();
+#endif
+
     // Create a default resource space
     error = resource_server_new_res_space(context, context->parent_pd_id, &context->default_space);
     CHECK_ERROR_GOTO(error, "failed to create resource server's default space", exit_main);
@@ -197,7 +205,18 @@ int resource_server_main(void *context_v)
 
         /* Receive a message */
         RESOURCE_SERVER_PRINTF("Ready to receive a message\n");
+
+#if BENCHMARK_RESOURCE_SERVER
+        ccnt_t wait_start, wait_end;
+        SEL4BENCH_READ_CCNT(wait_start);
+#endif
+
         tag = resource_server_recv(context, &sender_badge);
+
+#if BENCHMARK_RESOURCE_SERVER
+        SEL4BENCH_READ_CCNT(wait_end);
+#endif
+
         RESOURCE_SERVER_PRINTF("Received a message\n");
 
 #if RESOURCE_SERVER_DEBUG
@@ -221,6 +240,10 @@ int resource_server_main(void *context_v)
         /* If the sender badge is NOTIF_BADGE, then we were woken up by the RT, and should check for work */
         if (sender_badge == NOTIF_BADGE)
         {
+#if BENCHMARK_RESOURCE_SERVER
+            printf("%s %s: Got work notif, waited for %lu\n", context->resource_type_name, SERVER_UTILS, wait_end - wait_start);
+#endif
+
             /* Perform any pending work the RT requested */
             while (1)
             {
@@ -233,6 +256,7 @@ int resource_server_main(void *context_v)
                 RESOURCE_SERVER_PRINTF("Got some work from RT\n");
                 if (context->debug_print)
                 {
+                    printf("TEMPA it thinks debug print is on?\n");
                     pb_pretty_print(&PdWorkReturnMessage_msg, (void *)&work);
                 }
 
@@ -333,7 +357,7 @@ int resource_server_unattach(resource_server_context_t *context,
     int error = 0;
 
     CHECK_ERROR(vaddr == NULL, "cannot unattach a NULL vaddr");
-    
+
     error = vmr_client_delete_by_vaddr(context->vmr_rde,
                                        vaddr);
     CHECK_ERROR(error, "failed to unattach from ADS");

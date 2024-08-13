@@ -54,3 +54,8 @@
  *              If the resource server crashes while serving a request, the client will remain blocked.
  */
 #define STORE_REPLY_CAP 1
+
+/**
+ * If true, outputs clock cycles for GPI server's message send/receive times
+ */
+#define BENCHMARK_GPI_SERVER 0

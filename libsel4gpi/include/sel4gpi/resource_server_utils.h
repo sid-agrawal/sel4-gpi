@@ -23,6 +23,8 @@
 #define RESOURCE_SERVER_DEBUG 1
 #define SERVER_UTILS "Server Utils"
 
+#define BENCHMARK_RESOURCE_SERVER 0
+
 // Could use the server's debug function instead
 #if RESOURCE_SERVER_DEBUG
 #define RESOURCE_SERVER_PRINTF(...)                                       \

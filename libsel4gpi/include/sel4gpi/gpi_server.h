@@ -35,6 +35,48 @@
 
 #define GPI_SERVER_BADGE_PARENT_VALUE 0xdeadbeef // Change this to something which will not violate the badge range
 
+#if BENCHMARK_GPI_SERVER
+#include <sel4bench/arch/sel4bench.h>
+
+#define BENCH_INIT ccnt_t bench_start, bench_end
+
+#define BENCH_POINT(msg)                                        \
+    do                                                          \
+    {                                                           \
+        SEL4BENCH_READ_CCNT(bench_start);                       \
+        OSDB_PRINTBENCH("Time at %s: %lu\n", msg, bench_start); \
+    } while (0)
+
+#define START_BENCH()                     \
+    do                                    \
+    {                                     \
+        SEL4BENCH_READ_CCNT(bench_start); \
+    } while (0)
+
+#define END_BENCH(msg)                                                      \
+    do                                                                      \
+    {                                                                       \
+        SEL4BENCH_READ_CCNT(bench_end);                                     \
+        OSDB_PRINTBENCH("Time to %s: %lu\n", msg, bench_end - bench_start); \
+    } while (0)
+
+#else
+#define BENCH_INIT
+
+#define BENCH_POINT(msg) \
+    do                   \
+    {                    \
+    } while (0)
+#define START_BENCH() \
+    do                \
+    {                 \
+    } while (0)
+#define END_BENCH(msg) \
+    do                 \
+    {                  \
+    } while (0)
+#endif
+
 /** @file API for allowing a thread to act as the parent to a GPI server
  * thread.
  *
