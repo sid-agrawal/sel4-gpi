@@ -30,6 +30,15 @@
 
 #define MAX_TIMER_IRQS 4
 
+#define MAX_GEN_IRQS 15
+
+/* QEMU, by default, only gets around 300 MB untyped */
+#ifdef CONFIG_PLAT_QEMU_ARM_VIRT
+#define SERIAL_IRQ 33
+#elif CONFIG_PLAT_ODROIDC4
+#define SERIAL_IRQ 225
+#endif
+
 struct timer_callback_info
 {
     irq_callback_fn_t callback;
@@ -87,6 +96,10 @@ struct driver_env
 
     /* slot of the benchmark endpoint in the test process*/
     seL4_CPtr bench_endpoint_in_test;
+
+    /* IRQ handler caps for any non-timer IRQs */
+    int num_gen_irqs;
+    sel4ps_irq_t gen_irqs[MAX_GEN_IRQS];
 
     /** FIELDS FOR NON-OSMOSIS TEST **/
 

@@ -442,6 +442,21 @@ static void handle_irq_handler_bind_req(seL4_Word sender_badge,
         resource_component_registry_get_by_badge(get_cpu_component(), sender_badge);
     SERVER_GOTO_IF_COND_BG(cpu_data == NULL, sender_badge, "Couldn't find CPU from badge: ");
 
+    pd_component_registry_entry_t *pd_data = (pd_component_registry_entry_t *)
+        resource_component_registry_get_by_id(get_pd_component(), get_client_id_from_badge(sender_badge));
+    SERVER_GOTO_IF_COND_BG(pd_data == NULL, sender_badge, "Client PD %u for CPU not found: ",
+                           get_client_id_from_badge(sender_badge));
+
+    seL4_CPtr irq_handler_slot;
+    error = cpu_irq_handler_bind(&cpu_data->cpu, msg->irq, pd_data->pd.notification.cptr, &irq_handler_slot);
+    SERVER_GOTO_IF_ERR(error, "Failed to bind IRQ %d handler with notification\n", msg->irq);
+
+    cspacepath_t dest = {0};
+    error = resource_component_transfer_cap(get_cpu_component()->server_vka,
+                                            pd_data->pd.pd_vka, irq_handler_slot,
+                                            &dest, false, 0);
+
+    reply_msg->msg.irq_handler_bind.slot = dest.capPtr;
 err_goto:
     reply_msg->which_msg = CpuReturnMessage_irq_handler_bind_tag;
     reply_msg->errorCode = error;
@@ -504,6 +519,9 @@ static void cpu_component_handle(void *msg_p,
             break;
         case CpuMessage_ack_vppi_tag:
             handle_ack_vppi_req(sender_badge, &msg->msg.ack_vppi, reply_msg);
+            break;
+        case CpuMessage_irq_handler_bind_tag:
+            handle_irq_handler_bind_req(sender_badge, &msg->msg.irq_handler_bind, reply_msg);
             break;
         default:
             SERVER_GOTO_IF_COND(1, "Unknown request received: %u\n", msg->which_msg);

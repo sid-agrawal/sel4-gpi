@@ -326,7 +326,7 @@ int cpu_client_ack_vppi(cpu_client_context_t *cpu, uint64_t irq)
     return error;
 }
 
-int cpu_client_irq_handler_bind(cpu_client_context_t *cpu, int irq, seL4_Word badge, seL4_CPtr *ret_slot)
+int cpu_client_irq_handler_bind(cpu_client_context_t *cpu, int irq, seL4_CPtr *ret_slot)
 {
     OSDB_PRINTF("Sending 'IRQ handler bind' request to CPU component\n");
 
@@ -336,13 +336,10 @@ int cpu_client_irq_handler_bind(cpu_client_context_t *cpu, int irq, seL4_Word ba
         .magic = CPU_RPC_MAGIC,
         .which_msg = CpuMessage_irq_handler_bind_tag,
         .msg.irq_handler_bind = {
-            .irq = irq,
-            .badge = badge,
-        },
+            .irq = irq},
     };
 
     CpuReturnMessage ret_msg = {0};
-
     error = sel4gpi_rpc_call(&rpc_env, cpu->ep, (void *)&msg,
                              0, NULL, (void *)&ret_msg);
 

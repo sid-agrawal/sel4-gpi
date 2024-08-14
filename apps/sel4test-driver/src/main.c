@@ -74,10 +74,8 @@ static char allocator_mem_pool[ALLOCATOR_STATIC_POOL_SIZE];
 
 /* QEMU, by default, only gets around 300 MB untyped */
 #ifdef CONFIG_PLAT_QEMU_ARM_VIRT
-#define SERIAL_IRQ 33
 #define TEST_UNTYPED_SIZE BIT(seL4_PageBits) * 25600 // 100 MB
 #elif CONFIG_PLAT_ODROIDC4
-#define SERIAL_IRQ 225
 #define TEST_UNTYPED_SIZE BIT(seL4_PageBits) * 76800 // 300 MB
 #endif
 
@@ -592,7 +590,9 @@ void *main_continued(void *arg UNUSED)
                                            &env.vspace,
                                            GPI_SERVER_DEFAULT_PRIORITY,
                                            &env.gpi_endpoint_in_parent,
-                                           &env.mx);
+                                           &env.mx,
+                                           &env.num_gen_irqs,
+                                           env.gen_irqs);
     // printf(GPISERVP "Public EP is: %d\n", env.gpi_endpoint_in_parent);
     // debug_cap_identify(GPISERVP, env.gpi_endpoint_in_parent);
 #endif
