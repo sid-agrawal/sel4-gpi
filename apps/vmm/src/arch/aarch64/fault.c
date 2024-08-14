@@ -40,7 +40,8 @@ bool fault_advance_vcpu(vm_context_t *vm, seL4_UserContext *regs)
     // For now we just ignore it and continue
     // Assume 64-bit instruction
     regs->pc += 4;
-    return !(vm_write_registers(vm, true, regs, SEL4_USER_CONTEXT_SIZE));
+    int error = vm_write_registers(vm, true, regs, SEL4_USER_CONTEXT_SIZE);
+    return !error;
 }
 
 enum fault_width
@@ -279,7 +280,10 @@ bool fault_handle_vcpu_exception(vm_context_t *vm)
     case HSR_SMC_64_EXCEPTION:
         if (handle_smc(GUEST_VCPU_ID, &regs, hsr))
         {
-            return fault_advance_vcpu(vm, &regs);
+            fault_advance_vcpu(vm, &regs);
+            sel4debug_print_registers(&regs);
+            return true;
+            // return fault_advance_vcpu(vm, &regs);
         }
         return false;
     case HSR_WFx_EXCEPTION:

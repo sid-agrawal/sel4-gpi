@@ -30,6 +30,8 @@ int test_vmm_native(env_t env)
     int error;
     printf("------------------STARTING: %s------------------\n", __func__);
 
+    sel4test_get_irq_handler(env, SERIAL_IRQ);
+
     // test process will act as the VMM
     error = sel4test_vmm_init(sel4test_get_irq_handler(env, SERIAL_IRQ),
                               &env->vka, &env->vspace, env->asid_pool, &env->simple, env->tcb, env->endpoint);

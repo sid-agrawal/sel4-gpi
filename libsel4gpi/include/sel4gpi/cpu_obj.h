@@ -40,6 +40,8 @@ typedef struct _cpu
     seL4_CPtr fault_ep;         ///< currently binded fault endpoint
     seL4_UserContext *reg_ctx;  ///< TCB register values that are to be written, NOT the current values
     vka_object_t vcpu;          ///< VCPU object (only exists if CPU is elevated)
+    seL4_CPtr irq_notif;        ///< badged notification for IRQs, currently only allows one bound IRQ
+    int bound_irq;              ///< ID of bound IRQ
 } cpu_t;
 
 /**
@@ -240,7 +242,8 @@ int cpu_ack_vppi(cpu_t *cpu, uint64_t irq);
  *
  * @param cpu the CPU object
  * @param irq IRQ ID of handler to bind
- * @param badge OPTIONAL: badge to apply to the notification
+ * @param notif notification object to bind to the IRQ handler
+ * @param[out] irq_handler OPTIONAL: returns the slot to the IRQ handler
  * @return int 0 on success, other on failure
  */
-int cpu_irq_handler_bind(cpu_t *cpu, int irq, seL4_Word badge);
+int cpu_irq_handler_bind(cpu_t *cpu, int irq, seL4_CPtr notif, seL4_CPtr *irq_handler);

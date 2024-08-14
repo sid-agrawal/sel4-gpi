@@ -16,6 +16,7 @@
 
 #include <sel4/sel4.h>
 #include <sel4utils/strerror.h>
+#include <sel4platsupport/device.h>
 #include <vka/vka.h>
 #include <vka/object.h>
 #include <vka/object_capops.h>
@@ -66,7 +67,9 @@ gpi_server_parent_spawn_thread(simple_t *parent_simple, vka_t *parent_vka,
                                vspace_t *parent_vspace,
                                uint8_t priority,
                                seL4_CPtr *server_ep_cap,
-                               sync_mutex_t *mx)
+                               sync_mutex_t *mx,
+                               int *num_gen_irqs,
+                               sel4ps_irq_t *gen_irqs)
 {
     seL4_Error error;
     cspacepath_t parent_cspace_cspath;
@@ -91,6 +94,8 @@ gpi_server_parent_spawn_thread(simple_t *parent_simple, vka_t *parent_vka,
     get_gpi_server()->server_vspace = parent_vspace;
     get_gpi_server()->rt_pd_id = RT_PD_ID;
     get_gpi_server()->mx = mx;
+    get_gpi_server()->num_gen_irqs = num_gen_irqs;
+    get_gpi_server()->gen_irqs = gen_irqs;
 
     /* Allocate the Endpoint that the server will be listening on. */
     error = vka_alloc_endpoint(parent_vka, &get_gpi_server()->server_ep_obj);
@@ -347,4 +352,75 @@ void gpi_debug_print_resources(void)
         printf(" - RT MO (%u)\n", (int)attach_node->mo_id);
     }
     printf("\n\n");
+}
+
+static seL4_CPtr find_irq_handler(sel4ps_irq_t *irqs, int *num_irqs, int irq)
+{
+    for (int i = 0; i < *num_irqs; i++)
+    {
+        bool found = false;
+        switch (irqs[i].irq.type)
+        {
+        case PS_INTERRUPT:
+            if (irqs[i].irq.irq.number == irq)
+            {
+                found = true;
+            }
+            break;
+        case PS_TRIGGER:
+            if (irqs[i].irq.trigger.number == irq)
+            {
+                found = true;
+            }
+        default:
+            /* we currently don't store any other types of IRQs */
+            break;
+        }
+
+        if (found)
+        {
+            return irqs[i].handler_path.capPtr;
+        }
+    }
+
+    return seL4_CapNull;
+}
+
+seL4_CPtr gpi_get_irq_handler(vka_t *vka, simple_t *simple, sel4ps_irq_t *irqs, int *num_irqs, int irq)
+{
+    assert(irqs != NULL);
+    assert(num_irqs != NULL);
+
+    seL4_CPtr handler_slot = find_irq_handler(irqs, num_irqs, irq);
+    if (handler_slot == seL4_CapNull)
+    {
+        cspacepath_t handler_path;
+        ps_irq_t irq_info = {0};
+#ifdef CONFIG_PLAT_ODROIDC4
+        if (irq == SERIAL_IRQ)
+        {
+            irq_info.type = PS_TRIGGER;
+            irq_info.trigger.number = irq;
+            irq_info.trigger.trigger = PS_EDGE_TRIGGERED;
+        }
+#else
+        irq_info.irq.number = irq;
+        irq_info.type = PS_INTERRUPT;
+#endif
+
+        int error = sel4platsupport_copy_irq_cap(vka, simple, &irq_info, &handler_path);
+        if (error)
+        {
+            OSDB_PRINTERR("Failed to get IRQ %d Handler\n", irq);
+            return seL4_CapNull;
+        }
+
+        irqs[*num_irqs].irq = irq_info;
+        irqs[*num_irqs].handler_path = handler_path;
+        (*num_irqs)++;
+
+        handler_slot = handler_path.capPtr;
+    }
+
+    return handler_slot;
 }

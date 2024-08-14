@@ -52,12 +52,13 @@ int vm_read_registers(vm_context_t *vm, bool suspend, seL4_UserContext *regs, si
 void vm_dump_registers(vm_context_t *vm)
 {
     seL4_UserContext regs = {0};
-    cpu_client_read_registers(&vm->runnable.cpu, regs);
+    cpu_client_read_registers(&vm->runnable.cpu, &regs);
     sel4debug_print_registers(&regs);
 }
 
 void vm_dump_vcpu_registers(vm_context_t *vm)
 {
+    VMM_PRINTERR("Unimplemented!\n");
     // vcpu_print_regs(vm->vcpu.cptr);
 }
 
@@ -83,9 +84,7 @@ static void serial_ack(vm_context_t *vm, int irq, void *cookie)
      * come across a case yet where more than this needs to be done.
      */
     VMM_PRINT("Acking serial interrupt\n");
-    // seL4_Error error = seL4_IRQHandler_Ack(vmon_ctxt.serial_irq_handler);
-    // (XXX) Linh
-    int error = 1;
+    seL4_Error error = seL4_IRQHandler_Ack(vmon_ctxt.serial_irq_handler);
     WARN_IF_COND(error, "Failed to ACK serial interrupt, seL4_Error: %d\n", error);
 }
 
@@ -126,7 +125,8 @@ static void handle_fault(int argc, char **argv)
 
         vm = vmon_ctxt.guests[vm_id];
         assert(vm != NULL);
-        // fault_handle(vm, &info);
+
+        fault_handle(vm, &info);
     }
 }
 
@@ -162,7 +162,9 @@ int osm_vmm_init(void)
     error = sel4gpi_start_pd(&vmon_ctxt.fault_thread_runnable);
     GOTO_IF_ERR(error, "Failed to start VMM's fault handler thread\n");
 
-    // TODO IRQ bind
+    error = cpu_client_irq_handler_bind(&vmon_ctxt.fault_thread_runnable.cpu, SERIAL_IRQ,
+                                        &vmon_ctxt.serial_irq_handler);
+    GOTO_IF_ERR(error, "Failed to bind VMM's CPU to the serial IRQ handler\n");
 
 err_goto:
     return error;
@@ -175,41 +177,13 @@ uint32_t osm_new_guest(void)
     GOTO_IF_COND(vmon_ctxt.guest_id_counter >= MAX_GUEST_COUNT, "Maximum number of guests started\n");
     vm_context_t *vm = calloc(1, sizeof(vm_context_t));
 
-    pd_config_t *vm_cfg = calloc(1, sizeof(pd_config_t));
-
-    seL4_CPtr pd_rde = sel4gpi_get_rde(GPICAP_TYPE_PD);
-    GOTO_IF_COND(pd_rde == seL4_CapNull, "No PD RDE\n");
+    pd_config_t *vm_cfg = sel4gpi_new_runnable(true, true, &vm->runnable);
 
     seL4_CPtr mo_rde = sel4gpi_get_rde(GPICAP_TYPE_MO);
     GOTO_IF_COND(mo_rde == seL4_CapNull, "No MO RDE\n");
 
     seL4_CPtr vmr_rde = sel4gpi_get_bound_vmr_rde();
     GOTO_IF_COND(vmr_rde == seL4_CapNull, "No VMR RDE\n");
-
-    pd_client_context_t self_pd_conn = sel4gpi_get_pd_conn();
-
-    /* allocate MO for PD's OSmosis data */
-    error = mo_component_client_connect(mo_rde, 1, MO_PAGE_BITS, &vm_cfg->osm_data_mo);
-    GOTO_IF_ERR(error, "Failed to allocat OSmosis data MO\n");
-
-    sel4gpi_runnable_t runnable = {0};
-    /* new PD */
-    error = pd_component_client_connect(pd_rde, &vm_cfg->osm_data_mo, &runnable.pd);
-    GOTO_IF_ERR(error, "Failed to create new PD\n");
-
-    /* new ADS*/
-    seL4_CPtr ads_rde = sel4gpi_get_rde(GPICAP_TYPE_ADS);
-    GOTO_IF_COND(ads_rde == seL4_CapNull, "Can't make new ADS, no ADS RDE\n");
-
-    error = ads_component_client_connect(ads_rde, &runnable.ads);
-    GOTO_IF_ERR(error, "failed to allocate a new ADS");
-
-    /* new CPU */
-    seL4_CPtr cpu_rde = sel4gpi_get_rde(GPICAP_TYPE_CPU);
-    GOTO_IF_COND(cpu_rde == seL4_CapNull, "No CPU RDE\n");
-
-    error = cpu_component_client_connect(cpu_rde, &runnable.cpu);
-    GOTO_IF_ERR(error, "failed to allocate a new CPU");
 
     size_t guest_ram_pages = BYTES_TO_SIZE_BITS_PAGES(GUEST_RAM_SIZE, MO_LARGE_PAGE_BITS);
     mo_client_context_t guest_ram_mo = {0};
@@ -286,7 +260,7 @@ uint32_t osm_new_guest(void)
     vm_cfg->fault_ep_badge = guest_id;
 
     seL4_Word arg = GUEST_DTB_VADDR;
-    error = sel4gpi_prepare_pd(vm_cfg, &runnable, 1, &arg);
+    error = sel4gpi_prepare_pd(vm_cfg, &vm->runnable, 1, &arg);
     GOTO_IF_ERR(error, "Failed to setup VM-PD\n");
 
     // WIP DTB parsing
@@ -324,13 +298,15 @@ uint32_t osm_new_guest(void)
     /* Just in case there is already an interrupt available to handle, we ack it here. */
     serial_ack(vm, SERIAL_IRQ, NULL);
 
-    error = sel4gpi_start_pd(&runnable);
+    error = sel4gpi_start_pd(&vm->runnable);
 
     // pd_client_dump(&runnable.pd, NULL, 0);
 
     vmon_ctxt.guests[guest_id] = vm;
     vmon_ctxt.guest_id_counter++;
     vm->id = guest_id;
+
+    pd_client_send_cap(&vmon_ctxt.fault_thread_runnable.pd, vm->runnable.cpu.ep, &vm->runnable.cpu.ep);
 
 err_goto:
     sel4gpi_config_destroy(vm_cfg);

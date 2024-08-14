@@ -23,6 +23,7 @@
 #include <sel4gpi/endpoint_component.h>
 #include <sel4gpi/error_handle.h>
 #include <sel4testsupport/testreporter.h>
+#include <sel4platsupport/device.h>
 
 /* Bootstrap test type. */
 static inline void bootstrap_set_up_test_type(uintptr_t e)
@@ -151,24 +152,11 @@ static void handle_get_irq_handler_request(driver_env_t env, int irq)
 {
     int error = 0;
     int extraCaps = 0;
-    cspacepath_t handler_slot;
-    error = vka_cspace_alloc_path(&env->vka, &handler_slot);
-    if (error)
-    {
-        ZF_LOGE("Failed to allocate slot for IRQ handler\n");
-        goto err_goto;
-    }
 
-    error = simple_get_IRQ_handler(&env->simple, irq, handler_slot);
-    if (error)
-    {
-        ZF_LOGE("Failed to get IRQ %d Handler\n", irq);
-        goto err_goto;
-    }
+    seL4_CPtr handler_slot = gpi_get_irq_handler(&env->vka, &env->simple, env->gen_irqs, &env->num_gen_irqs, irq);
 
-    seL4_SetCap(0, handler_slot.capPtr);
+    seL4_SetCap(0, handler_slot);
     extraCaps = 1;
-
 err_goto:
     seL4_SetMR(0, 0);
     api_reply(env->reply.cptr, seL4_MessageInfo_new(error, 0, extraCaps, 0));
@@ -494,7 +482,7 @@ void osm_set_up(uintptr_t e)
 
     cpu_t *cpu;
     seL4_CPtr cpu_slot_in_test;
-    error = cpu_component_allocate(pd->id, &cpu, NULL);
+    error = cpu_component_allocate(pd->id, &cpu, &cpu_slot_in_test);
     assert(error == 0);
     env->test_cpu = cpu;
 
@@ -513,6 +501,7 @@ void osm_set_up(uintptr_t e)
                             gpi_new_badge(GPICAP_TYPE_CPU, 0, pd->id, get_cpu_component()->space_id, cpu->id),
                             cpu_slot_in_test);
     assert(error == 0);
+    CPRINTF("cpu_slot_in_test: %lx\n", cpu_slot_in_test);
 
     // Load the test image in the ADS
     void *entry_pt;

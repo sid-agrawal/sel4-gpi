@@ -13,6 +13,7 @@
 #include <sel4utils/vspace.h>
 #include <sel4utils/util.h>
 #include <sel4utils/helpers.h>
+#include <vka/capops.h>
 
 #include <sel4gpi/cpu_component.h>
 #include <sel4gpi/mo_component.h>
@@ -20,6 +21,7 @@
 #include <sel4gpi/debug.h>
 #include <sel4gpi/model_exporting.h>
 #include <sel4gpi/error_handle.h>
+#include <sel4gpi/gpi_server.h>
 #include <sel4/sel4.h>
 #include <sel4runtime.h>
 #include <sel4debug/register_dump.h>
@@ -237,6 +239,12 @@ void cpu_destroy(cpu_t *cpu)
         vka_free_object(get_cpu_component()->server_vka, &cpu->vcpu);
     }
 
+    if (cpu->irq_notif != seL4_CapNull)
+    {
+        vka_cspace_free(get_cpu_component()->server_vka, cpu->irq_notif);
+        // TODO: clear IRQ handler & call this in pd_destroy
+    }
+
     // Free other things
     free(cpu->reg_ctx);
 
@@ -346,8 +354,42 @@ int cpu_ack_vppi(cpu_t *cpu, uint64_t irq)
     return seL4_ARM_VCPU_AckVPPI(cpu->vcpu.cptr, irq);
 }
 
-int cpu_irq_handler_bind(cpu_t *cpu, int irq, seL4_Word badge)
+int cpu_irq_handler_bind(cpu_t *cpu, int irq, seL4_CPtr notif, seL4_CPtr *irq_handler)
 {
-    // Linh WIP
-    // simple_get_IRQ_handler()
+    int error = 0;
+    cspacepath_t notif_path, badged_notif_path = {0};
+
+    SERVER_GOTO_IF_COND(cpu->irq_notif != seL4_CapNull, "IRQ already bound to this CPU, cannot bind another\n");
+
+    seL4_CPtr handler_slot = gpi_get_irq_handler(get_cpu_component()->server_vka, get_gpi_server()->server_simple,
+                                                 get_gpi_server()->gen_irqs, get_gpi_server()->num_gen_irqs, irq);
+
+    vka_cspace_make_path(get_cpu_component()->server_vka, notif, &notif_path);
+
+    error = vka_cspace_alloc_path(get_cpu_component()->server_vka, &badged_notif_path);
+    SERVER_GOTO_IF_ERR(error, "Failed to allocate slot for badged notification\n");
+
+    error = vka_cnode_mint(&badged_notif_path, &notif_path, seL4_AllRights, irq); // TODO Linh: fix to a better badge
+    SERVER_GOTO_IF_ERR(error, "Failed to mint a badge on the IRQ notification\n");
+
+    error = seL4_IRQHandler_SetNotification(handler_slot, badged_notif_path.capPtr);
+    SERVER_GOTO_IF_ERR(error, "Failed to set notification for IRQ %d handler\n", irq);
+
+    cpu->irq_notif = badged_notif_path.capPtr;
+
+    if (irq_handler)
+    {
+        *irq_handler = handler_slot;
+    }
+
+    return 0;
+
+err_goto:
+
+    if (badged_notif_path.capPtr)
+    {
+        vka_cspace_free_path(get_cpu_component()->server_vka, badged_notif_path);
+    }
+
+    return error;
 }

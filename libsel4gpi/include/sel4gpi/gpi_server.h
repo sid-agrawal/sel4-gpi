@@ -93,6 +93,8 @@
  * @param priority Server thread's priority.
  * @param server_endpoint Server thread's endpoint cap.
  * @param mx an initialized and managed mutex for synchronization between the test driver and gpi server
+ * @param num_gen_irqs pointer to number of stored IRQ handlers (shared with the test-driver)
+ * @param gen_irqs test-driver's shared array of general (non-timer) IRQ handlers
  * @return seL4_Error value.
  */
 seL4_Error gpi_server_parent_spawn_thread(simple_t *parent_simple,
@@ -100,7 +102,9 @@ seL4_Error gpi_server_parent_spawn_thread(simple_t *parent_simple,
                                           vspace_t *parent_vspace,
                                           uint8_t priority,
                                           seL4_CPtr *server_endpoint,
-                                          sync_mutex_t *mx);
+                                          sync_mutex_t *mx,
+                                          int *num_gen_irqs,
+                                          sel4ps_irq_t *gen_irqs);
 
 /*
 Context of the server
@@ -157,6 +161,9 @@ typedef struct _gpi_server_context
     gpi_obj_id_t test_proc_id; ///< Use this to warn if we try to clean up the test process
 
     sync_mutex_t *mx; ///< mutex for synchronization between the test driver and GPI server
+
+    int *num_gen_irqs;
+    sel4ps_irq_t *gen_irqs;
 } gpi_server_context_t;
 
 /**
@@ -175,3 +182,5 @@ void gpi_panic(char *reason, uint64_t code);
  * Debug function prints all core resources in existence
  */
 void gpi_debug_print_resources(void);
+
+seL4_CPtr gpi_get_irq_handler(vka_t *vka, simple_t *simple, sel4ps_irq_t *irqs, int *num_irqs, int irq);
