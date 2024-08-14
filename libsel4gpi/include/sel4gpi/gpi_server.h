@@ -36,9 +36,9 @@
 #define GPI_SERVER_BADGE_PARENT_VALUE 0xdeadbeef // Change this to something which will not violate the badge range
 
 #if BENCHMARK_GPI_SERVER
-#include <sel4bench/arch/sel4bench.h>
+#include <sel4gpi/bench_utils.h>
 
-#define BENCH_INIT ccnt_t bench_start, bench_end
+#define BENCH_INIT BENCH_UTILS_FN_INIT
 
 #define BENCH_POINT(msg)                                        \
     do                                                          \
@@ -47,19 +47,9 @@
         OSDB_PRINTBENCH("Time at %s: %lu\n", msg, bench_start); \
     } while (0)
 
-#define START_BENCH()                     \
-    do                                    \
-    {                                     \
-        SEL4BENCH_READ_CCNT(bench_start); \
-    } while (0)
+#define START_BENCH BENCH_UTILS_START
 
-#define END_BENCH(msg)                                       \
-    do                                                       \
-    {                                                        \
-        SEL4BENCH_READ_CCNT(bench_end);                      \
-        OSDB_PRINTBENCH("Nanobenchmark, time to %s\n", msg); \
-        printf("NANORESULT>%lu\n", bench_end - bench_start); \
-    } while (0)
+#define END_BENCH BENCH_UTILS_END_NANO
 
 #else
 #define BENCH_INIT

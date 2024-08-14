@@ -50,7 +50,7 @@ static size_t cspace_size_bits = 17;
 
 void benchmark_init(env_t env)
 {
-    sel4bench_init();
+    BENCH_UTILS_PD_INIT;
 
     for (int i = 0; i < 5; i++)
     {
@@ -830,7 +830,7 @@ static int benchmark_fs(env_t env)
     test_error_eq(maybe_terminate_pd(&fs_pd), 0);
     test_error_eq(maybe_terminate_pd(&ramdisk_pd), 0);
 
-    sel4bench_destroy();
+    BENCH_UTILS_DESTROY;
     return sel4test_get_result();
 }
 
@@ -933,7 +933,7 @@ int benchmark_basic_sel4utils(env_t env)
     error = vka_cnode_revoke(&cspace);
     test_error_eq(error, 0);
 
-    sel4bench_destroy();
+    BENCH_UTILS_DESTROY;
     return sel4test_get_result();
 }
 
@@ -998,7 +998,7 @@ int benchmark_basic_osm(env_t env)
     error = benchmark_ads_delete_osm(&ads);
     test_error_eq(error, 0);
 
-    sel4bench_destroy();
+    BENCH_UTILS_DESTROY;
     return sel4test_get_result();
 }
 
@@ -1025,7 +1025,7 @@ int benchmark_process_spawn_sel4utils(env_t env)
     error = benchmark_ipc_pd(ep);
     test_error_eq(error, 0);
 
-    sel4bench_destroy();
+    BENCH_UTILS_DESTROY;
     return sel4test_get_result();
 }
 
@@ -1055,7 +1055,7 @@ int benchmark_process_spawn_osm(env_t env)
     // Cleanup
     test_error_eq(maybe_terminate_pd(&pd), 0);
 
-    sel4bench_destroy();
+    BENCH_UTILS_DESTROY;
     return sel4test_get_result();
 }
 
@@ -1142,6 +1142,7 @@ static int internal_benchmark_cleanup_toy_servers(env_t env, hello_cleanup_mode_
     /* Crash a PD */
     ccnt_t start, end;
     
+    BENCH_UTILS_RECORD_NANO();
     if (server_to_crash == HELLO_CLEANUP_TOY_BLOCK_SERVER_MODE)
     {
         printf("Crashing toy_block_server PD\n");
@@ -1171,6 +1172,7 @@ static int internal_benchmark_cleanup_toy_servers(env_t env, hello_cleanup_mode_
         // Invalid mode of server to crash
         test_assert(0);
     }
+    BENCH_UTILS_STOP_RECORD_NANO();
 
     printf("Crash started at %lu, finished at %lu\n", start, end);
     benchmark_print_result(end - start);
@@ -1184,7 +1186,7 @@ static int internal_benchmark_cleanup_toy_servers(env_t env, hello_cleanup_mode_
     test_error_eq(maybe_terminate_pd(&hello_client_toy_db_pd), 0);
     test_error_eq(maybe_terminate_pd(&hello_dummy_pd), 0);
 
-    sel4bench_destroy();
+    BENCH_UTILS_DESTROY;
     return sel4test_get_result();
 }
 
@@ -1324,7 +1326,7 @@ static int internal_benchmark_cleanup(env_t env, cleanup_scenario_server_t serve
     test_error_eq(maybe_terminate_pd(&kvstore_client_pd), 0);
     test_error_eq(maybe_terminate_pd(&kvstore_server_pd), 0);
 
-    sel4bench_destroy();
+    BENCH_UTILS_DESTROY;
     return sel4test_get_result();
 }
 
