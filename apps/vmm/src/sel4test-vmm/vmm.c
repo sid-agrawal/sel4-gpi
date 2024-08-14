@@ -47,11 +47,6 @@ extern char _guest_initrd_image_end[];
 
 static vmon_context_t vmon_ctxt;
 
-seL4_CPtr vm_get_vcpu(vm_context_t *vm)
-{
-    return vm->vcpu.cptr;
-}
-
 void vm_suspend(vm_context_t *vm)
 {
     seL4_Error err = seL4_TCB_Suspend(vm->tcb.cptr);
@@ -80,12 +75,24 @@ void vm_dump_registers(vm_context_t *vm)
 
 void vm_dump_vcpu_registers(vm_context_t *vm)
 {
-    vcpu_print_regs(vm->vcpu.cptr);
+    vcpu_regs_t regs = {0};
+    vcpu_read_regs(vm->vcpu.cptr, &regs);
+    vcpu_print_regs(&regs);
 }
 
 uint32_t vm_get_id(vm_context_t *vm)
 {
     return vm->id;
+}
+
+int vm_inject_irq(vm_context_t *vm, int virq, int prio, int group, int idx)
+{
+    return seL4_ARM_VCPU_InjectIRQ(vm->vcpu.cptr, virq, prio, group, idx);
+}
+
+int vm_ack_vppi(vm_context_t *vm, uint64_t irq)
+{
+    return seL4_ARM_VCPU_AckVPPI(vm->vcpu.cptr, irq);
 }
 
 static void serial_ack(vm_context_t *vm, int irq, void *cookie)

@@ -212,3 +212,24 @@ int cpu_read_registers(cpu_t *cpu, seL4_UserContext *regs);
  * @return int 0 on success, other on failure
  */
 int cpu_write_registers(cpu_t *cpu, seL4_UserContext *regs, size_t num_reg, bool resume);
+
+/**
+ * @brief Wrapper for seL4_ARM_VCPU_InjectIRQ(). Is a NO-OP if the CPU hasn't been elevated.
+ *
+ * @param cpu the CPU object
+ * @param virq virtual IRQ ID
+ * @param prio priority of IRQ to inject
+ * @param group IRQ group
+ * @param idx VGIC list register
+ * @return int 0 on success, other on failure
+ */
+int cpu_inject_irq(cpu_t *cpu, int virq, int prio, int group, int idx);
+
+/**
+ * @brief Wrapper for seL4_ARM_VCPU_AckVPPI(). Is a NO-OP if the CPU hasn't been elevated.
+ *
+ * @param cpu the CPU object
+ * @param irq IRQ ID to ACK
+ * @return int 0 on success, other on failure
+ */
+int cpu_ack_vppi(cpu_t *cpu, uint64_t irq);

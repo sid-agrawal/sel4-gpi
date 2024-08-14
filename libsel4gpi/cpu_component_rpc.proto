@@ -54,6 +54,20 @@ message CpuWriteVcpuMessage {
     uint64 val = 2;
 };
 
+message CpuReadVcpuMessage {
+}
+
+message CpuInjectIrqMessage {
+    uint32 virq = 1;
+    uint32 prio = 2;
+    uint32 group = 3;
+    uint32 idx = 4;
+};
+
+message CpuAckVppiMessage {
+    uint32 irq = 1;
+};
+
 message CpuMessage {
     uint64 magic = 100;
     oneof msg {
@@ -67,6 +81,8 @@ message CpuMessage {
         CpuWriteRegistersMessage write_reg = 8;
         CpuReadRegistersMessage read_reg = 9;
         CpuDisconnectMessage disconnect = 10;
+        CpuInjectIrqMessage inject_irq = 11;
+        CpuAckVppiMessage ack_vppi = 12;
     };
 };
 

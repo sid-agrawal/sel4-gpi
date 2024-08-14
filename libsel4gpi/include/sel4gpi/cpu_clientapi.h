@@ -141,3 +141,26 @@ int cpu_client_set_tls_base(cpu_client_context_t *cpu, void *tls_base);
  * @return 0 on success
  */
 int cpu_client_suspend(cpu_client_context_t *cpu);
+
+/**
+ * @brief Wrapper for seL4_ARM_VCPU_InjectIRQ(). Is a NO-OP if the CPU hasn't been elevated.
+ *
+ * @param cpu the CPU context
+ * @param virq virtual IRQ ID
+ * @param prio priority of IRQ to inject
+ * @param group IRQ group
+ * @param idx VGIC list register
+ * @return int 0 on success, other on failure
+ */
+int cpu_client_inject_irq(cpu_client_context_t *cpu, int virq, int prio, int group, int idx);
+
+/**
+ * @brief Wrapper for seL4_ARM_VCPU_AckVPPI(). Is a NO-OP if the CPU hasn't been elevated.
+ *
+ * @param cpu the CPU context
+ * @param irq IRQ ID to ACK
+ * @return int 0 on success, other on failure
+ */
+int cpu_client_ack_vppi(cpu_client_context_t *cpu, uint64_t irq);
+
+// int cpu_get_irq_handler()

@@ -227,7 +227,7 @@ static inline bool vgic_vcpu_load_list_reg(vm_context_t *vm, vgic_t *vgic, size_
     assert((idx >= 0) && (idx < ARRAY_SIZE(vgic_vcpu->lr_shadow)));
     // @ivanv: why is the priority 0?
 
-    seL4_Error err = seL4_ARM_VCPU_InjectIRQ(vm_get_vcpu(vm), virq->virq, 0, group, idx);
+    int err = vm_inject_irq(vm, virq->virq, 0, group, idx);
     if (err)
     {
         VMM_PRINTERR("Failed to inject VCPU IRQ\n");

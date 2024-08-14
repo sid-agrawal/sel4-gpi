@@ -23,13 +23,11 @@
 #define SCTLR_EL1_NATIVE (SCTLR_EL1 | SCTLR_EL1_C | SCTLR_EL1_I | SCTLR_EL1_UCI)
 #define SCTLR_DEFAULT SCTLR_EL1_NATIVE
 
-/* stolen from microkit, with microkit stuff removed */
 static seL4_Error vcpu_write_reg(seL4_CPtr vcpu, uint64_t reg, uint64_t value)
 {
     return seL4_ARM_VCPU_WriteRegs(vcpu, reg, value);
 }
 
-/* stolen from microkit, with microkit stuff removed */
 static seL4_Word vcpu_read_reg(seL4_CPtr vcpu, uint64_t reg)
 {
     seL4_ARM_VCPU_ReadRegs_t ret;
@@ -83,42 +81,79 @@ void vcpu_reset(seL4_CPtr vcpu)
     vcpu_write_reg(vcpu, seL4_VCPUReg_CNTKCTL_EL1, 0);
 }
 
-void vcpu_print_regs(seL4_CPtr vcpu)
+void vcpu_read_regs(seL4_CPtr vcpu, vcpu_regs_t *regs)
 {
-    // @ivanv this is an incredible amount of system calls
-    printf("dumping VCPU (ID 0x%lx) registers:\n", vcpu);
-    /* VM control registers EL1 */
-    printf("    sctlr: 0x%016lx\n", vcpu_read_reg(vcpu, seL4_VCPUReg_SCTLR));
-    printf("    ttbr0: 0x%016lx\n", vcpu_read_reg(vcpu, seL4_VCPUReg_TTBR0));
-    printf("    ttbr1: 0x%016lx\n", vcpu_read_reg(vcpu, seL4_VCPUReg_TTBR1));
-    printf("    tcr: 0x%016lx\n", vcpu_read_reg(vcpu, seL4_VCPUReg_TCR));
-    printf("    mair: 0x%016lx\n", vcpu_read_reg(vcpu, seL4_VCPUReg_MAIR));
-    printf("    amair: 0x%016lx\n", vcpu_read_reg(vcpu, seL4_VCPUReg_AMAIR));
-    printf("    cidr: 0x%016lx\n", vcpu_read_reg(vcpu, seL4_VCPUReg_CIDR));
+    regs->sctlr = vcpu_read_reg(vcpu, seL4_VCPUReg_SCTLR);
+    regs->ttbr0 = vcpu_read_reg(vcpu, seL4_VCPUReg_TTBR0);
+    regs->ttbr1 = vcpu_read_reg(vcpu, seL4_VCPUReg_TTBR1);
+    regs->tcr = vcpu_read_reg(vcpu, seL4_VCPUReg_TCR);
+    regs->mair = vcpu_read_reg(vcpu, seL4_VCPUReg_MAIR);
+    regs->amair = vcpu_read_reg(vcpu, seL4_VCPUReg_AMAIR);
+    regs->cidr = vcpu_read_reg(vcpu, seL4_VCPUReg_CIDR);
     /* other system registers EL1 */
-    printf("    actlr: 0x%016lx\n", vcpu_read_reg(vcpu, seL4_VCPUReg_ACTLR));
-    printf("    cpacr: 0x%016lx\n", vcpu_read_reg(vcpu, seL4_VCPUReg_CPACR));
+    regs->actlr = vcpu_read_reg(vcpu, seL4_VCPUReg_ACTLR);
+    regs->cpacr = vcpu_read_reg(vcpu, seL4_VCPUReg_CPACR);
     /* exception handling registers EL1 */
-    printf("    afsr0: 0x%016lx\n", vcpu_read_reg(vcpu, seL4_VCPUReg_AFSR0));
-    printf("    afsr1: 0x%016lx\n", vcpu_read_reg(vcpu, seL4_VCPUReg_AFSR1));
-    printf("    esr: 0x%016lx\n", vcpu_read_reg(vcpu, seL4_VCPUReg_ESR));
-    printf("    far: 0x%016lx\n", vcpu_read_reg(vcpu, seL4_VCPUReg_FAR));
-    printf("    isr: 0x%016lx\n", vcpu_read_reg(vcpu, seL4_VCPUReg_ISR));
-    printf("    vbar: 0x%016lx\n", vcpu_read_reg(vcpu, seL4_VCPUReg_VBAR));
+    regs->afsr0 = vcpu_read_reg(vcpu, seL4_VCPUReg_AFSR0);
+    regs->afsr1 = vcpu_read_reg(vcpu, seL4_VCPUReg_AFSR1);
+    regs->esr = vcpu_read_reg(vcpu, seL4_VCPUReg_ESR);
+    regs->far = vcpu_read_reg(vcpu, seL4_VCPUReg_FAR);
+    regs->isr = vcpu_read_reg(vcpu, seL4_VCPUReg_ISR);
+    regs->vbar = vcpu_read_reg(vcpu, seL4_VCPUReg_VBAR);
     /* thread pointer/ID registers EL0/EL1 */
-    printf("    tpidr_el1: 0x%016lx\n", vcpu_read_reg(vcpu, seL4_VCPUReg_TPIDR_EL1));
+    regs->tpidr_el1 = vcpu_read_reg(vcpu, seL4_VCPUReg_TPIDR_EL1);
     // @ivanv: I think thins might not be the correct ifdef
 #if CONFIG_MAX_NUM_NODES > 1
     /* Virtualisation Multiprocessor ID Register */
-    printf("    vmpidr_el2: 0x%016lx\n", vcpu_read_reg(vcpu, seL4_VCPUReg_VMPIDR_EL2));
+    regs->vmpidr_el2 = vcpu_read_reg(vcpu, seL4_VCPUReg_VMPIDR_EL2);
 #endif
     /* general registers x0 to x30 have been saved by traps.S */
-    printf("    sp_el1: 0x%016lx\n", vcpu_read_reg(vcpu, seL4_VCPUReg_SP_EL1));
-    printf("    elr_el1: 0x%016lx\n", vcpu_read_reg(vcpu, seL4_VCPUReg_ELR_EL1));
-    printf("    spsr_el1: 0x%016lx\n", vcpu_read_reg(vcpu, seL4_VCPUReg_SPSR_EL1)); // 32-bit // @ivanv what
+    regs->sp_el1 = vcpu_read_reg(vcpu, seL4_VCPUReg_SP_EL1);
+    regs->elr_el1 = vcpu_read_reg(vcpu, seL4_VCPUReg_ELR_EL1);
+    regs->spsr_el1 = vcpu_read_reg(vcpu, seL4_VCPUReg_SPSR_EL1); // 32-bit // @ivanv what
     /* generic timer registers, to be completed */
-    printf("    cntv_ctl: 0x%016lx\n", vcpu_read_reg(vcpu, seL4_VCPUReg_CNTV_CTL));
-    printf("    cntv_cval: 0x%016lx\n", vcpu_read_reg(vcpu, seL4_VCPUReg_CNTV_CVAL));
-    printf("    cntvoff: 0x%016lx\n", vcpu_read_reg(vcpu, seL4_VCPUReg_CNTVOFF));
-    printf("    cntkctl_el1: 0x%016lx\n", vcpu_read_reg(vcpu, seL4_VCPUReg_CNTKCTL_EL1));
+    regs->cntv_ctl = vcpu_read_reg(vcpu, seL4_VCPUReg_CNTV_CTL);
+    regs->cntv_cval = vcpu_read_reg(vcpu, seL4_VCPUReg_CNTV_CVAL);
+    regs->cntvoff = vcpu_read_reg(vcpu, seL4_VCPUReg_CNTVOFF);
+    regs->cntkctl_el1 = vcpu_read_reg(vcpu, seL4_VCPUReg_CNTKCTL_EL1);
+}
+
+void vcpu_print_regs(vcpu_regs_t *regs)
+{
+    // @ivanv this is an incredible amount of system calls
+    printf("dumping VCPU registers:\n");
+    /* VM control registers EL1 */
+    printf("    sctlr: 0x%016lx\n", regs->sctlr);
+    printf("    ttbr0: 0x%016lx\n", regs->ttbr0);
+    printf("    ttbr1: 0x%016lx\n", regs->ttbr1);
+    printf("    tcr: 0x%016lx\n", regs->tcr);
+    printf("    mair: 0x%016lx\n", regs->mair);
+    printf("    amair: 0x%016lx\n", regs->amair);
+    printf("    cidr: 0x%016lx\n", regs->cidr);
+    /* other system registers EL1 */
+    printf("    actlr: 0x%016lx\n", regs->actlr);
+    printf("    cpacr: 0x%016lx\n", regs->cpacr);
+    /* exception handling registers EL1 */
+    printf("    afsr0: 0x%016lx\n", regs->afsr0);
+    printf("    afsr1: 0x%016lx\n", regs->afsr1);
+    printf("    esr: 0x%016lx\n", regs->esr);
+    printf("    far: 0x%016lx\n", regs->far);
+    printf("    isr: 0x%016lx\n", regs->isr);
+    printf("    vbar: 0x%016lx\n", regs->vbar);
+    /* thread pointer/ID registers EL0/EL1 */
+    printf("    tpidr_el1: 0x%016lx\n", regs->tpidr_el1);
+    // @ivanv: I think thins might not be the correct ifdef
+#if CONFIG_MAX_NUM_NODES > 1
+    /* Virtualisation Multiprocessor ID Register */
+    printf("    vmpidr_el2: 0x%016lx\n", regs->vmpidr_el2);
+#endif
+    /* general registers x0 to x30 have been saved by traps.S */
+    printf("    sp_el1: 0x%016lx\n", regs->sp_el1);
+    printf("    elr_el1: 0x%016lx\n", regs->elr_el1);
+    printf("    spsr_el1: 0x%016lx\n", regs->spsr_el1); // 32-bit // @ivanv what
+    /* generic timer registers, to be completed */
+    printf("    cntv_ctl: 0x%016lx\n", regs->cntv_ctl);
+    printf("    cntv_cval: 0x%016lx\n", regs->cntv_cval);
+    printf("    cntvoff: 0x%016lx\n", regs->cntvoff);
+    printf("    cntkctl_el1: 0x%016lx\n", regs->cntkctl_el1);
 }

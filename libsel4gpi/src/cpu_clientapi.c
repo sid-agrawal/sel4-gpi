@@ -274,4 +274,54 @@ int cpu_client_read_registers(cpu_client_context_t *cpu, seL4_UserContext *regs)
 
 int cpu_client_write_vcpu_reg(cpu_client_context_t *cpu, uint64_t reg, uint64_t value)
 {
+    // (XXX) Linh
+}
+
+int cpu_client_inject_irq(cpu_client_context_t *cpu, int virq, int prio, int group, int idx)
+{
+    OSDB_PRINTF("Sending 'inject IRQ' request to CPU component\n");
+
+    int error = 0;
+
+    CpuMessage msg = {
+        .magic = CPU_RPC_MAGIC,
+        .which_msg = CpuMessage_inject_irq_tag,
+        .msg.inject_irq = {
+            .virq = virq,
+            .prio = prio,
+            .group = group,
+            .idx = idx,
+        },
+    };
+
+    CpuReturnMessage ret_msg = {0};
+
+    error = sel4gpi_rpc_call(&rpc_env, cpu->ep, (void *)&msg,
+                             0, NULL, (void *)&ret_msg);
+    error |= ret_msg.errorCode;
+
+    return error;
+}
+
+int cpu_client_ack_vppi(cpu_client_context_t *cpu, uint64_t irq)
+{
+    OSDB_PRINTF("Sending 'ack VPPI' request to CPU component\n");
+
+    int error = 0;
+
+    CpuMessage msg = {
+        .magic = CPU_RPC_MAGIC,
+        .which_msg = CpuMessage_ack_vppi_tag,
+        .msg.ack_vppi = {
+            .irq = irq,
+        },
+    };
+
+    CpuReturnMessage ret_msg = {0};
+
+    error = sel4gpi_rpc_call(&rpc_env, cpu->ep, (void *)&msg,
+                             0, NULL, (void *)&ret_msg);
+    error |= ret_msg.errorCode;
+
+    return error;
 }

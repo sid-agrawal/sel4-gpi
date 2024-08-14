@@ -30,12 +30,6 @@ extern char _guest_initrd_image_end[];
 
 static vmon_context_t vmon_ctxt;
 
-seL4_CPtr vm_get_vcpu(vm_context_t *vm)
-{
-    // return vm->vcpu.cptr;
-    return 0;
-}
-
 void vm_suspend(vm_context_t *vm)
 {
     int err = cpu_client_suspend(&vm->runnable.cpu);
@@ -47,21 +41,19 @@ void vm_suspend(vm_context_t *vm)
 
 int vm_write_registers(vm_context_t *vm, bool resume, seL4_UserContext *regs, size_t num_regs)
 {
-    // seL4_Error err = seL4_TCB_WriteRegisters(vm->tcb.cptr, resume, 0, num_regs, regs);
-    // return err != seL4_NoError;
-    return 1;
+    return cpu_client_write_registers(&vm->runnable.cpu, regs, num_regs, resume);
 }
 
 int vm_read_registers(vm_context_t *vm, bool suspend, seL4_UserContext *regs, size_t num_regs)
 {
-    // seL4_Error err = seL4_TCB_ReadRegisters(vm->tcb.cptr, suspend, 0, num_regs, regs);
-    // return err != seL4_NoError;
-    return 1;
+    return cpu_client_read_registers(&vm->runnable.cpu, regs);
 }
 
 void vm_dump_registers(vm_context_t *vm)
 {
-    // sel4debug_dump_registers(vm->tcb.cptr);
+    seL4_UserContext regs = {0};
+    cpu_client_read_registers(&vm->runnable.cpu, regs);
+    sel4debug_print_registers(&regs);
 }
 
 void vm_dump_vcpu_registers(vm_context_t *vm)
@@ -72,6 +64,16 @@ void vm_dump_vcpu_registers(vm_context_t *vm)
 uint32_t vm_get_id(vm_context_t *vm)
 {
     return vm->id;
+}
+
+int vm_inject_irq(vm_context_t *vm, int virq, int prio, int group, int idx)
+{
+    return cpu_client_inject_irq(&vm->runnable.cpu, virq, prio, group, idx);
+}
+
+int vm_ack_vppi(vm_context_t *vm, uint64_t irq)
+{
+    return cpu_client_ack_vppi(&vm->runnable.cpu, irq);
 }
 
 static void serial_ack(vm_context_t *vm, int irq, void *cookie)

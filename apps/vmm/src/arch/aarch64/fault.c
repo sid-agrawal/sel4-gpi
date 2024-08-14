@@ -302,7 +302,7 @@ bool fault_handle_vppi_event(vm_context_t *vm)
         // @ivanv, make a note that when having a lot of printing on it can cause this error
         VMM_PRINTERR("VPPI IRQ %lu dropped on VM %u\n", ppi_irq, vm_get_id(vm));
         // Acknowledge to unmask it as our guest will not use the interrupt
-        seL4_Error err = seL4_ARM_VCPU_AckVPPI(vm_get_vcpu(vm), ppi_irq);
+        int err = vm_ack_vppi(vm, ppi_irq);
         if (err)
         {
             VMM_PRINTERR("Failed to ACK VPPI in VM %d\n", vm_get_id(vm));

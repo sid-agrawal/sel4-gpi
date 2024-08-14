@@ -9,7 +9,7 @@
 
 static void vppi_event_ack(vm_context_t *vm, int irq, void *cookie)
 {
-    seL4_Error err = seL4_ARM_VCPU_AckVPPI(vm_get_vcpu(vm), irq);
+    int err = vm_ack_vppi(vm, irq);
     if (err != seL4_NoError)
     {
         VMM_PRINTERR("Failed to ack VPPI event\n");

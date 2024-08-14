@@ -392,6 +392,44 @@ err_goto:
     reply_msg->errorCode = error;
 }
 
+static void handle_inject_irq_req(seL4_Word sender_badge, CpuInjectIrqMessage *msg, CpuReturnMessage *reply_msg)
+{
+    OSDB_PRINTF("Got 'inject IRQ' request from Client: ");
+    BADGE_PRINT(sender_badge);
+
+    int error = 0;
+    cpu_component_registry_entry_t *cpu_data = (cpu_component_registry_entry_t *)
+        resource_component_registry_get_by_badge(get_cpu_component(), sender_badge);
+    SERVER_GOTO_IF_COND_BG(cpu_data == NULL, sender_badge, "Couldn't find CPU from badge: ");
+    if (cpu_data->cpu.vcpu.cptr != seL4_CapNull)
+    {
+        error = cpu_inject_irq(&cpu_data->cpu, msg->virq, msg->prio, msg->group, msg->idx);
+    }
+
+err_goto:
+    reply_msg->which_msg = CpuReturnMessage_basic_tag;
+    reply_msg->errorCode = error;
+}
+
+static void handle_ack_vppi_req(seL4_Word sender_badge, CpuAckVppiMessage *msg, CpuReturnMessage *reply_msg)
+{
+    OSDB_PRINTF("Got 'inject IRQ' request from Client: ");
+    BADGE_PRINT(sender_badge);
+
+    int error = 0;
+    cpu_component_registry_entry_t *cpu_data = (cpu_component_registry_entry_t *)
+        resource_component_registry_get_by_badge(get_cpu_component(), sender_badge);
+    SERVER_GOTO_IF_COND_BG(cpu_data == NULL, sender_badge, "Couldn't find CPU from badge: ");
+    if (cpu_data->cpu.vcpu.cptr != seL4_CapNull)
+    {
+        error = cpu_ack_vppi(&cpu_data->cpu, msg->irq);
+    }
+
+err_goto:
+    reply_msg->which_msg = CpuReturnMessage_basic_tag;
+    reply_msg->errorCode = error;
+}
+
 static void cpu_component_handle(void *msg_p,
                                  seL4_Word sender_badge,
                                  seL4_CPtr received_cap,
@@ -443,6 +481,12 @@ static void cpu_component_handle(void *msg_p,
             break;
         case CpuMessage_disconnect_tag:
             handle_disconnect_req(sender_badge, &msg->msg.disconnect, reply_msg);
+            break;
+        case CpuMessage_inject_irq_tag:
+            handle_inject_irq_req(sender_badge, &msg->msg.inject_irq, reply_msg);
+            break;
+        case CpuMessage_ack_vppi_tag:
+            handle_ack_vppi_req(sender_badge, &msg->msg.ack_vppi, reply_msg);
             break;
         default:
             SERVER_GOTO_IF_COND(1, "Unknown request received: %u\n", msg->which_msg);

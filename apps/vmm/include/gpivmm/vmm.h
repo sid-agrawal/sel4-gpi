@@ -101,14 +101,6 @@ int vmm_init_virq(size_t vcpu_id, virq_ack_fn_t serial_ack_fn);
 // ========== Helpers that each implementation-type specifies ==========
 
 /**
- * @brief Retrieves the VCPU object from a VM context
- *
- * @param vm the VM context
- * @return seL4_CPtr slot holding the VCPU object
- */
-seL4_CPtr vm_get_vcpu(vm_context_t *vm);
-
-/**
  * @brief pauses execution of a VM
  *
  * @param vm the VM context
@@ -158,3 +150,24 @@ void vm_dump_vcpu_registers(vm_context_t *vm);
  * @return uint32_t the ID of the VM, will never be 0
  */
 uint32_t vm_get_id(vm_context_t *vm);
+
+/**
+ * @brief Injects an IRQ into a VM
+ *
+ * @param vm the VM context
+ * @param virq virtual IRQ ID
+ * @param prio priority of IRQ to inject
+ * @param group IRQ group
+ * @param idx VGIC list register
+ * @return int 0 on success, other on failure
+ */
+int vm_inject_irq(vm_context_t *vm, int virq, int prio, int group, int idx);
+
+/**
+ * @brief Acks a VPPI for a VM
+ *
+ * @param vm the VM context
+ * @param irq IRQ ID to ACK
+ * @return int int 0 on success, other on failure
+ */
+int vm_ack_vppi(vm_context_t *vm, uint64_t irq);

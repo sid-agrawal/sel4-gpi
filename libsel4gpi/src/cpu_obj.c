@@ -331,8 +331,17 @@ int cpu_write_registers(cpu_t *cpu, seL4_UserContext *regs, size_t num_reg, bool
                         "Cannot write more registers (%zu) than seL4_UserContext: %zu",
                         num_reg, SEL4_USER_CONTEXT_COUNT);
     OSDB_PRINTF("Writing %zu registers, %s CPU\n", num_reg, resume ? "resuming" : "stopping");
-    sel4debug_print_registers(regs);
     return seL4_TCB_WriteRegisters(cpu->tcb.cptr, resume, 0, num_reg, regs);
 err_goto:
     return 1;
+}
+
+int cpu_inject_irq(cpu_t *cpu, int virq, int prio, int group, int idx)
+{
+    return seL4_ARM_VCPU_InjectIRQ(cpu->vcpu.cptr, virq, prio, group, idx);
+}
+
+int cpu_ack_vppi(cpu_t *cpu, uint64_t irq)
+{
+    return seL4_ARM_VCPU_AckVPPI(cpu->vcpu.cptr, irq);
 }
