@@ -79,7 +79,7 @@ static void on_pd_registry_delete(resource_registry_node_t *node_gen, void *arg)
     pd_destroy(&node->pd, get_pd_component()->server_vka, get_pd_component()->server_vspace);
 
     // Clear any pending work
-    BENCH_INIT;
+    BENCH_INIT(1);
     START_BENCH();
 
     linked_list_t *lists[3] = {node->pending_model_state, node->pending_destroy, node->pending_frees};
@@ -114,6 +114,7 @@ static void on_pd_registry_delete(resource_registry_node_t *node_gen, void *arg)
     linked_list_destroy(node->pending_model_state, false);
 
     END_BENCH("clear pending work lists");
+    BENCH_PRINT();
 }
 
 int pd_component_allocate(gpi_obj_id_t client_id, mo_t *init_data_mo, pd_t **ret_pd, seL4_CPtr *ret_cap)

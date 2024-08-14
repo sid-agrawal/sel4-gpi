@@ -40,20 +40,19 @@
 
 #define BENCH_INIT BENCH_UTILS_FN_INIT
 
-#define BENCH_POINT(msg)                                        \
-    do                                                          \
-    {                                                           \
-        SEL4BENCH_READ_CCNT(bench_start);                       \
-        OSDB_PRINTBENCH("Time at %s: %lu\n", msg, bench_start); \
-    } while (0)
+#define BENCH_POINT BENCH_UTILS_POINT
 
 #define START_BENCH BENCH_UTILS_START
 
 #define END_BENCH BENCH_UTILS_END_NANO
 
-#else
-#define BENCH_INIT
+#define BENCH_PRINT BENCH_UTILS_PRINT_RESULTS
 
+#else
+#define BENCH_INIT(n) \
+    do               \
+    {                \
+    } while (0)
 #define BENCH_POINT(msg) \
     do                   \
     {                    \
@@ -65,6 +64,10 @@
 #define END_BENCH(msg) \
     do                 \
     {                  \
+    } while (0)
+#define BENCH_PRINT() \
+    do                \
+    {                 \
     } while (0)
 #endif
 

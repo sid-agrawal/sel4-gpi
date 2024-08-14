@@ -233,8 +233,6 @@ void gpi_server_main()
     sel4bench_init();
 #endif
 
-    BENCH_INIT;
-
     /* The Parent will seL4_Call() to us, the Server, right after spawning us.
      * It will expect us to seL4_Reply() with an error status code - we will
      * send this Reply.
@@ -276,7 +274,6 @@ void gpi_server_main()
 
         OSDB_PRINTF("Got message on EP with ");
         BADGE_PRINT(sender_badge);
-        BENCH_POINT("Received message");
 
         gpi_cap_t cap_type = get_cap_type_from_badge(sender_badge);
 

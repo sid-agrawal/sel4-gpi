@@ -660,12 +660,13 @@ err_goto:
     return error;
 }
 
+#define PD_DESTROY_N_BENCH 16
 void pd_destroy(pd_t *pd, vka_t *server_vka, vspace_t *server_vspace)
 {
     int error = 0;
     int pd_id = pd->id;
 
-    BENCH_INIT;
+    BENCH_INIT(PD_DESTROY_N_BENCH); // 14 benchmarks in this function
     BENCH_POINT("Start destroying PD");
 
     OSDB_PRINTF("Destroying PD (%u, %s)\n", pd_id, pd->name);
@@ -793,6 +794,7 @@ void pd_destroy(pd_t *pd, vka_t *server_vka, vspace_t *server_vspace)
     END_BENCH("cleanup PD resource while destroying PD");
 
     BENCH_POINT("Finish destroying PD");
+    BENCH_PRINT();
 
 err_goto:
     return;
