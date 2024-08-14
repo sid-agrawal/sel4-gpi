@@ -200,3 +200,12 @@ int create_timer_interrupt_thread(env_t env, helper_thread_t *thread);
 
 void calculateSD(float data[], float *mean, float *sd,
                  int start, int end);
+
+/**
+ * @brief Get an IRQ handler for the given IRQ from the test driver
+ *
+ * @param env test environment
+ * @param irq the IRQ ID to get a handler for
+ * @return int 0 on success, other on error
+ */
+seL4_CPtr sel4test_get_irq_handler(env_t env, int irq);

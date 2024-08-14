@@ -49,13 +49,9 @@ message CpuDisconnectMessage {
     /* No content */
 };
 
-message CpuWriteVcpuMessage {
-    uint64 reg = 1;
-    uint64 val = 2;
-};
-
 message CpuReadVcpuMessage {
-}
+    /* No content */
+};
 
 message CpuInjectIrqMessage {
     uint32 virq = 1;
@@ -66,6 +62,11 @@ message CpuInjectIrqMessage {
 
 message CpuAckVppiMessage {
     uint32 irq = 1;
+};
+
+message CpuIrqHandlerBindMessage {
+    uint32 irq = 1; 
+    uint64 badge = 2;
 };
 
 message CpuMessage {
@@ -83,6 +84,7 @@ message CpuMessage {
         CpuDisconnectMessage disconnect = 10;
         CpuInjectIrqMessage inject_irq = 11;
         CpuAckVppiMessage ack_vppi = 12;
+        CpuIrqHandlerBindMessage irq_handler_bind = 13;
     };
 };
 
@@ -100,6 +102,15 @@ message CpuReadRegistersReturnMessage {
     repeated uint64 reg_buf = 1 [(nanopb).max_count = 36]; /* buffer for seL4_UserContext */
 }
 
+message CpuReadVcpuReturnMessage {
+    repeated uint64 reg_buf = 1 [(nanopb).max_count = 24]; /* buffer for vcpu_reg_t */
+}
+
+message CpuIrqHandlerBindReturnMessage
+{
+    uint64 slot = 1;
+}
+
 /* message type for all Cpu Component return messages */
 message CpuReturnMessage {
     CpuComponentError errorCode = 1;
@@ -107,5 +118,7 @@ message CpuReturnMessage {
         CpuBasicReturnMessage basic = 2;
         CpuAllocReturnMessage alloc = 3;
         CpuReadRegistersReturnMessage read_reg = 4;
+        CpuReadVcpuReturnMessage read_vcpu = 5;
+        CpuIrqHandlerBindReturnMessage irq_handler_bind = 6;
     };
 };

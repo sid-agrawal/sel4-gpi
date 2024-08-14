@@ -31,8 +31,8 @@ int test_vmm_native(env_t env)
     printf("------------------STARTING: %s------------------\n", __func__);
 
     // test process will act as the VMM
-    error = sel4test_vmm_init(env->irq_handler, &env->vka, &env->vspace,
-                              env->asid_pool, &env->simple, env->tcb, env->endpoint);
+    error = sel4test_vmm_init(sel4test_get_irq_handler(env, SERIAL_IRQ),
+                              &env->vka, &env->vspace, env->asid_pool, &env->simple, env->tcb, env->endpoint);
     test_error_eq(error, 0);
     uint32_t guest_id = sel4test_new_guest();
     test_assert(guest_id != 0);

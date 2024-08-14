@@ -76,9 +76,6 @@ struct driver_env
     /* time server for managing timeouts */
     time_manager_t tm;
 
-    /* irq handler for serial driver */
-    seL4_CPtr serial_irq_handler;
-
     /* slot of the fault endpoint in the test driver */
     seL4_CPtr endpoint_in_driver;
 

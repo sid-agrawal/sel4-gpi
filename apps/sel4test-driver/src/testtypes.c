@@ -147,6 +147,33 @@ static void handle_bench_request(driver_env_t env)
     api_reply(env->reply.cptr, seL4_MessageInfo_new(0, 0, 0, 0));
 }
 
+static void handle_get_irq_handler_request(driver_env_t env, int irq)
+{
+    int error = 0;
+    int extraCaps = 0;
+    cspacepath_t handler_slot;
+    error = vka_cspace_alloc_path(&env->vka, &handler_slot);
+    if (error)
+    {
+        ZF_LOGE("Failed to allocate slot for IRQ handler\n");
+        goto err_goto;
+    }
+
+    error = simple_get_IRQ_handler(&env->simple, irq, handler_slot);
+    if (error)
+    {
+        ZF_LOGE("Failed to get IRQ %d Handler\n", irq);
+        goto err_goto;
+    }
+
+    seL4_SetCap(0, handler_slot.capPtr);
+    extraCaps = 1;
+
+err_goto:
+    seL4_SetMR(0, 0);
+    api_reply(env->reply.cptr, seL4_MessageInfo_new(error, 0, extraCaps, 0));
+}
+
 /* This function waits on:
  * Timer interrupts (from hardware)
  * Requests from tests (sel4driver acts as a server)
@@ -221,6 +248,11 @@ static int sel4test_driver_wait(driver_env_t env, struct testcase *test)
             handle_bench_request(env);
             continue;
         }
+        else if (test_output == SEL4TEST_GET_IRQ_HANDLER)
+        {
+            handle_get_irq_handler_request(env, (int)seL4_GetMR(1));
+            continue;
+        }
 
         result = test_output;
         if (seL4_MessageInfo_get_label(info))
@@ -276,7 +308,6 @@ void basic_set_up(uintptr_t e)
     env->init->domain = sel4utils_copy_cap_to_process(&(env->test_process), &env->vka, simple_get_init_cap(&env->simple, seL4_CapDomain));
     env->init->asid_pool = sel4utils_copy_cap_to_process(&(env->test_process), &env->vka, simple_get_init_cap(&env->simple, seL4_CapInitThreadASIDPool));
     env->init->asid_ctrl = sel4utils_copy_cap_to_process(&(env->test_process), &env->vka, simple_get_init_cap(&env->simple, seL4_CapASIDControl));
-    env->init->serial_irq_handler = sel4utils_copy_cap_to_process(&(env->test_process), &env->vka, env->serial_irq_handler);
 #ifdef CONFIG_IOMMU
     env->init->io_space = sel4utils_copy_cap_to_process(&(env->test_process), &env->vka, simple_get_init_cap(&env->simple, seL4_CapIOSpace));
 #endif /* CONFIG_IOMMU */

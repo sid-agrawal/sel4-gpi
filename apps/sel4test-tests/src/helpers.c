@@ -617,3 +617,32 @@ void calculateSD(float data[], float *mean, float *sd,
     *sd = sqrt(*sd);
     return;
 }
+
+seL4_CPtr sel4test_get_irq_handler(env_t env, int irq)
+{
+    cspacepath_t irq_handler_path = {0};
+    int error = vka_cspace_alloc_path(&env->vka, &irq_handler_path);
+    if (error)
+    {
+        ZF_LOGE("Failed to allocate path for IPC Receive\n");
+        return seL4_CapNull;
+    }
+
+    seL4_SetCapReceivePath(irq_handler_path.root, irq_handler_path.capPtr, irq_handler_path.capDepth);
+
+    seL4_MessageInfo_t msg = seL4_MessageInfo_new(0, 0, 0, 2);
+    seL4_SetMR(0, SEL4TEST_GET_IRQ_HANDLER);
+    seL4_SetMR(1, (seL4_Word)irq);
+
+    seL4_MessageInfo_t reply = seL4_Call(env->endpoint, msg);
+
+    if (seL4_MessageInfo_get_extraCaps(reply) < 1 || seL4_MessageInfo_get_label(reply) != 0)
+    {
+        ZF_LOGE("Failed to get IRQ handler cap\n");
+        return seL4_CapNull;
+    }
+
+    printf("Got IRQ %d handler\n", irq);
+
+    return irq_handler_path.capPtr;
+}

@@ -233,3 +233,14 @@ int cpu_inject_irq(cpu_t *cpu, int virq, int prio, int group, int idx);
  * @return int 0 on success, other on failure
  */
 int cpu_ack_vppi(cpu_t *cpu, uint64_t irq);
+
+/**
+ * @brief Binds the CPU an IRQ handler notification for the given IRQ.
+ * If the CPU is listening on any endpoint, it will be unblocked by this notification.
+ *
+ * @param cpu the CPU object
+ * @param irq IRQ ID of handler to bind
+ * @param badge OPTIONAL: badge to apply to the notification
+ * @return int 0 on success, other on failure
+ */
+int cpu_irq_handler_bind(cpu_t *cpu, int irq, seL4_Word badge);

@@ -430,6 +430,23 @@ err_goto:
     reply_msg->errorCode = error;
 }
 
+static void handle_irq_handler_bind_req(seL4_Word sender_badge,
+                                        CpuIrqHandlerBindMessage *msg,
+                                        CpuReturnMessage *reply_msg)
+{
+    OSDB_PRINTF("Got 'IRQ handler bind' request from Client: ");
+    BADGE_PRINT(sender_badge);
+
+    int error = 0;
+    cpu_component_registry_entry_t *cpu_data = (cpu_component_registry_entry_t *)
+        resource_component_registry_get_by_badge(get_cpu_component(), sender_badge);
+    SERVER_GOTO_IF_COND_BG(cpu_data == NULL, sender_badge, "Couldn't find CPU from badge: ");
+
+err_goto:
+    reply_msg->which_msg = CpuReturnMessage_irq_handler_bind_tag;
+    reply_msg->errorCode = error;
+}
+
 static void cpu_component_handle(void *msg_p,
                                  seL4_Word sender_badge,
                                  seL4_CPtr received_cap,

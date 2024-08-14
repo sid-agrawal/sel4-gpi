@@ -39,8 +39,6 @@ typedef struct
     /* asid pool cap for the test process to use when creating new processes */
     seL4_CPtr asid_pool;
     seL4_CPtr asid_ctrl;
-    /* serial irq handler for test process */
-    seL4_CPtr serial_irq_handler;
 #ifdef CONFIG_IOMMU
     seL4_CPtr io_space;
 #endif /* CONFIG_IOMMU */

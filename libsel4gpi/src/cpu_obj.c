@@ -345,3 +345,9 @@ int cpu_ack_vppi(cpu_t *cpu, uint64_t irq)
 {
     return seL4_ARM_VCPU_AckVPPI(cpu->vcpu.cptr, irq);
 }
+
+int cpu_irq_handler_bind(cpu_t *cpu, int irq, seL4_Word badge)
+{
+    // Linh WIP
+    // simple_get_IRQ_handler()
+}

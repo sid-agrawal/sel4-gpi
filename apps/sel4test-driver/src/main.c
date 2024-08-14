@@ -580,17 +580,6 @@ void *main_continued(void *arg UNUSED)
         ZF_LOGF_IF(error, "Failed to allocate reply");
     }
 
-    /* serial IRQ handler */
-    cspacepath_t serial_slot;
-    error = vka_cspace_alloc_path(&env.vka, &serial_slot);
-    ZF_LOGF_IFERR(error, "Failed to allocate serial_slot for IRQ handler\n");
-
-    printf("Getting IRQ %d handler\n", SERIAL_IRQ);
-    error = simple_get_IRQ_handler(&env.simple, SERIAL_IRQ, serial_slot);
-    ZF_LOGF_IFERR(error, "Failed to make serial IRQ Handler\n");
-
-    env.serial_irq_handler = serial_slot.capPtr;
-
 /* Start core services */
 #ifdef GPI_SERVER_ENABLED
     error = sync_mutex_new(&env.vka, &env.mx);
