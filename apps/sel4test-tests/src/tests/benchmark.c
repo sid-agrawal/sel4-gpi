@@ -52,6 +52,7 @@ void benchmark_init(env_t env)
 {
     BENCH_UTILS_PD_INIT;
 
+    /* For Warming up the IPC path */
     for (int i = 0; i < 5; i++)
     {
         benchmark_ipc_rt(env);
