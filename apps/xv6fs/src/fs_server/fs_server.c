@@ -798,11 +798,16 @@ int xv6fs_work_handler(PdWorkReturnMessage *work)
       char fs_pd_id_str[CSV_MAX_STRING_SIZE];
       get_pd_id(sel4gpi_get_pd_conn().id, fs_pd_id_str);
 
-      /* Add the file resource space node */
+      /* Add the file resource space ID(s) */
       char file_space_id[CSV_MAX_STRING_SIZE];
       get_resource_space_id(get_xv6fs_server()->gen.resource_type,
                             get_xv6fs_server()->gen.default_space.id,
                             file_space_id);
+
+      char file_ns_space_id[CSV_MAX_STRING_SIZE];
+      get_resource_space_id(get_xv6fs_server()->gen.resource_type,
+                            space_id,
+                            file_ns_space_id);
 
       /* Add nodes for all files and blocks */
       gpi_cap_t block_cap_type = sel4gpi_get_resource_type_code(BLOCK_RESOURCE_TYPE_NAME);
@@ -815,11 +820,10 @@ int xv6fs_work_handler(PdWorkReturnMessage *work)
       {
         XV6FS_PRINTF("Get RR for fileno %u\n", inums[i]);
 
-// We have to add all file resource nodes here, because the files may be closed,
-// so the root task wouldn't add them
+        // We have to add all file resource nodes here, because the files may be closed,
+        // so the root task wouldn't add them
 
-/* Add the file resource node */
-#if 1
+        /* Add the file resource node */
         gpi_model_node_t *file_node = add_resource_node(
             model_state,
             make_res_id(get_xv6fs_server()->gen.resource_type, get_xv6fs_server()->gen.default_space.id, inums[i]),
@@ -829,8 +833,33 @@ int xv6fs_work_handler(PdWorkReturnMessage *work)
         add_edge_by_id(model_state, GPI_EDGE_TYPE_SUBSET, file_node->id, file_space_id);
 
         /* Add the hold edges */
-        add_edge_by_id(model_state, GPI_EDGE_TYPE_HOLD, client_pd_id_str, file_node->id);
         add_edge_by_id(model_state, GPI_EDGE_TYPE_HOLD, fs_pd_id_str, file_node->id);
+
+        /* If in a namespace, add the file resource node in the namespace */
+        if (space_id != get_xv6fs_server()->gen.default_space.id)
+        {
+          gpi_model_node_t *file_ns_node = add_resource_node(
+              model_state,
+              make_res_id(get_xv6fs_server()->gen.resource_type, space_id, inums[i]),
+              true);
+
+          // Add the subset edge
+          add_edge_by_id(model_state, GPI_EDGE_TYPE_SUBSET, file_ns_node->id, file_ns_space_id);
+
+          // Add the map edge to the file in the default file space
+          add_edge(model_state, GPI_EDGE_TYPE_MAP, file_ns_node, file_node);
+
+          // FS holds all files
+          add_edge_by_id(model_state, GPI_EDGE_TYPE_HOLD, fs_pd_id_str, file_ns_node->id);
+
+          // Client holds the resource in the namespace
+          add_edge_by_id(model_state, GPI_EDGE_TYPE_HOLD, client_pd_id_str, file_ns_node->id);
+        }
+        else
+        {
+          // Client holds the file directly
+          add_edge_by_id(model_state, GPI_EDGE_TYPE_HOLD, client_pd_id_str, file_node->id);
+        }
 
         /* Add relations for blocks */
         error = xv6fs_sys_inode_blocknos(inums[i], blocknos, n_blocknos, &n_blocknos);
@@ -846,7 +875,6 @@ int xv6fs_work_handler(PdWorkReturnMessage *work)
           get_resource_id(make_res_id(block_cap_type, block_space_id, block_id), block_id_str);
           add_edge_by_id(model_state, GPI_EDGE_TYPE_MAP, file_node->id, block_id_str);
         }
-#endif
       }
 
       free(blocknos);

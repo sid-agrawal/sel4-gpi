@@ -256,7 +256,6 @@ int resource_server_main(void *context_v)
                 RESOURCE_SERVER_PRINTF("Got some work from RT\n");
                 if (context->debug_print)
                 {
-                    printf("TEMPA it thinks debug print is on?\n");
                     pb_pretty_print(&PdWorkReturnMessage_msg, (void *)&work);
                 }
 
