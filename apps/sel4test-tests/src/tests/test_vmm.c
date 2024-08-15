@@ -69,10 +69,10 @@ int test_vmm_osm(env_t env)
     uint32_t guest_id = osm_new_guest();
     test_assert(guest_id != 0);
 
-    while (1)
-    {
-        sel4test_sleep(env, 10UL * SECOND);
-    }
+    // while (1)
+    // {
+    sel4test_sleep(env, 10UL * SECOND);
+    // }
 
     // #ifdef CONFIG_DEBUG_BUILD
     //     seL4_DebugDumpScheduler();

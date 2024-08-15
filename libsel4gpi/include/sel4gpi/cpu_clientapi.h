@@ -173,7 +173,8 @@ int cpu_client_ack_vppi(cpu_client_context_t *cpu, uint64_t irq);
  *
  * @param cpu the CPU context
  * @param irq the IRQ ID to get a handler for
+ * @param badge A badge to differientiate the notification signal
  * @param ret_slot OPTIONAL: IRQ handler for the given IRQ
  * @return int 0 on success, other on failure
  */
-int cpu_client_irq_handler_bind(cpu_client_context_t *cpu, int irq, seL4_CPtr *ret_slot);
+int cpu_client_irq_handler_bind(cpu_client_context_t *cpu, int irq, seL4_Word badge, seL4_CPtr *ret_slot);

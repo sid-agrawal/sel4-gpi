@@ -94,3 +94,13 @@ int cpu_component_configure(cpu_t *cpu,
                             mo_t *ipc_buf_mo,
                             void *ipc_buf_addr,
                             int prio);
+
+/**
+ * @brief Unbind the IRQ handled by the CPU. Clears the notification set
+ * for the IRQ handler and frees the badged notification.
+ * The original unbadged notification may still exist with the PD from which the
+ * badged IRQ notification was derived.
+ *
+ * @param cpu the CPU object ID
+ */
+void cpu_component_unbind_irq(gpi_obj_id_t cpu_id);

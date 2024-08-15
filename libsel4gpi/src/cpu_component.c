@@ -451,7 +451,7 @@ static void handle_irq_handler_bind_req(seL4_Word sender_badge,
                            get_client_id_from_badge(sender_badge));
 
     seL4_CPtr irq_handler_slot;
-    error = cpu_irq_handler_bind(&cpu_data->cpu, msg->irq, pd_data->pd.notification.cptr, &irq_handler_slot);
+    error = cpu_irq_handler_bind(&cpu_data->cpu, msg->irq, pd_data->pd.notification.cptr, msg->badge, &irq_handler_slot);
     SERVER_GOTO_IF_ERR(error, "Failed to bind IRQ %d handler with notification\n", msg->irq);
 
     cspacepath_t dest = {0};
@@ -591,4 +591,17 @@ int cpu_component_stop(gpi_obj_id_t cpu_id)
 
 err_goto:
     return error;
+}
+
+void cpu_component_unbind_irq(gpi_obj_id_t cpu_id)
+{
+    cpu_component_registry_entry_t *cpu_data = (cpu_component_registry_entry_t *)
+        resource_component_registry_get_by_id(get_cpu_component(), cpu_id);
+    if (cpu_data == NULL)
+    {
+        OSDB_PRINTERR("Couldn't find CPU to unbind (%u)\n", cpu_id);
+        return;
+    }
+
+    cpu_unbind_irq(&cpu_data->cpu);
 }

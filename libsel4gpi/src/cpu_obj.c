@@ -239,13 +239,8 @@ void cpu_destroy(cpu_t *cpu)
         vka_free_object(get_cpu_component()->server_vka, &cpu->vcpu);
     }
 
-    if (cpu->irq_notif != seL4_CapNull)
-    {
-        vka_cspace_free(get_cpu_component()->server_vka, cpu->irq_notif);
-        // TODO: clear IRQ handler & call this in pd_destroy
-    }
+    cpu_unbind_irq(cpu);
 
-    // Free other things
     free(cpu->reg_ctx);
 
     return;
@@ -354,11 +349,11 @@ int cpu_ack_vppi(cpu_t *cpu, uint64_t irq)
     return seL4_ARM_VCPU_AckVPPI(cpu->vcpu.cptr, irq);
 }
 
-int cpu_irq_handler_bind(cpu_t *cpu, int irq, seL4_CPtr notif, seL4_CPtr *irq_handler)
+int cpu_irq_handler_bind(cpu_t *cpu, int irq, seL4_CPtr notif, seL4_Word badge, seL4_CPtr *irq_handler)
 {
     int error = 0;
     cspacepath_t notif_path, badged_notif_path = {0};
-
+    SERVER_GOTO_IF_COND(badge == 0, "No badge was provided to differentiate the IRQ notification\n");
     SERVER_GOTO_IF_COND(cpu->irq_notif != seL4_CapNull, "IRQ already bound to this CPU, cannot bind another\n");
 
     seL4_CPtr handler_slot = gpi_get_irq_handler(get_cpu_component()->server_vka, get_gpi_server()->server_simple,
@@ -369,7 +364,7 @@ int cpu_irq_handler_bind(cpu_t *cpu, int irq, seL4_CPtr notif, seL4_CPtr *irq_ha
     error = vka_cspace_alloc_path(get_cpu_component()->server_vka, &badged_notif_path);
     SERVER_GOTO_IF_ERR(error, "Failed to allocate slot for badged notification\n");
 
-    error = vka_cnode_mint(&badged_notif_path, &notif_path, seL4_AllRights, irq); // TODO Linh: fix to a better badge
+    error = vka_cnode_mint(&badged_notif_path, &notif_path, seL4_AllRights, badge);
     SERVER_GOTO_IF_ERR(error, "Failed to mint a badge on the IRQ notification\n");
 
     error = seL4_IRQHandler_SetNotification(handler_slot, badged_notif_path.capPtr);
@@ -392,4 +387,18 @@ err_goto:
     }
 
     return error;
+}
+
+void cpu_unbind_irq(cpu_t *cpu)
+{
+    if (cpu->irq_notif != seL4_CapNull)
+    {
+        seL4_CPtr irq_handler = gpi_get_irq_handler(get_gpi_server()->server_vka,
+                                                    get_gpi_server()->server_simple,
+                                                    get_gpi_server()->gen_irqs,
+                                                    get_gpi_server()->num_gen_irqs,
+                                                    cpu->bound_irq);
+        seL4_IRQHandler_Clear(irq_handler);
+        vka_cspace_free(get_cpu_component()->server_vka, cpu->irq_notif);
+    }
 }
