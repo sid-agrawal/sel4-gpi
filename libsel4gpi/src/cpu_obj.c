@@ -45,13 +45,13 @@ int cpu_stop(cpu_t *cpu)
 }
 
 int cpu_config_vspace(cpu_t *cpu,
-                      vka_t *vka,
                       vspace_t *vspace,
                       uint64_t root_cnode,
                       seL4_Word cnode_guard,
                       seL4_CPtr fault_ep,
                       seL4_CPtr ipc_buffer_frame,
-                      void *ipc_buf_addr)
+                      void *ipc_buf_addr,
+                      int prio)
 {
     int error = 0;
     OSDB_PRINTF("Configuring CPU, cspace: %lx, cspace_guard: %lx, fault_ep: %lx, ipc_buf_addr: %p, ipc_buf_frame: %ld\n",
@@ -76,7 +76,7 @@ int cpu_config_vspace(cpu_t *cpu,
                                ipc_buffer_frame);
     SERVER_GOTO_IF_ERR(error, "Failed to configure TCB\n");
 
-    error = seL4_TCB_SetPriority(cpu->tcb.cptr, seL4_CapInitThreadTCB, seL4_MaxPrio - 1);
+    error = seL4_TCB_SetPriority(cpu->tcb.cptr, seL4_CapInitThreadTCB, prio);
 
 err_goto:
     return error;

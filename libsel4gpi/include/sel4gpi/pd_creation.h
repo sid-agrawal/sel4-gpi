@@ -138,8 +138,6 @@ typedef struct _rde_config
  */
 typedef struct _pd_config
 {
-    ep_client_context_t fault_ep;    ///< supply a tracked fault-endpoint for the PD, if NULL, will create a new one
-    seL4_Word fault_ep_badge;        ///< OPTIONAL: badge to apply to the fault EP
     mo_client_context_t osm_data_mo; ///< the MO for holding a PD's OSmosis data
     ads_config_t ads_cfg;            ///< the ADS config
     linked_list_t *rde_cfg;          ///< the RDE config
@@ -150,6 +148,9 @@ typedef struct _pd_config
     linked_list_t *linked_pds;       ///< UNUSED: list of children PDs to link with the created PD.
                                      ///< Linked children PD will be terminated when the parent PD is destroyed.
     bool link_with_current;          ///< whether to link the created PD as a child of the current PD
+    ep_client_context_t fault_ep;    ///< supply a tracked fault-endpoint for the PD, if NULL, will create a new one
+    seL4_Word fault_ep_badge;        ///< OPTIONAL: badge to apply to the fault EP
+    int cpu_prio;                    ///< OPTIONAL: scheduler priority of the CPU
     // ongoing: add configs for other resources here as needed
 } pd_config_t;
 

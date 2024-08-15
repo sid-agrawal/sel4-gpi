@@ -13,11 +13,9 @@ struct _vm_context
 
 typedef struct _vmon_context
 {
-    seL4_CPtr serial_irq_handler;             ///< IRQ handler for serial device
     ep_client_context_t vm_fault_ep;          ///< Listening endpoint for VM faults
     sel4gpi_runnable_t fault_thread_runnable; ///< Runnable for fault handling thread
     uint32_t guest_id_counter;                ///< the next free VM ID
-    vm_context_t *guests[MAX_GUEST_COUNT];
 } vmon_context_t;
 
 /**

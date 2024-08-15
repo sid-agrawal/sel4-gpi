@@ -18,6 +18,14 @@
 #include <gpivmm/smoldtb.h>
 #include <gpivmm/linux.h>
 
+/* (XXX) Linh: This is meant for the fault handler thread to store its own CPTRs */
+typedef struct _vmon_fault_context
+{
+    ep_client_context_t vm_fault_ep;       ///< Listening endpoint for VM faults
+    seL4_CPtr serial_irq_handler;          ///< IRQ handler for serial device
+    vm_context_t *guests[MAX_GUEST_COUNT]; ///< List of guests managed by the VMM
+} vmon_fault_context_t;
+
 /* Data for the guest's kernel image. */
 extern char _guest_kernel_image[];
 extern char _guest_kernel_image_end[];
@@ -28,7 +36,8 @@ extern char _guest_dtb_image_end[];
 extern char _guest_initrd_image[];
 extern char _guest_initrd_image_end[];
 
-static vmon_context_t vmon_ctxt;
+static vmon_context_t vmon_ctxt;             /* main VMM thread's CPTRs */
+static vmon_fault_context_t vmon_fault_ctxt; /* fault VMM thread's CPTRs */
 
 void vm_suspend(vm_context_t *vm)
 {
@@ -84,22 +93,13 @@ static void serial_ack(vm_context_t *vm, int irq, void *cookie)
      * come across a case yet where more than this needs to be done.
      */
     VMM_PRINT("Acking serial interrupt\n");
-    seL4_Error error = seL4_IRQHandler_Ack(vmon_ctxt.serial_irq_handler);
+    seL4_Error error = seL4_IRQHandler_Ack(vmon_fault_ctxt.serial_irq_handler);
     WARN_IF_COND(error, "Failed to ACK serial interrupt, seL4_Error: %d\n", error);
 }
 
 static void handle_fault(int argc, char **argv)
 {
-    // NOTE: we cannot access the fault EP from vmon_ctxt, as we're in a different
-    //       CSpace from the main thread
-    if (argc < 1)
-    {
-        VMM_PRINTERR("No fault EP to listen on, exiting\n");
-        return;
-    }
-
-    ep_client_context_t fault_listen_ep = {.ep = (seL4_CPtr)atol(argv[0])};
-    int error = ep_client_get_raw_endpoint(&fault_listen_ep);
+    int error = ep_client_get_raw_endpoint(&vmon_fault_ctxt.vm_fault_ep);
     if (error)
     {
         VMM_PRINTERR("Failed to get raw fault endpoint for listening, exiting\n");
@@ -112,7 +112,7 @@ static void handle_fault(int argc, char **argv)
     uint32_t vm_id = 0;
     while (1)
     {
-        info = seL4_Recv(fault_listen_ep.raw_endpoint, &badge);
+        info = seL4_Recv(vmon_fault_ctxt.vm_fault_ep.raw_endpoint, &badge);
         vm_id = (uint32_t)badge;
 
         if (vm_id == 0 || vm_id >= MAX_GUEST_COUNT)
@@ -123,7 +123,7 @@ static void handle_fault(int argc, char **argv)
 
         VMM_PRINTV("VM %u fault: %s\n", vm_id, fault_to_string(seL4_MessageInfo_get_label(info)));
 
-        vm = vmon_ctxt.guests[vm_id];
+        vm = vmon_fault_ctxt.guests[vm_id];
         assert(vm != NULL);
 
         fault_handle(vm, &info);
@@ -152,18 +152,22 @@ int osm_vmm_init(void)
     pd_config_t *t_cfg = sel4gpi_configure_thread(handle_fault, &fault_handler_ep, &vmon_ctxt.fault_thread_runnable);
     GOTO_IF_COND(t_cfg == NULL, "Couldn't allocate VMM's fault handler thread\n");
 
-    seL4_CPtr ep_in_thread;
-    error = pd_client_send_cap(&vmon_ctxt.fault_thread_runnable.pd, vmon_ctxt.vm_fault_ep.ep, &ep_in_thread);
+    /* Give the fault listening EP to the fault thread */
+    error = pd_client_send_cap(&vmon_ctxt.fault_thread_runnable.pd,
+                               vmon_ctxt.vm_fault_ep.ep,
+                               &vmon_fault_ctxt.vm_fault_ep.ep);
     GOTO_IF_ERR(error, "Failed to send fault listening EP to thread\n");
 
-    error = sel4gpi_prepare_pd(t_cfg, &vmon_ctxt.fault_thread_runnable, 1, (seL4_Word *)&ep_in_thread);
+    t_cfg->cpu_prio = seL4_MinPrio + 1;
+    error = sel4gpi_prepare_pd(t_cfg, &vmon_ctxt.fault_thread_runnable, 0, NULL);
     GOTO_IF_ERR(error, "Failed to prepare VMM's fault handler thread\n");
 
     error = sel4gpi_start_pd(&vmon_ctxt.fault_thread_runnable);
     GOTO_IF_ERR(error, "Failed to start VMM's fault handler thread\n");
 
+    /* bind the fault thread to the serial IRQ handler */
     error = cpu_client_irq_handler_bind(&vmon_ctxt.fault_thread_runnable.cpu, SERIAL_IRQ,
-                                        &vmon_ctxt.serial_irq_handler);
+                                        &vmon_fault_ctxt.serial_irq_handler);
     GOTO_IF_ERR(error, "Failed to bind VMM's CPU to the serial IRQ handler\n");
 
 err_goto:
@@ -258,6 +262,7 @@ uint32_t osm_new_guest(void)
 
     vm_cfg->fault_ep = vmon_ctxt.vm_fault_ep;
     vm_cfg->fault_ep_badge = guest_id;
+    vm_cfg->cpu_prio = seL4_MinPrio + 1;
 
     seL4_Word arg = GUEST_DTB_VADDR;
     error = sel4gpi_prepare_pd(vm_cfg, &vm->runnable, 1, &arg);
@@ -299,16 +304,24 @@ uint32_t osm_new_guest(void)
     serial_ack(vm, SERIAL_IRQ, NULL);
 
     error = sel4gpi_start_pd(&vm->runnable);
+    GOTO_IF_ERR(error, "Failed to start VM\n");
 
-    // pd_client_dump(&runnable.pd, NULL, 0);
+#ifdef GPI_EXTRACT_MODEL
+    pd_client_dump(&runnable.pd, NULL, 0);
+#endif
 
-    vmon_ctxt.guests[guest_id] = vm;
+    vmon_fault_ctxt.guests[guest_id] = vm;
     vmon_ctxt.guest_id_counter++;
     vm->id = guest_id;
 
-    pd_client_send_cap(&vmon_ctxt.fault_thread_runnable.pd, vm->runnable.cpu.ep, &vm->runnable.cpu.ep);
+    /* replace each CPTR in the VM context with a CPTR relative to the fault thread's CSpace  */
+    error = pd_client_send_cap(&vmon_ctxt.fault_thread_runnable.pd, vm->runnable.cpu.ep, &vm->runnable.cpu.ep);
+    error |= pd_client_send_cap(&vmon_ctxt.fault_thread_runnable.pd, vm->runnable.ads.ep, &vm->runnable.ads.ep);
+    error |= pd_client_send_cap(&vmon_ctxt.fault_thread_runnable.pd, vm->runnable.pd.ep, &vm->runnable.pd.ep);
+    GOTO_IF_ERR(error, "Failed to copy VM caps to fault handler thread, future resource operations will fail\n");
 
 err_goto:
+    // (XXX) Linh: we should be cleaning up intermediate allocations on failure
     sel4gpi_config_destroy(vm_cfg);
 
     return error ? 0 : guest_id;

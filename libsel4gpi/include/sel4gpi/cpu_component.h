@@ -83,6 +83,7 @@ int cpu_component_allocate(gpi_obj_id_t client_id, cpu_t **ret_cpu, seL4_CPtr *r
  * @param fault_ep_position w.r.t the PD's cspace, the fault endpoint (OPTIONAL)
  * @param ipc_buf_mo MO of the the ipc buf for the cpu (OPTIONAL)
  * @param ipc_buf_addr w.r.t the given ADS, address to IPC buf (OPTIONAL)
+ * @param prio scheduler priority of the CPU, default is 0 (OPTIONAL)
  * @return int returns 0 on success, 1 on failure
  */
 int cpu_component_configure(cpu_t *cpu,
@@ -91,4 +92,5 @@ int cpu_component_configure(cpu_t *cpu,
                             uint64_t cnode_guard,
                             seL4_CPtr fault_ep,
                             mo_t *ipc_buf_mo,
-                            void *ipc_buf_addr);
+                            void *ipc_buf_addr,
+                            int prio);

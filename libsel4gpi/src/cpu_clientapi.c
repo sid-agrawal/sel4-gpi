@@ -81,7 +81,8 @@ int cpu_client_config(cpu_client_context_t *cpu,
                       mo_client_context_t *ipc_buf_mo,
                       seL4_Word cnode_guard,
                       seL4_CPtr fault_ep_position,
-                      void *ipc_buf_addr)
+                      void *ipc_buf_addr,
+                      int prio)
 {
     OSDB_PRINTF("Sending config request to CPU component\n");
 
@@ -94,6 +95,7 @@ int cpu_client_config(cpu_client_context_t *cpu,
             .cnode_guard = cnode_guard,
             .fault_ep_cap = fault_ep_position,
             .ipc_buf_addr = (uint64_t)ipc_buf_addr,
+            .prio = prio,
         }};
 
     CpuReturnMessage ret_msg = {0};

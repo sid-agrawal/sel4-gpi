@@ -120,7 +120,8 @@ int cpu_component_configure(cpu_t *cpu,
                             uint64_t cnode_guard,
                             seL4_CPtr fault_ep,
                             mo_t *ipc_buf_mo,
-                            void *ipc_buf_addr)
+                            void *ipc_buf_addr,
+                            int prio)
 {
     int error = 0;
 
@@ -155,13 +156,13 @@ int cpu_component_configure(cpu_t *cpu,
 
     /* Configure the vspace */
     error = cpu_config_vspace(cpu,
-                              get_cpu_component()->server_vka,
                               ads->vspace,
                               cspace_root,
                               (uint64_t)cnode_guard,
                               fault_ep,
                               ipc_buf_frame,
-                              ipc_buf_addr);
+                              ipc_buf_addr,
+                              prio);
 
     /* Set the bound notification */
     error = cpu_bind_notif(cpu, pd->notification.cptr);
@@ -210,7 +211,8 @@ static void handle_config_req(seL4_Word sender_badge,
         (uint64_t)msg->cnode_guard,
         msg->fault_ep_cap,
         ipc_mo_data == NULL ? NULL : &ipc_mo_data->mo,
-        (void *)msg->ipc_buf_addr);
+        (void *)msg->ipc_buf_addr,
+        msg->prio);
 
 err_goto:
     reply_msg->which_msg = CpuReturnMessage_basic_tag;
@@ -316,6 +318,7 @@ static void handle_read_registers_req(seL4_Word sender_badge, CpuReadRegistersMe
     if (!error)
     {
         reply_msg->msg.read_reg.reg_buf_count = SEL4_USER_CONTEXT_COUNT;
+        // sel4debug_print_registers((seL4_UserContext *)reply_msg->msg.read_reg.reg_buf);
     }
 
 err_goto:

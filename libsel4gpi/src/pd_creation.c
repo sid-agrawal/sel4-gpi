@@ -547,7 +547,8 @@ int sel4gpi_prepare_pd(pd_config_t *cfg, sel4gpi_runnable_t *runnable, int argc,
                               ipc_buf_addr ? &runtime_context.ipc_buf_cfg->mo : NULL,
                               cnode_guard,
                               fault_ep_in_PD.raw_endpoint,
-                              ipc_buf_addr);
+                              ipc_buf_addr,
+                              cfg->cpu_prio);
     GOTO_IF_ERR(error, "failed to configure CPU\n");
 
 err_goto:
