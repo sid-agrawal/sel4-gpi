@@ -106,24 +106,6 @@ static void serial_ack(vm_context_t *vm, int irq, void *cookie)
     WARN_IF_COND(error, "Failed to ACK serial interrupt, seL4_Error: %d\n", error);
 }
 
-static void handle_interrupt(void)
-{
-    seL4_Word badge = 0;
-    seL4_MessageInfo_t info = {0};
-    while (1)
-    {
-        seL4_Wait(vmon_ctxt.irq_ntfn.cptr, &badge);
-        if (badge & SERIAL_IRQ)
-        {
-            VMM_PRINT("Serial interrupt received\n");
-        }
-        else
-        {
-            VMM_PRINT("Unhandled interrupt received\n");
-        }
-    }
-}
-
 static void handle_fault(void)
 {
     vm_context_t *vm = NULL;
@@ -133,19 +115,34 @@ static void handle_fault(void)
     while (1)
     {
         info = seL4_Recv(vmon_ctxt.vm_fault_ep.cptr, &badge);
-        vm_id = (uint32_t)badge;
-
-        if (vm_id == 0 || vm_id >= MAX_GUEST_COUNT)
+        if (FAULT_BADGE_FLAG & badge)
         {
-            VMM_PRINTERR("Fault received from invalid VM: %u\n", vm_id);
-            continue;
+            vm_id = (uint32_t)(badge & ~FAULT_BADGE_FLAG);
+
+            if (vm_id == 0 || vm_id >= MAX_GUEST_COUNT)
+            {
+                VMM_PRINTERR("Fault received from invalid VM: %u\n", vm_id);
+                continue;
+            }
+
+            VMM_PRINTV("VM %u fault: %s\n", vm_id, fault_to_string(seL4_MessageInfo_get_label(info)));
+
+            vm = vmon_ctxt.guests[vm_id];
+            assert(vm != NULL);
+            fault_handle(vm, &info);
         }
-
-        VMM_PRINTV("VM %u fault: %s\n", vm_id, fault_to_string(seL4_MessageInfo_get_label(info)));
-
-        vm = vmon_ctxt.guests[vm_id];
-        assert(vm != NULL);
-        fault_handle(vm, &info);
+        else if (badge & SERIAL_IRQ_BIT)
+        {
+            VMM_PRINT("Got serial IRQ\n");
+            if (!virq_inject(vm, GUEST_VCPU_ID, SERIAL_IRQ))
+            {
+                VMM_PRINTERR("Failed to inject serial IRQ %d into vCPU %d\n", SERIAL_IRQ, GUEST_VCPU_ID);
+            }
+        }
+        else
+        {
+            VMM_PRINTERR("Received Unexpected fault or IRQ notification for badge: %lx\n", badge);
+        }
     }
 }
 
@@ -198,14 +195,8 @@ static int start_handler_threads(vka_t *vka, vspace_t *vspace, simple_t *simple,
     error = sel4utils_start_thread(&fault_thread, (sel4utils_thread_entry_fn)handle_fault, NULL, NULL, 1);
     GOTO_IF_ERR(error, "Failed to start thread\n");
 
-    sel4utils_thread_t interrupt_thread;
-    error = sel4utils_configure_thread_config(vka, vspace, vspace, t_cfg, &interrupt_thread);
-    GOTO_IF_ERR(error, "Failed to configure thread\n");
-
-    error = seL4_TCB_BindNotification(interrupt_thread.tcb.cptr, vmon_ctxt.irq_ntfn.cptr);
+    error = seL4_TCB_BindNotification(fault_thread.tcb.cptr, vmon_ctxt.irq_ntfn.cptr);
     GOTO_IF_ERR(error, "seL4_Error: %d, Failed to bind IRQ handling notification to interrupt handling thread\n", error);
-
-    error = sel4utils_start_thread(&interrupt_thread, (sel4utils_thread_entry_fn)handle_interrupt, NULL, NULL, 1);
 err_goto:
     return error;
 }
@@ -246,7 +237,7 @@ int sel4test_vmm_init(seL4_IRQHandler irq_handler,
 
     vka_cspace_make_path(vka, vmon_ctxt.irq_ntfn.cptr, &src);
 
-    error = vka_cnode_mint(&dest, &src, seL4_AllRights, SERIAL_IRQ);
+    error = vka_cnode_mint(&dest, &src, seL4_AllRights, SERIAL_IRQ_BIT);
     GOTO_IF_ERR(error, "Failed to mint notification badge for serial interrupts");
 
     error = seL4_IRQHandler_SetNotification(vmon_ctxt.serial_irq_handler, dest.capPtr);
@@ -299,7 +290,7 @@ uint32_t sel4test_new_guest(void)
 
     /* make a badged fault EP */
     vka_cspace_make_path(vka, vmon_ctxt.vm_fault_ep.cptr, &src);
-    error = vka_cnode_mint(&next_slot, &src, seL4_AllRights, guest_id);
+    error = vka_cnode_mint(&next_slot, &src, seL4_AllRights, FAULT_BADGE_FLAG | (uint64_t)guest_id);
     GOTO_IF_ERR(error, "Failed to mint vm's fault endpoint into its cspace\n");
     vm->fault_ep = next_slot.capPtr;
     next_slot.capPtr++;

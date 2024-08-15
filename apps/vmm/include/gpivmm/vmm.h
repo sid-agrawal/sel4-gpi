@@ -18,6 +18,9 @@
 #define MAX_GUEST_COUNT 5 // maximum number of guests supported by the VMM
 #define MAX_VM_NAME_LEN 32
 
+#define SERIAL_IRQ_BIT 1             // Indicator bit on notification for serial IRQs
+#define FAULT_BADGE_FLAG (1UL << 63) // indicator flag on fault EP badge
+
 // @ivanv: if we keep using this, make sure that we have a static assert
 // that sizeof seL4_UserContext is 0x24
 // Note that this is AArch64 specific

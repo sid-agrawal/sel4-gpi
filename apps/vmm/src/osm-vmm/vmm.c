@@ -17,6 +17,7 @@
 #include <gpivmm/fault.h>
 #include <gpivmm/smoldtb.h>
 #include <gpivmm/linux.h>
+#include <gpivmm/virq.h>
 
 /* (XXX) Linh: This is meant for the fault handler thread to store its own CPTRs */
 typedef struct _vmon_fault_context
@@ -113,20 +114,34 @@ static void handle_fault(int argc, char **argv)
     while (1)
     {
         info = seL4_Recv(vmon_fault_ctxt.vm_fault_ep.raw_endpoint, &badge);
-        vm_id = (uint32_t)badge;
-
-        if (vm_id == 0 || vm_id >= MAX_GUEST_COUNT)
+        if (FAULT_BADGE_FLAG & badge)
         {
-            VMM_PRINTERR("Fault received from invalid VM: %u\n", vm_id);
-            continue;
+            vm_id = (uint32_t)(badge & ~FAULT_BADGE_FLAG);
+            if (vm_id == 0 || vm_id >= MAX_GUEST_COUNT)
+            {
+                VMM_PRINTERR("Fault received from invalid VM: %u\n", vm_id);
+                continue;
+            }
+
+            VMM_PRINTV("VM %u fault: %s\n", vm_id, fault_to_string(seL4_MessageInfo_get_label(info)));
+
+            vm = vmon_fault_ctxt.guests[vm_id];
+            assert(vm != NULL);
+
+            fault_handle(vm, &info);
         }
-
-        VMM_PRINTV("VM %u fault: %s\n", vm_id, fault_to_string(seL4_MessageInfo_get_label(info)));
-
-        vm = vmon_fault_ctxt.guests[vm_id];
-        assert(vm != NULL);
-
-        fault_handle(vm, &info);
+        else if (badge & SERIAL_IRQ_BIT)
+        {
+            VMM_PRINT("Got serial IRQ\n");
+            if (!virq_inject(vm, GUEST_VCPU_ID, SERIAL_IRQ))
+            {
+                VMM_PRINTERR("Failed to inject serial IRQ %d into vCPU %d\n", SERIAL_IRQ, GUEST_VCPU_ID);
+            }
+        }
+        else
+        {
+            VMM_PRINTERR("Received Unexpected fault or IRQ notification for badge: %lx\n", badge);
+        }
     }
 }
 
@@ -166,7 +181,8 @@ int osm_vmm_init(void)
     GOTO_IF_ERR(error, "Failed to start VMM's fault handler thread\n");
 
     /* bind the fault thread to the serial IRQ handler */
-    error = cpu_client_irq_handler_bind(&vmon_ctxt.fault_thread_runnable.cpu, SERIAL_IRQ,
+    error = cpu_client_irq_handler_bind(&vmon_ctxt.fault_thread_runnable.cpu,
+                                        SERIAL_IRQ, SERIAL_IRQ_BIT,
                                         &vmon_fault_ctxt.serial_irq_handler);
     GOTO_IF_ERR(error, "Failed to bind VMM's CPU to the serial IRQ handler\n");
 
@@ -261,7 +277,7 @@ uint32_t osm_new_guest(void)
                            NULL, guest_ram_pages, MO_LARGE_PAGE_BITS, &guest_ram_mo);
 
     vm_cfg->fault_ep = vmon_ctxt.vm_fault_ep;
-    vm_cfg->fault_ep_badge = guest_id;
+    vm_cfg->fault_ep_badge = FAULT_BADGE_FLAG | (uint64_t)guest_id;
     vm_cfg->cpu_prio = seL4_MinPrio + 1;
 
     seL4_Word arg = GUEST_DTB_VADDR;

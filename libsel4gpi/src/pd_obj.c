@@ -710,6 +710,7 @@ void pd_destroy(pd_t *pd, vka_t *server_vka, vspace_t *server_vspace)
     if (pd->shared_data->cpu_conn.id)
     {
         START_BENCH();
+        cpu_component_unbind_irq(pd->shared_data->cpu_conn.id);
         resource_component_dec(get_cpu_component(), pd->shared_data->cpu_conn.id);
         END_BENCH("dec CPU while destroying PD");
     }
