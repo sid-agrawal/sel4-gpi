@@ -501,7 +501,6 @@ void osm_set_up(uintptr_t e)
                             gpi_new_badge(GPICAP_TYPE_CPU, 0, pd->id, get_cpu_component()->space_id, cpu->id),
                             cpu_slot_in_test);
     assert(error == 0);
-    CPRINTF("cpu_slot_in_test: %lx\n", cpu_slot_in_test);
 
     // Load the test image in the ADS
     void *entry_pt;
@@ -569,7 +568,7 @@ void osm_set_up(uintptr_t e)
     // Configure the CPU
     error = cpu_component_configure(cpu, ads, pd,
                                     api_make_guard_skip_word(seL4_WordBits - PD_CSPACE_SIZE_BITS), 0,
-                                    ipc_buf_mo, ipc_buf_vaddr);
+                                    ipc_buf_mo, ipc_buf_vaddr, seL4_MinPrio + 1);
     assert(error == 0);
 
     /* Set the benchmark IPC endpoint, same as the PD ep */

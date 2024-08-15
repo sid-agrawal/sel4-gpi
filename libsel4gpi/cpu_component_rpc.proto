@@ -14,6 +14,7 @@ message CpuConfigMessage {
     uint64 ipc_buf_addr = 1;    /* vaddr of the IPC buffer in the bound ADS */
     uint64 fault_ep_cap = 2;    /* cap ptr of the fault endpont in the bound cspace */
     uint64 cnode_guard = 3;     /* cnode guard bits for the bound cspace */
+    uint32 prio = 4;            /* scheduler priority of the CPU */
 };
 
 message CpuChangeVspaceMessage {

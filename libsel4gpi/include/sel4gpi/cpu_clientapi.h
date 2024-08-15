@@ -66,6 +66,7 @@ int cpu_client_start(cpu_client_context_t *conn);
  * @param fault_ep_position w.r.t the PD's cspace, the fault endpoint (OPTIONAL)
  *                          this is not sent as an unwrapped cap, as the limit is 3
  * @param ipc_buf_addr w.r.t the given ADS, address to IPC buf (OPTIONAL)
+ * @param prio scheduler priority of the CPU, default is 0 (OPTIONAL)
  * @return int returns 0 on success, 1 on failure
  */
 int cpu_client_config(cpu_client_context_t *cpu,
@@ -74,7 +75,8 @@ int cpu_client_config(cpu_client_context_t *cpu,
                       mo_client_context_t *ipc_buf_mo,
                       seL4_Word cnode_guard,
                       seL4_CPtr fault_ep_position,
-                      void *ipc_buf_addr);
+                      void *ipc_buf_addr,
+                      int prio);
 
 /**
  * @brief Change just the vspace of the CPU object

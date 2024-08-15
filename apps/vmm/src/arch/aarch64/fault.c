@@ -280,10 +280,7 @@ bool fault_handle_vcpu_exception(vm_context_t *vm)
     case HSR_SMC_64_EXCEPTION:
         if (handle_smc(GUEST_VCPU_ID, &regs, hsr))
         {
-            fault_advance_vcpu(vm, &regs);
-            sel4debug_print_registers(&regs);
-            return true;
-            // return fault_advance_vcpu(vm, &regs);
+            return fault_advance_vcpu(vm, &regs);
         }
         return false;
     case HSR_WFx_EXCEPTION:

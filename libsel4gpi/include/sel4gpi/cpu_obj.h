@@ -63,29 +63,31 @@ int cpu_stop(cpu_t *cpu);
 /**
  * @brief Configures the IPC buffer, CSpace, ADS, and Fault endpoint binded to the CPU's TCB
  *
- * @param cpu cpu opject
- * @param vka
- * @param vspace
- * @param cspace
- * @param fault_ep endpoint for fault handling
- * @param ipc_buffer true if we want to create an IPC buffer for the TCB
- * @return int
+ * @param cpu CPU object
+ * @param vspace vspace of the CPU
+ * @param root_cnode root cnode for the CPU
+ * @param cnode_guard guard on the root cnode
+ * @param fault_ep OPTIONAL: endpoint for faults w.r.t to the CPU's cspace
+ * @param ipc_buffer_frame OPTIONAL: IPC buffer frame
+ * @param ipc_buf_addr OPTIONAL: IPC buffer address
+ * @param prio OPTIONAL: prio scheduler priority of the CPU, default is 0 (OPTIONAL)
+ * @return int 0 on success, 1 on failure.
  */
 int cpu_config_vspace(cpu_t *cpu,
-                      vka_t *vka,
                       vspace_t *vspace,
                       seL4_CNode root_cnode,
                       uint64_t cnode_guard,
                       seL4_CPtr fault_ep,
                       seL4_CPtr ipc_buffer_frame,
-                      void *ipc_buf_addr);
+                      void *ipc_buf_addr,
+                      int prio);
 
 /**
  * @brief Change the vspace of the CPU object
  *
  * @param cpu cpu object
  * @param vspace vspace i.e. root PT cap
- * @return int 0 on success, -1 on failure.
+ * @return int 0 on success, 1 on failure.
  */
 int cpu_change_vspace(cpu_t *cpu,
                       vka_t *vka,
