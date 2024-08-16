@@ -52,7 +52,7 @@ int test_vmm_native(env_t env)
     return sel4test_get_result();
 }
 
-DEFINE_TEST(GPIVM001, "Test VMM that starts one Linux guest (native)", test_vmm_native, false)
+DEFINE_TEST(GPIVM001, "Test VMM that starts one Linux guest (native)", test_vmm_native, true)
 #endif
 
 #ifdef OSM_VMM
@@ -69,10 +69,10 @@ int test_vmm_osm(env_t env)
     uint32_t guest_id = osm_new_guest();
     test_assert(guest_id != 0);
 
-    // while (1)
-    // {
-    sel4test_sleep(env, 10UL * SECOND);
-    // }
+    while (1)
+    {
+        sel4test_sleep(env, 10UL * SECOND);
+    }
 
     // #ifdef CONFIG_DEBUG_BUILD
     //     seL4_DebugDumpScheduler();
@@ -81,5 +81,5 @@ int test_vmm_osm(env_t env)
     return sel4test_get_result();
 }
 
-DEFINE_TEST_OSM(GPIVM002, "Test VMM that starts one Linux guest (osm)", test_vmm_osm, false)
+DEFINE_TEST_OSM(GPIVM002, "Test VMM that starts one Linux guest (osm)", test_vmm_osm, true)
 #endif

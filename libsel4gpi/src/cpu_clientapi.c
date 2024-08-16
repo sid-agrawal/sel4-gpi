@@ -274,9 +274,27 @@ int cpu_client_read_registers(cpu_client_context_t *cpu, seL4_UserContext *regs)
     return error;
 }
 
-int cpu_client_write_vcpu_reg(cpu_client_context_t *cpu, uint64_t reg, uint64_t value)
+int cpu_client_read_vcpu_regs(cpu_client_context_t *cpu, vcpu_regs_t *regs)
 {
-    // Linh WIP
+    OSDB_PRINTF("Sending read registers request to CPU component\n");
+    int error = 0;
+
+    CpuMessage msg = {
+        .magic = CPU_RPC_MAGIC,
+        .which_msg = CpuMessage_read_vcpu_tag,
+    };
+
+    CpuReturnMessage ret_msg = {0};
+
+    error = sel4gpi_rpc_call(&rpc_env, cpu->ep, (void *)&msg,
+                             0, NULL, (void *)&ret_msg);
+
+    if (!error)
+    {
+        memcpy(regs, ret_msg.msg.read_reg.reg_buf, sizeof(seL4_Word) * ret_msg.msg.read_reg.reg_buf_count);
+    }
+
+    error |= ret_msg.errorCode;
 }
 
 int cpu_client_inject_irq(cpu_client_context_t *cpu, int virq, int prio, int group, int idx)

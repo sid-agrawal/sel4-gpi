@@ -24,9 +24,9 @@
 #include <gpivmm/fault.h>
 #include <gpivmm/virq.h>
 #include <gpivmm/sel4test-vmm.h>
-#include <gpivmm/vcpu.h>
 #include <gpivmm/vgic/vgic.h>
 #include <sel4gpi/pd_utils.h>
+#include <sel4gpi/vcpu.h>
 
 // @ivanv: ideally we would have none of these hardcoded values
 // initrd, ram size come from the DTB

@@ -68,8 +68,9 @@ void vm_dump_registers(vm_context_t *vm)
 
 void vm_dump_vcpu_registers(vm_context_t *vm)
 {
-    VMM_PRINTERR("Unimplemented!\n");
-    // vcpu_print_regs(vm->vcpu.cptr);
+    vcpu_regs_t vcpu_regs = {0};
+    cpu_client_read_vcpu_regs(&vm->runnable.cpu, &vcpu_regs);
+    vcpu_print_regs(&vcpu_regs);
 }
 
 uint32_t vm_get_id(vm_context_t *vm)

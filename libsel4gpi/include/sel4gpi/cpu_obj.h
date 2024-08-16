@@ -21,6 +21,7 @@
 #include <vspace/vspace.h>
 #include <sel4utils/vspace_internal.h>
 #include <sel4utils/process.h>
+#include <sel4gpi/vcpu.h>
 #include <sel4gpi/model_exporting.h>
 
 #define SEL4_USER_CONTEXT_COUNT sizeof(seL4_UserContext) / sizeof(seL4_Word)
@@ -260,3 +261,11 @@ int cpu_irq_handler_bind(cpu_t *cpu, int irq, seL4_CPtr notif, seL4_Word badge, 
  * @param cpu the CPU object
  */
 void cpu_unbind_irq(cpu_t *cpu);
+
+/**
+ * @brief reads all VCPU registers from the CPU
+ *
+ * @param cpu the CPU object
+ * @param[out] returns a filled in VCPU regs struct
+ */
+void cpu_read_vcpu_regs(cpu_t *cpu, vcpu_regs_t *regs);

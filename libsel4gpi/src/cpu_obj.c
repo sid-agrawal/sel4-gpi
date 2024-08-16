@@ -402,3 +402,11 @@ void cpu_unbind_irq(cpu_t *cpu)
         vka_cspace_free(get_cpu_component()->server_vka, cpu->irq_notif);
     }
 }
+
+void cpu_read_vcpu_regs(cpu_t *cpu, vcpu_regs_t *regs)
+{
+    if (cpu->vcpu.cptr != seL4_CapNull)
+    {
+        vcpu_read_regs(cpu->vcpu.cptr, regs);
+    }
+}

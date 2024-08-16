@@ -11,6 +11,7 @@
 #include <vka/object.h>
 #include <vspace/vspace.h>
 
+#include <sel4gpi/vcpu.h>
 #include <sel4gpi/cpu_component.h>
 #include <sel4gpi/cpu_client_context.h>
 #include <sel4gpi/endpoint_clientapi.h>
@@ -117,14 +118,13 @@ int cpu_client_write_registers(cpu_client_context_t *cpu, seL4_UserContext *regs
 int cpu_client_read_registers(cpu_client_context_t *cpu, seL4_UserContext *regs);
 
 /**
- * @brief write a VCPU register for the CPU
+ * @brief reads all VCPU registers from the CPU
  *
- * @param cpu the CPU conext
- * @param reg the register to write
- * @param value value to write
+ * @param cpu the CPU context
+ * @param[out] returns a filled in VCPU regs struct
  * @return int 0 on success, other on failure
  */
-int cpu_client_write_vcpu_reg(cpu_client_context_t *cpu, uint64_t reg, uint64_t value);
+int cpu_client_read_vcpu_regs(cpu_client_context_t *cpu, vcpu_regs_t *regs);
 
 /* CONVENIENCE FUNCTIONS */
 /**

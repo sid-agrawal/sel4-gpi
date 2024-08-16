@@ -465,6 +465,25 @@ err_goto:
     reply_msg->errorCode = error;
 }
 
+static void handle_read_vcpu_req(seL4_Word sender_badge, CpuReadVcpuMessage *msg, CpuReturnMessage *reply_msg)
+{
+    OSDB_PRINTF("Got 'read vcpu registers' request from Client: ");
+    BADGE_PRINT(sender_badge);
+
+    int error = 0;
+    cpu_component_registry_entry_t *cpu_data = (cpu_component_registry_entry_t *)
+        resource_component_registry_get_by_badge(get_cpu_component(), sender_badge);
+    SERVER_GOTO_IF_COND_BG(cpu_data == NULL, sender_badge, "Couldn't find CPU from badge: ");
+
+    cpu_read_vcpu_regs(&cpu_data->cpu, (vcpu_regs_t *)reply_msg->msg.read_vcpu.reg_buf);
+    reply_msg->msg.read_vcpu.reg_buf_count = SEL4_VCPU_REG_COUNT;
+    CPRINTF("%u\n", SEL4_VCPU_REG_COUNT);
+
+err_goto:
+    reply_msg->which_msg = CpuReturnMessage_read_vcpu_tag;
+    reply_msg->errorCode = error;
+}
+
 static void cpu_component_handle(void *msg_p,
                                  seL4_Word sender_badge,
                                  seL4_CPtr received_cap,
@@ -525,6 +544,9 @@ static void cpu_component_handle(void *msg_p,
             break;
         case CpuMessage_irq_handler_bind_tag:
             handle_irq_handler_bind_req(sender_badge, &msg->msg.irq_handler_bind, reply_msg);
+            break;
+        case CpuMessage_read_vcpu_tag:
+            handle_read_vcpu_req(sender_badge, &msg->msg.read_vcpu, reply_msg);
             break;
         default:
             SERVER_GOTO_IF_COND(1, "Unknown request received: %u\n", msg->which_msg);

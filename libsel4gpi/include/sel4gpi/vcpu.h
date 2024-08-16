@@ -52,6 +52,8 @@ typedef struct _vcpu_regs
     seL4_Word cntkctl_el1;
 } vcpu_regs_t;
 
+#define SEL4_VCPU_REG_COUNT (sizeof(vcpu_regs_t) / sizeof(seL4_Word))
+
 void vcpu_reset(seL4_CPtr vcpu);
 void vcpu_read_regs(seL4_CPtr vcpu, vcpu_regs_t *regs);
 void vcpu_print_regs(vcpu_regs_t *regs);
