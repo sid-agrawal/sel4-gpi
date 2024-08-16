@@ -483,6 +483,7 @@ void osm_set_up(uintptr_t e)
     cpu_t *cpu;
     seL4_CPtr cpu_slot_in_test;
     error = cpu_component_allocate(pd->id, &cpu, &cpu_slot_in_test);
+    CPRINTF("%u\n", cpu->id);
     assert(error == 0);
     env->test_cpu = cpu;
 

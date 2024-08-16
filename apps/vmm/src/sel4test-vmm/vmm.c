@@ -27,7 +27,6 @@
 #include <gpivmm/vgic/vgic.h>
 #include <sel4gpi/pd_utils.h>
 #include <sel4gpi/vcpu.h>
-#include <cpio/cpio.h>
 
 // @ivanv: ideally we would have none of these hardcoded values
 // initrd, ram size come from the DTB
@@ -46,10 +45,6 @@
 // /* Data for the initial RAM disk to be passed to the kernel. */
 // extern char _guest_initrd_image[];
 // extern char _guest_initrd_image_end[];
-
-/* guest images are stored here */
-extern char _cpio_archive[];
-extern char _cpio_archive_end[];
 
 static vmon_context_t vmon_ctxt;
 
@@ -257,13 +252,11 @@ err_goto:
     return error;
 }
 
-uint32_t sel4test_new_guest(void)
+static int setup_guest_devices(vm_context_t *vm, const char *kernel_img_name,
+                               uint64_t kernel_img_offset, copy_kernel_image_fn_t kernel_img_cp_fn,
+                               uint64_t guest_id, uintptr_t *kernel_pc)
 {
     int error = 0;
-    uint32_t guest_id = vmon_ctxt.guest_id_counter;
-    GOTO_IF_COND(vmon_ctxt.guest_id_counter >= MAX_GUEST_COUNT, "Maximum number of guests started\n");
-    vm_context_t *vm = calloc(1, sizeof(vm_context_t));
-
     vka_t *vka = vmon_ctxt.vka;
     vspace_t *vspace = vmon_ctxt.vspace;
 
@@ -325,21 +318,23 @@ uint32_t sel4test_new_guest(void)
 
 #ifdef CONFIG_DEBUG_BUILD
     char vm_name[MAX_VM_NAME_LEN];
-    snprintf(vm_name, MAX_VM_NAME_LEN, "VM%d", guest_id);
+    snprintf(vm_name, MAX_VM_NAME_LEN, "VM%u", (uint32_t)guest_id);
     seL4_DebugNameThread(vm->tcb.cptr, vm_name);
 #endif
 
     reservation_t res;
 
-    /* GIC vCPU interface region */
-    VMM_PRINT("Mapping GIC interface - seL4: %x, linux: %x\n", GIC_PADDR, LINUX_GIC_PADDR);
-    error = vka_alloc_frame_at(vka, seL4_PageBits, (uintptr_t)GIC_PADDR, &vm->gic_vcpu_frame);
-    GOTO_IF_ERR(error, "Failed to allocate GIC vCPU frame");
+    if (strcmp(kernel_img_name, LINUX_KERNEL_NAME) == 0)
+    {
+        /* GIC vCPU interface region */
+        VMM_PRINT("Mapping GIC interface - seL4: %x, linux: %x\n", GIC_PADDR, LINUX_GIC_PADDR);
+        error = vka_alloc_frame_at(vka, seL4_PageBits, (uintptr_t)GIC_PADDR, &vm->gic_vcpu_frame);
+        GOTO_IF_ERR(error, "Failed to allocate GIC vCPU frame");
 
-    res = vspace_reserve_range_at(&vm->vspace, (void *)LINUX_GIC_PADDR, BIT(seL4_PageBits), seL4_AllRights, 0);
-    error = vspace_map_pages_at_vaddr(&vm->vspace, &vm->gic_vcpu_frame.cptr, NULL, (void *)LINUX_GIC_PADDR, 1, seL4_PageBits, res);
-    GOTO_IF_ERR(error, "Failed to map GIC vCPU region to VM");
-
+        res = vspace_reserve_range_at(&vm->vspace, (void *)LINUX_GIC_PADDR, BIT(seL4_PageBits), seL4_AllRights, 0);
+        error = vspace_map_pages_at_vaddr(&vm->vspace, &vm->gic_vcpu_frame.cptr, NULL, (void *)LINUX_GIC_PADDR, 1, seL4_PageBits, res);
+        GOTO_IF_ERR(error, "Failed to map GIC vCPU region to VM");
+    }
 #ifdef BOARD_qemu_arm_virt
     /* map in serial device region */
     vm->n_dev_frames = 1;
@@ -422,55 +417,8 @@ uint32_t sel4test_new_guest(void)
     void *guest_ram_curr_vspace = vspace_map_pages(vspace, ram_frames_in_vmm, NULL, seL4_ReadWrite, guest_ram_pages, seL4_LargePageBits, 1);
     ZF_LOGF_IF(guest_ram_curr_vspace == NULL, "Failed to map guest RAM to VMM's vspace");
 
-    uint64_t kernel_size = 0;
-    uint64_t cpio_len = _cpio_archive_end - _cpio_archive;
-    const void *guest_kernel_image = cpio_get_file(_cpio_archive, cpio_len, "linux", &kernel_size);
-
-    uint64_t dtb_size = 0;
-    const void *guest_dtb_image = cpio_get_file(_cpio_archive, cpio_len, "linux.dtb", &dtb_size);
-
-    uint64_t initrd_size = 0;
-    const void *guest_initrd_image = cpio_get_file(_cpio_archive, cpio_len, "rootfs.cpio.gz", &initrd_size);
-
-    // memcpy((char *)(guest_ram_curr_vspace + 0x1000000), (char *)_guest_kernel_image, kernel_size);
-
-    uintptr_t guest_dtb_curr_vspace = (uintptr_t)guest_ram_curr_vspace + ((uintptr_t)GUEST_DTB_VADDR - (uintptr_t)GUEST_RAM_VADDR);
-    uintptr_t guest_initrd_curr_vspace = (uintptr_t)guest_ram_curr_vspace + ((uintptr_t)GUEST_INIT_RAM_DISK_VADDR - (uintptr_t)GUEST_RAM_VADDR);
-    VMM_PRINT("guest ram: %p, dtb: %lx, initrd: %lx\n", guest_ram_curr_vspace, guest_dtb_curr_vspace, guest_initrd_curr_vspace);
-
-    uintptr_t kernel_pc_curr_vspace = linux_setup_images((uintptr_t)guest_ram_curr_vspace,
-                                                         (uintptr_t)guest_kernel_image,
-                                                         kernel_size,
-                                                         (uintptr_t)guest_dtb_image,
-                                                         (uintptr_t)guest_dtb_curr_vspace,
-                                                         dtb_size,
-                                                         (uintptr_t)guest_initrd_image,
-                                                         (uintptr_t)guest_initrd_curr_vspace,
-                                                         initrd_size);
-
-    uintptr_t kernel_pc_vm_vspace = (uintptr_t)GUEST_RAM_VADDR + (kernel_pc_curr_vspace - (uintptr_t)guest_ram_curr_vspace);
-
-    /* Just in case there is already an interrupt available to handle, we ack it here. */
-    serial_ack(vm, SERIAL_IRQ, NULL);
-
-    /*
-     * Set the TCB registers to what the virtual machine expects to be started with.
-     * You will note that this is currently Linux specific as we currently do not support
-     * any other kind of guest. However, even though the library is open to supporting other
-     * guests, there is no point in prematurely generalising this code.
-     */
-    seL4_UserContext regs = {0};
-    regs.x0 = (seL4_Word)GUEST_DTB_VADDR;
-    regs.spsr = 0x5; // PMODE_EL1h
-    regs.pc = (seL4_Word)GUEST_RAM_VADDR;
-    // Writing to x0, pc, and spsr
-    seL4_Error s_err = seL4_TCB_WriteRegisters(vm->tcb.cptr, true, 0, 4, &regs);
-
-    GOTO_IF_COND(s_err != seL4_NoError, "Failed to start guest\n");
-
-    vmon_ctxt.guests[guest_id] = vm;
-    vmon_ctxt.guest_id_counter++;
-    vm->id = guest_id;
+    *kernel_pc = kernel_img_cp_fn((uintptr_t)guest_ram_curr_vspace,
+                                  kernel_img_name, kernel_img_offset);
 
 err_goto:
     if (ram_frames_in_guest)
@@ -489,5 +437,51 @@ err_goto:
         vspace_unmap_pages(vspace, guest_ram_curr_vspace, guest_ram_pages, seL4_LargePageBits, vka);
     }
 
+    return error;
+}
+
+uint32_t sel4test_new_guest(const char *kernel_image)
+{
+    int error = 0;
+    uint32_t guest_id = vmon_ctxt.guest_id_counter;
+    GOTO_IF_COND(vmon_ctxt.guest_id_counter >= MAX_GUEST_COUNT, "Maximum number of guests started\n");
+    vm_context_t *vm = calloc(1, sizeof(vm_context_t));
+
+    uintptr_t kernel_pc_vm_vspace = 0;
+    uint64_t kernel_img_offset = 0;
+    copy_kernel_image_fn_t cp_fn = NULL;
+    seL4_UserContext regs = {0};
+
+    if (strcmp(kernel_image, LINUX_KERNEL_NAME) == 0)
+    {
+        cp_fn = linux_copy_kernel_image;
+        regs.x0 = (seL4_Word)GUEST_DTB_VADDR;
+    }
+    else
+    {
+        if (strcmp(kernel_image, HELLO_KERNEL_NAME) == 0)
+        {
+            kernel_img_offset = HELLO_KERNEL_PC_OFFSET;
+        }
+        cp_fn = generic_copy_kernel_image;
+    }
+
+    error = setup_guest_devices(vm, kernel_image, kernel_img_offset, cp_fn, guest_id, &kernel_pc_vm_vspace);
+    GOTO_IF_ERR(error, "Failed to setup guest device regions\n");
+
+    /* Just in case there is already an interrupt available to handle, we ack it here. */
+    serial_ack(vm, SERIAL_IRQ, NULL);
+
+    regs.spsr = 0x5; // PMODE_EL1h
+    regs.pc = (seL4_Word)kernel_pc_vm_vspace;
+    // Writing to x0, pc, and spsr
+    seL4_Error s_err = seL4_TCB_WriteRegisters(vm->tcb.cptr, true, 0, 4, &regs);
+    GOTO_IF_COND(s_err != seL4_NoError, "Failed to start guest\n");
+
+    vmon_ctxt.guests[guest_id] = vm;
+    vmon_ctxt.guest_id_counter++;
+    vm->id = guest_id;
+
+err_goto:
     return error ? 0 : guest_id;
 }

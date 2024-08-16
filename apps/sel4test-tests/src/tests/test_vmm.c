@@ -25,19 +25,40 @@
 
 #if SEL4TEST_VMM
 #include <gpivmm/sel4test-vmm.h>
-int test_vmm_native(env_t env)
+
+static int start_vmm_and_guest(env_t env, const char *guest_name)
+{
+    int error;
+
+    // test process will act as the VMM
+    error = sel4test_vmm_init(sel4test_get_irq_handler(env, SERIAL_IRQ),
+                              &env->vka, &env->vspace, env->asid_pool,
+                              &env->simple, env->tcb, env->endpoint);
+    test_error_eq(error, 0);
+    uint32_t guest_id = sel4test_new_guest(guest_name);
+    test_assert(guest_id != 0);
+
+    return error;
+}
+
+int test_hello_vm_sel4test(env_t env)
 {
     int error;
     printf("------------------STARTING: %s------------------\n", __func__);
 
-    sel4test_get_irq_handler(env, SERIAL_IRQ);
-
     // test process will act as the VMM
-    error = sel4test_vmm_init(sel4test_get_irq_handler(env, SERIAL_IRQ),
-                              &env->vka, &env->vspace, env->asid_pool, &env->simple, env->tcb, env->endpoint);
-    test_error_eq(error, 0);
-    uint32_t guest_id = sel4test_new_guest();
-    test_assert(guest_id != 0);
+    start_vmm_and_guest(env, HELLO_KERNEL_NAME);
+    sel4test_sleep(env, 2UL * SECOND);
+
+    return sel4test_get_result();
+}
+DEFINE_TEST(GPIVM001, "Test VMM that starts a Hello guest PD (sel4test)", test_hello_vm_sel4test, true)
+
+int test_linux_vm_sel4test(env_t env)
+{
+    printf("------------------STARTING: %s------------------\n", __func__);
+
+    start_vmm_and_guest(env, LINUX_KERNEL_NAME);
 
     while (1)
     {
@@ -45,41 +66,53 @@ int test_vmm_native(env_t env)
         seL4_Yield();
     }
 
-    // #ifdef CONFIG_DEBUG_BUILD
-    //     seL4_DebugDumpScheduler();
-    // #endif
-
     return sel4test_get_result();
 }
 
-DEFINE_TEST(GPIVM001, "Test VMM that starts one Linux guest (native)", test_vmm_native, true)
+DEFINE_TEST(GPIVM002, "Test VMM that starts one Linux guest (sel4test)", test_linux_vm_sel4test, false)
 #endif
 
 #ifdef OSM_VMM
 #include <gpivmm/osm-vmm.h>
 
-int test_vmm_osm(env_t env)
+static int start_vmm_and_guest(const char *guest_name)
+{
+    int error = osm_vmm_init();
+    test_error_eq(error, 0);
+
+    uint32_t guest_id = osm_new_guest(guest_name);
+    test_assert(guest_id != 0);
+
+    return error;
+}
+
+int test_hello_vm_osm(env_t env)
 {
     int error;
     printf("------------------STARTING: %s------------------\n", __func__);
 
-    error = osm_vmm_init();
-    test_error_eq(error, 0);
+    start_vmm_and_guest(HELLO_KERNEL_NAME);
 
-    uint32_t guest_id = osm_new_guest();
-    test_assert(guest_id != 0);
+    sel4test_sleep(env, 2UL * SECOND);
+
+    return sel4test_get_result();
+}
+DEFINE_TEST_OSM(GPIVM003, "Test VMM that starts one Linux guest PD (osm)", test_hello_vm_osm, true)
+
+int test_linux_vm_osm(env_t env)
+{
+    int error;
+    printf("------------------STARTING: %s------------------\n", __func__);
+
+    start_vmm_and_guest(LINUX_KERNEL_NAME);
 
     while (1)
     {
         sel4test_sleep(env, 10UL * SECOND);
     }
 
-    // #ifdef CONFIG_DEBUG_BUILD
-    //     seL4_DebugDumpScheduler();
-    // #endif
-
     return sel4test_get_result();
 }
 
-DEFINE_TEST_OSM(GPIVM002, "Test VMM that starts one Linux guest (osm)", test_vmm_osm, true)
+DEFINE_TEST_OSM(GPIVM004, "Test VMM that starts one Linux guest PD (osm)", test_linux_vm_osm, false)
 #endif

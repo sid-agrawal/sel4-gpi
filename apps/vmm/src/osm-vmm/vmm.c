@@ -18,7 +18,6 @@
 #include <gpivmm/smoldtb.h>
 #include <gpivmm/linux.h>
 #include <gpivmm/virq.h>
-#include <cpio/cpio.h>
 
 /* (XXX) Linh: This is meant for the fault handler thread to store its own CPTRs */
 typedef struct _vmon_fault_context
@@ -38,10 +37,6 @@ typedef struct _vmon_fault_context
 // /* Data for the initial RAM disk to be passed to the kernel. */
 // extern char _guest_initrd_image[];
 // extern char _guest_initrd_image_end[];
-
-/* guest images are stored here */
-extern char _cpio_archive[];
-extern char _cpio_archive_end[];
 
 static vmon_context_t vmon_ctxt;             /* main VMM thread's CPTRs */
 static vmon_fault_context_t vmon_fault_ctxt; /* fault VMM thread's CPTRs */
@@ -197,15 +192,10 @@ err_goto:
     return error;
 }
 
-uint32_t osm_new_guest(void)
+static int configure_guest_pd(pd_config_t *vm_cfg, const char *kernel_img_name, uint64_t kernel_img_offset,
+                              copy_kernel_image_fn_t kernel_img_cp_fn, uint64_t guest_id)
 {
-    int error = 0;
-    uint32_t guest_id = vmon_ctxt.guest_id_counter;
-    GOTO_IF_COND(vmon_ctxt.guest_id_counter >= MAX_GUEST_COUNT, "Maximum number of guests started\n");
-    vm_context_t *vm = calloc(1, sizeof(vm_context_t));
-
-    pd_config_t *vm_cfg = sel4gpi_new_runnable(true, true, &vm->runnable);
-
+    int error;
     seL4_CPtr mo_rde = sel4gpi_get_rde(GPICAP_TYPE_MO);
     GOTO_IF_COND(mo_rde == seL4_CapNull, "No MO RDE\n");
 
@@ -214,45 +204,21 @@ uint32_t osm_new_guest(void)
 
     size_t guest_ram_pages = BYTES_TO_SIZE_BITS_PAGES(GUEST_RAM_SIZE, MO_LARGE_PAGE_BITS);
     mo_client_context_t guest_ram_mo = {0};
+    void *guest_ram_curr_vspace = NULL;
 #ifdef BOARD_qemu_arm_virt
     // On QEMU, there is a special reserved region for VM guest RAM
-    void *guest_ram_curr_vspace = sel4gpi_get_vmr_at_paddr(vmr_rde, guest_ram_pages, NULL, SEL4UTILS_RES_TYPE_GENERIC,
-                                                           MO_LARGE_PAGE_BITS, GUEST_RAM_VADDR, &guest_ram_mo);
+    guest_ram_curr_vspace = sel4gpi_get_vmr_at_paddr(vmr_rde, guest_ram_pages, NULL, SEL4UTILS_RES_TYPE_GENERIC,
+                                                     MO_LARGE_PAGE_BITS, QEMU_VM_RESERVE_PADDR, &guest_ram_mo);
 #elif BOARD_odroidc4
-    void *guest_ram_curr_vspace = sel4gpi_get_vmr(vmr_rde, guest_ram_pages, (void *)GUEST_RAM_VADDR, SEL4UTILS_RES_TYPE_GENERIC,
-                                                  MO_LARGE_PAGE_BITS, &guest_ram_mo);
+    guest_ram_curr_vspace = sel4gpi_get_vmr(vmr_rde, guest_ram_pages, (void *)GUEST_RAM_VADDR,
+                                            SEL4UTILS_RES_TYPE_GENERIC, MO_LARGE_PAGE_BITS, &guest_ram_mo);
 #endif // BOARD_qemu_arm_virt
-    GOTO_IF_COND(guest_ram_curr_vspace == NULL, "Failed to reserve region for guest RAM in current ADS\n");
+    GOTO_IF_COND(guest_ram_curr_vspace == 0, "Failed to reserve region for guest RAM in current ADS\n");
 
-    uint64_t kernel_size = 0;
-    uint64_t cpio_len = _cpio_archive_end - _cpio_archive;
-    const void *guest_kernel_image = cpio_get_file(_cpio_archive, cpio_len, "linux", &kernel_size);
+    uintptr_t kernel_pc_vm_vspace = kernel_img_cp_fn((uintptr_t)guest_ram_curr_vspace,
+                                                     kernel_img_name, kernel_img_offset);
 
-    uint64_t dtb_size = 0;
-    const void *guest_dtb_image = cpio_get_file(_cpio_archive, cpio_len, "linux.dtb", &dtb_size);
-
-    uint64_t initrd_size = 0;
-    const void *guest_initrd_image = cpio_get_file(_cpio_archive, cpio_len, "rootfs.cpio.gz", &initrd_size);
-
-    uintptr_t guest_dtb_curr_vspace = (uintptr_t)guest_ram_curr_vspace + ((uintptr_t)GUEST_DTB_VADDR - (uintptr_t)GUEST_RAM_VADDR);
-    uintptr_t guest_initrd_curr_vspace = (uintptr_t)guest_ram_curr_vspace + ((uintptr_t)GUEST_INIT_RAM_DISK_VADDR - (uintptr_t)GUEST_RAM_VADDR);
-    VMM_PRINT("guest ram: %p, dtb: %lx initrd: %lx\n", guest_ram_curr_vspace, guest_dtb_curr_vspace, guest_initrd_curr_vspace);
-
-    uintptr_t kernel_pc_curr_vspace = linux_setup_images((uintptr_t)guest_ram_curr_vspace,
-                                                         (uintptr_t)guest_kernel_image,
-                                                         kernel_size,
-                                                         (uintptr_t)guest_dtb_image,
-                                                         (uintptr_t)guest_dtb_curr_vspace,
-                                                         dtb_size,
-                                                         (uintptr_t)guest_initrd_image,
-                                                         (uintptr_t)guest_initrd_curr_vspace,
-                                                         initrd_size);
-
-    uintptr_t kernel_pc_vm_vspace = (uintptr_t)GUEST_RAM_VADDR + (kernel_pc_curr_vspace - (uintptr_t)guest_ram_curr_vspace);
-
-    vm_cfg->elevated_cpu = true;
-    vm_cfg->ads_cfg.entry_point = (void *)kernel_pc_vm_vspace;
-
+/* setup UART device */
 #ifdef BOARD_qemu_arm_virt
     mo_client_context_t serial_dev_mo = {0};
     error = mo_component_client_connect_paddr(mo_rde, 1, MO_PAGE_BITS, SERIAL_PADDR, &serial_dev_mo);
@@ -280,21 +246,63 @@ uint32_t osm_new_guest(void)
                            BYTES_TO_SIZE_BITS_PAGES(MiB_TO_BYTES(1), MO_PAGE_BITS), MO_PAGE_BITS, &bus3_mo);
 #endif // BOARD_qemu_arm_virt
 
-    mo_client_context_t gic_mo = {0};
-    error = mo_component_client_connect_paddr(mo_rde, 1, MO_PAGE_BITS, GIC_PADDR, &gic_mo);
-    GOTO_IF_ERR(error, "Could not allocate MO for GIC dev region\n");
-    sel4gpi_add_vmr_config(&vm_cfg->ads_cfg, GPI_DISJOINT, SEL4UTILS_RES_TYPE_DEVICE, (void *)LINUX_GIC_PADDR,
-                           NULL, 1, MO_PAGE_BITS, &gic_mo);
+    if (strcmp(kernel_img_name, LINUX_KERNEL_NAME) == 0)
+    {
+        /* setup GIC */
+        mo_client_context_t gic_mo = {0};
+        error = mo_component_client_connect_paddr(mo_rde, 1, MO_PAGE_BITS, GIC_PADDR, &gic_mo);
+        GOTO_IF_ERR(error, "Could not allocate MO for GIC dev region\n");
+        sel4gpi_add_vmr_config(&vm_cfg->ads_cfg, GPI_DISJOINT, SEL4UTILS_RES_TYPE_DEVICE, (void *)LINUX_GIC_PADDR,
+                               NULL, 1, MO_PAGE_BITS, &gic_mo);
+    }
 
+    /* guest RAM config */
     sel4gpi_add_vmr_config(&vm_cfg->ads_cfg, GPI_DISJOINT, SEL4UTILS_RES_TYPE_GENERIC, (void *)GUEST_RAM_VADDR,
                            NULL, guest_ram_pages, MO_LARGE_PAGE_BITS, &guest_ram_mo);
 
+    vm_cfg->elevated_cpu = true;
+    vm_cfg->ads_cfg.entry_point = (void *)kernel_pc_vm_vspace;
     vm_cfg->fault_ep = vmon_ctxt.vm_fault_ep;
-    vm_cfg->fault_ep_badge = FAULT_BADGE_FLAG | (uint64_t)guest_id;
+    vm_cfg->fault_ep_badge = FAULT_BADGE_FLAG | guest_id;
     vm_cfg->cpu_prio = seL4_MinPrio + 1;
+    vm_cfg->link_with_current = true;
 
-    seL4_Word arg = GUEST_DTB_VADDR;
-    error = sel4gpi_prepare_pd(vm_cfg, &vm->runnable, 1, &arg);
+err_goto:
+    return error;
+}
+
+uint32_t osm_new_guest(const char *kernel_image)
+{
+    int error = 0;
+    uint32_t guest_id = vmon_ctxt.guest_id_counter;
+    GOTO_IF_COND(vmon_ctxt.guest_id_counter >= MAX_GUEST_COUNT, "Maximum number of guests started\n");
+    vm_context_t *vm = calloc(1, sizeof(vm_context_t));
+
+    seL4_Word *args = NULL;
+    int argc = 0;
+    uint64_t kernel_img_offset = 0;
+    copy_kernel_image_fn_t cp_fn = NULL;
+    if (strcmp(kernel_image, LINUX_KERNEL_NAME) == 0)
+    {
+        argc = 1;
+        seL4_Word dtb_arg = GUEST_DTB_VADDR;
+        args = &dtb_arg;
+        cp_fn = linux_copy_kernel_image;
+    }
+    else
+    {
+        if (strcmp(kernel_image, HELLO_KERNEL_NAME) == 0)
+        {
+            kernel_img_offset = HELLO_KERNEL_PC_OFFSET;
+        }
+        cp_fn = generic_copy_kernel_image;
+    }
+
+    pd_config_t *vm_cfg = sel4gpi_new_runnable(true, true, &vm->runnable);
+    error = configure_guest_pd(vm_cfg, kernel_image, kernel_img_offset, cp_fn, (uint64_t)guest_id);
+    GOTO_IF_ERR(error, "Failed to setup guest device regions\n");
+
+    error = sel4gpi_prepare_pd(vm_cfg, &vm->runnable, argc, args);
     GOTO_IF_ERR(error, "Failed to setup VM-PD\n");
 
     // WIP DTB parsing

@@ -265,23 +265,8 @@ err_goto:
     return error;
 }
 
-int cpu_set_local_context(cpu_t *cpu, void *entry_point,
-                          void *arg0, void *arg1,
-                          void *arg2, void *init_stack)
-{
-    int error = 0;
-    OSDB_PRINTF("Setting local context with args: [%p, %p, %p], init_stack: %p\n", arg0, arg1, arg2, init_stack);
-    error = sel4utils_arch_init_local_context(entry_point, arg0, arg1, arg2, init_stack, cpu->reg_ctx);
-    SERVER_GOTO_IF_ERR(error, "failed to set CPU context\n");
-
-    error = seL4_TCB_WriteRegisters(cpu->tcb.cptr, 0, 0, SEL4_USER_CONTEXT_COUNT, cpu->reg_ctx);
-    SERVER_GOTO_IF_ERR(error, "failed to write TCB registers\n");
-err_goto:
-    return error;
-}
-
-int cpu_set_remote_context(cpu_t *cpu, void *entry_point,
-                           void *init_stack, seL4_Word arg1)
+int cpu_set_pd_entry_regs(cpu_t *cpu, void *entry_point,
+                          void *init_stack, seL4_Word arg1)
 {
     int error = 0;
     error = sel4utils_arch_init_context(entry_point, init_stack, cpu->reg_ctx);
@@ -297,10 +282,10 @@ err_goto:
     return error;
 }
 
-int cpu_set_guest_context(cpu_t *cpu, uintptr_t kernel_entry, uintptr_t kernel_dtb)
+int cpu_set_guest_entry_regs(cpu_t *cpu, uintptr_t kernel_entry, seL4_Word arg0)
 {
     int error = 0;
-    error = sel4utils_arch_init_context_guest(kernel_entry, kernel_dtb, cpu->reg_ctx);
+    error = sel4utils_arch_init_context_guest(kernel_entry, arg0, cpu->reg_ctx);
     SERVER_GOTO_IF_ERR(error, "failed to set CPU context\n");
 
     error = seL4_TCB_WriteRegisters(cpu->tcb.cptr, 0, 0, SEL4_USER_CONTEXT_COUNT, cpu->reg_ctx);
@@ -400,6 +385,7 @@ void cpu_unbind_irq(cpu_t *cpu)
                                                     cpu->bound_irq);
         seL4_IRQHandler_Clear(irq_handler);
         vka_cspace_free(get_cpu_component()->server_vka, cpu->irq_notif);
+        cpu->irq_notif = seL4_CapNull;
     }
 }
 

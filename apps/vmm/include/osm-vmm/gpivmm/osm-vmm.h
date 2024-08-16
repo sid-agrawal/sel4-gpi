@@ -29,9 +29,11 @@ typedef struct _vmon_context
 int osm_vmm_init(void);
 
 /**
- * @brief starts a new linux guest as a PD.
- * Does not support any other type of guest because we currently don't need to
+ * @brief starts a new guest from the given binary image as a PD.
+ * Currently only performs additional RAM setup (DTB and init ramdisk) for Linux guests.
+ * Other guests simply get a copy of their kernel_image in RAM
  *
+ * @param kernel_image name of kernel image
  * @return int 0 on success, 1 on failure
  */
-uint32_t osm_new_guest(void);
+uint32_t osm_new_guest(const char *kernel_image);

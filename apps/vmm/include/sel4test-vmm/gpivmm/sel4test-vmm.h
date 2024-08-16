@@ -70,4 +70,4 @@ int sel4test_vmm_init(seL4_IRQHandler irq_handler,
  *
  * @return int the VM ID of the guest, 0 if an error occurred
  */
-uint32_t sel4test_new_guest(void);
+uint32_t sel4test_new_guest(const char *kernel_image);

@@ -11,6 +11,7 @@
 #pragma once
 #include <sel4gpi/debug.h>
 #include <utils/ansi_color.h>
+#include <utils/attribute.h>
 #include <stdbool.h>
 
 #define GUEST_VCPU_ID 0   // ID of the first vCPU, defined for convenience since only one vCPU is ever started
@@ -20,6 +21,9 @@
 
 #define SERIAL_IRQ_BIT 1             // Indicator bit on notification for serial IRQs
 #define FAULT_BADGE_FLAG (1UL << 63) // indicator flag on fault EP badge
+
+// On QEMU, there is a special reserved region for VM guest RAM
+#define QEMU_VM_RESERVE_PADDR 0x40000000
 
 // @ivanv: if we keep using this, make sure that we have a static assert
 // that sizeof seL4_UserContext is 0x24
@@ -48,6 +52,12 @@ typedef struct _vm_context vm_context_t;
 
 struct _vmon_context;
 typedef struct _vmon_context vmon_context_t;
+
+/**
+ * @brief Function for copying a kernel image into guest RAM at the given offset.
+ * Returns the entry point for the guest in its own ADS.
+ */
+typedef uintptr_t (*copy_kernel_image_fn_t)(uintptr_t guest_ram_curr_vspace, const char *kernel_image_name, uint64_t offset);
 
 // Device addresses
 
@@ -87,6 +97,13 @@ typedef struct _vmon_context vmon_context_t;
 #error Need to define serial interrupt
 #endif
 
+/* guest specific image names and offsets */
+#define HELLO_KERNEL_NAME "hellokernel.bin"
+#define HELLO_KERNEL_PC_OFFSET 0x1000000
+#define LINUX_KERNEL_NAME "linux"
+#define LINUX_DTB_NAME "linux.dtb"
+#define LINUX_INITRD_NAME "rootfs.cpio.gz"
+
 // ========================== Generic Helpers ==========================
 
 typedef void (*virq_ack_fn_t)(vm_context_t *vm, int irq, void *cookie);
@@ -100,6 +117,30 @@ typedef void (*virq_ack_fn_t)(vm_context_t *vm, int irq, void *cookie);
  * @return int 0 on success, other on failure
  */
 int vmm_init_virq(size_t vcpu_id, virq_ack_fn_t serial_ack_fn);
+
+/**
+ * @brief Copies the linux kernel image into guest RAM. Additionally copies linux's DTB and init ramdisk,
+ * and performs sanity checks on image size and header magic values
+ *
+ * @param guest_ram_curr_vspace vaddr of guest RAM in the current ADS
+ * @param kernel_image_name UNUSED
+ * @param offset UNUSED
+ * @return uintptr_t entry point of the kernel in the guest's ADS
+ */
+uintptr_t linux_copy_kernel_image(uintptr_t guest_ram_curr_vspace,
+                                  UNUSED const char *kernel_image_name,
+                                  UNUSED uint64_t offset);
+
+/**
+ * @brief Copies an arbitrary kernel image into guest RAM without any additional setup
+ *
+ * @param guest_ram_curr_vspace vaddr of guest RAM in the current ADS
+ * @param kernel_image_name name of the image in the CPIO archive
+ * @param offset offset in guest RAM at which to copy the image
+ * @return uintptr_t entry point of the kernel in the guest's ADS
+ */
+uintptr_t generic_copy_kernel_image(uintptr_t guest_ram_curr_vspace,
+                                    const char *kernel_image_name, uint64_t offset);
 
 // ========== Helpers that each implementation-type specifies ==========
 

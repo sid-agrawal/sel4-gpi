@@ -632,7 +632,7 @@ int pd_component_runtime_setup(pd_t *pd,
         if (!error)
         {
             /* set a flag in the first argument register to trigger the entire C runtime setup for OSmosis PDs */
-            error = cpu_set_remote_context(cpu, entry_point, init_stack, OSM_PD_RUNTIME);
+            error = cpu_set_pd_entry_regs(cpu, entry_point, init_stack, OSM_PD_RUNTIME);
         }
     }
     else if (cpu->vcpu.cptr != seL4_CapNull) // CPU is elevated, this is a guest-OS PD
@@ -640,8 +640,7 @@ int pd_component_runtime_setup(pd_t *pd,
         error = cpu_elevate(cpu);
         if (!error)
         {
-            SERVER_GOTO_IF_COND(argc == 0, "Setting up a guest requires at least one argument for the DTB\n");
-            error = cpu_set_guest_context(cpu, (uintptr_t)entry_point, (uintptr_t)args[0]);
+            error = cpu_set_guest_entry_regs(cpu, (uintptr_t)entry_point, argc > 0 ? args[0] : 0);
         }
     }
     else // No ELF was loaded for this PD, setup only the CPU and arguments
@@ -661,7 +660,7 @@ int pd_component_runtime_setup(pd_t *pd,
          * if we're not setting up the entire runtime, entry point function expects the second argument register
          * to contain the address of the function to execute
          */
-        error = cpu_set_remote_context(cpu, entry_point, init_stack, args[0]);
+        error = cpu_set_pd_entry_regs(cpu, entry_point, init_stack, args[0]);
     }
 
 #if CONFIG_DEBUG_BUILD

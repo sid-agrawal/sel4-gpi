@@ -148,26 +148,8 @@ void cpu_destroy(cpu_t *cpu);
 int cpu_set_tls_base(cpu_t *cpu, void *tls_base, bool write_reg);
 
 /**
- * @brief sets the CPU object's register values with the given arguments and entry point
- * intended usage: the entry point is a function which the CPU can jump directly to in its binded ADS,
- *                 and arguments to the function can be put in registers
- *
- * @param cpu the target CPU
- * @param entry_point address of instruction to start execution at
- * @param arg0 the first argument
- * @param arg1 the second argument
- * @param arg2 the third argument
- * @param init_stack the starting position in the stack (w.r.t CPU's binded ADS)
- * @return int returns 0 on success, 1 on failure
- */
-int cpu_set_local_context(cpu_t *cpu, void *entry_point,
-                          void *arg0, void *arg1,
-                          void *arg2, void *init_stack);
-
-/**
- * @brief sets the CPU object's register values to the given entry point
- * intended usage: the entry point is not necessarily a function, arguments for whatever is
- *                 required during execution must be placed on the stack
+ * @brief sets the CPU's entry point, stack pointer, and optional argument in its registers
+ * intended usage: to start a host PD
 
  * @param cpu the target CPU
  * @param entry_point address of instruction to start execution at
@@ -175,19 +157,18 @@ int cpu_set_local_context(cpu_t *cpu, void *entry_point,
  * @param arg1 OPTIONAL: value to set in the second argument register (the first is for something else)
  * @return int returns 0 on success, 1 on failure
  */
-int cpu_set_remote_context(cpu_t *cpu, void *entry_point, void *init_stack, seL4_Word arg1);
+int cpu_set_pd_entry_regs(cpu_t *cpu, void *entry_point, void *init_stack, seL4_Word arg1);
 
 /**
- * @brief sets the CPU object's registers to the given kernel entry point
- * intended usage: running a guest
- * currently only supports linux guests
+ * @brief sets the CPU's entry point and optional argument in its registers
+ * intended usage: to start a guest PD
  *
  * @param cpu the target CPU
  * @param kernel_entry address of instruction to start execution at
- * @param kernel_dtb address of DTB to pass to the guest
+ * @param arg0 OPTIONAL: value to set in the first argument register
  * @return int
  */
-int cpu_set_guest_context(cpu_t *cpu, uintptr_t kernel_entry, uintptr_t kernel_dtb);
+int cpu_set_guest_entry_regs(cpu_t *cpu, uintptr_t kernel_entry, seL4_Word arg0);
 
 /**
  * @brief elevates a CPU by creating a VCPU and binding it to the TCB
