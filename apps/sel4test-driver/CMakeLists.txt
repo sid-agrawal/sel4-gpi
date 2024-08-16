@@ -59,7 +59,6 @@ file(
 )
 
 # Import build rules for test app
-add_subdirectory(../sel4test-tests sel4test-tests)
 add_subdirectory(../ramdisk ramdisk)
 add_subdirectory(../xv6fs xv6fs)
 add_subdirectory(../kvstore kvstore)
@@ -71,6 +70,9 @@ add_subdirectory(../hello-cleanup hello-cleanup)
 add_subdirectory(../hello-sync hello-sync)
 add_subdirectory(../hello-isolated-threads hello-isolated-threads)
 add_subdirectory(../sample-resource-server sample-resource-server)
+# IMPORTANT: This must be the last subdirectory imported, as it depends on variables from previous subdirs!
+add_subdirectory(../sel4test-tests sel4test-tests) 
+
 
 include(cpio)
 set(cpio_files "")

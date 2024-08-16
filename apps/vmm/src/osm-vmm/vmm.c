@@ -18,6 +18,7 @@
 #include <gpivmm/smoldtb.h>
 #include <gpivmm/linux.h>
 #include <gpivmm/virq.h>
+#include <cpio/cpio.h>
 
 /* (XXX) Linh: This is meant for the fault handler thread to store its own CPTRs */
 typedef struct _vmon_fault_context
@@ -27,15 +28,20 @@ typedef struct _vmon_fault_context
     vm_context_t *guests[MAX_GUEST_COUNT]; ///< List of guests managed by the VMM
 } vmon_fault_context_t;
 
-/* Data for the guest's kernel image. */
-extern char _guest_kernel_image[];
-extern char _guest_kernel_image_end[];
-/* Data for the device tree to be passed to the kernel. */
-extern char _guest_dtb_image[];
-extern char _guest_dtb_image_end[];
-/* Data for the initial RAM disk to be passed to the kernel. */
-extern char _guest_initrd_image[];
-extern char _guest_initrd_image_end[];
+/* Uncomment to use the assembly-embedded kernel images */
+// /* Data for the guest's kernel image. */
+// extern char _guest_kernel_image[];
+// extern char _guest_kernel_image_end[];
+// /* Data for the device tree to be passed to the kernel. */
+// extern char _guest_dtb_image[];
+// extern char _guest_dtb_image_end[];
+// /* Data for the initial RAM disk to be passed to the kernel. */
+// extern char _guest_initrd_image[];
+// extern char _guest_initrd_image_end[];
+
+/* guest images are stored here */
+extern char _cpio_archive[];
+extern char _cpio_archive_end[];
 
 static vmon_context_t vmon_ctxt;             /* main VMM thread's CPTRs */
 static vmon_fault_context_t vmon_fault_ctxt; /* fault VMM thread's CPTRs */
@@ -218,21 +224,27 @@ uint32_t osm_new_guest(void)
 #endif // BOARD_qemu_arm_virt
     GOTO_IF_COND(guest_ram_curr_vspace == NULL, "Failed to reserve region for guest RAM in current ADS\n");
 
-    size_t kernel_size = _guest_kernel_image_end - _guest_kernel_image;
-    size_t dtb_size = _guest_dtb_image_end - _guest_dtb_image;
-    size_t initrd_size = _guest_initrd_image_end - _guest_initrd_image;
+    uint64_t kernel_size = 0;
+    uint64_t cpio_len = _cpio_archive_end - _cpio_archive;
+    const void *guest_kernel_image = cpio_get_file(_cpio_archive, cpio_len, "linux", &kernel_size);
+
+    uint64_t dtb_size = 0;
+    const void *guest_dtb_image = cpio_get_file(_cpio_archive, cpio_len, "linux.dtb", &dtb_size);
+
+    uint64_t initrd_size = 0;
+    const void *guest_initrd_image = cpio_get_file(_cpio_archive, cpio_len, "rootfs.cpio.gz", &initrd_size);
 
     uintptr_t guest_dtb_curr_vspace = (uintptr_t)guest_ram_curr_vspace + ((uintptr_t)GUEST_DTB_VADDR - (uintptr_t)GUEST_RAM_VADDR);
     uintptr_t guest_initrd_curr_vspace = (uintptr_t)guest_ram_curr_vspace + ((uintptr_t)GUEST_INIT_RAM_DISK_VADDR - (uintptr_t)GUEST_RAM_VADDR);
     VMM_PRINT("guest ram: %p, dtb: %lx initrd: %lx\n", guest_ram_curr_vspace, guest_dtb_curr_vspace, guest_initrd_curr_vspace);
 
     uintptr_t kernel_pc_curr_vspace = linux_setup_images((uintptr_t)guest_ram_curr_vspace,
-                                                         (uintptr_t)_guest_kernel_image,
+                                                         (uintptr_t)guest_kernel_image,
                                                          kernel_size,
-                                                         (uintptr_t)_guest_dtb_image,
+                                                         (uintptr_t)guest_dtb_image,
                                                          (uintptr_t)guest_dtb_curr_vspace,
                                                          dtb_size,
-                                                         (uintptr_t)_guest_initrd_image,
+                                                         (uintptr_t)guest_initrd_image,
                                                          (uintptr_t)guest_initrd_curr_vspace,
                                                          initrd_size);
 

@@ -477,7 +477,6 @@ static void handle_read_vcpu_req(seL4_Word sender_badge, CpuReadVcpuMessage *msg
 
     cpu_read_vcpu_regs(&cpu_data->cpu, (vcpu_regs_t *)reply_msg->msg.read_vcpu.reg_buf);
     reply_msg->msg.read_vcpu.reg_buf_count = SEL4_VCPU_REG_COUNT;
-    CPRINTF("%u\n", SEL4_VCPU_REG_COUNT);
 
 err_goto:
     reply_msg->which_msg = CpuReturnMessage_read_vcpu_tag;

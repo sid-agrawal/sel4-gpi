@@ -27,6 +27,7 @@
 #include <gpivmm/vgic/vgic.h>
 #include <sel4gpi/pd_utils.h>
 #include <sel4gpi/vcpu.h>
+#include <cpio/cpio.h>
 
 // @ivanv: ideally we would have none of these hardcoded values
 // initrd, ram size come from the DTB
@@ -35,15 +36,20 @@
 // e.g one DTB for VMM one, one DTB for VMM two. we should be able to hide all
 // of this in the build system to avoid doing any run-time DTB stuff.
 
-/* Data for the guest's kernel image. */
-extern char _guest_kernel_image[];
-extern char _guest_kernel_image_end[];
-/* Data for the device tree to be passed to the kernel. */
-extern char _guest_dtb_image[];
-extern char _guest_dtb_image_end[];
-/* Data for the initial RAM disk to be passed to the kernel. */
-extern char _guest_initrd_image[];
-extern char _guest_initrd_image_end[];
+/* Uncomment to use the assembly-embedded kernel images */
+// /* Data for the guest's kernel image. */
+// extern char _guest_kernel_image[];
+// extern char _guest_kernel_image_end[];
+// /* Data for the device tree to be passed to the kernel. */
+// extern char _guest_dtb_image[];
+// extern char _guest_dtb_image_end[];
+// /* Data for the initial RAM disk to be passed to the kernel. */
+// extern char _guest_initrd_image[];
+// extern char _guest_initrd_image_end[];
+
+/* guest images are stored here */
+extern char _cpio_archive[];
+extern char _cpio_archive_end[];
 
 static vmon_context_t vmon_ctxt;
 
@@ -416,23 +422,29 @@ uint32_t sel4test_new_guest(void)
     void *guest_ram_curr_vspace = vspace_map_pages(vspace, ram_frames_in_vmm, NULL, seL4_ReadWrite, guest_ram_pages, seL4_LargePageBits, 1);
     ZF_LOGF_IF(guest_ram_curr_vspace == NULL, "Failed to map guest RAM to VMM's vspace");
 
-    size_t kernel_size = _guest_kernel_image_end - _guest_kernel_image;
-    // memcpy((char *)(guest_ram_curr_vspace + 0x1000000), (char *)_guest_kernel_image, kernel_size);
+    uint64_t kernel_size = 0;
+    uint64_t cpio_len = _cpio_archive_end - _cpio_archive;
+    const void *guest_kernel_image = cpio_get_file(_cpio_archive, cpio_len, "linux", &kernel_size);
 
-    size_t dtb_size = _guest_dtb_image_end - _guest_dtb_image;
-    size_t initrd_size = _guest_initrd_image_end - _guest_initrd_image;
+    uint64_t dtb_size = 0;
+    const void *guest_dtb_image = cpio_get_file(_cpio_archive, cpio_len, "linux.dtb", &dtb_size);
+
+    uint64_t initrd_size = 0;
+    const void *guest_initrd_image = cpio_get_file(_cpio_archive, cpio_len, "rootfs.cpio.gz", &initrd_size);
+
+    // memcpy((char *)(guest_ram_curr_vspace + 0x1000000), (char *)_guest_kernel_image, kernel_size);
 
     uintptr_t guest_dtb_curr_vspace = (uintptr_t)guest_ram_curr_vspace + ((uintptr_t)GUEST_DTB_VADDR - (uintptr_t)GUEST_RAM_VADDR);
     uintptr_t guest_initrd_curr_vspace = (uintptr_t)guest_ram_curr_vspace + ((uintptr_t)GUEST_INIT_RAM_DISK_VADDR - (uintptr_t)GUEST_RAM_VADDR);
     VMM_PRINT("guest ram: %p, dtb: %lx, initrd: %lx\n", guest_ram_curr_vspace, guest_dtb_curr_vspace, guest_initrd_curr_vspace);
 
     uintptr_t kernel_pc_curr_vspace = linux_setup_images((uintptr_t)guest_ram_curr_vspace,
-                                                         (uintptr_t)_guest_kernel_image,
+                                                         (uintptr_t)guest_kernel_image,
                                                          kernel_size,
-                                                         (uintptr_t)_guest_dtb_image,
+                                                         (uintptr_t)guest_dtb_image,
                                                          (uintptr_t)guest_dtb_curr_vspace,
                                                          dtb_size,
-                                                         (uintptr_t)_guest_initrd_image,
+                                                         (uintptr_t)guest_initrd_image,
                                                          (uintptr_t)guest_initrd_curr_vspace,
                                                          initrd_size);
 
@@ -451,13 +463,8 @@ uint32_t sel4test_new_guest(void)
     regs.x0 = (seL4_Word)GUEST_DTB_VADDR;
     regs.spsr = 0x5; // PMODE_EL1h
     regs.pc = (seL4_Word)GUEST_RAM_VADDR;
-    /* Write out all the TCB registers */
-    seL4_Error s_err = seL4_TCB_WriteRegisters(
-        vm->tcb.cptr,
-        true, // We'll explcitly start the guest below rather than in this call
-        0,    // No flags
-        4,    // Writing to x0, pc, and spsr
-        &regs);
+    // Writing to x0, pc, and spsr
+    seL4_Error s_err = seL4_TCB_WriteRegisters(vm->tcb.cptr, true, 0, 4, &regs);
 
     GOTO_IF_COND(s_err != seL4_NoError, "Failed to start guest\n");
 

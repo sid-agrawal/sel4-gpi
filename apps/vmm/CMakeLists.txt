@@ -17,11 +17,12 @@ elseif(GPIVMMImplementation STREQUAL "osm-vmm")
     set(VMMImplDef "OSM_VMM")
 endif()
 
-
 if(KernelPlatform STREQUAL "qemu-arm-virt")
     set(KernelPlatVMM "qemu_arm_virt")
+    set(KernelPlatVMM "qemu_arm_virt" PARENT_SCOPE) # to allow sel4test-tests to access this var
 elseif(KernelPlatform STREQUAL "odroidc4")
     set(KernelPlatVMM "${KernelPlatform}")
+    set(KernelPlatVMM "${KernelPlatform}" PARENT_SCOPE) # to allow sel4test-tests to access this var
 endif()
 
 find_program(DTC_TOOL dtc)
@@ -35,6 +36,9 @@ set(
 
 set(
     VmDTBPath "${CMAKE_CURRENT_BINARY_DIR}/linux.dtb"
+)
+set(
+    VmDTBPath "${CMAKE_CURRENT_BINARY_DIR}/linux.dtb" PARENT_SCOPE # to allow sel4test-tests to access this var
 )
 
 # Compile DTS to DTB
@@ -58,25 +62,26 @@ file(
         src/arch/${KernelSel4Arch}/vgic/*.c
 )
 
-string(CONCAT package_guest_image_defs
-    "GUEST_KERNEL_IMAGE_PATH=\"${CMAKE_CURRENT_SOURCE_DIR}/board/${KernelPlatVMM}/linux\"\;"
-    "GUEST_DTB_IMAGE_PATH=\"${VmDTBPath}\"\;"
-    "GUEST_INITRD_IMAGE_PATH=\"${CMAKE_CURRENT_SOURCE_DIR}/board/${KernelPlatVMM}/rootfs.cpio.gz\"\;"
-)
+# Uncomment to use the assembly-embedded kernel images
+# string(CONCAT package_guest_image_defs
+#     "GUEST_KERNEL_IMAGE_PATH=\"${CMAKE_CURRENT_SOURCE_DIR}/board/${KernelPlatVMM}/linux\"\;"
+#     "GUEST_DTB_IMAGE_PATH=\"${VmDTBPath}\"\;"
+#     "GUEST_INITRD_IMAGE_PATH=\"${CMAKE_CURRENT_SOURCE_DIR}/board/${KernelPlatVMM}/rootfs.cpio.gz\"\;"
+# )
 
-set_source_files_properties(
-    tools/package_guest_images.S
-    PROPERTIES
-    COMPILE_OPTIONS "-x;assembler-with-cpp;"
-    COMPILE_DEFINITIONS ${package_guest_image_defs}
-)
+# set_source_files_properties(
+#     tools/package_guest_images.S
+#     PROPERTIES
+#     COMPILE_OPTIONS "-x;assembler-with-cpp;"
+#     COMPILE_DEFINITIONS ${package_guest_image_defs}
+# )
 
 list(
     APPEND
     deps
     ${VmDTSPath}
     tools/package_guest_images.S
-    ${CMAKE_CURRENT_SOURCE_DIR}/board/${KernelPlatVMM}/bootimg.bin
+    ${CMAKE_CURRENT_SOURCE_DIR}/board/${KernelPlatVMM}/hellokernel.bin
 )
 
 # add_link_options("-fuse-ld=lld")
