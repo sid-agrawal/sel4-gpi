@@ -27,6 +27,8 @@
 #include <sel4runtime.h>
 #include "test_shared.h"
 
+#include <sample_client.h>
+
 #define TEST_LOG(msg, ...)                                  \
     do                                                      \
     {                                                       \
@@ -109,3 +111,49 @@ int test_pd_dump(env_t env)
 }
 
 DEFINE_TEST_OSM(GPIPD002, "Test PD dump", test_pd_dump, true)
+
+int test_sample_resource_server(env_t env)
+{
+    int error;
+    printf("------------------STARTING: %s------------------\n", __func__);
+    
+    // Start the sample server
+    pd_client_context_t sample_server_pd;
+    gpi_space_id_t sample_space_id;
+    error = start_sample_server_proc(&sample_server_pd, &sample_space_id);
+    test_assert(error == 0);
+
+    // Find the RDE
+    seL4_CPtr sample_server_ep = sel4gpi_get_rde(sel4gpi_get_resource_type_code(SAMPLE_RESOURCE_TYPE_NAME));
+
+    // Allocate a sample resource
+    sample_client_context_t conn;
+    error = sample_client_alloc(sample_server_ep, &conn);
+    test_assert(error == 0);
+
+    // Invoke a sample resource
+    uint64_t x = 42; // Dummy arguments
+    uint64_t y = 24;
+    char response[40];
+    error = sample_client_invoke(&conn, x, y, response);
+    test_assert(error == 0);
+    test_assert(strcmp(response, "0x42") == 0);
+
+    // Free a sample resource
+    error = sample_client_free(&conn);
+    test_assert(error == 0);
+
+    // Check that the freed resource can't be used
+    printf("The next line should print 'Attempted to invoke a null cap'\n");
+    error = sample_client_invoke(&conn, x, y, response);
+    test_assert(error == seL4_InvalidArgument); // Should be invalid arg, since the cap is null
+
+    // Terminate the sample server
+    error = pd_client_terminate(&sample_server_pd);
+    test_assert(error == 0);
+
+    printf("------------------ENDING: %s------------------\n", __func__);
+    return sel4test_get_result();
+}
+
+DEFINE_TEST_OSM(GPIPD003, "Test starting a sample resource server", test_sample_resource_server, true)

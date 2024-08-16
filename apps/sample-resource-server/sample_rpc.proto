@@ -1,0 +1,53 @@
+syntax = "proto3";
+import 'nanopb.proto';
+
+enum SampleError {
+    NONE = 0;                    /* no error */
+    UNKNOWN = 11;                /* Manually set to the seL4_NumErrors */
+    BAD_ARG = 12;                /* invalid argument */
+    SERVER_ERR = 13;             /* internal server error */
+};
+
+message SampleAllocMessage {
+    /* No content */
+};
+
+message SampleFreeMessage {
+    /* No content */
+};
+
+message SampleInvokeMessage {
+    uint64 x = 1;
+    uint64 y = 2;
+};
+
+message SampleMessage {
+    uint64 magic = 100;
+    oneof msg {
+        SampleAllocMessage alloc = 1;
+        SampleFreeMessage free = 2;
+        SampleInvokeMessage invoke = 3;
+    };
+};
+
+
+message SampleBasicReturnMessage {
+    /* No content */
+};
+
+message SampleAllocReturnMessage {
+    uint64 dest = 1;            /* Destination CPtr of the resource in the client's CSpace */
+};
+
+message SampleInvokeReturnMessage {
+    string z = 1 [(nanopb).max_length = 40];
+};
+
+message SampleReturnMessage {
+    SampleError errorCode = 1; 
+    oneof msg {
+        SampleBasicReturnMessage basic = 2;
+        SampleAllocReturnMessage alloc = 3;
+        SampleInvokeReturnMessage invoke = 4;
+    };
+};

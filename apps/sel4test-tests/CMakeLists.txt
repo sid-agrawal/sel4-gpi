@@ -94,6 +94,7 @@ target_link_libraries(
         fs_client
         sqlite3
         kvstore_client
+        sample_client
     PRIVATE sel4test-driver_Config
 )
 
