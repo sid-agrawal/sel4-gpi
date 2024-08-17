@@ -81,6 +81,7 @@ list(
     deps
     ${VmDTSPath}
     tools/package_guest_images.S
+    ${CMAKE_CURRENT_SOURCE_DIR}/board/${KernelPlatVMM}/linux
     ${CMAKE_CURRENT_SOURCE_DIR}/board/${KernelPlatVMM}/hellokernel.bin
 )
 

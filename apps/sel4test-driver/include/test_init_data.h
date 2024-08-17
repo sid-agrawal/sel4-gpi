@@ -13,6 +13,13 @@
 
 #define TEST_PROCESS_CSPACE_SIZE_BITS 17
 
+/* QEMU, by default, only gets around 300 MB untyped */
+#ifdef CONFIG_PLAT_QEMU_ARM_VIRT
+#define SERIAL_IRQ 33
+#elif CONFIG_PLAT_ODROIDC4
+#define SERIAL_IRQ 225
+#endif
+
 /**
  * Init data shared between sel4test-driver and the sel4test-tests app -- the
  * sel4test-driver creates a shmem page to be shared between the driver and the
