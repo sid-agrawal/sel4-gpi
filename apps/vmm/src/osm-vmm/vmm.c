@@ -282,7 +282,7 @@ uint32_t osm_new_guest(const char *kernel_image)
     int argc = 0;
     uint64_t kernel_img_offset = 0;
     copy_kernel_image_fn_t cp_fn = NULL;
-    if (strcmp(kernel_image, LINUX_KERNEL_NAME) == 0)
+    if (strstr(kernel_image, "linux") != NULL)
     {
         argc = 1;
         seL4_Word dtb_arg = GUEST_DTB_VADDR;

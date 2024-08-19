@@ -38,6 +38,7 @@ include(cpio)
 set(cpio_files "")
 # New binaries in the CPIO go here.
 list(APPEND cpio_files "$<TARGET_FILE:hello_benchmark>")
+list(APPEND cpio_files "${PARENT_DIR}/vmm/board/${KernelPlatVMM}/debuglinux")
 list(APPEND cpio_files "${PARENT_DIR}/vmm/board/${KernelPlatVMM}/linux")
 list(APPEND cpio_files "${PARENT_DIR}/vmm/board/${KernelPlatVMM}/rootfs.cpio.gz")
 list(APPEND cpio_files "${PARENT_DIR}/vmm/board/${KernelPlatVMM}/hellokernel.bin")

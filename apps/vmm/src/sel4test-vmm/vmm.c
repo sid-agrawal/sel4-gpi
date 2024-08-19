@@ -28,13 +28,6 @@
 #include <sel4gpi/pd_utils.h>
 #include <sel4gpi/vcpu.h>
 
-// @ivanv: ideally we would have none of these hardcoded values
-// initrd, ram size come from the DTB
-// We can probably add a node for the DTB addr and then use that.
-// Part of the problem is that we might need multiple DTBs for the same example
-// e.g one DTB for VMM one, one DTB for VMM two. we should be able to hide all
-// of this in the build system to avoid doing any run-time DTB stuff.
-
 /* Uncomment to use the assembly-embedded kernel images */
 // /* Data for the guest's kernel image. */
 // extern char _guest_kernel_image[];
@@ -324,7 +317,7 @@ static int setup_guest_devices(vm_context_t *vm, const char *kernel_img_name,
 
     reservation_t res;
 
-    if (strcmp(kernel_img_name, LINUX_KERNEL_NAME) == 0)
+    if (strstr(kernel_img_name, LINUX_KERNEL_NAME) != NULL)
     {
         /* GIC vCPU interface region */
         VMM_PRINT("Mapping GIC interface - seL4: %x, linux: %x\n", GIC_PADDR, LINUX_GIC_PADDR);
@@ -452,7 +445,7 @@ uint32_t sel4test_new_guest(const char *kernel_image)
     copy_kernel_image_fn_t cp_fn = NULL;
     seL4_UserContext regs = {0};
 
-    if (strcmp(kernel_image, LINUX_KERNEL_NAME) == 0)
+    if (strstr(kernel_image, LINUX_KERNEL_NAME) != NULL)
     {
         cp_fn = linux_copy_kernel_image;
         regs.x0 = (seL4_Word)GUEST_DTB_VADDR;

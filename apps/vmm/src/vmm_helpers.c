@@ -24,11 +24,11 @@ err_goto:
 }
 
 uintptr_t linux_copy_kernel_image(uintptr_t guest_ram_curr_vspace,
-                                  UNUSED const char *kernel_image_name, UNUSED uint64_t offset)
+                                  const char *kernel_image_name, UNUSED uint64_t offset)
 {
     uint64_t kernel_size = 0;
     uint64_t cpio_len = _cpio_archive_end - _cpio_archive;
-    const void *guest_kernel_image = cpio_get_file(_cpio_archive, cpio_len, LINUX_KERNEL_NAME, &kernel_size);
+    const void *guest_kernel_image = cpio_get_file(_cpio_archive, cpio_len, kernel_image_name, &kernel_size);
 
     uint64_t dtb_size = 0;
     const void *guest_dtb_image = cpio_get_file(_cpio_archive, cpio_len, LINUX_DTB_NAME, &dtb_size);
