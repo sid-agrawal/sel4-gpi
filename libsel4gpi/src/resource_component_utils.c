@@ -14,7 +14,7 @@
 // Generic buffer size for RPC messages, in bytes
 // Must be larger than any RPC message in the system
 // We could use the generated Message_size constants instead, if we wanted to be more precise
-#define RPC_MSG_MAX_SIZE 512
+#define RPC_MSG_MAX_SIZE 1024
 
 static void resource_component_reply(resource_component_context_t *component, seL4_MessageInfo_t tag)
 {

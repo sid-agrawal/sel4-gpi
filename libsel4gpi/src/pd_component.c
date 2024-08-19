@@ -686,6 +686,13 @@ int pd_component_runtime_setup(pd_t *pd,
         error = cpu_set_pd_entry_regs(cpu, entry_point, init_stack, args[0]);
     }
 
+    // Increase refcount of the PD's ADS and CPU
+    error = resource_component_inc(get_ads_component(), ads->id);
+    SERVER_GOTO_IF_ERR(error, "Failed to increment refcount of PD's bound ADS\n");
+
+    error = resource_component_inc(get_cpu_component(), cpu->id);
+    SERVER_GOTO_IF_ERR(error, "Failed to increment refcount of PD's bound CPU\n");
+
 #if CONFIG_DEBUG_BUILD
     seL4_DebugNameThread(cpu->tcb.cptr, pd->name);
 #endif

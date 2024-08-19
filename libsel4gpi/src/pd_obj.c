@@ -695,13 +695,22 @@ void pd_destroy(pd_t *pd, vka_t *server_vka, vspace_t *server_vspace)
 
         // error = vka_cnode_copy(&reply_cap_path_in_rt, &reply_cap_path_in_pd, seL4_CanWrite);
         error = vka_cnode_move(&reply_cap_path_in_rt, &reply_cap_path_in_pd);
-        SERVER_GOTO_IF_ERR(error, "Failed to move reply cap (%lu) while destroying PD (%u)\n",
-                           pd->shared_data->reply_cap,
-                           pd_id);
 
-        seL4_MessageInfo_t reply_tag = seL4_MessageInfo_new(1, 0, 0, 0);
-        seL4_Send(reply_cap_path_in_rt.capPtr, reply_tag);
-        END_BENCH("send reply message to client while destroying PD");
+        if (error == seL4_FailedLookup)
+        {
+            // The reply cap was used before the shared data was updated, no error
+        }
+        else
+        {
+            printf("TEMPA error is %d\n", error);
+            SERVER_GOTO_IF_ERR(error, "Failed to move reply cap (%lu) while destroying PD (%u)\n",
+                               pd->shared_data->reply_cap,
+                               pd_id);
+
+            seL4_MessageInfo_t reply_tag = seL4_MessageInfo_new(1, 0, 0, 0);
+            seL4_Send(reply_cap_path_in_rt.capPtr, reply_tag);
+            END_BENCH("send reply message to client while destroying PD");
+        }
     }
 
     /* decrement the refcount of the PD's binded ADS and CPU */
