@@ -488,9 +488,9 @@ void osm_set_up(uintptr_t e)
     env->test_cpu = cpu;
 
     // Set the PD's core caps
-    error = pd_send_cap(pd, 0,
+    error = pd_send_cap(pd, NULL, seL4_CapNull, 0,
                         gpi_new_badge(GPICAP_TYPE_PD, 0, pd->id, get_pd_component()->space_id, pd->id),
-                        NULL, false, true);
+                        NULL, false, true, NULL);
     assert(error == 0);
 
     error = pd_set_core_cap(pd,

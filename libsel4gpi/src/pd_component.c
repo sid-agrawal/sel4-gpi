@@ -82,24 +82,23 @@ static void on_pd_registry_delete(resource_registry_node_t *node_gen, void *arg)
     BENCH_INIT(1);
     START_BENCH();
 
-    linked_list_t *lists[3] = {node->pending_model_state, node->pending_destroy, node->pending_frees};
-    PdWorkAction work_types[3] = {PdWorkAction_EXTRACT, PdWorkAction_DESTROY, PdWorkAction_FREE};
-
     pd_work_entry_t *work_res;
-    for (int i = 0; i < 3; i++)
+    for (int i = 0; i < PdWorkAction_MAX; i++)
     {
-        while (lists[i]->count > 0)
+        linked_list_t *list = node->pending_work[i];
+
+        while (list->count > 0)
         {
-            linked_list_pop_head(lists[i], (void **)&work_res);
+            linked_list_pop_head(list, (void **)&work_res);
 
             if (work_res->is_critical)
             {
-                if (work_types[i] == PdWorkAction_EXTRACT)
+                if (i == PdWorkAction_EXTRACT)
                 {
                     // (XXX) Arya: Maybe want to provide a warning here, that some model state may be lost
                     get_gpi_server()->model_extraction_n_missing--;
                 }
-                else
+                else if (i == PdWorkAction_DESTROY || i == PdWorkAction_FREE)
                 {
                     get_gpi_server()->pd_termination_n_missing--;
                 }
@@ -107,11 +106,9 @@ static void on_pd_registry_delete(resource_registry_node_t *node_gen, void *arg)
 
             free(work_res);
         }
-    }
 
-    linked_list_destroy(node->pending_destroy, false);
-    linked_list_destroy(node->pending_frees, false);
-    linked_list_destroy(node->pending_model_state, false);
+        linked_list_destroy(list, false);
+    }
 
     END_BENCH("clear pending work lists");
     BENCH_PRINT();
@@ -129,10 +126,11 @@ int pd_component_allocate(gpi_obj_id_t client_id, mo_t *init_data_mo, pd_t **ret
 
     OSDB_PRINTF("Successfully allocated a new PD %u.\n", new_entry->pd.id);
 
-    /* Initialize the registry entry */
-    new_entry->pending_destroy = linked_list_new();
-    new_entry->pending_frees = linked_list_new();
-    new_entry->pending_model_state = linked_list_new();
+    /* Initialize the registries */
+    for (int i = 0; i < PdWorkAction_MAX; i++)
+    {
+        new_entry->pending_work[i] = linked_list_new();
+    }
 
     *ret_pd = &new_entry->pd;
 
@@ -292,17 +290,24 @@ err_goto:
 }
 
 static void handle_send_cap_req(seL4_Word sender_badge, PdSendCapMessage *msg, PdReturnMessage *reply_msg,
-                                seL4_CPtr received_cap)
+                                seL4_CPtr received_cap, bool *should_reply)
 {
     OSDB_PRINTF("Got send-cap request from client badge %lx.\n", sender_badge);
     int error = 0;
+
+    gpi_obj_id_t client_id = get_client_id_from_badge(sender_badge);
+    gpi_obj_id_t target_id = get_object_id_from_badge(sender_badge);
 
     /* This only works if the extra cap is a GPI core cap (badged version of GPI server EP) */
     OSDB_PRINT_VERBOSE("received_cap: %lu (badge: %lx)\n", received_cap, seL4_GetBadge(0));
 
     /* Find the client */
-    pd_component_registry_entry_t *client_data = pd_component_registry_get_entry_by_badge(sender_badge);
-    SERVER_GOTO_IF_COND(client_data == NULL, "Couldn't find PD (%u)\n", get_object_id_from_badge(sender_badge));
+    pd_component_registry_entry_t *client_data = pd_component_registry_get_entry_by_id(client_id);
+    SERVER_GOTO_IF_COND(client_data == NULL, "Couldn't find PD (%u)\n", client_id);
+
+    /* Find the target */
+    pd_component_registry_entry_t *target_data = pd_component_registry_get_entry_by_id(target_id);
+    SERVER_GOTO_IF_COND(target_data == NULL, "Couldn't find PD (%u)\n", target_id);
 
     /* Get the cap to send */
     seL4_Word received_caps_badge = seL4_GetBadge(0);
@@ -310,12 +315,30 @@ static void handle_send_cap_req(seL4_Word sender_badge, PdSendCapMessage *msg, P
 
     /* Send the cap to the target */
     seL4_CPtr slot;
-    error = pd_send_cap(&client_data->pd,
+    bool requires_async_work = false;
+    error = pd_send_cap(&target_data->pd,
+                        &client_data->pd,
+                        msg->slot,
                         received_cap,
                         received_caps_badge,
                         &slot,
                         true,
-                        is_core_cap);
+                        is_core_cap,
+                        &requires_async_work);
+
+    if (requires_async_work && error == 0)
+    {
+        // Wait for the resource server to complete the work before replying
+        get_gpi_server()->pending_send_resource = true;
+
+        cspacepath_t reply_path;
+        vka_cspace_alloc_path(get_pd_component()->server_vka, &reply_path);
+        seL4_CNode_SaveCaller(reply_path.root, reply_path.capPtr, reply_path.capDepth);
+        get_gpi_server()->send_resource_reply = reply_path.capPtr;
+
+        *should_reply = false;
+        return;
+    }
 
     reply_msg->msg.send_cap.slot = slot;
 
@@ -781,26 +804,24 @@ static void handle_get_work_req(seL4_Word sender_badge, PdGetWorkMessage *msg, P
     reply_msg->msg.work.n_critical = 0;
     int n_object_ids = sizeof(reply_msg->msg.work.object_ids) / sizeof(reply_msg->msg.work.object_ids[0]);
 
-    // Order gives the priority of different types of work
-    linked_list_t *lists[3] = {pd_data->pending_model_state, pd_data->pending_destroy, pd_data->pending_frees};
-    PdWorkAction work_types[3] = {PdWorkAction_EXTRACT, PdWorkAction_DESTROY, PdWorkAction_FREE};
-
-    for (int i = 0; i < 3; i++)
+    // Order of pd pending work types gives the priority of different types of work
+    for (int i = 0; i < PdWorkAction_MAX; i++)
     {
         pd_work_entry_t *work_res;
+        linked_list_t *list = pd_data->pending_work[i];
 
         // Check if the list has any content
-        if (lists[i]->count > 0)
+        if (list->count > 0)
         {
-            reply_msg->msg.work.action = work_types[i];
-            int n_work = MIN(n_object_ids, lists[i]->count);
+            reply_msg->msg.work.action = i;
+            int n_work = MIN(n_object_ids, list->count);
             reply_msg->msg.work.object_ids_count = n_work;
             reply_msg->msg.work.pd_ids_count = n_work;
             reply_msg->msg.work.space_ids_count = n_work;
 
             for (int j = 0; j < n_work; j++)
             {
-                linked_list_pop_head(lists[i], (void **)&work_res);
+                linked_list_pop_head(list, (void **)&work_res);
                 assert(work_res != NULL);
                 reply_msg->msg.work.space_ids[j] = work_res->res_id.space_id;
                 reply_msg->msg.work.object_ids[j] = work_res->res_id.object_id;
@@ -908,48 +929,81 @@ static void handle_finish_work_req(seL4_Word sender_badge, PdFinishWorkMessage *
     OSDB_PRINTF("Got a 'finish work' message from: ");
     BADGE_PRINT(sender_badge);
 
-    if (!get_gpi_server()->pending_termination)
-    {
-        // Nothing to do, but all is well
-        goto err_goto;
-    }
-
     // (XXX) Arya: doesn't do any authentication, or check if the work is what we expected
 
-    // Update the pending termination counter
-    if (msg->n_critical > get_gpi_server()->pd_termination_n_missing)
+    switch (msg->work_type)
     {
-        OSDB_PRINTWARN("Got 'finished work request' for %d critical components, expecting %d\n", msg->n_critical,
-                       get_gpi_server()->pd_termination_n_missing);
-        get_gpi_server()->pd_termination_n_missing = 0;
-    }
-    else
-    {
-        get_gpi_server()->pd_termination_n_missing -= msg->n_critical;
-    }
+    case PdWorkAction_FREE:
+    case PdWorkAction_DESTROY:
+        if (!get_gpi_server()->pending_termination)
+        {
+            // Nothing to do, but all is well
+            goto err_goto;
+        }
 
-    /* Check if the cleanup is finished */
-    if (get_gpi_server()->pd_termination_n_missing == 0)
-    {
-        OSDB_PRINTF("Current PD cleanup is finished\n");
+        // Update the pending termination counter
+        if (msg->n_critical > get_gpi_server()->pd_termination_n_missing)
+        {
+            OSDB_PRINTWARN("Got 'finished work request' for %d critical components, expecting %d\n", msg->n_critical,
+                           get_gpi_server()->pd_termination_n_missing);
+            get_gpi_server()->pd_termination_n_missing = 0;
+        }
+        else
+        {
+            get_gpi_server()->pd_termination_n_missing -= msg->n_critical;
+        }
 
-        get_gpi_server()->pending_termination = false;
+        /* Check if the cleanup is finished */
+        if (get_gpi_server()->pd_termination_n_missing == 0)
+        {
+            OSDB_PRINTF("Current PD cleanup is finished\n");
 
-        // Reply to the PD that requested the termination
+            get_gpi_server()->pending_termination = false;
+
+            // Reply to the PD that requested the termination
+            PdReturnMessage return_msg = {
+                .which_msg = PdReturnMessage_basic_tag,
+                .errorCode = PdComponentError_NONE};
+
+            seL4_MessageInfo_t return_tag;
+            sel4gpi_rpc_reply(&get_pd_component()->rpc_env, (void *)&return_msg, &return_tag);
+            seL4_Send(get_gpi_server()->pd_termination_reply, return_tag);
+
+            // Free the reply cap's slot
+            vka_cspace_free(get_pd_component()->server_vka, get_gpi_server()->pd_termination_reply);
+        }
+        else
+        {
+            OSDB_PRINTF("Current PD cleanup is still missing %u pieces\n", get_gpi_server()->pd_termination_n_missing);
+        }
+
+        break;
+    case PdWorkAction_SEND:
+        OSDB_PRINTF("Current resource send is finished\n");
+
+        if (!get_gpi_server()->pending_send_resource)
+        {
+            // Nothing to do, but all is well
+            goto err_goto;
+        }
+
+        get_gpi_server()->pending_send_resource = false;
+
+        // Reply to the PD that requested to send the resource
         PdReturnMessage return_msg = {
             .which_msg = PdReturnMessage_basic_tag,
             .errorCode = PdComponentError_NONE};
 
         seL4_MessageInfo_t return_tag;
         sel4gpi_rpc_reply(&get_pd_component()->rpc_env, (void *)&return_msg, &return_tag);
-        seL4_Send(get_gpi_server()->pd_termination_reply, return_tag);
+        seL4_Send(get_gpi_server()->send_resource_reply, return_tag);
 
         // Free the reply cap's slot
-        vka_cspace_free(get_pd_component()->server_vka, get_gpi_server()->pd_termination_reply);
-    }
-    else
-    {
-        OSDB_PRINTF("Current PD cleanup is still missing %u pieces\n", get_gpi_server()->pd_termination_n_missing);
+        vka_cspace_free(get_pd_component()->server_vka, get_gpi_server()->send_resource_reply);
+
+        break;
+    default:
+        SERVER_GOTO_IF_COND(1, "Invalid work type in finish_work_req\n");
     }
 
 err_goto:
@@ -1037,7 +1091,7 @@ static void pd_component_handle(void *msg_p,
             handle_clear_slot_req(sender_badge, &msg->msg.clear_slot, reply_msg);
             break;
         case PdMessage_send_cap_tag:
-            handle_send_cap_req(sender_badge, &msg->msg.send_cap, reply_msg, received_cap);
+            handle_send_cap_req(sender_badge, &msg->msg.send_cap, reply_msg, received_cap, should_reply);
             *need_new_recv_cap = true;
             break;
         case PdMessage_dump_tag:
@@ -1321,7 +1375,7 @@ void pd_component_queue_model_extraction_work(pd_component_registry_entry_t *pd_
     assert(work != NULL);
 
     // Add to the list
-    linked_list_insert(pd_entry->pending_model_state, (void *)work);
+    linked_list_insert(pd_entry->pending_work[PdWorkAction_EXTRACT], (void *)work);
     get_gpi_server()->model_extraction_n_missing++;
 
     // Notify the PD
@@ -1343,7 +1397,7 @@ void pd_component_queue_destroy_work(pd_component_registry_entry_t *pd_entry, pd
     }
 
     // Add to the list
-    linked_list_insert(pd_entry->pending_destroy, (void *)work);
+    linked_list_insert(pd_entry->pending_work[PdWorkAction_DESTROY], (void *)work);
 
     // Notify the PD
     seL4_Signal(pd_entry->pd.badged_notification);
@@ -1364,7 +1418,18 @@ void pd_component_queue_free_work(pd_component_registry_entry_t *pd_entry, pd_wo
     }
 
     // Add to the list
-    linked_list_insert(pd_entry->pending_frees, (void *)work);
+    linked_list_insert(pd_entry->pending_work[PdWorkAction_FREE], (void *)work);
+
+    // Notify the PD
+    seL4_Signal(pd_entry->pd.badged_notification);
+}
+
+void pd_component_queue_notify_send_work(pd_component_registry_entry_t *pd_entry, pd_work_entry_t *work)
+{
+    assert(work != NULL);
+
+    // Add to the list
+    linked_list_insert(pd_entry->pending_work[PdWorkAction_SEND], (void *)work);
 
     // Notify the PD
     seL4_Signal(pd_entry->pd.badged_notification);

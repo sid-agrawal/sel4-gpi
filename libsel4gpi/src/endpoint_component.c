@@ -232,18 +232,23 @@ static void handle_badge_req(seL4_Word sender_badge, EpBadgeMessage *msg, EpRetu
 
     int error = 0;
 
+    // Find the endpoint
     ep_component_registry_entry_t *ep_data = (ep_component_registry_entry_t *)
         resource_component_registry_get_by_badge(get_ep_component(), sender_badge);
     SERVER_GOTO_IF_COND(ep_data == NULL, "Cannot find EP data\n");
 
+    // Find the destination PD
     pd_component_registry_entry_t *dest_pd_data = pd_component_registry_get_entry_by_badge(seL4_GetBadge(0));
     SERVER_GOTO_IF_COND(dest_pd_data == NULL, "Couldn't find target PD (%u)\n",
                         get_object_id_from_badge(seL4_GetBadge(0)));
 
+    // Send the tracked endpoint handle
     seL4_CPtr tracked_ep_slot;
-    error = pd_send_cap(&dest_pd_data->pd, seL4_CapNull, sender_badge, &tracked_ep_slot, true, msg->is_core_cap);
+    error = pd_send_cap(&dest_pd_data->pd, NULL, seL4_CapNull, seL4_CapNull, sender_badge,
+                        &tracked_ep_slot, true, msg->is_core_cap, NULL);
     SERVER_GOTO_IF_COND(error, "Failed to send tracked EP handle to PD (%u)\n", dest_pd_data->pd.id);
 
+    // Send the actual endpoint, with new badge
     cspacepath_t dest = {0};
     error = resource_component_transfer_cap(get_ep_component()->server_vka,
                                             dest_pd_data->pd.pd_vka,

@@ -277,7 +277,7 @@ void ramdisk_request_handler(
             CHECK_ERROR_GOTO(error, "Failed to attach MO", error, done);
 
             get_ramdisk_server()->shared_mem[client_id] = mo_vaddr;
-            
+
             // No need to clear the cap, it will be cleared by the utils after the call
 
             // RAMDISK_PRINTF("Can access vaddr %p, val 0x%x\n", mo_vaddr, *((int *)mo_vaddr));
@@ -413,7 +413,7 @@ int ramdisk_work_handler(PdWorkReturnMessage *work)
             free_block(blockno);
         }
 
-        error = pd_client_finish_work(&get_ramdisk_server()->gen.pd_conn, work->object_ids_count, work->n_critical);
+        error = pd_client_finish_work(&get_ramdisk_server()->gen.pd_conn, work);
     }
     else if (op == PdWorkAction_DESTROY)
     {
@@ -453,7 +453,13 @@ int ramdisk_work_handler(PdWorkReturnMessage *work)
             }
         }
 
-        error = pd_client_finish_work(&get_ramdisk_server()->gen.pd_conn, work->object_ids_count, work->n_critical);
+        error = pd_client_finish_work(&get_ramdisk_server()->gen.pd_conn, work);
+    }
+    else if (op == PdWorkAction_SEND)
+    {
+        // Ramdisk does not track refcount or support block sharing at the moment
+        CHECK_ERROR_GOTO(1, "Ramdisk does not support sending resource to another PD\n",
+                         RamdiskError_UNKNOWN, err_goto);
     }
     else
     {

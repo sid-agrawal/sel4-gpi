@@ -49,14 +49,8 @@ typedef struct _pd_component_registry_entry
 {
     resource_registry_node_t gen;
     pd_t pd;
-
-    /* Pending Work */
-    linked_list_t *pending_frees;       ///< List of pd_work_entry_t for resources to free from a resource space
-                                        ///< that this PD manages
-    linked_list_t *pending_destroy;     ///< List of pd_work_entry_t for resources to destroy from a resource space
-                                        ///< that this PD manages
-    linked_list_t *pending_model_state; ///< List of pd_work_entry_t for resources for which we need the model
-                                        ///< state from this PD
+    linked_list_t *pending_work[PdWorkAction_MAX]; ///< Lists of pending work
+                                                   ///< Indices are the PdWorkAction enum
 } pd_component_registry_entry_t;
 
 /**
@@ -177,6 +171,15 @@ void pd_component_queue_free_work(pd_component_registry_entry_t *pd_entry, pd_wo
  * @param work the details of the work
  */
 void pd_component_queue_destroy_work(pd_component_registry_entry_t *pd_entry, pd_work_entry_t *work);
+
+/**
+ * Queue a notification for a resource server that one of its resources has been shared with another PD
+ * The resource server may need to increment a reference count
+ *
+ * @param pd_entry the target PD
+ * @param work the details of the work
+ */
+void pd_component_queue_notify_send_work(pd_component_registry_entry_t *pd_entry, pd_work_entry_t *work);
 
 /**
  * Allocate a PD from the root task

@@ -340,6 +340,8 @@ int sample_work_handler(PdWorkReturnMessage *work)
 
             assert(space_id == get_sample_server()->gen.default_space.id);
 
+            SAMPLE_PRINTF("Free resource %u\n", object_id);
+
             // Find the resource from the registry
             sample_resource_registry_entry_t *node = (sample_resource_registry_entry_t *)
                 resource_registry_get_by_id(&get_sample_server()->registry, object_id);
@@ -350,7 +352,7 @@ int sample_work_handler(PdWorkReturnMessage *work)
         }
 
         // Notify the resource server that the work is done
-        error = pd_client_finish_work(&get_sample_server()->gen.pd_conn, work->object_ids_count, work->n_critical);
+        error = pd_client_finish_work(&get_sample_server()->gen.pd_conn, work);
     }
     else if (op == PdWorkAction_DESTROY)
     {
@@ -362,15 +364,42 @@ int sample_work_handler(PdWorkReturnMessage *work)
             assert(space_id == get_sample_server()->gen.default_space.id);
             assert(object_id == BADGE_OBJ_ID_NULL); // Only resource spaces should be destroyed
 
+            SAMPLE_PRINTF("Destroy resource space %u\n", space_id);
+
             /* INSERT HERE space cleanup */
         }
 
         // Notify the resource server that the work is done
-        error = pd_client_finish_work(&get_sample_server()->gen.pd_conn, work->object_ids_count, work->n_critical);
+        error = pd_client_finish_work(&get_sample_server()->gen.pd_conn, work);
+    }
+    else if (op == PdWorkAction_SEND)
+    {
+        for (int i = 0; i < work->object_ids_count; i++)
+        {
+            gpi_space_id_t space_id = work->space_ids[i];
+            gpi_obj_id_t object_id = work->object_ids[i];
+
+            assert(space_id == get_sample_server()->gen.default_space.id);
+
+            SAMPLE_PRINTF("Increase refcount of resource %u\n", object_id);
+
+            // Find the resource from the registry
+            sample_resource_registry_entry_t *node = (sample_resource_registry_entry_t *)
+                resource_registry_get_by_id(&get_sample_server()->registry, object_id);
+            CHECK_ERROR_GOTO(node == NULL, "couldn't find resource in registry", SampleError_SERVER_ERR, err_goto);
+
+            // Increase refcount
+            resource_registry_inc(&get_sample_server()->registry, (resource_registry_node_t *)node);
+
+            /* INSERT HERE any more metadata tracking, if necessary */
+        }
+
+        // Notify the resource server that the work is done
+        error = pd_client_finish_work(&get_sample_server()->gen.pd_conn, work);
     }
     else
     {
-        SAMPLE_PRINTF("Unknown work action\n");
+        SAMPLE_PRINTF("Warning: Unknown work action %d\n", op);
         error = 1;
     }
 

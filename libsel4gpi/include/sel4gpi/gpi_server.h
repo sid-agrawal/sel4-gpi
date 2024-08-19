@@ -50,8 +50,8 @@
 
 #else
 #define BENCH_INIT(n) \
-    do               \
-    {                \
+    do                \
+    {                 \
     } while (0)
 #define BENCH_POINT(msg) \
     do                   \
@@ -157,6 +157,10 @@ typedef struct _gpi_server_context
     bool pending_termination;       ///< True if a PD termination is currently in progress
     seL4_CPtr pd_termination_reply; ///< The reply cap for the pending pd termination
     int pd_termination_n_missing;   ///< Number of missing replies before cleanup is complete
+
+    /* Track a pending remote resource send */
+    bool pending_send_resource;    ///< True if sending a non-core resource is currently in progress
+    seL4_CPtr send_resource_reply; ///< The reply cap for the pending resource send
 
     gpi_obj_id_t test_proc_id; ///< Use this to warn if we try to clean up the test process
 

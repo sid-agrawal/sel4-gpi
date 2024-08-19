@@ -116,6 +116,7 @@ static int send_cap_req(pd_client_context_t *conn, seL4_CPtr cap_to_send, seL4_C
         .which_msg = PdMessage_send_cap_tag,
         .msg.send_cap = {
             .is_core_cap = is_core,
+            .slot = cap_to_send,
         }};
 
     PdReturnMessage ret_msg = {0};
@@ -361,7 +362,7 @@ int pd_client_send_subgraph(pd_client_context_t *conn, mo_client_context_t *mo_c
     return error;
 }
 
-int pd_client_finish_work(pd_client_context_t *conn, int n_requests, int n_critical)
+int pd_client_finish_work(pd_client_context_t *conn, PdWorkReturnMessage *work)
 {
     OSDB_PRINTF("Sending 'finish work' request to PD component\n");
 
@@ -371,8 +372,9 @@ int pd_client_finish_work(pd_client_context_t *conn, int n_requests, int n_criti
         .magic = PD_RPC_MAGIC,
         .which_msg = PdMessage_finish_work_tag,
         .msg.finish_work = {
-            .n_requests = n_requests,
-            .n_critical = n_critical,
+            .n_requests = work->object_ids_count,
+            .n_critical = work->n_critical,
+            .work_type = work->action,
         }};
 
     PdReturnMessage ret_msg = {0};

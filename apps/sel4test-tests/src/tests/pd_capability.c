@@ -155,5 +155,45 @@ int test_sample_resource_server(env_t env)
     printf("------------------ENDING: %s------------------\n", __func__);
     return sel4test_get_result();
 }
-
 DEFINE_TEST_OSM(GPIPD003, "Test starting a sample resource server", test_sample_resource_server, true)
+
+int test_send_resource(env_t env)
+{
+    int error;
+    printf("------------------STARTING: %s------------------\n", __func__);
+    
+    // Start the sample server
+    pd_client_context_t sample_server_pd;
+    gpi_space_id_t sample_space_id;
+    error = start_sample_server_proc(&sample_server_pd, &sample_space_id);
+    test_assert(error == 0);
+
+    // Find the RDE
+    seL4_CPtr sample_server_ep = sel4gpi_get_rde(sel4gpi_get_resource_type_code(SAMPLE_RESOURCE_TYPE_NAME));
+
+    // Allocate a sample resource
+    sample_client_context_t sample_res;
+    error = sample_client_alloc(sample_server_ep, &sample_res);
+    test_assert(error == 0);
+
+    // Allocate a core resource
+    mo_client_context_t mo;
+    error = mo_component_client_connect(sel4gpi_get_rde(GPICAP_TYPE_MO), 1, MO_PAGE_BITS, &mo);
+    test_assert(error == 0);
+
+    // Send the core resource
+    error = pd_client_send_cap(&sample_server_pd, mo.ep, NULL);
+    test_assert(error == 0);
+
+    // Send the non-core resource
+    error = pd_client_send_cap(&sample_server_pd, sample_res.ep, NULL);
+    test_assert(error == 0);
+
+    // Terminate the sample server
+    error = pd_client_terminate(&sample_server_pd);
+    test_assert(error == 0);
+
+    printf("------------------ENDING: %s------------------\n", __func__);
+    return sel4test_get_result();
+}
+DEFINE_TEST_OSM(GPIPD004, "Test sending resources to a PD", test_send_resource, true)

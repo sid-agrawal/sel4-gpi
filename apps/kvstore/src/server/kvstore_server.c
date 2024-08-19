@@ -327,7 +327,7 @@ static int kvstore_work_handler(PdWorkReturnMessage *work)
             resource_registry_dec(&get_kvstore_server()->kvstore_registry, node);
         }
 
-        error = pd_client_finish_work(&get_kvstore_server()->gen.pd_conn, work->object_ids_count, work->n_critical);
+        error = pd_client_finish_work(&get_kvstore_server()->gen.pd_conn, work);
     }
     else if (op == PdWorkAction_DESTROY)
     {
@@ -371,7 +371,7 @@ static int kvstore_work_handler(PdWorkReturnMessage *work)
             }
         }
 
-        error = pd_client_finish_work(&get_kvstore_server()->gen.pd_conn, work->object_ids_count, work->n_critical);
+        error = pd_client_finish_work(&get_kvstore_server()->gen.pd_conn, work);
     }
     else
     {

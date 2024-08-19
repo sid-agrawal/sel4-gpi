@@ -84,10 +84,18 @@ int test_fs(env_t env)
     int nbytes = write(f, TEST_STR_1, strlen(TEST_STR_1) + 1);
     test_assert(nbytes == strlen(TEST_STR_1) + 1);
 
-    error = close(f);
+    // Test sending a file resource
+    seL4_CPtr file_cap;
+    error = xv6fs_client_get_file(f, &file_cap);
+    test_assert(error == 0);
+
+    error = pd_client_send_cap(&fs_pd, file_cap, NULL);
     test_assert(error == 0);
 
     // Test file close
+    error = close(f);
+    test_assert(error == 0);
+
     nbytes = write(f, TEST_STR_1, strlen(TEST_STR_1) + 1);
     test_assert(nbytes == -1); // write should fail on closed file
 
@@ -239,11 +247,10 @@ int test_fs(env_t env)
     error = xv6fs_client_set_namespace(ns_id);
     test_assert(error == 0);
 
-    seL4_CPtr file;
-    error = xv6fs_client_get_file(f, &file);
+    error = xv6fs_client_get_file(f, &file_cap);
     test_assert(error == 0);
 
-    error = xv6fs_client_link_file(file, TEST_FNAME_3);
+    error = xv6fs_client_link_file(file_cap, TEST_FNAME_3);
     test_assert(error == 0);
 
     error = close(f);

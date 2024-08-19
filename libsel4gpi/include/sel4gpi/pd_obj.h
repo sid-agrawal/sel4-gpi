@@ -184,19 +184,27 @@ int pd_dump(pd_t *pd, model_state_t *ms);
  * only one of `cap` or `badge` needs to be provided
  *
  * @param pd the target PD
+ * @param pd the source PD - can be NULL only if sending a CORE capability type
+ * @param slot slot of the cap to send in the client PD - can be seL4_CapNull only if sending a CORE capability type
  * @param cap the cap to send, if badge is also provided, it will take precedence
  * @param the badge of the cap to send, if cap is also provided, it will be ignored
  * @param[out] slot returns the slot of the cap in the target PD, (optional)
  * @param inc_refcount if true, increments the refcount of the corresponding resource
  * @param update_core_res the cap being sent is a core PD resource,
  *                        and should be set in its OSmosis data
+ * @param pending_work returns true if this operation will require a resource server to complete pending work
+ *                     - can be NULL only if sending a CORE capability type
+ * @return 0 on success, error on failure
  */
-int pd_send_cap(pd_t *pd,
+int pd_send_cap(pd_t *to_pd,
+                pd_t *from_pd,
+                seL4_CPtr from_slot,
                 seL4_CPtr cap,
                 seL4_Word badge,
                 seL4_Word *slot,
                 bool inc_refcount,
-                bool update_core_res);
+                bool update_core_res,
+                bool *pending_work);
 
 /**
  * @brief Allocate a free slot from the PD's cspace

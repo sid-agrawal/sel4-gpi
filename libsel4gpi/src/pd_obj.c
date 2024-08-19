@@ -918,19 +918,41 @@ err_goto:
     return 1;
 }
 
+/**
+ * Find the hold node corresponding to a slot in the PD's cspace
+ * (XXX) No efficient way to search for this, unless if we add another key
+ *
+ * @param pd the target PD
+ * @param cptr the slot to search for
+ */
+static pd_hold_node_t *pd_find_hold_node_by_cptr(pd_t *pd, seL4_CPtr cptr)
+{
+    for (pd_hold_node_t *current_cap = (pd_hold_node_t *)pd->hold_registry.head; current_cap != NULL; current_cap = (pd_hold_node_t *)current_cap->gen.hh.next)
+    {
+        if (current_cap->slot_in_PD_Debug == cptr)
+        {
+            return current_cap;
+        }
+    }
+
+    return NULL;
+}
+
 int pd_send_cap(pd_t *to_pd,
+                pd_t *from_pd,
+                seL4_CPtr from_slot,
                 seL4_CPtr cap,
                 seL4_Word badge,
-                seL4_CPtr *slot,
+                seL4_Word *slot,
                 bool inc_refcount,
-                bool update_core_cap)
+                bool update_core_cap,
+                bool *pending_work)
 {
     int error = 0;
-    SERVER_GOTO_IF_COND(badge == 0 && cap == 0, "Both badge and cap to send are NULL\n");
+    SERVER_GOTO_IF_COND(badge == 0 && cap == 0 && slot == 0, "Both badge and cap to send are NULL\n");
 
     gpi_cap_t cap_type = get_cap_type_from_badge(badge);
-    vka_t *server_vka;
-    seL4_CPtr server_src_cap;
+    seL4_CPtr src_cap;
     bool should_mint = true;
 
     OSDB_PRINTF("Sending %s cap to PD %u, with badge: ", cap_type_to_str(cap_type), to_pd->id);
@@ -939,8 +961,7 @@ int pd_send_cap(pd_t *to_pd,
     switch (cap_type)
     {
     case GPICAP_TYPE_ADS:
-        server_vka = get_ads_component()->server_vka;
-        server_src_cap = get_ads_component()->server_ep;
+        src_cap = get_ads_component()->server_ep;
 
         // Copying the resource, so increase the reference count
         if (inc_refcount)
@@ -949,8 +970,7 @@ int pd_send_cap(pd_t *to_pd,
         }
         break;
     case GPICAP_TYPE_MO:
-        server_vka = get_mo_component()->server_vka;
-        server_src_cap = get_mo_component()->server_ep;
+        src_cap = get_mo_component()->server_ep;
 
         // Copying the resource, so increase the reference count
         if (inc_refcount)
@@ -959,8 +979,7 @@ int pd_send_cap(pd_t *to_pd,
         }
         break;
     case GPICAP_TYPE_CPU:
-        server_vka = get_cpu_component()->server_vka;
-        server_src_cap = get_cpu_component()->server_ep;
+        src_cap = get_cpu_component()->server_ep;
 
         // Copying the resource, so increase the reference count
         if (inc_refcount)
@@ -969,8 +988,7 @@ int pd_send_cap(pd_t *to_pd,
         }
         break;
     case GPICAP_TYPE_PD:
-        server_vka = get_pd_component()->server_vka;
-        server_src_cap = get_pd_component()->server_ep;
+        src_cap = get_pd_component()->server_ep;
 
         // Copying the resource, so increase the reference count
         if (inc_refcount)
@@ -979,8 +997,7 @@ int pd_send_cap(pd_t *to_pd,
         }
         break;
     case GPICAP_TYPE_EP:
-        server_vka = get_ep_component()->server_vka;
-        server_src_cap = get_ep_component()->server_ep;
+        src_cap = get_ep_component()->server_ep;
 
         // Copying the resource, so increase the reference count
         if (inc_refcount)
@@ -989,8 +1006,43 @@ int pd_send_cap(pd_t *to_pd,
         }
         break;
     default:
-        // (XXX) Linh: No implementation for sending non-RT resources to other PDs yet
-        should_mint = false;
+        // Try to find the hold node for this cap
+        pd_hold_node_t *current_cap = pd_find_hold_node_by_cptr(from_pd, from_slot);
+
+        if (current_cap != NULL)
+        {
+            // Check if there is already a pending send
+            if (get_gpi_server()->pending_send_resource) {
+                return PdComponentError_OPERATION_IN_PROGRESS;
+            }
+
+            // Find the resource manager
+            resspc_component_registry_entry_t *space_entry = resource_space_get_entry_by_id(current_cap->res_id.space_id);
+            SERVER_GOTO_IF_COND(space_entry == NULL, "Couldn't find resource space (%u)\n", current_cap->res_id.space_id);
+
+            pd_component_registry_entry_t *server_data = pd_component_registry_get_entry_by_id(space_entry->space.pd_id);
+            SERVER_GOTO_IF_COND(server_data == NULL, "Couldn't find PD (%u)\n", space_entry->space.pd_id);
+
+            // Queue the "notify send" operation for the resource manager
+            pd_work_entry_t *work_entry = calloc(1, sizeof(pd_work_entry_t));
+            SERVER_GOTO_IF_COND(work_entry == NULL, "Failed to allocate work entry node\n");
+            work_entry->res_id = current_cap->res_id;
+            work_entry->client_pd_id = to_pd->id;
+
+            OSDB_PRINTF("Queue work: notify resource server (%u) that resource " RES_ID_PRINTF " is sent to PD (%u).\n",
+                        server_data->pd.id, RES_ID_PRINT_ARGS(current_cap->res_id), to_pd->id);
+            pd_component_queue_notify_send_work(server_data, work_entry);
+
+            // Track the pending operation
+            *pending_work = true;
+
+            src_cap = space_entry->space.server_ep;
+        }
+        else
+        {
+            should_mint = false;
+        }
+
         break;
     }
 
@@ -999,7 +1051,7 @@ int pd_send_cap(pd_t *to_pd,
         gpi_res_id_t res_id = make_res_id(cap_type, get_space_id_from_badge(badge),
                                           get_object_id_from_badge(badge));
         seL4_CPtr new_cap;
-        error = pd_badge_and_add_resource(to_pd, res_id, server_src_cap, &new_cap);
+        error = pd_badge_and_add_resource(to_pd, res_id, src_cap, &new_cap);
 
         SERVER_GOTO_IF_COND(new_cap == seL4_CapNull, "Failed to mint a new resource to PD\n");
 

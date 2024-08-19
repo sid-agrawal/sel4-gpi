@@ -909,7 +909,7 @@ int xv6fs_work_handler(PdWorkReturnMessage *work)
       }
     }
 
-    error = pd_client_finish_work(&get_xv6fs_server()->gen.pd_conn, work->object_ids_count, work->n_critical);
+    error = pd_client_finish_work(&get_xv6fs_server()->gen.pd_conn, work);
   }
   else if (op == PdWorkAction_DESTROY)
   {
@@ -977,7 +977,29 @@ int xv6fs_work_handler(PdWorkReturnMessage *work)
       }
     }
 
-    error = pd_client_finish_work(&get_xv6fs_server()->gen.pd_conn, work->object_ids_count, work->n_critical);
+    error = pd_client_finish_work(&get_xv6fs_server()->gen.pd_conn, work);
+  }
+  else if (op == PdWorkAction_SEND)
+  {
+    for (int i = 0; i < work->object_ids_count; i++)
+    {
+      gpi_space_id_t space_id = work->space_ids[i];
+      gpi_obj_id_t object_id = work->object_ids[i];
+
+      XV6FS_PRINTF("Increase refcount of file %u\n", object_id);
+
+      // Find the resource from the registry
+      file_registry_entry_t *reg_entry = (file_registry_entry_t *)resource_registry_get_by_id(
+          &get_xv6fs_server()->file_registry,
+          object_id);
+      CHECK_ERROR_GOTO(reg_entry == NULL, "couldn't find resource in registry", FsError_UNKNOWN, err_goto);
+
+      // Increment the refcount
+      resource_registry_inc(&get_xv6fs_server()->file_registry, (resource_registry_node_t *)reg_entry);
+    }
+
+    // Notify the resource server that the work is done
+    error = pd_client_finish_work(&get_xv6fs_server()->gen.pd_conn, work);
   }
   else
   {

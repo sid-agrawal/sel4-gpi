@@ -211,16 +211,13 @@ int pd_client_get_work(pd_client_context_t *conn, PdWorkReturnMessage *work);
 int pd_client_send_subgraph(pd_client_context_t *conn, mo_client_context_t *mo_conn, bool has_data, int n_requests);
 
 /**
- * @brief For a resource server to send as a response to pd_client_get_work of 
- * type PdWorkAction_FREE / PdWorkAction_DESTROY
+ * @brief For a resource server to send as a response to pd_client_get_work
  *
  * @param conn the resource server's pd connection
- * @param n_requests the number of requests that the PD is fulfilling
- * @param n_critical the number of requests that the PD is fulfilling, and are critical to some
- *                   pending global operation
+ * @param work the work request being finished
  * @return 0 on success, error otherwise
  */
-int pd_client_finish_work(pd_client_context_t *conn, int n_requests, int n_critical);
+int pd_client_finish_work(pd_client_context_t *conn, PdWorkReturnMessage *work);
 
 /** OTHER FUNCTIONS FOR ACTIVE PDs **/
 

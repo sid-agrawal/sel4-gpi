@@ -8,10 +8,12 @@ enum PdComponentError {
 }
 
 enum PdWorkAction {
-    NO_WORK = 0;        /* there is no work to be done */
-    EXTRACT = 1;        /* work action to extract model state */
-    FREE = 2;           /* work action to free a resource */
-    DESTROY = 3;        /* work action to destroy a resource / space */
+    EXTRACT = 0;        /* extract model state */
+    SEND = 1;           /* a resource is sent to another PD */
+    FREE = 2;           /* free a resource */
+    DESTROY = 3;        /* destroy a resource / space */
+    MAX = 4;            /* number of types of work */
+    NO_WORK = 5;        /* there is no work to be done */
 };
 
 message PdAllocMessage {
@@ -36,6 +38,7 @@ message PdClearSlotMessage {
 
 message PdSendCapMessage {
     bool is_core_cap = 1;       /* true if the cap is a core cap (PD's own PD, ADS, or CPU) */
+    uint64 slot = 2;            /* slot of the cap in the sender's cspace */
 };
 
 message PdDumpMessage {
@@ -97,8 +100,9 @@ message PdSetNameMessage {
 }
 
 message PdFinishWorkMessage {
-    uint32 n_requests = 1;        /* the number of requests fulfilled by this message */
-    uint32 n_critical = 2;        /* the number of critical requests fulfilled by this message */
+    PdWorkAction work_type = 1;   /* type of work fulfilled */
+    uint32 n_requests = 2;        /* the number of requests fulfilled by this message */
+    uint32 n_critical = 3;        /* the number of critical requests fulfilled by this message */
 };
 
 message PdLinkChildMessage {
