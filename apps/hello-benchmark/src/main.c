@@ -53,13 +53,13 @@ int main(int argc, char **argv)
 
     // Wait for message from parent to time IPC
     seL4_Word sender;
-    tag = seL4_Recv(ep, &sender);
+    tag = sel4gpi_recv(ep, &sender);
     tag = seL4_MessageInfo_new(0, 0, 0, 1);
     seL4_SetMR(0, BM_IPC);
-    seL4_Reply(tag);
+    sel4gpi_reply(tag);
 
     // Block this PD so it does not exit
-    seL4_Recv(ep, &sender);
+    sel4gpi_recv(ep, &sender);
 
     printf("ERROR: hello_benchmark should not have gotten here");
 

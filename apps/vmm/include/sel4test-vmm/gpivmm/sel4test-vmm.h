@@ -42,6 +42,9 @@ typedef struct _vmon_context
     vka_object_t vm_fault_ep;
     uint32_t guest_id_counter; ///< the next free VM ID
     vm_context_t *guests[MAX_GUEST_COUNT];
+#if CONFIG_KERNEL_MCS
+    vka_object_t reply;
+#endif
 } vmon_context_t;
 
 /**

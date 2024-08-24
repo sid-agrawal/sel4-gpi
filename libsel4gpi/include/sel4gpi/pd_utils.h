@@ -228,3 +228,27 @@ int sel4gpi_copy_data_to_mo(void *vaddr, size_t size_bytes, mo_client_context_t 
  * @param range byte range to dump
  */
 void debug_print_mem_at(void *start_addr, uint32_t range);
+
+/**
+ * seL4_Recv wrapper to be used by gpi apps
+ * This does not support MCS kernel, but allows compilation of MCS kernel
+ */
+seL4_MessageInfo_t sel4gpi_recv(seL4_CPtr src, seL4_Word *sender);
+
+/**
+ * seL4_Reply wrapper to be used by gpi apps
+ * This does not support MCS kernel, but allows compilation of MCS kernel
+ */
+int sel4gpi_reply(seL4_MessageInfo_t tag);
+
+/**
+ * seL4_ReplyRecv wrapper to be used by gpi apps
+ * This does not support MCS kernel, but allows compilation of MCS kernel
+ */
+int sel4gpi_reply_recv(seL4_MessageInfo_t tag);
+
+/**
+ * seL4_CNode_SaveCaller wrapper to be used by gpi apps
+ * This does not support MCS kernel, but allows compilation of MCS kernel
+ */
+int sel4gpi_save_caller(seL4_CPtr root, seL4_CPtr slot, uint64_t depth);

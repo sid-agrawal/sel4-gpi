@@ -313,7 +313,7 @@ int test_ads_stack_isolated_stack_die(env_t env)
     seL4_MessageInfo_t tag;
     tag = seL4_MessageInfo_new(0, 0, 0, 0);
 
-    tag = seL4_Recv(ep_for_thread.cptr, NULL);
+    tag = sel4gpi_recv(ep_for_thread.cptr, NULL);
     assert(seL4_MessageInfo_get_length(tag) == 1);
     uint64_t *other_thread_stack = (uintptr_t *)seL4_GetMR(0);
     OSDB_PRINTF(ADS_DEBUG, "root-task: \t Writing to Other thread's stack: %p\n", other_thread_stack);
@@ -324,13 +324,13 @@ int test_ads_stack_isolated_stack_die(env_t env)
     /* modify the message */
     seL4_Word main_thread_stack = 5;
     seL4_SetMR(0, (seL4_Word)start);
-    seL4_ReplyRecv(ep_for_thread.cptr, tag, NULL);
+    sel4gpi_replyRecv(ep_for_thread.cptr, tag, NULL);
     printf("------------------- Phase 2 : %s -------------------\n", __func__);
 
     while (1)
     {
         //  printf("main responding to other thread\n");
-        seL4_ReplyRecv(ep_for_thread.cptr, tag, NULL);
+        sel4gpi_replyRecv(ep_for_thread.cptr, tag, NULL);
     }
     printf("------------------- ENDING : %s -------------------\n", __func__);
 

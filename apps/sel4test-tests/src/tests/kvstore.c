@@ -185,7 +185,7 @@ int test_kvstore_lib_in_same_pd(env_t env)
 
     /* Wait for test result */
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0, 0);
-    tag = seL4_Recv(self_ep.raw_endpoint, NULL);
+    tag = sel4gpi_recv(self_ep.raw_endpoint, NULL);
     error = seL4_MessageInfo_get_label(tag);
     test_assert(error == 0);
 
@@ -224,7 +224,7 @@ int test_kvstore_lib_in_diff_pd(env_t env)
 
     /* Wait for test result */
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0, 0);
-    tag = seL4_Recv(self_ep.raw_endpoint, NULL);
+    tag = sel4gpi_recv(self_ep.raw_endpoint, NULL);
     error = seL4_MessageInfo_get_label(tag);
     test_assert(error == 0);
 
@@ -275,7 +275,7 @@ int test_kvstore_diff_namespace(env_t env)
 
     /* Wait for test result */
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0, 0);
-    tag = seL4_Recv(self_ep.raw_endpoint, NULL);
+    tag = sel4gpi_recv(self_ep.raw_endpoint, NULL);
     error = seL4_MessageInfo_get_label(tag);
     test_assert(error == 0);
 
@@ -320,7 +320,7 @@ int test_kvstore_diff_fs(env_t env)
 
     /* Wait for test result */
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0, 0);
-    tag = seL4_Recv(self_ep.raw_endpoint, NULL);
+    tag = sel4gpi_recv(self_ep.raw_endpoint, NULL);
     error = seL4_MessageInfo_get_label(tag);
     test_assert(error == 0);
 
@@ -355,7 +355,7 @@ int test_kvstore_lib_same_pd_diff_ads(env_t env)
 
     /* Wait for test result */
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0, 0);
-    tag = seL4_Recv(self_ep.raw_endpoint, NULL);
+    tag = sel4gpi_recv(self_ep.raw_endpoint, NULL);
     error = seL4_MessageInfo_get_label(tag);
     test_assert(error == 0);
 
@@ -388,7 +388,7 @@ int test_kvstore_diff_threads(env_t env)
 
     /* Wait for test result */
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0, 0);
-    tag = seL4_Recv(self_ep.raw_endpoint, NULL);
+    tag = sel4gpi_recv(self_ep.raw_endpoint, NULL);
     error = seL4_MessageInfo_get_label(tag);
     test_assert(error == 0);
 
@@ -435,14 +435,14 @@ int test_kvstore_two_sets(env_t env)
 
     /* Wait for test result 1 */
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0, 0);
-    tag = seL4_Recv(self_ep.raw_endpoint, NULL);
+    tag = sel4gpi_recv(self_ep.raw_endpoint, NULL);
     error = seL4_MessageInfo_get_label(tag);
     test_assert(error == 0);
 
     test_error_eq(remove_RDEs(), 0);
 
     /* Wait for test result 2 */
-    tag = seL4_Recv(self_ep.raw_endpoint, NULL);
+    tag = sel4gpi_recv(self_ep.raw_endpoint, NULL);
     error = seL4_MessageInfo_get_label(tag);
     test_assert(error == 0);
 
@@ -494,7 +494,7 @@ int test_kvstore_lib_in_diff_pd_crash(env_t env)
 
     /* Wait for test result */
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0, 0);
-    tag = seL4_Recv(self_ep.raw_endpoint, NULL);
+    tag = sel4gpi_recv(self_ep.raw_endpoint, NULL);
     error = seL4_MessageInfo_get_label(tag);
     test_assert(error == 0);
 

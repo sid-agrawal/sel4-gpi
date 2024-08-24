@@ -66,6 +66,15 @@ int cpu_config_vspace(cpu_t *cpu,
     cpu->ipc_buf_addr = ipc_buf_addr;
     cpu->ipc_frame_cap = ipc_buffer_frame;
 
+#if CONFIG_KERNEL_MCS
+    error = seL4_TCB_Configure(cpu->tcb.cptr,
+                               root_cnode, // root cnode
+                               cnode_guard,
+                               vspace_root,
+                               0,
+                               (seL4_Word)ipc_buf_addr,
+                               ipc_buffer_frame);
+#else
     error = seL4_TCB_Configure(cpu->tcb.cptr,
                                fault_ep,   // fault endpoint
                                root_cnode, // root cnode
@@ -74,6 +83,7 @@ int cpu_config_vspace(cpu_t *cpu,
                                0, // domain
                                (seL4_Word)ipc_buf_addr,
                                ipc_buffer_frame);
+#endif
     SERVER_GOTO_IF_ERR(error, "Failed to configure TCB\n");
 
     error = seL4_TCB_SetPriority(cpu->tcb.cptr, seL4_CapInitThreadTCB, prio);
@@ -91,14 +101,24 @@ int cpu_change_vspace(cpu_t *cpu,
     seL4_CPtr vspace_root = vspace->get_root(vspace); // root page table
     SERVER_GOTO_IF_COND(vspace_root == seL4_CapNull, "Couldn't find root page table\n");
 
+#if CONFIG_KERNEL_MCS
     error = seL4_TCB_Configure(cpu->tcb.cptr,
-                               cpu->fault_ep, // fault endpoint
                                cpu->cspace,   // root cnode
                                cpu->cspace_guard,
                                vspace_root,
                                0, // domain
                                (seL4_Word)cpu->ipc_buf_addr,
                                cpu->ipc_frame_cap);
+#else
+    error = seL4_TCB_Configure(cpu->tcb.cptr,
+                            cpu->fault_ep, // fault endpoint
+                            cpu->cspace,   // root cnode
+                            cpu->cspace_guard,
+                            vspace_root,
+                            0, // domain
+                            (seL4_Word)cpu->ipc_buf_addr,
+                            cpu->ipc_frame_cap);
+#endif
 
 err_goto:
     return error;

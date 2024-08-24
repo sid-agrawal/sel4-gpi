@@ -115,7 +115,7 @@ static void handle_fault(int argc, char **argv)
     uint32_t vm_id = 0;
     while (1)
     {
-        info = seL4_Recv(vmon_fault_ctxt.vm_fault_ep.raw_endpoint, &badge);
+        info = sel4gpi_recv(vmon_fault_ctxt.vm_fault_ep.raw_endpoint, &badge);
         if (FAULT_BADGE_FLAG & badge)
         {
             vm_id = (uint32_t)(badge & ~FAULT_BADGE_FLAG);

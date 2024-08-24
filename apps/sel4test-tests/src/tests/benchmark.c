@@ -261,7 +261,7 @@ static int benchmark_pd_spawn_sel4utils(env_t env, sel4utils_process_t *sel4util
     test_error_eq(error, 0);
 
     // The PD will send the time that it spawned
-    seL4_MessageInfo_t tag = seL4_Recv(hello_ep.cptr, NULL);
+    seL4_MessageInfo_t tag = sel4gpi_recv(hello_ep.cptr, NULL);
     seL4_Word bench_type = seL4_GetMR(0);
     test_assert(bench_type == BM_PD_CREATE);
     seL4_Word pd_create_end_time = seL4_GetMR(1);
@@ -318,7 +318,7 @@ static int benchmark_pd_spawn_osm(pd_client_context_t *pd, seL4_CPtr *ep)
     test_error_eq(error, 0);
 
     // The PD will send the time that it spawned
-    seL4_MessageInfo_t tag = seL4_Recv(hello_ep.raw_endpoint, NULL);
+    seL4_MessageInfo_t tag = sel4gpi_recv(hello_ep.raw_endpoint, NULL);
     seL4_Word bench_type = seL4_GetMR(0);
     test_assert(bench_type == BM_PD_CREATE);
     seL4_Word pd_create_end_time = seL4_GetMR(1);
@@ -694,8 +694,13 @@ static int benchmark_cpu_bind_sel4utils(env_t env, vka_object_t *tcb,
 
     // Bind cpu
     SEL4BENCH_READ_CCNT(cpu_bind_start);
+#if CONFIG_KERNEL_MCS
+    error = seL4_TCB_Configure(tcb->cptr, cspace_root,
+                               0, vspace_root, 0, (seL4_Word)ipc_buf_vaddr, ipc_buf_frame);
+#else
     error = seL4_TCB_Configure(tcb->cptr, fault_ep_dest.capPtr, cspace_root,
                                0, vspace_root, 0, (seL4_Word)ipc_buf_vaddr, ipc_buf_frame);
+#endif
     SEL4BENCH_READ_CCNT(cpu_bind_end);
     test_error_eq(error, 0);
 
@@ -1135,14 +1140,14 @@ static int internal_benchmark_cleanup_toy_servers(env_t env, hello_cleanup_mode_
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0, 0);
     for (int i = 0; i < 4; i++)
     {
-        tag = seL4_Recv(self_ep.raw_endpoint, NULL);
+        tag = sel4gpi_recv(self_ep.raw_endpoint, NULL);
         error = seL4_MessageInfo_get_label(tag);
         test_assert(error == 0);
     }
 
     /* Crash a PD */
     ccnt_t start, end;
-    
+
     BENCH_UTILS_RECORD_NANO();
     if (server_to_crash == HELLO_CLEANUP_TOY_BLOCK_SERVER_MODE)
     {
@@ -1282,7 +1287,7 @@ static int internal_benchmark_cleanup(env_t env, cleanup_scenario_server_t serve
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0, 0);
     for (int i = 0; i < 1; i++)
     {
-        tag = seL4_Recv(self_ep.raw_endpoint, NULL);
+        tag = sel4gpi_recv(self_ep.raw_endpoint, NULL);
         error = seL4_MessageInfo_get_label(tag);
         test_assert(error == 0);
     }

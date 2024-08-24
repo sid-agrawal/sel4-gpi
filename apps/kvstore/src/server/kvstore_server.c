@@ -451,7 +451,7 @@ int kvstore_server_start_thread(seL4_CPtr *kvstore_ep)
 
     /* wait for te thread to start */
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0, 0);
-    tag = seL4_Recv(ep_conn.raw_endpoint, NULL);
+    tag = sel4gpi_recv(ep_conn.raw_endpoint, NULL);
     error = seL4_MessageInfo_get_label(tag);
     CHECK_ERR_GOTO(error, "kvstore thread setup failed", KvstoreError_UNKNOWN);
 

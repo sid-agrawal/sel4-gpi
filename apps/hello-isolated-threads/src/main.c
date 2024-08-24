@@ -98,7 +98,7 @@ int main(int argc, char **argv)
     test_assert(error == 0);
 
     /* wait for thread to complete */
-    seL4_MessageInfo_t info = seL4_Recv(cfg->fault_ep.raw_endpoint, NULL);
+    seL4_MessageInfo_t info = sel4gpi_recv(cfg->fault_ep.raw_endpoint, NULL);
     if (seL4_MessageInfo_get_label(info))
     {
         sel4utils_print_fault_message(info, "isolated_thread fault");

@@ -152,7 +152,7 @@ void sel4gpi_store_reply_cap(void)
     int error;
 
     // Save the reply cap in a previously-allocated slot
-    error = seL4_CNode_SaveCaller(
+    error = sel4gpi_save_caller(
         PD_CAP_ROOT,
         reply_cap_slot,
         PD_CAP_DEPTH);
@@ -330,4 +330,28 @@ int sel4gpi_copy_data_to_mo(void *vaddr, size_t size_bytes, mo_client_context_t 
     return 0;
 err_goto:
     return error;
+}
+
+seL4_MessageInfo_t sel4gpi_recv(seL4_CPtr src, seL4_Word *sender) {
+#if CONFIG_KERNEL_MCS
+    assert(!"Shouldn't call sel4gpi_recv with MCS kernel.\n");
+#else
+    return seL4_Recv(src, sender);
+#endif
+}
+
+int sel4gpi_reply(seL4_MessageInfo_t tag) {
+#if CONFIG_KERNEL_MCS
+    assert(!"Shouldn't call sel4gpi_reply with MCS kernel.\n");
+#else
+    return sel4gpi_reply(tag);
+#endif
+}
+
+int sel4gpi_save_caller(seL4_CPtr root, seL4_CPtr slot, uint64_t depth) {
+#if CONFIG_KERNEL_MCS
+    assert(!"Shouldn't call sel4gpi_save_caller with MCS kernel.\n");
+#else
+    return seL4_CNode_SaveCaller(root, slot, depth);
+#endif
 }

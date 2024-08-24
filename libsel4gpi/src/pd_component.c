@@ -39,6 +39,7 @@
 #include <sel4gpi/endpoint_component.h>
 #include <sel4gpi/gpi_rpc.h>
 #include <pd_component_rpc.pb.h>
+#include <sel4gpi/pd_utils.h>
 
 // Defined for utility printing macros
 #define DEBUG_ID PD_DEBUG
@@ -217,7 +218,7 @@ static void handle_terminate_req(seL4_Word sender_badge, PdTerminateMessage *msg
 
         cspacepath_t reply_path;
         vka_cspace_alloc_path(get_pd_component()->server_vka, &reply_path);
-        seL4_CNode_SaveCaller(reply_path.root, reply_path.capPtr, reply_path.capDepth);
+        sel4gpi_save_caller(reply_path.root, reply_path.capPtr, reply_path.capDepth);
         get_gpi_server()->pd_termination_reply = reply_path.capPtr;
 
         *should_reply = false;
@@ -333,7 +334,7 @@ static void handle_send_cap_req(seL4_Word sender_badge, PdSendCapMessage *msg, P
 
         cspacepath_t reply_path;
         vka_cspace_alloc_path(get_pd_component()->server_vka, &reply_path);
-        seL4_CNode_SaveCaller(reply_path.root, reply_path.capPtr, reply_path.capDepth);
+        sel4gpi_save_caller(reply_path.root, reply_path.capPtr, reply_path.capDepth);
         get_gpi_server()->send_resource_reply = reply_path.capPtr;
 
         *should_reply = false;
@@ -379,7 +380,7 @@ static void handle_dump_cap_req(seL4_Word sender_badge, PdDumpMessage *msg,
 
         cspacepath_t reply_path;
         vka_cspace_alloc_path(get_pd_component()->server_vka, &reply_path);
-        seL4_CNode_SaveCaller(reply_path.root, reply_path.capPtr, reply_path.capDepth);
+        sel4gpi_save_caller(reply_path.root, reply_path.capPtr, reply_path.capDepth);
         get_gpi_server()->model_extraction_reply = reply_path.capPtr;
 
         *should_reply = false;

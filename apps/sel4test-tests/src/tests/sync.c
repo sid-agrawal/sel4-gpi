@@ -184,11 +184,11 @@ int test_mutex(env_t env)
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0, 0);
 
     // First to finish
-    tag = seL4_Recv(self_ep.raw_endpoint, NULL);
+    tag = sel4gpi_recv(self_ep.raw_endpoint, NULL);
     int error1 = seL4_MessageInfo_get_label(tag);
 
     // Second to finish
-    tag = seL4_Recv(self_ep.raw_endpoint, NULL);
+    tag = sel4gpi_recv(self_ep.raw_endpoint, NULL);
     int error2 = seL4_MessageInfo_get_label(tag);
 
     // Print model state

@@ -108,7 +108,12 @@ static void handle_fault(void)
     uint32_t vm_id = 0;
     while (1)
     {
+#if CONFIG_KERNEL_MCS
+        info = seL4_Recv(vmon_ctxt.vm_fault_ep.cptr, &badge, vmon_ctxt.reply.cptr);
+#else
         info = seL4_Recv(vmon_ctxt.vm_fault_ep.cptr, &badge);
+#endif
+
         if (FAULT_BADGE_FLAG & badge)
         {
             vm_id = (uint32_t)(badge & ~FAULT_BADGE_FLAG);
@@ -213,6 +218,11 @@ int sel4test_vmm_init(seL4_IRQHandler irq_handler,
     vmon_ctxt.tcb = tcb;
     vmon_ctxt.guest_id_counter = 1;
 
+#if CONFIG_KERNEL_MCS
+    error = vka_alloc_reply(vka, &vmon_ctxt.reply);
+    GOTO_IF_ERR(error, "Failed to alloc reply for vmm\n");
+#endif
+
     error = vmm_init_virq(GUEST_VCPU_ID, &serial_ack);
     GOTO_IF_ERR(error, "Failed to initialize VIRQ controller\n");
 
@@ -302,11 +312,24 @@ static int setup_guest_devices(vm_context_t *vm, const char *kernel_img_name,
     void *ipc_buf = vspace_new_ipc_buffer(&vm->vspace, &ipc_buf_frame);
     GOTO_IF_COND(ipc_buf_frame == seL4_CapNull || ipc_buf == NULL, "Failed to allocate and/or map IPC buffer\n");
 
+#if CONFIG_KERNEL_MCS
+    error = seL4_TCB_Configure(vm->tcb.cptr, vm->cspace.cptr, cnode_guard, vm->vspace_root.cptr,
+                               0, (seL4_Word)ipc_buf, ipc_buf_frame);
+#else
     error = seL4_TCB_Configure(vm->tcb.cptr, vm->fault_ep, vm->cspace.cptr, cnode_guard, vm->vspace_root.cptr,
                                0, (seL4_Word)ipc_buf, ipc_buf_frame);
+#endif
     GOTO_IF_ERR(error, "Failed to configure TCB, seL4_Error: %d\n", error);
 
+#if CONFIG_KERNEL_MCS
+    error = vka_alloc_sched_context(vka, &vm->sched_ctxt);
+    GOTO_IF_ERR(error, "Failed to set allocate scheduling context, seL4_Error: %d\n", error);
+
+    error = seL4_TCB_SetSchedParams(vm->tcb.cptr, simple_get_tcb(vmon_ctxt.simple), seL4_MaxPrio - 1,
+                                    seL4_MaxPrio - 1, vm->sched_ctxt.cptr, vm->fault_ep);
+#else
     error = seL4_TCB_SetSchedParams(vm->tcb.cptr, simple_get_tcb(vmon_ctxt.simple), seL4_MaxPrio - 1, seL4_MaxPrio - 1);
+#endif
     GOTO_IF_ERR(error, "Failed to set TCB priority, seL4_Error: %d\n", error);
 
 #ifdef CONFIG_DEBUG_BUILD

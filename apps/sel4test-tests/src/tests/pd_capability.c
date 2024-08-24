@@ -60,7 +60,7 @@ int test_new_process_osmosis_shmem(env_t env)
     test_error_eq(error, 0);
 
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0, 0);
-    seL4_Recv(ep_conn.raw_endpoint, NULL);
+    sel4gpi_recv(ep_conn.raw_endpoint, NULL);
 
     pd_client_context_t self_pd = sel4gpi_get_pd_conn();
 
@@ -77,7 +77,8 @@ int test_new_process_osmosis_shmem(env_t env)
 
     seL4_SetMR(0, slot);
     tag = seL4_MessageInfo_new(0, 0, 0, 1);
-    seL4_ReplyRecv(ep_conn.raw_endpoint, tag, NULL);
+    sel4gpi_reply(tag);
+    sel4gpi_recv(ep_conn.raw_endpoint, NULL);
 
     sel4gpi_config_destroy(proc_cfg);
 

@@ -141,7 +141,7 @@ int test_threads_isolated_stack(env_t env)
     test_error_eq(error, 0);
 
     /* wait for PD to notify completion */
-    seL4_Recv(cfg->fault_ep.raw_endpoint, NULL);
+    sel4gpi_recv(cfg->fault_ep.raw_endpoint, NULL);
     printf("exiting %s\n", __func__);
     sel4gpi_config_destroy(cfg);
 

@@ -239,11 +239,11 @@ void gpi_server_main()
 #endif
 
     /* The Parent will seL4_Call() to us, the Server, right after spawning us.
-     * It will expect us to seL4_Reply() with an error status code - we will
+     * It will expect us to sel4gpi_reply() with an error status code - we will
      * send this Reply.
      *
-     * First call seL4_Recv() to get the Reply cap back to the Parent, and then
-     * seL4_Reply to report our status.
+     * First call sel4gpi_recv() to get the Reply cap back to the Parent, and then
+     * sel4gpi_reply to report our status.
      */
     seL4_Word sender_badge;
     recv(&sender_badge);

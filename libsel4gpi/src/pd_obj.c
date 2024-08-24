@@ -702,7 +702,6 @@ void pd_destroy(pd_t *pd, vka_t *server_vka, vspace_t *server_vspace)
         }
         else
         {
-            printf("TEMPA error is %d\n", error);
             SERVER_GOTO_IF_ERR(error, "Failed to move reply cap (%lu) while destroying PD (%u)\n",
                                pd->shared_data->reply_cap,
                                pd_id);

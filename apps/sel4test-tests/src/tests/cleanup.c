@@ -217,7 +217,7 @@ int test_cleanup_policy_1(env_t env)
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0, 0);
     for (int i = 0; i < 2; i++)
     {
-        tag = seL4_Recv(self_ep.raw_endpoint, NULL);
+        tag = sel4gpi_recv(self_ep.raw_endpoint, NULL);
         error = seL4_MessageInfo_get_label(tag);
         test_assert(error == 0);
     }
@@ -339,7 +339,7 @@ int test_cleanup_policy_2(env_t env)
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0, 0);
     for (int i = 0; i < 3; i++)
     {
-        tag = seL4_Recv(self_ep.raw_endpoint, NULL);
+        tag = sel4gpi_recv(self_ep.raw_endpoint, NULL);
         error = seL4_MessageInfo_get_label(tag);
         test_assert(error == 0);
     }
@@ -441,7 +441,7 @@ int test_cleanup_policy_3(env_t env)
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0, 0);
     for (int i = 0; i < 4; i++)
     {
-        tag = seL4_Recv(self_ep.raw_endpoint, NULL);
+        tag = sel4gpi_recv(self_ep.raw_endpoint, NULL);
         error = seL4_MessageInfo_get_label(tag);
         test_assert(error == 0);
     }

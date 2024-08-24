@@ -98,7 +98,7 @@ int start_resource_server_pd_args(gpi_cap_t rde_type,
 
     // Wait for it to finish starting
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0, 0);
-    tag = seL4_Recv(ep_conn.raw_endpoint, NULL);
+    tag = sel4gpi_recv(ep_conn.raw_endpoint, NULL);
     int n_caps = seL4_MessageInfo_get_extraCaps(tag);
     error = seL4_MessageInfo_get_label(tag);
     CHECK_ERROR(error, "message from server is a failure");

@@ -319,7 +319,7 @@ test_reply_recv(driver_env_t env)
 
     return sel4test_get_result();
 }
-DEFINE_TEST_BOOTSTRAP(SYSCALL0011, "Basic seL4_ReplyRecv() testing", test_reply_recv, true)
+DEFINE_TEST_BOOTSTRAP(SYSCALL0011, "Basic sel4gpi_replyRecv() testing", test_reply_recv, true)
 
 static int
 test_nb_recv(driver_env_t env)
@@ -372,9 +372,9 @@ GENERATE_SYSCALL_TEST(SYSCALL0015, seL4_NBSendWithMRs,
                       seL4_NBSendWithMRs(simple_get_cnode(&env->simple), seL4_MessageInfo_new(0, 0, 0, 0), TEST_MRS))
 
 #ifndef CONFIG_KERNEL_MCS
-/* the seL4_ReplyWithMRs symbol is not defined in non RT builds and so we must #ifdef out */
-GENERATE_SYSCALL_TEST_MAYBE(SYSCALL0016, seL4_ReplyWithMRs,
-                            seL4_ReplyWithMRs(seL4_MessageInfo_new(0, 0, 0, 0), TEST_MRS), !config_set(CONFIG_KERNEL_MCS))
+/* the sel4gpi_replyWithMRs symbol is not defined in non RT builds and so we must #ifdef out */
+GENERATE_SYSCALL_TEST_MAYBE(SYSCALL0016, sel4gpi_replyWithMRs,
+                            sel4gpi_replyWithMRs(seL4_MessageInfo_new(0, 0, 0, 0), TEST_MRS), !config_set(CONFIG_KERNEL_MCS))
 #endif
 GENERATE_SYSCALL_TEST(SYSCALL0017, seL4_CallWithMRs,
                       seL4_CallWithMRs(simple_get_cnode(&env->simple), seL4_MessageInfo_new(0, 0, 0, 0), TEST_MRS))

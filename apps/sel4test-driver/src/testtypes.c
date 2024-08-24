@@ -271,6 +271,8 @@ void basic_set_up(uintptr_t e)
     int error;
     driver_env_t env = (driver_env_t)e;
 
+    printf("Basic test setup\n");
+
     sel4utils_process_config_t config = process_config_default_simple(&env->simple, TESTS_APP, env->init->priority);
     config = process_config_mcp(config, seL4_MaxPrio);
     config = process_config_auth(config, simple_get_tcb(&env->simple));
@@ -353,7 +355,7 @@ Warning:
     /* set up free slot range */
     env->init->cspace_size_bits = TEST_PROCESS_CSPACE_SIZE_BITS;
     env->init->free_slots.start = free_slot_start;
-    //printf("%s:%d: free_slot.start %ld\n", __FUNCTION__, __LINE__, env->init->free_slots.start);
+    // printf("%s:%d: free_slot.start %ld\n", __FUNCTION__, __LINE__, env->init->free_slots.start);
     env->init->free_slots.end = (1u << TEST_PROCESS_CSPACE_SIZE_BITS);
     assert(env->init->free_slots.start < env->init->free_slots.end);
 }
@@ -457,9 +459,9 @@ void start_thread_stack(vka_t *vka, vspace_t *current, vspace_t *target, vspace_
 
 void osm_set_up(uintptr_t e)
 {
-    #ifndef GPI_SERVER_ENABLED
+#ifndef GPI_SERVER_ENABLED
     gpi_panic("GPI server not enabled for OSmosis test, check GPIServerEnabled in CMake\n", 1);
-    #endif
+#endif
 
     int error = 0;
     driver_env_t env = (driver_env_t)e;
