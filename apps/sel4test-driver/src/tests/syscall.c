@@ -373,8 +373,8 @@ GENERATE_SYSCALL_TEST(SYSCALL0015, seL4_NBSendWithMRs,
 
 #ifndef CONFIG_KERNEL_MCS
 /* the sel4gpi_replyWithMRs symbol is not defined in non RT builds and so we must #ifdef out */
-GENERATE_SYSCALL_TEST_MAYBE(SYSCALL0016, sel4gpi_replyWithMRs,
-                            sel4gpi_replyWithMRs(seL4_MessageInfo_new(0, 0, 0, 0), TEST_MRS), !config_set(CONFIG_KERNEL_MCS))
+GENERATE_SYSCALL_TEST_MAYBE(SYSCALL0016, seL4_ReplyWithMRs,
+                            seL4_ReplyWithMRs(seL4_MessageInfo_new(0, 0, 0, 0), TEST_MRS), !config_set(CONFIG_KERNEL_MCS))
 #endif
 GENERATE_SYSCALL_TEST(SYSCALL0017, seL4_CallWithMRs,
                       seL4_CallWithMRs(simple_get_cnode(&env->simple), seL4_MessageInfo_new(0, 0, 0, 0), TEST_MRS))
