@@ -76,7 +76,7 @@ int test_native_threads(env_t env)
     error = sel4utils_start_thread(&thread, sel4utils_thread, (void *)thread.tcb.cptr, (void *)NULL, 1);
     test_error_eq(error, 0);
 
-    sel4test_sleep(env, 5 * MILLISECOND);
+    sel4test_sleep(env, 5 * NS_IN_MS);
 
     sel4utils_clean_up_thread(&env->vka, &env->vspace, &thread);
 
@@ -104,7 +104,7 @@ int test_osm_threads(env_t env)
     error = sel4gpi_start_pd(&runnable);
     test_assert(error == 0);
 
-    sel4test_sleep(env, 5 * MILLISECOND);
+    sel4test_sleep(env, 5 * NS_IN_MS);
     sel4gpi_config_destroy(cfg);
 
     // Print model state

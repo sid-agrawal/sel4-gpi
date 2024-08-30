@@ -292,7 +292,8 @@ err_goto:
 static void handle_send_cap_req(seL4_Word sender_badge, PdSendCapMessage *msg, PdReturnMessage *reply_msg,
                                 seL4_CPtr received_cap, bool *should_reply)
 {
-    OSDB_PRINTF("Got send-cap request from client badge %lx.\n", sender_badge);
+    OSDB_PRINTF("Got send-cap request from client badge:");
+    BADGE_PRINT(sender_badge);
     int error = 0;
 
     gpi_obj_id_t client_id = get_client_id_from_badge(sender_badge);
@@ -1061,6 +1062,49 @@ err_goto:
     reply_msg->errorCode = error;
 }
 
+static void handle_irq_handler_bind_req(seL4_Word sender_badge,
+                                        PdIrqHandlerBindMessage *msg,
+                                        PdReturnMessage *reply_msg)
+{
+    OSDB_PRINTF("Got 'IRQ handler bind' request from Client: ");
+    BADGE_PRINT(sender_badge);
+
+    int error = 0;
+
+    pd_component_registry_entry_t *pd_data = (pd_component_registry_entry_t *)
+        resource_component_registry_get_by_id(get_pd_component(), get_object_id_from_badge(sender_badge));
+    SERVER_GOTO_IF_COND_BG(pd_data == NULL, sender_badge, "PD %u not found: ",
+                           get_object_id_from_badge(sender_badge));
+
+    seL4_CPtr irq_handler_slot;
+    error = pd_irq_handler_bind(&pd_data->pd, msg->irq, msg->badge, &irq_handler_slot);
+    SERVER_GOTO_IF_ERR(error, "Failed to bind IRQ %d handler with notification\n", msg->irq);
+
+    cspacepath_t dest = {0};
+    error = resource_component_transfer_cap(get_pd_component()->server_vka,
+                                            pd_data->pd.pd_vka, irq_handler_slot,
+                                            &dest, false, 0);
+    SERVER_GOTO_IF_ERR(error, "Failed to copy IRQ handler cap to PD %u", get_object_id_from_badge(sender_badge));
+
+    reply_msg->msg.irq_handler_bind.slot = dest.capPtr;
+
+    /* client has requested the IRQ cap be copied to the holder PD as well */
+    if (msg->copy_to_holder)
+    {
+        pd_data = (pd_component_registry_entry_t *)
+            resource_component_registry_get_by_id(get_pd_component(), get_client_id_from_badge(sender_badge));
+        SERVER_GOTO_IF_COND_BG(pd_data == NULL, sender_badge, "PD %u not found: ",
+                               get_client_id_from_badge(sender_badge));
+        error = resource_component_transfer_cap(get_pd_component()->server_vka, pd_data->pd.pd_vka,
+                                                irq_handler_slot, &dest, false, 0);
+        reply_msg->msg.irq_handler_bind.slot_holder = dest.capPtr;
+    }
+
+err_goto:
+    reply_msg->which_msg = PdReturnMessage_irq_handler_bind_tag;
+    reply_msg->errorCode = error;
+}
+
 static void pd_component_handle(void *msg_p,
                                 seL4_Word sender_badge,
                                 seL4_CPtr received_cap,
@@ -1147,6 +1191,9 @@ static void pd_component_handle(void *msg_p,
 #endif
         case PdMessage_link_child_tag:
             handle_link_child_req(sender_badge, &msg->msg.link_child, reply_msg);
+            break;
+        case PdMessage_irq_handler_bind_tag:
+            handle_irq_handler_bind_req(sender_badge, &msg->msg.irq_handler_bind, reply_msg);
             break;
         default:
             SERVER_GOTO_IF_COND(1, "Unknown request received: %u\n", msg->which_msg);

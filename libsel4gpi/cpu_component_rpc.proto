@@ -70,6 +70,10 @@ message CpuIrqHandlerBindMessage {
     uint64 badge = 2;
 };
 
+message CpuResumeMessage {
+    /* No content */
+}
+
 message CpuMessage {
     uint64 magic = 100;
     oneof msg {
@@ -87,6 +91,7 @@ message CpuMessage {
         CpuAckVppiMessage ack_vppi = 12;
         CpuIrqHandlerBindMessage irq_handler_bind = 13;
         CpuReadVcpuMessage read_vcpu = 14;
+        CpuResumeMessage resume = 15;
     };
 };
 

@@ -114,9 +114,10 @@ typedef void (*virq_ack_fn_t)(vm_context_t *vm, int irq, void *cookie);
  *
  * @param vcpu_id virtual processor ID
  * @param serial_ack_fn the ACK function for serial interrupts
+ * @param cookie cookie to provide to the ACK function upon invocation
  * @return int 0 on success, other on failure
  */
-int vmm_init_virq(size_t vcpu_id, virq_ack_fn_t serial_ack_fn);
+int vmm_init_virq(size_t vcpu_id, virq_ack_fn_t serial_ack_fn, void *cookie);
 
 /**
  * @brief Copies the linux kernel image into guest RAM. Additionally copies linux's DTB and init ramdisk,
@@ -143,6 +144,13 @@ uintptr_t generic_copy_kernel_image(uintptr_t guest_ram_curr_vspace,
                                     const char *kernel_image_name, uint64_t offset);
 
 // ========== Helpers that each implementation-type specifies ==========
+
+/**
+ * @brief resumes a VM
+ *
+ * @param vm the VM context
+ */
+void vm_resume(vm_context_t *vm);
 
 /**
  * @brief pauses execution of a VM

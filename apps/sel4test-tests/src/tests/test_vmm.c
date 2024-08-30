@@ -48,7 +48,7 @@ int test_hello_vm_sel4test(env_t env)
 
     // test process will act as the VMM
     start_vmm_and_guest(env, HELLO_KERNEL_NAME);
-    sel4test_sleep(env, 2UL * SECOND);
+    sel4test_sleep(env, 2UL * NS_IN_S);
 
     return sel4test_get_result();
 }
@@ -62,14 +62,14 @@ int test_linux_vm_sel4test(env_t env)
 
     while (1)
     {
-        sel4test_sleep(env, 10UL * SECOND);
+        sel4test_sleep(env, 10UL * NS_IN_S);
         seL4_Yield();
     }
 
     return sel4test_get_result();
 }
 
-DEFINE_TEST(GPIVM002, "Test VMM that starts one Linux guest (sel4test)", test_linux_vm_sel4test, false)
+DEFINE_TEST(GPIVM002, "Test VMM that starts one Linux guest (sel4test)", test_linux_vm_sel4test, true)
 #endif
 
 #ifdef OSM_VMM
@@ -93,7 +93,7 @@ int test_hello_vm_osm(env_t env)
 
     start_vmm_and_guest(HELLO_KERNEL_NAME);
 
-    sel4test_sleep(env, 2UL * SECOND);
+    sel4test_sleep(env, 2UL * NS_IN_S);
 
     return sel4test_get_result();
 }
@@ -108,11 +108,11 @@ int test_linux_vm_osm(env_t env)
 
     while (1)
     {
-        sel4test_sleep(env, 10UL * SECOND);
+        sel4test_sleep(env, 10UL * NS_IN_S);
     }
 
     return sel4test_get_result();
 }
 
-DEFINE_TEST_OSM(GPIVM004, "Test VMM that starts one Linux guest PD (osm)", test_linux_vm_osm, false)
+DEFINE_TEST_OSM(GPIVM004, "Test VMM that starts one Linux guest PD (osm)", test_linux_vm_osm, true)
 #endif

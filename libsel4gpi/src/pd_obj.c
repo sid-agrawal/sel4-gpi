@@ -1491,3 +1491,43 @@ void pd_mark_linked_for_deletion(pd_t *pd)
         OSDB_PRINT_VERBOSE("PD%u has no linked children\n", pd->id);
     }
 }
+
+int pd_irq_handler_bind(pd_t *pd, int irq, seL4_Word badge, seL4_CPtr *irq_handler)
+{
+    int error = 0;
+    cspacepath_t notif_path, badged_notif_path = {0};
+    SERVER_GOTO_IF_COND(badge == 0, "No badge was provided to differentiate the IRQ notification\n");
+    SERVER_GOTO_IF_COND(pd->badged_irq_ntfn != seL4_CapNull, "IRQ already bound to this PD, cannot bind another\n");
+
+    seL4_CPtr handler_slot = gpi_get_irq_handler(get_pd_component()->server_vka, get_gpi_server()->server_simple,
+                                                 get_gpi_server()->gen_irqs, get_gpi_server()->num_gen_irqs, irq);
+
+    vka_cspace_make_path(get_pd_component()->server_vka, pd->notification.cptr, &notif_path);
+
+    error = vka_cspace_alloc_path(get_pd_component()->server_vka, &badged_notif_path);
+    SERVER_GOTO_IF_ERR(error, "Failed to allocate slot for badged notification\n");
+
+    error = vka_cnode_mint(&badged_notif_path, &notif_path, seL4_AllRights, badge);
+    SERVER_GOTO_IF_ERR(error, "Failed to mint a badge on the IRQ notification\n");
+
+    error = seL4_IRQHandler_SetNotification(handler_slot, badged_notif_path.capPtr);
+    SERVER_GOTO_IF_ERR(error, "Failed to set notification for IRQ %d handler\n", irq);
+
+    pd->badged_irq_ntfn = badged_notif_path.capPtr;
+
+    if (irq_handler)
+    {
+        *irq_handler = handler_slot;
+    }
+
+    return 0;
+
+err_goto:
+
+    if (badged_notif_path.capPtr)
+    {
+        vka_cspace_free_path(get_cpu_component()->server_vka, badged_notif_path);
+    }
+
+    return error;
+}

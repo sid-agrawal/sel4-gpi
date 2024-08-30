@@ -279,3 +279,23 @@ int pd_client_set_name(pd_client_context_t *conn, char *name);
 int pd_client_bench_ipc(pd_client_context_t *conn,
                         seL4_CPtr dummy_send_cap,
                         bool cap_transfer);
+
+/**
+ * @brief Binds a PD's notification to an IRQ handler for the given IRQ.
+ * If the PD's CPU is listening on any endpoint, it will be unblocked by this notification.
+ * Optionally retrieves the handler for the given IRQ, for ACKing future interrupts.
+ *
+ * The holder of the given PD may additionally need a copy of the IRQ handler,
+ * in this case, passing copy_to_holder=true will copy the handler to the holder's CSpace as well.
+ *
+ * @param pd the PD context
+ * @param irq the IRQ ID to get a handler for
+ * @param copy_to_holder whether to copy the IRQ handler to the holder of the given PD
+ * @param badge A badge to differientiate the notification signal
+ * @param ret_slot OPTIONAL: IRQ handler for the given IRQ in the target PD's CSpace
+ * @param ret_slot_holder OPTIONAL: Will be filled in if copy_to_holder is true
+ * @return int 0 on success, other on failure
+ */
+int pd_client_irq_handler_bind(pd_client_context_t *pd, int irq, seL4_Word badge,
+                               bool copy_to_holder, seL4_CPtr *ret_slot,
+                               seL4_CPtr *ret_slot_holder);

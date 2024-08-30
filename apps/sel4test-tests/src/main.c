@@ -279,13 +279,17 @@ int main(int argc, char **argv)
         // debug_cap_identify("test-main", gpi_endpoint);
         /* initialise simple */
         init_simple(&env, init_data);
-
-        platsupport_serial_setup_simple(&env.vspace, &env.simple, &env.vka);
     }
 
     /* initialise rpc client */
     sel4rpc_client_init(&env.rpc_client, env.endpoint, SEL4TEST_PROTOBUF_RPC);
 
+    /* Setup serial driver */
+    // Allocating device memory from within the platsupport lib is currently unimplemented for OSM PDs
+    if (test_type == OSM)
+    {
+        platsupport_serial_setup_simple(&env.vspace, &env.simple, &env.vka);
+    }
     /* find the test */
     testcase_t *test = find_test(test_name);
 

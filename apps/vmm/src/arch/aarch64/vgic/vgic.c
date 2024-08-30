@@ -35,7 +35,7 @@ bool fault_handle_vgic_maintenance(vm_context_t *vm, size_t vcpu_id)
     slot->ack_fn = NULL;
     slot->ack_data = NULL;
     /* Clear pending */
-    VMM_PRINT("Maintenance IRQ %d\n", lr_virq.virq);
+    VMM_PRINTV("Maintenance IRQ %d\n", lr_virq.virq);
     set_pending(vgic_get_dist(vgic.registers), lr_virq.virq, false, vcpu_id);
     virq_ack(vm, &lr_virq);
     /* Check the overflow list for pending IRQs */
@@ -51,7 +51,6 @@ bool fault_handle_vgic_maintenance(vm_context_t *vm, size_t vcpu_id)
     {
         success = vgic_vcpu_load_list_reg(vm, &vgic, vcpu_id, idx, group, virq);
     }
-
     if (!success)
     {
         VMM_PRINTERR("VGIC: maintenance handler failed\n");

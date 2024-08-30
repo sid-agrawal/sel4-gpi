@@ -396,3 +396,8 @@ void cpu_read_vcpu_regs(cpu_t *cpu, vcpu_regs_t *regs)
         vcpu_read_regs(cpu->vcpu.cptr, regs);
     }
 }
+
+int cpu_resume(cpu_t *cpu)
+{
+    return seL4_TCB_Resume(cpu->tcb.cptr);
+}

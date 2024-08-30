@@ -250,3 +250,11 @@ void cpu_unbind_irq(cpu_t *cpu);
  * @param[out] returns a filled in VCPU regs struct
  */
 void cpu_read_vcpu_regs(cpu_t *cpu, vcpu_regs_t *regs);
+
+/**
+ * @brief Resume execution of the CPU
+ *
+ * @param cpu the CPU object
+ * @return int 0 on success, other on failure
+ */
+int cpu_resume(cpu_t *cpu);

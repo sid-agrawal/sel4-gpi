@@ -41,6 +41,15 @@ typedef struct _vmon_fault_context
 static vmon_context_t vmon_ctxt;             /* main VMM thread's CPTRs */
 static vmon_fault_context_t vmon_fault_ctxt; /* fault VMM thread's CPTRs */
 
+void vm_resume(vm_context_t *vm)
+{
+    int err = cpu_client_resume(&vm->runnable.cpu);
+    if (err)
+    {
+        VMM_PRINTERR("Failed to resume VMM\n");
+    }
+}
+
 void vm_suspend(vm_context_t *vm)
 {
     int err = cpu_client_suspend(&vm->runnable.cpu);
@@ -95,8 +104,13 @@ static void serial_ack(vm_context_t *vm, int irq, void *cookie)
      * For now we by default simply ack the serial IRQ, we have not
      * come across a case yet where more than this needs to be done.
      */
-    VMM_PRINT("Acking serial interrupt\n");
-    seL4_Error error = seL4_IRQHandler_Ack(vmon_fault_ctxt.serial_irq_handler);
+    bool signaled = (bool)cookie;
+    VMM_PRINTV("Acking serial interrupt, signaled? %d\n", signaled);
+    // This function might be called from within the fault thread or the main thread
+    // We have used the cookie to differentiate the source of the invocation,
+    // and use the correct cap slot accordingly
+    seL4_Error error = seL4_IRQHandler_Ack(signaled ? vmon_fault_ctxt.serial_irq_handler
+                                                    : vmon_ctxt.serial_irq_handler);
     WARN_IF_COND(error, "Failed to ACK serial interrupt, seL4_Error: %d\n", error);
 }
 
@@ -131,10 +145,11 @@ static void handle_fault(int argc, char **argv)
             assert(vm != NULL);
 
             fault_handle(vm, &info);
+            seL4_Reply(seL4_MessageInfo_new(0, 0, 0, 0));
         }
         else if (badge & SERIAL_IRQ_BIT)
         {
-            VMM_PRINT("Got serial IRQ\n");
+            VMM_PRINTV("Got serial IRQ\n");
             if (!virq_inject(vm, GUEST_VCPU_ID, SERIAL_IRQ))
             {
                 VMM_PRINTERR("Failed to inject serial IRQ %d into vCPU %d\n", SERIAL_IRQ, GUEST_VCPU_ID);
@@ -159,7 +174,9 @@ int osm_vmm_init(void)
     memset(&vmon_ctxt, 0, sizeof(vmon_context_t));
     vmon_ctxt.guest_id_counter = 1;
 
-    error = vmm_init_virq(GUEST_VCPU_ID, &serial_ack);
+    // future invocations of the serial_ack fn through the virq interface
+    // will be from the fault thread, so we use the cookie to differentiate
+    error = vmm_init_virq(GUEST_VCPU_ID, &serial_ack, (void *)true);
     GOTO_IF_ERR(error, "Failed to initialize VIRQ controller\n");
 
     error = ep_component_client_connect(sel4gpi_get_rde(GPICAP_TYPE_EP), &vmon_ctxt.vm_fault_ep);
@@ -183,10 +200,11 @@ int osm_vmm_init(void)
     GOTO_IF_ERR(error, "Failed to start VMM's fault handler thread\n");
 
     /* bind the fault thread to the serial IRQ handler */
-    error = cpu_client_irq_handler_bind(&vmon_ctxt.fault_thread_runnable.cpu,
-                                        SERIAL_IRQ, SERIAL_IRQ_BIT,
-                                        &vmon_fault_ctxt.serial_irq_handler);
-    GOTO_IF_ERR(error, "Failed to bind VMM's CPU to the serial IRQ handler\n");
+    error = pd_client_irq_handler_bind(&vmon_ctxt.fault_thread_runnable.pd,
+                                       SERIAL_IRQ, SERIAL_IRQ_BIT, true,
+                                       &vmon_fault_ctxt.serial_irq_handler,
+                                       &vmon_ctxt.serial_irq_handler);
+    GOTO_IF_ERR(error, "Failed to bind VMM's fault thread to the serial IRQ handler\n");
 
 err_goto:
     return error;
@@ -338,7 +356,7 @@ uint32_t osm_new_guest(const char *kernel_image)
     } */
 
     /* Just in case there is already an interrupt available to handle, we ack it here. */
-    serial_ack(vm, SERIAL_IRQ, NULL);
+    serial_ack(vm, SERIAL_IRQ, (void *)false);
 
     error = sel4gpi_start_pd(&vm->runnable);
     GOTO_IF_ERR(error, "Failed to start VM\n");

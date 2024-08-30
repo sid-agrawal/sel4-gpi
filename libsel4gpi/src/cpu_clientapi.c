@@ -374,3 +374,23 @@ int cpu_client_irq_handler_bind(cpu_client_context_t *cpu, int irq, seL4_Word ba
 
     return error;
 }
+
+int cpu_client_resume(cpu_client_context_t *cpu)
+{
+    OSDB_PRINTF("Sending 'resume' request to CPU component\n");
+
+    int error = 0;
+
+    CpuMessage msg = {
+        .magic = CPU_RPC_MAGIC,
+        .which_msg = CpuMessage_resume_tag,
+    };
+
+    CpuReturnMessage ret_msg = {0};
+
+    error = sel4gpi_rpc_call(&rpc_env, cpu->ep, (void *)&msg,
+                             0, NULL, (void *)&ret_msg);
+    error |= ret_msg.errorCode;
+
+    return error;
+}

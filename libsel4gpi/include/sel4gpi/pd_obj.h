@@ -135,6 +135,7 @@ typedef struct _pd
     vka_object_t notification;                              ///< Notification for RT->PD communication,
                                                             ///< should be bound to CPU
     seL4_CPtr badged_notification;                          ///< Badged version of notification, RT uses this one
+    seL4_CPtr badged_irq_ntfn;                              ///< Badged version for IRQ handling.
     size_t cspace_size;                                     ///< Size bits of the root CNode
     char *name;                                             ///< This is for model extraction only
     seL4_Word cnode_guard;                                  ///< cnode guard for this PD's cspace
@@ -473,3 +474,15 @@ int pd_add_linkage(pd_t *pd, gpi_obj_id_t linked_pd_id);
  * @param pd the PD object
  */
 void pd_mark_linked_for_deletion(pd_t *pd);
+
+/**
+ * @brief Binds the PD's notification to an IRQ handler for the given IRQ.
+ * If the PD's CPU is listening on any endpoint, it will be unblocked by this notification.
+ *
+ * @param pd the PD object
+ * @param irq IRQ ID of handler to bind
+ * @param badge A badge to differientiate the notification signal
+ * @param[out] irq_handler OPTIONAL: returns the slot to the IRQ handler
+ * @return int 0 on success, other on failure
+ */
+int pd_irq_handler_bind(pd_t *pd, int irq, seL4_Word badge, seL4_CPtr *irq_handler);

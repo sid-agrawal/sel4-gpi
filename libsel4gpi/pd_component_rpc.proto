@@ -109,6 +109,12 @@ message PdLinkChildMessage {
     /* No content */
 };
 
+message PdIrqHandlerBindMessage {
+    uint32 irq = 1; 
+    uint64 badge = 2;
+    bool copy_to_holder = 3;
+};
+
 /* message type for all PD component request messages */
 message PdMessage {
     uint64 magic = 100;
@@ -133,6 +139,7 @@ message PdMessage {
         PdSetNameMessage set_name = 18;
         PdFinishWorkMessage finish_work = 19;
         PdLinkChildMessage link_child = 20;
+        PdIrqHandlerBindMessage irq_handler_bind = 21;
     }
 };
 
@@ -166,6 +173,12 @@ message PdGiveResourceReturnMessage {
     uint64 slot = 1;                /* slot where the cap was placed in the receiver PD */
 }
 
+message PdIrqHandlerBindReturnMessage
+{
+    uint64 slot = 1;
+    uint64 slot_holder = 2;
+}
+
 /* message type for all PD Component return messages */
 message PdReturnMessage {
     PdComponentError errorCode = 1;
@@ -176,5 +189,6 @@ message PdReturnMessage {
         PdNextSlotReturnMessage next_slot = 5;
         PdSendCapReturnMessage send_cap = 6;
         PdGiveResourceReturnMessage give_resource = 7;
+        PdIrqHandlerBindReturnMessage irq_handler_bind = 8;
     };
 };

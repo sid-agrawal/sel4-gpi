@@ -9,7 +9,7 @@
 extern char _cpio_archive[];
 extern char _cpio_archive_end[];
 
-int vmm_init_virq(size_t vcpu_id, virq_ack_fn_t serial_ack_fn)
+int vmm_init_virq(size_t vcpu_id, virq_ack_fn_t serial_ack_fn, void *cookie)
 {
     int error = 0; // unused, to appease error handling macros
     bool success = virq_controller_init(vcpu_id);
@@ -17,7 +17,7 @@ int vmm_init_virq(size_t vcpu_id, virq_ack_fn_t serial_ack_fn)
 
     // @ivanv: Note that remove this line causes the VMM to fault if we
     // actually get the interrupt. This should be avoided by making the VGIC driver more stable.
-    success = virq_register(vcpu_id, SERIAL_IRQ, serial_ack_fn, NULL);
+    success = virq_register(vcpu_id, SERIAL_IRQ, serial_ack_fn, cookie);
     WARN_IF_COND(!success, "Failed to register VIRQ handler\n");
 err_goto:
     return !success;

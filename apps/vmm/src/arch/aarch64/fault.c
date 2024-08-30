@@ -284,7 +284,7 @@ bool fault_handle_vcpu_exception(vm_context_t *vm)
         }
         return false;
     case HSR_WFx_EXCEPTION:
-        // If we get a WFI exception, we just do nothing in the VMM.
+        // If we get a WFI exception on the MCS kernel, we just do nothing in the VMM.
         return true;
     default:
         VMM_PRINTERR("unknown SMC exception, EC class: 0x%lx, HSR: 0x%x\n", hsr_ec_class, hsr);

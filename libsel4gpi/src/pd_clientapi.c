@@ -569,3 +569,40 @@ int pd_client_set_name(pd_client_context_t *conn, char *name)
     return error;
 }
 #endif
+
+int pd_client_irq_handler_bind(pd_client_context_t *pd, int irq, seL4_Word badge,
+                               bool copy_to_holder, seL4_CPtr *ret_slot,
+                               seL4_CPtr *ret_slot_holder)
+{
+    OSDB_PRINTF("Sending 'IRQ handler bind' request to PD component\n");
+
+    int error = 0;
+
+    PdMessage msg = {
+        .magic = PD_RPC_MAGIC,
+        .which_msg = PdMessage_irq_handler_bind_tag,
+        .msg.irq_handler_bind = {
+            .irq = irq,
+            .badge = badge,
+            .copy_to_holder = copy_to_holder,
+        },
+    };
+
+    PdReturnMessage ret_msg = {0};
+    error = sel4gpi_rpc_call(&rpc_env, pd->ep, (void *)&msg,
+                             0, NULL, (void *)&ret_msg);
+
+    if (!error && ret_slot)
+    {
+        *ret_slot = ret_msg.msg.irq_handler_bind.slot;
+
+        if (ret_slot_holder)
+        {
+            *ret_slot_holder = ret_msg.msg.irq_handler_bind.slot_holder;
+        }
+    }
+
+    error |= ret_msg.errorCode;
+
+    return error;
+}

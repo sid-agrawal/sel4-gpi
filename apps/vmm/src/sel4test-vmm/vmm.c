@@ -41,12 +41,21 @@
 
 static vmon_context_t vmon_ctxt;
 
+void vm_resume(vm_context_t *vm)
+{
+    seL4_Error err = seL4_TCB_Resume(vm->tcb.cptr);
+    if (err)
+    {
+        VMM_PRINTERR("Failed to resume VM\n");
+    }
+}
+
 void vm_suspend(vm_context_t *vm)
 {
     seL4_Error err = seL4_TCB_Suspend(vm->tcb.cptr);
     if (err)
     {
-        VMM_PRINTERR("Failed to suspend VMM\n");
+        VMM_PRINTERR("Failed to suspend VM\n");
     }
 }
 
@@ -95,7 +104,7 @@ static void serial_ack(vm_context_t *vm, int irq, void *cookie)
      * For now we by default simply ack the serial IRQ, we have not
      * come across a case yet where more than this needs to be done.
      */
-    VMM_PRINT("Acking serial interrupt\n");
+    VMM_PRINTV("Acking serial interrupt\n");
     seL4_Error error = seL4_IRQHandler_Ack(vmon_ctxt.serial_irq_handler);
     WARN_IF_COND(error, "Failed to ACK serial interrupt, seL4_Error: %d\n", error);
 }
@@ -124,6 +133,7 @@ static void handle_fault(void)
             vm = vmon_ctxt.guests[vm_id];
             assert(vm != NULL);
             fault_handle(vm, &info);
+            seL4_Reply(seL4_MessageInfo_new(0, 0, 0, 0));
         }
         else if (badge & SERIAL_IRQ_BIT)
         {
@@ -213,7 +223,7 @@ int sel4test_vmm_init(seL4_IRQHandler irq_handler,
     vmon_ctxt.tcb = tcb;
     vmon_ctxt.guest_id_counter = 1;
 
-    error = vmm_init_virq(GUEST_VCPU_ID, &serial_ack);
+    error = vmm_init_virq(GUEST_VCPU_ID, &serial_ack, NULL);
     GOTO_IF_ERR(error, "Failed to initialize VIRQ controller\n");
 
     /* fault endpoint */
