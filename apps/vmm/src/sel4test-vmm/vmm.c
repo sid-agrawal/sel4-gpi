@@ -137,7 +137,7 @@ static void handle_fault(void)
         }
         else if (badge & SERIAL_IRQ_BIT)
         {
-            VMM_PRINT("Got serial IRQ\n");
+            VMM_PRINTV("Got serial IRQ\n");
             if (!virq_inject(vm, GUEST_VCPU_ID, SERIAL_IRQ))
             {
                 VMM_PRINTERR("Failed to inject serial IRQ %d into vCPU %d\n", SERIAL_IRQ, GUEST_VCPU_ID);

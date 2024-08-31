@@ -246,22 +246,23 @@ static int configure_guest_pd(pd_config_t *vm_cfg, const char *kernel_img_name, 
     size_t two_mb_pages = BYTES_TO_SIZE_BITS_PAGES(MiB_TO_BYTES(2), MO_PAGE_BITS);
 
     mo_client_context_t bus1_mo = {0};
-    error = mo_component_client_connect_paddr(mo_rde, 1, MO_PAGE_BITS, ODROID_BUS1, &bus1_mo);
+    error = mo_component_client_connect_paddr(mo_rde, two_mb_pages, MO_PAGE_BITS, ODROID_BUS1, &bus1_mo);
     GOTO_IF_ERR(error, "Failed to allocate MO for bus 1\n");
     sel4gpi_add_vmr_config(&vm_cfg->ads_cfg, GPI_DISJOINT, SEL4UTILS_RES_TYPE_DEVICE, (void *)ODROID_BUS1,
                            NULL, two_mb_pages, MO_PAGE_BITS, &bus1_mo);
 
     mo_client_context_t bus2_mo = {0};
-    error = mo_component_client_connect_paddr(mo_rde, 1, MO_PAGE_BITS, ODROID_BUS2, &bus2_mo);
+    error = mo_component_client_connect_paddr(mo_rde, two_mb_pages, MO_PAGE_BITS, ODROID_BUS2, &bus2_mo);
     GOTO_IF_ERR(error, "Failed to allocate MO for bus 2\n");
     sel4gpi_add_vmr_config(&vm_cfg->ads_cfg, GPI_DISJOINT, SEL4UTILS_RES_TYPE_DEVICE, (void *)ODROID_BUS2,
                            NULL, two_mb_pages, MO_PAGE_BITS, &bus2_mo);
 
+    size_t one_mb_pages = BYTES_TO_SIZE_BITS_PAGES(MiB_TO_BYTES(1), MO_PAGE_BITS);
     mo_client_context_t bus3_mo = {0};
-    error = mo_component_client_connect_paddr(mo_rde, 1, MO_PAGE_BITS, ODROID_BUS3, &bus3_mo);
+    error = mo_component_client_connect_paddr(mo_rde, one_mb_pages, MO_PAGE_BITS, ODROID_BUS3, &bus3_mo);
     GOTO_IF_ERR(error, "Failed to allocate MO for bus 3\n");
     sel4gpi_add_vmr_config(&vm_cfg->ads_cfg, GPI_DISJOINT, SEL4UTILS_RES_TYPE_DEVICE, (void *)ODROID_BUS3, NULL,
-                           BYTES_TO_SIZE_BITS_PAGES(MiB_TO_BYTES(1), MO_PAGE_BITS), MO_PAGE_BITS, &bus3_mo);
+                           one_mb_pages, MO_PAGE_BITS, &bus3_mo);
 #endif // BOARD_qemu_arm_virt
 
     if (strcmp(kernel_img_name, LINUX_KERNEL_NAME) == 0)

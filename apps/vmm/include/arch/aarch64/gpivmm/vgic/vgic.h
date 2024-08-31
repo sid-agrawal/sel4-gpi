@@ -28,38 +28,6 @@
 #error Unsupported GIC version
 #endif
 
-/* Uncomment these defines for more verbose logging in the GIC driver. */
-// #define DEBUG_IRQ
-// #define DEBUG_DIST
-
-#if defined(DEBUG_IRQ)
-#define LOG_IRQ(...)          \
-    do                        \
-    {                         \
-        printf("VGIC|IRQ: "); \
-        printf(__VA_ARGS__);  \
-    } while (0)
-#else
-#define LOG_IRQ(...) \
-    do               \
-    {                \
-    } while (0)
-#endif
-
-#if defined(DEBUG_DIST)
-#define LOG_DIST(...)          \
-    do                         \
-    {                          \
-        printf("VGIC|DIST: "); \
-        printf(__VA_ARGS__);   \
-    } while (0)
-#else
-#define LOG_DIST(...) \
-    do                \
-    {                 \
-    } while (0)
-#endif
-
 /* every vcpu_id reference here is the ID of the virtual processor - NOT the VMM's assigned ID for the guest */
 void vgic_init();
 bool fault_handle_vgic_maintenance(vm_context_t *vm, size_t vcpu_id);

@@ -200,7 +200,7 @@ static void vgic_dist_disable_irq(vgic_t *vgic, size_t vcpu_id, int irq)
      */
     if (irq >= NUM_SGI_VIRQS)
     {
-        LOG_DIST("Disabling IRQ %d\n", irq);
+        VMM_PRINTV("Disabling IRQ %d\n", irq);
         set_enable(vgic_get_dist(vgic->registers), irq, false, vcpu_id);
     }
 }
@@ -276,7 +276,7 @@ static bool vgic_dist_set_pending_irq(vm_context_t *vm, vgic_t *vgic, size_t vcp
 
 static void vgic_dist_clr_pending_irq(struct gic_dist_map *dist, size_t vcpu_id, int irq)
 {
-    LOG_DIST("Clear pending IRQ %d\n", irq);
+    VMM_PRINTV("Clear pending IRQ %d\n", irq);
     set_pending(dist, irq, false, vcpu_id);
     /* TODO: remove from IRQ queue and list registers as well */
     // @ivanv
