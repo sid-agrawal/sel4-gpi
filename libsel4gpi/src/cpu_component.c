@@ -433,38 +433,6 @@ err_goto:
     reply_msg->errorCode = error;
 }
 
-static void handle_irq_handler_bind_req(seL4_Word sender_badge,
-                                        CpuIrqHandlerBindMessage *msg,
-                                        CpuReturnMessage *reply_msg)
-{
-    OSDB_PRINTF("Got 'IRQ handler bind' request from Client: ");
-    BADGE_PRINT(sender_badge);
-
-    int error = 0;
-    cpu_component_registry_entry_t *cpu_data = (cpu_component_registry_entry_t *)
-        resource_component_registry_get_by_badge(get_cpu_component(), sender_badge);
-    SERVER_GOTO_IF_COND_BG(cpu_data == NULL, sender_badge, "Couldn't find CPU from badge: ");
-
-    pd_component_registry_entry_t *pd_data = (pd_component_registry_entry_t *)
-        resource_component_registry_get_by_id(get_pd_component(), get_client_id_from_badge(sender_badge));
-    SERVER_GOTO_IF_COND_BG(pd_data == NULL, sender_badge, "Client PD %u for CPU not found: ",
-                           get_client_id_from_badge(sender_badge));
-
-    seL4_CPtr irq_handler_slot;
-    error = cpu_irq_handler_bind(&cpu_data->cpu, msg->irq, pd_data->pd.notification.cptr, msg->badge, &irq_handler_slot);
-    SERVER_GOTO_IF_ERR(error, "Failed to bind IRQ %d handler with notification\n", msg->irq);
-
-    cspacepath_t dest = {0};
-    error = resource_component_transfer_cap(get_cpu_component()->server_vka,
-                                            pd_data->pd.pd_vka, irq_handler_slot,
-                                            &dest, false, 0);
-
-    reply_msg->msg.irq_handler_bind.slot = dest.capPtr;
-err_goto:
-    reply_msg->which_msg = CpuReturnMessage_irq_handler_bind_tag;
-    reply_msg->errorCode = error;
-}
-
 static void handle_read_vcpu_req(seL4_Word sender_badge, CpuReadVcpuMessage *msg, CpuReturnMessage *reply_msg)
 {
     OSDB_PRINTF("Got 'read vcpu registers' request from Client: ");
@@ -558,9 +526,6 @@ static void cpu_component_handle(void *msg_p,
         case CpuMessage_ack_vppi_tag:
             handle_ack_vppi_req(sender_badge, &msg->msg.ack_vppi, reply_msg);
             break;
-        case CpuMessage_irq_handler_bind_tag:
-            handle_irq_handler_bind_req(sender_badge, &msg->msg.irq_handler_bind, reply_msg);
-            break;
         case CpuMessage_read_vcpu_tag:
             handle_read_vcpu_req(sender_badge, &msg->msg.read_vcpu, reply_msg);
             break;
@@ -632,17 +597,4 @@ int cpu_component_stop(gpi_obj_id_t cpu_id)
 
 err_goto:
     return error;
-}
-
-void cpu_component_unbind_irq(gpi_obj_id_t cpu_id)
-{
-    cpu_component_registry_entry_t *cpu_data = (cpu_component_registry_entry_t *)
-        resource_component_registry_get_by_id(get_cpu_component(), cpu_id);
-    if (cpu_data == NULL)
-    {
-        OSDB_PRINTERR("Couldn't find CPU to unbind (%u)\n", cpu_id);
-        return;
-    }
-
-    cpu_unbind_irq(&cpu_data->cpu);
 }

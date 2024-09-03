@@ -286,7 +286,7 @@ int main(int argc, char **argv)
 
     /* Setup serial driver */
     // Allocating device memory from within the platsupport lib is currently unimplemented for OSM PDs
-    if (test_type == OSM)
+    if (test_type != OSM)
     {
         platsupport_serial_setup_simple(&env.vspace, &env.simple, &env.vka);
     }

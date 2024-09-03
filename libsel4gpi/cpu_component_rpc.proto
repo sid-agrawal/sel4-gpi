@@ -65,11 +65,6 @@ message CpuAckVppiMessage {
     uint32 irq = 1;
 };
 
-message CpuIrqHandlerBindMessage {
-    uint32 irq = 1; 
-    uint64 badge = 2;
-};
-
 message CpuResumeMessage {
     /* No content */
 }
@@ -89,9 +84,8 @@ message CpuMessage {
         CpuDisconnectMessage disconnect = 10;
         CpuInjectIrqMessage inject_irq = 11;
         CpuAckVppiMessage ack_vppi = 12;
-        CpuIrqHandlerBindMessage irq_handler_bind = 13;
-        CpuReadVcpuMessage read_vcpu = 14;
-        CpuResumeMessage resume = 15;
+        CpuReadVcpuMessage read_vcpu = 13;
+        CpuResumeMessage resume = 14;
     };
 };
 
@@ -113,11 +107,6 @@ message CpuReadVcpuReturnMessage {
     repeated uint64 reg_buf = 1 [(nanopb).max_count = 24]; /* buffer for vcpu_reg_t */
 }
 
-message CpuIrqHandlerBindReturnMessage
-{
-    uint64 slot = 1;
-}
-
 /* message type for all Cpu Component return messages */
 message CpuReturnMessage {
     CpuComponentError errorCode = 1;
@@ -126,6 +115,5 @@ message CpuReturnMessage {
         CpuAllocReturnMessage alloc = 3;
         CpuReadRegistersReturnMessage read_reg = 4;
         CpuReadVcpuReturnMessage read_vcpu = 5;
-        CpuIrqHandlerBindReturnMessage irq_handler_bind = 6;
     };
 };

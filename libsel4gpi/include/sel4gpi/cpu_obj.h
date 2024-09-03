@@ -41,8 +41,6 @@ typedef struct _cpu
     seL4_CPtr fault_ep;         ///< currently binded fault endpoint
     seL4_UserContext *reg_ctx;  ///< TCB register values that are to be written, NOT the current values
     vka_object_t vcpu;          ///< VCPU object (only exists if CPU is elevated)
-    seL4_CPtr irq_notif;        ///< badged notification for bound IRQ, currently only allows one bound IRQ
-    int bound_irq;              ///< ID of bound IRQ
 } cpu_t;
 
 /**
@@ -219,29 +217,6 @@ int cpu_inject_irq(cpu_t *cpu, int virq, int prio, int group, int idx);
  * @return int 0 on success, other on failure
  */
 int cpu_ack_vppi(cpu_t *cpu, uint64_t irq);
-
-/**
- * @brief Binds the CPU an IRQ handler notification for the given IRQ.
- * If the CPU is listening on any endpoint, it will be unblocked by this notification.
- *
- * @param cpu the CPU object
- * @param irq IRQ ID of handler to bind
- * @param notif notification object to bind to the IRQ handler
- * @param badge A badge to differientiate the notification signal
- * @param[out] irq_handler OPTIONAL: returns the slot to the IRQ handler
- * @return int 0 on success, other on failure
- */
-int cpu_irq_handler_bind(cpu_t *cpu, int irq, seL4_CPtr notif, seL4_Word badge, seL4_CPtr *irq_handler);
-
-/**
- * @brief Unbind the IRQ handled by the CPU. Clears the notification set
- * for the IRQ handler and frees the badged notification.
- * The original unbadged notification may still exist with the PD from which the
- * badged IRQ notification was derived.
- *
- * @param cpu the CPU object
- */
-void cpu_unbind_irq(cpu_t *cpu);
 
 /**
  * @brief reads all VCPU registers from the CPU

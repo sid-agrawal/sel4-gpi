@@ -166,20 +166,6 @@ int cpu_client_inject_irq(cpu_client_context_t *cpu, int virq, int prio, int gro
 int cpu_client_ack_vppi(cpu_client_context_t *cpu, uint64_t irq);
 
 /**
- * @brief Binds the CPU and PD to an IRQ handler notification for the given IRQ.
- * If the CPU is listening on any endpoint, it will be unblocked by this notification.
- * Optionally retrieves the handler for the given IRQ, for ACKing future interrupts.
- * Is a NO-OP if the CPU hasn't been elevated.
- *
- * @param cpu the CPU context
- * @param irq the IRQ ID to get a handler for
- * @param badge A badge to differientiate the notification signal
- * @param ret_slot OPTIONAL: IRQ handler for the given IRQ
- * @return int 0 on success, other on failure
- */
-int cpu_client_irq_handler_bind(cpu_client_context_t *cpu, int irq, seL4_Word badge, seL4_CPtr *ret_slot);
-
-/**
  * @brief Resume execution of the CPU
  *
  * @param cpu the CPU context

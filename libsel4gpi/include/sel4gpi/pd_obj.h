@@ -136,6 +136,8 @@ typedef struct _pd
                                                             ///< should be bound to CPU
     seL4_CPtr badged_notification;                          ///< Badged version of notification, RT uses this one
     seL4_CPtr badged_irq_ntfn;                              ///< Badged version for IRQ handling.
+    int bound_irq;                                          ///< ID of the IRQ handled by the PD, currently allows a PD
+                                                            ///< to handle one IRQ at a time
     size_t cspace_size;                                     ///< Size bits of the root CNode
     char *name;                                             ///< This is for model extraction only
     seL4_Word cnode_guard;                                  ///< cnode guard for this PD's cspace

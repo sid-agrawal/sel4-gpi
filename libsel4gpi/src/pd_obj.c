@@ -719,7 +719,6 @@ void pd_destroy(pd_t *pd, vka_t *server_vka, vspace_t *server_vspace)
     if (pd->shared_data->cpu_conn.id)
     {
         START_BENCH();
-        cpu_component_unbind_irq(pd->shared_data->cpu_conn.id);
         resource_component_dec(get_cpu_component(), pd->shared_data->cpu_conn.id);
         END_BENCH("dec CPU while destroying PD");
     }
@@ -748,6 +747,18 @@ void pd_destroy(pd_t *pd, vka_t *server_vka, vspace_t *server_vspace)
     vka_free_object(vka, &pd->notification);
     vka_cspace_free(vka, pd->badged_notification);
     END_BENCH("destroy notif while destroying PD");
+
+    /* destroy the badged IRQ notification, if PD has been handling IRQs */
+    if (pd->bound_irq)
+    {
+        seL4_CPtr irq_handler = gpi_get_irq_handler(get_gpi_server()->server_vka,
+                                                    get_gpi_server()->server_simple,
+                                                    get_gpi_server()->gen_irqs,
+                                                    get_gpi_server()->num_gen_irqs,
+                                                    pd->bound_irq);
+        seL4_IRQHandler_Clear(irq_handler);
+        vka_cspace_free(get_pd_component()->server_vka, pd->badged_irq_ntfn);
+    }
 
     START_BENCH();
     /* Free elf information */
@@ -1514,6 +1525,7 @@ int pd_irq_handler_bind(pd_t *pd, int irq, seL4_Word badge, seL4_CPtr *irq_handl
     SERVER_GOTO_IF_ERR(error, "Failed to set notification for IRQ %d handler\n", irq);
 
     pd->badged_irq_ntfn = badged_notif_path.capPtr;
+    pd->bound_irq = irq;
 
     if (irq_handler)
     {
