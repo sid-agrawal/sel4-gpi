@@ -66,9 +66,9 @@ typedef uintptr_t (*copy_kernel_image_fn_t)(uintptr_t guest_ram_curr_vspace, con
  * guest's "RAM" the same for all platforms. For just booting Linux with a
  * simple user-space, 0x10000000 bytes (256MB) is plenty.
  */
-#define GUEST_RAM_SIZE 0x20000000
 
 #if defined(BOARD_qemu_arm_virt)
+#define GUEST_RAM_SIZE 0x20000000
 #define GUEST_RAM_PADDR 0x40000000
 #define GUEST_RAM_VADDR 0x40000000
 #define GUEST_DTB_VADDR 0x4d000000
@@ -77,8 +77,9 @@ typedef uintptr_t (*copy_kernel_image_fn_t)(uintptr_t guest_ram_curr_vspace, con
 #define GIC_PADDR 0x8040000
 #define LINUX_GIC_PADDR 0x8010000
 #elif defined(BOARD_odroidc4)
+#define GUEST_RAM_SIZE 0x10000000
 #define GUEST_RAM_VADDR 0x20000000
-#define GUEST_DTB_VADDR 0x2f000000
+#define GUEST_DTB_VADDR 0x2d000000
 #define GUEST_INIT_RAM_DISK_VADDR 0x2d700000
 #define ODROID_BUS1 0xff600000
 #define ODROID_BUS2 0xff800000

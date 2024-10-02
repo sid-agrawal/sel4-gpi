@@ -52,3 +52,4 @@ modules.order
 Module.symvers
 Mkfile.old
 dkms.conf
+apps/vmm/board/qemu_arm_virt/CMakeFiles/cmake.check_cache
