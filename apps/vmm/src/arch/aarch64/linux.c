@@ -5,6 +5,7 @@
  */
 #include <sel4utils/util.h>
 #include <gpivmm/dtb.h>
+#include <gpivmm/vmm.h>
 #include <gpivmm/linux.h>
 #include <assert.h>
 #include <string.h>
@@ -34,6 +35,7 @@ uintptr_t linux_setup_images(uintptr_t ram_start,
                 kernel_start, kernel_end, dtb_start, dtb_end);
         return 0;
     }
+    ZF_LOGD("Linux kernel image [0x%lx..0x%lx)", kernel_start, kernel_end);
     // Check that the kernel and initrd do not overlap
     uintptr_t initrd_start = initrd_dest;
     uintptr_t initrd_end = initrd_start + initrd_size;
@@ -68,7 +70,7 @@ uintptr_t linux_setup_images(uintptr_t ram_start,
     // In this case, we place the image at the text_offset of the start of the guest's RAM,
     // so we need to make sure that the start of guest RAM is 2MiB aligned.
     assert((ram_start & ((1 << 20) - 1)) == 0);
-    ZF_LOGI("Copying guest kernel image to 0x%lx (0x%lx bytes)\n", kernel_dest, kernel_size);
+    VMM_PRINT("Copying guest kernel image to 0x%lx (0x%lx bytes)\n", kernel_dest, kernel_size);
     memcpy((char *)kernel_dest, (char *)kernel, kernel_size);
     // Copy the guest device tree blob into the right location
     // First check that the DTB given is actually a DTB!
@@ -93,11 +95,11 @@ uintptr_t linux_setup_images(uintptr_t ram_start,
         ZF_LOGE("Linux expects DTB address to be on an 8-byte boundary, DTB address is 0x%lx\n", dtb_dest);
         return 0;
     }
-    ZF_LOGI("Copying guest DTB to 0x%lx (0x%lx bytes)\n", dtb_dest, dtb_size);
+    VMM_PRINT("Copying guest DTB to 0x%lx (0x%lx bytes)\n", dtb_dest, dtb_size);
     memcpy((char *)dtb_dest, (char *)dtb_src, dtb_size);
     // Copy the initial RAM disk into the right location
     // @ivanv: add checks for initrd according to Linux docs
-    ZF_LOGI("Copying guest initial RAM disk to 0x%lx (0x%lx bytes)\n", initrd_dest, initrd_size);
+    VMM_PRINT("Copying guest initial RAM disk to 0x%lx (0x%lx bytes)\n", initrd_dest, initrd_size);
     memcpy((char *)initrd_dest, (char *)initrd_src, initrd_size);
 
     return kernel_dest;

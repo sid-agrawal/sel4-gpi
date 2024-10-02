@@ -40,8 +40,24 @@ uintptr_t linux_copy_kernel_image(uintptr_t guest_ram_curr_vspace,
                                       ((uintptr_t)GUEST_DTB_VADDR - (uintptr_t)GUEST_RAM_VADDR);
     uintptr_t guest_initrd_curr_vspace = guest_ram_curr_vspace +
                                          ((uintptr_t)GUEST_INIT_RAM_DISK_VADDR - (uintptr_t)GUEST_RAM_VADDR);
-    VMM_PRINT("Linux guest ram: %lx, dtb: %lx initrd: %lx\n",
-              guest_ram_curr_vspace, guest_dtb_curr_vspace, guest_initrd_curr_vspace);
+
+
+    VMM_PRINT("images locations  vspace as returned by CPIO:\n\t kernel_image 0x%lx:0x%lx, initrd: 0x%lx:0x%lx, dtb: 0x%lx:0x%lx \n",
+              guest_kernel_image,
+              guest_kernel_image + kernel_size,
+              guest_initrd_image,
+              guest_initrd_image + initrd_size,
+              guest_dtb_image,
+              guest_dtb_image + dtb_size);
+
+    VMM_PRINT("current vspace location:\n\t Linux guest ram: 0x%lx:0x%lx, initrd: 0x%lx:0x%lx, dtb: 0x%lx:0x%lx \n",
+              guest_ram_curr_vspace, 
+              0x0,
+              guest_initrd_curr_vspace,
+              guest_initrd_curr_vspace + initrd_size,
+              guest_dtb_curr_vspace,
+              guest_dtb_curr_vspace + dtb_size);
+    
 
     uintptr_t kernel_pc_curr_vspace = linux_setup_images(guest_ram_curr_vspace,
                                                          (uintptr_t)guest_kernel_image,
