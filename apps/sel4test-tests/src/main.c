@@ -157,6 +157,7 @@ static void init_allocator(env_t env, test_init_data_t *init_data)
             ZF_LOGF("Failed to add untyped objects to allocator");
         }
     }
+    printf("Added 0x%lx Bytes to the test process", total_size);
 
     /* add any arch specific objects to the allocator */
     arch_init_allocator(env, init_data);

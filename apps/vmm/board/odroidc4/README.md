@@ -1,5 +1,9 @@
 # Odroid-C4 images
 
+LOOK at wiki for new instructions.
+https://cellulosdocs.readthedocs.io/en/cellulos/development/virtual_machine_monitor.html
+
+
 ## Linux kernel
 
 ### Details
@@ -15,10 +19,11 @@ command in userspace: `zcat /proc/config.gz`.
 
 ### Instructions for reproducing
 
-```
-git clone --depth 1 --branch v6.1 https://github.com/torvalds/linux.git
-cp linux_config linux/.config
-make -C linux ARCH=arm64 CROSS_COMPILE=aarch64-none-elf- linux_config all -j$(nproc)
+```bash
+git clone --depth 1 --branch v6.1 https://github.com/torvalds/linux.git linux-clone-osmosis
+make -C linux-clone-osmosis defconfig
+cp linux_config linux-clone-osmosis/.config
+make -C linux-clone-osmosis ARCH=arm64 CROSS_COMPILE=aarch64-none-elf- all -j$(nproc)
 ```
 
 The path to the image will be: `linux/arm64/boot/Image`.
