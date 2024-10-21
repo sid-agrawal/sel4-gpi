@@ -587,7 +587,8 @@ gpi_model_node_t *ads_dump_rr(ads_t *ads, model_state_t *ms, gpi_model_node_t *p
             add_edge(ms, GPI_EDGE_TYPE_HOLD, pd_node, vmr_node);
             // set the VMR type, number of pages, and page size as extra data on the node
             char extra[CSV_MAX_STRING_SIZE] = {0};
-            snprintf(extra, CSV_MAX_STRING_SIZE, "%s_%u_%zu",
+            snprintf(extra, CSV_MAX_STRING_SIZE, "%p_%s_%u_%zu",
+                     res->vaddr,
                      human_readable_va_res_type(res->type),
                      res->n_pages, res->page_bits);
             set_node_extra(vmr_node, extra);
