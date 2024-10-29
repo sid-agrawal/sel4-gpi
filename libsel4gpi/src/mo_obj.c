@@ -158,12 +158,12 @@ gpi_model_node_t *mo_dump_rr(mo_t *mo, model_state_t *ms, gpi_model_node_t *pd_n
         char n_pages[20];
         char page_size[20];
 
-        snprintf(hex_addr, sizeof(hex_addr), "0x%lx", mo->frame_paddrs[0]);
-        snprintf(n_pages, sizeof(hex_addr), "%u", num_pages);
-        snprintf(page_size, sizeof(hex_addr), "%u", 1 << mo->page_bits);
+        assert(snprintf(hex_addr, sizeof(hex_addr), "0x%lx", mo->frame_paddrs[0]) < sizeof(hex_addr));
+        assert(snprintf(n_pages, sizeof(n_pages), "%u", num_pages) < sizeof(n_pages));
+        assert(snprintf(page_size, sizeof(page_size), "%u", 1 << mo->page_bits) < sizeof(page_size));
         KeyValuePair pairs[] = {
             {"va", hex_addr},
-            // {"num_pages", n_pages},
+            {"num_pages", n_pages},
             {"page_size", page_size}};
         size_t num_pairs = sizeof(pairs) / sizeof(pairs[0]);
         json_write(extra_str, sizeof(extra_str), pairs, num_pairs);
