@@ -362,9 +362,7 @@ uint32_t osm_new_guest(const char *kernel_image)
     error = sel4gpi_start_pd(&vm->runnable);
     GOTO_IF_ERR(error, "Failed to start VM\n");
 
-#ifdef GPI_EXTRACT_MODEL
-    pd_client_dump(&runnable.pd, NULL, 0);
-#endif
+    pd_client_dump(&vm->runnable.pd, NULL, 0);
 
     vmon_fault_ctxt.guests[guest_id] = vm;
     vmon_ctxt.guest_id_counter++;
