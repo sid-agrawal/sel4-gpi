@@ -23,6 +23,8 @@
 #include <sel4gpi/pd_component.h>
 #include <sel4gpi/gpi_server.h>
 
+#include <utils/json.h>
+
 #define DEBUG_ID MO_DEBUG
 #define SERVER_ID MOSERVS
 #define DEFAULT_ERR MoComponentError_UNKNOWN
@@ -150,7 +152,21 @@ gpi_model_node_t *mo_dump_rr(mo_t *mo, model_state_t *ms, gpi_model_node_t *pd_n
 
         // Set the number of pages, page size and starting phys addr as extra data on the MO
         char extra_str[CSV_MAX_STRING_SIZE];
-        snprintf(extra_str, CSV_MAX_STRING_SIZE, "0x%lx_%u_%zu", mo->frame_paddrs[0], num_pages, mo->page_bits);
+
+        /* Populate extra as KV Pair */
+        char hex_addr[20];
+        char n_pages[20];
+        char page_size[20];
+
+        snprintf(hex_addr, sizeof(hex_addr), "0x%lx", mo->frame_paddrs[0]);
+        snprintf(n_pages, sizeof(hex_addr), "%u", num_pages);
+        snprintf(page_size, sizeof(hex_addr), "%u", 1 << mo->page_bits);
+        KeyValuePair pairs[] = {
+            {"va", hex_addr},
+            // {"num_pages", n_pages},
+            {"page_size", page_size}};
+        size_t num_pairs = sizeof(pairs) / sizeof(pairs[0]);
+        json_write(extra_str, sizeof(extra_str), pairs, num_pairs);
         set_node_extra(mo_node, extra_str);
 
         mo_node->extracted = true;

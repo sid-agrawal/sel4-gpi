@@ -27,6 +27,8 @@
 #include <sel4gpi/pd_component.h>
 #include <sel4gpi/gpi_elf.h>
 
+#include <utils/json.h>
+
 #define MAX_MO_RR 10000
 
 // Defined for utility printing macros
@@ -587,10 +589,22 @@ gpi_model_node_t *ads_dump_rr(ads_t *ads, model_state_t *ms, gpi_model_node_t *p
             add_edge(ms, GPI_EDGE_TYPE_HOLD, pd_node, vmr_node);
             // set the VMR type, number of pages, and page size as extra data on the node
             char extra[CSV_MAX_STRING_SIZE] = {0};
-            snprintf(extra, CSV_MAX_STRING_SIZE, "%p_%s_%u_%zu",
-                     res->vaddr,
-                     human_readable_va_res_type(res->type),
-                     res->n_pages, res->page_bits);
+            
+            /* Populate extra as KV Pair */
+            char hex_addr[20];
+            char n_pages[20];
+            char page_size[20];
+
+            snprintf(hex_addr, sizeof(hex_addr), "%p", res->vaddr);
+            snprintf(n_pages, sizeof(hex_addr), "%u", res->n_pages);
+            snprintf(page_size, sizeof(hex_addr), "%u", 1 << res->page_bits);
+            KeyValuePair pairs[] = {
+                {"va", hex_addr},
+                {"vmr_type", human_readable_va_res_type(res->type)},
+                 {"num_pages", n_pages},
+                {"page_size", page_size}};
+            size_t num_pairs = sizeof(pairs) / sizeof(pairs[0]);
+            json_write(extra, sizeof(extra), pairs, num_pairs);
             set_node_extra(vmr_node, extra);
 
             /* Add the relation from VMR to MO node, if there is one */

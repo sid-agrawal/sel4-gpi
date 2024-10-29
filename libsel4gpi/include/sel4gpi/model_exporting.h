@@ -6,7 +6,7 @@
 #include <sel4/sel4.h>
 #include <utils/uthash.h>
 
-#define CSV_MAX_STRING_SIZE (size_t)100 // Define a suitable size for your strings
+#define CSV_MAX_STRING_SIZE (size_t)120 // Define a suitable size for your strings
 
 /* Definition of the model state graph structure */
 

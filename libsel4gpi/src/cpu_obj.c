@@ -25,6 +25,7 @@
 #include <sel4/sel4.h>
 #include <sel4runtime.h>
 #include <sel4debug/register_dump.h>
+#include <utils/json.h>
 
 // Defined for utility printing macros
 #define DEBUG_ID CPU_DEBUG
@@ -174,7 +175,14 @@ gpi_model_node_t *cpu_dump_rr(cpu_t *cpu, model_state_t *ms, gpi_model_node_t *p
 
         if (cpu->vcpu.cptr != seL4_CapNull)
         {
-            set_node_extra(cpu_node, "elevated");
+            /* Populate extra as KV Pair */
+            char extra[CSV_MAX_STRING_SIZE] = {0};
+            KeyValuePair pairs[] = {
+                {"elevate", "true"}
+                };
+            size_t num_pairs = sizeof(pairs) / sizeof(pairs[0]);
+            json_write(extra, sizeof(extra), pairs, num_pairs);
+            set_node_extra(cpu_node, extra);
         }
         add_edge(ms, GPI_EDGE_TYPE_HOLD, pd_node, cpu_node);
         add_edge(ms, GPI_EDGE_TYPE_SUBSET, cpu_node, vcpu_space_node);
