@@ -162,7 +162,7 @@ gpi_model_node_t *mo_dump_rr(mo_t *mo, model_state_t *ms, gpi_model_node_t *pd_n
         assert(snprintf(n_pages, sizeof(n_pages), "%u", num_pages) < sizeof(n_pages));
         assert(snprintf(page_size, sizeof(page_size), "%u", 1 << mo->page_bits) < sizeof(page_size));
         KeyValuePair pairs[] = {
-            {"va", hex_addr},
+            {"pa", hex_addr},
             {"num_pages", n_pages},
             {"page_size", page_size}};
         size_t num_pairs = sizeof(pairs) / sizeof(pairs[0]);
