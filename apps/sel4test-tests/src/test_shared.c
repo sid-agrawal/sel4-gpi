@@ -3,6 +3,7 @@
 void extract_model(pd_client_context_t *pd_conn)
 {
 #ifdef GPI_EXTRACT_MODEL
+    printf("BEGIN MODEL STATE:");
     /* Print model state */
     int error = pd_client_dump(pd_conn, NULL, 0);
     assert(error == 0);
