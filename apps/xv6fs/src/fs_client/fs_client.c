@@ -653,7 +653,7 @@ static int xv6fs_libc_access(const char *pathname, int amode)
 
 static int xv6fs_libc_faccessat(int dirfd, const char *filename, int amode, int flags)
 {
-  XV6FS_PRINTF("xv6fs_libc_faccessat path %s, mode %d, flag %x\n", filename, mode, flags);
+  XV6FS_PRINTF("xv6fs_libc_faccessat path %s, mode %d, flag %x\n", filename, amode, flags);
 
   if (dirfd != AT_FDCWD)
   {
