@@ -17,6 +17,7 @@
 #include <sel4gpi/debug.h>
 #include <sel4gpi/model_exporting.h>
 
+#include <utils/json.h>
 static char *edge_type_to_str(gpi_edge_type_t edge_type)
 {
     switch (edge_type)
@@ -168,6 +169,12 @@ void export_model_state(model_state_t *model_state, char *buffer, size_t buf_len
     // Print the edges
     for (gpi_model_edge_t *edge = model_state->edges; edge != NULL; edge = edge->hh.next)
     {
+        // NOTE: Duplicated in print_mode_state too
+        char extra_json_str[CSV_MAX_STRING_SIZE] = {0};
+        KeyValuePair pairs[] = {{"pd_incharge", edge->k.pd_incharge}};
+        size_t num_pairs = sizeof(pairs) / sizeof(pairs[0]);
+        json_write(extra_json_str, sizeof(extra_json_str), pairs, num_pairs);
+
         size_t buf_written = snprintf(buffer, buf_len - buf_written_total,
                                       "%-*s,%-*s,%-*s,%-*s,%-*s,%-*s,%-*s\n",
                                       width,
@@ -183,7 +190,7 @@ void export_model_state(model_state_t *model_state, char *buffer, size_t buf_len
                                       width,
                                       edge->k.to,
                                       width,
-                                      "");
+                                      extra_json_str);
 
         buffer += buf_written;
         buf_written_total += buf_written;
@@ -239,6 +246,11 @@ void print_model_state(model_state_t *model_state)
     // Print the edges
     for (gpi_model_edge_t *edge = model_state->edges; edge != NULL; edge = edge->hh.next)
     {
+    char extra_json_str[CSV_MAX_STRING_SIZE] = {0};
+    KeyValuePair pairs[] = {{"pd_incharge", edge->k.pd_incharge}};
+    size_t num_pairs = sizeof(pairs) / sizeof(pairs[0]);
+    json_write(extra_json_str, sizeof(extra_json_str), pairs, num_pairs);
+
         printf("%-*s,%-*s,%-*s,%-*s,%-*s,%-*s,%-*s\n",
                width,
                "",
@@ -253,7 +265,7 @@ void print_model_state(model_state_t *model_state)
                width,
                edge->k.to,
                width,
-               "");
+               extra_json_str);
     }
 }
 

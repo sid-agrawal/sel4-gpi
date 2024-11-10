@@ -40,7 +40,7 @@ typedef struct _gpi_model_node
 
     char data[CSV_MAX_STRING_SIZE];  ///< Stores any additional data in the node
                                      ///< Eg. the name of a PD node, or the type of a resource node
-    char data2[CSV_MAX_STRING_SIZE]; ///< Stores extra data for the node
+    char data2[CSV_MAX_STRING_SIZE]; ///< Stores extra data for the node as a VALID JSON
     bool extracted;                  ///< whether or not the dependent relations have been extracted
                                      ///< it's possible a node may be added as a dependency for another node
                                      ///< before it has been extracted itself
@@ -49,10 +49,11 @@ typedef struct _gpi_model_node
 
 typedef struct
 {
-    gpi_edge_type_t type;           ///< Type of edge
-    gpi_cap_t req_type;             ///< For request edges only, type of resource requested
-    char from[CSV_MAX_STRING_SIZE]; ///< Name of the 'from' node
-    char to[CSV_MAX_STRING_SIZE];   ///< Name of the 'to' node
+    gpi_edge_type_t type;                  ///< Type of edge
+    gpi_cap_t req_type;                    ///< For request edges only, type of resource requested
+    char pd_incharge[CSV_MAX_STRING_SIZE]; ///< Name of the PD that setup/maintains this edge.
+    char from[CSV_MAX_STRING_SIZE];        ///< Name of the 'from' node
+    char to[CSV_MAX_STRING_SIZE];          ///< Name of the 'to' node
 } gpi_model_edge_key_t;
 
 typedef struct _gpi_model_edge
