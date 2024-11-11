@@ -830,10 +830,10 @@ int xv6fs_work_handler(PdWorkReturnMessage *work)
             true);
 
         /* Add the subset edge */
-        add_edge_by_id(model_state, GPI_EDGE_TYPE_SUBSET, file_node->id, file_space_id);
+        add_edge_by_id(model_state, GPI_EDGE_TYPE_SUBSET, fs_pd_id_str, file_node->id, file_space_id);
 
         /* Add the hold edges */
-        add_edge_by_id(model_state, GPI_EDGE_TYPE_HOLD, fs_pd_id_str, file_node->id);
+        add_edge_by_id(model_state, GPI_EDGE_TYPE_HOLD, get_root_node(model_state)->id, fs_pd_id_str, file_node->id);
 
         /* If in a namespace, add the file resource node in the namespace */
         if (space_id != get_xv6fs_server()->gen.default_space.id)
@@ -844,21 +844,22 @@ int xv6fs_work_handler(PdWorkReturnMessage *work)
               true);
 
           // Add the subset edge
-          add_edge_by_id(model_state, GPI_EDGE_TYPE_SUBSET, file_ns_node->id, file_ns_space_id);
+          add_edge_by_id(model_state, GPI_EDGE_TYPE_SUBSET, fs_pd_id_str, file_ns_node->id, file_ns_space_id);
 
           // Add the map edge to the file in the default file space
-          add_edge(model_state, GPI_EDGE_TYPE_MAP, file_ns_node, file_node);
+          add_edge(model_state, GPI_EDGE_TYPE_MAP, get_pd_node(model_state, sel4gpi_get_pd_conn().id),
+                   file_ns_node, file_node);
 
           // FS holds all files
-          add_edge_by_id(model_state, GPI_EDGE_TYPE_HOLD, fs_pd_id_str, file_ns_node->id);
+          add_edge_by_id(model_state, GPI_EDGE_TYPE_HOLD, get_root_node(model_state)->id, fs_pd_id_str, file_ns_node->id);
 
           // Client holds the resource in the namespace
-          add_edge_by_id(model_state, GPI_EDGE_TYPE_HOLD, client_pd_id_str, file_ns_node->id);
+          add_edge_by_id(model_state, GPI_EDGE_TYPE_HOLD, get_root_node(model_state)->id, client_pd_id_str, file_ns_node->id);
         }
         else
         {
           // Client holds the file directly
-          add_edge_by_id(model_state, GPI_EDGE_TYPE_HOLD, client_pd_id_str, file_node->id);
+          add_edge_by_id(model_state, GPI_EDGE_TYPE_HOLD, get_root_node(model_state)->id, client_pd_id_str, file_node->id);
         }
 
         /* Add relations for blocks */
@@ -873,7 +874,9 @@ int xv6fs_work_handler(PdWorkReturnMessage *work)
 
           char block_id_str[CSV_MAX_STRING_SIZE];
           get_resource_id(make_res_id(block_cap_type, block_space_id, block_id), block_id_str);
-          add_edge_by_id(model_state, GPI_EDGE_TYPE_MAP, file_node->id, block_id_str);
+          add_edge_by_id(model_state, GPI_EDGE_TYPE_MAP,
+                         fs_pd_id_str,
+                         file_node->id, block_id_str);
         }
       }
 

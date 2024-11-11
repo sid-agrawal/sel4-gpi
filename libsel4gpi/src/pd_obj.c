@@ -1129,7 +1129,7 @@ static int res_dump(pd_t *pd, model_state_t *ms, pd_hold_node_t *current_cap, gp
         res_node = ads_dump_rr(&ads_data->ads, ms, pd_node);
 
         /* Add the hold edge */
-        add_edge(ms, GPI_EDGE_TYPE_HOLD, pd_node, res_node);
+        add_edge(ms, GPI_EDGE_TYPE_HOLD, get_root_node(ms), pd_node, res_node);
 
         break;
     case GPICAP_TYPE_MO:
@@ -1143,7 +1143,7 @@ static int res_dump(pd_t *pd, model_state_t *ms, pd_hold_node_t *current_cap, gp
         res_node = mo_dump_rr(&mo_data->mo, ms, pd_node);
 
         /* Add the hold edge */
-        add_edge(ms, GPI_EDGE_TYPE_HOLD, pd_node, res_node);
+        add_edge(ms, GPI_EDGE_TYPE_HOLD, get_root_node(ms), pd_node, res_node);
         break;
     case GPICAP_TYPE_CPU:
         cpu_component_registry_entry_t *cpu_data = (cpu_component_registry_entry_t *)
@@ -1153,7 +1153,7 @@ static int res_dump(pd_t *pd, model_state_t *ms, pd_hold_node_t *current_cap, gp
         res_node = cpu_dump_rr(&cpu_data->cpu, ms, pd_node);
 
         /* Add the hold edge */
-        add_edge(ms, GPI_EDGE_TYPE_HOLD, pd_node, res_node);
+        add_edge(ms, GPI_EDGE_TYPE_HOLD, get_root_node(ms), pd_node, res_node);
         break;
     case GPICAP_TYPE_seL4:
         // Use some other method to get the cap details
@@ -1177,7 +1177,7 @@ static int res_dump(pd_t *pd, model_state_t *ms, pd_hold_node_t *current_cap, gp
         res_node = resspc_dump_rr(&space_data->space, ms, pd_node);
 
         /* Add the hold edge */
-        add_edge(ms, GPI_EDGE_TYPE_HOLD, pd_node, res_node);
+        add_edge(ms, GPI_EDGE_TYPE_HOLD, get_root_node(ms), pd_node, res_node);
         break;
     case GPICAP_TYPE_VMR:
         // Do not need to dump VMR, handled in ADS component
@@ -1205,7 +1205,9 @@ static int res_dump(pd_t *pd, model_state_t *ms, pd_hold_node_t *current_cap, gp
             /* Add the subset edge */
             char space_id[CSV_MAX_STRING_SIZE];
             get_resource_space_id(space_entry->space.resource_type, space_entry->space.id, space_id);
-            add_edge_by_id(ms, GPI_EDGE_TYPE_SUBSET, res_node->id, space_id);
+            add_edge_by_id(ms, GPI_EDGE_TYPE_SUBSET,
+                           get_root_node(ms)->id,
+                           res_node->id, space_id);
 
             /* Find the resource server */
             pd_component_registry_entry_t *manager_pd_entry =
@@ -1230,7 +1232,7 @@ static int res_dump(pd_t *pd, model_state_t *ms, pd_hold_node_t *current_cap, gp
         }
 
         /* Add the hold edge */
-        add_edge(ms, GPI_EDGE_TYPE_HOLD, pd_node, res_node);
+        add_edge(ms, GPI_EDGE_TYPE_HOLD, get_root_node(ms), pd_node, res_node);
         break;
     }
 
@@ -1274,7 +1276,9 @@ static int pd_dump_internal(pd_t *pd, model_state_t *ms)
                 /* Add the resource server PD node */
                 char resource_manager_pd_id[CSV_MAX_STRING_SIZE];
                 get_pd_id(rm->space.pd_id, resource_manager_pd_id);
-                add_request_edge_by_id(ms, pd_node->id, resource_manager_pd_id, rde.type.type);
+                add_request_edge_by_id(ms,
+                                       get_root_node(ms)->id,
+                                       pd_node->id, resource_manager_pd_id, rde.type.type);
 
                 /* Request info about the space */
                 if (rm->space.pd_id != get_gpi_server()->rt_pd_id)

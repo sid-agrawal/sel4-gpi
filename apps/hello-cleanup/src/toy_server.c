@@ -111,6 +111,8 @@ int toy_work_handler(
     PdWorkReturnMessage *work)
 {
     int error = 0;
+    char ts_pd_id_str[CSV_MAX_STRING_SIZE];
+    get_pd_id(sel4gpi_get_pd_conn().id, ts_pd_id_str);
 
     int op = work->action;
     if (op == PdWorkAction_EXTRACT)
@@ -160,7 +162,8 @@ int toy_work_handler(
                                             get_toy_server()->toy_maps[toy_id].id),
                                 toy_map_id_str);
 
-                add_edge_by_id(model_state, GPI_EDGE_TYPE_MAP, toy_id_str, toy_map_id_str);
+                add_edge_by_id(model_state, GPI_EDGE_TYPE_MAP, ts_pd_id_str,
+                               toy_id_str, toy_map_id_str);
             }
 
             /* Send the result */

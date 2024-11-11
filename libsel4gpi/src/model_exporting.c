@@ -251,13 +251,18 @@ void set_node_extra(gpi_model_node_t *node, char *extra)
     strncpy(node->data2, extra, CSV_MAX_STRING_SIZE);
 }
 
-static void internal_add_edge_by_id(model_state_t *model_state, gpi_edge_type_t type, char *from_id,
-                                    char *to_id, gpi_cap_t req_type)
+static void internal_add_edge_by_id(model_state_t *model_state,
+                                    gpi_edge_type_t type,
+                                    char *pd_incharge,
+                                    char *from_id,
+                                    char *to_id,
+                                    gpi_cap_t req_type)
 {
     gpi_model_edge_t edge_static;
     memset(&edge_static, 0, sizeof(gpi_model_edge_t));
     edge_static.k.type = type;
     edge_static.k.req_type = req_type;
+    strcpy(edge_static.k.pd_incharge, pd_incharge);
     strcpy(edge_static.k.from, from_id);
     strcpy(edge_static.k.to, to_id);
 
@@ -294,30 +299,47 @@ static void internal_add_edge_by_id(model_state_t *model_state, gpi_edge_type_t 
 }
 
 // Generic edge function
-static void add_edge_private(model_state_t *model_state, gpi_edge_type_t type, gpi_model_node_t *from,
-                             gpi_model_node_t *to, gpi_cap_t req_type)
+static void add_edge_private(model_state_t *model_state,
+                             gpi_edge_type_t type,
+                             gpi_model_node_t *pd_incharge, // XXX , may be change type gpi_model_node_t
+                             gpi_model_node_t *from,
+                             gpi_model_node_t *to, 
+                             gpi_cap_t req_type)
 {
-    internal_add_edge_by_id(model_state, type, from->id, to->id, req_type);
+    assert (pd_incharge->node_type == GPI_NODE_TYPE_PD);
+    internal_add_edge_by_id(model_state, type, pd_incharge->id, from->id, to->id, req_type);
 }
 
-void add_edge(model_state_t *model_state, gpi_edge_type_t type, gpi_model_node_t *from, gpi_model_node_t *to)
+void add_edge(model_state_t *model_state,
+              gpi_edge_type_t type,
+              gpi_model_node_t *pd_incharge,
+              gpi_model_node_t *from,
+              gpi_model_node_t *to)
 {
-    add_edge_private(model_state, type, from, to, GPICAP_TYPE_NONE);
+    add_edge_private(model_state, type, pd_incharge, from, to, GPICAP_TYPE_NONE);
 }
 
-void add_edge_by_id(model_state_t *model_state, gpi_edge_type_t type, char *from, char *to)
+void add_edge_by_id(model_state_t *model_state,
+                    gpi_edge_type_t type,
+                    char *pd_incharge,
+                    char *from,
+                    char *to)
 {
-    internal_add_edge_by_id(model_state, type, from, to, GPICAP_TYPE_NONE);
+    internal_add_edge_by_id(model_state, type, pd_incharge, from, to, GPICAP_TYPE_NONE);
 }
 
-void add_request_edge(model_state_t *model_state, gpi_model_node_t *from, gpi_model_node_t *to, gpi_cap_t req_type)
+void add_request_edge(model_state_t *model_state,
+                      gpi_model_node_t *pd_incharge,
+                      gpi_model_node_t *from,
+                      gpi_model_node_t *to,
+                      gpi_cap_t req_type)
 {
-    add_edge_private(model_state, GPI_EDGE_TYPE_REQUEST, from, to, req_type);
+    add_edge_private(model_state, GPI_EDGE_TYPE_REQUEST, pd_incharge, from, to, req_type);
 }
 
-void add_request_edge_by_id(model_state_t *model_state, char *from, char *to, gpi_cap_t req_type)
+void add_request_edge_by_id(model_state_t *model_state, char * pd_incharge, char *from, char *to, gpi_cap_t req_type)
 {
-    internal_add_edge_by_id(model_state, GPI_EDGE_TYPE_REQUEST, from, to, req_type);
+    internal_add_edge_by_id(model_state, GPI_EDGE_TYPE_REQUEST, pd_incharge, from, to, req_type);
 }
 
 void get_resource_space_id(gpi_cap_t resource_type, gpi_space_id_t res_space_id, char *str_id)
@@ -374,10 +396,10 @@ gpi_model_node_t *get_resource_space_node(model_state_t *model_state, gpi_cap_t 
 // Add a PD to the model state
 gpi_model_node_t *add_pd_node(model_state_t *model_state, char *pd_name, gpi_obj_id_t pd_id, bool extracted)
 {
-    char node_id[CSV_MAX_STRING_SIZE];
-    get_pd_id(pd_id, node_id);
+    char node_id_str[CSV_MAX_STRING_SIZE];
+    get_pd_id(pd_id, node_id_str);
 
-    return add_node(model_state, GPI_NODE_TYPE_PD, node_id, pd_name, extracted);
+    return add_node(model_state, GPI_NODE_TYPE_PD, node_id_str, pd_name, extracted);
 }
 
 gpi_model_node_t *get_pd_node(model_state_t *model_state, gpi_obj_id_t pd_id)
@@ -407,7 +429,12 @@ void combine_model_states(model_state_t *dest, model_state_t *src)
             }
             else if (item->type == GPI_MODEL_EDGE)
             {
-                internal_add_edge_by_id(dest, item->edge.k.type, item->edge.k.from, item->edge.k.to, item->edge.k.req_type);
+                internal_add_edge_by_id(dest,
+                                        item->edge.k.type, 
+                                        item->edge.k.pd_incharge,
+                                        item->edge.k.from, 
+                                        item->edge.k.to, 
+                                        item->edge.k.req_type);
             }
         }
     }
@@ -421,7 +448,12 @@ void combine_model_states(model_state_t *dest, model_state_t *src)
 
         for (gpi_model_edge_t *edge = src->edges; edge != NULL; edge = edge->hh.next)
         {
-            internal_add_edge_by_id(dest, edge->k.type, edge->k.from, edge->k.to, edge->k.req_type);
+            internal_add_edge_by_id(dest,
+                                    edge->k.type,
+                                    edge->k.pd_incharge,
+                                    edge->k.from,
+                                    edge->k.to,
+                                    edge->k.req_type);
         }
     }
 }

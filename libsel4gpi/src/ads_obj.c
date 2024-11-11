@@ -569,12 +569,12 @@ gpi_model_node_t *ads_dump_rr(ads_t *ads, model_state_t *ms, gpi_model_node_t *p
         ads_space_node = add_resource_space_node(ms, GPICAP_TYPE_ADS, ads->id, false);
         gpi_model_node_t *mo_space_node = add_resource_space_node(ms, GPICAP_TYPE_MO,
                                                                   get_mo_component()->space_id, false);
-        add_edge(ms, GPI_EDGE_TYPE_MAP, ads_space_node, mo_space_node);
+        add_edge(ms, GPI_EDGE_TYPE_MAP, get_root_node(ms), ads_space_node, mo_space_node);
     }
 
     if (!ads_space_node->extracted)
     {
-        add_edge(ms, GPI_EDGE_TYPE_HOLD, get_root_node(ms), ads_space_node); // the RT holds this resource space
+        add_edge(ms, GPI_EDGE_TYPE_HOLD, get_root_node(ms), get_root_node(ms), ads_space_node); // the RT holds this resource space
 
         for (attach_node_t *res = (attach_node_t *)ads->attach_registry.head; res != NULL; res = (attach_node_t *)res->gen.hh.next)
         {
@@ -585,8 +585,8 @@ gpi_model_node_t *ads_dump_rr(ads_t *ads, model_state_t *ms, gpi_model_node_t *p
                 ms,
                 make_res_id(GPICAP_TYPE_VMR, ads->id, (gpi_obj_id_t)res->map_entry->gen.object_id),
                 true);
-            add_edge(ms, GPI_EDGE_TYPE_SUBSET, vmr_node, ads_space_node);
-            add_edge(ms, GPI_EDGE_TYPE_HOLD, pd_node, vmr_node);
+            add_edge(ms, GPI_EDGE_TYPE_SUBSET, get_root_node(ms), vmr_node, ads_space_node);
+            add_edge(ms, GPI_EDGE_TYPE_HOLD, get_root_node(ms), pd_node, vmr_node);
             // set the VMR type, number of pages, and page size as extra data on the node
             char extra[CSV_MAX_STRING_SIZE] = {0};
             
@@ -622,7 +622,9 @@ gpi_model_node_t *ads_dump_rr(ads_t *ads, model_state_t *ms, gpi_model_node_t *p
                     // mark the node to be dumped later on, since we've only added it here for the MAP edge
                 }
 
-                add_edge(ms, GPI_EDGE_TYPE_MAP, vmr_node, mo_node);
+                add_edge(ms, GPI_EDGE_TYPE_MAP,
+                         get_root_node(ms),
+                         get_root_node(ms), mo_node);
             }
         }
 

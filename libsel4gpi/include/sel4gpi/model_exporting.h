@@ -234,31 +234,35 @@ void get_pd_id(gpi_obj_id_t pd_id, char *str_id);
 /**
  * Add a directed edge to the model state
  * @param type The edge type
+ * @param pd_incarge PD responsibible for setting up and/or maintaining tha ID
  * @param from The source node of the directed edge
  * @param to The destination node of the directed edge
  */
-void add_edge(model_state_t *model_state, gpi_edge_type_t type, gpi_model_node_t *from, gpi_model_node_t *to);
+void add_edge(model_state_t *model_state, gpi_edge_type_t type, gpi_model_node_t *pd_incharge, gpi_model_node_t *from, gpi_model_node_t *to);
 
 /**
  * Add a directed edge to the model state
  * @param type The edge type
+ * @param pd_incarge PD responsibible for setting up and/or maintaining tha ID
  * @param from The ID of the source node of the directed edge
  * @param to The ID of the destination node of the directed edge
  */
-void add_edge_by_id(model_state_t *model_state, gpi_edge_type_t type, char *from, char *to);
+void add_edge_by_id(model_state_t *model_state, gpi_edge_type_t type, char *pd_incharge, char *from, char *to);
 
 /**
  * Add a directed REQUEST edge to the model state
+ * @param pd_incarge PD responsibible for setting up and/or maintaining tha ID
  * @param from The source node of the directed edge
  * @param to The destination node of the directed edge
  * @param req_type The type of object for the request
  */
-void add_request_edge(model_state_t *model_state, gpi_model_node_t *from, gpi_model_node_t *to, gpi_cap_t req_type);
+void add_request_edge(model_state_t *model_state, gpi_model_node_t *pd_incharge, gpi_model_node_t *from, gpi_model_node_t *to, gpi_cap_t req_type);
 
 /**
  * Add a directed REQUEST edge to the model state
+ * @param pd_incarge PD responsibible for setting up and/or maintaining tha ID
  * @param from The ID of the source node of the directed edge
  * @param to The ID of the destination node of the directed edge
  * @param req_type The type of object for the request
  */
-void add_request_edge_by_id(model_state_t *model_state, char *from, char *to, gpi_cap_t req_type);
+void add_request_edge_by_id(model_state_t *model_state, char *pd_incharge, char *from, char *to, gpi_cap_t req_type);

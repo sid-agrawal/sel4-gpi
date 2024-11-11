@@ -143,7 +143,7 @@ gpi_model_node_t *cpu_dump_rr(cpu_t *cpu, model_state_t *ms, gpi_model_node_t *p
     {
         vcpu_space_node = add_resource_space_node(ms, GPICAP_TYPE_CPU,
                                                   get_cpu_component()->space_id, false);
-        add_edge(ms, GPI_EDGE_TYPE_HOLD, root_node, vcpu_space_node); // the RT holds this resource space
+        add_edge(ms, GPI_EDGE_TYPE_HOLD, root_node, root_node, vcpu_space_node); // the RT holds this resource space
     }
 
     // Add the PCPU resource space
@@ -157,8 +157,8 @@ gpi_model_node_t *cpu_dump_rr(cpu_t *cpu, model_state_t *ms, gpi_model_node_t *p
     {
         pcpu_space_node = add_resource_space_node(ms, GPICAP_TYPE_CPU,
                                                   get_cpu_component()->space_id, false);
-        add_edge(ms, GPI_EDGE_TYPE_HOLD, root_node, pcpu_space_node);      // the RT holds this resource space
-        add_edge(ms, GPI_EDGE_TYPE_MAP, vcpu_space_node, pcpu_space_node); // vcpu space maps to pcpu space
+        add_edge(ms, GPI_EDGE_TYPE_HOLD, root_node, root_node, pcpu_space_node);      // the RT holds this resource space
+        add_edge(ms, GPI_EDGE_TYPE_MAP, root_node, vcpu_space_node, pcpu_space_node); // vcpu space maps to pcpu space
     }
 
     /* Add the Virtual CPU node */
@@ -184,8 +184,8 @@ gpi_model_node_t *cpu_dump_rr(cpu_t *cpu, model_state_t *ms, gpi_model_node_t *p
             json_write(extra, sizeof(extra), pairs, num_pairs);
             set_node_extra(cpu_node, extra);
         }
-        add_edge(ms, GPI_EDGE_TYPE_HOLD, pd_node, cpu_node);
-        add_edge(ms, GPI_EDGE_TYPE_SUBSET, cpu_node, vcpu_space_node);
+        add_edge(ms, GPI_EDGE_TYPE_HOLD, root_node, pd_node, cpu_node);
+        add_edge(ms, GPI_EDGE_TYPE_SUBSET, root_node, cpu_node, vcpu_space_node);
 
         seL4_Word affinity = 0;
 #if CONFIG_MAX_NUM_NODES > 1
@@ -195,9 +195,9 @@ gpi_model_node_t *cpu_dump_rr(cpu_t *cpu, model_state_t *ms, gpi_model_node_t *p
 
         /* Add the Physical CPU (core) node */
         gpi_model_node_t *cpu_core_node = add_resource_node(ms, make_res_id(GPICAP_TYPE_PCPU, 1, affinity), true);
-        add_edge(ms, GPI_EDGE_TYPE_MAP, cpu_node, cpu_core_node);
-        add_edge(ms, GPI_EDGE_TYPE_HOLD, root_node, cpu_core_node);
-        add_edge(ms, GPI_EDGE_TYPE_SUBSET, cpu_core_node, pcpu_space_node);
+        add_edge(ms, GPI_EDGE_TYPE_MAP, root_node, cpu_node, cpu_core_node);
+        add_edge(ms, GPI_EDGE_TYPE_HOLD, root_node, root_node, cpu_core_node);
+        add_edge(ms, GPI_EDGE_TYPE_SUBSET, root_node, cpu_core_node, pcpu_space_node);
 
         cpu_node->extracted = true;
     }
