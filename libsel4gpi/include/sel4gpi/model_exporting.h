@@ -114,13 +114,6 @@ void clean_model_state(model_state_t *model_state);
 void destroy_model_state(model_state_t *model_state);
 
 /**
- * Export the model state to a buffer with CSV formatting
- *
- * @param model_state
- */
-void export_model_state(model_state_t *model_state, char *buffer, size_t len);
-
-/**
  * Print the model state to a terminal with CSV formatting
  *
  * @param model_state
