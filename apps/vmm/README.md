@@ -1,0 +1,1 @@
+A write up on the design of the VMM is available on the [CellulOS Wiki](https://cellulosdocs.readthedocs.io/en/cellulos/development/virtual_machine_monitor.html)
