@@ -32,7 +32,7 @@ list(REMOVE_ITEM deps "${CMAKE_CURRENT_SOURCE_DIR}/src/tests/lwc.c")
 
 add_subdirectory(../sqlite3 sqlite3)
 
-cmake_path(GET CMAKE_CURRENT_SOURCE_DIR PARENT_PATH PARENT_DIR)
+get_filename_component(PARENT_DIR ${CMAKE_CURRENT_SOURCE_DIR} DIRECTORY)
 
 include(cpio)
 set(cpio_files "")
