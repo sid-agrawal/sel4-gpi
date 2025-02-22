@@ -734,10 +734,12 @@ int xv6fs_sys_fcntl(void *fh, int cmd, unsigned long arg)
   switch (cmd)
   {
   case F_SETFL:
+  {
     uint64_t flags_mask = O_APPEND | O_ASYNC | O_NONBLOCK;
     f->flags = (f->flags & ~flags_mask) | (arg & flags_mask);
     // printf("xv6fs_sys_fcntl: F_SETFL\n");
     break;
+  }
   case F_GETFL:
     res = f->flags;
     // printf("xv6fs_sys_fcntl: F_GETFL\n");
@@ -755,10 +757,12 @@ int xv6fs_sys_fcntl(void *fh, int cmd, unsigned long arg)
     // printf("xv6fs_sys_fcntl: F_SETLKW\n");
     break;
   case F_GETLK:
+  {
     struct flock *lk = (struct flock *)arg;
     lk->l_type = F_UNLCK;
     // printf("xv6fs_sys_fcntl: F_GETLK\n");
     break;
+  }
   case F_GETOWN_EX:
     printf("xv6fs_sys_fcntl: Unsupported cmd F_GETOWN_EX\n");
     break;

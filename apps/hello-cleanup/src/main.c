@@ -129,17 +129,23 @@ int main(int argc, char **argv)
             &BasicReturnMessage_msg);
         break;
     case HELLO_CLEANUP_TOY_BLOCK_CLIENT_MODE:
+    {
         seL4_CPtr server_ep = sel4gpi_get_rde(sel4gpi_get_resource_type_code(TOY_BLOCK_RESOURCE_TYPE_NAME));
         error = toy_client(server_ep);
         break;
+    }
     case HELLO_CLEANUP_TOY_FILE_CLIENT_MODE:
-        server_ep = sel4gpi_get_rde(sel4gpi_get_resource_type_code(TOY_FILE_RESOURCE_TYPE_NAME));
+    {
+        seL4_CPtr server_ep = sel4gpi_get_rde(sel4gpi_get_resource_type_code(TOY_FILE_RESOURCE_TYPE_NAME));
         error = toy_client(server_ep);
         break;
+    }
     case HELLO_CLEANUP_TOY_DB_CLIENT_MODE:
-        server_ep = sel4gpi_get_rde(sel4gpi_get_resource_type_code(TOY_DB_RESOURCE_TYPE_NAME));
+    {
+        seL4_CPtr server_ep = sel4gpi_get_rde(sel4gpi_get_resource_type_code(TOY_DB_RESOURCE_TYPE_NAME));
         error = toy_client(server_ep);
         break;
+    }
     case HELLO_CLEANUP_NOTHING_MODE:
         error = do_nothing();
         break;

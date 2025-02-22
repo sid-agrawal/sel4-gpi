@@ -295,6 +295,7 @@ void ramdisk_request_handler(
             CHECK_ERROR_GOTO(error, "Failed to free cap during unbind", error, done);
             break;
         case RamdiskAction_ALLOC:
+        {
             // Assign a new block to this ep
             gpi_obj_id_t blockno;
             error = alloc_block(&blockno);
@@ -318,6 +319,7 @@ void ramdisk_request_handler(
 
             RAMDISK_PRINTF("Resource is in dest slot %d\n", (int)dest);
             break;
+        }
         default:
             RAMDISK_PRINTF("Op is %d\n", msg->op);
             CHECK_ERROR_GOTO(1, "got invalid op on badged ep without obj id", RamdiskError_UNKNOWN, done);

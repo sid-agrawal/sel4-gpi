@@ -362,6 +362,7 @@ void xv6fs_request_handler(void *msg_p,
       reply_msg->msg.ns.space_id = ns_id;
       break;
     case FsMessage_create_tag:
+    {
       int open_flags = msg->msg.create.flags;
       pathname = msg->msg.create.path;
 
@@ -454,6 +455,7 @@ void xv6fs_request_handler(void *msg_p,
       reply_msg->which_msg = FsReturnMessage_create_tag;
       reply_msg->msg.create.slot = dest;
       break;
+    }
     case FsMessage_link_tag:
       CHECK_ERROR_GOTO(!sel4gpi_rpc_check_cap(get_xv6fs_server()->gen.resource_type),
                        "Did not receive FILE cap\n",
@@ -479,7 +481,7 @@ void xv6fs_request_handler(void *msg_p,
       }
 
       /* Find the file to link */
-      reg_entry = (file_registry_entry_t *)resource_registry_get_by_badge(&get_xv6fs_server()->file_registry, file_badge);
+      file_registry_entry_t *reg_entry = (file_registry_entry_t *)resource_registry_get_by_badge(&get_xv6fs_server()->file_registry, file_badge);
 
       if (reg_entry == NULL)
       {

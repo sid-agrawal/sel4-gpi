@@ -547,9 +547,11 @@ static int xv6fs_libc_fcntl(int fd, int cmd, ...)
   switch (cmd)
   {
   case F_SETFL:
+  {
     uint64_t flags_mask = O_APPEND | O_ASYNC | O_NONBLOCK;
     file->flags = (file->flags & ~flags_mask) | (arg & flags_mask);
     break;
+  }
   case F_GETFL:
     ret = file->flags;
     break;
@@ -569,9 +571,11 @@ static int xv6fs_libc_fcntl(int fd, int cmd, ...)
     break;
   case F_GETLK:
     // (XXX) Ignoring file lock operations
+    {
     struct flock *lk = (struct flock *)arg;
     lk->l_type = F_UNLCK;
     break;
+    }
   case F_GETOWN_EX:
     XV6FS_PRINTF("xv6fs_sys_fcntl: Unsupported cmd F_GETOWN_EX\n");
     ret = -1;

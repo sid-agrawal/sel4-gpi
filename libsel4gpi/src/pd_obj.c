@@ -1026,13 +1026,15 @@ int pd_send_cap(pd_t *to_pd,
         }
         break;
     default:
+    {
         // Try to find the hold node for this cap
         pd_hold_node_t *current_cap = pd_find_hold_node_by_cptr(from_pd, from_slot);
 
         if (current_cap != NULL)
         {
             // Check if there is already a pending send
-            if (get_gpi_server()->pending_send_resource) {
+            if (get_gpi_server()->pending_send_resource)
+            {
                 return PdComponentError_OPERATION_IN_PROGRESS;
             }
 
@@ -1064,6 +1066,7 @@ int pd_send_cap(pd_t *to_pd,
         }
 
         break;
+    }
     }
 
     if (should_mint)
@@ -1121,6 +1124,7 @@ static int res_dump(pd_t *pd, model_state_t *ms, pd_hold_node_t *current_cap, gp
     case GPICAP_TYPE_NONE:
         break;
     case GPICAP_TYPE_ADS:
+    {
         ads_component_registry_entry_t *ads_data = (ads_component_registry_entry_t *)
             resource_component_registry_get_by_id(get_ads_component(), current_cap->res_id.object_id);
         SERVER_GOTO_IF_COND(ads_data == NULL, "Failed to find ADS data\n");
@@ -1132,6 +1136,7 @@ static int res_dump(pd_t *pd, model_state_t *ms, pd_hold_node_t *current_cap, gp
         add_edge(ms, GPI_EDGE_TYPE_HOLD, get_root_node(ms), pd_node, res_node);
 
         break;
+    }
     case GPICAP_TYPE_MO:
         assert(current_cap->res_id.space_id == get_mo_component()->space_id);
 
@@ -1146,6 +1151,7 @@ static int res_dump(pd_t *pd, model_state_t *ms, pd_hold_node_t *current_cap, gp
         add_edge(ms, GPI_EDGE_TYPE_HOLD, get_root_node(ms), pd_node, res_node);
         break;
     case GPICAP_TYPE_CPU:
+    {
         cpu_component_registry_entry_t *cpu_data = (cpu_component_registry_entry_t *)
             resource_component_registry_get_by_id(get_cpu_component(), current_cap->res_id.object_id);
         SERVER_GOTO_IF_COND(cpu_data == NULL, "Failed to find CPU data\n");
@@ -1155,6 +1161,7 @@ static int res_dump(pd_t *pd, model_state_t *ms, pd_hold_node_t *current_cap, gp
         /* Add the hold edge */
         add_edge(ms, GPI_EDGE_TYPE_HOLD, get_root_node(ms), pd_node, res_node);
         break;
+    }
     case GPICAP_TYPE_seL4:
         // Use some other method to get the cap details
         break;
@@ -1171,6 +1178,7 @@ static int res_dump(pd_t *pd, model_state_t *ms, pd_hold_node_t *current_cap, gp
         // Don't add a hold edge for PDs
         break;
     case GPICAP_TYPE_RESSPC:
+    {
         resspc_component_registry_entry_t *space_data = resource_space_get_entry_by_id(current_cap->res_id.object_id);
         SERVER_GOTO_IF_COND(space_data == NULL, "Failed to find resource space data\n");
 
@@ -1179,6 +1187,7 @@ static int res_dump(pd_t *pd, model_state_t *ms, pd_hold_node_t *current_cap, gp
         /* Add the hold edge */
         add_edge(ms, GPI_EDGE_TYPE_HOLD, get_root_node(ms), pd_node, res_node);
         break;
+    }
     case GPICAP_TYPE_VMR:
         // Do not need to dump VMR, handled in ADS component
         break;

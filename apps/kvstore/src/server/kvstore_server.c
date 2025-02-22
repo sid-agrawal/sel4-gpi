@@ -184,6 +184,7 @@ static int kvstore_init()
     CHECK_ERR_GOTO(error, "failed to map kvstore space to file space", KvstoreError_UNKNOWN);
 
 err_goto:
+    return error;
 }
 
 static void kvstore_request_handler(void *msg_p,
@@ -263,12 +264,14 @@ static void kvstore_request_handler(void *msg_p,
             error = kvstore_server_set(store_id, msg->msg.set.key, msg->msg.set.val);
             break;
         case KvstoreMessage_get_tag:
+        {
             uint64_t val;
             error = kvstore_server_get(store_id, msg->msg.get.key, &val);
 
             reply_msg->which_msg = KvstoreReturnMessage_get_tag;
             reply_msg->msg.get.val = val;
             break;
+        }
         default:
             CHECK_ERR_GOTO(1, "got invalid op on badged ep with obj id", KvstoreError_UNKNOWN);
         }
