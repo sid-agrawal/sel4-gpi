@@ -849,8 +849,8 @@ int xv6fs_work_handler(PdWorkReturnMessage *work)
           add_edge_by_id(model_state, GPI_EDGE_TYPE_SUBSET, fs_pd_id_str, file_ns_node->id, file_ns_space_id);
 
           // Add the map edge to the file in the default file space
-          add_edge(model_state, GPI_EDGE_TYPE_MAP, get_pd_node(model_state, sel4gpi_get_pd_conn().id),
-                   file_ns_node, file_node);
+          add_edge_by_id(model_state, GPI_EDGE_TYPE_MAP,
+            fs_pd_id_str, file_ns_node->id, file_node->id);
 
           // FS holds all files
           add_edge_by_id(model_state, GPI_EDGE_TYPE_HOLD, get_root_node(model_state)->id, fs_pd_id_str, file_ns_node->id);

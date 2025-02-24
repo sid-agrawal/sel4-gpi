@@ -306,6 +306,9 @@ static void add_edge_private(model_state_t *model_state,
                              gpi_model_node_t *to, 
                              gpi_cap_t req_type)
 {
+    assert (pd_incharge != NULL);
+    assert (from != NULL);
+    assert (to != NULL);
     assert (pd_incharge->node_type == GPI_NODE_TYPE_PD);
     internal_add_edge_by_id(model_state, type, pd_incharge->id, from->id, to->id, req_type);
 }
@@ -316,6 +319,7 @@ void add_edge(model_state_t *model_state,
               gpi_model_node_t *from,
               gpi_model_node_t *to)
 {
+    assert (pd_incharge != NULL);
     add_edge_private(model_state, type, pd_incharge, from, to, GPICAP_TYPE_NONE);
 }
 
@@ -334,6 +338,7 @@ void add_request_edge(model_state_t *model_state,
                       gpi_model_node_t *to,
                       gpi_cap_t req_type)
 {
+    assert (pd_incharge != NULL);
     add_edge_private(model_state, GPI_EDGE_TYPE_REQUEST, pd_incharge, from, to, req_type);
 }
 
