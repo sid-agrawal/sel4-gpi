@@ -368,7 +368,7 @@ uint32_t osm_new_guest(const char *kernel_image)
     serial_ack(vm, SERIAL_IRQ, (void *)false);
 
 
-    // pd_client_dump(&vm->runnable.pd, NULL, 0);
+    pd_client_dump(&vm->runnable.pd, NULL, 0);
 
     error = sel4gpi_start_pd(&vm->runnable);
     GOTO_IF_ERR(error, "Failed to start VM\n");
