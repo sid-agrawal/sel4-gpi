@@ -480,7 +480,7 @@ static void cpu_component_handle(void *msg_p,
     CpuReturnMessage *reply_msg = (CpuReturnMessage *)reply_msg_p;
 
     SERVER_GOTO_IF_COND(msg->magic != CPU_RPC_MAGIC,
-                        "CPU component received message with incorrect magic number %lx\n", msg->magic);
+                        "CPU component received message with incorrect magic number 0x%lx\n", msg->magic);
 
     if (get_object_id_from_badge(sender_badge) == BADGE_OBJ_ID_NULL)
     {
