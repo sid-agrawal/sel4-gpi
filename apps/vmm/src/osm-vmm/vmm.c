@@ -227,6 +227,13 @@ static int configure_guest_pd(pd_config_t *vm_cfg, const char *kernel_img_name, 
     // On QEMU, there is a special reserved region for VM guest RAM
     guest_ram_curr_vspace = sel4gpi_get_vmr_at_paddr(vmr_rde, guest_ram_pages, NULL, SEL4UTILS_RES_TYPE_GENERIC,
                                                      MO_LARGE_PAGE_BITS, QEMU_VM_RESERVE_PADDR, &guest_ram_mo);
+
+    /* 
+        A very hacky thing.
+        We assume that the guest ram is mapped at this VA in the VMM.
+        This is the VA that the VMM uses for the GPIKV009 example.
+    */
+    assert (guest_ram_curr_vspace == (void *)0x10200000);
 #elif BOARD_odroidc4
     guest_ram_curr_vspace = sel4gpi_get_vmr(vmr_rde, guest_ram_pages, (void *)GUEST_RAM_VADDR,
                                             SEL4UTILS_RES_TYPE_GENERIC, MO_LARGE_PAGE_BITS, &guest_ram_mo);
