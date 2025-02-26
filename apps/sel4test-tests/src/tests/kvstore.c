@@ -146,7 +146,9 @@ int start_hello_kvstore(kvstore_mode_t kvstore_mode,
     test_assert(error == 0);
 
     // Share necessary RDEs to start threads
-    if (kvstore_mode == SEPARATE_THREAD)
+    // XX-SID
+    if ((kvstore_mode == SEPARATE_THREAD) ||
+        (kvstore_mode == SEPARATE_THREAD_WITH_ISOLATED_STACK))
     {
         sel4gpi_add_rde_config(cfg, GPICAP_TYPE_EP, BADGE_SPACE_ID_NULL);
         sel4gpi_add_rde_config(cfg, GPICAP_TYPE_PD, BADGE_SPACE_ID_NULL);
@@ -241,7 +243,8 @@ int test_kvstore_lib_in_diff_pd(env_t env)
     printf("------------------ENDING: %s------------------\n", __func__);
     return sel4test_get_result();
 }
-DEFINE_TEST_OSM(GPIKV002, "Test kvstore with app and lib in different PDs, same FS, same NS", test_kvstore_lib_in_diff_pd, true)
+DEFINE_TEST_OSM(GPIKV002, "Test kvstore with app and lib in different PDs, same FS, same NS", 
+    test_kvstore_lib_in_diff_pd, true)
 
 int test_kvstore_diff_namespace(env_t env)
 {
@@ -292,7 +295,8 @@ int test_kvstore_diff_namespace(env_t env)
     printf("------------------ENDING: %s------------------\n", __func__);
     return sel4test_get_result();
 }
-DEFINE_TEST_OSM(GPIKV003, "Test app and lib with same FS, different namespace", test_kvstore_diff_namespace, true)
+DEFINE_TEST_OSM(GPIKV003, "Test app and lib with same FS, different namespace", 
+    test_kvstore_diff_namespace, true)
 
 int test_kvstore_diff_fs(env_t env)
 {
@@ -404,7 +408,8 @@ int test_kvstore_diff_threads(env_t env)
     printf("------------------ENDING: %s------------------\n", __func__);
     return sel4test_get_result();
 }
-DEFINE_TEST_OSM(GPIKV006, "Test kvstore with app and lib in the same PD, different threads", test_kvstore_diff_threads, true)
+DEFINE_TEST_OSM(GPIKV006, "Test kvstore with app and lib in the same PD, different threads", 
+    test_kvstore_diff_threads, true)
 /* Thread with isolated stack is GPIKV010*/
 
 int test_kvstore_two_sets(env_t env)
@@ -762,8 +767,9 @@ int test_kvstore_diff_threads_with_isolated_stacks(env_t env)
 
     /* Start the combined app/lib PD */
     pd_client_context_t hello_pd;
-    error = start_hello_kvstore(SEPARATE_THREAD, self_ep, 0, &hello_pd, BADGE_SPACE_ID_NULL);
-
+    error = start_hello_kvstore(SEPARATE_THREAD_WITH_ISOLATED_STACK,
+                                self_ep, 0, &hello_pd, BADGE_SPACE_ID_NULL);
+    test_assert(error == 0);
     test_error_eq(remove_RDEs(), 0);
 
     /* Wait for test result */

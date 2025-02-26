@@ -28,6 +28,7 @@ typedef enum _kvstore_mode
  *  - SEPARATE_ADS: server uses the same thread as the caller,
  *                  compartmentalizes client and server heaps in separate ADS
  *  - SEPARATE_THREAD: uses a process-local kvstore in a different thread from the caller
+ *  - SEPARATE_THREAD_WITH_ISOLATED_STACK: uses a process-local kvstore in a different thread (with an isolated stack) from the caller
  *  - SEPARATE_PROC: uses a kvstore in a remote process (ep argument is required)
  * @param ep endpoint of the kvstore server (optional)
  * @return 0 on success, seL4 error otherwise

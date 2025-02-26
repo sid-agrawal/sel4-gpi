@@ -411,7 +411,8 @@ static void kvstore_server_main_thread(int argc, char **argv)
     {
         seL4_CPtr parent_ep = (seL4_CPtr)atol(argv[0]);
         gpi_obj_id_t parent_pd_id = (seL4_CPtr)atol(argv[1]);
-        printf("kvstore-server: in thread, parent ep (%lu), parent ID (%u) \n", parent_ep, parent_pd_id);
+        printf("kvstore-server: in thread, parent ep (%lu), parent ID (%u) \n", 
+            parent_ep, parent_pd_id);
 
         kvstore_server_main(parent_ep, parent_pd_id);
     }

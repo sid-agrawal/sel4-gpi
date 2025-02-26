@@ -161,6 +161,10 @@ int kvstore_client_configure(kvstore_mode_t kvstore_mode, seL4_CPtr ep)
     case SEPARATE_THREAD:
         error = kvstore_server_start_thread(&server_ep);
         break;
+    case SEPARATE_THREAD_WITH_ISOLATED_STACK:
+        // error = kvstore_server_start_thread_with_isolated_stack(&server_ep);
+        error = kvstore_server_start_thread(&server_ep);
+        break;
     case SEPARATE_PROC:
         // This PD will send kvstore requests to another PD
         server_ep = ep;
@@ -174,7 +178,9 @@ int kvstore_client_create_kvstore(seL4_CPtr *dest, gpi_obj_id_t *store_id)
 {
     seL4_Error error = 0;
 
-    if (mode == SEPARATE_PROC || mode == SEPARATE_THREAD)
+    if (mode == SEPARATE_PROC  ||
+        mode == SEPARATE_THREAD ||
+        mode == SEPARATE_THREAD_WITH_ISOLATED_STACK)
     {
         KvstoreMessage request = {
             .magic = KVSTORE_RPC_MAGIC,
@@ -216,7 +222,9 @@ int kvstore_client_set(seL4_CPtr kvstore_ep, gpi_obj_id_t store_id, seL4_Word ke
 {
     seL4_Error error;
 
-    if (mode == SEPARATE_PROC || mode == SEPARATE_THREAD)
+    if (mode == SEPARATE_PROC ||
+        mode == SEPARATE_THREAD ||
+        mode == SEPARATE_THREAD_WITH_ISOLATED_STACK)
     {
         KvstoreMessage request = {
             .magic = KVSTORE_RPC_MAGIC,
@@ -260,7 +268,7 @@ int kvstore_client_get(seL4_CPtr kvstore_ep, gpi_obj_id_t store_id, seL4_Word ke
 {
     seL4_Error error;
 
-    if (mode == SEPARATE_PROC || mode == SEPARATE_THREAD)
+    if (mode == SEPARATE_PROC || mode == SEPARATE_THREAD || mode == SEPARATE_THREAD_WITH_ISOLATED_STACK)
     {
         KvstoreMessage request = {
             .magic = KVSTORE_RPC_MAGIC,

@@ -126,7 +126,10 @@ int main(int argc, char **argv)
     seL4_CPtr mo_ep = sel4gpi_get_rde(GPICAP_TYPE_MO);
 
     seL4_CPtr kvstore_ep = seL4_CapNull;
-    if (mode == SEPARATE_PROC || mode == SEPARATE_THREAD) {
+    if ((mode == SEPARATE_PROC) || 
+        (mode == SEPARATE_THREAD) ||
+        (mode == SEPARATE_THREAD_WITH_ISOLATED_STACK)) 
+        {
         gpi_cap_t kvstore_cap_type = sel4gpi_get_resource_type_code(KVSTORE_RESOURCE_NAME);
         kvstore_ep = sel4gpi_get_rde(kvstore_cap_type);
     }
@@ -136,7 +139,7 @@ int main(int argc, char **argv)
 
     /* initialize */
     // (XXX) Linh: TO BE REMOVED, terrible hack so that our separate threads test runs - only one thread can use the fs client at a time
-    if (mode != SEPARATE_THREAD)
+    if (mode != SEPARATE_THREAD && mode != SEPARATE_THREAD_WITH_ISOLATED_STACK)
     {
         error = xv6fs_client_init();
         CHECK_ERROR(error, "Failed to initialize file system");
@@ -157,7 +160,8 @@ int main(int argc, char **argv)
     }
 
     // (XXX) Linh: TO BE REMOVED, terrible hack so that our separate threads test runs - only one thread can use the fs client at a time
-    if (mode == SEPARATE_THREAD)
+    if ((mode == SEPARATE_THREAD) ||
+        (mode == SEPARATE_THREAD_WITH_ISOLATED_STACK))
     {
         memset(&xv6fs_client, 0, sizeof(global_xv6fs_client_context_t));
         error = xv6fs_client_init();
