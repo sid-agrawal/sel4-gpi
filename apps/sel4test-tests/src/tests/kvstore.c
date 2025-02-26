@@ -523,110 +523,26 @@ DEFINE_TEST_OSM(GPIKV008,
 
 #ifdef OSM_VMM
 #include <gpivmm/osm-vmm.h>
+
+/*
+    This test i.e. GPIKV009. Relies on the following:
+    1. The gPA KVS_VM_SHARED_PAGE_HOST_PA being free i.e. not used by the linux kernel. 
+       Note that in our setup gPA == hPA.
+    2. The start of the guest RAM is mapped at 0x10200000, in the VMM's address space. 
+       We have an assert for that in the VMM's setup code. 
+    3. The linux is going to run the cmd "/root/proc/kv_app_in_vm 0x5f600000", after boot up. 
+       This maps dev mem and uses that addr as a shared buffer. 
+
+    Other notes:
+    1. We use busy loops to synchronize
+    2. The communication from the linux process to the KV Server, is relayed via the VMM. 
+       We could also do this via a separate KVS client, but setting shared memory for that with the VM 
+       needed some addtional plumping. Basically the we have 512MB MO, and to allow a separate PD 
+       to map that one page, we need to split that MO.
+
+*/
 #define KVS_VM_SHARED_PAGE_HOST_PA 0x5f600000
-// #define KVS_VM_SHARED_PAGE_HOST_PA 0x5ff02000
 static seL4_CPtr server_ep;
-// int kvstore_tests(seL4_CPtr *kvstore_ep)
-// {
-//     int error=0;
-//     uint64_t key, val, val_ret;
-
-//     seL4_DebugDumpScheduler();
-//     printf("---- xxx Begin KVstore tests ---- KV EP: %d\n", *kvstore_ep);
-
-//     // Create a kvstore
-//     gpi_obj_id_t kvstore_id;
-//     mode = SEPARATE_PROC ;
-
-//     sel4gpi_rpc_env_t rpc_client = {
-//         .request_desc = &KvstoreMessage_msg,
-//         .reply_desc = &KvstoreReturnMessage_msg,
-//     };
-//     {
-//         KvstoreMessage request = {
-//             .magic = KVSTORE_RPC_MAGIC,
-//             .which_msg = KvstoreMessage_create_tag};
-
-//         KvstoreReturnMessage reply = {0};
-
-//         printf("one\n");
-//         error = sel4gpi_rpc_call(&rpc_client, *kvstore_ep, &request, 0, NULL, &reply);
-
-//         error |= reply.errorCode;
-
-//         if (error == seL4_NoError) {
-//             *kvstore_ep = reply.msg.alloc.dest;
-//         }
-//     }
-
-//     // assert(error != 0);
-//     printf("kvstore_client_create_kvstore done\n");
-
-//     // Ensure there aren't already values
-//     key = 100;
-//     val = 42;
-//     KvstoreMessage request = {
-//         .magic = KVSTORE_RPC_MAGIC,
-//         .which_msg = KvstoreMessage_get_tag,
-//         .msg.set = {
-//             .key = key,
-//         }};
-
-//     KvstoreReturnMessage reply = {0};
-
-//     error = sel4gpi_rpc_call(&rpc_client, *kvstore_ep, &request, 0, NULL, &reply);
-
-//     error |= reply.errorCode;
-
-//     if (error == seL4_NoError) {
-//         val = reply.msg.get.val;
-//     }
-
-//     assert(error == KvstoreError_KEY);
-//     printf("kvstore_client_get done\n");
-
-//     // Set and get one value
-//     KvstoreMessage request2 = {
-//         .magic = KVSTORE_RPC_MAGIC,
-//         .which_msg = KvstoreMessage_set_tag,
-//         .msg.set = {
-//             .key = key,
-//             .val = val,
-//         }};
-
-//     KvstoreReturnMessage reply2 = {0};
-
-//     error = sel4gpi_rpc_call(&rpc_client, *kvstore_ep, &request2, 0, NULL, &reply2);
-
-//     error |= reply2.errorCode;
-
-//     printf("kvstore_client_set done %d\n", request2.msg.set.val);
-//     // assert(error != 0);
-
-//     KvstoreMessage req3 = {
-//         .magic = KVSTORE_RPC_MAGIC,
-//         .which_msg = KvstoreMessage_get_tag,
-//         .msg.set = {
-//             .key = key,
-//         }};
-
-//     KvstoreReturnMessage reply3 = {0};
-
-//     error = sel4gpi_rpc_call(&rpc_client, *kvstore_ep, &req3, 0, NULL, &reply3);
-
-//     error |= reply3.errorCode;
-
-//     if (error == seL4_NoError) {
-//         val = reply3.msg.get.val;
-//     } else {
-
-//     assert(error != 0);
-//     }
-//     printf("---- xxxFinished KVstore tests. Final val %d ----\n", val);
-
-//     return error;
-// }
-
 int get_rpc(seL4_CPtr kvstore_ep, int key, int *val)
 {
     int error = 0;
@@ -680,6 +596,7 @@ int set_rpc(seL4_CPtr kvstore_ep, int key, int val)
     return error;
 }
 
+// Shared buffer semantics
 typedef enum
 {
     GET,
@@ -691,51 +608,41 @@ typedef struct
     message_type_t cmd;
     int key;
     int value;
-    int message_ready;
-    int result_ready;
+    int message_ready; // To be accessed with atomic ops.
+    int result_ready; // To be accessed with atomic ops.
     int result;
 } shared_buffer_t;
 
 int shared_mem_setup(env_t env)
 {
-
+    /*
+        Setup (i.e., find) the shared buffer, on the linux process, we do this via
+        mmaping /dev/mem
+    */
     uint64_t ret_vaddr = 0x10200000 + (KVS_VM_SHARED_PAGE_HOST_PA - QEMU_VM_RESERVE_PADDR);
     gpi_cap_t kvstore_cap_type = sel4gpi_get_resource_type_code(KVSTORE_RESOURCE_NAME);
     seL4_CPtr kvstore_ep = sel4gpi_get_rde(kvstore_cap_type);
     printf("KV RDE EP %d\n", kvstore_ep);
 
-    // int error = kvstore_tests(&kvstore_ep);
-    // assert(error != 0 );
-
     ///////////////KVS INIT//////////
-    gpi_obj_id_t kvstore_id;
     int error = 0;
-
     sel4gpi_rpc_env_t rpc_client = {
         .request_desc = &KvstoreMessage_msg,
         .reply_desc = &KvstoreReturnMessage_msg,
     };
+    KvstoreMessage request = {
+        .magic = KVSTORE_RPC_MAGIC,
+        .which_msg = KvstoreMessage_create_tag};
+    KvstoreReturnMessage reply = {0};
+
+    error = sel4gpi_rpc_call(&rpc_client, kvstore_ep, &request, 0, NULL, &reply);
+    error |= reply.errorCode;
+    if (error == seL4_NoError)
     {
-        KvstoreMessage request = {
-            .magic = KVSTORE_RPC_MAGIC,
-            .which_msg = KvstoreMessage_create_tag};
-
-        KvstoreReturnMessage reply = {0};
-
-        error = sel4gpi_rpc_call(&rpc_client, kvstore_ep, &request, 0, NULL, &reply);
-
-        error |= reply.errorCode;
-
-        if (error == seL4_NoError)
-        {
-            kvstore_ep = reply.msg.alloc.dest;
-        }
+        kvstore_ep = reply.msg.alloc.dest;
     }
 
-    /////////////////////////////////
-
-    printf("before while\n");
-#if 1
+    /* While loop to keep reading from the shared buffer and send to KVS Server*/
     shared_buffer_t *shared_buffer = (shared_buffer_t *)ret_vaddr;
     while (1)
     {
@@ -783,9 +690,6 @@ int shared_mem_setup(env_t env)
         // Sleep for a random time between 1 and 2 seconds
         sel4test_sleep(env, NS_IN_S);
     }
-
-#endif
-
     return 0;
 }
 static int start_vmm_and_guest(const char *guest_name)
