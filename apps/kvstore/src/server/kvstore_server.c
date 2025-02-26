@@ -476,6 +476,64 @@ err_goto:
     return error;
 }
 
+int kvstore_server_start_thread_with_isolated_stack(seL4_CPtr *kvstore_ep)
+{
+    int error;
+    pd_client_context_t self_pd_conn = sel4gpi_get_pd_conn();
+    seL4_CPtr pd_rde = sel4gpi_get_rde(GPICAP_TYPE_PD);
+    GOTO_IF_COND(pd_rde == seL4_CapNull, "Can't start thread, no PD RDE\n");
+
+    /* new PD as the thread */
+    sel4gpi_runnable_t runnable = {0};
+    pd_config_t *cfg = sel4gpi_configure_thread(kvstore_server_main_thread, seL4_CapNull, &runnable);
+    GOTO_IF_COND(cfg == NULL, "Failed to generate a thread config\n");
+
+    /* allow KVstore to allocate new EPs */
+    sel4gpi_add_rde_config(cfg, GPICAP_TYPE_EP, BADGE_SPACE_ID_NULL);
+
+    /* temp EP */
+    ep_client_context_t ep_conn;
+    error = sel4gpi_alloc_endpoint(&ep_conn);
+    CHECK_ERR_GOTO(error, "failed to allocate ep\n", KvstoreError_UNKNOWN);
+
+    seL4_CPtr temp_ep_in_PD;
+    pd_client_send_cap(&runnable.pd, ep_conn.ep, &temp_ep_in_PD);
+
+    /* prepare args */
+    int argc = 2;
+    gpi_obj_id_t self_pd_id = sel4gpi_get_pd_conn().id;
+    seL4_Word args[2] = {temp_ep_in_PD, self_pd_id};
+
+    /* start the PD */
+    error = sel4gpi_prepare_pd(cfg, &runnable, argc, args);
+    CHECK_ERR_GOTO(error, "Failed to prepare PD\n", KvstoreError_UNKNOWN);
+
+    error = sel4gpi_start_pd(&runnable);
+    CHECK_ERR_GOTO(error, "Failed to start PD\n", KvstoreError_UNKNOWN);
+
+    /* wait for te thread to start */
+    seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0, 0);
+    tag = seL4_Recv(ep_conn.raw_endpoint, NULL);
+    error = seL4_MessageInfo_get_label(tag);
+    CHECK_ERR_GOTO(error, "kvstore thread setup failed", KvstoreError_UNKNOWN);
+
+    /* get the kvstore EP from RDE */
+    gpi_cap_t kvstore_type_code = sel4gpi_get_resource_type_code(KVSTORE_RESOURCE_NAME);
+    CHECK_ERR_GOTO(kvstore_type_code == GPICAP_TYPE_NONE, "failed to get type code for kvstore", KvstoreError_UNKNOWN);
+    *kvstore_ep = sel4gpi_get_rde(kvstore_type_code);
+    CHECK_ERR_GOTO(*kvstore_ep == seL4_CapNull, "failed to get RDE for kvstore", KvstoreError_UNKNOWN);
+
+    KVSTORE_PRINTF("Started thread, ep (%lu)\n", *kvstore_ep);
+
+    sel4gpi_config_destroy(cfg);
+
+    // (XXX) Arya: should clean up the temporary EP here
+    // At least, it will be freed when the PD terminates
+
+err_goto:
+    return error;
+}
+
 int kvstore_create_store(gpi_obj_id_t *store_id)
 {
     int error = 0;

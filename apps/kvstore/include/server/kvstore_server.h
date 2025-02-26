@@ -52,6 +52,11 @@ int kvstore_server_init();
 int kvstore_server_start_thread(seL4_CPtr *kvstore_ep);
 
 /**
+ * Start the kvstore server as a thread
+*/
+int kvstore_server_start_thread_with_isolated_stack(seL4_CPtr *kvstore_ep);
+
+/**
  * Main function to serve kvstore requests
 */
 int kvstore_server_main(seL4_CPtr parent_ep, gpi_obj_id_t parent_pd_id);

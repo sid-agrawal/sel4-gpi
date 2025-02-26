@@ -162,8 +162,7 @@ int kvstore_client_configure(kvstore_mode_t kvstore_mode, seL4_CPtr ep)
         error = kvstore_server_start_thread(&server_ep);
         break;
     case SEPARATE_THREAD_WITH_ISOLATED_STACK:
-        // error = kvstore_server_start_thread_with_isolated_stack(&server_ep);
-        error = kvstore_server_start_thread(&server_ep);
+        error = kvstore_server_start_thread_with_isolated_stack(&server_ep);
         break;
     case SEPARATE_PROC:
         // This PD will send kvstore requests to another PD
