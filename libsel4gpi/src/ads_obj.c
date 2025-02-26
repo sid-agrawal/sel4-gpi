@@ -624,7 +624,8 @@ gpi_model_node_t *ads_dump_rr(ads_t *ads, model_state_t *ms, gpi_model_node_t *p
 
                 add_edge(ms, GPI_EDGE_TYPE_MAP,
                          get_root_node(ms),
-                         get_root_node(ms), mo_node);
+                         vmr_node,
+                         mo_node);
             }
         }
 
