@@ -293,10 +293,11 @@ int sel4gpi_ads_configure(ads_config_t *cfg,
                 // If an MO is provided for stack and code regions, they will not be allocated like below
                 if (vmr->mo.ep != seL4_CapNull)
                 {
-                    PD_CREATION_PRINT("Attaching provided MO for a %s VMR\n", human_readable_va_res_type(vmr->type));
                     void *vmr_addr = NULL;
                     error = vmr_client_attach_no_reserve(vmr_rde, vmr->start, &vmr->mo, vmr->type, &vmr_addr);
                     GOTO_IF_ERR(error, "Failed to attach MO to VMR\n");
+                    PD_CREATION_PRINT("Attached provided MO for a %s VMR at VA: {%p} num_pages: %d\n", 
+                        human_readable_va_res_type(vmr->type), vmr_addr);
                     vmr->start = vmr_addr;
                     // (XXX) Linh: should we also give ownership of this MO to the created PD?
                 }
