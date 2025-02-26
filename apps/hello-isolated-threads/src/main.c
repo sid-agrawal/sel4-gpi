@@ -35,7 +35,8 @@ int isolated_thread(int argc, char **argv)
     int error = 0;
     ep_client_context_t fault_ep_conn = sel4gpi_get_fault_ep_conn();
     error = ep_client_get_raw_endpoint(&fault_ep_conn);
-    printf("in thread with isolated stack!\n");
+    uintptr_t * stack_addr = (void *)((uintptr_t)__builtin_frame_address(0) & ~(PAGE_SIZE_4K - 1));
+    printf("in thread with isolated stack! with Stack ADDR: %p\n", stack_addr);
 
     assert(argc >= 1);
     uint64_t *main_thread_frame_addr = (uint64_t *)atol(argv[0]);
@@ -60,6 +61,8 @@ int main(int argc, char **argv)
     ep_client_context_t fault_ep_conn = sel4gpi_get_fault_ep_conn();
     error = ep_client_get_raw_endpoint(&fault_ep_conn);
     GOTO_IF_ERR(error, "Failed to get raw fault handler EP\n");
+    uintptr_t * stack_addr = (void *)((uintptr_t)__builtin_frame_address(0) & ~(PAGE_SIZE_4K - 1));
+    printf("in main thread! with Stack ADDR: %p\n", stack_addr);
 
     printf("Hello: ADS_CAP: %lu PD_CAP: %lu FAULT_EP_CAP: %lu\n", ads_conn.ep, pd_conn.ep, fault_ep_conn.ep);
 
@@ -116,7 +119,7 @@ int main(int argc, char **argv)
     sel4gpi_config_destroy(cfg);
 
     /* tell parent we've completed */
-    printf("exiting hello_isolated_threads %s\n", __func__);
+    printf("exiting app hello_isolated_threads %s\n", __func__);
     seL4_MessageInfo_t msg = seL4_MessageInfo_new(0, 0, 0, 0);
     seL4_Send(fault_ep_conn.raw_endpoint, msg);
 
