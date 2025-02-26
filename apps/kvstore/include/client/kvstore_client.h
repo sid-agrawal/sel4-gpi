@@ -16,6 +16,7 @@ typedef enum _kvstore_mode
     SAME_THREAD,
     SEPARATE_ADS,
     SEPARATE_THREAD,
+    SEPARATE_THREAD_WITH_ISOLATED_STACK,
     SEPARATE_PROC
 } kvstore_mode_t;
 
