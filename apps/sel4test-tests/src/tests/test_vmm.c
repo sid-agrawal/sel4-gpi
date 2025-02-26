@@ -97,7 +97,7 @@ int test_hello_vm_osm(env_t env)
 
     return sel4test_get_result();
 }
-DEFINE_TEST_OSM(GPIVM003, "Test VMM that starts one Linux guest PD (osm)", test_hello_vm_osm, true)
+DEFINE_TEST_OSM(GPIVM003, "Test VMM that starts one hello vm guest PD (osm)", test_hello_vm_osm, true)
 
 int test_linux_vm_osm(env_t env)
 {
