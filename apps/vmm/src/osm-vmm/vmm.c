@@ -283,7 +283,8 @@ static int configure_guest_pd(pd_config_t *vm_cfg, const char *kernel_img_name, 
     vm_cfg->ads_cfg.entry_point = (void *)kernel_pc_vm_vspace;
     vm_cfg->fault_ep = vmon_ctxt.vm_fault_ep;
     vm_cfg->fault_ep_badge = FAULT_BADGE_FLAG | guest_id;
-    vm_cfg->cpu_prio = seL4_MinPrio + 1;
+    // Reduced this, so that it can work along side the sel4test-test binary
+    vm_cfg->cpu_prio = seL4_MinPrio;// + 1;
     vm_cfg->link_with_current = true;
 
 err_goto:
@@ -360,7 +361,7 @@ uint32_t osm_new_guest(const char *kernel_image)
     serial_ack(vm, SERIAL_IRQ, (void *)false);
 
 
-    pd_client_dump(&vm->runnable.pd, NULL, 0);
+    // pd_client_dump(&vm->runnable.pd, NULL, 0);
 
     error = sel4gpi_start_pd(&vm->runnable);
     GOTO_IF_ERR(error, "Failed to start VM\n");

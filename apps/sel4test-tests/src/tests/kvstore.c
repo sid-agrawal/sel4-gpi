@@ -17,6 +17,8 @@
 #include <ramdisk_client.h>
 #include <fs_client.h>
 #include <kvstore_shared.h>
+#include <kvstore_client.h>
+#include <kvstore_server_rpc.pb.h>
 
 #define KVSTORE_SERVER_APP "kvstore_server"
 #define HELLO_KVSTORE_APP "hello_kvstore"
@@ -72,7 +74,7 @@ static int remove_RDEs()
     int error = 0;
     error = pd_client_remove_rde(&pd_conn, ramdisk_cap_type, BADGE_SPACE_ID_NULL);
     error |= pd_client_remove_rde(&pd_conn, file_cap_type, BADGE_SPACE_ID_NULL);
-    error |= pd_client_remove_rde(&pd_conn, kvstore_cap_type, BADGE_SPACE_ID_NULL);
+    // error |= pd_client_remove_rde(&pd_conn, kvstore_cap_type, BADGE_SPACE_ID_NULL);
     return error;
 }
 
@@ -518,3 +520,208 @@ int test_kvstore_lib_in_diff_pd_crash(env_t env)
 DEFINE_TEST_OSM(GPIKV008,
                 "Test kvstore with app and lib in different PDs, same FS, different NS: ramdisk crashes",
                 test_kvstore_lib_in_diff_pd_crash, true)
+
+
+
+
+
+#ifdef OSM_VMM
+#include <gpivmm/osm-vmm.h>
+#define KVS_VM_SHARED_PAGE_HOST_PA 0x5f600000
+// #define KVS_VM_SHARED_PAGE_HOST_PA 0x5ff02000
+static seL4_CPtr server_ep;
+kvstore_mode_t mode;
+int kvstore_tests(seL4_CPtr *kvstore_ep)
+{
+    int error=0;
+    uint64_t key, val, val_ret;
+
+    seL4_DebugDumpScheduler();
+    printf("---- xxx Begin KVstore tests ---- KV EP: %d\n", *kvstore_ep);
+
+    // Create a kvstore
+    gpi_obj_id_t kvstore_id;
+    mode = SEPARATE_PROC ;
+
+    sel4gpi_rpc_env_t rpc_client = {
+        .request_desc = &KvstoreMessage_msg,
+        .reply_desc = &KvstoreReturnMessage_msg,
+    };
+    {
+        KvstoreMessage request = {
+            .magic = KVSTORE_RPC_MAGIC,
+            .which_msg = KvstoreMessage_create_tag};
+
+        KvstoreReturnMessage reply = {0};
+
+        printf("one\n");
+        error = sel4gpi_rpc_call(&rpc_client, *kvstore_ep, &request, 0, NULL, &reply);
+
+        error |= reply.errorCode;
+
+        if (error == seL4_NoError) {
+            *kvstore_ep = reply.msg.alloc.dest;
+        }
+    }
+
+
+
+
+    // assert(error != 0);
+    printf("kvstore_client_create_kvstore done\n");
+
+    // Ensure there aren't already values
+    key = 100;
+    val = 42;
+    KvstoreMessage request = {
+        .magic = KVSTORE_RPC_MAGIC,
+        .which_msg = KvstoreMessage_get_tag,
+        .msg.set = {
+            .key = key,
+        }};
+
+    KvstoreReturnMessage reply = {0};
+
+    error = sel4gpi_rpc_call(&rpc_client, *kvstore_ep, &request, 0, NULL, &reply);
+
+    error |= reply.errorCode;
+
+    if (error == seL4_NoError) {
+        val = reply.msg.get.val;
+    }
+
+
+
+    assert(error == KvstoreError_KEY);
+    printf("kvstore_client_get done\n");
+
+    // Set and get one value
+    KvstoreMessage request2 = {
+        .magic = KVSTORE_RPC_MAGIC,
+        .which_msg = KvstoreMessage_set_tag,
+        .msg.set = {
+            .key = key,
+            .val = val,
+        }};
+
+    KvstoreReturnMessage reply2 = {0};
+
+    error = sel4gpi_rpc_call(&rpc_client, *kvstore_ep, &request2, 0, NULL, &reply2);
+
+    error |= reply2.errorCode;
+
+    printf("kvstore_client_set done %d\n", request2.msg.set.val);
+    // assert(error != 0);
+
+    KvstoreMessage req3 = {
+        .magic = KVSTORE_RPC_MAGIC,
+        .which_msg = KvstoreMessage_get_tag,
+        .msg.set = {
+            .key = key,
+        }};
+
+    KvstoreReturnMessage reply3 = {0};
+
+    error = sel4gpi_rpc_call(&rpc_client, *kvstore_ep, &req3, 0, NULL, &reply3);
+
+    error |= reply3.errorCode;
+
+    if (error == seL4_NoError) {
+        val = reply3.msg.get.val;
+    } else {
+
+    assert(error != 0);
+    }
+    printf("---- xxxFinished KVstore tests. Final val %d ----\n", val);
+
+    return error;
+}
+int shared_mem_setup(env_t env) {
+
+
+    #if 1
+    uint64_t ret_vaddr = 0x10200000 + (KVS_VM_SHARED_PAGE_HOST_PA - QEMU_VM_RESERVE_PADDR);
+    int count = 0;
+    while (1) {
+        volatile unsigned long *x = (unsigned long *)ret_vaddr;
+        *x = count++;
+            printf("--writing %lx  to VA: %p, PA: %p\n", *x,
+                    ret_vaddr, KVS_VM_SHARED_PAGE_HOST_PA);
+            printf("--reading %lx from VA: %p, PA: %p\n", *x,
+                    ret_vaddr, KVS_VM_SHARED_PAGE_HOST_PA);
+        
+            sel4test_sleep(env, NS_IN_S);
+            
+            if (count == 100 ) {
+                break;
+            }
+    }
+            #endif
+    gpi_cap_t kvstore_cap_type = sel4gpi_get_resource_type_code(KVSTORE_RESOURCE_NAME);
+    seL4_CPtr kvstore_ep = sel4gpi_get_rde(kvstore_cap_type);
+    printf("KV RDE EP %d\n", kvstore_ep);
+
+    int error = kvstore_tests(&kvstore_ep);
+    // assert(error != 0 );
+
+    return 0;
+
+}
+static int start_vmm_and_guest(const char *guest_name)
+{
+    int error = osm_vmm_init();
+    test_error_eq(error, 0);
+
+    uint32_t guest_id = osm_new_guest(guest_name);
+    test_assert(guest_id != 0);
+
+    return error;
+}
+
+int test_kvstore_in_pd_app_in_VM(env_t env)
+{
+
+    int error;
+
+    printf("------------------STARTING TEST: %s------------------\n", __func__);
+
+    error = setup(env);
+    test_assert(error == 0);
+
+    /* Start the kvstore PD */
+    pd_client_context_t kvstore_pd;
+    seL4_CPtr kvstore_ep;
+    error = start_kvstore_server(&kvstore_ep, BADGE_SPACE_ID_NULL, &kvstore_pd);
+    test_assert(error == 0);
+
+    test_error_eq(remove_RDEs(), 0);
+
+    start_vmm_and_guest(LINUX_KERNEL_NAME);
+    sel4test_sleep(env, 15*NS_IN_S);
+     shared_mem_setup(env);
+    /* Wait for test result */
+
+    while(1) {
+        sel4test_sleep(env, 1*NS_IN_S);
+
+    }
+    seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0, 0);
+    tag = seL4_Recv(self_ep.raw_endpoint, NULL);
+    error = seL4_MessageInfo_get_label(tag);
+    test_assert(error == 0);
+
+    // extract_model(&pd_conn);
+
+    /* Cleanup servers */
+    // test_error_eq(maybe_terminate_pd(&hello_pd), 0);
+    test_error_eq(maybe_terminate_pd(&kvstore_pd), 0);
+    test_error_eq(maybe_terminate_pd(&fs_pd), 0);
+    test_error_eq(maybe_terminate_pd(&ramdisk_pd), 0);
+
+    printf("------------------ENDING: %s------------------\n", __func__);
+    return sel4test_get_result();
+}
+DEFINE_TEST_OSM(GPIKV009, "Test kvstore with app in VM and KVS in host PD", 
+    test_kvstore_in_pd_app_in_VM, true)
+
+#endif
