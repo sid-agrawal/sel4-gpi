@@ -156,7 +156,7 @@ int start_hello_kvstore(kvstore_mode_t kvstore_mode,
     }
 
     // share the ADS RDE if we're to make new ADSes
-    if (kvstore_mode == SEPARATE_ADS)
+    if (kvstore_mode == SEPARATE_ADS || kvstore_mode == SEPARATE_THREAD_WITH_ISOLATED_STACK)
     {
         sel4gpi_add_rde_config(cfg, GPICAP_TYPE_ADS, BADGE_SPACE_ID_NULL);
     }

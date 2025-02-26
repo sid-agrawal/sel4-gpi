@@ -59,6 +59,7 @@ int main(int argc, char **argv)
     ads_client_context_t ads_conn = sel4gpi_get_ads_conn();
     pd_client_context_t pd_conn = sel4gpi_get_pd_conn();
     ep_client_context_t fault_ep_conn = sel4gpi_get_fault_ep_conn();
+
     error = ep_client_get_raw_endpoint(&fault_ep_conn);
     GOTO_IF_ERR(error, "Failed to get raw fault handler EP\n");
     uintptr_t * stack_addr = (void *)((uintptr_t)__builtin_frame_address(0) & ~(PAGE_SIZE_4K - 1));

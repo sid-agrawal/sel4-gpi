@@ -483,10 +483,32 @@ int kvstore_server_start_thread_with_isolated_stack(seL4_CPtr *kvstore_ep)
     seL4_CPtr pd_rde = sel4gpi_get_rde(GPICAP_TYPE_PD);
     GOTO_IF_COND(pd_rde == seL4_CapNull, "Can't start thread, no PD RDE\n");
 
-    /* new PD as the thread */
+    // /* new PD as the thread with isolated stack*/
     sel4gpi_runnable_t runnable = {0};
-    pd_config_t *cfg = sel4gpi_configure_thread(kvstore_server_main_thread, seL4_CapNull, &runnable);
-    GOTO_IF_COND(cfg == NULL, "Failed to generate a thread config\n");
+    pd_config_t *cfg = sel4gpi_new_runnable(true, true, &runnable);
+    test_assert(cfg != NULL);
+
+    /* isolated stacks */
+    sel4gpi_add_vmr_config(&cfg->ads_cfg,
+                           GPI_DISJOINT, SEL4UTILS_RES_TYPE_STACK, NULL,
+                           NULL, DEFAULT_STACK_PAGES, MO_PAGE_BITS, NULL);
+
+    /* ELF code and data sections: shallow copy by type */
+    sel4gpi_add_vmr_config(&cfg->ads_cfg, GPI_SHARED, SEL4UTILS_RES_TYPE_CODE, NULL, NULL, 0, 0, NULL);
+    sel4gpi_add_vmr_config(&cfg->ads_cfg, GPI_SHARED, SEL4UTILS_RES_TYPE_DATA, NULL, NULL, 0, 0, NULL);
+
+    /* heap: shallow copy by type */
+    sel4gpi_add_vmr_config(&cfg->ads_cfg, GPI_SHARED, SEL4UTILS_RES_TYPE_HEAP, (void *)PD_HEAP_LOC, NULL, 0, 0, NULL);
+
+    /* isolated IPC buffer */
+    sel4gpi_add_vmr_config(&cfg->ads_cfg, GPI_DISJOINT, SEL4UTILS_RES_TYPE_IPC_BUF,
+                           NULL, NULL, 1, MO_PAGE_BITS, NULL);
+
+    /* give thread all our RDEs */
+    sel4gpi_config_pd_share_all_rdes(cfg);
+
+    cfg->ads_cfg.entry_point = kvstore_server_main_thread;
+    cfg->link_with_current = true;
 
     /* allow KVstore to allocate new EPs */
     sel4gpi_add_rde_config(cfg, GPICAP_TYPE_EP, BADGE_SPACE_ID_NULL);
