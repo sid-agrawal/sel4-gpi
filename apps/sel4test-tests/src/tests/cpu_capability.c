@@ -110,6 +110,7 @@ int test_osm_threads(env_t env)
     // Print model state
     pd_client_context_t pd_conn = sel4gpi_get_pd_conn();
     extract_model(&pd_conn);
+    // seL4_DebugDumpScheduler();
     
     return sel4test_get_result();
 }
@@ -140,14 +141,13 @@ int test_threads_isolated_stack(env_t env)
     error = sel4gpi_start_pd(&runnable);
     test_error_eq(error, 0);
 
+    // Print model state inside the thread with isolated stack
+
     /* wait for PD to notify completion */
     seL4_Recv(cfg->fault_ep.raw_endpoint, NULL);
     printf("exiting %s\n", __func__);
     sel4gpi_config_destroy(cfg);
 
-    // Print model state
-    pd_client_context_t pd_conn = sel4gpi_get_pd_conn();
-    extract_model(&pd_conn);
 
     return sel4test_get_result();
 }

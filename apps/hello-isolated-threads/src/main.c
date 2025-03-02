@@ -20,6 +20,13 @@ char _cpio_archive_end[1];
 #include <sel4gpi/pd_utils.h>
 #include <sel4gpi/error_handle.h>
 
+void extract_model(pd_client_context_t *pd_conn)
+{
+    printf("BEGIN MODEL STATE:");
+    /* Print model state */
+    int error = pd_client_dump(pd_conn, NULL, 0);
+    assert(error == 0);
+}
 /* Initialization for static morecore */
 #define APP_MALLOC_SIZE (PAGE_SIZE_4K)
 char *morecore_area = (char *)PD_HEAP_LOC;
@@ -46,6 +53,9 @@ int isolated_thread(int argc, char **argv)
     /* we may not cause a fault if the main thread's stack addr is also mapped to something in our ADS,
      * so, notify parent of completion
      */
+    pd_client_context_t pd_conn = sel4gpi_get_pd_conn();
+    extract_model(&pd_conn);
+    
     seL4_MessageInfo_t msg = seL4_MessageInfo_new(0, 0, 0, 0);
     seL4_Send(fault_ep_conn.raw_endpoint, msg);
     printf("exiting %s\n", __func__);
