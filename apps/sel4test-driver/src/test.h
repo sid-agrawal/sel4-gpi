@@ -125,6 +125,10 @@ struct driver_env
     /* OSmosis PD running the test executable */
     pd_t *test_pd;
     cpu_t *test_cpu;
+
+    /** Process Manager thread */
+    helper_thread_t pm_thread;
+    seL4_CPtr pm_endpoint;
 };
 typedef struct driver_env *driver_env_t;
 

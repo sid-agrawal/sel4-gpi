@@ -1,0 +1,17 @@
+{
+    "files.associations": {
+        "sel4test-vmm.h": "c",
+        "storage_info.h": "c",
+        "mo_clientapi.h": "c",
+        "resource_server_utils.h": "c",
+        "ramdisk_server.h": "c",
+        "string.h": "c",
+        "error_handle.h": "c",
+        "pd_clientapi.h": "c",
+        "pd_creation.h": "c",
+        "smoldtb.h": "c",
+        "pd_utils.h": "c",
+        "model_exporting.h": "c",
+        "sddf_blk_server.h": "c"
+    }
+}

@@ -720,6 +720,10 @@ static void sel4test_exit(int code)
     seL4_TCB_Suspend(seL4_CapInitThreadTCB);
 }
 
+void process_manager_entry(void *arg1, void *arg2, void *arg3, void *arg4) {
+    
+}
+
 int main(void)
 {
     /* Set exit handler */
@@ -774,6 +778,17 @@ int main(void)
     env.ops.irq_ops.irq_register_fn = irq_register_fn_copy;
 
     simple_print(&env.simple);
+
+    // setup process manager thread
+    vka_object_t pm_ep_obj;
+    error = vka_alloc_endpoint(&env->vka, &pm_ep_obj);
+    env->pm_endpoint = pm_ep_obj.cptr;
+    error = create_helper_thread(env, &env->pm_thread);
+    NAME_THREAD(get_helper_tcb(&env->pm_thread), "ProcessManager");
+    error = start_helper(env, &env->pm_thread, process_manager_entry, env, NULL, NULL, NULL);
+
+
+
 
     /* switch to a bigger, safer stack with a guard page
      * before starting the tests */
