@@ -106,9 +106,17 @@ int test_linux_vm_osm(env_t env)
 
     start_vmm_and_guest(LINUX_KERNEL_NAME);
 
+    /* Block the (high-priority) main thread so the low-priority VMM fault
+     * thread and the guest vCPU get CPU and the guest can boot. The original
+     * sel4test_sleep() blocked via a HW timer, which QEMU virt lacks ("no
+     * supported HW timer") and which spinning on seL4_Yield() cannot replace
+     * (it starves the lower-priority threads). Block on a never-signalled
+     * endpoint instead. */
+    vka_object_t block_ep = {0};
+    vka_alloc_endpoint(&env->vka, &block_ep);
     while (1)
     {
-        sel4test_sleep(env, 10UL * NS_IN_S);
+        seL4_Recv(block_ep.cptr, NULL);
     }
 
     return sel4test_get_result();
