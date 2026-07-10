@@ -35,8 +35,9 @@ int main(int argc, char **argv)
     ccnt_t ctx_start, ctx_end;
     ccnt_t creation_start, creation_end;
 
-    // Record creation end time
+    // Record creation end time (PMU cycles and generic-timer wall-clock)
     SEL4BENCH_READ_CCNT(creation_end);
+    uint64_t cntvct_end; asm volatile("isb; mrs %0, cntpct_el0" : "=r"(cntvct_end));
 
     // Get args
     assert(argc > 0);
@@ -46,9 +47,10 @@ int main(int argc, char **argv)
     // printf("hello_benchmark main! creation end time: %lu\n", creation_end);
 
     // Send a message to parent with creation end time
-    seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0, 2);
+    seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0, 3);
     seL4_SetMR(0, BM_PD_CREATE);
     seL4_SetMR(1, creation_end);
+    seL4_SetMR(2, cntvct_end);
     seL4_Send(ep, tag);
 
     // Wait for message from parent to time IPC

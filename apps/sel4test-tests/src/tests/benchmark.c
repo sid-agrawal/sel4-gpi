@@ -221,6 +221,18 @@ static int benchmark_pd_delete_osm(pd_client_context_t *pd)
     return 0;
 }
 
+/* Wall-clock timing via the ARM generic timer (CNTVCT_EL0), independent of the seL4 PMU
+ * cycle counter, so process-spawn cost can be reported in real seconds rather than converted
+ * cycles. CNTVCT is a system-wide counter, consistent across the parent and the spawned PD. */
+static inline uint64_t bench_cntvct(void) { uint64_t v; asm volatile("isb; mrs %0, cntpct_el0" : "=r"(v)); return v; }
+static void bench_print_wallclock(uint64_t start, uint64_t end)
+{
+    uint64_t freq; asm volatile("mrs %0, cntfrq_el0" : "=r"(freq));
+    uint64_t diff = end - start;
+    uint64_t us = freq ? (diff * 1000000ULL) / freq : 0;
+    printf("WALLCLOCK_US>%lu (cntvct_diff=%lu cntfrq=%lu)\n", (unsigned long)us, (unsigned long)diff, (unsigned long)freq);
+}
+
 static int benchmark_pd_spawn_sel4utils(env_t env, sel4utils_process_t *sel4utils_proc, seL4_CPtr *ep)
 {
     ccnt_t pd_create_start_time;
@@ -236,6 +248,7 @@ static int benchmark_pd_spawn_sel4utils(env_t env, sel4utils_process_t *sel4util
     *ep = hello_ep.cptr;
 
     SEL4BENCH_READ_CCNT(pd_create_start_time);
+    uint64_t cntvct_start = bench_cntvct();
 
     // Configure the process
     sel4utils_process_config_t config = process_config_default_simple(&env->simple, "hello_benchmark", env->priority);
@@ -265,7 +278,9 @@ static int benchmark_pd_spawn_sel4utils(env_t env, sel4utils_process_t *sel4util
     seL4_Word bench_type = seL4_GetMR(0);
     test_assert(bench_type == BM_PD_CREATE);
     seL4_Word pd_create_end_time = seL4_GetMR(1);
+    uint64_t cntvct_end = seL4_GetMR(2);
     benchmark_print_result(pd_create_end_time - pd_create_start_time);
+    bench_print_wallclock(cntvct_start, cntvct_end);
     return error;
 
 #if CONFIG_MAX_NUM_NODES > 1
@@ -291,6 +306,7 @@ static int benchmark_pd_spawn_osm(pd_client_context_t *pd, seL4_CPtr *ep)
     *ep = hello_ep.raw_endpoint;
 
     SEL4BENCH_READ_CCNT(pd_create_start_time);
+    uint64_t cntvct_start = bench_cntvct();
 
     // Configure the PD
     sel4gpi_runnable_t runnable = {0};
@@ -322,7 +338,9 @@ static int benchmark_pd_spawn_osm(pd_client_context_t *pd, seL4_CPtr *ep)
     seL4_Word bench_type = seL4_GetMR(0);
     test_assert(bench_type == BM_PD_CREATE);
     seL4_Word pd_create_end_time = seL4_GetMR(1);
+    uint64_t cntvct_end = seL4_GetMR(2);
     benchmark_print_result(pd_create_end_time - pd_create_start_time);
+    bench_print_wallclock(cntvct_start, cntvct_end);
     return error;
 
     sel4gpi_config_destroy(cfg);
