@@ -27,7 +27,11 @@
 
 #define PD_CREATION_DBG 0
 
-#ifdef PD_CREATION_DBG
+/* Use #if, not #ifdef: PD_CREATION_DBG is defined as 0 to mean "off", but
+ * #ifdef is true for any definition, so the prints were always compiled in.
+ * On real hardware each print blocks on the 115200-baud UART for milliseconds,
+ * inside the timed region of the PD-spawn benchmarks. */
+#if PD_CREATION_DBG
 #define PD_CREATION_PRINT(msg, ...)                                     \
     do                                                                  \
     {                                                                   \
@@ -41,6 +45,7 @@
     } while (0)
 #else
 #define PD_CREATION_PRINT(...)
+#define PD_CREATION_PRINT_2(...)
 #endif // PD_CREATION_DBG
 
 /**
