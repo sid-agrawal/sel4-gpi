@@ -91,9 +91,19 @@ list(
 
 add_library(vmm STATIC EXCLUDE_FROM_ALL ${deps})
 
+# Same switch sel4test-tests uses: when off, the VMM does not dump the model
+# state (a CSV row per node and edge) while creating a guest.
+if (GPIExtractModel)
+    set(GPIExtractModelDef "GPI_EXTRACT_MODEL")
+else()
+    set(GPIExtractModelDef "GPI_NO_EXTRACT")
+endif()
+
+target_compile_options(vmm PUBLIC "-D${GPIExtractModelDef}")
+
 target_include_directories(
     vmm
-    PUBLIC 
+    PUBLIC
         include
         include/arch/${KernelSel4Arch}
         include/${GPIVMMImplementation}

@@ -368,7 +368,12 @@ uint32_t osm_new_guest(const char *kernel_image)
     serial_ack(vm, SERIAL_IRQ, (void *)false);
 
 
+#ifdef GPI_EXTRACT_MODEL
+    /* Dumping the model prints a CSV row per node and edge. This sits inside the
+     * timed VM-creation region, and on real hardware each line blocks on the
+     * 115200-baud UART for milliseconds, so it must not be on by default. */
     pd_client_dump(&vm->runnable.pd, NULL, 0);
+#endif
 
     error = sel4gpi_start_pd(&vm->runnable);
     GOTO_IF_ERR(error, "Failed to start VM\n");
